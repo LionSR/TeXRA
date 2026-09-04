@@ -1063,7 +1063,10 @@ describe('StreamLogStore load', () => {
 
     const store = await StreamLogStore.open();
 
-    expect(store.getUnfinishedStreamIds()).toEqual(['group', 'streaming']);
+    expect(store.keys().filter((id) => store.hasUnfinishedOutput(id))).toEqual([
+      'group',
+      'streaming',
+    ]);
     expect(storage.fullLogReads()).toBe(0);
   });
 
@@ -1165,7 +1168,9 @@ describe('StreamLogStore load', () => {
     });
     const store = await StreamLogStore.open();
 
-    expect(store.getUnfinishedStreamIds()).toEqual(['workflow']);
+    expect(store.keys().filter((id) => store.hasUnfinishedOutput(id))).toEqual([
+      'workflow',
+    ]);
     const affected = await store.endRunningGroupsForStreams(['workflow'], 300);
     await store.flush();
     expect(store.get('workflow')).toBeUndefined();

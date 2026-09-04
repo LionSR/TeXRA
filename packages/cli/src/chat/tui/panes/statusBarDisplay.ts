@@ -829,16 +829,21 @@ interface StatusBarStreamTarget {
 export function statusBarStreamTarget({
   activeStreamId,
   canStopActiveRun,
-  canStopPendingRunWithoutStream = false,
+  canStopPendingRun = false,
   parentStream,
   phaseOf,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly canStopActiveRun: boolean;
-  readonly canStopPendingRunWithoutStream?: boolean;
+  /** Whether the session's own pending root run is stoppable — the whole
+   *  window from launch until the run's stream reports a terminal phase,
+   *  including the part where the stream id exists but has no phase yet.
+   *  `chatTuiCanStopActiveRun` is the single derivation of that fact. */
+  readonly canStopPendingRun?: boolean;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  /** Lifecycle phase for a stream, from the session status machine. */
+  /** Lifecycle phase for a stream, from the session's read-time phase rule.
+   *  Undefined means no live producer in this process, not "not known yet". */
   readonly phaseOf: (streamId: StreamTabId) => StreamPhase | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StatusBarStreamTarget {
@@ -849,21 +854,21 @@ export function statusBarStreamTarget({
     values: streams,
     canUseValue: (_stream, streamId) => isActivePhase(phaseOf(streamId)),
   });
-  // An absent phase means no live flow context: a stream still between launch
-  // and its reservation reports RUNNING/STARTING from the machine's
-  // reservation arm, so it does not need an undefined-is-live default here,
-  // and a restored stream that now answers from durable facts must not flip
-  // Ctrl-C from exit to stop.
-  let hasPendingOrLiveStream = false;
+  // This scan answers only "is some stream on the rail live", so an absent
+  // phase reads as not-live here: a restored stream now answers from durable
+  // facts, and treating its unknown phase as live would say "stop" for a
+  // session with nothing running. The session's own pending run is a separate
+  // fact, and `canStopPendingRun` carries it — including the launch window
+  // where a stream id exists but no phase does.
+  let hasLiveStream = false;
   for (const streamId of streams.keys()) {
     if (isActivePhase(phaseOf(streamId))) {
-      hasPendingOrLiveStream = true;
+      hasLiveStream = true;
       break;
     }
   }
   const canStopVisibleRun =
-    canStopActiveRun &&
-    (canStopPendingRunWithoutStream || hasPendingOrLiveStream);
+    canStopActiveRun && (canStopPendingRun || hasLiveStream);
   const displayStreamId = activeSlice ? activeStreamId : liveAncestor?.streamId;
   let ctrlCAction: CtrlCAction;
   if (!canStopVisibleRun) {

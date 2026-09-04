@@ -375,19 +375,15 @@ export class SessionState {
     }
     if (live) return { state: live, origin: 'live' };
 
-    const run = this.snapshots.getRunMetadata(stream, { quiet: true });
-    // Unhydrated: the run tuple is unknown. The transcript summary is still
-    // resident for every stream, so a transcript left open is enough to say
-    // the run was interrupted without reading anything. A record that already
-    // holds the tuple answers from it even while `refreshSeed` parks its disk
-    // provenance at `unknown` for an in-flight re-seed; otherwise a settled
-    // tab would blink back to `ready` every time it is warmed again.
-    const holdsRunFacts =
-      run.authorityFailure !== undefined ||
-      run.outcome !== undefined ||
-      run.lease !== undefined ||
-      run.checkpointPresent !== undefined;
-    if (!holdsRunFacts && !this.snapshots.hasProvenance(stream)) {
+    // The run tuple, not the record: it is small, it is written once per
+    // hydration, and it outlives the record the hydration warmed, so asking
+    // it here neither loads a sidecar nor pins one resident (#9947). Absent
+    // means this stream has never hydrated — the tuple is unknown rather than
+    // empty. The transcript summary is resident for every stream either way,
+    // so a transcript left open is enough to say the run was interrupted
+    // without reading anything.
+    const run = this.snapshots.getRunPhaseFacts(stream);
+    if (!run) {
       return this.streamLogs.hasUnfinishedOutput(stream)
         ? { state: { phase: STREAM_PHASE.CANCELLED }, origin: 'derived' }
         : { origin: 'pending' };

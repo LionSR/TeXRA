@@ -839,7 +839,11 @@ export class SessionFactApplier {
   }
 
   private isRetiredSidecarCandidate(streamId: StreamTabId): boolean {
-    const phase = this.state.streamStatus.get(streamId);
+    // The read-time rule, not the status machine: a child restored from disk
+    // has no live phase, so keying off the machine kept every hydrated
+    // finished child resident forever. Its derived terminal phase is the same
+    // fact, established later.
+    const phase = this.state.resolveStreamPhase(streamId).state?.phase;
     if (phase === undefined || !isTerminalOutcomePhase(phase)) return false;
     if (!this.state.getStreamMetadata(streamId).parentStreamId) return false;
     return this.options.isStreamPresented?.(streamId) !== true;

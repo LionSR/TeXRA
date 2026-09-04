@@ -30,7 +30,10 @@ import {
   streams as streamsSignal,
   NO_BYPASS,
 } from '../state/cliState';
-import { chatTuiCanStopVisibleRun } from '../state/sessionRunState';
+import {
+  chatTuiCanStopActiveRun,
+  chatTuiCanStopVisibleRun,
+} from '../state/sessionRunState';
 import {
   childRosters as childRostersSignal,
   parentStream as parentStreamSignal,
@@ -93,15 +96,18 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // for the whole run (#8273).
   const rootRunPending = useSignal(rootRunPendingSignal);
   const rootRunStreamId = useSignal(rootRunStreamIdSignal);
+  const runStopFacts = {
+    runPending: rootRunPending,
+    streamId: rootRunStreamId,
+    status: streamPhaseFor(rootRunStreamId)?.phase,
+  };
   const target = statusBarStreamTarget({
     activeStreamId,
-    canStopActiveRun: chatTuiCanStopVisibleRun({
-      runPending: rootRunPending,
-      streamId: rootRunStreamId,
-      status: streamPhaseFor(rootRunStreamId)?.phase,
-    }),
-    canStopPendingRunWithoutStream:
-      rootRunPending && rootRunStreamId === undefined,
+    canStopActiveRun: chatTuiCanStopVisibleRun(runStopFacts),
+    // The whole pending-run window, not just its launch gap: a restored
+    // stream's phase is derived, so a run whose stream has not reported one
+    // yet must still read "stop" — Ctrl-C would stop it.
+    canStopPendingRun: chatTuiCanStopActiveRun(runStopFacts),
     parentStream,
     phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
     streams,

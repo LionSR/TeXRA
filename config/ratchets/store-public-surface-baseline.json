@@ -1,5 +1,5 @@
 {
-  "semantics": "Public (static + instance) method declarations of StreamLogStore and StreamSnapshotStore, per issue #9590 Stage 5 (proof obligation 10). Every public method is a caller-verified contract, and every field exposed by a configured aggregate snapshot getter is one caller-visible contract unit. Replacing five field getters with getRunMetadata therefore leaves the StreamSnapshotStore contract budget unchanged: the aggregate method contributes five units, not one. Transcript row mutation is writer-only (TranscriptWriter via acquireWriter/loadAndAcquireWriter), snapshot event projection enters only through attachSessionEvents, and 'protected' counts as public because neither class is subclassed. The ratchet rejects growth in either public methods or configured aggregate fields. When the surface genuinely shrinks, lower this baseline in the same PR. requestEviction (2026-09-02) is the one sanctioned addition: the sidecar counterpart of StreamLogStore.requestEviction, requested by the session lifecycle for finished child streams so a long session's record set stops growing; see docs/proposals/2026-09-02-stream-lifetime-and-cancellation-simplification.md section 2.C. StreamSnapshotStore.deleteStream was removed on the same day (#11769): it was a zero-caller wrapper over stageDeleteStream + commit, so the surface returns to 21. S1 read-time phase derivation (2026-09-04): StreamLogStore gains hasUnfinishedOutput (the per-stream form of the getUnfinishedStreamIds scan the same summary flags already answer), and StreamSnapshotStore.getRunMetadata gains the four run-phase fields (authorityFailure, outcome, checkpointPresent, lease) that SessionState.resolveStreamPhase reads for a stream with no live flow context. Both are deliberate additions recorded here in the same commit; the compensating deletion is restart repair, which the S1 sequence removes once every fact it wrote has a read-time replacement.",
+  "semantics": "Public (static + instance) method declarations of StreamLogStore and StreamSnapshotStore, per issue #9590 Stage 5 (proof obligation 10). Every public method is a caller-verified contract, and every field exposed by a configured aggregate snapshot getter is one caller-visible contract unit. Replacing five field getters with getRunMetadata therefore leaves the StreamSnapshotStore contract budget unchanged: the aggregate method contributes five units, not one. Transcript row mutation is writer-only (TranscriptWriter via acquireWriter/loadAndAcquireWriter), snapshot event projection enters only through attachSessionEvents, and 'protected' counts as public because neither class is subclassed. The ratchet rejects growth in either public methods or configured aggregate fields. When the surface genuinely shrinks, lower this baseline in the same PR. requestEviction (2026-09-02) is the one sanctioned addition: the sidecar counterpart of StreamLogStore.requestEviction, requested by the session lifecycle for finished child streams so a long session's record set stops growing; see docs/proposals/2026-09-02-stream-lifetime-and-cancellation-simplification.md section 2.C. StreamSnapshotStore.deleteStream was removed on the same day (#11769): it was a zero-caller wrapper over stageDeleteStream + commit, so the surface returns to 21. S1 read-time phase derivation (2026-09-04): StreamLogStore is net zero. hasUnfinishedOutput replaces getUnfinishedStreamIds, whose two callers (SessionHandle.computeStartupSeedSet and runRestartRepair) now filter keys() through it, so the scan lives with the caller that wanted it and the store answers one stream at a time. StreamSnapshotStore is +1 and stays +1 in this commit: getRunPhaseFacts publishes the run tuple (outcome, checkpointPresent, lease, authorityFailure) that SessionState.resolveStreamPhase reads for a stream with no live flow context. It counts as ONE unit rather than four because it is one accessor over one map with one consumer; getRunMetadata keeps exactly its five record-owned fields, and the tuple is deliberately not on it because these four must outlive the record that a bounded-residency release drops (#9947). The offset proposed in review does not hold: getExecutionIdMap has a second production consumer outside restart repair (SessionStores.deleteAllOnce), so deleting restart repair does not pay for this row. The real reduction is getRunPhaseFacts itself. It is interim, and goes when the persistence substrate's executions rows carry outcome and resumability, returning StreamSnapshotStore to 21.",
   "stores": {
     "StreamLogStore": [
       "acquireWriter",
@@ -13,7 +13,6 @@
       "get",
       "getSummaryMeta",
       "getTimestampRange",
-      "getUnfinishedStreamIds",
       "has",
       "hasAuthoritativeStream",
       "hasUnfinishedOutput",
@@ -37,6 +36,7 @@
       "getOutputFiles",
       "getParentStreamId",
       "getRunMetadata",
+      "getRunPhaseFacts",
       "getRunUsage",
       "getWorkPlan",
       "hasProvenance",
@@ -54,14 +54,10 @@
   "aggregateContracts": {
     "StreamSnapshotStore": {
       "getRunMetadata": [
-        "authorityFailure",
-        "checkpointPresent",
         "config",
         "description",
         "executionId",
         "identity",
-        "lease",
-        "outcome",
         "userFollowUpSupport"
       ]
     }

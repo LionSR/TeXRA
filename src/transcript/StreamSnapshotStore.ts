@@ -196,6 +196,34 @@ interface RunPhaseProbe {
   failure?: string;
 }
 
+/**
+ * What a hydration learned about the run a stream last carried: enough for a
+ * reader to say what happened to a stream with no live flow context in this
+ * process, and nothing more.
+ *
+ * Held OUTSIDE the stream record, in a small always-resident map, for the
+ * reason bounded residency exists (#9947): a rail that wants every tab's
+ * phase would otherwise have to keep every tab's whole sidecar record
+ * resident. Four small fields per stream survive the record; the accumulators
+ * behind them do not. In memory only — nothing here is written to a sidecar
+ * or a summary file, and a fresh process learns it all again by hydrating.
+ *
+ * Display-only. Each field was true at the instant the stream hydrated, so a
+ * caller about to WRITE (open, resume, delete) re-reads the authority under
+ * the lease instead of trusting them — a process-local mirror cannot observe
+ * another host's finalize (see `listExecutions`' own note on that rule).
+ */
+export interface RunPhaseFacts {
+  /** `ExecutionMeta.outcome`: absent for a run that never finalized. */
+  readonly outcome?: RunOutcome;
+  /** Whether a resumable flow checkpoint file exists (existence, not validity). */
+  readonly checkpointPresent?: boolean;
+  /** Who held the execution lease when this stream hydrated. */
+  readonly lease?: ExecutionLeasePresence;
+  /** Why this stream's execution authority could not be read, if it could not. */
+  readonly authorityFailure?: string;
+}
+
 function withoutSummaryMetaFields(
   meta: StreamSummaryMeta | undefined,
   fields: readonly (keyof StreamSummaryMeta)[],
@@ -224,15 +252,8 @@ const EXECUTION_SCOPED_SUMMARY_META_FIELDS = [
 ] as const satisfies readonly (keyof StreamSummaryMeta)[];
 
 /**
- * The execution-scoped facts owned by one run record and replaced or hydrated
- * together when a stream changes execution.
- *
- * The last four are the read-time run-phase tuple: they answer "what happened
- * to this run" for a stream with no live flow context in this process, and
- * they are display-only. Each was true at the instant this record hydrated, so
- * a caller about to WRITE (open, resume, delete) re-reads the authority under
- * the lease instead of trusting them — a process-local mirror cannot observe
- * another host's finalize (see `listExecutions`' own note on that rule).
+ * The five execution-scoped facts owned by one run record and replaced or
+ * hydrated together when a stream changes execution.
  */
 export interface RunMetadata {
   readonly executionId?: ExecutionId;
@@ -240,14 +261,6 @@ export interface RunMetadata {
   readonly userFollowUpSupport?: UserFollowUpSupport;
   readonly config?: AgentConfig;
   readonly description?: string;
-  /** Why this stream's execution authority could not be read, if it could not. */
-  readonly authorityFailure?: string;
-  /** `ExecutionMeta.outcome`: absent for a run that never finalized. */
-  readonly outcome?: RunOutcome;
-  /** Whether a resumable flow checkpoint file exists (existence, not validity). */
-  readonly checkpointPresent?: boolean;
-  /** Who held the execution lease when this record hydrated. */
-  readonly lease?: ExecutionLeasePresence;
 }
 
 /**
@@ -479,15 +492,6 @@ interface StreamRecord {
    * retired early with the run-classification consolidation).
    */
   description: string | undefined;
-  /**
-   * The read-time run-phase tuple for the same execution, captured by the
-   * hydration that read `meta` (see {@link RunMetadata}). In memory only —
-   * nothing here is written back to a sidecar or a summary file.
-   */
-  runOutcome: RunOutcome | undefined;
-  runCheckpointPresent: boolean | undefined;
-  runLease: ExecutionLeasePresence | undefined;
-  runAuthorityFailure: string | undefined;
   /** Same-execution mirror fields retained across a transient authority read. */
   summaryMetaHydrationFallback: StreamSummaryMeta | undefined;
 
@@ -512,19 +516,6 @@ interface StreamRecord {
   overlays: Partial<OverlayPatches>;
 }
 
-/**
- * Drop the run-phase tuple a record holds for the execution it is leaving.
- * Called from every site that replaces the record's execution-scoped fields
- * together, so a new run can never inherit the previous run's outcome,
- * checkpoint, lease, or authority-read failure.
- */
-function clearRunPhaseFacts(record: StreamRecord): void {
-  record.runOutcome = undefined;
-  record.runCheckpointPresent = undefined;
-  record.runLease = undefined;
-  record.runAuthorityFailure = undefined;
-}
-
 export class StreamSnapshotStore {
   private readonly records = new ResidentStreamRegistry<
     StreamTabId,
@@ -543,10 +534,6 @@ export class StreamSnapshotStore {
     userFollowUpSupport: undefined,
     runConfig: undefined,
     description: undefined,
-    runOutcome: undefined,
-    runCheckpointPresent: undefined,
-    runLease: undefined,
-    runAuthorityFailure: undefined,
     summaryMetaHydrationFallback: undefined,
     diskState: 'unknown',
     seedChain: undefined,
@@ -555,6 +542,15 @@ export class StreamSnapshotStore {
     metaOverlay: false,
     overlays: {},
   }));
+  /**
+   * What each hydrated stream's last run turned out to be — see
+   * {@link RunPhaseFacts}. Kept beside the records rather than in them so it
+   * outlives the record: a rail that shows every tab's phase must not pin
+   * every tab's accumulators (#9947). An entry is written when a stream
+   * hydrates, dropped when its execution changes hands, and dropped with the
+   * stream itself; a record released for residency keeps its entry.
+   */
+  private readonly runFacts = new Map<StreamTabId, RunPhaseFacts>();
   /**
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
    * namespace holds a staged stream's data and the sidecar writes buffered
@@ -569,7 +565,7 @@ export class StreamSnapshotStore {
       this.writes.cancelPendingWritesForStream(stream),
     invalidateStreamGeneration: (stream) => this.rotateGeneration(stream),
     seedChain: (stream) => this.records.get(stream)?.seedChain,
-    evict: (stream) => this.evict(stream),
+    evict: (stream) => this.forget(stream),
   } satisfies StagedDeletionHost);
 
   /**
@@ -1280,12 +1276,28 @@ export class StreamSnapshotStore {
     }
   }
 
-  /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
+  /**
+   * Release a stream's resident record. The stream itself lives on, so its
+   * {@link RunPhaseFacts} stay: releasing the accumulators is what bounded
+   * residency buys, and dropping the four fields with them would make every
+   * released tab's phase read as unknown again. Disk cleanup is the caller's
+   * job.
+   */
   private evict(stream: StreamTabId): void {
     this.records.delete(stream);
     this.seedQueues.delete(stream);
     this.writes.dropStreamWrites(stream);
     this.unseededReadWarned.delete(stream);
+  }
+
+  /**
+   * Drop everything this store holds for a stream that is gone — a committed
+   * deletion, or a stream the authoritative roster no longer lists. The one
+   * eviction that also forgets the run facts.
+   */
+  private forget(stream: StreamTabId): void {
+    this.evict(stream);
+    this.runFacts.delete(stream);
   }
 
   /**
@@ -1481,7 +1493,7 @@ export class StreamSnapshotStore {
       record.runIdentity = undefined;
       record.userFollowUpSupport = undefined;
       record.description = undefined;
-      clearRunPhaseFacts(record);
+      this.runFacts.delete(stream);
       record.summaryMetaHydrationFallback = undefined;
     }
     record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
@@ -1517,7 +1529,7 @@ export class StreamSnapshotStore {
     if (previous && previous !== executionId) {
       record.runConfig = undefined;
       record.description = undefined;
-      clearRunPhaseFacts(record);
+      this.runFacts.delete(stream);
       // Only what the departing execution owned: the stream's parent edge and
       // its summed usage outlive any single run, and on a record minted after
       // a release the fallback is their only source until seeding lands.
@@ -1562,9 +1574,9 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Canonical run record projected from live facts or hydrated from the
-   * execution record named by the stream sidecar. Every field shares that
-   * execution owner and replacement lifecycle.
+   * Canonical immutable run record projected from live facts or hydrated from
+   * the execution record named by the stream sidecar. All five fields share
+   * that execution owner and replacement lifecycle.
    */
   getRunMetadata(
     stream: StreamTabId,
@@ -1580,11 +1592,21 @@ export class StreamSnapshotStore {
       userFollowUpSupport: record?.userFollowUpSupport,
       config: record?.runConfig,
       description: record?.description,
-      authorityFailure: record?.runAuthorityFailure,
-      outcome: record?.runOutcome,
-      checkpointPresent: record?.runCheckpointPresent,
-      lease: record?.runLease,
     });
+  }
+
+  /**
+   * What this stream's last run turned out to be, or `undefined` for a stream
+   * that has never hydrated — see {@link RunPhaseFacts}.
+   *
+   * Deliberately not part of {@link getRunMetadata}: those five fields are the
+   * record's, and go with it. These four are the store's, and survive a
+   * record released for residency, which is the only reason a caller can ask
+   * every tab's phase without making every tab resident. Never warns about an
+   * unseeded read — "not hydrated yet" is one of the answers.
+   */
+  getRunPhaseFacts(stream: StreamTabId): RunPhaseFacts | undefined {
+    return this.runFacts.get(stream);
   }
 
   /**
@@ -1875,8 +1897,13 @@ export class StreamSnapshotStore {
   }
 
   private evictStreamsExcept(keep: ReadonlySet<StreamTabId>): void {
-    for (const stream of [...this.records.keys()]) {
-      if (!keep.has(stream)) this.evict(stream);
+    // `load` is authoritative about the stream set, so a stream missing from
+    // it is gone rather than merely released: forget its run facts too.
+    for (const stream of new Set([
+      ...this.records.keys(),
+      ...this.runFacts.keys(),
+    ])) {
+      if (!keep.has(stream)) this.forget(stream);
     }
   }
 
@@ -2095,7 +2122,7 @@ export class StreamSnapshotStore {
       // from (#9590 Stage 6); when identity changes hands, drop it with the
       // pair and invalidate any authority read already in flight.
       record.description = undefined;
-      clearRunPhaseFacts(record);
+      this.runFacts.delete(stream);
       record.summaryMetaHydrationFallback = undefined;
     }
     // Started before the metadata await so both reads overlap, and awaited at
@@ -2103,6 +2130,10 @@ export class StreamSnapshotStore {
     const phaseProbe = executionId
       ? this.probeRunPhase(executionId)
       : undefined;
+    // Accumulated locally and published once at the end: the map is what
+    // readers see, and half a tuple would render a stopped run as a healthy
+    // one for the length of the probe.
+    let runFacts: RunPhaseFacts = {};
     if (meta) {
       const pendingLiveWrite = metaOverlay !== undefined;
       const configBeforeHydration = record.runConfig;
@@ -2144,8 +2175,12 @@ export class StreamSnapshotStore {
         // Whole-value: this read is the only producer of the run's outcome,
         // so it replaces rather than fills, and a failed read says so with
         // the cause attached instead of leaving a quiet absence.
-        record.runOutcome = hydrated.outcome;
-        record.runAuthorityFailure = hydrated.authorityFailure;
+        runFacts = {
+          ...(hydrated.outcome !== undefined && { outcome: hydrated.outcome }),
+          ...(hydrated.authorityFailure !== undefined && {
+            authorityFailure: hydrated.authorityFailure,
+          }),
+        };
       }
     }
 
@@ -2194,16 +2229,26 @@ export class StreamSnapshotStore {
 
     if (phaseProbe) {
       const probe = await phaseProbe;
-      // Same two guards the metadata half uses: an evicted record and a
-      // handoff to another execution both make this probe's answer stale.
-      if (
-        this.records.get(stream) === record &&
-        record.runExecutionId === executionId
-      ) {
-        record.runCheckpointPresent = probe.checkpointPresent;
-        record.runLease = probe.lease;
-        record.runAuthorityFailure ??= probe.failure;
-      }
+      runFacts = {
+        ...runFacts,
+        ...(probe.checkpointPresent !== undefined && {
+          checkpointPresent: probe.checkpointPresent,
+        }),
+        ...(probe.lease !== undefined && { lease: probe.lease }),
+        ...(runFacts.authorityFailure === undefined &&
+          probe.failure !== undefined && { authorityFailure: probe.failure }),
+      };
+    }
+    // Published even when it is empty: the entry's existence is what says this
+    // stream hydrated, and it is the only such marker that outlives the
+    // record. A deletion (which rotates the generation) or a handoff to
+    // another execution during the awaits above makes this tuple somebody
+    // else's, so neither publishes.
+    if (
+      this.isCurrentGeneration(stream, generation) &&
+      record.runExecutionId === executionId
+    ) {
+      this.runFacts.set(stream, Object.freeze(runFacts));
     }
   }
 

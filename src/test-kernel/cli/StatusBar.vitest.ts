@@ -1184,7 +1184,7 @@ describe('CLI StatusBar display model', () => {
         input: {
           activeStreamId: undefined,
           canStopActiveRun: true,
-          canStopPendingRunWithoutStream: false,
+          canStopPendingRun: false,
           parentStream: parentOfChild,
           streams: streamMap([]),
         },
@@ -1197,7 +1197,7 @@ describe('CLI StatusBar display model', () => {
         input: {
           activeStreamId: undefined,
           canStopActiveRun: true,
-          canStopPendingRunWithoutStream: true,
+          canStopPendingRun: true,
           parentStream: parentOfChild,
           streams: streamMap([]),
         },
@@ -1206,10 +1206,10 @@ describe('CLI StatusBar display model', () => {
         isChildStream: false,
       },
       {
-        // No phase means no live producer for that stream: a run already
-        // admitted reports RUNNING/STARTING from the machine's reservation
-        // arm, so nothing here is stoppable.
-        name: 'focused root whose stream has no phase',
+        // No phase means no live producer for that stream, and no pending run
+        // either: a restored tab whose phase is still being derived must not
+        // offer to stop a run that is not there.
+        name: 'focused root whose stream has no phase and no pending run',
         input: {
           activeStreamId: 'root',
           canStopActiveRun: true,
@@ -1221,13 +1221,14 @@ describe('CLI StatusBar display model', () => {
         isChildStream: false,
       },
       {
-        // The launch window is covered by the pending-run capability, not by
-        // reading an absent phase as live.
+        // The pending-run capability covers the whole launch window,
+        // including the part where the run's stream id exists but its phase
+        // does not — never an absent phase read as live.
         name: 'focused phaseless root while a pending run is stoppable',
         input: {
           activeStreamId: 'root',
           canStopActiveRun: true,
-          canStopPendingRunWithoutStream: true,
+          canStopPendingRun: true,
           parentStream: parentOfChild,
           streams: streamMap([['root', rootPending]]),
         },
@@ -1240,7 +1241,7 @@ describe('CLI StatusBar display model', () => {
         input: {
           activeStreamId: 'root',
           canStopActiveRun: true,
-          canStopPendingRunWithoutStream: true,
+          canStopPendingRun: true,
           parentStream: parentOfChild,
           streams: streamMap([['root', rootWaiting]]),
         },
