@@ -1,5 +1,8 @@
 /** Tool-use follow-up routing and continuation ownership. */
-import { classifyRun } from '@agent/runtime/runClassification';
+import {
+  classifyRun,
+  type RunClassification,
+} from '@agent/runtime/runClassification';
 import { readExecutionStreamIndex } from '@agent/storage/executionListing';
 import {
   currentSession,
@@ -9,6 +12,10 @@ import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
 
@@ -189,9 +196,70 @@ export async function lookupStreamExecutionId(
 }
 
 /**
+ * The one mapping from a run classification to what the user's stream shows
+ * and what the refusal is called. Both refusal paths use it — a follow-up
+ * with no live flow here, and a resume whose checkpoint read came back empty
+ * — so the two cannot word or settle the same fact differently.
+ *
+ * A refusal the user can see again is recorded on the stream: the two
+ * classifications that mean "no flow here can execute this run" — another
+ * process holds it, or this process holds a lease with no live run behind it
+ * — become the stream's read-only detail, so the tab keeps saying why after
+ * the toast is gone. A classification that read the run's state and found it
+ * free (`finished`, `resumable`) DROPS any hold an earlier refusal left, and
+ * with it the phase that hold retained: a stream whose run is readable and
+ * unowned must neither stay read-only nor show the WAITING a failed resume
+ * rolled back to, on facts that have since changed.
+ *
+ * An `unclassified` run deliberately records nothing: `classifyRun` reports it
+ * for any failed read, including a transient one (EMFILE, a partial read
+ * racing another process's atomic rewrite), and a hold is sticky, so a blip
+ * would leave the tab permanently read-only — and dropping the hold on one
+ * would report a run another process is executing as finished. The unreadable
+ * display fact has its own producer in the run tuple's `authorityFailure`,
+ * which every later hydration re-reads.
+ *
+ * Nothing is written to disk.
+ */
+export function recordRunRefusal(
+  streamId: StreamTabId,
+  session: SessionHandle,
+  classification: RunClassification,
+): FollowUpFailureReason {
+  switch (classification.kind) {
+    case 'held_elsewhere':
+      session.status.markUnavailableOrLog(
+        streamId,
+        streamHeldMessage(classification.owner),
+        logger,
+      );
+      return 'owned_elsewhere';
+    case 'owned_here':
+      // A lease this process holds for a stream with no live flow context is
+      // a registry/lease disagreement, not a free run: it stays read-only
+      // with the same diagnostic restart repair writes for it.
+      session.status.markUnavailableOrLog(
+        streamId,
+        streamUnreadableMessage('lease owned by this process with no live run'),
+        logger,
+      );
+      return 'not_resumable';
+    case 'finished':
+      session.status.clearHold(streamId, { discardRetainedPhase: true });
+      return 'finished';
+    case 'resumable':
+      session.status.clearHold(streamId, { discardRetainedPhase: true });
+      return 'not_resumable';
+    case 'unclassified':
+      return 'not_resumable';
+  }
+}
+
+/**
  * Word the refusal of a stream with no live flow here from the persisted
  * facts: who holds the run, and whether a checkpoint is left. Read only on
- * the failure path; an unreadable fact is `not_resumable`.
+ * the failure path; an unreadable fact is `not_resumable`. Only the one run
+ * the user acted on is inspected.
  */
 async function classifyRefusal(
   streamId: StreamTabId,
@@ -208,17 +276,7 @@ async function classifyRefusal(
     return 'not_resumable';
   }
   if (!executionId) return 'not_resumable';
-  const classification = await classifyRun(executionId);
-  switch (classification.kind) {
-    case 'held_elsewhere':
-      return 'owned_elsewhere';
-    case 'finished':
-      return 'finished';
-    case 'resumable':
-    case 'owned_here':
-    case 'unclassified':
-      return 'not_resumable';
-  }
+  return recordRunRefusal(streamId, session, await classifyRun(executionId));
 }
 
 export async function submitFollowUp(

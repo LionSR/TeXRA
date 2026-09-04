@@ -55,10 +55,15 @@ export interface SessionRendererPort {
    */
   invalidate(streamId: StreamTabId, slice: SessionRenderSlice): void;
 
+  /**
+   * `phaseOverride` carries the phase a caller is applying right now, which
+   * has not reached the status machine yet; without one the host resolves the
+   * stream's phase itself.
+   */
   onStreamMetadataChanged(
     streamId: StreamTabId,
     options?: {
-      streamStates?: Map<StreamTabId, StreamPhaseState>;
+      phaseOverride?: StreamPhaseState;
     },
   ): void;
 

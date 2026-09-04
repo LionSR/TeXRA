@@ -16,6 +16,7 @@ src/**
 **/tsconfig.json
 eslint.config.mjs
 esbuild.config.mjs
+vite.config.mts
 tsconfig.json
 **/*.map
 **/*.ts

@@ -23,10 +23,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { streamStageFromStageStart } from '@shared/streams/stage';
-import {
-  isActivePhase,
-  isTerminalOutcomePhase,
-} from '@shared/streams/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { assertNever } from '@utils/core';
 
@@ -130,6 +127,7 @@ function sessionFactStreamIds(fact: SessionFact): StreamTabId[] {
     case 'followUpSent':
     case 'setActiveStream':
     case 'updateStreamDescription':
+    case 'streamHoldChanged':
       return fact.payload.streamId ? [fact.payload.streamId] : [];
     default:
       return assertNever(fact, 'Unhandled session fact stream identity');
@@ -269,7 +267,7 @@ export class SessionFactApplier {
   private pushStreamMetadata(
     streamId: StreamTabId,
     options?: {
-      streamStates?: Map<StreamTabId, StreamPhaseState>;
+      phaseOverride?: StreamPhaseState;
     },
   ): void {
     this.registeredWithRenderer.add(streamId);
@@ -361,6 +359,8 @@ export class SessionFactApplier {
               fact.substate,
               fact.runStartedAt,
             );
+          case 'streamHoldChanged':
+            return this.handleStreamHoldChanged(fact.payload.streamId);
           case 'setParentStream':
             return this.handleSetParentStream(fact.payload);
           case 'removeStream': {
@@ -685,7 +685,7 @@ export class SessionFactApplier {
     // the stream already exists by then so getStreamCategory() finds it.
     const agentCategory =
       payload.agentCategory ?? this.getStreamCategory(streamId);
-    // Ensure stream state exists so it's included in getAllStreamStates()
+    // Mint the ephemeral execution record so the tab renders its category.
     if (agentCategory) {
       this.state.getOrCreateStreamState(streamId, agentCategory);
     }
@@ -695,9 +695,7 @@ export class SessionFactApplier {
     // focus policy belong to the host presentation, not the session fact.
     const firstHostDelivery = !this.registeredWithRenderer.has(streamId);
     if (firstHostDelivery) {
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.state.streamStatus.getAllStreamStates(),
-      });
+      this.pushStreamMetadata(streamId);
     }
   }
 
@@ -709,7 +707,23 @@ export class SessionFactApplier {
     });
   }
 
+  /**
+   * A read-only hold was recorded on this stream or dropped from it. The hold
+   * carries no phase of its own, so the whole change is in what
+   * `resolveStreamPhase` now answers: push the stream's metadata, which is the
+   * only wire carrying `statusDetail` and the `unavailable` sentinel derived
+   * from it.
+   */
+  private handleStreamHoldChanged(streamId: StreamTabId): void {
+    if (this.renderer.isAvailable()) this.pushStreamMetadata(streamId);
+  }
+
   private handleRunConfig(streamId: StreamTabId): void {
+    // A run is taking this stream over, so whatever a previous row open read
+    // about the last run — its outcome, checkpoint, and lease — is not this
+    // run's. The live phase answers while the run is in flight; the next row
+    // open reads the durable tuple again.
+    this.state.clearRunFacts(streamId);
     // No explicit refresh: `getStreamMetadata` overlays the summary mirror —
     // already updated synchronously by the snapshot store's projection of
     // this same fact — at read time (#9947).
@@ -717,9 +731,7 @@ export class SessionFactApplier {
       // A run start or config change may update agent name, model, or label,
       // which the frontend tabs display even for background subagents. Patch
       // only the affected stream instead of rebuilding all historical tabs.
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.state.streamStatus.getAllStreamStates(),
-      });
+      this.pushStreamMetadata(streamId);
     }
   }
 
@@ -818,17 +830,18 @@ export class SessionFactApplier {
   }
 
   /**
-   * A finished child stream nobody is presenting releases its sidecar record
-   * as well as its transcript. Children are what a long session accumulates;
-   * a root stream stays resident for the host's history views. The store
-   * re-seeds on the next `preload`, which every presentation path performs
-   * before reading, and warns on a synchronous read that skipped it.
+   * A child stream nobody is presenting and no live run in this process owns
+   * releases its sidecar record as well as its transcript. Children are what
+   * a long session accumulates; a root stream stays resident for the host's
+   * history views. The store re-seeds on the next `preload`, which every
+   * presentation path performs before reading, and warns on a synchronous
+   * read that skipped it.
    *
-   * The single owner of that rule, so the two moments it can become true —
-   * the stream finishes while nothing presents it, and a host stops
-   * presenting a stream that already finished — ask the same question. The
-   * rule is re-read after the store's drain: a relaunch or a fresh
-   * presentation during it keeps the record.
+   * The single owner of that rule, so every moment it can become true — the
+   * run ends while nothing presents it, a host stops presenting a stream no
+   * run owns, and an activation abandons a record it warmed — asks the same
+   * question. The rule is re-read after the store's drain: a relaunch or a
+   * fresh presentation during it keeps the record.
    */
   retireSidecarIfFinishedChild(streamId: StreamTabId): void {
     if (!this.isRetiredSidecarCandidate(streamId)) return;
@@ -843,8 +856,33 @@ export class SessionFactApplier {
   }
 
   private isRetiredSidecarCandidate(streamId: StreamTabId): boolean {
-    const phase = this.state.streamStatus.get(streamId);
-    if (phase === undefined || !isTerminalOutcomePhase(phase)) return false;
+    // The read-time rule, not the status machine: a child restored from disk
+    // has no live phase, so keying off the machine kept every hydrated
+    // finished child resident forever. A terminal outcome is not the only
+    // answer that means nobody owns the stream — a run held by another host,
+    // an unreadable authority, and a hydrated stream with nothing durable
+    // left are equally nobody's to write, and their records are equally pure
+    // accumulators; keying on the outcome alone left each of those resident
+    // for the life of the process, the cost bounded residency exists to bound
+    // (#9947). The run facts live on the session, not the record, so the
+    // phase stays answerable after the release.
+    //
+    // Two origins keep the record. `live` is a producer in this process.
+    // `pending` is a row nobody has opened, whose record may be the only home
+    // of a live fact — releasing that loses it rather than parking
+    // it. `none` is the one answer that is ambiguous about which of the two
+    // it is: it is also what a run reads as between its `run.config` and its
+    // first status, so a record naming an execution the hydration did not
+    // account for is a run starting, not an empty stream.
+    const { origin } = this.state.resolveStreamPhase(streamId);
+    if (origin === 'live' || origin === 'pending') return false;
+    if (
+      origin === 'none' &&
+      this.state.snapshots.getRunMetadata(streamId, { quiet: true })
+        .executionId !== undefined
+    ) {
+      return false;
+    }
     if (!this.state.getStreamMetadata(streamId).parentStreamId) return false;
     return this.options.isStreamPresented?.(streamId) !== true;
   }
@@ -943,14 +981,28 @@ export class SessionFactApplier {
     }
 
     if (isNewStream || isNewRunningTransition) {
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.buildStreamStatesForRefresh(
-          streamId,
-          status,
-          substate,
-          runStartedAt,
-        ),
-      });
+      // The status being applied has not necessarily reached the status
+      // machine yet (hosts and tests also call this method directly), so it
+      // travels with the push instead of being re-read.
+      //
+      // Unless a hold was recorded while this handler was suspended in the
+      // rehydrate await above: this status is then the older fact, and its
+      // override would paint a live phase over the read-only detail the
+      // refusal wrote (an override suppresses `statusDetail`). Push without
+      // it and let the renderer read the resolved phase, hold included.
+      const held = this.state.streamStatus.holdState(streamId) !== undefined;
+      this.pushStreamMetadata(
+        streamId,
+        held
+          ? undefined
+          : {
+              phaseOverride: {
+                phase: status,
+                ...(substate ? { substate } : {}),
+                ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+              },
+            },
+      );
     } else {
       const lastTimestamp =
         this.state.streamLogs.getTimestampRange(streamId).last;
@@ -966,26 +1018,5 @@ export class SessionFactApplier {
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
     return this.state.getStreamMetadata(streamId).agentCategory;
-  }
-
-  /**
-   * Snapshot the status machine and splice in `streamId`'s about-to-be-applied
-   * status/substate, which hasn't been written to the machine yet when this
-   * is called during `setStreamStatus`. Combined into one map so the phase
-   * and substate views can't diverge on which streams they cover.
-   */
-  private buildStreamStatesForRefresh(
-    streamId: StreamTabId,
-    status: StreamPhase,
-    substate?: StreamSubstate,
-    runStartedAt?: number,
-  ): Map<StreamTabId, StreamPhaseState> {
-    const statesForRefresh = this.state.streamStatus.getAllStreamStates();
-    statesForRefresh.set(streamId, {
-      phase: status,
-      ...(substate ? { substate } : {}),
-      ...(runStartedAt !== undefined ? { runStartedAt } : {}),
-    });
-    return statesForRefresh;
   }
 }

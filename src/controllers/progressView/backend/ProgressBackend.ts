@@ -321,7 +321,14 @@ export class ProgressBackend {
     this.inFlightActivationGenerations.add(generation);
     const hydration = await Promise.allSettled([
       leasePromise,
-      this.state.snapshots.preload([stream]),
+      // Opening the row is the one moment this host reads the stream's
+      // durable run facts, and it rides the preload it already performs:
+      // chained after it because the preload backfills the summary mirror the
+      // execution FK comes from. There is no pass over the other rows —
+      // an unopened one renders from the always-resident summary tier.
+      this.state.snapshots
+        .preload([stream])
+        .then(() => this.state.hydrateRunFacts(stream)),
     ]);
     this.inFlightActivationGenerations.delete(generation);
     const transcriptLeaseResult = hydration[0];
@@ -357,6 +364,11 @@ export class ProgressBackend {
     // has already thrown for any rejection.
     if (transcriptLeaseResult.status !== 'fulfilled')
       throw transcriptLeaseResult.reason;
+
+    // The open just read this stream's run facts, so publish the phase they
+    // resolve to. This is the only moment a restored row's phase converges
+    // from "not opened yet" to what actually happened to that run.
+    this.renderer.updateStreamMetadata(stream);
 
     const previousStream = this.presentation.activeStream;
     const previousTranscriptLease = this.transcriptPresentationLease;
@@ -662,6 +674,9 @@ export class ProgressBackend {
     if (!canUseStreamDataDir(stream)) return undefined;
 
     const hadDeletableData = this.hasDeletableStreamData(stream);
+    // The renderer owns this: it sends both the full roster and the
+    // incremental per-stream metadata a tab can first appear through.
+    const wasRendered = this.renderer.hasRenderedStream(stream);
     // An undefined expectedIncarnation falls back to the current incarnation
     // inside `clearStream`, matching the no-options call this replaces.
     const deletion = await this.state.clearStream(stream, {
@@ -671,12 +686,17 @@ export class ProgressBackend {
       return deletion;
     }
     // `clearStream` deleted and tombstoned the stream, so report `deleted`
-    // even when it had no durable data (ephemeral-only): the caller must not
-    // retire the tombstone a stale fact could then resurrect through.
-    if (!hadDeletableData) return 'deleted';
+    // even when this call removed nothing of its own: the caller must not
+    // retire the tombstone a stale fact could then resurrect through. The
+    // removal chrome below is owed to whatever the rail is showing, not to
+    // whatever this call deleted — a swept background shell has no durable
+    // data left by the time its `removeStream` fact arrives, and skipping the
+    // chrome for it left its row on screen with nothing behind it.
+    if (!hadDeletableData && !wasRendered) return 'deleted';
 
     this.lifecycle.cleanupDeletedStream(stream);
     this.webviewBridge.clearStream(stream);
+    this.renderer.forgetRenderedStream(stream);
     const selectionWasDeleted = this.presentation.activeStream === stream;
     if (selectionWasDeleted) {
       this.presentation.select('');

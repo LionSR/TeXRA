@@ -23,6 +23,7 @@ vi.mock('@tools/goal', async (importOriginal) => {
 
 import { getExecutionStore } from '@agent/storage';
 import * as logger from '@logger/logUtils';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -696,11 +697,11 @@ describe('ProgressBackend cleanup', () => {
       try {
         await expect(
           backend.state.stores.sweepLeftoverStreams(),
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual([]);
 
         expect(warnSpy).toHaveBeenCalledWith(
           'SessionStores',
-          `Skipping orphaned execution cleanup for ${failing.executionId}; startup will continue.`,
+          `Skipping orphaned execution cleanup for ${failing.executionId}; the sweep continues.`,
           { data: expect.any(Error) },
         );
         await expectStored(
@@ -757,7 +758,7 @@ describe('ProgressBackend cleanup', () => {
     }
   });
 
-  it('sweeps leftover background shells at startup, keeping real sessions', async () => {
+  it('sweeps leftover background shells, keeping real sessions', async () => {
     // The sweep reads the persisted identity meta (kind 'process'), the
     // authority since the legacy name-prefix reader was retired.
     const shell = {
@@ -807,11 +808,34 @@ describe('ProgressBackend cleanup', () => {
     try {
       await second.session.waitUntilReady();
       await second.backend.state.load();
-      await second.backend.state.stores.sweepLeftoverStreams();
+      second.backend.setupEventListeners();
+      // The rail paints the persisted shell before the deferred sweep runs:
+      // a shell hydrates with no status, so no filter hides its row.
+      await second.backend.syncRenderedStreams({ syncActiveStream: false });
 
+      const swept = await second.backend.state.stores.sweepLeftoverStreams();
+
+      expect(swept).toEqual([shell.stream]);
       expect(second.backend.state.streamLogs.has(shell.stream)).toBe(false);
       await expectStored(streamDataDir(shell.stream), false);
       await expectStored(`executions/${shell.executionId}`, false);
+
+      // What the sweep's caller publishes for each swept shell. Its durable
+      // state is already gone, so the removal is presentation-only — and the
+      // stranded row is the whole reason the fact is published at all.
+      for (const streamId of swept) {
+        second.session.events.emit({
+          scope: 'session',
+          event: { type: 'removeStream', payload: { streamId } },
+        });
+      }
+
+      await vi.waitFor(() =>
+        expect(second.messages).toContainEqual({
+          command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+          stream: shell.stream,
+        }),
+      );
 
       // A real session is untouched, whatever its age.
       expect(second.backend.state.streamLogs.has(session.stream)).toBe(true);

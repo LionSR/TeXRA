@@ -166,7 +166,7 @@ interface OwnedExecutionLease {
  * (`owned`), or another process whose owner is alive or unprovable (`held`).
  * Malformed present state rejects deliberately.
  */
-type ExecutionLeasePresence =
+export type ExecutionLeasePresence =
   | { readonly status: 'free' }
   | { readonly status: 'owned' }
   | { readonly status: 'held'; readonly owner: LeaseOwnerRecord };

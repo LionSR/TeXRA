@@ -13,6 +13,7 @@ import {
   runInSession,
   SessionHandle,
 } from '@agent/runtime';
+import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { DisposableStore } from '@platform/disposable';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
@@ -267,6 +268,12 @@ async function openPaperSession(
         ),
       );
       resources.add(options.attachSession(session));
+      // Off the ready path: the leftover-stream sweep reads this paper's
+      // whole storage root, so it starts on a timer nothing awaits. It is
+      // scheduled inside the session scope, which the timer inherits, so the
+      // sweep reads this paper's storage and not another's; closing the paper
+      // or shutting the process down cancels it if it has not started.
+      resources.add(scheduleLeftoverStreamSweep(session));
       return {
         root,
         roots,

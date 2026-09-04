@@ -1,10 +1,20 @@
 import {
+  getExecutionStore,
+  readExecutionMetaCore,
   SessionStores,
   type DeleteAllStreamsResult,
   type DeleteStreamResult,
 } from '@agent/storage';
+import {
+  inspectExecutionLease,
+  type ExecutionLeasePresence,
+} from '@agent/storage/executionLease';
+import { flowKey } from '@agent/node/persistedFlow';
 import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import type {
+  StreamPhaseState,
+  StreamStatusMachine,
+} from '@agent/runtime/StreamStatusService';
 import {
   defaultSession,
   type SessionHandle,
@@ -16,13 +26,21 @@ import {
   type ContextStateData,
   type ConversationProgress,
   type StreamStage,
+  type ExecutionId,
+  type RunOutcome,
   type StreamIdentityFields,
   type StreamPhase,
   type StreamTabId,
   AgentCategory,
+  STREAM_PHASE,
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Config-derived display fields: undefined until the stream's `RunConfig`
@@ -105,6 +123,41 @@ interface EphemeralStreamState {
 }
 
 /**
+ * What {@link SessionState.hydrateRunFacts} learned about the run a stream
+ * last carried: enough for {@link SessionState.resolveStreamPhase} to say
+ * what happened to a stream with no live flow context in this process, and
+ * nothing more.
+ *
+ * In memory only — nothing here is written to a sidecar or a summary file,
+ * and a fresh process learns it again the next time the row is opened.
+ *
+ * Display-only. Each field was true at the instant the row was opened, so a
+ * caller about to WRITE (open, resume, delete) re-reads the authority under
+ * the lease instead of trusting them: a process-local mirror cannot observe
+ * another host's finalize.
+ */
+interface RunPhaseFacts {
+  /** `ExecutionMeta.outcome`: absent for a run that never finalized. */
+  readonly outcome?: RunOutcome;
+  /** Whether a resumable flow checkpoint file exists (existence, not validity). */
+  readonly checkpointPresent?: boolean;
+  /** Who held the execution lease when the row was opened. */
+  readonly lease?: ExecutionLeasePresence;
+  /** Why this stream's execution authority could not be read, if it could not. */
+  readonly authorityFailure?: string;
+}
+
+/**
+ * What {@link SessionState.resolveStreamPhase} decided about one stream, and
+ * on what evidence. See that method for the meaning of each `origin`.
+ */
+interface ResolvedStreamPhase {
+  readonly state?: StreamPhaseState;
+  readonly origin: 'live' | 'derived' | 'pending' | 'none';
+  readonly detail?: string;
+}
+
+/**
  * Host-neutral session state.
  *
  * Coordinates two persistence stores — `streamLogs` (transcript) and
@@ -130,6 +183,14 @@ export class SessionState {
     StreamTabId,
     CachedStreamMetadata
   >();
+  /**
+   * What each opened row's last run turned out to be — see
+   * {@link RunPhaseFacts}. Written by {@link hydrateRunFacts}, which only the
+   * row-open paths call, so this map holds an entry per row the user has
+   * actually opened rather than one per stream in the workspace. Dropped when
+   * the stream's execution changes hands, and with the stream itself.
+   */
+  private readonly _runFacts = new Map<StreamTabId, RunPhaseFacts>();
   /**
    * Per-stream incarnation generation, bumped only by a legitimate claim on
    * the identity (`claimStreamIdentity`, from a workflow attachment with live
@@ -320,6 +381,190 @@ export class SessionState {
     this.updateStreamMetadata(stream, { description });
   }
 
+  // -- Stream phase ------------------------------------------------------------
+
+  /**
+   * Read what this stream's last run turned out to be, for the row the user
+   * just opened. Four small reads against that row's execution: the
+   * read-only lease inspection (a dead claim reports as absent and is
+   * unlinked by the next claim, never by this call), one `exists` stat for
+   * the flow checkpoint (never a parse of the often ~600 KB record), a
+   * core-schema parse of the execution row for the outcome, and the run
+   * record — the same pair of authority reads the sidecar preload makes, so
+   * a row the preload found unreadable can never look healthy here.
+   *
+   * Called from the row-open paths only, one stream at a time — never over a
+   * roster. That is the whole point: an unopened row renders from the
+   * always-resident summary tier, and {@link resolveStreamPhase}'s unhydrated
+   * arm already answers for it, so no startup pass has to walk the history to
+   * make the first screen correct.
+   *
+   * Never throws. A read that fails lands in `authorityFailure`, which the
+   * rule renders read-only with the cause rather than as a run that never
+   * happened.
+   *
+   * ORDERING INVARIANT — lease, then checkpoint, then outcome, sequentially.
+   * A foreign finalize writes the outcome, deletes the checkpoint, then
+   * releases the lease. Reading in that same order means a free lease is
+   * always followed by the outcome read that a finalize which released it has
+   * already written. Any other order (a parallel batch included) can splice
+   * "lease free, no checkpoint" observed after the finalize onto "no outcome"
+   * observed before it, and leave the row reading Ready.
+   */
+  async hydrateRunFacts(stream: StreamTabId): Promise<void> {
+    // The always-resident summary mirror is the FK: a caller that preloaded
+    // the sidecar first (every row-open path does) has already backfilled it
+    // for a legacy row whose summary predates the mirror.
+    const executionId = this.getStreamMetadata(stream).executionId;
+    // The incarnation is the one fact every legitimate re-claim bumps,
+    // including a deterministic re-run that reuses the same execution id and
+    // a `claimStreamIdentity` that drops a tombstone without touching the
+    // mirror; the execution-id comparison alone would miss both.
+    const incarnation = this.incarnationOf(stream);
+    const facts = await this.readRunFacts(executionId);
+    // Re-checked after the reads: a deletion, a re-claim, or a fresh
+    // execution during them makes this tuple somebody else's.
+    if (this.isStreamRemoved(stream)) return;
+    if (this.incarnationOf(stream) !== incarnation) return;
+    if (this.getStreamMetadata(stream).executionId !== executionId) return;
+    // Published even when it is empty: the entry's existence is what says
+    // this row has been read, and an empty tuple is the honest answer for a
+    // stream that never had an execution.
+    this._runFacts.set(stream, Object.freeze(facts));
+  }
+
+  private async readRunFacts(
+    executionId: ExecutionId | undefined,
+  ): Promise<RunPhaseFacts> {
+    if (!executionId) return {};
+    try {
+      const store = getExecutionStore(executionId);
+      const lease = await inspectExecutionLease(executionId);
+      const checkpointPresent = await store.exists(flowKey(executionId));
+      // Core-only, and strict on the core: a malformed row is an unreadable
+      // authority, but a malformed OPTIONAL `workflow` projection must not
+      // cost a valid outcome beside it.
+      const meta = await readExecutionMetaCore(store);
+      // The same config read the sidecar preload makes, and the reason it is
+      // here: that preload catches an unreadable `config.json` into its own
+      // authority failure, so without this read the row would come back with a
+      // healthy tuple and render as completed/cancelled off a run whose
+      // authority is half unreadable. Last, so the lease → checkpoint →
+      // outcome ordering above is untouched.
+      await store.readConfig();
+      return {
+        checkpointPresent,
+        lease,
+        ...(meta?.outcome !== undefined && { outcome: meta.outcome }),
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Could not read run phase facts for execution ${executionId}.`,
+        { data: { executionId, error } },
+      );
+      return { authorityFailure: toErrorMessage(error) };
+    }
+  }
+
+  /**
+   * Drop a stream's run facts. Called when a fresh run takes the stream over
+   * — the previous run's outcome, checkpoint, and lease are not this run's —
+   * and when the stream itself is cleared.
+   */
+  clearRunFacts(stream: StreamTabId): void {
+    this._runFacts.delete(stream);
+  }
+
+  /**
+   * The one read-time rule for a stream's phase, and the only place that
+   * decides what a stream with no live flow context in this process is.
+   *
+   * `origin` says where the answer came from, and that is the second half of
+   * the contract:
+   * - `live` — this process owns a producer for the stream (a phase, a launch
+   *   reservation, or a hold). Nothing derived may override it.
+   * - `derived` — no producer exists anywhere: the lease is free and the
+   *   durable facts say what happened. Only this value licenses a reader to
+   *   treat the stream's rows as final.
+   * - `pending` — this row has not been opened yet, so the run tuple is
+   *   unknown rather than absent. It converges when the row is opened and
+   *   {@link hydrateRunFacts} reads it.
+   * - `none` — read, lease free, and nothing durable is left of the run.
+   *
+   * `detail` is the human sentence for a stream that has no phase and cannot
+   * get one (held elsewhere, or unreadable); a caller renders it read-only
+   * with the `unavailable` sentinel. Pure and synchronous: every fact it
+   * reads is already resident (the status machine, the always-resident
+   * transcript summary, and the run tuple this row's own open captured). It
+   * never writes and never starts a read.
+   */
+  resolveStreamPhase(stream: StreamTabId): ResolvedStreamPhase {
+    const live = this.streamStatus.getStreamState(stream);
+    // The hold is read before the phase because `markUnavailable` keeps the
+    // phase the stream already had on the hold entry, so such an entry
+    // answers `getStreamState` too. Taking the phase first would drop the
+    // detail and offer the terminal buttons on a run this process does not
+    // own — both facts belong to the caller.
+    const hold = this.streamStatus.holdState(stream);
+    if (hold !== undefined) {
+      return { ...(live ? { state: live } : {}), origin: 'live', detail: hold };
+    }
+    if (live) return { state: live, origin: 'live' };
+
+    // The run tuple this row's own open read, not the sidecar record: asking
+    // it here neither loads a sidecar nor pins one resident (#9947). Absent
+    // means the row has never been opened — the tuple is unknown rather than
+    // empty. The transcript summary is resident for every stream either way,
+    // so a transcript left open is enough to say the run was interrupted
+    // without reading anything, which is what an unopened row renders from.
+    const run = this._runFacts.get(stream);
+    if (!run) {
+      return this.streamLogs.hasUnfinishedOutput(stream)
+        ? { state: { phase: STREAM_PHASE.CANCELLED }, origin: 'derived' }
+        : { origin: 'pending' };
+    }
+
+    if (run.authorityFailure !== undefined) {
+      return {
+        origin: 'derived',
+        detail: streamUnreadableMessage(run.authorityFailure),
+      };
+    }
+    // A live foreign owner is not a finished run: an inferred terminal phase
+    // here would offer Resume and Delete on a run another process is
+    // executing. A lease this process holds with no live flow context is a
+    // registry/lease disagreement — neither foreign nor ready.
+    if (run.lease?.status === 'held') {
+      return { origin: 'derived', detail: streamHeldMessage(run.lease.owner) };
+    }
+    if (run.lease?.status === 'owned') {
+      return {
+        origin: 'derived',
+        detail: streamUnreadableMessage(
+          'lease owned by this process with no live run',
+        ),
+      };
+    }
+    if (run.outcome) {
+      return { state: { phase: run.outcome }, origin: 'derived' };
+    }
+    // No outcome and nobody alive to write one: the run was interrupted. A
+    // surviving checkpoint or an unclosed transcript is the evidence, and
+    // CANCELLED is the value every downstream table already renders for it.
+    if (run.checkpointPresent || this.streamLogs.hasUnfinishedOutput(stream)) {
+      return { state: { phase: STREAM_PHASE.CANCELLED }, origin: 'derived' };
+    }
+    return { origin: 'none' };
+  }
+
+  /**
+   * {@link resolveStreamPhase}'s phase alone, for the render paths that only
+   * need what the status machine used to answer.
+   */
+  getStreamPhaseState(stream: StreamTabId): StreamPhaseState | undefined {
+    return this.resolveStreamPhase(stream).state;
+  }
+
   // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).
 
   // -- Ephemeral execution state ----------------------------------------------
@@ -500,6 +745,7 @@ export class SessionState {
     // the fresh run has already tracked its own phase there.
     this._ephemeralState.delete(stream);
     this._streamMetadataCache.delete(stream);
+    this._runFacts.delete(stream);
     return { incarnation, changedRosterParents };
   }
 
@@ -585,13 +831,14 @@ export class SessionState {
     return changedParents;
   }
 
-  /** Drop the ephemeral status/session/execution/metadata-cache state a
-   *  cleared stream leaves behind. Callers still own tombstoning it in
+  /** Drop the ephemeral status/session/execution/metadata-cache/run-fact
+   *  state a cleared stream leaves behind. Callers still own tombstoning it in
    *  `_removedStreams` and, for `clearAll`, scrubbing rosters. */
   private clearEphemeralStreamState(stream: StreamTabId): void {
     this.streamStatus.clearStream(stream);
     this._ephemeralState.delete(stream);
     this._streamMetadataCache.delete(stream);
+    this._runFacts.delete(stream);
   }
 
   private incarnationOf(stream: StreamTabId): number {
@@ -694,10 +941,12 @@ export class SessionState {
 
     // ProgressBackend waits for SessionHandle readiness before entering this
     // method. The session owns transcript opening and sidecar hydration; a
-    // presentation must never reload those live stores. The startup sweep
-    // (dropping leftover background shells, then orphaned persisted state) is
-    // every host's own responsibility at process bring-up, before any
-    // presentation attaches — see `sweepLeftoverStreams`'s callers.
+    // presentation must never reload those live stores. The leftover-stream
+    // sweep (dropping leftover background shells, then orphaned persisted
+    // state) is the host process's own, scheduled off this path once its UI is
+    // up — see `scheduleLeftoverStreamSweep`. A presentation may therefore
+    // attach before it has run, and never waits for it; this only drains
+    // deletions that have already started.
     await this.stores.waitForPendingStreamDeletions();
 
     this.logger.info(

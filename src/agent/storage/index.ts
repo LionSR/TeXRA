@@ -19,6 +19,7 @@ export {
   getExecutionStore,
   clearStoreCache,
   isReservedKvKeyName,
+  readExecutionMetaCore,
 } from './ExecutionKVStore';
 export {
   buildCliWorkflowResultMeta,

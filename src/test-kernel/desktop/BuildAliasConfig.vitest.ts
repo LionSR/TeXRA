@@ -46,7 +46,7 @@ describe('build alias configuration', () => {
 
     // The extension bundlers resolve the same root table: Vite through the
     // shared aliases.mjs, esbuild through tsconfig path mapping.
-    const extensionViteConfig = readText('packages/extension/vite.config.ts');
+    const extensionViteConfig = readText('packages/extension/vite.config.mts');
     const extensionEsbuildConfig = readText(
       'packages/extension/esbuild.config.mjs',
     );

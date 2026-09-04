@@ -249,10 +249,7 @@ describe('retained finished children', () => {
       backend.presentation.activeStream,
       backend.presentation.activeStream,
     );
-    backend.renderer.updateStreamMetadata(
-      PARENT,
-      backend.state.streamStatus.getAllStreamStates(),
-    );
+    backend.renderer.updateStreamMetadata(PARENT);
 
     const rosters = messages.flatMap((message) => {
       if (message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS) {

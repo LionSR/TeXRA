@@ -21,7 +21,7 @@ import type {
 } from '@shared/schemas';
 
 // Local imports - model handlers
-import { ModelHandler } from './ModelHandler';
+import { ModelHandler, type AssistantTextAppendOptions } from './ModelHandler';
 
 // Third-party imports
 import type { ModelConfig } from 'llm-zoo';
@@ -225,7 +225,7 @@ export class ModelHandlerValidation extends ModelHandler<
   protected appendTextToLastAssistantMessage(
     _messages: ChatCompletionMessageParam[],
     _text: string,
-    _options?: { afterContinuationPrompt?: boolean; fallbackText?: string },
+    _options?: AssistantTextAppendOptions,
   ): boolean {
     return false;
   }

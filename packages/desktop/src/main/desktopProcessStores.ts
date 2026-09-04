@@ -10,7 +10,6 @@ import { toLogData } from './desktopLogUtils.js';
 export async function initializeDesktopProcessStores(session: SessionHandle) {
   const logger = createLog('DesktopProcessStores');
   const stores = createSessionStores(session);
-  await stores.sweepLeftoverStreams();
   const streamIncarnations = new Map<StreamTabId, number>();
   const pendingRemovals = new Map<StreamTabId, number>();
 

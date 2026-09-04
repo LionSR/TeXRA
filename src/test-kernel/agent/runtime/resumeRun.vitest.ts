@@ -25,6 +25,14 @@ vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
   getExecutionStore: getExecutionStoreMock,
 }));
 
+// The refusal path re-reads the durable facts, which the fixtures below do
+// not seed: the store double answers only `readConfig`/`readMeta`.
+const classifyRunMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/runtime/runClassification', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/runtime/runClassification')>()),
+  classifyRun: classifyRunMock,
+}));
+
 const readExecutionStreamIndexMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/executionListing', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionListing')>()),
@@ -80,6 +88,7 @@ describe('resumeRun tool-use queue ownership', () => {
       readMeta: async () => ({ streamId: STREAM }),
     });
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
+    classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
     readExecutionStreamIndexMock.mockReset().mockResolvedValue({
       byStream: new Map([[STREAM, EXECUTION]]),
       unreadable: new Map(),
@@ -320,5 +329,23 @@ describe('resumeRun tool-use queue ownership', () => {
       resumeRun(EXECUTION, { session, executeWorkflow }),
     ).resolves.toEqual({ failed: 'finished' });
     expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
+    expect(session.status.holdState(STREAM)).toBeUndefined();
+  });
+
+  // An empty retrieval is also what a torn read of the owner's rewrite looks
+  // like, so the refusal is decided from the lease: a run another process is
+  // executing keeps its hold instead of being reported finished.
+  it('refuses an empty retrieval held elsewhere as owned elsewhere', async () => {
+    const session = createSession();
+    retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
+    classifyRunMock.mockResolvedValueOnce({
+      kind: 'held_elsewhere',
+      owner: { pid: 4321, processStart: null, hostname: 'other-host' },
+    });
+
+    await expect(
+      resumeRun(EXECUTION, { session, executeWorkflow }),
+    ).resolves.toEqual({ failed: 'owned_elsewhere' });
+    expect(session.status.holdState(STREAM)).toContain('4321');
   });
 });

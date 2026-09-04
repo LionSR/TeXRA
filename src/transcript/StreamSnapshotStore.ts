@@ -19,7 +19,7 @@
 import pMap from 'p-map';
 import { z } from 'zod';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionStore, readExecutionMetaCore } from '@agent/storage';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -60,6 +60,7 @@ import {
 
 import { mapToRecord, throwAggregated } from '@utils/core';
 import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -158,7 +159,13 @@ const SNAPSHOT_RUN_FACT_TYPES = Object.freeze([
 
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 interface HydratedRunState {
-  authorityReadComplete: boolean;
+  /**
+   * Why the execution authority could not be read, or `undefined` when it
+   * was read completely. Carries the cause rather than a bare boolean so the
+   * `summaryMetaHydrationFallback` decision below and the warning that
+   * accompanies it cannot disagree about what went wrong.
+   */
+  authorityFailure?: string;
   config?: AgentConfig;
   identity?: RunIdentity;
   userFollowUpSupport?: UserFollowUpSupport;
@@ -1161,10 +1168,10 @@ export class StreamSnapshotStore {
    * own liveness rule is what keeps a freshly active record resident.
    *
    * Public on purpose, and the one row added to the store-surface baseline:
-   * the session's lifecycle owner requests it for a finished child stream
-   * nobody is presenting, and a host's focus-leave path requests it for the
-   * stream it just stopped presenting. Without it, the record set grows with
-   * every stream a long session touches.
+   * the session's lifecycle owner requests it for a child stream nobody is
+   * presenting and no live run in this process owns, and a host's focus-leave
+   * path requests it for the stream it just stopped presenting. Without it,
+   * the record set grows with every stream a long session touches.
    */
   async requestEviction(
     stream: StreamTabId,
@@ -1397,11 +1404,14 @@ export class StreamSnapshotStore {
     executionId?: ExecutionId,
   ): void {
     const record = this.getOrCreateRecord(stream);
-    if (
-      executionId &&
-      record.runExecutionId &&
-      record.runExecutionId !== executionId
-    ) {
+    // The same evidence `setRunStart` uses: a record minted after a bounded-
+    // residency release knows the execution it succeeds only through the
+    // mirror it started from, and reading the record field alone would let
+    // the departed run's identity, description, and run facts — which outlive
+    // the record by design — be read as this run's.
+    const previous =
+      record.runExecutionId ?? record.summaryMetaHydrationFallback?.executionId;
+    if (executionId && previous && previous !== executionId) {
       // A config for a new execution the store never saw `run.start` for:
       // the previous run's identity and description are not this run's.
       // Identity stays absent (renders pending) until `run.start` or a seed
@@ -1883,14 +1893,18 @@ export class StreamSnapshotStore {
     let identity: RunIdentity | undefined;
     let userFollowUpSupport: UserFollowUpSupport | undefined;
     let description: string | undefined;
-    let authorityReadComplete = true;
+    let authorityFailure: string | undefined;
 
     if (executionId) {
       let config: AgentConfig | null = null;
       try {
         const store = getExecutionStore(executionId);
+        // Core-only, and strict on the core (see {@link
+        // readExecutionMetaCore}): a malformed row is an unreadable authority,
+        // but a malformed OPTIONAL `workflow` projection is not — the identity
+        // and description below parsed either way.
         const [execMeta, execConfig] = await Promise.all([
-          store.readMeta(),
+          readExecutionMetaCore(store),
           store.readConfig(),
         ]);
         // Identity comes only from the stamped execution row; a row without
@@ -1901,14 +1915,14 @@ export class StreamSnapshotStore {
         description = execMeta?.description;
         config = execConfig;
       } catch (error) {
-        authorityReadComplete = false;
+        authorityFailure = toErrorMessage(error);
         log.warn(`Could not read execution record for stream ${stream}.`, {
           data: { stream, executionId, error },
         });
       }
       if (config) {
         return {
-          authorityReadComplete,
+          authorityFailure,
           config,
           identity,
           userFollowUpSupport,
@@ -1917,8 +1931,10 @@ export class StreamSnapshotStore {
       }
     }
 
+    // Same facts on the no-config path: a stream whose `config.json` is
+    // missing still has a readable identity and description.
     return {
-      authorityReadComplete,
+      authorityFailure,
       identity,
       userFollowUpSupport,
       description,
@@ -1989,7 +2005,7 @@ export class StreamSnapshotStore {
       const mirroredExecutionId =
         mirroredMeta?.executionId ?? previousExecutionId;
       if (
-        !hydrated.authorityReadComplete &&
+        hydrated.authorityFailure !== undefined &&
         mirroredExecutionId === executionId
       ) {
         record.summaryMetaHydrationFallback = withoutSummaryMetaFields(

@@ -64,6 +64,18 @@ export class LitSessionRenderer implements SessionRendererPort {
     StreamTabId,
     ConversationProgress
   >();
+  /**
+   * The streams this renderer has actually put on screen — the roster of the
+   * last `UPDATE_STREAMS`, plus every stream an incremental
+   * `UPDATE_STREAM_METADATA` introduced since. Nothing else remembers it:
+   * both messages are built from live state and keep no copy, and live state
+   * stops listing a stream the moment it is deleted, including when some
+   * other owner deleted it. That is exactly when a row is stranded (the
+   * leftover sweep republishes each swept shell as a `removeStream` fact for
+   * that reason), so this is what answers "is the view still showing this
+   * stream?" once its durable state is already gone.
+   */
+  private readonly renderedStreams = new Set<StreamTabId>();
 
   constructor(
     private readonly state: SessionState,
@@ -98,7 +110,18 @@ export class LitSessionRenderer implements SessionRendererPort {
   dispose(): void {
     this.progressDebounce.cancel();
     this.pendingProgressUpdates.clear();
+    this.renderedStreams.clear();
     this.webviewBridge.clearAll();
+  }
+
+  /** Whether this renderer's last projection put `stream` on screen. */
+  hasRenderedStream(stream: StreamTabId): boolean {
+    return this.renderedStreams.has(stream);
+  }
+
+  /** Forget a stream whose removal this renderer has just projected. */
+  forgetRenderedStream(stream: StreamTabId): void {
+    this.renderedStreams.delete(stream);
   }
 
   clearPendingConversationProgress(streamId: StreamTabId): void {
@@ -108,11 +131,11 @@ export class LitSessionRenderer implements SessionRendererPort {
   onStreamMetadataChanged(
     streamId: StreamTabId,
     options?: {
-      streamStates?: Map<StreamTabId, StreamPhaseState>;
+      phaseOverride?: StreamPhaseState;
     },
   ): void {
     if (!this.isAvailable()) return;
-    this.updateStreamMetadata(streamId, options?.streamStates);
+    this.updateStreamMetadata(streamId, options?.phaseOverride);
   }
 
   onStreamStatusChanged(
@@ -365,7 +388,7 @@ export class LitSessionRenderer implements SessionRendererPort {
   /** Push one stream's metadata patch. */
   updateStreamMetadata(
     streamId: StreamTabId,
-    streamStates?: Map<StreamTabId, StreamPhaseState>,
+    phaseOverride?: StreamPhaseState,
   ): void {
     if (!this.isAvailable()) return;
     const streamInfo = buildStreamInfo(
@@ -373,13 +396,11 @@ export class LitSessionRenderer implements SessionRendererPort {
       streamId,
       this.getActiveStream(),
     );
+    this.renderedStreams.add(streamId);
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
       streamInfo,
-      streamState: this.metadataFor(
-        streamInfo,
-        streamStates ?? this.state.streamStatus.getAllStreamStates(),
-      ),
+      streamState: this.metadataFor(streamInfo, phaseOverride),
     });
   }
 
@@ -397,11 +418,15 @@ export class LitSessionRenderer implements SessionRendererPort {
     if (!this.isAvailable()) return;
 
     const streams = buildStreamInfos(this.state, projectedStream);
-    const states = this.state.streamStatus.getAllStreamStates();
     const streamStates: Record<StreamTabId, StreamMetadata> = {};
     for (const streamInfo of streams) {
-      streamStates[streamInfo.name] = this.metadataFor(streamInfo, states);
+      streamStates[streamInfo.name] = this.metadataFor(streamInfo);
     }
+
+    // A full refresh replaces the roster wholesale, incremental additions
+    // included: what is not in this message is not on screen any more.
+    this.renderedStreams.clear();
+    for (const streamInfo of streams) this.renderedStreams.add(streamInfo.name);
 
     // Full stream-tabs refresh, carrying the per-stream metadata patch.
     const unsupportedCommands = this.getUnsupportedCommands?.();
@@ -416,22 +441,34 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  /** Immutable per-stream metadata for one already-built tab info. */
+  /**
+   * Immutable per-stream metadata for one already-built tab info.
+   *
+   * `phaseOverride` is the one phase the rule cannot see yet: the status a
+   * caller is in the middle of applying, which has not reached the status
+   * machine. Everything else — live, derived, or unknown — comes from
+   * {@link SessionState.resolveStreamPhase}.
+   */
   private metadataFor(
     streamInfo: StreamTabInfo,
-    streamStates: Map<StreamTabId, StreamPhaseState>,
+    phaseOverride?: StreamPhaseState,
   ): StreamMetadata {
     const current = this.state.getStreamState(streamInfo.name);
-    const status = streamStates.get(streamInfo.name);
+    const resolved = this.state.resolveStreamPhase(streamInfo.name);
+    const status = phaseOverride ?? resolved.state;
     // A stream held by another process, or one whose run state could not be
     // read, has no phase in this session; the wire carries the sentinel so
     // the view renders it read-only, with `statusDetail` saying why.
-    const statusDetail = this.state.streamStatus.holdState(streamInfo.name);
+    const statusDetail = phaseOverride ? undefined : resolved.detail;
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
       status: statusDetail ? STREAM_LIFECYCLE_UNAVAILABLE : status?.phase,
       statusDetail,
-      substate: status?.substate,
+      // The unavailable sentinel travels alone: a hold keeps the phase the
+      // stream had, and shipping that phase's substate with the sentinel
+      // would light the active-run controls on a run this process cannot act
+      // on.
+      substate: statusDetail ? undefined : status?.substate,
       runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,
       lastTimestamp: this.state.streamLogs.getTimestampRange(streamInfo.name)

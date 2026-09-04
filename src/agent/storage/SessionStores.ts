@@ -217,6 +217,23 @@ export class SessionStores {
       stream,
       options?.expectedIncarnation,
       async () => {
+        if (!this.hasResidentStreamState(stream)) {
+          // Nothing this instance knows about is left to delete: some other
+          // owner — the leftover sweep, another host — already committed this
+          // stream's deletion. Every presentation that projects the resulting
+          // `removeStream` fact routes back through here, and without this the
+          // repeat costs a staged-deletion rescan plus a full walk of the
+          // executions directory, once per shell per presentation, to delete
+          // nothing. Report the deletion as committed so the caller still does
+          // its presentation-only removal.
+          if (options?.shouldDelete?.() === false) return 'superseded';
+          // The goal entry is keyed by stream alone and outlives both stores,
+          // so it is the one durable footprint a never-registered stream can
+          // still own. Forgetting it is a single in-memory key check when it
+          // holds nothing.
+          await this.forgetGoalEntry(stream);
+          return 'deleted';
+        }
         let executionId: ExecutionId | undefined;
         try {
           executionId = await this.executionIdForStream(stream);
@@ -228,13 +245,27 @@ export class SessionStores {
           return 'failed';
         }
         const deletion = (): Promise<DeleteStreamResult> =>
-          this.enqueueDeletion(() =>
-            this.deleteStreamAndNotify(
+          this.enqueueDeletion(async () => {
+            // Staged residue from a crash makes `stageDeleteStream` throw
+            // until it is reconciled, and the sweep that used to reconcile
+            // everything at bring-up now runs after the UI is up — a user (or
+            // the sweep itself) can reach this stream first. Recover just this
+            // stream's residue here, on the deletion queue, so it is ordered
+            // against THIS instance's other deletions. Mutual exclusion with
+            // the sweep's unscoped pass is not this queue's to give — the
+            // sweep builds its own `SessionStores` — and belongs to the
+            // coordinator both reconciles share (`StagedDeletionCoordinator`,
+            // which serializes them). The reconciliation stays logged.
+            await this.reconcileStagedDeletions(
+              new Set(this.streamLogs.keys()),
+              new Set([stream]),
+            );
+            return this.deleteStreamAndNotify(
               stream,
               executionId,
               options?.shouldDelete,
-            ),
-          );
+            );
+          });
         if (!executionId || !this.executions) return deletion();
         try {
           return await this.executions.runExecutionStep(executionId, deletion);
@@ -260,6 +291,12 @@ export class SessionStores {
    */
   deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
     return this.enqueueDeletion(async () => {
+      // Same recovery as `deleteStream`: a history delete can reach a stream
+      // with staged residue before the deferred sweep has reconciled it.
+      await this.reconcileStagedDeletions(
+        new Set(this.streamLogs.keys()),
+        new Set([stream]),
+      );
       const hadCanonicalStream = this.streamLogs.has(stream);
       await this.deleteStreamSidecars(stream);
       if (hadCanonicalStream) await this.notifyDeleted(stream);
@@ -465,6 +502,26 @@ export class SessionStores {
   }
 
   /**
+   * Whether this instance still holds state a deletion could act on: a
+   * transcript index entry, or a resident sidecar record — which is also the
+   * only in-memory source of the stream's execution edge. Both reads are
+   * in-memory, so this is the cheap admission for the repeat deletions a
+   * republished removal fact produces.
+   *
+   * False is not a claim that nothing is on disk, only that nothing this
+   * instance knows about is: staged residue no index entry refers to any more
+   * belongs to the orphan sweep, which enumerates `listStagedDeletions`.
+   */
+  private hasResidentStreamState(stream: StreamTabId): boolean {
+    return (
+      this.streamLogs.has(stream) ||
+      this.snapshots.hasProvenance(stream) ||
+      this.snapshots.getRunMetadata(stream, { quiet: true }).executionId !==
+        undefined
+    );
+  }
+
+  /**
    * The stream→execution edge. Live deletion paths resolve the current
    * execution from the resident snapshot record first: `run.start` updates
    * the in-memory record synchronously. A stream with no resident record
@@ -495,11 +552,20 @@ export class SessionStores {
     return undefined;
   }
 
+  /**
+   * Recover deletions a crash interrupted, so a stream with staged residue can
+   * be staged again. `selectedStreams` narrows the recovery to the streams the
+   * caller is about to delete; every other interrupted deletion keeps its own
+   * owner.
+   */
   private async reconcileStagedDeletions(
     liveStreams: ReadonlySet<StreamTabId>,
+    selectedStreams?: ReadonlySet<StreamTabId>,
   ): Promise<void> {
-    const reconciliation =
-      await this.snapshots.reconcileStagedDeletions(liveStreams);
+    const reconciliation = await this.snapshots.reconcileStagedDeletions(
+      liveStreams,
+      selectedStreams,
+    );
     if (
       reconciliation.restored.length > 0 ||
       reconciliation.pendingCleanup.length > 0 ||
@@ -692,29 +758,62 @@ export class SessionStores {
   }
 
   /**
-   * The startup sweep every process owner runs before presenting a rail: drop
-   * leftover background shells, then persisted state no live stream refers to.
+   * The sweep every process owner runs once per launch: drop leftover
+   * background shells, then persisted state no live stream refers to.
    *
    * One entry point so the order lives in one place. It matters: the ephemeral
    * sweep removes streams from the transcript index, and the orphan sweep reads
    * that index as its live set — running them the other way round would take
    * the shells' own sidecars for orphans on the next launch instead of this one.
+   *
+   * `runningStreams` names the streams this process is running right now. It
+   * is what makes the sweep safe off the bring-up path: those streams are
+   * never offered to the ephemeral half (whose deletions would otherwise queue
+   * behind a live execution lane for the run's whole lifetime), and they are
+   * retained by the orphan half. A caller sweeping before any run can exist
+   * may leave it out.
+   *
+   * Resolves to the streams it removed from the transcript index. Running off
+   * the ready path means a presentation may already be showing them, and no
+   * host repaints a rail for a deletion the store made on its own, so the
+   * caller owns telling presentations they are gone. The orphan half is not
+   * listed: by construction it only touches persisted state no index entry
+   * refers to, which nothing renders.
    */
-  async sweepLeftoverStreams(): Promise<void> {
-    await this.sweepEphemeralStreams(new Set(this.streamLogs.keys()));
-    const orphans = await this.sweepOrphanedStreams(
-      new Set(this.streamLogs.keys()),
+  async sweepLeftoverStreams(options?: {
+    readonly runningStreams?: ReadonlySet<StreamTabId>;
+  }): Promise<readonly StreamTabId[]> {
+    const running = options?.runningStreams ?? new Set<StreamTabId>();
+    const sweptShells = await this.sweepEphemeralStreams(
+      new Set(
+        [...this.streamLogs.keys()].filter((stream) => !running.has(stream)),
+      ),
     );
-    if (orphans.streams.length > 0 || orphans.executionIds.length > 0) {
-      log.info(
-        `Removed ${orphans.streams.length} orphaned stream sidecar(s) and ${orphans.executionIds.length} execution dir(s).`,
-        { data: orphans },
+    // The ephemeral half has already committed its deletions by now, so a
+    // failure in the orphan half must not hide them from the caller: the
+    // shells it swept still need their presentation removal published.
+    try {
+      const orphans = await this.sweepOrphanedStreams(
+        new Set([...this.streamLogs.keys(), ...running]),
+      );
+      if (orphans.streams.length > 0 || orphans.executionIds.length > 0) {
+        log.info(
+          `Removed ${orphans.streams.length} orphaned stream sidecar(s) and ${orphans.executionIds.length} execution dir(s).`,
+          { data: orphans },
+        );
+      }
+    } catch (error) {
+      log.warn(
+        `The orphaned-stream sweep did not finish: ${toErrorMessage(error)}`,
+        { data: error },
       );
     }
+    return sweptShells;
   }
 
   /**
-   * Delete background-shell streams a previous process left behind.
+   * Delete background-shell streams left behind by a process that is not
+   * running them any more.
    *
    * A background shell is ephemeral by construction: `autoClose` drops its tab
    * the moment the command finalizes, and the command's output is already
@@ -727,17 +826,25 @@ export class SessionStores {
    * persisted shell hydrates with no status at all and no rail filter can key
    * off one.
    *
-   * A shell still running holds its execution lease, so `deleteStream` answers
-   * `'active'` and keeps it — the durable lease is the liveness authority here,
-   * not an in-memory phase. The cost is that a shell whose host crashed inside
-   * the lease's staleness window is retained (loudly) until the next launch.
+   * `candidates` is the caller's contract that none of these streams is
+   * running in this process. It matters because `deleteStream` does not refuse
+   * a live stream, it queues behind its execution lane: a shell this process
+   * started would hold the sequential loop below (and an unresolved
+   * `pendingStreamDeletions` entry that `waitForPendingStreamDeletions` awaits)
+   * for the command's whole lifetime. `sweepLeftoverStreams` filters them out.
+   *
+   * A shell another process is still running holds its execution lease, so
+   * `deleteStream` answers `'active'` and keeps it — the durable lease is the
+   * liveness authority for those, not an in-memory phase. The cost is that a
+   * shell whose host crashed inside the lease's staleness window is retained
+   * (loudly) until the next launch.
    */
   private async sweepEphemeralStreams(
-    liveStreams: ReadonlySet<StreamTabId>,
-  ): Promise<void> {
+    candidates: ReadonlySet<StreamTabId>,
+  ): Promise<StreamTabId[]> {
     const swept: StreamTabId[] = [];
     const retained: StreamTabId[] = [];
-    for (const stream of liveStreams) {
+    for (const stream of candidates) {
       // Identity is the one authority on what a stream is: a background shell
       // persists `RunIdentity` `{ kind: 'process' }` in its summary meta
       // mirror. A summary without the mirror is treated as not-a-shell and
@@ -769,6 +876,7 @@ export class SessionStores {
         { data: { retained } },
       );
     }
+    return swept;
   }
 
   /**
@@ -789,7 +897,14 @@ export class SessionStores {
       );
       return { streams: [], executionIds: [] };
     }
-    await this.reconcileStagedDeletions(liveStreams);
+    // On the deletion queue so this pass is ordered against this instance's
+    // own deletions. It cannot order it against another instance's — the
+    // queue is per-instance and this sweep runs on a `SessionStores` of its
+    // own — so exclusion with a concurrent scoped reconcile comes from the
+    // coordinator underneath both (`StagedDeletionCoordinator.reconcile`).
+    await this.enqueueDeletion(() =>
+      this.reconcileStagedDeletions(liveStreams),
+    );
     const [persistedStreams, stagedDeletions] = await Promise.all([
       this.snapshots.listPersistedStreams(),
       this.snapshots.listStagedDeletions(),
@@ -801,15 +916,62 @@ export class SessionStores {
     const sweptStreams: StreamTabId[] = [];
     const sweptExecutionIds: ExecutionId[] = [];
 
-    const { byStream, unreadable } = await readExecutionStreamIndex();
+    // One walk of the executions directory for both halves: the stream half
+    // resolves each orphan's owning execution from it, and the execution half
+    // takes the same references. Reading it twice cost a second full scan of
+    // every execution's metadata for exactly the same answer.
+    let listing: ExecutionStreamReferenceListing;
+    try {
+      listing = await this.listExecutionStreamReferences();
+    } catch (error) {
+      // Ownership is unknown for every row, and unknown state is never swept.
+      log.warn(
+        `Skipping orphan cleanup; the executions directory could not be listed: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+      return { streams: [], executionIds: [] };
+    }
+    const { references, unreadable } = listing;
+    const byStream = new Map(
+      references.map(({ streamId, executionId }) => [streamId, executionId]),
+    );
     await Promise.all(
       orphanedStreams.map(async (stream) => {
+        // `liveStreams` is a snapshot the caller took before this sweep's
+        // awaits. Off the bring-up path a stream can be registered after it —
+        // a new chat tab, a fresh background shell — and `ensureStream` puts
+        // it in the transcript index at once, so the fresh persisted listing
+        // holds a stream the stale snapshot does not and it would read as an
+        // orphan. Liveness is therefore re-read here, and again after staging
+        // through `shouldDelete`, the way `sweepOrphanedExecutions` does.
+        if (this.streamLogs.has(stream)) return;
+        const shouldDelete = (): boolean => !this.streamLogs.has(stream);
+        // `shouldDelete` re-reads the cached index, which is all a
+        // synchronous guard can do. This is the same question put to the
+        // shared store, and the sidecar deletion asks it once more in its
+        // post-staging window, immediately before the transcript delete and
+        // the irreversible sidecar commit. What remains is the window between
+        // that answer and the commit: a host registering this id inside it
+        // has its registration erased by our delete. Closing that would take
+        // a cross-host lock, which no deletion path here holds.
+        const stillOrphaned = async (): Promise<boolean> =>
+          !(await this.streamLogs.hasAuthoritativeStream(stream));
         try {
+          // This instance's summary index only knows the streams it opened
+          // with. Another host can register one after that, and its transcript
+          // lives in the shared authoritative store alone — deleting this
+          // stream's sidecars and execution would erase live state. Only the
+          // durable index may admit the irreversible delete, exactly as
+          // `sweepOrphanedExecutions` does; the cached index above stays the
+          // prefilter, and this costs one authoritative read per candidate.
+          if (!(await stillOrphaned())) return;
           const executionId = byStream.get(stream);
           if (executionId) {
             const outcome = await this.deleteExecutionWithStreamState(
               executionId,
-              () => this.deleteStreamSidecars(stream),
+              () =>
+                this.deleteStreamSidecars(stream, shouldDelete, stillOrphaned),
+              shouldDelete,
             );
             if (outcome.kind === 'streams-deleted') {
               sweptStreams.push(stream);
@@ -821,7 +983,7 @@ export class SessionStores {
             }
             if (outcome.kind === 'retained') {
               log.warn(
-                `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
+                `Skipping orphaned execution cleanup for ${executionId}; the sweep continues.`,
                 { data: outcome.error },
               );
               return;
@@ -842,19 +1004,34 @@ export class SessionStores {
               );
               return;
             }
-            await this.deleteStreamSidecars(stream);
+            await this.deleteStreamSidecars(
+              stream,
+              shouldDelete,
+              stillOrphaned,
+            );
           }
           sweptStreams.push(stream);
         } catch (error) {
+          // A stream registered while this deletion was staging is not a
+          // failure: the guard rolled the staging back and kept it.
+          if (error instanceof StreamDeletionSupersededError) return;
           log.warn(
-            `Skipping orphaned stream cleanup for ${stream}; startup will continue.`,
+            `Skipping orphaned stream cleanup for ${stream}; the sweep continues.`,
             { data: error },
           );
         }
       }),
     );
+    // The stream half already deleted these execution directories; offering
+    // them again only costs a lease read and a delete of nothing.
+    const deletedExecutionIds = new Set(sweptExecutionIds);
     sweptExecutionIds.push(
-      ...(await this.sweepOrphanedExecutions(liveStreams)),
+      ...(await this.sweepOrphanedExecutions(
+        liveStreams,
+        references.filter(
+          ({ executionId }) => !deletedExecutionIds.has(executionId),
+        ),
+      )),
     );
     return { streams: sweptStreams, executionIds: sweptExecutionIds };
   }
@@ -863,21 +1040,14 @@ export class SessionStores {
    * Sweep execution directories whose explicit metadata reference is absent
    * from the persistent transcript index. Metadata without a `streamId` and
    * unreadable metadata stay untouched: they do not establish ownership.
+   *
+   * `references` comes from the caller's single walk of the executions
+   * directory rather than a second one of its own.
    */
   private async sweepOrphanedExecutions(
     liveStreams: ReadonlySet<StreamTabId>,
+    references: ExecutionStreamReferenceListing['references'],
   ): Promise<ExecutionId[]> {
-    let references;
-    try {
-      ({ references } = await this.listExecutionStreamReferences());
-    } catch (error) {
-      log.warn(
-        `Skipping execution-side orphan cleanup; startup will continue: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-      return [];
-    }
-
     const swept: ExecutionId[] = [];
     // Await each candidate so a large run history does not enqueue every
     // deletion promise at once; the shared queue is serialized regardless.
@@ -896,7 +1066,7 @@ export class SessionStores {
         if (result?.status === 'deleted') swept.push(executionId);
       } catch (error) {
         log.warn(
-          `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
+          `Skipping orphaned execution cleanup for ${executionId}; the sweep continues.`,
           { data: error },
         );
       }
@@ -907,6 +1077,13 @@ export class SessionStores {
   private async deleteStreamSidecars(
     stream: StreamTabId,
     shouldDelete?: () => boolean,
+    /**
+     * An asynchronous second opinion, checked in the same post-staging
+     * window as `shouldDelete`. The sweep passes the shared transcript store
+     * here because `shouldDelete` is synchronous and can only read this
+     * process's cached index (see `sweepOrphanedStreams`).
+     */
+    confirmDeletable?: () => Promise<boolean>,
   ): Promise<void> {
     const snapshotDeletion = await this.snapshots.stageDeleteStream(
       stream,
@@ -917,7 +1094,22 @@ export class SessionStores {
     // await. Only an unchanged generation may cross the transcript commit
     // point below; a superseded deletion rolls its staging back and leaves
     // the fresh incarnation untouched.
-    if (shouldDelete?.() === false) {
+    // `confirmDeletable` reads the durable store and can reject; a read that
+    // fails after staging is treated as "not deletable" so the staging is
+    // rolled back rather than left neither committed nor rolled back.
+    let confirmed = shouldDelete?.() !== false;
+    if (confirmed && confirmDeletable) {
+      try {
+        confirmed = await confirmDeletable();
+      } catch (error) {
+        log.warn(
+          `Stream ${stream} deletion could not be confirmed against the shared store; retaining it: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+        confirmed = false;
+      }
+    }
+    if (!confirmed) {
       try {
         await snapshotDeletion.rollback();
       } catch (rollbackError) {
@@ -974,15 +1166,19 @@ export class SessionStores {
     if (shouldDelete?.() === false) {
       throw new StreamDeletionSupersededError(stream);
     }
-    if (this.goalEntries) {
-      try {
-        await this.goalEntries.forget(stream);
-      } catch (error) {
-        log.warn(
-          `Stream ${stream} was deleted, but goal cleanup was incomplete: ${toErrorMessage(error)}`,
-          { data: error },
-        );
-      }
+    await this.forgetGoalEntry(stream);
+  }
+
+  /** Drop a deleted stream's goal entry; a failure is loud, never fatal. */
+  private async forgetGoalEntry(stream: StreamTabId): Promise<void> {
+    if (!this.goalEntries) return;
+    try {
+      await this.goalEntries.forget(stream);
+    } catch (error) {
+      log.warn(
+        `Stream ${stream} was deleted, but goal cleanup was incomplete: ${toErrorMessage(error)}`,
+        { data: error },
+      );
     }
   }
 

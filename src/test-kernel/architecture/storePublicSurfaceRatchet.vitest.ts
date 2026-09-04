@@ -73,6 +73,26 @@ function publicMethodNames(store: StoreName): string[] {
   return [...new Set(names)].toSorted((a, b) => a.localeCompare(b));
 }
 
+/**
+ * The interface an aggregate getter publishes. `T | undefined` names the same
+ * contract as `T`: an accessor that can also answer "nothing recorded yet"
+ * still exposes every field of `T` to its callers, so the union must not let
+ * an aggregate escape the field count.
+ */
+function aggregateTypeName(type: ts.TypeNode | undefined): string | undefined {
+  if (!type) return undefined;
+  if (ts.isUnionTypeNode(type)) {
+    const named = type.types.filter(
+      (member) => member.kind !== ts.SyntaxKind.UndefinedKeyword,
+    );
+    return named.length === 1 ? aggregateTypeName(named[0]) : undefined;
+  }
+  if (!ts.isTypeReferenceNode(type) || !ts.isIdentifier(type.typeName)) {
+    return undefined;
+  }
+  return type.typeName.text;
+}
+
 function aggregateFieldNames(store: StoreName, methodName: string): string[] {
   const sourceFile = storeSourceFile(store);
   let returnTypeName: string | undefined;
@@ -84,10 +104,7 @@ function aggregateFieldNames(store: StoreName, methodName: string): string[] {
           ts.isIdentifier(member.name) &&
           member.name.text === methodName,
       );
-      if (method?.type && ts.isTypeReferenceNode(method.type)) {
-        const { typeName } = method.type;
-        if (ts.isIdentifier(typeName)) returnTypeName = typeName.text;
-      }
+      returnTypeName = aggregateTypeName(method?.type);
       return;
     }
     ts.forEachChild(node, visit);
