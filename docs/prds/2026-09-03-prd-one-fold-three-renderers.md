@@ -420,9 +420,12 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   over rather than reinventing it - with one addition it cannot make, since
   the payload does not carry it: on a `setParentStream` the fold also names
   the child's **prior** parent, read from the view before the event applies.
-  Without it the walk starts at the new relationship and the old parent
-  keeps the child in its `childIds` and `rollup` forever, which is the
-  two-chain requirement below. A fact naming no stream still folds - it
+  A `removeStream` names its prior parent for the same reason: the fold
+  recomputes the deleted stream's arm first, after which the edge is gone,
+  so the old parent would keep the deleted child in its `childIds`,
+  `rollup`, and memoized run model forever. Without both, the walk starts
+  at the new relationship - or at none - which is the two-chain requirement
+  below. A fact naming no stream still folds - it
   updates session-level state such as `inquiries` - it simply names no arm.
   A **lifecycle** event (`run.start`, `removeStream`) additionally names its
   stream's subtree: a child's
@@ -1200,7 +1203,9 @@ file-select group and the LaTeXDiff controls need (file lists, the current
 and open files, whether the root is a Git repository, recent commits -
 `fileOptions$` and `isGitRepo$` today), the five banners, the onboarding funnel
 state, the debug-mode flag (`GET_DEBUG_MODE` today, which gates the Pack and
-Delete-output controls §12 retains), and the open papers'
+Delete-output controls §12 retains), the current theme (the desktop's
+`nativeTheme` listener sends `THEME_SET` today,
+`desktopViewStateIpc.ts:28-42`, and lane 4 deletes that route), and the open papers'
 display records - `{ key, name, initials, subtitle }` per paper, so the
 desktop rail reads a named field instead of deriving a name from a path or
 joining a catalog in the component (§12). None of it is the user's choice (`Surface`, 9) or a
@@ -1363,7 +1368,14 @@ trip, so the surface tells the host what it is showing without selection
 becoming a session fact), and the launcher's file pickers. The banners and the
 onboarding cards are interactive, so their actions are arms too:
 `recheckDependencies`, `dismissBanner { id }`, `signIn`,
-`onboarding { advance | dismiss }`, and `openInstallGuide { tool }`
+`onboarding { advance | dismiss }`,
+`gettingStarted { action }` (the empty state's `createSampleProject`,
+`cloneOverleaf`, `downloadArxiv`, `openWalkthrough` - distinct host
+commands in `GettingStartedActionSchema`, `mainView/state.ts:354-374`, which
+a funnel transition does not model),
+`showInstruction { key, text }` (the launcher's instruction help, including
+the "Never remind again" persistence `showInstructionWithSuppress` owns
+today, `frontend/ui/instruction.ts:31-64`), and `openInstallGuide { tool }`
 (`mainView/inbound.ts:184-200`). `openSettings` and `openUrl` cannot perform
 a recheck, a dismissal, or a funnel transition, so without these the
 retained controls go inert the moment lane 4 deletes the command
@@ -1685,8 +1697,17 @@ continuations in one turn, so paper B's file operation would resolve against
 paper A. So: **Effect code never calls the static classes.** It resolves a
 session-scoped file service from `WorkspaceRoots` instead, and the lint that
 7.3 already puts on `currentSession()` in `src/controllers/session` covers
-`WorkspaceFS` and `StorageFS` too. The unchanged callers are the run-scoped
-and host-scoped ones, which stay in the Promise tier.
+`WorkspaceFS` and `StorageFS` too. The unchanged callers are the **run-scoped** ones, which resolve their root
+from the run they are inside. Host-scoped callers are not exempt and this
+section previously said they were: a `host.request` for paper B - picking,
+opening, packing, cleaning - is not inside an agent run, so
+`currentSession()` returns the process default
+(`SessionHandle.ts:828-836`) and the operation acts on paper A. Every
+request already carries its `session` (8.1), so the dispatcher **enters that
+session's context before dispatching**, and the async-local lookup resolves
+B for the length of the handler. The rule is that nothing resolves a root
+from ambient process state: Effect code takes it from `WorkspaceRoots`, and
+the Promise tier takes it from a run or from the request that named it.
 
 The other two roots are not that cheap, and this section previously implied
 they were. `config` and `workspaceState` have no equivalent choke point:
@@ -1697,9 +1718,16 @@ accessors do cover) there are 12 raw `platform().config` and 23 raw
 each resolves the instance built once at startup. With two papers open,
 paper B would read and write paper A's settings and UI state. So the four
 roots move in two steps, not one: `workspace` and `storage` as above, then
-`config` and `workspaceState` as their own named work - the providers
-constructed per session inside `sessionLayer`, the four accessors resolving
-the root from context, and the 35 raw reads routed through them.
+`config` and `workspaceState` as their own named work - the four accessors
+resolving the root from context and the 35 raw reads routed through them.
+
+One thing that work must not do is construct a whole config provider per
+paper. `openTexraConfigStores` opens a workspace `JsonStore` **and** a
+global one, and `JsonStore.get` does not observe writes made through another
+instance (`jsonStore.ts:91-100`), so a per-paper provider would leave paper
+B reading its open-time snapshot of a global setting that paper A has since
+changed. The global store stays process-level and shared; only the
+workspace-scoped target is per paper.
 
 That work is a prerequisite of the multi-paper feature, not an optional
 follow-up, so lane 6's acceptance covers it: a desktop process may not open
@@ -2049,12 +2077,13 @@ As tests:
    `warn`. The exported-trace reader (`TraceStreamLogEntrySchema`) is a
    permanent boundary and is unchanged.
 6. **With the persistence owner, not yet agreed:** the durable store
-   exposes `commits`, a **non-decreasing commit generation** for the session,
-   readable at any time (7.1). It carries no events, need not be exact, and
-   may over-report. It is a level rather than a notification precisely so it
-   cannot be missed, which requires that it **never decrease and never reuse
-   a value**: a persisted generation or a non-reusing sequence - not a WAL
-   frame count (a checkpoint resets it) and not `MAX(rowid)` (retention
+   exposes `commits`, **the session's actual commit ordinal**, readable at
+   any time (7.1). Not an independent generation: 7.1 merges it with this
+   process's own level and compares once, so a source reporting 100 while
+   the table is at 50 suppresses real ordinals 51-100 and leaves
+   cross-process readers stale. The ordinal must **never decrease and never
+   reuse a value** - a persisted generation or a non-reusing sequence, not a
+   WAL frame count (a checkpoint resets it) and not `MAX(rowid)` (retention
    lowers it, and without `AUTOINCREMENT` the value is reused). A store that
    can offer neither wakes unconditionally on a timer instead. Without it a process that only reads
    goes stale whenever another process owns the run.
