@@ -1005,14 +1005,22 @@ That ordinal is also the level of decision 6: the wake says "the session's
 commit ordinal is now N", and the reader asks for everything above its own.
 One coordinate answers both questions. `all(view.cursor)` is the initial
 subscribe and the resubscribe alike.
-There is **no** `events(streamId, fromSeq)` method. It had one candidate
-consumer, the trace viewer, and §10.3 keeps that viewer on its existing
-shared-renderer path - so it would ship with no caller, which the
-export-needs-a-consumer rule forbids. It would also be the wrong shape for a
-future one: the session lane carries status, parent, removal, and inquiry
-facts that a per-stream read drops, so a viewer wanting them needs
-`all(cursor)` anyway. Everything reads the one ordered stream: a filter would make every single-stream reader
-scan every other stream's history on every wake. The rc.112 names used above -
+**Read path, corrected 2026-09-04.** An earlier revision of this section
+had no `events(streamId, fromSeq)` method and read everything through
+`all(cursor)`. That cannot hold beside the two-tier residency rule (5.2): a
+listing that folds every stream's transcript is #9952 again. The read path
+is therefore two methods: `all(cursor)` is the listing tier, the
+latest-of-type index for every stream plus the session aggregate in commit
+order; `events(streamId, fromSeq)` is the transcript tier, one stream's rows
+from a seq, opened when a surface subscribes to that stream and closed when
+its last subscriber leaves. The session-lane facts a per-stream read would
+drop (status, parent, removal, inquiry) are exactly the listing tier, so a
+subscriber always holds both. The precise shape of the key, the ordinal, the
+cursor, and the two reads is the jointly owned contract with the substrate
+proposal (`2026-09-03-persistence-substrate-decision.md`), and this document
+references that section rather than restating it; where the two disagree
+until that section lands, the substrate proposal wins on storage shape and
+this document wins on what the fold consumes. The rc.112 names used above -
 `Stream.unwrap`, `Stream.flatMap`, `Ref.make`/`Ref.get` - are verified
 against `node_modules/effect/dist`; the v3 `toQueueScoped` and
 `unwrapScoped` are gone and are no longer needed here.
@@ -1348,7 +1356,7 @@ the same functions in process.
 
 ```ts
 EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, host: HostSnapshot | null, replayComplete: boolean }
-Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface and session, every stream
+Subscribe   = { session: SessionKey, cursor: SessionCursor, streams: { id: StreamTabId, fromSeq: Seq }[] }  // listing tier for every stream; transcript tier for the named ones
 ```
 
 `Subscribe` travels **up** (8.6 makes it the replacement for
