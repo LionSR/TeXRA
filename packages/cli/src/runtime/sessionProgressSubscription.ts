@@ -125,6 +125,7 @@ function projectCliRunFact(
           ...(event.background ? { suppressViewSwitch: true } : {}),
         },
       };
+    case 'run.activate':
     case 'approval.requested':
     case 'approval.resolved':
     case 'approval.policy':

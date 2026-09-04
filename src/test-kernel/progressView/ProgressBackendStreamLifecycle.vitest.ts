@@ -128,9 +128,7 @@ async function beginGatedDeletion(
 }> {
   const deletion = backend.deleteStream(stream);
   await vi.waitFor(() =>
-    expect(backend.state.clearStream).toHaveBeenCalledWith(stream, {
-      expectedIncarnation: 0,
-    }),
+    expect(backend.state.clearStream).toHaveBeenCalledWith(stream),
   );
   return { deletion };
 }
@@ -299,9 +297,9 @@ describe('ProgressBackend', () => {
       after,
     ]);
 
-    const activeRemoval = backend.state.beginStreamRemoval(activeStream);
-    const failedRemoval = backend.state.beginStreamRemoval(failedStream);
-    const deletedRemoval = backend.state.beginStreamRemoval(deletedStream);
+    backend.state.beginStreamRemoval(activeStream);
+    backend.state.beginStreamRemoval(failedStream);
+    backend.state.beginStreamRemoval(deletedStream);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([
       before,
       after,
@@ -320,108 +318,36 @@ describe('ProgressBackend', () => {
       before,
     ]);
 
-    expect(
-      backend.state.retireStreamTombstone(
-        failedStream,
-        failedRemoval.incarnation,
-      ),
-    ).toEqual({ retired: true, changedRosterParents: [parent] });
+    expect(backend.state.retireStreamTombstone(failedStream)).toEqual({
+      retired: true,
+      changedRosterParents: [parent],
+    });
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([
       after,
       newestFailed,
       before,
     ]);
 
-    expect(
-      backend.state.commitStreamTombstone(
-        deletedStream,
-        deletedRemoval.incarnation,
-      ),
-    ).toEqual({ committed: true, changedRosterParents: [parent] });
+    expect(backend.state.commitStreamTombstone(deletedStream)).toEqual({
+      committed: true,
+      changedRosterParents: [parent],
+    });
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([
       after,
       newestFailed,
       before,
     ]);
 
-    expect(
-      backend.state.retireStreamTombstone(
-        activeStream,
-        activeRemoval.incarnation,
-      ),
-    ).toEqual({ retired: true, changedRosterParents: [parent] });
+    expect(backend.state.retireStreamTombstone(activeStream)).toEqual({
+      retired: true,
+      changedRosterParents: [parent],
+    });
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([
       after,
       newestFailed,
       before,
       newestActive,
     ]);
-  });
-
-  it('notifies a parent roster when a fresh workflow run.start reclaims a child identity', () => {
-    const target = createIsolatedRecordingBackend();
-    const { backend, session } = target;
-    const parent = 'workflow-reclaim-parent' as StreamTabId;
-    const childStream = 'workflow-reclaimed-child' as StreamTabId;
-    const child = childRosterRow(childStream);
-    setChildRoster(backend, parent, [child]);
-    backend.state.beginStreamRemoval(childStream);
-    backend.setupEventListeners();
-    const invalidate = vi.spyOn(backend.renderer, 'invalidate');
-
-    // The fresh `run.start` carries this session's own owner token: the
-    // live-owner evidence that lets it reopen the committed tombstone.
-    emitRunEvent(target, childStream, {
-      type: 'run.start',
-      streamId: childStream,
-      executionId: 'aaaa0001f10e' as ExecutionId,
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'workflow-reclaim',
-      },
-      ownerId: session.ownerId,
-    });
-    expect(backend.state.isStreamRemoved(childStream)).toBe(false);
-    expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
-    expect(invalidate).toHaveBeenCalledWith(parent, 'subagents');
-  });
-
-  it('keeps superseded settlements from revealing rows across parent and child reclaims', () => {
-    const { backend } = createIsolatedRecordingBackend();
-    const parent = 'reclaimed-parent' as StreamTabId;
-    const childStream = 'reclaimed-child' as StreamTabId;
-    const oldChild = childRosterRow(
-      childStream,
-      'old-execution' as ExecutionId,
-    );
-    setChildRoster(backend, parent, [oldChild]);
-
-    const childRemoval = backend.state.beginStreamRemoval(childStream);
-    const parentRemoval = backend.state.beginStreamRemoval(parent);
-    expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
-
-    backend.state.claimStreamIdentity(parent);
-    backend.state.claimStreamIdentity(childStream);
-    const newChild = childRosterRow(
-      childStream,
-      'new-execution' as ExecutionId,
-    );
-    backend.applyRunFact(parent, {
-      type: 'child.activity',
-      parentStreamId: parent,
-      items: [newChild],
-    });
-
-    expect(
-      backend.state.retireStreamTombstone(
-        childStream,
-        childRemoval.incarnation,
-      ),
-    ).toEqual({ retired: false, changedRosterParents: [] });
-    expect(
-      backend.state.retireStreamTombstone(parent, parentRemoval.incarnation),
-    ).toEqual({ retired: false, changedRosterParents: [] });
-    expect(backend.state.getStreamState(parent)?.subagents).toEqual([newChild]);
   });
 
   it('handles removeStream session facts before backend load', async () => {
@@ -433,11 +359,7 @@ describe('ProgressBackend', () => {
 
     emitRemoveStream(target, streamId);
 
-    await vi.waitFor(() =>
-      expect(clearStream).toHaveBeenCalledWith(streamId, {
-        expectedIncarnation: 0,
-      }),
-    );
+    await vi.waitFor(() => expect(clearStream).toHaveBeenCalledWith(streamId));
   });
 
   it('refuses reserved stream identifiers before durable cleanup', async () => {
@@ -1336,9 +1258,7 @@ describe('ProgressBackend', () => {
 
     await backend.deleteStream(stream);
 
-    expect(clearStream).toHaveBeenCalledWith(stream, {
-      expectedIncarnation: 0,
-    });
+    expect(clearStream).toHaveBeenCalledWith(stream);
     expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
     expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
       syncActiveStream: true,

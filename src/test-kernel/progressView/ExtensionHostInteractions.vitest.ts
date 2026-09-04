@@ -14,6 +14,10 @@ import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
 
 // Local file imports
 import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
+import {
+  bashApprovalRequest,
+  toolEditApprovalRequest,
+} from '../agent/progressTestUtils';
 
 const mocks = vi.hoisted(() => ({
   getLinterMessages: vi.fn(async () => []),
@@ -92,7 +96,6 @@ function createInteractions(
     toolEditApprovals,
     interactions: createExtensionHostInteractions({
       interactions: options.presentationSink ?? createPresentationSink(),
-      session,
       getApprovalHandlers: () => handlers,
       getToolEditApprovals: () =>
         toolEditApprovals as unknown as ReturnType<
@@ -212,14 +215,18 @@ describe('createExtensionHostInteractions', () => {
       'proposal-parallel',
       'Check the calculation.',
     );
-    const parallelBash = interactions.requestBashApproval?.({
-      command: 'lake build',
-      streamId: STREAM_A,
-    });
-    const otherStream = interactions.requestBashApproval?.({
-      command: 'npm test',
-      streamId: STREAM_B,
-    });
+    const parallelBash = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'lake build',
+        streamId: STREAM_A,
+      }),
+    );
+    const otherStream = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'npm test',
+        streamId: STREAM_B,
+      }),
+    );
 
     // The approval also awaits the tool-edit controller: it must not report
     // completion while pending tool edits for the stream are still approving.
@@ -733,10 +740,12 @@ describe('createExtensionHostInteractions', () => {
   it('forwards a bash cancellation cause without user provenance', async () => {
     const { handlers, interactions } = createInteractions();
 
-    const resultPromise = interactions.requestBashApproval?.({
-      command: 'rm -rf build',
-      streamId: STREAM_A,
-    });
+    const resultPromise = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'rm -rf build',
+        streamId: STREAM_A,
+      }),
+    );
 
     interactions.cancel({
       streamId: STREAM_A,
@@ -753,10 +762,12 @@ describe('createExtensionHostInteractions', () => {
   it('rejects a resolution whose kind does not match the pending request', async () => {
     const { handlers, interactions } = createInteractions();
 
-    const resultPromise = interactions.requestBashApproval?.({
-      command: 'echo hi',
-      streamId: STREAM_A,
-    });
+    const resultPromise = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'echo hi',
+        streamId: STREAM_A,
+      }),
+    );
     const requestId = firstShowRequestId(handlers.transport.bash.show);
 
     // A mismatched kind for the same requestId must not settle the pending
@@ -911,13 +922,16 @@ describe('createExtensionHostInteractions', () => {
     const session = createTestSession();
     const { interactions, toolEditApprovals } = createInteractions({ session });
     toolEditApprovals.requestApproval.mockResolvedValue(approvalResult);
-    const request = {
-      path: 'paper.tex',
-      originalContent: 'A',
-      proposedContent: 'B',
-      sourceTool: 'edit',
-      streamId: STREAM_A,
-    };
+    const request = toolEditApprovalRequest(
+      {
+        path: 'paper.tex',
+        originalContent: 'A',
+        proposedContent: 'B',
+        sourceTool: 'edit',
+        streamId: STREAM_A,
+      },
+      session,
+    );
 
     await expect(interactions.requestToolEditApproval?.(request)).resolves.toBe(
       approvalResult,
@@ -935,10 +949,12 @@ describe('createExtensionHostInteractions', () => {
       });
     });
 
-    const result = interactions.requestBashApproval?.({
-      command: 'echo pending',
-      streamId: 'stream-sync' as StreamTabId,
-    });
+    const result = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'echo pending',
+        streamId: 'stream-sync' as StreamTabId,
+      }),
+    );
 
     await expect(result).resolves.toEqual({
       action: 'reject',
@@ -982,10 +998,12 @@ describe('createExtensionHostInteractions', () => {
   it('cancels all pending requests on dispose with a stable cause', async () => {
     const { handlers, interactions, toolEditApprovals } = createInteractions();
 
-    const bashPromise = interactions.requestBashApproval?.({
-      command: 'echo hi',
-      streamId: STREAM_A,
-    });
+    const bashPromise = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'echo hi',
+        streamId: STREAM_A,
+      }),
+    );
     const planPromise = interactions.requestPlanApproval?.({
       requestId: 'plan-a',
       streamId: STREAM_B,

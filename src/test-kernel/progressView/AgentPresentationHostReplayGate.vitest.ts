@@ -141,7 +141,6 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
       );
       const interactions = createExtensionHostInteractions({
         interactions: presentationHost,
-        session,
         getApprovalHandlers: () => createRecordingApprovalHandlers(),
         getToolEditApprovals: () =>
           ({

@@ -128,8 +128,8 @@ export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
   /**
    * Whether `status` is a terminal outcome that no producer can still move.
-   * `SessionState.streamDurablyFinal` produces it from
-   * `streamDurableOutcome`, which needs the terminal outcome plus one of two
+   * The fold's `runDurablyFinal` produces it from the stream's status and
+   * the local snapshot, which needs the terminal outcome plus one of two
    * ways to have no producer left: the phase came
    * from the durable facts (origin `derived`, so nothing is running this
    * stream anywhere), or it is this process's own `live` entry with no hold

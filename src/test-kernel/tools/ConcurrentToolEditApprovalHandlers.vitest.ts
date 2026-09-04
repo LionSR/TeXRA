@@ -15,6 +15,7 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
 /**
  * Proves the desktop multi-window invariant: two runs owned by distinct
@@ -58,12 +59,12 @@ describe('Concurrent session tool edit approval handlers', () => {
     }
 
     function makeRequest(tag: string): ToolEditApprovalRequest {
-      return {
+      return toolEditApprovalRequest({
         path: `${tag}.tex`,
         originalContent: `old-${tag}`,
         proposedContent: `new-${tag}`,
         sourceTool: 'write_file',
-      };
+      });
     }
 
     const seenByA: ToolEditApprovalRequest[] = [];

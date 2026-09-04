@@ -70,15 +70,10 @@ import {
   type PlanApprovalPermission,
 } from '@shared/schemas';
 import { setToolEditApprovalSessionBypass } from '@tools/approval';
-import {
-  prepareBashApprovalPrompt,
-  setBashApprovalSessionBypass,
-} from '@tools/approval/bashApproval';
-import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
+import { setBashApprovalSessionBypass } from '@tools/approval/bashApproval';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
-import { generateShortId, onAbort } from '@utils/core';
+import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { notify } from '../notifications/terminalNotifier';
 import { foregroundReader, patchStream } from './cliState';
@@ -158,17 +153,10 @@ export function createTuiHostInteractions(
     emit: (event, payload) => host.emit(event, payload),
     async requestToolEditApproval(request) {
       // The prompt the tool boundary prepared is the `approval.requested`
-      // payload: showing it keeps one requestId per request. Prepared here
-      // only for a fixture that carries none.
+      // payload: showing it keeps one requestId per request.
       const decision = await enqueueDecision({
         kind: 'toolEdit',
-        data:
-          request.permission ??
-          prepareToolEditApprovalPrompt(currentSession(), {
-            requestId: `approval-${generateShortId()}`,
-            request,
-            relativePath: WorkspaceFS.relativePath(request.path),
-          }),
+        data: request.permission,
         tui: {
           originalContent: request.originalContent,
           proposedContent: request.proposedContent,
@@ -306,7 +294,7 @@ async function requestBashInteraction(
 ): Promise<BashSettlement> {
   const decision = await enqueueDecision({
     kind: 'bash',
-    data: request.permission ?? prepareBashApprovalPrompt(request),
+    data: request.permission,
   });
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);

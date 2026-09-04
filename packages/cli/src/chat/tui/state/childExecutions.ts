@@ -10,6 +10,7 @@
 // truth instead of a parallel fact-fold.
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
+import { SubscriptionRef } from 'effect';
 import type { StreamPhaseState } from '@agent/runtime';
 import type {
   SessionState,
@@ -17,11 +18,15 @@ import type {
   StreamExecutionState,
 } from '@controllers/session/SessionState';
 import {
+  STREAM_LIFECYCLE_UNAVAILABLE,
+  STREAM_STATUS,
   runIdentityDisplayName,
   type ActiveChildInfo,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import type { StreamView } from '@shared/session/sessionView';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 
 import type { StreamSlice } from './cliState';
 
@@ -90,20 +95,29 @@ export function streamStateFor(
 export function sessionStreamPhase(
   streamId: StreamTabId,
 ): StreamPhaseState | undefined {
-  return BOUND.get()?.state.getStreamPhaseState(streamId);
+  const stream = viewStream(streamId);
+  if (
+    !stream ||
+    stream.status === STREAM_STATUS.READY ||
+    stream.status === STREAM_LIFECYCLE_UNAVAILABLE
+  ) {
+    return undefined;
+  }
+  return {
+    phase: stream.status,
+    ...(stream.substate ? { substate: stream.substate } : {}),
+    ...(stream.runStartedAt !== null
+      ? { runStartedAt: stream.runStartedAt }
+      : {}),
+  };
 }
 
-/** Read the durable run facts for the stream the user just focused, then
- *  repaint the readers that render its phase. The CLI's one caller of the
- *  session's row-open hydration — nothing here walks the roster, so a stream
- *  the user has not focused renders from its always-resident summary. */
-export async function hydrateFocusedStreamRunFacts(
-  streamId: StreamTabId,
-): Promise<void> {
+/** The stream's arm of the session view, the one read-time source of its
+ *  phase, outcome, and availability. */
+function viewStream(streamId: StreamTabId): StreamView | undefined {
   const bound = BOUND.get();
-  if (!bound) return;
-  await bound.state.hydrateRunFacts(streamId);
-  invalidateChildStreams();
+  if (!bound) return undefined;
+  return SubscriptionRef.getUnsafe(bound.state.view).streams.get(streamId);
 }
 
 /**
@@ -118,7 +132,12 @@ export async function hydrateFocusedStreamRunFacts(
 export function sessionStreamDurableOutcome(
   streamId: StreamTabId,
 ): RunOutcome | undefined {
-  return BOUND.get()?.state.streamDurableOutcome(streamId);
+  const stream = viewStream(streamId);
+  return stream &&
+    isTerminalOutcomePhase(stream.status) &&
+    stream.group === 'recent'
+    ? stream.status
+    : undefined;
 }
 
 /** Canonical reason a stream is unavailable in this session: held by another
@@ -127,7 +146,8 @@ export function sessionStreamDurableOutcome(
 export function streamUnavailableDetailFor(
   streamId: StreamTabId,
 ): string | undefined {
-  return BOUND.get()?.state.resolveStreamPhase(streamId).detail;
+  const stream = viewStream(streamId);
+  return stream?.readOnly ? (stream.statusDetail ?? undefined) : undefined;
 }
 
 /** Queued follow-up messages for a stream, from the session-owned queue. */

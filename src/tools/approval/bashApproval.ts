@@ -62,7 +62,7 @@ export function isBashApprovalBypassedForStream(
  * session.
  */
 export function prepareBashApprovalPrompt(
-  request: HostBashApprovalRequest,
+  request: Omit<HostBashApprovalRequest, 'permission'>,
   session?: SessionHandle,
 ): BashPermission {
   const streamId = request.streamId ?? undefined;
@@ -80,7 +80,7 @@ export function prepareBashApprovalPrompt(
 }
 
 export async function requestBashApproval(
-  request: HostBashApprovalRequest,
+  request: Omit<HostBashApprovalRequest, 'permission'>,
 ): Promise<BashSettlement> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY);
 
@@ -108,7 +108,7 @@ export async function requestBashApproval(
 
   requireInteractions('bash approval', context);
 
-  const hostRequest: HostBashApprovalRequest = {
+  const hostRequest: Omit<HostBashApprovalRequest, 'permission'> = {
     command: request.command,
     ...(request.cwd && { cwd: request.cwd }),
     streamId,

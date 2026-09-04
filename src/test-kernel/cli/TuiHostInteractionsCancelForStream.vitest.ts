@@ -35,6 +35,10 @@ import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApproval
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { AgentCategory, type AgentProposal, type Plan } from '@shared/schemas';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
+import {
+  bashApprovalRequest,
+  toolEditApprovalRequest,
+} from '../agent/progressTestUtils';
 
 function host(): CliRuntimeHost {
   return { emit: vi.fn() } as unknown as CliRuntimeHost;
@@ -170,10 +174,12 @@ describe('createTuiHostInteractions', () => {
 
   it('cancels a queued bash approval for the target stream (not just retry)', async () => {
     const interactions = tuiInteractions();
-    const bashResult = interactions.requestBashApproval?.({
-      command: 'echo hi',
-      streamId: 'stream-a',
-    });
+    const bashResult = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'echo hi',
+        streamId: 'stream-a',
+      }),
+    );
 
     await waitForApproval('bash', { streamId: 'stream-a' });
 
@@ -188,13 +194,15 @@ describe('createTuiHostInteractions', () => {
 
   it('keeps queued tool-edit cancellation separate from user feedback', async () => {
     const interactions = tuiInteractions();
-    const editResult = interactions.requestToolEditApproval?.({
-      path: '/work/paper.tex',
-      originalContent: 'old',
-      proposedContent: 'new',
-      sourceTool: 'edit',
-      streamId: 'stream-a',
-    });
+    const editResult = interactions.requestToolEditApproval?.(
+      toolEditApprovalRequest({
+        path: '/work/paper.tex',
+        originalContent: 'old',
+        proposedContent: 'new',
+        sourceTool: 'edit',
+        streamId: 'stream-a',
+      }),
+    );
 
     await waitForApproval('toolEdit', { streamId: 'stream-a' });
     interactions.cancel({ streamId: 'stream-a' });

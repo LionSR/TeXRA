@@ -237,7 +237,9 @@ export function recordRunRefusal(
     case 'held_elsewhere':
       session.status.markUnavailableOrLog(
         streamId,
-        streamHeldMessage(classification.owner),
+        streamHeldMessage(
+          `pid ${classification.owner.pid} on ${classification.owner.hostname}`,
+        ),
         logger,
       );
       return 'owned_elsewhere';

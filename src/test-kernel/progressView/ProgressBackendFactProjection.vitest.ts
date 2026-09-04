@@ -285,7 +285,6 @@ describe('ProgressBackend', () => {
 
     emitRunEvent(target, 'child' as StreamTabId, {
       type: 'run.start',
-      ownerId: null,
       streamId: 'child' as StreamTabId,
       executionId: 'c41111' as ExecutionId,
       identity: { kind: 'agent', agent: 'search' },
@@ -1165,7 +1164,6 @@ describe('ProgressBackend', () => {
     backend.state.streamLogs.ensureStream(stream);
     emitRunEvent(target, stream, {
       type: 'run.start',
-      ownerId: null,
       streamId: stream,
       executionId,
       identity: {

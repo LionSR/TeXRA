@@ -74,7 +74,11 @@ const config = AgentConfigSchema.parse({
 
 interface StartedLaunch {
   readonly session: ReturnType<typeof createTestSession>;
-  readonly start: ReturnType<typeof runEventsOfType<'run.start'>>[number];
+  /** The creation fact; absent on a resume, which activates an existing
+   *  stream and mints no `run.start` (decision 9). */
+  readonly start:
+    ReturnType<typeof runEventsOfType<'run.start'>>[number] | undefined;
+  readonly activate: ReturnType<typeof runEventsOfType<'run.activate'>>[number];
   readonly result: ReturnType<typeof runEventsOfType<'result'>>[number];
 }
 
@@ -85,6 +89,7 @@ interface StartedLaunch {
  */
 async function captureStartedLaunch(
   run: (session: ReturnType<typeof createTestSession>) => Promise<unknown>,
+  options: { readonly resumed?: boolean } = {},
 ): Promise<StartedLaunch> {
   const session = createTestSession();
   const recordedSession = recordSessionEvents(session.events);
@@ -116,10 +121,17 @@ async function captureStartedLaunch(
   try {
     await expect(run(session)).rejects.toBe(LAUNCH_FAILURE);
     const starts = runEventsOfType(recordedSession.events, 'run.start');
-    expect(starts).toHaveLength(1);
+    expect(starts).toHaveLength(options.resumed ? 0 : 1);
+    const activations = runEventsOfType(recordedSession.events, 'run.activate');
+    expect(activations).toHaveLength(1);
     const results = runEventsOfType(recordedSession.events, 'result');
     expect(results).toHaveLength(1);
-    return { session, start: starts[0], result: results[0] };
+    return {
+      session,
+      start: starts[0],
+      activate: activations[0],
+      result: results[0],
+    };
   } finally {
     recordedSession.detach();
     session.dispose();
@@ -136,23 +148,36 @@ function expectStartedThenFailed(
   launch: StartedLaunch,
   isSubagent: boolean,
 ): void {
-  expect(launch.start).toMatchObject({
+  const { start } = launch;
+  if (!start) throw new Error('a fresh launch emits run.start');
+  expect(start).toMatchObject({
     identity: { kind: 'agent', agent: 'chat' },
     agentCategory: AgentCategory.ToolUse,
     isRemote: false,
     background: isSubagent,
-    approvalPolicy: launch.session.approvalPolicySnapshotFor(
-      launch.start.streamId,
-    ),
-    ownerId: launch.session.ownerId,
+    approvalPolicy: launch.session.approvalPolicySnapshotFor(start.streamId),
+  });
+  expectActivatedThenFailed(launch, isSubagent);
+  expect(launch.result).toMatchObject({ executionId: start.executionId });
+}
+
+/** Every activation, fresh or resumed, carries the activation metadata the
+ *  frozen wire projects and ends on the same failure path. */
+function expectActivatedThenFailed(
+  launch: StartedLaunch,
+  isSubagent: boolean,
+): void {
+  expect(launch.activate).toMatchObject({
+    category: AgentCategory.ToolUse,
+    isRemote: false,
+    background: isSubagent,
   });
   expect(launch.result).toMatchObject({
     outcome: RUN_OUTCOME.FAILED,
-    streamId: launch.start.streamId,
-    executionId: launch.start.executionId,
+    streamId: launch.activate.streamId,
     isSubagent,
   });
-  expect(launch.session.status.get(launch.start.streamId)).toBe(
+  expect(launch.session.status.get(launch.activate.streamId)).toBe(
     STREAM_PHASE.FAILED,
   );
 }
@@ -193,6 +218,7 @@ describe('native agent launch activation', () => {
 
       expectStartedThenFailed(launch, isSubagent === true);
       expect(launch.start).not.toHaveProperty('parentStreamId');
+      expect(launch.activate.streamId).toBe(launch.start?.streamId);
     },
   );
 
@@ -213,15 +239,16 @@ describe('native agent launch activation', () => {
       });
       mocks.retrieveSessionResumeData.mockResolvedValueOnce(resume);
 
-      const launch = await captureStartedLaunch((session) =>
-        resumeToolUseFromResumeData(resume, { session }),
+      const launch = await captureStartedLaunch(
+        (session) => resumeToolUseFromResumeData(resume, { session }),
+        { resumed: true },
       );
 
-      expectStartedThenFailed(launch, isSubagent);
-      expect(launch.start.streamId).toBe(streamId);
-      expect(launch.start.userFollowUpSupport).toBe(
-        USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      );
+      // A resume activates the stream it already has: no second creation
+      // fact, one activation on the same failure path.
+      expectActivatedThenFailed(launch, isSubagent);
+      expect(launch.start).toBeUndefined();
+      expect(launch.activate.streamId).toBe(streamId);
     },
   );
 });

@@ -188,7 +188,6 @@ export function emitRunStart(
       identity: { kind: 'agent', agent: payload.streamId },
       agentCategory: payload.agentCategory,
       isRemote: false,
-      ownerId: target.session.ownerId,
     },
   });
 }

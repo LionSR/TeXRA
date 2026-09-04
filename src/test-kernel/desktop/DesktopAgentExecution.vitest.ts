@@ -12,6 +12,7 @@ import {
   type AgentTrace,
   type ResultEvent,
 } from '@agent/trace';
+import type { HostBashApprovalRequest } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { HubEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -62,6 +63,7 @@ import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
 } from '@tools/approval';
+import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   STREAM_LOGS_DIR,
   type StreamLogStore,
@@ -77,6 +79,10 @@ import {
   type RunExecutionRequest,
 } from './desktopAgentExecutionTestHarness.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
+import {
+  bashApprovalRequest,
+  toolEditApprovalRequest,
+} from '../agent/progressTestUtils';
 
 const mocks = createModuleMocks();
 
@@ -161,17 +167,10 @@ type BridgeInteractions = {
     streamId: StreamTabId;
     operation: string;
   }) => Promise<unknown>;
-  requestBashApproval?: (request: {
-    command: string;
-    streamId?: StreamTabId;
-  }) => Promise<unknown>;
-  requestToolEditApproval?: (request: {
-    path: string;
-    originalContent: string;
-    proposedContent: string;
-    sourceTool: string;
-    streamId?: StreamTabId;
-  }) => Promise<unknown>;
+  requestBashApproval?: (request: HostBashApprovalRequest) => Promise<unknown>;
+  requestToolEditApproval?: (
+    request: ToolEditApprovalRequest,
+  ) => Promise<unknown>;
 };
 
 /** Test-side record of what each bridge was constructed with. Tests pass the
@@ -796,7 +795,6 @@ function startStream(bridge: TestableBridge, streamId: string): void {
     identity: { kind: 'agent', agent: streamId },
     agentCategory: AgentCategory.Workflow,
     isRemote: false,
-    ownerId: bridgeSession(bridge).ownerId,
   });
 }
 
@@ -984,7 +982,6 @@ describe('DesktopProgressBridge', () => {
     const config = workflowConfig();
     emitRunEvent(bridge, streamId, {
       type: 'run.start',
-      ownerId: null,
       streamId,
       executionId,
       identity: { kind: 'multiAgentWorkflow', workflowName: 'proofreader' },
@@ -2152,10 +2149,15 @@ describe('DesktopProgressBridge', () => {
 
     activateStream(bridge, 'bash-delete-all-stream');
 
-    const result = bridgeInteractions(bridge).requestBashApproval?.({
-      command: 'echo hi',
-      streamId: 'bash-delete-all-stream' as StreamTabId,
-    });
+    const result = bridgeInteractions(bridge).requestBashApproval?.(
+      bashApprovalRequest(
+        {
+          command: 'echo hi',
+          streamId: 'bash-delete-all-stream' as StreamTabId,
+        },
+        bridgeSession(bridge),
+      ),
+    );
 
     await waitForShownPermission(messages, { kind: PERMISSION_KIND.BASH });
 
@@ -2228,7 +2230,6 @@ describe('DesktopProgressBridge', () => {
     // Rerun is gated on a resolved native agent identity.
     emitRunEvent(bridge, 'stream-new' as StreamTabId, {
       type: 'run.start',
-      ownerId: null,
       streamId: 'stream-new' as StreamTabId,
       executionId: 'e7ec0001' as ExecutionId,
       identity: { kind: 'agent', agent: runConfig.agent },
@@ -2525,7 +2526,6 @@ describe('DesktopProgressBridge', () => {
 
     emitRunEvent(bridge, 'stream-1' as StreamTabId, {
       type: 'run.start',
-      ownerId: null,
       streamId: 'stream-1' as StreamTabId,
       executionId: 'ec1002' as ExecutionId,
       identity: { kind: 'agent', agent: 'search' },
@@ -2585,7 +2585,6 @@ describe('DesktopProgressBridge', () => {
     // texra.restoreState, which shows RESTORE_MALFORMED_MESSAGE).
     emitRunEvent(bridge, 'stream-1' as StreamTabId, {
       type: 'run.start',
-      ownerId: null,
       streamId: 'stream-1' as StreamTabId,
       executionId: 'ec1003' as ExecutionId,
       identity: { kind: 'agent', agent: 'search' },
@@ -2865,7 +2864,6 @@ describe('DesktopProgressBridge', () => {
       owner.processSession.transcripts.ensureStream(childStreamId);
       owner.processSession.publishRunEvent(childStreamId, {
         type: 'run.start',
-        ownerId: null,
         streamId: childStreamId,
         executionId: childExecutionId,
         identity: { kind: 'agent', agent: 'search' },
@@ -3072,7 +3070,7 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('replays a tool-edit approval with a fresh window request id', async () => {
+    it('replays a tool-edit approval to a reopened window under its request id', async () => {
       const streamId = 'rebound-stream-tool-edit' as StreamTabId;
       const executionId = 'ec00ed' as ExecutionId;
       const messagesA: unknown[] = [];
@@ -3083,13 +3081,18 @@ describe('DesktopProgressBridge', () => {
       });
       const approvalPromise = bridgeInteractions(
         owner.bridgeA,
-      ).requestToolEditApproval?.({
-        path: '/workspace/rebound-tool-edit.txt',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        streamId,
-      });
+      ).requestToolEditApproval?.(
+        toolEditApprovalRequest(
+          {
+            path: '/workspace/rebound-tool-edit.txt',
+            originalContent: 'old\n',
+            proposedContent: 'new\n',
+            sourceTool: 'write_file',
+            streamId,
+          },
+          owner.processSession,
+        ),
+      );
       expect(approvalPromise).toBeDefined();
       let oldRequestId = '';
       await vi.waitFor(() => {
@@ -3097,11 +3100,6 @@ describe('DesktopProgressBridge', () => {
           shownPermissionRequestId(messagesA, PERMISSION_KIND.TOOL_EDIT) ?? '';
         expect(oldRequestId).not.toBe('');
       });
-      const handleOldToolEdit = assertSupported(
-        owner.bridgeA.progressViewInboundHandlers[
-          PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
-        ],
-      );
       await vi.waitFor(() => expect(owner.diffPathsA).toHaveLength(1));
       const [oldDiff] = owner.diffPathsA;
       await expect(access(oldDiff!.original)).resolves.toBeUndefined();
@@ -3125,20 +3123,9 @@ describe('DesktopProgressBridge', () => {
             '';
           expect(newRequestId).not.toBe('');
         });
-        expect(newRequestId).not.toBe(oldRequestId);
-
-        let settledByOldPresenter = false;
-        void approvalPromise?.then(() => {
-          settledByOldPresenter = true;
-        });
-        await handleOldToolEdit({
-          command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-          requestId: oldRequestId,
-          action: 'reject',
-          feedback: 'Stale presenter.',
-        });
-        await settleProgressEvents();
-        expect(settledByOldPresenter).toBe(false);
+        // One request id per request: the replayed prompt is the same
+        // `approval.requested` fact the first window showed.
+        expect(newRequestId).toBe(oldRequestId);
 
         const handleToolEdit = assertSupported(
           bridgeB.progressViewInboundHandlers[
@@ -3583,7 +3570,6 @@ describe('DesktopProgressBridge', () => {
             },
             // No live owner: a replayed start, not a re-claim, so the
             // pending deletion proceeds.
-            ownerId: null,
           },
         });
         const pendingDrain = vi.spyOn(
@@ -3610,102 +3596,6 @@ describe('DesktopProgressBridge', () => {
         }
       } finally {
         leaseReleased.resolve();
-      }
-    });
-
-    it('does not start a process fallback for a newer presentation deletion claim', async () => {
-      const streamId = 'reclaimed-presentation-delete' as StreamTabId;
-      const owner = await createProcessOwner({
-        streamId,
-        executionId: 'ec00f9' as ExecutionId,
-      });
-      seedStreamStatusForTest(owner.processSession.status, streamId, {
-        phase: STREAM_PHASE.COMPLETED,
-      });
-      const firstRelease = createDeferred();
-      const secondRelease = createDeferred();
-      // The deletion runs as a step on the execution lane; gate the lane.
-      const waitForRelease = vi
-        .spyOn(owner.processSession.executions, 'runExecutionStep')
-        .mockImplementationOnce(async (_executionId, step) => {
-          await firstRelease.promise;
-          return step();
-        })
-        .mockImplementationOnce(async (_executionId, step) => {
-          await secondRelease.promise;
-          return step();
-        });
-      const deleteStream = vi.spyOn(owner.sessionStores, 'deleteStream');
-
-      try {
-        emitSessionFact(owner.bridgeA, 'removeStream', {
-          streamId,
-        });
-        await vi.waitFor(() =>
-          expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
-            true,
-          ),
-        );
-        // Let the process fallback observe the presentation's first claim and
-        // retire its own pending-removal marker before the identity is
-        // legitimately re-claimed.
-        await settleProgressEvents();
-
-        const freshExecutionId = 'ec00fa' as ExecutionId;
-        snapshotFacts(owner.progressSnapshotStore).setRunStart({
-          streamId,
-          executionId: freshExecutionId,
-          identity: {
-            kind: 'multiAgentWorkflow',
-            workflowName: 'reclaimed-workflow',
-          },
-        });
-        const { handle: freshHandle } = owner.createHandle({
-          executionId: freshExecutionId,
-        });
-        owner.processSession.executions.trackAgentExecution(freshHandle, {
-          status: STREAM_PHASE.COMPLETED,
-        });
-        // The fresh workflow start from this process re-claims the identity.
-        emitRunEvent(owner.bridgeA, streamId, {
-          type: 'run.start',
-          streamId,
-          executionId: freshExecutionId,
-          identity: {
-            kind: 'multiAgentWorkflow',
-            workflowName: 'reclaimed-workflow',
-          },
-          ownerId: owner.processSession.ownerId,
-        });
-        firstRelease.resolve();
-        await vi.waitFor(() =>
-          expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
-            false,
-          ),
-        );
-        expect(waitForRelease).toHaveBeenCalledTimes(1);
-
-        emitSessionFact(owner.bridgeA, 'removeStream', {
-          streamId,
-        });
-        await vi.waitFor(() =>
-          expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
-            true,
-          ),
-        );
-        await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalledTimes(2));
-        await settleProgressEvents();
-
-        // Both deletions are the presentation's (incarnations 0 and 1); a
-        // process fallback would have issued a third.
-        expect(deleteStream).toHaveBeenCalledTimes(2);
-        expect(
-          deleteStream.mock.calls.map(([, o]) => o?.expectedIncarnation),
-        ).toEqual([0, 1]);
-        expect(owner.processSession.transcripts.has(streamId)).toBe(true);
-      } finally {
-        firstRelease.resolve();
-        secondRelease.resolve();
       }
     });
 
@@ -4112,7 +4002,6 @@ describe('DesktopProgressBridge', () => {
         });
         owner.processSession.publishRunEvent(childStreamId, {
           type: 'run.start',
-          ownerId: null,
           streamId: childStreamId,
           executionId: childExecutionId,
           identity: { kind: 'agent', agent: 'searcher' },

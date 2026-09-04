@@ -1225,7 +1225,6 @@ function seedRunningWorkflow(): void {
     streamId: childStreamId,
     event: {
       type: 'run.start',
-      ownerId: null,
       streamId: childStreamId,
       executionId,
       identity: {
@@ -1429,7 +1428,6 @@ function emitRunStart(
       identity: { kind: 'agent', agent: streamId.split('#')[0] ?? streamId },
       agentCategory,
       isRemote: false,
-      ownerId: defaultSession().ownerId,
     },
   });
 }

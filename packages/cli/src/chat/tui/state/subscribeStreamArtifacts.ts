@@ -34,10 +34,7 @@ import {
   registerCliStateResetHook,
   setTransientNotice,
 } from './cliState';
-import {
-  hydrateFocusedStreamRunFacts,
-  isChildStreamRemoved,
-} from './childExecutions';
+import { isChildStreamRemoved } from './childExecutions';
 
 /** Bumped whenever the artifact projection changes: after a focus/`/plan`
  *  preload completes or when a live fact mutates the snapshot store. Renderers
@@ -167,10 +164,6 @@ export async function hydrateStreamArtifacts(
   if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
     return undefined;
   }
-  // After the preload, which backfills the summary mirror the run facts'
-  // execution FK comes from. This focus is the one moment the CLI reads them;
-  // an unfocused stream's phase stays what its always-resident summary says.
-  await hydrateFocusedStreamRunFacts(streamId);
   bumpStreamArtifactRevision();
   return { kind: 'complete' };
 }

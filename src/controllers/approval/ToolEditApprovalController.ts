@@ -12,7 +12,6 @@ import {
   matchesCancelSelector,
   type HostInteractionCancelSelector,
 } from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withEventErrorHandling } from '@controllers/session/eventErrorHandling';
 import type {
@@ -27,13 +26,10 @@ import {
   type LatexPreviewEntry,
 } from '@tools/approval/latexPreview';
 import {
-  prepareToolEditApprovalPrompt,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';
@@ -85,7 +81,6 @@ export interface ToolEditApprovalHost {
 }
 
 export interface ToolEditApprovalControllerOptions {
-  session: SessionHandle;
   host: ToolEditApprovalHost;
   showToolEditPermission(payload: ToolEditPermission): void;
   resolveToolEditPermission(requestId: string): void;
@@ -132,13 +127,8 @@ export class ToolEditApprovalController {
     }
 
     // The request id the tool boundary minted for the `approval.requested`
-    // fact is the one every surface shows and answers; a fixture without a
-    // prepared permission mints its own.
-    const requestId =
-      request.permission?.requestId ?? `approval-${generateShortId()}`;
-    const relativePath =
-      request.permission?.relativePath ??
-      WorkspaceFS.relativePath(request.path);
+    // fact is the one every surface shows and answers.
+    const { requestId, relativePath } = request.permission;
     const initialization: InitializingToolEditApproval = {
       phase: 'initializing',
       request,
@@ -370,14 +360,7 @@ export class ToolEditApprovalController {
     // Revealing the stream belongs to the host interactions port, which does
     // it for every interaction kind before the request is dispatched here.
     withEventErrorHandling(CHANNEL, 'failed to show approval prompt', () => {
-      this.options.showToolEditPermission(
-        entry.request.permission ??
-          prepareToolEditApprovalPrompt(this.options.session, {
-            requestId: entry.requestId,
-            request: entry.request,
-            relativePath: entry.relativePath,
-          }),
-      );
+      this.options.showToolEditPermission(entry.request.permission);
     });
   }
 

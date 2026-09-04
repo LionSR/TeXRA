@@ -802,6 +802,7 @@ export function attachTranscriptRecorder(
           return;
 
         case 'run.start':
+        case 'run.activate':
         case 'run.config':
         case 'approval.requested':
         case 'approval.resolved':

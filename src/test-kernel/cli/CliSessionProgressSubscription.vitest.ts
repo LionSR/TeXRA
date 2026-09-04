@@ -132,7 +132,6 @@ const PROGRESS_PROJECTION_CASES = {
       identity: { kind: 'agent', agent: 'proofreader' },
       agentCategory: AgentCategory.Workflow,
       isRemote: false,
-      ownerId: null,
     }),
     payload: {
       streamId,
@@ -397,7 +396,6 @@ describe('attachCliSessionProgressProjection', () => {
           identity: { kind: 'process', tool: 'bash' },
           agentCategory: AgentCategory.ToolUse,
           background: true,
-          ownerId: null,
         }),
       );
 

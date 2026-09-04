@@ -28,7 +28,6 @@ vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 import { noopTrace } from '@agent/trace';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -71,9 +70,8 @@ async function launchWithMissingAgent(
  * (disposing earlier would drop the queued replay with the session).
  */
 async function triggerQueuedMissingAgentFailure(
-  owner: SessionHostInteractions,
+  session: SessionHandle,
 ): Promise<SessionHandle> {
-  const session = createTestSession({ interactions: owner });
   let thrown: unknown;
   await buildAgentLaunchContext({
     config: AgentConfigSchema.parse({
@@ -107,7 +105,8 @@ describe('AgentLaunchContext', () => {
     // Delivery is confirmed so the launch catch adds no generic toast; the
     // undelivered variant is covered by the generic-error-toast test below.
     const explicit = createRecordingHost({ emitDelivery: true });
-    const session = createTestSession({ interactions: explicit.host });
+    const session = createTestSession();
+    session.interactions.use(explicit.interactions);
 
     try {
       await launchWithMissingAgent(
@@ -132,7 +131,8 @@ describe('AgentLaunchContext', () => {
     // A host that reports no delivery (for example an older/no-op adapter)
     // must still surface the launch failure once through the generic toast.
     const recording = createRecordingHost({ emitDelivery: false });
-    const session = createTestSession({ interactions: recording.host });
+    const session = createTestSession();
+    session.interactions.use(recording.interactions);
 
     try {
       await launchWithMissingAgent(session);
@@ -154,8 +154,8 @@ describe('AgentLaunchContext', () => {
     // The retained replay owns the delivery decision: it renders the targeted
     // banner and emits no generic fallback.
     const recording = createRecordingHost({ emitDelivery: true });
-    const owner = new SessionHostInteractions();
-    const session = await triggerQueuedMissingAgentFailure(owner);
+    const session = await triggerQueuedMissingAgentFailure(createTestSession());
+    const owner = session.interactions;
 
     owner.use(recording.interactions);
     await Promise.resolve();
@@ -174,8 +174,8 @@ describe('AgentLaunchContext', () => {
 
   it('emits the generic fallback when a queued missing-agent banner replay is not delivered', async () => {
     const recording = createRecordingHost({ emitDelivery: false });
-    const owner = new SessionHostInteractions();
-    const session = await triggerQueuedMissingAgentFailure(owner);
+    const session = await triggerQueuedMissingAgentFailure(createTestSession());
+    const owner = session.interactions;
 
     owner.use(recording.interactions);
     await Promise.resolve();
@@ -198,8 +198,8 @@ describe('AgentLaunchContext', () => {
     // must still trip the not-delivered fallback — otherwise the launch
     // error stays presentation-pending and surfaces zero times (#10398).
     const events: Array<{ event: string; payload: unknown }> = [];
-    const owner = new SessionHostInteractions();
-    const session = await triggerQueuedMissingAgentFailure(owner);
+    const session = await triggerQueuedMissingAgentFailure(createTestSession());
+    const owner = session.interactions;
 
     owner.use({
       emit: (event, payload) => {
@@ -226,7 +226,8 @@ describe('AgentLaunchContext', () => {
     // error unmarked so the launch catch emits the generic fallback on the
     // same host (#10466).
     const events: Array<{ event: string; payload: unknown }> = [];
-    const owner = new SessionHostInteractions();
+    const session = createTestSession();
+    const owner = session.interactions;
     owner.use({
       emit: (event, payload) => {
         if (event === 'showAgentConfigBanner') {
@@ -237,7 +238,6 @@ describe('AgentLaunchContext', () => {
       },
       cancel: () => {},
     });
-    const session = createTestSession({ interactions: owner });
     let thrown: unknown;
 
     try {
@@ -262,8 +262,8 @@ describe('AgentLaunchContext', () => {
 
   it('does not queue a second generic toast while a missing-agent banner replay is pending', async () => {
     const recording = createRecordingHost({ emitDelivery: false });
-    const owner = new SessionHostInteractions();
-    const session = createTestSession({ interactions: owner });
+    const session = createTestSession();
+    const owner = session.interactions;
 
     try {
       await launchWithMissingAgent(session);
@@ -291,7 +291,8 @@ describe('AgentLaunchContext', () => {
 
   it('does not double-surface a model-not-recognized failure via the generic error toast', async () => {
     const recording = createRecordingHost({ emitDelivery: true });
-    const session = createTestSession({ interactions: recording.host });
+    const session = createTestSession();
+    session.interactions.use(recording.interactions);
 
     mocks.resolve.mockReturnValueOnce({
       entry: { path: '/agents/chat.yaml' },

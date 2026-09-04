@@ -145,8 +145,8 @@ export class ProgressBackend {
     });
     this.hasPendingPermissions = ui.hasPendingPermissions;
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
-      deleteStream: (stream, expectedIncarnation, beforeRetainedRepair) =>
-        this.deleteStream(stream, expectedIncarnation, beforeRetainedRepair),
+      deleteStream: (stream, beforeRetainedRepair) =>
+        this.deleteStream(stream, { beforeRetainedRepair }),
       // The committed selection, plus the target of an activation still in
       // flight: an activation preloads the sidecar before it selects, so a
       // terminal status landing in that window must not evict what the
@@ -317,14 +317,7 @@ export class ProgressBackend {
     this.inFlightActivationGenerations.add(generation);
     const hydration = await Promise.allSettled([
       leasePromise,
-      // Opening the row is the one moment this host reads the stream's
-      // durable run facts, and it rides the preload it already performs:
-      // chained after it because the preload backfills the summary mirror the
-      // execution FK comes from. There is no pass over the other rows —
-      // an unopened one renders from the always-resident summary tier.
-      this.state.snapshots
-        .preload([stream])
-        .then(() => this.state.hydrateRunFacts(stream)),
+      this.state.snapshots.preload([stream]),
     ]);
     this.inFlightActivationGenerations.delete(generation);
     const transcriptLeaseResult = hydration[0];
@@ -480,21 +473,24 @@ export class ProgressBackend {
    */
   async deleteStream(
     stream: StreamTabId,
-    expectedIncarnation?: number,
-    beforeRetainedRepair?: (outcome: 'active' | 'failed') => void,
+    options: {
+      /** The fact path owns its removal barrier and passes its repair hook;
+       *  a host command (no options) owns its barrier through the applier. */
+      readonly beforeRetainedRepair?: (outcome: 'active' | 'failed') => void;
+    } = {},
   ): Promise<DeleteStreamResult | undefined> {
+    const { beforeRetainedRepair } = options;
     const wasActive = this.presentation.activeStream === stream;
     const activationGeneration = this.activationGeneration;
 
-    // A host command (no caller incarnation) owns its removal barrier and
-    // pending buffer through the applier, exactly like a `removeStream` fact.
-    // If a fact-path barrier already owns this identity, do not start a second
-    // deletion or touch that barrier.
-    let commandRemoval: { incarnation: number; created: boolean } | undefined;
-    if (expectedIncarnation === undefined) {
+    // A host command owns its removal barrier and pending buffer through the
+    // applier, exactly like a `removeStream` fact. If a fact-path barrier
+    // already owns this identity, do not start a second deletion or touch
+    // that barrier.
+    let commandRemoval: { created: boolean } | undefined;
+    if (!beforeRetainedRepair) {
       commandRemoval = this.factApplier.beginCommandRemoval(stream);
       if (!commandRemoval.created) return 'superseded';
-      expectedIncarnation = commandRemoval.incarnation;
     }
     const releaseDeletionClaim = this.state.stores.claimStreamDeletion(stream);
 
@@ -517,22 +513,13 @@ export class ProgressBackend {
           if (preparationRetained) {
             return Promise.resolve('failed' as const);
           }
-          return this.deleteStreamNow(
-            stream,
-            wasActive,
-            activationGeneration,
-            expectedIncarnation,
-          );
+          return this.deleteStreamNow(stream, wasActive, activationGeneration);
         },
       );
     } catch (error) {
       releaseDeletionClaim();
       if (commandRemoval) {
-        this.factApplier.abortCommandRemoval(
-          stream,
-          commandRemoval.incarnation,
-          commandRemoval.created,
-        );
+        this.factApplier.abortCommandRemoval(stream, commandRemoval.created);
       }
       throw error;
     }
@@ -547,7 +534,6 @@ export class ProgressBackend {
       // durable cleanup just reported as still live.
       this.factApplier.completeCommandRemoval(
         stream,
-        commandRemoval.incarnation,
         retained,
         commandRemoval.created,
       );
@@ -653,7 +639,6 @@ export class ProgressBackend {
     stream: StreamTabId,
     wasActive: boolean,
     activationGenerationAtStart: number,
-    expectedIncarnation?: number,
   ): Promise<DeleteStreamResult | undefined> {
     // `undefined` means the deletion never ran (reserved id / cannot-use data
     // dir), not "deleted": the command path relies on a committed deletion
@@ -664,11 +649,7 @@ export class ProgressBackend {
     // The renderer owns this: it sends both the full roster and the
     // incremental per-stream metadata a tab can first appear through.
     const wasRendered = this.renderer.hasRenderedStream(stream);
-    // An undefined expectedIncarnation falls back to the current incarnation
-    // inside `clearStream`, matching the no-options call this replaces.
-    const deletion = await this.state.clearStream(stream, {
-      expectedIncarnation,
-    });
+    const deletion = await this.state.clearStream(stream);
     if (deletion !== 'deleted') {
       return deletion;
     }

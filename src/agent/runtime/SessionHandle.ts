@@ -94,11 +94,7 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
   Partial<
     Pick<
       SessionHandle,
-      | 'events'
-      | 'snapshots'
-      | 'interactions'
-      | 'responseTextProcessing'
-      | 'roots'
+      'events' | 'snapshots' | 'responseTextProcessing' | 'roots'
     >
   >;
 
@@ -182,7 +178,7 @@ export class SessionHandle {
     const status = new StreamStatusMachine(events);
     const transcripts = init.transcripts;
     const followUps = new ToolUseFollowUpQueue();
-    const interactions = init.interactions ?? new SessionHostInteractions();
+    const interactions = new SessionHostInteractions(this);
     // The approval authority publishes a stream's full policy snapshot on
     // every effective bypass change; `setApprovalPolicy` below publishes the
     // same snapshot when the policy half moves.
@@ -221,7 +217,6 @@ export class SessionHandle {
       summaryMetaSource: (stream) => transcripts.getSummaryMeta(stream),
     });
     this.interactions = interactions;
-    interactions.bindSession(this);
     this.approvals = approvals;
     this.modelRetries = new ModelRetryGate();
     this.responseTextProcessing =

@@ -36,6 +36,9 @@ interface CreateChildStreamOptions {
   config: AgentConfig;
   /** Writer atomically reserved by createRehydratedChildStream. */
   reservedWriter?: TranscriptWriter;
+  /** A workflow-script run's resume anchor, stamped on `run.start`
+   *  (decision 9): the checkpoint it journals into. */
+  checkpointId?: string;
 }
 
 interface FinalizeChildStreamOptions {
@@ -146,7 +149,7 @@ export function createChildStream(
       // the child is registered after this event by the delegation site; the
       // queue publishes `approval.policy` for every value the edge changes.
       approvalPolicy: session.approvalPolicySnapshotFor(childStreamId),
-      ownerId: session.ownerId,
+      ...(options.checkpointId ? { checkpointId: options.checkpointId } : {}),
     });
     started = true;
     runTrace.trace.emit({

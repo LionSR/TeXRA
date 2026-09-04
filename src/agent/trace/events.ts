@@ -95,23 +95,17 @@ export interface StageStartEvent extends StageStamp {
  * run itself begins: the fold's existence fact (a stream exists iff its
  * `run.start` exists), typed from its `run.start` arm so the trace stays
  * assignable to the session-event vocabulary. Live emitters always know the
- * identity; the nullish arm belongs to the legacy importer alone. `ownerId`
- * is the owner token of the session that launched the run
- * (`SessionHandle.ownerId`): the applier stamps it on the fold envelope, and
- * the tombstone-reopen gate reads it as the live-owner evidence a re-claimed
- * workflow stream must carry. `approvalPolicy` is the run's initial policy
- * snapshot from the session's single authority (PRD 6, item 2); later
- * changes arrive as `approval.policy`. A launch that fails after this event
- * emits its terminal `result` on the same failure path, so a
- * started-but-never-run stream folds to failed, never to a ghost.
+ * identity; the nullish arm belongs to the legacy importer alone.
+ * `approvalPolicy` is the run's initial policy snapshot from the session's
+ * single authority (PRD 6, item 2); later changes arrive as
+ * `approval.policy`. A launch that fails after this event emits its terminal
+ * `result` on the same failure path, so a started-but-never-run stream folds
+ * to failed, never to a ghost.
  *
- * Not at-most-once in lane 1: a resumed turn of a WAITING session re-emits
- * `run.start` for the same stream id (`buildAgentLaunchContext` emits on
- * every launch, resumes included), and the fold treats a `run.start` for a
- * known stream as an update of its launch facts. PRD 6, item 9 splits the
- * two into one `run.start` per incarnation plus `run.activate` per
- * activation; until that lands, no applier or host may read this event as
- * a guarantee that the stream is new.
+ * Once per stream (decision 9): a stream id names one run and is never
+ * reused, so a resume mints no `run.start`; it emits `run.activate` alone.
+ * The writing process's identity rides the envelope the publisher stamps,
+ * never the event (contract C5).
  */
 interface RunStartEvent
   extends
@@ -120,7 +114,21 @@ interface RunStartEvent
   readonly streamId: StreamTabId;
   readonly identity: RunIdentity;
   readonly userFollowUpSupport?: UserFollowUpSupport;
-  readonly ownerId: string | null;
+}
+
+/**
+ * Every activation of a run, the first launch and each resume (PRD 6, item
+ * 8), carrying the activation metadata the frozen NDJSON `setActiveStream`
+ * line projects from. `run.start` is the creation fact and happens once;
+ * activation happens many times on one stream.
+ */
+interface RunActivateEvent extends StageStamp {
+  readonly type: 'run.activate';
+  readonly streamId: StreamTabId;
+  readonly category: AgentCategory;
+  readonly isRemote: boolean;
+  /** Launched in the background whoever is watching (a delegated child). */
+  readonly background: boolean;
 }
 
 /**
@@ -432,6 +440,7 @@ export interface ResultEvent extends StageStamp {
 export type AgentEvent =
   | LogEvent
   | RunStartEvent
+  | RunActivateEvent
   | RunConfigEvent
   | ApprovalRequestedEvent
   | ApprovalResolvedEvent
@@ -474,6 +483,7 @@ export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'updateCompileFailures',
   'goalPaused',
   'run.start',
+  'run.activate',
   'run.config',
   'approval.requested',
   'approval.resolved',

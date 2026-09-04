@@ -356,7 +356,6 @@ function emitRunStart(
     streamId,
     event: {
       type: 'run.start',
-      ownerId: null,
       streamId,
       executionId,
       identity,
@@ -3645,7 +3644,6 @@ describe('sessionSignalsAdapter run facts', () => {
         streamId: child1,
         event: {
           type: 'run.start',
-          ownerId: null,
           streamId: child1,
           executionId: 'aaaa0008f10e' as ExecutionId,
           identity: { kind: 'agent', agent: 'child1' },

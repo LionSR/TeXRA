@@ -28,11 +28,19 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
+import type { HostBashApprovalRequest } from '@agent/runtime/HostInteractions';
 import type {
   ExecutionId,
   ProgressPermissionKind,
   StreamTabId,
 } from '@shared/schemas';
+import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
+import {
+  prepareToolEditApprovalPrompt,
+  type ToolEditApprovalRequest,
+} from '@tools/approval/toolEditApproval';
+import { generateShortId } from '@utils/core';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 /**
  * Loosely-typed recording of host emissions. The recording host flattens typed
@@ -372,8 +380,8 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
       pending.settle({ action: 'reject' });
     }
   }
-  const host = new SessionHostInteractions() as SessionHostInteractions &
-    RecordingProgressSink;
+  const host = sessionWithInteractions(undefined)
+    .interactions as SessionHostInteractions & RecordingProgressSink;
   host.use(interactions);
   return {
     events,
@@ -398,10 +406,27 @@ export function sessionWithInteractions(
     | undefined,
   eventHub?: SessionEventHub,
 ): SessionHandle {
+  // Like production SessionHandle, the stub carries a real event hub and
+  // co-constructs the status machine on that same hub — emit sites resolve
+  // `session.events` directly, and status facts publish on the hub the
+  // session's listeners read (SessionHandleInit documents why an injected
+  // machine is forbidden). Tests that record status facts pass the hub in.
+  // The interaction owner is constructed with the stub it belongs to, as
+  // production constructs it with the session.
+  const events = eventHub ?? new SessionEventHub();
+  const session = {
+    events,
+    modelRetries: new ModelRetryGate(),
+    status: new StreamStatusMachine(events),
+    transcripts: { ensureLoaded: async () => {} },
+    followUps: { terminalize: () => false },
+    publishRunEvent: (streamId: StreamTabId, event: AgentEvent) =>
+      events.emit({ scope: 'run', streamId, event }),
+  } as unknown as SessionHandle;
   const owner =
     interactions instanceof SessionHostInteractions
       ? interactions
-      : new SessionHostInteractions();
+      : new SessionHostInteractions(session);
   if (interactions && !(interactions instanceof SessionHostInteractions)) {
     owner.use(
       'cancel' in interactions
@@ -409,21 +434,11 @@ export function sessionWithInteractions(
         : { ...interactions, cancel: () => {} },
     );
   }
-  // Like production SessionHandle, the stub carries a real event hub and
-  // co-constructs the status machine on that same hub — emit sites resolve
-  // `session.events` directly, and status facts publish on the hub the
-  // session's listeners read (SessionHandleInit documents why an injected
-  // machine is forbidden). Tests that record status facts pass the hub in.
-  const events = eventHub ?? new SessionEventHub();
-  return {
+  Object.assign(session, {
     interactions: owner,
-    events,
     approvals: createSessionApprovals(owner),
-    modelRetries: new ModelRetryGate(),
-    status: new StreamStatusMachine(events),
-    transcripts: { ensureLoaded: async () => {} },
-    followUps: { terminalize: () => false },
-  } as unknown as SessionHandle;
+  });
+  return session;
 }
 
 /**
@@ -441,7 +456,8 @@ export function testRunScope(
       SessionHostInteractions | Pick<SessionHostInteractions, 'emit'>;
   } = {},
 ): RunScope {
-  const interactions = options.interactions ?? new SessionHostInteractions();
+  const interactions =
+    options.interactions ?? sessionWithInteractions(undefined).interactions;
   return createRunScope({
     streamId: streamId as StreamTabId,
     executionId: 'deadbeef' as ExecutionId,
@@ -472,4 +488,30 @@ export function withTestRunContext<T>(
     createRunContext({ runScope, ...options }),
     fn,
   ) as Promise<T>;
+}
+
+/** A host bash request carrying the prompt the tool boundary prepares. */
+export function bashApprovalRequest(
+  request: Omit<HostBashApprovalRequest, 'permission'>,
+  session: SessionHandle = sessionWithInteractions(undefined),
+): HostBashApprovalRequest {
+  return {
+    ...request,
+    permission: prepareBashApprovalPrompt(request, session),
+  };
+}
+
+/** A tool-edit request carrying the prompt the tool boundary prepares. */
+export function toolEditApprovalRequest(
+  request: Omit<ToolEditApprovalRequest, 'permission'>,
+  session: SessionHandle = sessionWithInteractions(undefined),
+): ToolEditApprovalRequest {
+  return {
+    ...request,
+    permission: prepareToolEditApprovalPrompt(session, {
+      requestId: `approval-${generateShortId()}`,
+      request,
+      relativePath: WorkspaceFS.relativePath(request.path),
+    }),
+  };
 }

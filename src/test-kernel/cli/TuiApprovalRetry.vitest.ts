@@ -132,6 +132,10 @@ import {
   isBashApprovalBypassedForStream,
   proposalApprovals,
 } from '@tools/approval';
+import {
+  bashApprovalRequest,
+  toolEditApprovalRequest,
+} from '../agent/progressTestUtils';
 
 function host(): CliRuntimeHost {
   return {
@@ -470,10 +474,12 @@ describe('TUI retry approvals', () => {
 
   it('updates TUI bash bypass state at the approval decision site', async () => {
     const { presentationHost, interactions } = tui();
-    const result = interactions.requestBashApproval?.({
-      command: 'echo ok',
-      streamId: 'bash-bypass-stream',
-    });
+    const result = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'echo ok',
+        streamId: 'bash-bypass-stream',
+      }),
+    );
 
     await waitForApproval('bash', { streamId: 'bash-bypass-stream' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'bash' });
@@ -525,13 +531,15 @@ describe('TUI retry approvals', () => {
 
   it('updates TUI edit bypass state at the approval decision site', async () => {
     const { presentationHost, interactions } = tui();
-    const result = interactions.requestToolEditApproval?.({
-      path: '/work/main.tex',
-      originalContent: 'old',
-      proposedContent: 'new',
-      sourceTool: 'edit',
-      streamId: 'edit-bypass-stream',
-    });
+    const result = interactions.requestToolEditApproval?.(
+      toolEditApprovalRequest({
+        path: '/work/main.tex',
+        originalContent: 'old',
+        proposedContent: 'new',
+        sourceTool: 'edit',
+        streamId: 'edit-bypass-stream',
+      }),
+    );
 
     await waitForApproval('toolEdit', { streamId: 'edit-bypass-stream' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'toolEdit' });
@@ -610,17 +618,21 @@ describe('TUI retry approvals', () => {
       workingDirectory: null,
       agentCategory: AgentCategory.ToolUse,
     });
-    const edit = interactions.requestToolEditApproval?.({
-      path: '/work/main.tex',
-      originalContent: 'old',
-      proposedContent: 'new',
-      sourceTool: 'edit',
-      streamId,
-    });
-    const bash = interactions.requestBashApproval?.({
-      command: 'lake build',
-      streamId,
-    });
+    const edit = interactions.requestToolEditApproval?.(
+      toolEditApprovalRequest({
+        path: '/work/main.tex',
+        originalContent: 'old',
+        proposedContent: 'new',
+        sourceTool: 'edit',
+        streamId,
+      }),
+    );
+    const bash = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'lake build',
+        streamId,
+      }),
+    );
     void enqueueApproval({
       kind: 'planApproval',
       data: {
@@ -1396,10 +1408,12 @@ describe('TUI retry approvals', () => {
     const retry = interactions.requestRetry?.(
       chatGptSubscriptionRetry('preparing-stream'),
     );
-    const bash = interactions.requestBashApproval?.({
-      command: 'echo ok',
-      streamId: 'bash-stream',
-    });
+    const bash = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'echo ok',
+        streamId: 'bash-stream',
+      }),
+    );
 
     await waitForApproval('bash', { streamId: 'bash-stream' });
     // The retry owns a queue slot from the moment it is requested, but it is

@@ -128,7 +128,6 @@ export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
         streamId,
         executionId,
         identity,
-        ownerId: null,
       });
     },
     setRunConfig: (streamId, config, executionId) => {

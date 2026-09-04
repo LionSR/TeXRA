@@ -54,7 +54,7 @@ function taskGroupEndStatus(
  * `running` is a lie only once nothing can still close it, and a terminal
  * phase alone does not say that: a user stop publishes CANCELLED while the
  * flow is still unwinding in this process, with its stages' `GROUP_END` rows
- * yet to write. `SessionState.streamDurableOutcome` is the fact that does say
+ * yet to write. The fold's `runDurablyFinal` is the fact that does say
  * it, and it says it with a value rather than a bit — the run's own outcome,
  * whether that came from the durable facts alone or from a terminal phase
  * this process has nothing left to write behind (`finalizeRunTerminal`

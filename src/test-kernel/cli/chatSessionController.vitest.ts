@@ -138,6 +138,7 @@ import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentEvent } from '@agent/trace';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -174,6 +175,7 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { StreamSnapshotStore } from '@transcript';
+import { bashApprovalRequest } from '../agent/progressTestUtils';
 
 /**
  * Session fixture in the states the controller is exercised from. The
@@ -360,13 +362,16 @@ function installOwnerSession(): {
     publishResult: () => {},
     releaseRootExecutionLease: async () => {},
   });
-  const interactions = new SessionHostInteractions();
-  installSession({
-    interactions,
+  const session = {
     events,
     status,
     executions,
-  });
+    publishRunEvent: (streamId: StreamTabId, event: AgentEvent) =>
+      events.emit({ scope: 'run', streamId, event }),
+  } as unknown as SessionHandle;
+  const interactions = new SessionHostInteractions(session);
+  Object.assign(session, { interactions });
+  installSession(session as unknown as Record<string, unknown>);
   return { events, status, executions, interactions };
 }
 
@@ -802,10 +807,12 @@ describe('createChatSessionController', () => {
     expect(detachResultToast).toHaveBeenCalledOnce();
     expect(mocks.presentationHostClose).not.toHaveBeenCalled();
 
-    const approval = interactions.requestBashApproval({
-      command: 'printf child',
-      streamId: childStream,
-    });
+    const approval = interactions.requestBashApproval(
+      bashApprovalRequest({
+        command: 'printf child',
+        streamId: childStream,
+      }),
+    );
     await vi.waitFor(() => expect(requestBashApproval).toHaveBeenCalledOnce());
     adapterDecision.resolve({ action: 'approve' });
     await expect(approval).resolves.toEqual({ action: 'approve' });

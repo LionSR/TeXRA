@@ -108,6 +108,9 @@ interface AgentLaunchInput {
   isSubagent?: boolean;
   /** Stream this run was launched from, stamped on `run.start`. */
   parentStreamId?: StreamTabId;
+  /** A workflow-script run's resume anchor, stamped on `run.start`
+   *  (decision 9): the checkpoint it journals into. */
+  checkpointId?: string;
   /** Runtime behavior declared by the launch source, stamped on `run.start`. */
   userFollowUpSupport?: UserFollowUpSupport;
   /** When true, reject if an explicit category doesn't match the YAML-defined category. */
@@ -422,33 +425,45 @@ async function assembleAgentLaunchContext(
   modelHandler.setLogger(agentLogger);
 
   input.signal?.throwIfAborted();
+  const isRemote = isRemoteAgent(fullConfig.agent);
   // The reservation commit point: the existence fact. From here the stream
   // is real for every fold, and a failure below ends it with a terminal
   // `result` instead of releasing the reservation (PRD
   // one-fold-three-renderers, section 6, item 3). The launch facts the fold
   // reads verbatim (item 6) are all known here; the run's own `run.config`
-  // follows once the lifecycle starts.
+  // follows once the lifecycle starts. A resume (`streamTabIdOverride`)
+  // activates an existing stream and mints no `run.start` (decision 9).
+  if (!input.streamTabIdOverride) {
+    agentLogger.emit({
+      type: 'run.start',
+      streamId,
+      executionId,
+      identity: { kind: 'agent', agent: config.agent },
+      userFollowUpSupport:
+        input.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      agentCategory: setting.agentCategory,
+      isRemote,
+      worktree: launchWorktreeInfo(config.workingDirectory),
+      ...(input.parentStreamId && input.parentStreamId !== streamId
+        ? { parentStreamId: input.parentStreamId }
+        : {}),
+      // A delegated child runs in the background whoever is watching.
+      background: input.isSubagent ?? false,
+      // The initial policy snapshot (PRD 6, item 2). A delegated child's
+      // ancestry is registered from `onStreamResolved` below, after this
+      // event; the queue publishes a fresh `approval.policy` for every value
+      // the edge changes, so the fold's latest-of-type entry ends correct.
+      approvalPolicy: session.approvalPolicySnapshotFor(streamId),
+      ...(input.checkpointId ? { checkpointId: input.checkpointId } : {}),
+    });
+  }
+  // Every activation, first launch and resume alike (PRD 6, item 8).
   agentLogger.emit({
-    type: 'run.start',
+    type: 'run.activate',
     streamId,
-    executionId,
-    identity: { kind: 'agent', agent: config.agent },
-    userFollowUpSupport:
-      input.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-    agentCategory: setting.agentCategory,
-    isRemote: isRemoteAgent(fullConfig.agent),
-    worktree: launchWorktreeInfo(config.workingDirectory),
-    ...(input.parentStreamId && input.parentStreamId !== streamId
-      ? { parentStreamId: input.parentStreamId }
-      : {}),
-    // A delegated child runs in the background whoever is watching.
+    category: setting.agentCategory,
+    isRemote,
     background: input.isSubagent ?? false,
-    // The initial policy snapshot (PRD 6, item 2). A delegated child's
-    // ancestry is registered from `onStreamResolved` below, after this
-    // event; the queue publishes a fresh `approval.policy` for every value
-    // the edge changes, so the fold's latest-of-type entry ends correct.
-    approvalPolicy: session.approvalPolicySnapshotFor(streamId),
-    ownerId: session.ownerId,
   });
   onStarted(runTrace, setting.agentCategory);
   input.onStreamResolved?.(streamId);
@@ -657,11 +672,8 @@ function compensateStartedFailure(args: {
  * Treats the `run.start` emission as a transactional commit point: resolution
  * failures before that point release the lock silently; failures after end
  * the started stream via {@link compensateStartedFailure}. A resume passes
- * `streamTabIdOverride` and reserves nothing, but still emits `run.start`
- * for its existing stream: in lane 1 a hydrated stream has no `run.start`
- * until this re-emission mints it in the view, and the fold reads a
- * `run.start` for a known stream as an update. PRD 6, item 9 replaces the
- * resume's emission with `run.activate`.
+ * `streamTabIdOverride`, reserves nothing, and emits `run.activate` alone:
+ * its stream already exists for every fold (PRD 6, item 8).
  */
 export async function buildAgentLaunchContext(
   input: AgentLaunchInput,

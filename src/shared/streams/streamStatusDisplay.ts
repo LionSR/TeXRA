@@ -17,8 +17,8 @@ export type StreamStatusDisplayKey =
   | 'ready';
 
 /**
- * The fold's interrupted reading (PRD one-fold-three-renderers, 5.2): a
- * pending approval whose owner process is not alive. A copy key over the
+ * The fold's interrupted reading (PRD one-fold-three-renderers, 5.2): an
+ * in-flight run whose owner process nobody holds. A copy key over the
  * durable phase, never a lifecycle status or a host display key, so the
  * durable event set and the hosts' per-status tables stay what they are and
  * only the label and tone change.
@@ -125,7 +125,7 @@ const STREAM_STATUS_TONES: Record<StreamStatusCopyKey, StreamStatusTone> = {
 /**
  * The label and tone pair a `StreamView` carries (G4), read from the one
  * table through one display key: the status and substate, or the fold's
- * interrupted reading when a pending approval has no live owner.
+ * interrupted reading when an in-flight run has lost its owner.
  */
 export function streamStatusCopy(
   status: StreamLifecycleStatus,
@@ -143,21 +143,19 @@ export function streamStatusCopy(
   };
 }
 
-/** Banner copy for the fold's interrupted reading: the approval is still
- *  listed, so a resume re-asks it. */
+/** Banner copy for the fold's interrupted reading: the process running the
+ *  run is gone; a pending approval stays listed, so a resume re-asks it. */
 export function streamInterruptedMessage(): string {
-  return 'This run was waiting for an approval when its process stopped. Resume it to answer.';
+  return 'The process running this run stopped before it finished. Resume it to continue.';
 }
 
 /**
- * Banner and tooltip copy for a run another TeXRA process holds. Recorded
- * as the stream's unavailable detail and sent as `StreamMetadata.statusDetail`.
+ * Banner and tooltip copy for a run another TeXRA process holds. `owner`
+ * names that process the way the caller knows it: a lease record's pid and
+ * hostname, or the fold's owner id.
  */
-export function streamHeldMessage(owner: {
-  readonly pid: number;
-  readonly hostname: string;
-}): string {
-  return `Held by another TeXRA process (pid ${owner.pid} on ${owner.hostname}). Let it finish or close it; if it is gone, Delete removes the run.`;
+export function streamHeldMessage(owner: string): string {
+  return `Held by another TeXRA process (${owner}). Let it finish or close it; if it is gone, Delete removes the run.`;
 }
 
 /** Banner and tooltip copy for a run whose saved state could not be read. */

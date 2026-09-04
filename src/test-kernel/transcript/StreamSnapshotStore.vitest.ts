@@ -311,7 +311,6 @@ describe('StreamSnapshotStore', () => {
       streamId: STREAM,
       event: {
         type: 'run.start',
-        ownerId: null,
         streamId: STREAM,
         executionId,
         identity: { kind: 'agent', agent: 'session-label' },
@@ -489,7 +488,6 @@ describe('StreamSnapshotStore', () => {
       streamId: STREAM,
       event: {
         type: 'run.start',
-        ownerId: null,
         streamId: STREAM,
         executionId,
         identity: workflowIdentity,
@@ -1114,7 +1112,6 @@ describe('StreamSnapshotStore', () => {
       streamId: STREAM,
       event: {
         type: 'run.start',
-        ownerId: null,
         streamId: STREAM,
         executionId,
         identity: { kind: 'agent', agent: 'search' },

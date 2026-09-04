@@ -30,7 +30,6 @@ function startWorkflow(
     events,
     {
       type: 'run.start',
-      ownerId: null,
       streamId: target,
       executionId,
       identity: { kind: 'multiAgentWorkflow', workflowName: 'proof-workflow' },
@@ -167,7 +166,6 @@ describe('attachWorkflowPlainOutput', () => {
 
     emit(events, {
       type: 'run.start',
-      ownerId: null,
       streamId,
       executionId,
       identity: { kind: 'agent', agent: 'ordinary-workflow' },

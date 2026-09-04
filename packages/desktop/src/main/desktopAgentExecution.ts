@@ -343,7 +343,6 @@ export class DesktopProgressBridge {
     if (this.disposed) return;
 
     this.toolEditApprovals = new ToolEditApprovalController({
-      session: this.session,
       host: new DesktopToolEditApprovalHost({ ui: this.options.host }),
       showToolEditPermission: (payload) =>
         this.backend.approvalHandlers.toolEdit.show(payload),
@@ -357,7 +356,6 @@ export class DesktopProgressBridge {
     // unimplemented.
     this.hostInteractions = createProgressHostInteractions({
       interactions: presentationHost,
-      session: this.session,
       getApprovalHandlers: () => this.backend.approvalHandlers,
       getToolEditApprovals: () => this.toolEditApprovals!,
       setApprovalBypassState: this.backend.setApprovalBypassState,

@@ -1,21 +1,28 @@
 /**
  * The one fold (PRD one-fold-three-renderers, G1 and 5.2): `fold(view,
- * input)` turns the durable session events, live text chunks, and owner
- * liveness snapshots into `SessionView`. Every process that shows a session
- * runs it; the transport carries its input, never its output.
+ * input)` turns the durable session events, live text chunks, the local
+ * runtime snapshot, and the transcript subscription set into `SessionView`.
+ * Every process that shows a session runs it; the transport carries its
+ * input, never its output.
  *
  * Pure in the sense that matters: no IO, no clock, no platform, no store
  * reads, and the same input sequence yields the same view. Incremental in
  * the sense the PRD requires: an event recomputes the arm for its stream,
  * walks `parentId` to the root refreshing each ancestor's `childIds`,
- * `rollup`, `approval`, and `group`, then touches `order` only when a
- * top-level stream appeared, moved, or left. O(depth) per event, never a
- * whole-view pass. A text chunk costs the chunk, never the row's text.
+ * `rollup`, `approval`, `group`, and `forceExpanded`, then touches `order`
+ * only when a top-level stream appeared, moved, or left. O(depth) per
+ * event, never a whole-view pass. A text chunk costs the chunk, never the
+ * row's text.
  *
- * Existence: a stream exists iff its `run.start` has been folded. A fact
- * that names any other stream changes nothing (the caller that stamps the
- * envelope logs it); a parent edge to a stream the view has no `run.start`
- * for leaves the child top-level with the edge kept in `ancestors`.
+ * Three rules govern the event arm before any fact applies (5.2). A listing
+ * fact is ordered by commit within its `(aggregate, listing type)` entry in
+ * `view.latest` and ignored when it is not above it, whichever read
+ * delivered it. A transcript row folds only for an aggregate in the
+ * subscription set (its `view.folded` entry), and only when its seq is above
+ * that entry, which it then advances. `view.cursor` moves on tail rows
+ * alone. Existence: a stream exists iff its `run.start` has folded and its
+ * `stream.removed` has not; the tombstone is final and ids are never reused
+ * (decision 9), so a fact naming any other stream changes nothing.
  *
  * The run model (`transcript.run`) is derived only when one of its inputs
  * moved: the stream's own `run.start`, a status change, a transcript entry
@@ -24,13 +31,14 @@
  * of the frame, so a replay of R events derives each touched board once.
  *
  * The accumulator contract that makes this O(depth): `view.streams`,
- * `view.policy`, and `view.queuedFollowUps` are indexes reused across folds,
- * a transcript's arrays are appended in place (a copy per entry would make a
- * replay quadratic), and the fold's own indexes over a transcript live in a
- * module-private map keyed by the transcript value. Every `StreamView`
- * value, every `TranscriptView` value, and the `SessionView` envelope are
- * replaced on change and never mutated, so a host that compares those by
- * identity sees exactly what changed. A caller holds the latest view only.
+ * `view.policy`, `view.folded`, `view.latest`, and `view.queuedFollowUps`
+ * are indexes reused across folds, a transcript's arrays are appended in
+ * place (a copy per entry would make a replay quadratic), and the fold's own
+ * indexes over a transcript live in a module-private map keyed by the
+ * transcript value. Every `StreamView` value, every `TranscriptView` value,
+ * and the `SessionView` envelope are replaced on change and never mutated,
+ * so a host that compares those by identity sees exactly what changed. A
+ * caller holds the latest view only.
  */
 import {
   AgentCategory,
@@ -39,19 +47,29 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   STREAMING_TEXT_MESSAGE_TYPES,
+  isPlainAgentIdentity,
+  listingTypeOf,
   runIdentityDisplayName,
   sumUsageStats,
+  type AggregateId,
   type FoldInput,
+  type LocalRuntimeState,
   type RoundIndexed,
   type SessionEvent,
   type StreamLogEntry,
   type StreamTabId,
+  type TaskGroup,
+  type TextChunk,
+  type TranscriptSubscription,
   type WorkflowDeclaredPlan,
 } from '@shared/schemas';
 import {
   compactionActivityRow,
+  isSettledRow,
   projectTranscriptRow,
+  promotesOnlyOnTypedTerminalState,
   type TranscriptRow,
+  type TranscriptRowKind,
 } from '@shared/transcript';
 import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import {
@@ -78,6 +96,7 @@ import {
   isTranscriptSettlementPhase,
 } from '@shared/streams/streamStatus';
 import {
+  streamHeldMessage,
   streamInterruptedMessage,
   streamStatusCopy,
 } from '@shared/streams/streamStatusDisplay';
@@ -92,11 +111,21 @@ import { isObject } from '@utils/core';
 import type { SessionView, StreamView, TranscriptView } from './sessionView';
 
 type DurableEvent = SessionEvent;
-type TextChunk = Extract<FoldInput, { type: 'text.chunk' }>;
-type OwnerLiveness = Extract<FoldInput, { type: 'owner.liveness' }>;
+type RunStartEvent = Extract<DurableEvent, { type: 'run.start' }>;
 
 /** Workflow-script stream ids whose run model a batch derives at its end. */
 type DeferredRunModels = Set<StreamTabId> | null;
+
+/** Canonical dashboard rows a workflow-script run model reads. */
+const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
+  'compactionActivity',
+  'phase',
+  'workflowTask',
+]);
+
+/** Residency cap on the dashboard rows one run model folds: a long workflow
+ *  keeps its newest cards, never an unbounded history (PRD 5.2). */
+const MAX_RUN_MODEL_DASHBOARD_ROWS = 2_000;
 
 // ---------------------------------------------------------------------------
 // Entry
@@ -119,7 +148,7 @@ export function fold(
   }
   for (const streamId of deferred) {
     const stream = next.streams.get(streamId);
-    if (stream) next.streams.set(streamId, withRunModel(next, stream));
+    if (stream) setStream(next, withRunModel(next, stream));
   }
   return next;
 }
@@ -132,14 +161,28 @@ function foldWith(
   // The envelope is replaced, never mutated: work on a copy whose indexes
   // are shared with the previous value.
   const next: SessionView = { ...view };
-  switch (input.type) {
-    case 'text.chunk':
+  switch (input._tag) {
+    case 'event': {
+      if (input.read === 'all' && input.event.commit > next.cursor) {
+        next.cursor = input.event.commit;
+      }
+      return foldDurable(next, input.event, deferred) ||
+        next.cursor !== view.cursor
+        ? next
+        : view;
+    }
+    case 'chunk':
       return foldTextChunk(next, input) ? next : view;
-    case 'owner.liveness':
-      foldOwnerLiveness(next, input, deferred);
+    case 'local':
+      foldLocal(next, input.local, deferred);
       return next;
-    default:
-      return foldDurable(next, input, deferred) ? next : view;
+    case 'subscriptions':
+      foldSubscriptions(next, input.set, deferred);
+      return next;
+    case 'replay.complete':
+      // The marker carries no fact (PRD 5.2); the publish gate reads it from
+      // the input beside the view, never from the view.
+      return view;
   }
 }
 
@@ -195,13 +238,14 @@ function replaceTranscript(
   return next;
 }
 
-function emptyTranscript(): TranscriptView {
+function emptyTranscript(settledSeq = 0): TranscriptView {
   const compactionState = createCompactionActivityProjection();
   const transcript: TranscriptView = {
     rows: [],
     taskGroups: [],
     compaction: compactionState.blocks,
-    settledSeq: 0,
+    settledSeq,
+    settledRows: 0,
     run: null,
   };
   INDEXES.set(transcript, {
@@ -233,65 +277,59 @@ function streamIdDisplayName(streamId: StreamTabId): string {
  */
 const NO_ROUNDS = Object.freeze({});
 
-/** The arm-specific keys `withCategory` drops when a stream re-arms. */
-const ARM_KEYS = new Set([
-  'category',
-  'todos',
-  'plan',
-  'goal',
-  'outputs',
-  'files',
-  'missingOutputs',
-  'compileFailures',
-]);
-
 /**
  * A stream in its initial shape, minted by its `run.start` alone. A run with
  * no category (a process stream, a legacy import) takes the tool-use arm, as
  * roster provisioning does today.
  */
-function createStream(
-  id: StreamTabId,
-  category: StreamView['category'],
-  timestamp: number,
-): StreamView {
+function createStream(event: RunStartEvent): StreamView {
+  const id = event.aggregateId as StreamTabId;
   const status = STREAM_STATUS.READY;
+  const identity = event.identity ?? null;
   const common = {
     id,
-    identity: null,
-    executionId: null,
-    isRemote: false,
-    ownerId: null,
-    label: streamIdDisplayName(id),
+    executionId: event.executionId,
+    identity,
+    isRemote: event.isRemote ?? false,
+    ownerId: event.ownerId,
+    label: identity
+      ? runIdentityDisplayName(identity)
+      : streamIdDisplayName(id),
     description: null,
     model: null,
     modelLabel: null,
     command: null,
-    worktree: null,
+    inputFiles: [],
+    worktree: event.worktree ?? null,
     status,
     substate: null,
     statusDetail: null,
     ...streamStatusCopy(status),
+    createdAt: event.commit,
     runStartedAt: null,
-    lastTimestamp: null,
-    creationTimestamp: timestamp,
+    lastTimestamp: event.at,
     conversationProgress: { toolCallCount: 0 },
     stage: null,
-    followUpSupport: 'unsupported' as const,
-    contextState: null,
-    parentId: null,
+    followUpSupport: event.userFollowUpSupport ?? ('unsupported' as const),
+    context: null,
+    parentId: event.parentStreamId ?? null,
     ancestors: [],
     childIds: [],
     rollup: { total: 0, running: 0, finished: 0 },
     approval: 'none' as const,
+    readOnly: false,
+    forceExpanded: false,
     group: 'recent' as const,
     usage: {},
+    thinkingActive: false,
+    compactingActive: false,
+    latestLine: null,
     transcript: emptyTranscript(),
   };
-  return category === AgentCategory.Workflow
+  return event.agentCategory === AgentCategory.Workflow
     ? {
         ...common,
-        category,
+        category: AgentCategory.Workflow,
         files: NO_ROUNDS,
         missingOutputs: NO_ROUNDS,
         compileFailures: NO_ROUNDS,
@@ -308,19 +346,41 @@ function createStream(
       };
 }
 
-/** Re-arm a stream when `run.start` names a different category. */
-function withCategory(
-  stream: StreamView,
-  category: StreamView['category'],
-): StreamView {
-  if (stream.category === category) return stream;
-  const common = Object.fromEntries(
-    Object.entries(stream).filter(([key]) => !ARM_KEYS.has(key)),
-  );
-  return {
-    ...createStream(stream.id, category, stream.creationTimestamp),
-    ...common,
-  } as StreamView;
+/**
+ * Land a stream value in the index and keep the paper-level rollup (5.1)
+ * current from the group it left and the group it entered. Every write to
+ * `view.streams` goes through here; `dropStream` is the one removal.
+ */
+function setStream(view: SessionView, stream: StreamView): void {
+  const previous = view.streams.get(stream.id);
+  view.streams.set(stream.id, stream);
+  if (previous?.group !== stream.group) {
+    countGroups(view, previous?.group, stream.group);
+  }
+}
+
+function dropStream(view: SessionView, stream: StreamView): void {
+  view.streams.delete(stream.id);
+  countGroups(view, stream.group, undefined);
+}
+
+function countGroups(
+  view: SessionView,
+  left: StreamView['group'] | undefined,
+  entered: StreamView['group'] | undefined,
+): void {
+  const rollup = { ...view.rollup };
+  if (left === 'running' || left === 'waiting' || left === 'interrupted') {
+    rollup[left] -= 1;
+  }
+  if (
+    entered === 'running' ||
+    entered === 'waiting' ||
+    entered === 'interrupted'
+  ) {
+    rollup[entered] += 1;
+  }
+  view.rollup = rollup;
 }
 
 // ---------------------------------------------------------------------------
@@ -331,7 +391,7 @@ function orderingKey(stream: StreamView): {
   name: string;
   creationTimestamp: number;
 } {
-  return { name: stream.id, creationTimestamp: stream.creationTimestamp };
+  return { name: stream.id, creationTimestamp: stream.createdAt };
 }
 
 /** `ids` with `id` placed by the `streamOrdering` rule. */
@@ -363,6 +423,8 @@ function withoutId(
   return ids.filter((existing) => existing !== id);
 }
 
+/** Root first. A parent edge always names a stream the view holds: the fold
+ *  re-roots a child whose parent it lacks (5.2, `ancestors`). */
 function ancestorsOf(
   view: SessionView,
   stream: StreamView,
@@ -373,17 +435,7 @@ function ancestorsOf(
   while (parentId !== null && !seen.has(parentId)) {
     seen.add(parentId);
     const parent = view.streams.get(parentId);
-    if (!parent) {
-      // A parent the view has no run.start for (evicted, or never replayed)
-      // keeps the label this stream last saw for it, and the chain above it,
-      // which nothing can recompute any more.
-      const known = stream.ancestors.findIndex((a) => a.id === parentId);
-      const kept =
-        known >= 0
-          ? stream.ancestors.slice(0, known + 1)
-          : [{ id: parentId, label: streamIdDisplayName(parentId) }];
-      return [...kept, ...chain];
-    }
+    if (!parent) break;
     chain.unshift({ id: parent.id, label: parent.label });
     parentId = parent.parentId;
   }
@@ -403,7 +455,7 @@ function refreshAncestors(view: SessionView, streamId: StreamTabId): void {
         a.id === stream.ancestors[i].id &&
         a.label === stream.ancestors[i].label,
     );
-  if (!unchanged) view.streams.set(streamId, { ...stream, ancestors });
+  if (!unchanged) setStream(view, { ...stream, ancestors });
   for (const childId of stream.childIds) refreshAncestors(view, childId);
 }
 
@@ -411,22 +463,39 @@ function refreshAncestors(view: SessionView, streamId: StreamTabId): void {
 // Derived per-stream facts
 // ---------------------------------------------------------------------------
 
+/** Whether somebody holds the stream's run: its owner is this process or a
+ *  process whose lease this one may not touch (5.2, `group`). */
+function ownerHeld(local: LocalRuntimeState, stream: StreamView): boolean {
+  return (
+    stream.ownerId !== null &&
+    (local.self.includes(stream.ownerId) ||
+      local.heldBy.includes(stream.ownerId))
+  );
+}
+
 /**
- * `group`, `approval`, `rollup`, and the status copy from the stream's own
- * facts and its children. Waiting needs a live owner: without one the same
- * pending request reads as interrupted (label, tone, and the resume notice
- * in `statusDetail`), never waiting, because nothing is listening for the
- * answer; the durable phase and the listed approval stay, so a resume can
- * re-ask.
+ * `group`, `approval`, `readOnly`, `forceExpanded`, `rollup`, and the status
+ * copy from the stream's own facts, the local snapshot, and its children
+ * (5.2). Interrupted is owner loss: an in-flight stream nobody holds, whether
+ * or not an approval is pending. Waiting needs a held owner: without one the
+ * same pending request reads as interrupted, never waiting, because nothing
+ * is listening for the answer; the durable phase and the listed approval
+ * stay, so a resume can re-ask.
  */
 function withAggregates(view: SessionView, stream: StreamView): StreamView {
+  const { local } = view;
+  const held = ownerHeld(local, stream);
   const pendingOwn = view.approvals.some((a) => a.streamId === stream.id);
-  const ownerLive =
-    stream.ownerId !== null && view.liveOwners.includes(stream.ownerId);
-  const waiting = pendingOwn && ownerLive;
-  const interrupted = pendingOwn && !ownerLive;
+  const interrupted = isInFlightPhase(stream.status) && !held;
+  const waiting = pendingOwn && held;
+  const heldElsewhere =
+    stream.ownerId !== null &&
+    local.heldBy.includes(stream.ownerId) &&
+    !local.self.includes(stream.ownerId);
+  const unreadable = local.unreadable.find((u) => u.streamId === stream.id);
   const rollup = { total: 0, running: 0, finished: 0 };
   let descendantWaiting = false;
+  let descendantNeedsUser = false;
   for (const childId of stream.childIds) {
     const child = view.streams.get(childId);
     if (!child) continue;
@@ -436,10 +505,12 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
     rollup.finished +=
       (isTerminalOutcomePhase(child.status) ? 1 : 0) + child.rollup.finished;
     if (child.approval !== 'none') descendantWaiting = true;
+    if (child.forceExpanded) descendantNeedsUser = true;
   }
   let group: StreamView['group'] = 'recent';
-  if (waiting) group = 'waiting';
-  else if (!pendingOwn && isInFlightPhase(stream.status)) group = 'running';
+  if (interrupted) group = 'interrupted';
+  else if (waiting) group = 'waiting';
+  else if (isInFlightPhase(stream.status)) group = 'running';
   let approval: StreamView['approval'] = 'none';
   if (waiting) approval = 'own';
   else if (descendantWaiting) approval = 'descendant';
@@ -447,10 +518,19 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
     substate: stream.substate ?? undefined,
     interrupted,
   });
-  const statusDetail = interrupted ? streamInterruptedMessage() : null;
+  const readOnly = heldElsewhere || unreadable !== undefined;
+  const forceExpanded = waiting || interrupted || descendantNeedsUser;
+  let statusDetail: string | null = unreadable?.detail ?? null;
+  if (statusDetail === null && interrupted) {
+    statusDetail = streamInterruptedMessage();
+  } else if (statusDetail === null && heldElsewhere) {
+    statusDetail = streamHeldMessage(stream.ownerId as string);
+  }
   if (
     stream.group === group &&
     stream.approval === approval &&
+    stream.readOnly === readOnly &&
+    stream.forceExpanded === forceExpanded &&
     stream.rollup.total === rollup.total &&
     stream.rollup.running === rollup.running &&
     stream.rollup.finished === rollup.finished &&
@@ -460,7 +540,16 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
   ) {
     return stream;
   }
-  return { ...stream, group, approval, rollup, ...copy, statusDetail };
+  return {
+    ...stream,
+    group,
+    approval,
+    readOnly,
+    forceExpanded,
+    rollup,
+    ...copy,
+    statusDetail,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -501,7 +590,7 @@ function childProgressChanged(prev: StreamView, next: StreamView): boolean {
   );
 }
 
-/** Whether an imported entry is one the run model reads: a group boundary
+/** Whether a transcript entry is one the run model reads: a group boundary
  *  (phases), a workflow card, or a plan marker. */
 function entryAffectsRunModel(entry: StreamLogEntry): boolean {
   return (
@@ -509,6 +598,38 @@ function entryAffectsRunModel(entry: StreamLogEntry): boolean {
     entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK ||
     workflowMarkerOf(entry) !== undefined
   );
+}
+
+/**
+ * The run model's residency (PRD 5.2, section 4 of the build note): the
+ * newest dashboard rows up to the cap, and the phase groups those rows still
+ * name. A phase whose every card fell off the cap is not shown.
+ */
+function runModelInputs(transcript: TranscriptView): {
+  rows: TranscriptRow[];
+  taskGroups: TaskGroup[];
+} {
+  const dashboard = transcript.rows.filter((row) =>
+    WORKFLOW_DASHBOARD_KINDS.has(row.kind),
+  );
+  const rows =
+    dashboard.length > MAX_RUN_MODEL_DASHBOARD_ROWS
+      ? dashboard.slice(-MAX_RUN_MODEL_DASHBOARD_ROWS)
+      : dashboard;
+  if (rows.length === dashboard.length) {
+    return { rows, taskGroups: transcript.taskGroups };
+  }
+  const retainedPhaseIds = new Set<string>();
+  for (const row of rows) {
+    if (row.kind === 'phase') retainedPhaseIds.add(row.id);
+    else if (row.groupId !== undefined) retainedPhaseIds.add(row.groupId);
+  }
+  return {
+    rows,
+    taskGroups: transcript.taskGroups.filter(
+      (group) => group.kind !== 'phase' || retainedPhaseIds.has(group.id),
+    ),
+  };
 }
 
 /** `transcript.run` for a workflow-script run, derived now. */
@@ -522,16 +643,13 @@ function withRunModel(view: SessionView, stream: StreamView): StreamView {
   const transcript = stream.transcript;
   const indexes = indexesOf(transcript);
   const run = workflowRunModel({
-    taskGroups: transcript.taskGroups,
-    rows: transcript.rows,
+    ...runModelInputs(transcript),
     workflowAttemptId: indexes.workflowAttemptId,
     plan: indexes.plan,
     streamPhase: stream.status,
-    // Main's `SessionState.streamDurableOutcome` in the fold's vocabulary: a
-    // terminal outcome with no live owner left to settle its cards.
+    // A terminal outcome with no owner left to settle its cards.
     runDurablyFinal:
-      isTerminalOutcomePhase(stream.status) &&
-      !(stream.ownerId !== null && view.liveOwners.includes(stream.ownerId)),
+      isTerminalOutcomePhase(stream.status) && !ownerHeld(view.local, stream),
     childProgress,
   });
   return { ...stream, transcript: replaceTranscript(transcript, { run }) };
@@ -570,7 +688,7 @@ function walkUp(
     if (!current) return;
     let next = withAggregates(view, current);
     if (id === boardId) next = runModelAt(view, next, deferred);
-    if (next !== current) view.streams.set(id, next);
+    if (next !== current) setStream(view, next);
     id = current.parentId;
   }
 }
@@ -646,21 +764,37 @@ function isStreamingTextRow(row: TranscriptRow): row is StreamingTextRow {
   );
 }
 
-function projectRow(transcript: TranscriptView, entry: StreamLogEntry): void {
+/**
+ * Whether a stream's run, round, and session headings go to the task-group
+ * surface rather than the rows (keyed on the identity, never the id format):
+ * every workflow run and every plain agent run. The one exception is a
+ * full-log child that is not a workflow run, a detached process or an
+ * external-CLI session, whose verbatim log is the point of opening it.
+ */
+function lifecycleToTaskGroups(stream: StreamView): boolean {
+  return (
+    stream.category === AgentCategory.Workflow ||
+    stream.identity === null ||
+    isPlainAgentIdentity(stream.identity)
+  );
+}
+
+function projectRow(
+  transcript: TranscriptView,
+  entry: StreamLogEntry,
+  projectLifecycleToTaskGroups: boolean,
+): void {
   const row = projectTranscriptRow(entry, {
     previousRow: rowById(transcript, entry.id),
-    projectLifecycleToTaskGroups: true,
+    projectLifecycleToTaskGroups,
   });
   if (row) upsertRow(transcript, row);
 }
 
-/** Fold one imported transcript row into the slice: the row, task-group,
- *  compaction, and run-marker reducers, each called unchanged. */
-function applyEntry(
-  transcript: TranscriptView,
-  entry: StreamLogEntry,
-): TranscriptView {
-  const next = replaceTranscript(transcript, {});
+/** Fold one transcript row into the slice: the row, task-group, compaction,
+ *  and run-marker reducers, each called unchanged. */
+function applyEntry(stream: StreamView, entry: StreamLogEntry): TranscriptView {
+  const next = replaceTranscript(stream.transcript, {});
   const indexes = indexesOf(next);
   upsertTaskGroupFromStreamLog(next.taskGroups, indexes.taskGroupIndex, entry);
   const marker = workflowMarkerOf(entry);
@@ -672,7 +806,7 @@ function applyEntry(
     next,
     applyCompactionActivityEntries(indexes.compactionState, [entry]),
   );
-  projectRow(next, entry);
+  projectRow(next, entry, lifecycleToTaskGroups(stream));
   if (isStreamingEntry(entry)) {
     const row = rowById(next, entry.id);
     const text = entry.text ?? '';
@@ -703,6 +837,171 @@ function withSettledTranscript(
   if (changed.length === 0) return stream;
   reconcileCompactionRows(transcript, changed);
   return { ...stream, transcript };
+}
+
+// ---------------------------------------------------------------------------
+// Transcript-derived stream facts (G4: derived in the fold, never by a host)
+// ---------------------------------------------------------------------------
+
+/** The headline a status line shows for a row: its own text, untrimmed and
+ *  unsanitized; a host sanitizes for its surface at paint. */
+function rowHeadline(row: TranscriptRow): string {
+  switch (row.kind) {
+    case 'assistant':
+    case 'log':
+      return row.text.full;
+    case 'user':
+    case 'error':
+    case 'progressStatus':
+      return row.summary.full;
+    case 'workflowTask':
+      return row.line;
+    case 'phase':
+      return row.heading;
+    case 'thinking':
+      return 'Thinking';
+    case 'scratchpad':
+      return 'Scratchpad';
+    case 'webSearch':
+    case 'webFetch':
+    case 'statistics':
+    case 'contextManagement':
+    case 'compactionActivity':
+      return row.label;
+    case 'fileList':
+    case 'missingOutputs':
+      return row.summary;
+    case 'latexdiff':
+      return `Latexdiff results (${row.entries.length})`;
+    case 'tool':
+      return '';
+  }
+}
+
+function nonEmpty(text: string | undefined): string | undefined {
+  return text !== undefined && text.trim().length > 0 ? text : undefined;
+}
+
+/** A workflow run's newest operational summary: what its tool, phase, card,
+ *  error, or plain log row last said. */
+function workflowOperationalLatestLine(
+  rows: readonly TranscriptRow[],
+): string | undefined {
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index];
+    if (row.kind === 'tool') {
+      const line =
+        nonEmpty(row.toolUse.headerSummary) ?? nonEmpty(row.model.headerLabel);
+      if (line) return line;
+      continue;
+    }
+    if (row.kind === 'phase') {
+      const line = nonEmpty(row.phaseLabel);
+      if (line) return line;
+      continue;
+    }
+    if (
+      row.kind === 'error' ||
+      row.kind === 'workflowTask' ||
+      ((row.kind === 'assistant' || row.kind === 'log') &&
+        row.messageType === MESSAGE_TYPES.DEFAULT)
+    ) {
+      const line = nonEmpty(rowHeadline(row));
+      if (line) return line;
+    }
+  }
+  return undefined;
+}
+
+/** Any other run's newest user instruction or settled model reply. */
+function latestConversationLine(
+  rows: readonly TranscriptRow[],
+  settledRows: number,
+): string | undefined {
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index];
+    const headline = rowHeadline(row);
+    if (headline.trim().length === 0) continue;
+    if (row.kind === 'user') return headline;
+    const response =
+      (row.kind === 'assistant' || row.kind === 'log') &&
+      row.messageType === MESSAGE_TYPES.MODEL_RESPONSE;
+    if (
+      response &&
+      (index < settledRows || isSettledRow(row, index < rows.length - 1))
+    ) {
+      return headline;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Advance the contiguous leading prefix of settled rows (5.2, `settledRows`):
+ * an append-only scrollback prints rows in order, so a row is settled for
+ * printing only once every row before it is. Only the tail past the previous
+ * frontier is walked. A final stream settles every open row except the two
+ * kinds whose state bridge cleanup can still replace (a compaction block, a
+ * workflow card).
+ */
+function advanceSettledRows(
+  rows: readonly TranscriptRow[],
+  start: number,
+  streamFinal: boolean,
+): number {
+  let index = Math.min(start, rows.length);
+  while (index < rows.length) {
+    const row = rows[index];
+    if (!isSettledRow(row, index < rows.length - 1)) {
+      if (promotesOnlyOnTypedTerminalState(row) || !streamFinal) break;
+    }
+    index += 1;
+  }
+  return index;
+}
+
+/** The transcript-derived fields of a stream, after its rows or its
+ *  settlement moved: `settledRows`, `thinkingActive`, `compactingActive`,
+ *  and `latestLine`. */
+function withTranscriptFacts(stream: StreamView): StreamView {
+  const { transcript } = stream;
+  const streamFinal = isTranscriptSettlementPhase(stream.status);
+  const settledRows = advanceSettledRows(
+    transcript.rows,
+    transcript.settledRows,
+    streamFinal,
+  );
+  const lastThinking = transcript.rows.findLast(
+    (row) => row.kind === 'thinking',
+  );
+  const thinkingActive =
+    lastThinking?.kind === 'thinking' && lastThinking.streaming;
+  const compactingActive = transcript.compaction.some(
+    (block) => block.status === 'running',
+  );
+  const latestLine =
+    (stream.category === AgentCategory.Workflow
+      ? workflowOperationalLatestLine(transcript.rows)
+      : latestConversationLine(transcript.rows, settledRows)) ??
+    stream.latestLine;
+  if (
+    settledRows === transcript.settledRows &&
+    thinkingActive === stream.thinkingActive &&
+    compactingActive === stream.compactingActive &&
+    latestLine === stream.latestLine
+  ) {
+    return stream;
+  }
+  return {
+    ...stream,
+    thinkingActive,
+    compactingActive,
+    latestLine,
+    transcript:
+      settledRows === transcript.settledRows
+        ? transcript
+        : replaceTranscript(transcript, { settledRows }),
+  };
 }
 
 /**
@@ -740,9 +1039,13 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
   } else {
     // The entry's own text was blank and projected no row; the chunk that
     // gives it one projects it once.
-    projectRow(transcript, { ...cursor.entry, text: cursor.text.full });
+    projectRow(
+      transcript,
+      { ...cursor.entry, text: cursor.text.full },
+      lifecycleToTaskGroups(stream),
+    );
   }
-  view.streams.set(stream.id, { ...stream, transcript });
+  setStream(view, { ...stream, transcript });
   return true;
 }
 
@@ -783,25 +1086,14 @@ function wrongArm(stream: StreamView, event: DurableEvent): never {
  *  are handled by the caller). */
 function applyOwnArm(stream: StreamView, event: DurableEvent): StreamView {
   switch (event.type) {
-    case 'run.start': {
-      const identity = event.identity ?? stream.identity;
-      const armed = withCategory(
-        stream,
-        event.agentCategory ?? stream.category,
-      );
-      return {
-        ...armed,
-        identity,
-        executionId: event.executionId,
-        isRemote: event.isRemote ?? armed.isRemote,
-        label: identity
-          ? runIdentityDisplayName(identity)
-          : streamIdDisplayName(stream.id),
-        worktree: event.worktree ?? armed.worktree,
-        followUpSupport: event.userFollowUpSupport ?? armed.followUpSupport,
-        parentId: event.parentStreamId ?? armed.parentId,
-      };
-    }
+    case 'run.start':
+      // Existence cannot become more true (5.2, "Duplicates"): a second
+      // start for a stream the view holds is a no-op.
+      return stream;
+    case 'run.activate':
+      // Ownership moves with the envelope the caller stamps; the activation
+      // metadata repeats the launch facts the stream already carries.
+      return stream;
     case 'run.config': {
       const model =
         stream.identity?.kind === 'agent' ? (event.config.model ?? null) : null;
@@ -813,6 +1105,7 @@ function applyOwnArm(stream: StreamView, event: DurableEvent): StreamView {
           stream.identity?.kind === 'process'
             ? (event.config.instruction ?? null)
             : null,
+        inputFiles: event.config.inputFiles ?? stream.inputFiles,
       };
     }
     case 'status': {
@@ -829,7 +1122,7 @@ function applyOwnArm(stream: StreamView, event: DurableEvent): StreamView {
             ? { stage: null, conversationProgress: { toolCallCount: 0 } }
             : {}),
         },
-        event.timestamp,
+        event.at,
       );
     }
     case 'result':
@@ -840,7 +1133,7 @@ function applyOwnArm(stream: StreamView, event: DurableEvent): StreamView {
           substate: null,
           runStartedAt: null,
         },
-        event.timestamp,
+        event.at,
       );
     case 'stage.start': {
       const stage = streamStageFromStageStart({
@@ -861,7 +1154,7 @@ function applyOwnArm(stream: StreamView, event: DurableEvent): StreamView {
     case 'context.state':
       return {
         ...stream,
-        contextState: {
+        context: {
           inputTokens: event.inputTokens,
           contextWindow: event.contextWindow,
           utilizationPercent: roundedUtilizationPercent(
@@ -914,49 +1207,47 @@ function applyOwnArm(stream: StreamView, event: DurableEvent): StreamView {
           'drop',
         ),
       };
-    case 'workflow.call':
-    case 'workflow.plan':
-      // Until the events-to-row collapse (post-cutover), the card and the plan
-      // marker reach the transcript as `legacy.entry` rows, which the run
-      // model reads; the trace arms only advance `settledSeq`.
-      return stream;
     case 'setParentStream':
       return event.parentStreamId === stream.parentId
         ? stream
         : { ...stream, parentId: event.parentStreamId };
     case 'updateStreamDescription':
       return { ...stream, description: event.description };
-    case 'legacy.entry':
-      return {
-        ...stream,
-        transcript: applyEntry(stream.transcript, event.entry),
-      };
+    case 'transcript.entry':
+      return { ...stream, transcript: applyEntry(stream, event.entry) };
     case 'approval.requested':
     case 'approval.resolved':
     case 'approval.policy':
     case 'inquiryThreadUpdated':
     case 'updateQueuedFollowUps':
-    case 'removeStream':
+    case 'stream.removed':
       return stream;
   }
 }
 
 /** Session-level slices, applied before the stream arm so the arm's
  *  aggregates see them. */
-function applySessionSlices(view: SessionView, event: DurableEvent): void {
+function applySessionSlices(
+  view: SessionView,
+  streamId: StreamTabId | null,
+  event: DurableEvent,
+): void {
   switch (event.type) {
     case 'run.start':
       // The initial snapshot rides the existence fact (PRD 6, item 2); a
       // legacy import carries none and leaves the entry to `approval.policy`.
-      if (event.approvalPolicy) {
-        view.policy.set(event.streamId, event.approvalPolicy);
+      if (event.approvalPolicy && streamId !== null) {
+        view.policy.set(streamId, event.approvalPolicy);
       }
       return;
     case 'approval.requested':
+      // A set keyed by request id (5.2): a replayed request is one entry.
+      if (streamId === null) return;
+      if (view.approvals.some((a) => a.requestId === event.requestId)) return;
       view.approvals = [
         ...view.approvals,
         {
-          streamId: event.streamId,
+          streamId,
           requestId: event.requestId,
           payload: event.payload,
         },
@@ -968,15 +1259,16 @@ function applySessionSlices(view: SessionView, event: DurableEvent): void {
       );
       return;
     case 'approval.policy':
-      view.policy.set(event.streamId, event.snapshot);
+      if (streamId !== null) view.policy.set(streamId, event.snapshot);
       return;
     case 'inquiryThreadUpdated': {
       const {
         type: _type,
-        streamId: _streamId,
+        aggregateId: _aggregateId,
         seq: _seq,
+        commit: _commit,
         ownerId: _ownerId,
-        timestamp: _timestamp,
+        at: _at,
         ...thread
       } = event;
       const at = view.inquiries.findIndex(
@@ -989,7 +1281,7 @@ function applySessionSlices(view: SessionView, event: DurableEvent): void {
       return;
     }
     case 'updateQueuedFollowUps':
-      view.queuedFollowUps.set(event.streamId, event.messages);
+      if (streamId !== null) view.queuedFollowUps.set(streamId, event.messages);
       return;
     default:
       return;
@@ -998,8 +1290,8 @@ function applySessionSlices(view: SessionView, event: DurableEvent): void {
 
 /**
  * Move `stream` from `previousParentId` to its current parent. A parent the
- * view has no `run.start` for leaves the stream top-level; `ancestors` keeps
- * the edge by its last known label.
+ * view has no `run.start` for re-roots the stream: top-level, no ancestors
+ * (5.2, `ancestors`).
  */
 function relink(
   view: SessionView,
@@ -1009,15 +1301,18 @@ function relink(
   const previousParent =
     previousParentId === null ? undefined : view.streams.get(previousParentId);
   if (previousParent) {
-    view.streams.set(previousParent.id, {
+    setStream(view, {
       ...previousParent,
       childIds: withoutId(previousParent.childIds, stream.id),
     });
   }
   const parent =
     stream.parentId === null ? undefined : view.streams.get(stream.parentId);
+  if (!parent && stream.parentId !== null) {
+    setStream(view, { ...stream, parentId: null });
+  }
   if (parent) {
-    view.streams.set(parent.id, {
+    setStream(view, {
       ...parent,
       childIds: insertOrdered(view, parent.childIds, stream.id),
     });
@@ -1030,63 +1325,71 @@ function relink(
   refreshAncestors(view, stream.id);
 }
 
+/** The stream a durable event names: its aggregate, except for the thread
+ *  aggregate of an inquiry (5.1). */
+function streamOf(event: DurableEvent): StreamTabId | null {
+  return event.type === 'inquiryThreadUpdated'
+    ? null
+    : (event.aggregateId as StreamTabId);
+}
+
 /** Returns whether the event changed anything. */
 function foldDurable(
   view: SessionView,
   event: DurableEvent,
   deferred: DeferredRunModels,
 ): boolean {
-  if (event.streamId === null) {
-    // Session-scoped: no stream arm, no per-stream seq.
-    applySessionSlices(view, event);
+  if (event.type === 'transcript.entry') return foldTranscriptRow(view, event);
+  // Listing facts are ordered by commit per (aggregate, listing type),
+  // whichever read delivered them (5.2, "Duplicates").
+  const listingKey = `${event.aggregateId}/${listingTypeOf(event)}`;
+  const latest = view.latest.get(listingKey);
+  if (latest !== undefined && event.commit <= latest) return false;
+  view.latest.set(listingKey, event.commit);
+
+  const streamId = streamOf(event);
+  if (streamId === null) {
+    applySessionSlices(view, null, event);
     return true;
   }
-  const known = view.streams.get(event.streamId);
-  // At-least-once delivery: a seq this stream has already folded is a replay.
-  if (known && event.seq <= known.transcript.settledSeq) return false;
-  if (event.type === 'removeStream') {
-    return foldRemoveStream(view, event.streamId, deferred);
+  if (event.type === 'stream.removed') {
+    return foldStreamRemoved(view, streamId, deferred);
   }
-  // Existence: only `run.start` mints a stream. The envelope stamper logs a
-  // fact that arrives for a stream the view has no `run.start` for.
+  const known = view.streams.get(streamId);
+  // Existence: only `run.start` mints a stream, once. A fact for a stream
+  // the view has no `run.start` for changes nothing (its publisher logs it).
   if (!known && event.type !== 'run.start') return false;
   const created = !known;
-  const before =
-    known ??
-    createStream(
-      event.streamId,
-      (event.type === 'run.start' && event.agentCategory) ||
-        AgentCategory.ToolUse,
-      event.timestamp,
-    );
+  const before = known ?? createStream(event as RunStartEvent);
 
-  applySessionSlices(view, event);
+  applySessionSlices(view, streamId, event);
   const own = applyOwnArm(before, event);
   let next: StreamView = {
     ...own,
     ownerId: event.ownerId,
-    lastTimestamp: event.timestamp,
-    transcript: replaceTranscript(own.transcript, { settledSeq: event.seq }),
+    lastTimestamp: event.at,
+    transcript: replaceTranscript(own.transcript, {
+      settledSeq: Math.max(own.transcript.settledSeq, event.commit),
+    }),
   };
-  view.streams.set(next.id, next);
+  setStream(view, next);
 
   if (created || next.parentId !== before.parentId) {
-    relink(view, next, before.parentId);
-    walkUp(view, before.parentId, before.parentId, deferred);
+    relink(view, next, created ? null : before.parentId);
+    if (!created) walkUp(view, before.parentId, before.parentId, deferred);
   }
   if (next.label !== before.label) {
     for (const childId of next.childIds) refreshAncestors(view, childId);
   }
   next = view.streams.get(next.id)!;
-  const aggregated = withAggregates(view, next);
-  // The run model's own inputs: the stream's existence and status, and the
-  // transcript entries it reads.
-  const runInputsMoved =
-    created ||
-    own.status !== before.status ||
-    (event.type === 'legacy.entry' && entryAffectsRunModel(event.entry));
-  view.streams.set(
-    next.id,
+  const aggregated =
+    own.status !== before.status
+      ? withAggregates(view, withTranscriptFacts(next))
+      : withAggregates(view, next);
+  // The run model's own inputs: the stream's existence and status.
+  const runInputsMoved = created || own.status !== before.status;
+  setStream(
+    view,
     runInputsMoved ? runModelAt(view, aggregated, deferred) : aggregated,
   );
   walkUp(
@@ -1098,47 +1401,166 @@ function foldDurable(
   return true;
 }
 
-function foldRemoveStream(
+/**
+ * The transcript tier (5.2, "Residency"): a row folds only for an aggregate
+ * in the subscription set and only above the seq the view has retained for
+ * it, which it then advances. A dropped row never touches `folded`.
+ */
+function foldTranscriptRow(
+  view: SessionView,
+  event: Extract<DurableEvent, { type: 'transcript.entry' }>,
+): boolean {
+  const retained = view.folded.get(event.aggregateId);
+  if (retained === undefined || event.seq <= retained) return false;
+  const stream = view.streams.get(event.aggregateId as StreamTabId);
+  if (!stream) return false;
+  view.folded.set(event.aggregateId, event.seq);
+  const withEntry: StreamView = {
+    ...stream,
+    lastTimestamp: event.at,
+    transcript: replaceTranscript(applyEntry(stream, event.entry), {
+      settledSeq: Math.max(stream.transcript.settledSeq, event.commit),
+    }),
+  };
+  const next = withTranscriptFacts(withEntry);
+  setStream(view, next);
+  if (entryAffectsRunModel(event.entry)) {
+    setStream(view, runModelAt(view, next, null));
+  }
+  return true;
+}
+
+/** Whether `stream` is the stream aggregate or the execution aggregate named
+ *  by `aggregateId`: a transcript spans both (5.1). */
+function isAggregateOf(stream: StreamView, aggregateId: AggregateId): boolean {
+  return stream.id === aggregateId || stream.executionId === aggregateId;
+}
+
+/**
+ * The tombstone (5.2, "Existence" and "Durable text wins"): final, clears
+ * every session-level entry keyed by the stream, re-roots its children, and
+ * ends its transcript tier.
+ */
+function foldStreamRemoved(
   view: SessionView,
   streamId: StreamTabId,
   deferred: DeferredRunModels,
 ): boolean {
   const stream = view.streams.get(streamId);
   if (!stream) return false;
-  view.streams.delete(stream.id);
+  dropStream(view, stream);
   view.policy.delete(stream.id);
   view.queuedFollowUps.delete(stream.id);
+  view.folded.delete(stream.id);
+  view.folded.delete(stream.executionId);
+  for (const key of [...view.latest.keys()]) {
+    if (key.startsWith(`${stream.id}/`)) view.latest.delete(key);
+  }
   if (view.approvals.some((a) => a.streamId === stream.id)) {
     view.approvals = view.approvals.filter((a) => a.streamId !== stream.id);
+  }
+  if (view.inquiries.some((i) => i.parentStreamId === stream.id)) {
+    view.inquiries = view.inquiries.filter(
+      (i) => i.parentStreamId !== stream.id,
+    );
   }
   view.order = withoutId(view.order, stream.id);
   const parent =
     stream.parentId === null ? undefined : view.streams.get(stream.parentId);
   if (parent) {
-    view.streams.set(parent.id, {
+    setStream(view, {
       ...parent,
       childIds: withoutId(parent.childIds, stream.id),
     });
     walkUp(view, parent.id, parent.id, deferred);
   }
-  // Orphans surface at the top level; their `ancestors` keep the evicted
-  // label, so nothing above them is lost to the reader.
+  // A child whose parent is gone is top-level: no dangling edge, no
+  // ancestors (5.2, `ancestors`).
   for (const childId of stream.childIds) {
-    if (view.streams.has(childId)) {
-      view.order = insertOrdered(view, view.order, childId);
-    }
+    const child = view.streams.get(childId);
+    if (!child) continue;
+    setStream(view, { ...child, parentId: null });
+    view.order = insertOrdered(view, view.order, childId);
+    refreshAncestors(view, childId);
   }
   return true;
 }
 
-function foldOwnerLiveness(
+/**
+ * The local snapshot names the streams whose owner entered or left the held
+ * set and those entering or leaving `unreadable` (5.2, "Incremental"), so an
+ * owner exiting recomputes exactly the streams it owned, never the view.
+ */
+function foldLocal(
   view: SessionView,
-  snapshot: OwnerLiveness,
+  local: LocalRuntimeState,
   deferred: DeferredRunModels,
 ): void {
-  view.liveOwners = [...snapshot.owners];
-  // Only a stream with a pending request can change group on liveness; the
-  // approvals list names them, so no whole-view pass.
-  const touched = new Set<StreamTabId>(view.approvals.map((a) => a.streamId));
-  for (const streamId of touched) walkUp(view, streamId, null, deferred);
+  const previous = view.local;
+  view.local = local;
+  const heldBefore = new Set([...previous.self, ...previous.heldBy]);
+  const heldAfter = new Set([...local.self, ...local.heldBy]);
+  const changedOwners = new Set<string>();
+  for (const owner of heldBefore) {
+    if (!heldAfter.has(owner)) changedOwners.add(owner);
+  }
+  for (const owner of heldAfter) {
+    if (!heldBefore.has(owner)) changedOwners.add(owner);
+  }
+  // `self` and `heldBy` are separate only so `readOnly` can ask who holds:
+  // an owner moving between them changes that answer.
+  for (const owner of local.heldBy) {
+    if (previous.self.includes(owner) !== local.self.includes(owner)) {
+      changedOwners.add(owner);
+    }
+  }
+  const touched = new Set<StreamTabId>();
+  for (const stream of view.streams.values()) {
+    if (stream.ownerId !== null && changedOwners.has(stream.ownerId)) {
+      touched.add(stream.id);
+    }
+  }
+  const unreadableBefore = new Map(
+    previous.unreadable.map((u) => [u.streamId, u.detail]),
+  );
+  const unreadableAfter = new Map(
+    local.unreadable.map((u) => [u.streamId, u.detail]),
+  );
+  for (const [streamId, detail] of unreadableBefore) {
+    if (unreadableAfter.get(streamId) !== detail) touched.add(streamId);
+  }
+  for (const [streamId, detail] of unreadableAfter) {
+    if (unreadableBefore.get(streamId) !== detail) touched.add(streamId);
+  }
+  for (const streamId of touched) walkUp(view, streamId, streamId, deferred);
+}
+
+/**
+ * The subscription set (5.2, "Residency"): an aggregate entering it gets its
+ * `folded` entry at the seq the subscription names; one leaving it loses its
+ * transcript tier (rows, task groups, compaction, run model, in-flight text)
+ * and its entry, keeping every listing fact.
+ */
+function foldSubscriptions(
+  view: SessionView,
+  set: readonly TranscriptSubscription[],
+  deferred: DeferredRunModels,
+): void {
+  const subscribed = new Map(set.map((s) => [s.id, s.fromSeq]));
+  for (const [id, fromSeq] of subscribed) {
+    if (!view.folded.has(id)) view.folded.set(id, fromSeq);
+  }
+  for (const id of [...view.folded.keys()]) {
+    if (subscribed.has(id)) continue;
+    view.folded.delete(id);
+    for (const stream of view.streams.values()) {
+      if (!isAggregateOf(stream, id)) continue;
+      const evicted = withTranscriptFacts({
+        ...stream,
+        transcript: emptyTranscript(stream.transcript.settledSeq),
+      });
+      setStream(view, runModelAt(view, evicted, deferred));
+      break;
+    }
+  }
 }

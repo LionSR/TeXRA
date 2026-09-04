@@ -1,3 +1,5 @@
+import { SubscriptionRef } from 'effect';
+
 import type { DeleteStreamResult } from '@agent/storage';
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
@@ -11,7 +13,6 @@ import { withEventErrorHandling } from '@controllers/session/eventErrorHandling'
 import {
   STREAM_PHASE,
   isGoalInFlight,
-  type SessionEventBody,
   type SetParentStreamPayload,
   type StreamPhase,
   type StreamStage,
@@ -65,7 +66,6 @@ type DeferredFact =
 
 /** A provisional removal barrier and the facts its async delete deferred. */
 interface PendingDeletion {
-  readonly incarnation: number;
   readonly facts: DeferredFact[];
 }
 
@@ -75,9 +75,6 @@ type SessionFactApplierOptions = {
    * the removal barrier's fate: `active`/`failed` mean the stream was
    * retained — still alive — so the applier retires the barrier and its
    * facts flow again; `deleted` (or a host that reports nothing) keeps it.
-   * The applier passes the incarnation captured when the barrier was set so
-   * the host can refuse to delete a deterministic identity that a fresh run
-   * re-claimed while the deletion was queued.
    *
    * A host that rebuilds retained presentation state must invoke
    * `beforeRetainedRepair` with its `active`/`failed` outcome before that
@@ -90,7 +87,6 @@ type SessionFactApplierOptions = {
    */
   deleteStream: (
     stream: StreamTabId,
-    expectedIncarnation?: number,
     beforeRetainedRepair?: (outcome: 'active' | 'failed') => void,
   ) =>
     | void
@@ -157,11 +153,9 @@ export class SessionFactApplier {
   private readonly registeredWithRenderer = new Set<StreamTabId>();
 
   /**
-   * Provisional removal barriers by stream: the incarnation each captured and
-   * the facts arriving while its delete was still in flight. Keyed by stream,
-   * holding only the most recent barrier — a superseded deletion's buffer is
-   * dropped with it (its facts named a superseded incarnation), while a newer
-   * barrier installs its own.
+   * Provisional removal barriers by stream: the facts arriving while each
+   * delete was still in flight. A removal is final (decision 9), so one
+   * barrier per stream is ever installed.
    */
   private readonly pendingDeletions = new Map<StreamTabId, PendingDeletion>();
 
@@ -199,6 +193,9 @@ export class SessionFactApplier {
       this.renderer.invalidate(streamId, 'contextState');
     },
     'run.start': (_streamId, event) => this.handleRunStart(event),
+    // Activation is a fold and wire fact; canonical state has nothing to
+    // learn from it that `run.start` and the status rail do not carry.
+    'run.activate': () => undefined,
     'run.config': (_streamId, event) => this.handleRunConfig(event.streamId),
     // Approval facts and the terminal result are the fold's; canonical
     // state learns approvals from the host port and the outcome from the
@@ -352,25 +349,16 @@ export class SessionFactApplier {
             const { streamId } = fact.payload;
             // Provisional barrier: facts racing the host delete are refused
             // now, but the barrier becomes permanent only when the deletion
-            // actually commits. The captured incarnation travels with the
-            // host delete, so a workflow relaunch that claims the identity
-            // while the delete is queued makes the delete report
-            // `superseded` instead of erasing the fresh run. A
-            // retained/live/failed/superseded outcome retires the barrier so
-            // a still-live or freshly re-claimed stream is not frozen — but
-            // only when the barrier still carries THIS removal's incarnation,
-            // because a newer deletion B may already own the identity. The
-            // host delete option must surface that outcome even when
-            // presentation repair fails; any other rejection leaves the
-            // barrier in place and is logged by the event-error wrapper,
-            // because the stream may have deleted.
-            const { incarnation: expectedIncarnation, changedRosterParents } =
+            // actually commits. A retained/live/failed outcome retires the
+            // barrier so a still-live stream is not frozen. The host delete
+            // option must surface that outcome even when presentation
+            // repair fails; any other rejection leaves the barrier in place
+            // and is logged by the event-error wrapper, because the stream
+            // may have deleted.
+            const { changedRosterParents } =
               this.state.beginStreamRemoval(streamId);
             this.registeredWithRenderer.delete(streamId);
-            const { pending, created } = this.beginPendingDeletion(
-              streamId,
-              expectedIncarnation,
-            );
+            const { pending, created } = this.beginPendingDeletion(streamId);
             // Establish tombstone and pending-fact ownership first. Renderer
             // delivery is best-effort and cannot prevent durable deletion.
             this.notifyRosterParents(changedRosterParents);
@@ -378,26 +366,17 @@ export class SessionFactApplier {
             const settleDeletion = (
               outcome: void | DeleteStreamResult | undefined,
             ): void => {
-              // A prior removeStream fact for the same incarnation owns this
-              // deletion's settlement (the store dedups its delete promise);
-              // only the owning barrier retires the tombstone and replays.
+              // A prior removeStream fact owns this deletion's settlement
+              // (the store dedups its delete promise); only the owning
+              // barrier retires the tombstone and replays.
               if (!created || settled) return;
               settled = true;
               // A host that reports nothing keeps the tombstone: the outcome
               // is unknown, so settle as if the deletion committed.
-              this.settleRemoval(
-                streamId,
-                expectedIncarnation,
-                pending,
-                outcome ?? 'deleted',
-              );
+              this.settleRemoval(streamId, pending, outcome ?? 'deleted');
             };
             return Promise.resolve(
-              this.options.deleteStream(
-                streamId,
-                expectedIncarnation,
-                settleDeletion,
-              ),
+              this.options.deleteStream(streamId, settleDeletion),
             ).then(
               (outcome) => {
                 settleDeletion(outcome);
@@ -418,37 +397,11 @@ export class SessionFactApplier {
         assertNever(fact, 'Unhandled session fact');
       },
     );
-    // Its own scope, after the handler: a fold failure is logged and can
-    // never drop an admitted fact from canonical state, and the fold reads
-    // the stores the handler has just updated.
-    withEventErrorHandling(
-      'SessionView',
-      `failed to fold ${fact.type} fact`,
-      () => this.foldSessionFact(fact),
-    );
   }
 
   handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
-    // A committed tombstone is reopened only by a fresh workflow `run.start`
-    // with live-owner evidence: the fact names the workflow identity, and its
-    // owner is one this process can prove alive (in process, its own
-    // session's token). A stale `run.start` replayed for an identity nobody
-    // live re-claimed carries an owner that is not, so it cannot satisfy
-    // this gate (PRD one-fold-three-renderers, section 6, item 3).
-    if (
-      event.type === 'run.start' &&
-      this.state.isStreamRemoved(streamId) &&
-      event.identity.kind === 'multiAgentWorkflow' &&
-      event.ownerId !== null &&
-      this.state.view.liveOwners.includes(event.ownerId)
-    ) {
-      // The fresh start is the first delivery for the new incarnation, even
-      // when a prior host delete left this applier's registry untouched.
-      this.registeredWithRenderer.delete(streamId);
-      const { changedRosterParents } = this.state.claimStreamIdentity(streamId);
-      this.notifyRosterParents(changedRosterParents);
-    }
-    // A run fact for a removed stream is stale by definition. A
+    // A run fact for a removed stream is stale by definition: a removal is
+    // final and a stream id is never reused (decision 9). A
     // `child.activity` snapshot is authoritative for its parent even when some
     // listed children are tombstoned: canonical state accepts the whole fact,
     // while SessionState's shared read projection hides those child rows until
@@ -476,216 +429,20 @@ export class SessionFactApplier {
       `failed to handle ${event.type} fact`,
       () => handle(streamId, event),
     );
-    withEventErrorHandling(
-      'SessionView',
-      `failed to fold ${event.type} fact`,
-      () => this.foldRunFact(streamId, event),
-    );
   }
 
   /**
-   * Translate an admitted session fact into the fold's vocabulary and feed
-   * `SessionState.view`. Field naming only: the two shapes mirror each other,
-   * and the store reads (`GoalStore`, the follow-up queue) happen here, in
-   * the controller, so the fold never touches a store. A `child.activity`
-   * roster has no arm: topology is `parentId`.
+   * Open (or reuse) the provisional buffer for `streamId`. A second
+   * `removeStream` for the same stream reuses the existing buffer and does
+   * not re-own the deletion settlement.
    */
-  private foldSessionFact(fact: SessionFact): void {
-    switch (fact.type) {
-      case 'goalStateChanged': {
-        const { streamId } = fact.payload;
-        const goal = GoalStore.getForStream(streamId);
-        this.fold(streamId, {
-          type: 'goalStateChanged',
-          state: goal
-            ? { active: true, status: goal.status, objective: goal.objective }
-            : { active: false },
-        });
-        return;
-      }
-      case 'inquiryThreadUpdated':
-        // Session-level (PRD 5.1): the arm rides a null stream when the
-        // thread has no parent.
-        this.fold(fact.payload.parentStreamId, {
-          type: 'inquiryThreadUpdated',
-          ...fact.payload,
-        });
-        return;
-      case 'updateQueuedFollowUps':
-      case 'followUpSent': {
-        const { streamId } = fact.payload;
-        this.fold(streamId, {
-          type: 'updateQueuedFollowUps',
-          messages: this.state.followUps.getAll(streamId),
-        });
-        return;
-      }
-      case 'updateStreamDescription':
-        this.fold(fact.payload.streamId, {
-          type: 'updateStreamDescription',
-          description: fact.payload.description,
-        });
-        return;
-      case 'status':
-        this.fold(fact.streamId, {
-          type: 'status',
-          phase: fact.phase,
-          previousPhase: fact.previousPhase,
-          cause: fact.cause,
-          substate: fact.substate,
-          runStartedAt: fact.runStartedAt,
-        });
-        return;
-      case 'setParentStream':
-        this.fold(fact.payload.childStreamId, {
-          type: 'setParentStream',
-          parentStreamId: fact.payload.parentStreamId,
-        });
-        return;
-      case 'removeStream':
-        this.fold(fact.payload.streamId, { type: 'removeStream' });
-        return;
-      case 'streamHoldChanged':
-        // A read-only hold is process-local display state; the fold has no
-        // arm for it.
-        return;
-      default:
-        return assertNever(fact, 'Unhandled session fact for the fold');
-    }
-  }
-
-  private foldRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
-    switch (event.type) {
-      case 'usage':
-        this.fold(event.payload.streamId, {
-          type: 'usage',
-          storageKey: event.payload.storageKey,
-          usage: event.payload.usage,
-        });
-        return;
-      case 'context.state':
-        this.fold(streamId, {
-          type: 'context.state',
-          inputTokens: event.inputTokens,
-          contextWindow: event.contextWindow,
-        });
-        return;
-      case 'run.start': {
-        // The launcher's owner token rides the envelope, not the body.
-        const {
-          streamId: runStream,
-          stageId: _stageId,
-          ownerId,
-          ...body
-        } = event;
-        this.state.applySessionEvent(runStream, body, ownerId);
-        return;
-      }
-      case 'approval.requested':
-        this.fold(streamId, {
-          type: 'approval.requested',
-          requestId: event.requestId,
-          payload: event.payload,
-        });
-        return;
-      case 'approval.resolved':
-        this.fold(streamId, {
-          type: 'approval.resolved',
-          requestId: event.requestId,
-        });
-        return;
-      case 'approval.policy':
-        this.fold(streamId, {
-          type: 'approval.policy',
-          snapshot: event.snapshot,
-        });
-        return;
-      case 'result':
-        this.fold(streamId, {
-          type: 'result',
-          outcome: event.outcome,
-          executionId: event.executionId,
-          category: event.category,
-          isSubagent: event.isSubagent,
-          error: event.error,
-        });
-        return;
-      case 'run.config':
-        this.fold(event.streamId, {
-          type: 'run.config',
-          executionId: event.executionId,
-          config: event.config,
-        });
-        return;
-      case 'updateTodos':
-        this.fold(event.streamId, { type: 'updateTodos', todos: event.todos });
-        return;
-      case 'updatePlan':
-        this.fold(event.streamId, { type: 'updatePlan', plan: event.plan });
-        return;
-      case 'addOutputFiles':
-        this.fold(event.streamId, {
-          type: 'addOutputFiles',
-          filesByRound: event.filesByRound,
-        });
-        return;
-      case 'updateMissingOutputs':
-        this.fold(event.streamId, {
-          type: 'updateMissingOutputs',
-          filesByRound: event.filesByRound,
-        });
-        return;
-      case 'updateCompileFailures':
-        this.fold(event.streamId, {
-          type: 'updateCompileFailures',
-          filesByRound: event.filesByRound,
-        });
-        return;
-      case 'goalPaused':
-        this.fold(event.streamId, { type: 'goalPaused' });
-        return;
-      case 'conversation.progress':
-        this.fold(streamId, {
-          type: 'conversation.progress',
-          progress: event.progress,
-        });
-        return;
-      case 'stage.start':
-        this.fold(streamId, {
-          type: 'stage.start',
-          id: event.id,
-          label: event.label,
-          parentId: event.parentId,
-          kind: event.kind,
-          index: event.index,
-          total: event.total,
-        });
-        return;
-      case 'child.activity':
-        return;
-      default:
-        return assertNever(event, 'Unhandled run fact for the fold');
-    }
-  }
-
-  private fold(streamId: StreamTabId | null, body: SessionEventBody): void {
-    this.state.applySessionEvent(streamId, body);
-  }
-
-  /**
-   * Open (or reuse) the provisional buffer for `streamId` at `incarnation`.
-   * A second `removeStream` for the same incarnation reuses the existing
-   * buffer and does not re-own the deletion settlement.
-   */
-  private beginPendingDeletion(
-    streamId: StreamTabId,
-    incarnation: number,
-  ): { readonly pending: PendingDeletion; readonly created: boolean } {
+  private beginPendingDeletion(streamId: StreamTabId): {
+    readonly pending: PendingDeletion;
+    readonly created: boolean;
+  } {
     const existing = this.pendingDeletions.get(streamId);
-    if (existing && existing.incarnation === incarnation) {
-      return { pending: existing, created: false };
-    }
-    const pending: PendingDeletion = { incarnation, facts: [] };
+    if (existing) return { pending: existing, created: false };
+    const pending: PendingDeletion = { facts: [] };
     this.pendingDeletions.set(streamId, pending);
     return { pending, created: true };
   }
@@ -744,13 +501,11 @@ export class SessionFactApplier {
   /**
    * The shared settlement machine for a removal barrier, fact- or
    * command-owned: drop the pending buffer, retire the tombstone when the
-   * outcome kept or re-claimed the stream (`active`/`failed`/`superseded`),
-   * commit it otherwise, and notify roster parents once for whichever
-   * applied.
+   * outcome kept the stream (`active`/`failed`/`superseded`), commit it
+   * otherwise, and notify roster parents once for whichever applied.
    */
   private settleRemoval(
     streamId: StreamTabId,
-    incarnation: number,
     pending: PendingDeletion | undefined,
     outcome: DeleteStreamResult,
   ): void {
@@ -760,21 +515,18 @@ export class SessionFactApplier {
     const retained = outcome === 'active' || outcome === 'failed';
     const retirement =
       retained || outcome === 'superseded'
-        ? this.state.retireStreamTombstone(streamId, incarnation)
+        ? this.state.retireStreamTombstone(streamId)
         : { retired: false, changedRosterParents: [] };
     const commitment =
       !retained && outcome !== 'superseded'
-        ? this.state.commitStreamTombstone(streamId, incarnation)
+        ? this.state.commitStreamTombstone(streamId)
         : { committed: false, changedRosterParents: [] };
     this.notifyRosterParents([
       ...retirement.changedRosterParents,
       ...commitment.changedRosterParents,
     ]);
     // A retained deletion still lives: replay the facts buffered while it was
-    // provisional so status/stage/roster/metadata are not stuck stale. Replay
-    // only when the retirement above actually removed THIS removal's barrier —
-    // a superseded deletion whose identity a fresh run re-claimed (or a newer
-    // deletion B owns) must never replay through that newer barrier. A
+    // provisional so status/stage/roster/metadata are not stuck stale. A
     // committed deletion discards them (the stream is gone).
     if (retained && retirement.retired && pending) {
       this.replayDeferredFacts(pending.facts);
@@ -788,16 +540,13 @@ export class SessionFactApplier {
    * already owns the identity; the caller must then skip the deletion and
    * leave that barrier untouched.
    */
-  beginCommandRemoval(streamId: StreamTabId): {
-    incarnation: number;
-    created: boolean;
-  } {
-    const { incarnation, created, changedRosterParents } =
+  beginCommandRemoval(streamId: StreamTabId): { created: boolean } {
+    const { created, changedRosterParents } =
       this.state.beginStreamRemoval(streamId);
     this.registeredWithRenderer.delete(streamId);
-    if (created) this.beginPendingDeletion(streamId, incarnation);
+    if (created) this.beginPendingDeletion(streamId);
     this.notifyRosterParents(changedRosterParents);
-    return { incarnation, created };
+    return { created };
   }
 
   /**
@@ -809,18 +558,15 @@ export class SessionFactApplier {
    */
   completeCommandRemoval(
     streamId: StreamTabId,
-    incarnation: number,
     outcome: DeleteStreamResult | undefined,
     created: boolean,
   ): void {
     if (!created) return;
-    const pending = this.pendingDeletions.get(streamId);
     // An unreported command outcome means nothing was deleted, so the barrier
     // retires exactly as a retained deletion does.
     this.settleRemoval(
       streamId,
-      incarnation,
-      pending?.incarnation === incarnation ? pending : undefined,
+      this.pendingDeletions.get(streamId),
       outcome ?? 'active',
     );
   }
@@ -830,16 +576,10 @@ export class SessionFactApplier {
    * stream may have deleted) but discard the buffered facts, exactly as the
    * fact path does on a rejected host delete.
    */
-  abortCommandRemoval(
-    streamId: StreamTabId,
-    incarnation: number,
-    created: boolean,
-  ): void {
+  abortCommandRemoval(streamId: StreamTabId, created: boolean): void {
     if (!created) return;
     const pending = this.pendingDeletions.get(streamId);
-    if (pending && pending.incarnation === incarnation) {
-      this.finishPendingDeletion(streamId, pending);
-    }
+    if (pending) this.finishPendingDeletion(streamId, pending);
   }
 
   private handleUpdateStreamDescription({
@@ -905,8 +645,8 @@ export class SessionFactApplier {
 
   /**
    * A read-only hold was recorded on this stream or dropped from it. The hold
-   * carries no phase of its own, so the whole change is in what
-   * `resolveStreamPhase` now answers: push the stream's metadata, which is the
+   * carries no phase of its own, so the whole change is in the stream's
+   * `readOnly` and `statusDetail`: push the stream's metadata, which is the
    * only wire carrying `statusDetail` and the `unavailable` sentinel derived
    * from it.
    */
@@ -915,11 +655,6 @@ export class SessionFactApplier {
   }
 
   private handleRunConfig(streamId: StreamTabId): void {
-    // A run is taking this stream over, so whatever a previous row open read
-    // about the last run — its outcome, checkpoint, and lease — is not this
-    // run's. The live phase answers while the run is in flight; the next row
-    // open reads the durable tuple again.
-    this.state.clearRunFacts(streamId);
     // No explicit refresh: `getStreamMetadata` overlays the summary mirror —
     // already updated synchronously by the snapshot store's projection of
     // this same fact — at read time (#9947).
@@ -1052,34 +787,17 @@ export class SessionFactApplier {
   }
 
   private isRetiredSidecarCandidate(streamId: StreamTabId): boolean {
-    // The read-time rule, not the status machine: a child restored from disk
-    // has no live phase, so keying off the machine kept every hydrated
-    // finished child resident forever. A terminal outcome is not the only
-    // answer that means nobody owns the stream — a run held by another host,
-    // an unreadable authority, and a hydrated stream with nothing durable
-    // left are equally nobody's to write, and their records are equally pure
-    // accumulators; keying on the outcome alone left each of those resident
-    // for the life of the process, the cost bounded residency exists to bound
-    // (#9947). The run facts live on the session, not the record, so the
-    // phase stays answerable after the release.
-    //
-    // Two origins keep the record. `live` is a producer in this process.
-    // `pending` is a row nobody has opened, whose record may be the only home
-    // of a live fact — releasing that loses it rather than parking
-    // it. `none` is the one answer that is ambiguous about which of the two
-    // it is: it is also what a run reads as between its `run.config` and its
-    // first status, so a record naming an execution the hydration did not
-    // account for is a run starting, not an empty stream.
-    const { origin } = this.state.resolveStreamPhase(streamId);
-    if (origin === 'live' || origin === 'pending') return false;
-    if (
-      origin === 'none' &&
-      this.state.snapshots.getRunMetadata(streamId, { quiet: true })
-        .executionId !== undefined
-    ) {
-      return false;
-    }
-    if (!this.state.getStreamMetadata(streamId).parentStreamId) return false;
+    // The view's rule, not the status machine: a child restored from disk has
+    // no live phase, so keying off the machine kept every hydrated finished
+    // child resident forever. A record is released once the stream's status
+    // is a terminal outcome nothing can move (`isTerminalOutcomePhase`) and
+    // the stream is a child nobody presents. A stream the view does not hold
+    // is not known to be finished, and stays.
+    const stream = SubscriptionRef.getUnsafe(this.state.view).streams.get(
+      streamId,
+    );
+    if (!stream || !isTerminalOutcomePhase(stream.status)) return false;
+    if (stream.parentId === null) return false;
     return this.options.isStreamPresented?.(streamId) !== true;
   }
 

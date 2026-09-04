@@ -4,11 +4,8 @@
  * type's single source of truth, so a field lands here first and every host
  * reads the same name.
  *
- * Every field is Zod except `transcript`: its rows, task groups, compaction
- * blocks, and run model are the existing shared folds' TypeScript outputs
- * (`TranscriptRow` carries `ReadonlyMap`s), and fold output never crosses a
- * parse boundary (G1, G2), so `z.custom<TranscriptView>()` states the type
- * without inventing a second definition of those shapes.
+ * `SessionView` holds `Map`s because it never crosses a bridge; only events,
+ * chunks, and `local` do (8.1), and those are arrays and records.
  *
  * Interaction state (selection, drafts, recording, expansion, focus, scroll)
  * is never here (G3); `sessionPresentationBoundary.vitest.ts` pins the names.
@@ -17,12 +14,15 @@ import { z } from 'zod';
 
 import {
   AgentCategory,
+  AggregateIdSchema,
   ApprovalPolicySnapshotSchema,
+  CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
   ExecutionIdSchema,
   GoalStateSchema,
   InquiryThreadUpdatedEventSchema,
+  OwnerIdSchema,
   PermissionPayloadSchema,
   PlanSchema,
   RoundKeyedOutputSidecarValueSchemas,
@@ -32,15 +32,18 @@ import {
   StreamStageSchema,
   StreamSubstateSchema,
   StreamTabIdSchema,
+  TaskGroupSchema,
   TodoItemSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
-  type TaskGroup,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import type { CompactionActivityProjection } from '@shared/streams/compactionActivityProjection';
+import type { CompactionActivityBlock } from '@shared/streams/compactionActivityProjection';
 import { STREAM_STATUS_TONE } from '@shared/streams/streamStatusDisplay';
 import type { WorkflowRunModel } from '@shared/streams/workflowRunModel';
+
+/** Which session (paper) a view is of: the session's storage root. */
+const SessionKeySchema = z.string().min(1);
 
 /**
  * A stream's transcript slice: what hosts paint, and nothing else. The fold
@@ -50,32 +53,49 @@ import type { WorkflowRunModel } from '@shared/streams/workflowRunModel';
  * nor mutate them. `rows`, `taskGroups`, and `compaction` are appended in
  * place by the fold (a copy per entry would make a replay quadratic) and the
  * slice value is replaced on every change; hosts read, never write.
+ *
+ * The row, block, and run-model elements are the shared renderers' own
+ * TypeScript shapes (`transcriptRow.ts`, `compactionActivityProjection.ts`,
+ * `workflowRunModel.ts`); they have no schema of their own yet, so the
+ * element types are stated rather than re-declared here.
  */
-export interface TranscriptView {
+const TranscriptViewSchema = z.object({
   /** `projectTranscriptRow` over every entry plus the compaction rows, in
    *  wire append order. */
-  readonly rows: TranscriptRow[];
+  rows: z.array(z.custom<TranscriptRow>()),
   /** `upsertTaskGroupFromStreamLog` over the group entries. */
-  readonly taskGroups: TaskGroup[];
+  taskGroups: z.array(TaskGroupSchema),
   /** `applyCompactionActivityEntries` blocks, in projection order. */
-  readonly compaction: CompactionActivityProjection['blocks'];
-  /** The last durable seq folded into this stream; text chunks never move it. */
-  readonly settledSeq: number;
+  compaction: z.array(z.custom<CompactionActivityBlock>()),
+  /** The last session commit ordinal folded for this stream, over both of
+   *  its aggregates; text chunks never move it. A memoization key, never a
+   *  print boundary. */
+  settledSeq: CommitOrdinalSchema,
+  /** The contiguous leading prefix of rows whose finalizing event has
+   *  folded: what an append-only scrollback may print. */
+  settledRows: z.int().nonnegative(),
   /** `workflowRunModel`, for a workflow-script run; null for every other. */
-  readonly run: WorkflowRunModel | null;
-}
+  run: z.custom<WorkflowRunModel>().nullable(),
+});
+export type TranscriptView = z.infer<typeof TranscriptViewSchema>;
 
-const StreamGroupSchema = z.enum(['running', 'waiting', 'recent']);
+const StreamGroupSchema = z.enum([
+  'running',
+  'waiting',
+  'interrupted',
+  'recent',
+]);
 
 const StreamViewCommonSchema = z.object({
   id: StreamTabIdSchema,
+  /** From `run.start`; 1:1 with `id`, never changes. */
+  executionId: ExecutionIdSchema,
   /** Null only for legacy imports. */
   identity: RunIdentitySchema.nullable(),
-  executionId: ExecutionIdSchema.nullable(),
   // Launch facts from the `run.start` payload, never derived (5.2).
   isRemote: z.boolean(),
   /** Owner of the latest durable event. */
-  ownerId: z.string().nullable(),
+  ownerId: OwnerIdSchema.nullable(),
   /** Agent name, or the id-prefix fallback for an identity-less stream. */
   label: z.string(),
   /** The AI one-liner; title when present. */
@@ -84,42 +104,58 @@ const StreamViewCommonSchema = z.object({
   modelLabel: z.string().nullable(),
   /** Full, untruncated command that spawned a process stream. */
   command: z.string().nullable(),
+  /** The run's input files, from `run.config`. */
+  inputFiles: z.array(z.string()),
   worktree: WorktreeInfoSchema.nullable(),
-  /** The durable phase. An interrupted stream (a pending approval with no
-   *  live owner, 5.2) keeps it and reads as interrupted through the copy. */
+  /** The durable phase. An interrupted stream keeps it and reads as
+   *  interrupted through the copy. */
   status: StreamLifecycleStatusSchema,
   substate: StreamSubstateSchema.nullable(),
-  /** Banner copy beside the label: the interrupted reading's resume notice;
-   *  null otherwise. */
+  /** Banner copy beside the label: the local unreadable detail, else the
+   *  interrupted or held notice; null otherwise. */
   statusDetail: z.string().nullable(),
   // G4: one table (`streamStatusDisplay`) spells both, through the status
   // and substate or the interrupted reading.
   statusLabel: z.string(),
   tone: z.enum(STREAM_STATUS_TONE),
+  /** Immutable: the commit ordinal of this stream's `run.start`; the
+   *  ordering key. */
+  createdAt: CommitOrdinalSchema,
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
-  /** The first `run.start` timestamp: the ordering key. A resume keeps it. */
-  creationTimestamp: z.number(),
   conversationProgress: ConversationProgressSchema,
   stage: StreamStageSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
-  contextState: ContextStateDataSchema.nullable(),
+  /** Latest `context.state`. */
+  context: ContextStateDataSchema.nullable(),
   parentId: StreamTabIdSchema.nullable(),
-  /** Root first; an evicted parent keeps its last known label. */
+  /** Root first. */
   ancestors: z.array(z.object({ id: StreamTabIdSchema, label: z.string() })),
   /** `streamOrdering` rule. */
   childIds: z.array(StreamTabIdSchema),
-  /** Descendants by status. No waiting count: a waiting descendant expands
-   *  the path, so a collapsed parent never hides one. */
+  /** Descendants by status. No waiting or interrupted count: both force
+   *  expansion, so a collapsed parent never hides a row that needs the user. */
   rollup: z.object({
     total: z.int().nonnegative(),
     running: z.int().nonnegative(),
     finished: z.int().nonnegative(),
   }),
   approval: z.enum(['none', 'own', 'descendant']),
+  /** This process cannot act on it: another live owner, or unreadable (5.2). */
+  readOnly: z.boolean(),
+  /** This stream or a descendant needs the user; outranks a collapsed
+   *  override. */
+  forceExpanded: z.boolean(),
   group: StreamGroupSchema,
   usage: RunUsageMapSchema,
-  transcript: z.custom<TranscriptView>(),
+  /** The newest thinking row is still streaming. */
+  thinkingActive: z.boolean(),
+  /** A context compaction is in progress. */
+  compactingActive: z.boolean(),
+  /** The stream's latest line: a workflow run's newest operational summary,
+   *  any other run's newest user instruction or settled model reply. */
+  latestLine: z.string().nullable(),
+  transcript: TranscriptViewSchema,
 });
 
 const ToolUseStreamViewSchema = StreamViewCommonSchema.extend({
@@ -146,7 +182,8 @@ const StreamViewSchema = z.discriminatedUnion('category', [
 ]);
 export type StreamView = z.infer<typeof StreamViewSchema>;
 
-/** A pending approval: which stream is asking, and the request the UI shows. */
+/** A pending approval: which stream is asking, and the request the UI shows.
+ *  The list is a set keyed by `requestId` (5.2). */
 const ApprovalRequestSchema = z.object({
   streamId: StreamTabIdSchema,
   requestId: z.string(),
@@ -154,28 +191,61 @@ const ApprovalRequestSchema = z.object({
 });
 
 const SessionViewSchema = z.object({
+  key: SessionKeySchema,
   streams: z.map(StreamTabIdSchema, StreamViewSchema),
   /** Top-level ids, `streamOrdering` rule. */
   order: z.array(StreamTabIdSchema),
+  /** The tail position: the last commit folded from `all`; a listing or
+   *  history row never advances it. */
+  cursor: CommitOrdinalSchema,
+  /** One entry per subscribed aggregate: the highest seq the fold has
+   *  retained for it (the subscription's `fromSeq` until a row folds).
+   *  Created when the aggregate enters the subscription set, deleted with
+   *  its transcript tier on eviction; never a commit ordinal. */
+  folded: z.map(AggregateIdSchema, z.int().nonnegative()),
+  /** One entry per `${aggregate}/${listing type}`: the commit of the latest
+   *  listing fact folded for it, so a replayed older one is ignored. */
+  latest: z.map(z.string(), CommitOrdinalSchema),
+  /** Paper-level aggregate; a rail badge reads it and derives nothing. */
+  rollup: z.object({
+    running: z.int().nonnegative(),
+    waiting: z.int().nonnegative(),
+    interrupted: z.int().nonnegative(),
+  }),
   approvals: z.array(ApprovalRequestSchema),
   /** Latest snapshot per run. */
   policy: z.map(StreamTabIdSchema, ApprovalPolicySnapshotSchema),
   inquiries: z.array(InquiryThreadUpdatedEventSchema),
-  /** Owner ids whose process is alive: a fold input, never persisted. */
-  liveOwners: z.array(z.string()),
+  /** This process's local truth: a fold input, never durable. */
+  local: z.object({
+    self: z.array(OwnerIdSchema),
+    heldBy: z.array(OwnerIdSchema),
+    unreadable: z.array(
+      z.object({ streamId: StreamTabIdSchema, detail: z.string() }),
+    ),
+  }),
   queuedFollowUps: z.map(StreamTabIdSchema, z.array(z.string())),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
 
-/** The empty view a fold starts from. */
-export function createSessionView(): SessionView {
+/**
+ * The empty view a fold starts from: keyed by its session, its cursor at the
+ * layer's tail anchor (PRD 7.2). Built once per fold fiber and never by an
+ * input, since no arm carries a key.
+ */
+export function emptySessionView(key: string, cursor = 0): SessionView {
   return {
+    key,
     streams: new Map(),
     order: [],
+    cursor,
+    folded: new Map(),
+    latest: new Map(),
+    rollup: { running: 0, waiting: 0, interrupted: 0 },
     approvals: [],
     policy: new Map(),
     inquiries: [],
-    liveOwners: [],
+    local: { self: [], heldBy: [], unreadable: [] },
     queuedFollowUps: new Map(),
   };
 }

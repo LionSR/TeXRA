@@ -22,12 +22,10 @@ import {
   type SettledInteractionKind,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { warn as logWarning } from '@logger/logUtils';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
-import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
@@ -41,7 +39,6 @@ import {
 
 export interface ProgressHostInteractionsOptions {
   interactions: Pick<SessionHostInteractions, 'emit'>;
-  session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   getToolEditApprovals(): ToolEditApprovalController;
   setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
@@ -361,13 +358,10 @@ export function createProgressHostInteractions(
     ): Promise<BashSettlement> {
       revealStream();
       // The prompt the tool boundary prepared is the `approval.requested`
-      // payload: showing it keeps one requestId per request. Prepared here
-      // only for a fixture that carries none.
-      return handlers().bash.request(
-        request.permission ??
-          prepareBashApprovalPrompt(request, options.session),
-        { cancellationResult: (cause) => cancellationResultFor('bash', cause) },
-      );
+      // payload: showing it keeps one requestId per request.
+      return handlers().bash.request(request.permission, {
+        cancellationResult: (cause) => cancellationResultFor('bash', cause),
+      });
     },
 
     requestPlanApproval(

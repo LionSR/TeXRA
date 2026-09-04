@@ -45,9 +45,9 @@ export interface ToolEditApprovalRequest {
   /**
    * What the UI shows for this request, prepared once at the tool boundary
    * (`prepareToolEditApprovalPrompt`): the payload of the `approval.requested`
-   * fact the session publishes. Absent only on fixtures that never fold.
+   * fact the session publishes, and what every host surface renders.
    */
-  readonly permission?: ToolEditPermission;
+  readonly permission: ToolEditPermission;
 }
 
 /**
@@ -104,7 +104,7 @@ export function prepareToolEditApprovalPrompt(
   session: SessionHandle,
   params: {
     requestId: string;
-    request: ToolEditApprovalRequest;
+    request: Omit<ToolEditApprovalRequest, 'permission'>;
     relativePath: string;
   },
 ): ToolEditPermission {
@@ -194,7 +194,7 @@ export function firstChangedLine(
 // ============================================================================
 
 export async function requestToolEditApproval(
-  request: ToolEditApprovalRequest,
+  request: Omit<ToolEditApprovalRequest, 'permission'>,
 ): Promise<ToolEditApprovalResult> {
   const approvalsEnabled = getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY);
 
@@ -249,7 +249,7 @@ export async function requestToolEditApproval(
 
 function finalizeApprovalResult(
   result: ToolEditApprovalResult,
-  request: ToolEditApprovalRequest,
+  request: Omit<ToolEditApprovalRequest, 'permission'>,
 ): ToolEditApprovalResult {
   if (result.action !== 'apply') {
     return result;

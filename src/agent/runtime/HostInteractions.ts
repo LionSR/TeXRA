@@ -188,9 +188,9 @@ export interface HostBashApprovalRequest {
   /**
    * What the UI shows for this request, built once at the tool boundary
    * (`prepareBashApprovalPrompt`): the payload of the `approval.requested`
-   * fact. Absent only on fixtures that never fold.
+   * fact, and what every host surface renders.
    */
-  readonly permission?: BashPermission;
+  readonly permission: BashPermission;
 }
 
 /**
@@ -419,8 +419,10 @@ interface PendingSessionInteraction {
  * Plans, proposals, retries, and questions are their own permission; bash
  * and tool-edit requests carry the prompt the tool boundary prepared.
  */
-type PermissionPayloadFor<K extends SettledInteractionKind> =
-  Extract<PermissionPayload, { kind: K }> | undefined;
+type PermissionPayloadFor<K extends SettledInteractionKind> = Extract<
+  PermissionPayload,
+  { kind: K }
+>;
 
 /**
  * The durable copy of a request payload. A retry carries the provider error,
@@ -471,20 +473,14 @@ export class SessionHostInteractions implements HostInteractions {
   > = [];
   private attachmentVersion = 0;
   private disposed = false;
-  /** The owning session, once it binds: the run-scoped fact rail every
-   *  response-bearing request publishes on, and the approval state the
-   *  request payloads read. Unbound only in fixtures that never fold. */
-  private session: SessionHandle | undefined;
 
   /**
-   * Bind the session that owns this interaction surface. `SessionHandle`
-   * calls it once at construction; from then on every response-bearing
-   * request publishes `approval.requested` and `approval.resolved` for its
-   * stream through `session.publishRunEvent`, never through a bus.
+   * @param session The owning session: the run-scoped fact rail every
+   *   response-bearing request publishes `approval.requested` and
+   *   `approval.resolved` on, through `session.publishRunEvent`, never a bus.
+   *   `SessionHandle` constructs this surface with itself.
    */
-  bindSession(session: SessionHandle): void {
-    this.session = session;
-  }
+  constructor(private readonly session: SessionHandle) {}
 
   /** Number of response-bearing requests awaiting a host decision. */
   get pendingCount(): number {
@@ -601,7 +597,7 @@ export class SessionHostInteractions implements HostInteractions {
       'toolEdit',
       request.streamId,
       (interactions) => interactions.requestToolEditApproval?.(request),
-      request.permission && { kind: 'toolEdit', data: request.permission },
+      { kind: 'toolEdit', data: request.permission },
     );
   }
 
@@ -612,7 +608,7 @@ export class SessionHostInteractions implements HostInteractions {
       'bash',
       request.streamId,
       (interactions) => interactions.requestBashApproval?.(request),
-      request.permission && { kind: 'bash', data: request.permission },
+      { kind: 'bash', data: request.permission },
     );
   }
 
@@ -775,14 +771,15 @@ export class SessionHostInteractions implements HostInteractions {
     });
   }
 
+  /** A request naming a stream is a run fact; a streamless one (an unscoped
+   *  question) has no aggregate to publish on. */
   private publishRequested(
     streamId: StreamTabId | undefined,
-    payload: PermissionPayload | undefined,
+    payload: PermissionPayload,
   ): PendingSessionInteraction['fact'] {
-    const session = this.session;
-    if (!session || !streamId || !payload) return undefined;
+    if (!streamId) return undefined;
     const requestId = payload.data.requestId;
-    session.publishRunEvent(streamId, {
+    this.session.publishRunEvent(streamId, {
       type: 'approval.requested',
       requestId,
       payload: redactedForFact(payload),
@@ -914,7 +911,7 @@ export class SessionHostInteractions implements HostInteractions {
   private deletePending(pending: PendingSessionInteraction): boolean {
     if (!this.pending.delete(pending)) return false;
     if (pending.fact) {
-      this.session?.publishRunEvent(pending.fact.streamId, {
+      this.session.publishRunEvent(pending.fact.streamId, {
         type: 'approval.resolved',
         requestId: pending.fact.requestId,
       });

@@ -123,7 +123,6 @@ describe('child stream progress events', () => {
           identity: { kind: 'process', tool: 'bash' },
           agentCategory: AgentCategory.ToolUse,
           parentStreamId,
-          ownerId: defaultSession().ownerId,
         }),
       );
       expect(runEventsOfType(recorded.events, 'run.config')).toContainEqual(
