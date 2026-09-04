@@ -409,8 +409,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   protected override backgroundModeSupported = true;
 
   /**
-   * Reads the ChatGPT-subscription profile when active (that backend does
-   * support compaction, just not via the stateful endpoint — see
+   * Reads the ChatGPT-subscription profile when active (this route uses
+   * client-side compaction — see
    * {@link storesResponsesServerSide} and `compactConversationClientSide`);
    * otherwise falls back to whether this request is routed through
    * OpenRouter, which implements its own compaction path via
@@ -1054,10 +1054,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
           `Compacting conversation (${this.chainState.getCumulativeInputTokens()} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
         );
       }
-      // A backend that keeps no server-side response state (the ChatGPT-
-      // subscription/Codex profile) has nothing for the stateful compact
-      // endpoint to act on, so it always goes through the client-side
-      // summarize-and-resend fallback instead (#7213).
+      // The ChatGPT-subscription profile uses summarize-and-resend (#7213);
+      // the direct-API profile uses the standalone compact endpoint.
       effectiveMessages = this.storesResponsesServerSide
         ? await this.compactConversation(
             client,
@@ -1099,12 +1097,19 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     const rawEffort = this.capabilities.supportsReasoning
       ? this.getEffectiveReasoningEffort()
       : undefined;
-    const reasoningEffort = rawEffort
+    let reasoningEffort = rawEffort
       ? toOpenAIReasoningEffort(
           rawEffort,
           getDeclaredMaxReasoningEffort(this.config.capabilities),
         )
       : undefined;
+    // Astra's minimum is low; a saved minimal override must not reach the API.
+    if (
+      this.config.fullName === 'gpt-6-astra' &&
+      reasoningEffort === 'minimal'
+    ) {
+      reasoningEffort = 'low';
+    }
     // Pro-mode registry entries (GPT-5.6 Pro) share the base model's wire id
     // and select pro execution via `reasoning.mode` on the request.
     const reasoningMode = this.capabilities.reasoningMode;
