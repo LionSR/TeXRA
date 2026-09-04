@@ -8,8 +8,10 @@ updated: 2026-09-03
 **Status:** Proposed; requires owner ratification of the nine decisions in
 section 17 before lane 2 starts. Decision 9 is the one to read first: it
 rules that a `StreamTabId` names a run and is never reused, which is what
-lets thirteen incarnation fences earlier drafts had accumulated be deleted
-rather than maintained. Reverting it is mechanical if the owner disagrees. Lane 1 may start on ratification of
+lets twelve of the thirteen incarnation fences earlier drafts had
+accumulated be deleted rather than maintained. Its cost is a visible
+behaviour change for relaunched workflows, stated in full there; reverting
+is mechanical if the owner weighs that differently. Lane 1 may start on ratification of
 decision 1 alone; lane 6 also needs decision 7, which is what it
 implements.
 
@@ -360,9 +362,12 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   null outside active phases and `lastTimestamp` moves with every event, so
   neither can place a re-rooted child among existing siblings without
   replaying history.
-- **`executionId`** comes from `run.start`, is 1:1 with the stream id, and
-  never changes. A resume keeps it rather than minting one: `executeAgent`
-  passes `resume.executionId`
+- **`executionId`** comes from `run.start` and never changes for the
+  stream, but it is **not** 1:1 with the stream id across launches: a
+  workflow's is derived from its checkpoint
+  (`WorkflowScriptTool.ts:345-353`), so a relaunch after a deletion has a
+  fresh stream id and the same execution id. A resume keeps it rather than
+  minting one: `executeAgent` passes `resume.executionId`
   straight back into `buildAgentLaunchContext` (`executeAgent.ts:541-549`),
   because the checkpoint, the lease, and every execution-scoped store live
   under it. The fold carries it only because `RunIdentity` deliberately does
@@ -525,7 +530,12 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **Durable text wins.** At the other end, a chunk is a preview of a row the
   durable events will settle, so a chunk for a row whose finalizing event has
   already folded is discarded rather than reopening its `inflight` entry, and
-  `removeStream` clears every `inflight` entry for its stream. A chunk that
+  `removeStream` clears every session-level entry keyed by its stream -
+  `inflight`, the stream's pending `approvals`, its `queuedFollowUps`, its
+  `policy` entry, and its `inquiries`. Not only the text: a pending
+  `approval.requested` with no `approval.resolved` would otherwise fold back
+  into `approvals` on every replay as an actionable decision for a stream
+  that can never exist again. A chunk that
   arrives afterwards - the two arms are asynchronous, so one can - names a
   stream the view does not have and is dropped, which is unambiguous now
   that an id is never reused; without the clear, an entry for a stream that
@@ -1097,8 +1107,12 @@ decides what is _logged as a defect_, not whether the caller hears back. A reque
 `Unavailable`, not a defect: with two surfaces on one session, one can send
 `stop` or `resume` from a view that has not yet folded the other's
 `removeStream`, and calling that a defect would bypass the response path
-(8.4) and leave the sender's latch and draft pending forever. Only a
-malformed request - one the Zod union rejects - is a defect. Error payloads cross the bridge as plain
+(8.4) and leave the sender's latch and draft pending forever. The envelope is parsed first, and an
+arm the Zod union rejects is `Invalid` under that request's own id - a stale
+surface sending `followUp.send` with no text still gets an answer, where
+calling it a defect would strand the same latch this rule protects. Only a
+message whose **envelope** cannot be decoded is a defect, because there is
+no id to answer under. Error payloads cross the bridge as plain
 tagged objects under the Zod union. Effect Schema is used nowhere: it
 measures 188 KB minified and 56 KB gzipped, and rc.112's `Schema.TaggedError`
 is already renamed upstream, so the pinned name would break on the next
@@ -1238,10 +1252,14 @@ fixing the id retired it.
   change and emits the resulting full snapshot as `approval.policy` (section
   6, item 2), which keeps "never a toggle delta" true of the _event_ while
   the _request_ stays a mutation.
-- workflow: `workflow.skip { executionId, callIndex }`,
-  `workflow.retry { executionId, callIndex }`,
-  `workflow.kill { executionId, detachActiveChildren }` - each names its
-  execution, because the handler has to select that execution's interaction
+- workflow: `workflow.skip { streamId, executionId, callIndex }`,
+  `workflow.retry { streamId, executionId, callIndex }`,
+  `workflow.kill { streamId, executionId, detachActiveChildren }` - each
+  names both, because a checkpoint-derived execution id can outlive the
+  stream that carried it (5.2): the stream id says which relaunch, the
+  execution id addresses the checkpoint anchor. This is the only place a
+  bare stream id is not enough. Each names its
+  execution because the handler has to select that execution's interaction
   scope (7.6) and one session can have several workflows running
 - misc: `runCompileFixer { streamId }`, `exportTranscript { streamId }` -
   both are stream-scoped in the handlers today, so both name their stream
@@ -1268,7 +1286,14 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
 today), `openUrl`, `openPaper` (the desktop rail's "Add paper…": the native
 directory picker, the session graph, and the new key returned as the
 outcome for `Shell.open` - without it that action is inert once
-`desktopWorkspaceRelaunch` is deleted), `setActiveView { mode }` (a
+`desktopWorkspaceRelaunch` is deleted), `savePastedImage { base64, mediaType, fileName }` (returning the stored
+filename, which `InstructionManager.handleClipboardImage` does today through
+`savePastedImageBase64`; §12.4 retains image paste and lane 4 deletes the
+message registry it rides), `useOwnApiKey { streamId, retryId, provider,
+model, reason }` (the quota panel's recovery: the host prompts and changes
+routing, then its outcome carries the retry the surface re-issues as a
+`runtime.request`, which is what `ProgressApiKeyRetryController.useOwnApiKey`
+does in one step today), `setActiveView { mode }` (a
 notification, not a round trip: the extension host needs `texra.activeView`
 for six `view/title` menu conditions and §8.5 removes the selection round
 trip, so the surface tells the host what it is showing without selection
@@ -1397,9 +1422,13 @@ open paper, so a paper with no streams at all is still a distinct surface
 with its own `session` and its own composer, rather than one of many
 indistinguishable `selected: null`s.
 
-`LaunchSurface` is not a new type: it is `MainViewPersistedState`
-(`store.ts:26`, `MainViewPersistedStateSchema`) moved under `Surface` and
-keyed per session. It already owns every launcher selection the composer
+`LaunchSurface` is `MainViewPersistedState` (`store.ts:26`,
+`MainViewPersistedStateSchema`) moved under `Surface` and keyed per session,
+minus its host-derived fields: `openedFiles` is the host's, not the user's,
+and §8.1 already puts the current and open files in the `host` snapshot, so
+persisting a per-view copy would give two surfaces different answers to a
+question the rule below says cannot differ - and a stale one after a reload.
+`LaunchSurface` is the selections subset. It already owns every launcher selection the composer
 needs to build a `validatedRequest` - `sessionType`, `launchTarget`,
 `selectedTeamId`, `workingDirectory`, `agent` and `model`, `commit`, the
 single, multi, and context file selections, the checkbox values, and the
@@ -1433,7 +1462,9 @@ in which each Map is an entry array (`[StreamTabId, V][]`), parsed and
 rebuilt into Maps at load, because webview state crosses `JSON.stringify`
 and a Map serializes to `{}`. Persisted per view and session: `selected`, `launch` (as
 today), `drafts` (text only; images and the polished and transcribed
-variants are not), `expanded`, `groups`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
+variants are not), `inquiryDrafts` (whole, and cleared when the inquiry
+resolves - §8.5 removes the round trip that persists them today, so nothing
+else would), `expanded`, `groups`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
 `session` (it is the key) and `focusedRow`; `Shell` persists `active`, `open`, and `collapsed`.
 
 Deleted: the `setActiveStream` fact, `ProgressPresentationState`, the
@@ -1971,12 +2002,32 @@ As tests:
 
    Minting per launch deletes all thirteen, plus `_streamIncarnations`,
    `_removedStreams`' generation compare, and the reset-on-`run.start` rule.
-   A tombstone becomes final; `run.start` is seq 1 of its stream and its
-   `executionId` is redundant with the stream id; `StreamKey` is a
-   `StreamTabId` again; `target` is a bare id. The cost is one lookup:
-   whatever resolves a workflow attachment by deterministic id resolves it
-   by `(parent, callIndex)` instead, which the fold already answers through
-   `childIds` and `transcript.run`.
+   A tombstone becomes final; `run.start` is seq 1 of its stream;
+   `StreamKey` is a `StreamTabId` again; `target` is a bare id.
+
+   **The cost is larger than an earlier draft of this decision claimed, and
+   it is the one input that could change the answer.** A workflow's
+   execution id is deliberately derived from its checkpoint, and its stream
+   id is derived from _that_:
+   `runExecutionId = deriveExecutionId({ checkpointId })` then
+   `runStreamId = getStreamTabId(STREAM_PREFIX, { executionId })`
+   (`WorkflowScriptTool.ts:345-353`), so a relaunch re-roots registration,
+   stream, and grandchildren on one stable anchor and resume replays
+   completed calls (#8712). Minting a fresh stream id keeps the anchor for
+   the _execution_ - the checkpoint identity is untouched, so resume still
+   replays - but the **stream** no longer re-roots: a relaunched workflow
+   appears as a new row rather than reusing its old tab. When the old row
+   was deleted that is what the user asked for; when it was not, it is a
+   visible behaviour change, and it is the thing to weigh against thirteen
+   fences.
+
+   Two consequences follow and are already written into the document.
+   `executionId` is **not** redundant with the stream id and is not 1:1 with
+   it: a relaunched workflow has a fresh stream id and the same
+   checkpoint-derived execution id. So the workflow arms name both
+   (`{ streamId, executionId }`, 8.2) - the stream id says which relaunch,
+   the execution id addresses the checkpoint anchor - and that is the one
+   place a bare id is not enough.
 
    **If the owner disagrees, reverting is mechanical** - re-pair each id with
    an `executionId` at the thirteen sites, whose individual arguments are in
