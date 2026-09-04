@@ -182,7 +182,7 @@ describe('SessionState.resolveStreamPhase', () => {
     await seedSidecarFk(stream, executionId);
     const executionStore = getExecutionStore(executionId);
     await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
-    vi.spyOn(executionStore, 'readMeta').mockRejectedValue(
+    vi.spyOn(executionStore, 'readMetaStrict').mockRejectedValue(
       new Error('meta.json is unreadable'),
     );
 

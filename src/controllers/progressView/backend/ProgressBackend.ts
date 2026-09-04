@@ -888,23 +888,47 @@ export class ProgressBackend {
       start += BACKGROUND_HYDRATION_CHUNK
     ) {
       if (signal.aborted || this.disposed) return;
-      const chunk = streams.slice(start, start + BACKGROUND_HYDRATION_CHUNK);
-      try {
-        await this.state.snapshots.preload(chunk);
-      } catch (error) {
-        // One unreadable stream must not end the pass: the rule renders it
-        // from whatever the hydration did establish, and says why.
-        log.warn('Background sidecar hydration failed for a chunk', {
-          data: { streams: chunk, error },
+      // The roster was captured once, so a stream can be deleted while this
+      // pass walks the chunks behind it. Re-check membership here and again
+      // after the reads: preloading a deleted stream mints a resident record
+      // for it, and pushing its metadata splices its tab back into the view.
+      const chunk = streams
+        .slice(start, start + BACKGROUND_HYDRATION_CHUNK)
+        .filter((stream) => this.isStreamPresent(stream));
+      if (chunk.length > 0) {
+        // Through the storage queue, for the reason the queue exists: a chunk
+        // must not interleave with a deletion committing the same stream.
+        await this.enqueueStorageOperation(async () => {
+          try {
+            await this.state.snapshots.preload(chunk);
+          } catch (error) {
+            // One unreadable stream must not end the pass: the rule renders it
+            // from whatever the hydration did establish, and says why.
+            log.warn('Background sidecar hydration failed for a chunk', {
+              data: { streams: chunk, error },
+            });
+          }
+          if (signal.aborted || this.disposed) return;
+          for (const stream of chunk) {
+            if (!this.isStreamPresent(stream)) continue;
+            this.renderer.updateStreamMetadata(stream);
+          }
         });
-      }
-      if (signal.aborted || this.disposed) return;
-      for (const stream of chunk) {
-        this.renderer.updateStreamMetadata(stream);
       }
       // Yield between chunks so a long history never starves the UI.
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
+  }
+
+  /**
+   * Whether this stream is still on the rail — neither committed away nor
+   * behind a provisional removal barrier. The same pair `activateStream`
+   * rejects a focus request on.
+   */
+  private isStreamPresent(stream: StreamTabId): boolean {
+    return (
+      !this.state.isStreamRemoved(stream) && this.state.streamLogs.has(stream)
+    );
   }
 
   /**

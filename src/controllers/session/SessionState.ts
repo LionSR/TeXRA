@@ -364,20 +364,35 @@ export class SessionState {
    */
   resolveStreamPhase(stream: StreamTabId): ResolvedStreamPhase {
     const live = this.streamStatus.getStreamState(stream);
-    if (live) return { state: live, origin: 'live' };
+    // The hold is read before the phase because `markUnavailable` keeps the
+    // phase the stream already had on the hold entry, so such an entry
+    // answers `getStreamState` too. Taking the phase first would drop the
+    // detail and offer the terminal buttons on a run this process does not
+    // own — both facts belong to the caller.
     const hold = this.streamStatus.holdState(stream);
-    if (hold !== undefined) return { origin: 'live', detail: hold };
+    if (hold !== undefined) {
+      return { ...(live ? { state: live } : {}), origin: 'live', detail: hold };
+    }
+    if (live) return { state: live, origin: 'live' };
 
+    const run = this.snapshots.getRunMetadata(stream, { quiet: true });
     // Unhydrated: the run tuple is unknown. The transcript summary is still
     // resident for every stream, so a transcript left open is enough to say
-    // the run was interrupted without reading anything.
-    if (!this.snapshots.hasProvenance(stream)) {
+    // the run was interrupted without reading anything. A record that already
+    // holds the tuple answers from it even while `refreshSeed` parks its disk
+    // provenance at `unknown` for an in-flight re-seed; otherwise a settled
+    // tab would blink back to `ready` every time it is warmed again.
+    const holdsRunFacts =
+      run.authorityFailure !== undefined ||
+      run.outcome !== undefined ||
+      run.lease !== undefined ||
+      run.checkpointPresent !== undefined;
+    if (!holdsRunFacts && !this.snapshots.hasProvenance(stream)) {
       return this.streamLogs.hasUnfinishedOutput(stream)
         ? { state: { phase: STREAM_PHASE.CANCELLED }, origin: 'derived' }
         : { origin: 'pending' };
     }
 
-    const run = this.snapshots.getRunMetadata(stream, { quiet: true });
     if (run.authorityFailure !== undefined) {
       return {
         origin: 'derived',

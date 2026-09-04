@@ -954,7 +954,7 @@ describe('StreamSnapshotStore', () => {
     const oldMeta = await oldExecutionStore.readMeta();
     const readStarted = pDefer<void>();
     const deferredRead = pDefer<typeof oldMeta>();
-    vi.spyOn(oldExecutionStore, 'readMeta').mockImplementation(() => {
+    vi.spyOn(oldExecutionStore, 'readMetaStrict').mockImplementation(() => {
       readStarted.resolve();
       return deferredRead.promise;
     });
@@ -1037,7 +1037,7 @@ describe('StreamSnapshotStore', () => {
     const deferredRead = pDefer<typeof capturedMeta>();
     // The description rides the seed's one execution-meta read; the live
     // event lands while that read is still in flight.
-    vi.spyOn(executionStore, 'readMeta').mockImplementation(() => {
+    vi.spyOn(executionStore, 'readMetaStrict').mockImplementation(() => {
       readStarted.resolve();
       return deferredRead.promise;
     });
@@ -2734,9 +2734,10 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
       executionId,
       parentStreamId: OTHER_STREAM,
     });
-    vi.spyOn(getExecutionStore(executionId), 'readMeta').mockRejectedValueOnce(
-      new Error('transient execution read failure'),
-    );
+    vi.spyOn(
+      getExecutionStore(executionId),
+      'readMetaStrict',
+    ).mockRejectedValueOnce(new Error('transient execution read failure'));
     let mirroredMeta: Record<string, unknown> = {
       executionId,
       parentStreamId: 'previous-parent',
@@ -2767,9 +2768,10 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
     vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     const executionId = 'b88f88' as ExecutionId;
     await writeMetaFile(STREAM, { executionId });
-    vi.spyOn(getExecutionStore(executionId), 'readMeta').mockRejectedValueOnce(
-      new Error('transient execution read failure'),
-    );
+    vi.spyOn(
+      getExecutionStore(executionId),
+      'readMetaStrict',
+    ).mockRejectedValueOnce(new Error('transient execution read failure'));
     let mirroredMeta: Record<string, unknown> = {
       executionId: 'a77e77',
       identity: { kind: 'agent', agent: 'search' },

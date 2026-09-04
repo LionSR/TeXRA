@@ -1968,8 +1968,13 @@ export class StreamSnapshotStore {
       let config: AgentConfig | null = null;
       try {
         const store = getExecutionStore(executionId);
+        // Strict: a malformed row is an unreadable authority, not a run that
+        // never finished. The tolerant reader resolves to null, which would
+        // derive as "no outcome" and render a corrupt execution as a healthy,
+        // sendable stream — the same distinction `listExecutionStreamReferences`
+        // draws for restart repair today.
         const [execMeta, execConfig] = await Promise.all([
-          store.readMeta(),
+          store.readMetaStrict(),
           store.readConfig(),
         ]);
         // Identity comes only from the stamped execution row; a row without
