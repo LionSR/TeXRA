@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   ink@7.1.1: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
-  openai@7.4.0: b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9
+  openai@7.10.0: d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8
 
 importers:
 
@@ -55,8 +55,8 @@ importers:
         specifier: ^7.1.2
         version: 7.1.2
       '@openai/codex-sdk':
-        specifier: ^0.152.0
-        version: 0.152.0
+        specifier: ^0.153.3
+        version: 0.153.3
       '@openrouter/sdk':
         specifier: ^1.2.93
         version: 1.2.93
@@ -157,8 +157,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.34.0
-        version: 1.34.0(zod@4.4.3)
+        specifier: ^1.35.0
+        version: 1.35.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -187,8 +187,8 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(chokidar@3.6.0)
       openai:
-        specifier: ^7.4.0
-        version: 7.4.0(patch_hash=b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9)(ws@8.21.3)(zod@4.4.3)
+        specifier: ^7.10.0
+        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3)
       p-defer:
         specifier: ^4.0.1
         version: 4.0.1
@@ -428,8 +428,8 @@ importers:
         specifier: ^7.1.2
         version: 7.1.2
       '@openai/codex-sdk':
-        specifier: ^0.152.0
-        version: 0.152.0
+        specifier: ^0.153.3
+        version: 0.153.3
       '@openrouter/sdk':
         specifier: ^1.2.93
         version: 1.2.93
@@ -509,8 +509,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
       llm-zoo:
-        specifier: ^1.34.0
-        version: 1.34.0(zod@4.4.3)
+        specifier: ^1.35.0
+        version: 1.35.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -527,8 +527,8 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(chokidar@3.6.0)
       openai:
-        specifier: ^7.4.0
-        version: 7.4.0(patch_hash=b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9)(ws@8.21.3)(zod@4.4.3)
+        specifier: ^7.10.0
+        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3)
       p-defer:
         specifier: ^4.0.1
         version: 4.0.1
@@ -758,8 +758,8 @@ importers:
         specifier: ^0.3.257
         version: 0.3.257(@anthropic-ai/sdk@0.122.0(zod@4.5.4))(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.5.4))(zod@4.5.4)
       '@openai/codex-sdk':
-        specifier: ^0.152.0
-        version: 0.152.0
+        specifier: ^0.153.3
+        version: 0.153.3
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
@@ -821,8 +821,8 @@ importers:
         specifier: ^1.1.6
         version: 1.1.6
       '@openai/codex-sdk':
-        specifier: ^0.152.0
-        version: 0.152.0
+        specifier: ^0.153.3
+        version: 0.153.3
       '@openrouter/sdk':
         specifier: ^1.2.93
         version: 1.2.93
@@ -878,8 +878,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.34.0
-        version: 1.34.0(zod@4.4.3)
+        specifier: ^1.35.0
+        version: 1.35.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -899,8 +899,8 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1
       openai:
-        specifier: ^7.4.0
-        version: 7.4.0(patch_hash=b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9)(ws@8.21.3)(zod@4.4.3)
+        specifier: ^7.10.0
+        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3)
       p-map:
         specifier: ^7.0.7
         version: 7.0.7
@@ -1080,8 +1080,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.34.0
-        version: 1.34.0(zod@4.4.3)
+        specifier: ^1.35.0
+        version: 1.35.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.2
         version: 11.5.2
@@ -2156,47 +2156,47 @@ packages:
   '@octokit/types@18.0.0':
     resolution: {integrity: sha512-l6bAF43PNxkJp6g+W4PjoUSSkxHomXw2nOum5CTftJz1NlV3vu93NImgOYtLf6CbBUb5j+fiuzW0PPQ5JTSvZA==}
 
-  '@openai/codex-sdk@0.152.0':
-    resolution: {integrity: sha512-kT4xkjDOQSodqPbaip9DsiJXy0yUuTLpoXtWzsWi2BCv5q0bwCSK3EZXqJC9qDtM0xZodK3Aru1v1A56/1CaoQ==}
+  '@openai/codex-sdk@0.153.3':
+    resolution: {integrity: sha512-qGqRtA6tFFGmi/IdWUpsJqj16M4fzfoB9Y/sHfCd6ryxRtzDPBhAaiHIVbdHSZoHsBx1VgiQHYd6XnEuVrMiOg==}
     engines: {node: '>=18'}
 
-  '@openai/codex@0.152.0':
-    resolution: {integrity: sha512-Vx0tg/J5SbxYYGJazTtL/XySK9Dlqc5KW1MZM71NMwVci/4F1ap+FfSKPFTlrICEtOTuq3KNcWSdv9oMGdPuRw==}
+  '@openai/codex@0.153.3':
+    resolution: {integrity: sha512-SwQns+YIXvaXV4a6RUd9twgTPJkkfZpuTNEkTtIkwBnfw6fpT61+d6gU1WHZxK6vWFNqJCBoJEP69FIAsoPduA==}
     engines: {node: '>=16'}
     hasBin: true
 
-  '@openai/codex@0.152.0-darwin-arm64':
-    resolution: {integrity: sha512-DOnDA6EKOs+aRytYH4ffIuUutok9ovpvCNax8aaTZvBB2bKUPjUleLrP1pk+hGarddqU1ySuvXMOfp6ufXyOVQ==}
+  '@openai/codex@0.153.3-darwin-arm64':
+    resolution: {integrity: sha512-cIJh2xhww3ZBXmgBt6e9gQjrdL2c9xiiq7yimDHtTGdg3wiUOADD/OsmIu/RJOitwM8OgImdHFjR59doBBdo8A==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [darwin]
 
-  '@openai/codex@0.152.0-darwin-x64':
-    resolution: {integrity: sha512-p2XLFWU+Lflke89zNK67ad2/yaFndUIZkyk+gjl35NCDz+LncvAUOeiTFB2MtmC2kxvudcYo6/yezQqwM29Gnw==}
+  '@openai/codex@0.153.3-darwin-x64':
+    resolution: {integrity: sha512-82Jxir4LygzF32z4y9KOMhK8rVlA4T6c10I9/MK+FhkEmTnDYcL4+VyttHdnMrX0I/Bdqj2M71gFellIaJHiDQ==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [darwin]
 
-  '@openai/codex@0.152.0-linux-arm64':
-    resolution: {integrity: sha512-OTmO6y5gCpcjzybwzgK/nSM8VI68Pw+T2ohBK+8cwVM+7PCRqSqtNo7qTLG0bgv9ff6QtwiZ9sl0KtY42H0Wqg==}
+  '@openai/codex@0.153.3-linux-arm64':
+    resolution: {integrity: sha512-uayZKgz5lk7Pz3JPjL98FGQGFRcrax3sGEQ9CtduyZscbIcnn3iYszRvGcubqVwiHi3B9oAVqy8V2NcWGwImLg==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [linux]
 
-  '@openai/codex@0.152.0-linux-x64':
-    resolution: {integrity: sha512-Isn/g5EZTaNbwZtaIuz67U1FNDEVVeMpS4xiR+c1dpOPL2xxrGNtdAothOW2YKsb96OsS+QfClziFb4qxesWDA==}
+  '@openai/codex@0.153.3-linux-x64':
+    resolution: {integrity: sha512-CyLvuM9Ij7sQuNtnHrzHtF+DtNISaauZZakyhy+MoFS1XxKTGv3FN4/qh6c94YZtLStZ7aUmfYQz59V3PV4zng==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [linux]
 
-  '@openai/codex@0.152.0-win32-arm64':
-    resolution: {integrity: sha512-1aMFMFvhSru5IT3hRstBjTmLPkhi+FKlu05bKKsKY+Pmx3a0sZBiK8WYFkROUynsM6ZVgNApfDv8zVUbX5crLA==}
+  '@openai/codex@0.153.3-win32-arm64':
+    resolution: {integrity: sha512-Y5so5McyGWjfyj6q1qzgwT5UOMGo0jGPXECy88p2XWAwavtnHicoh6f4xi7VMgxEc/dxUijMPMVRJ5kqrBseXQ==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [win32]
 
-  '@openai/codex@0.152.0-win32-x64':
-    resolution: {integrity: sha512-vy67ua+QeOHKqT5ovLOkINncuaknldUkOfwcGdxQwPbSxgnCoiHnAO/rieWQt3ncM2pRzygtPVoLOFiovcRlaQ==}
+  '@openai/codex@0.153.3-win32-x64':
+    resolution: {integrity: sha512-+3BNGznK6xRYrBi8Ivsz50gQdViIKWjQ6I4zC5ELYLgBB0ETD/VBMP51LnybywJUKnZ6ow3VE/koImgfCl4Eiw==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
@@ -5091,8 +5091,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@1.34.0:
-    resolution: {integrity: sha512-a/QfJU4VMhK/oQ+TkJJJ+PZCfGncuIQ18Od33KQPdg4fFD72KM45QpODEHN8vcha4W6KV5l280Sc4NSdt+pqGg==}
+  llm-zoo@1.35.0:
+    resolution: {integrity: sha512-zHcMXttMOJFg+vuKEL/9ORLLAuo//v8oV16k5w0JvABYPb2L1v/c9FM2eV8sxBH7Q+Hg0NWM7BMjC9nWUWT+dQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -5483,14 +5483,15 @@ packages:
     resolution: {integrity: sha512-YgBpdJHPyQ2UE5x+hlSXcnejzAvD0b22U2OuAP+8OnlJT+PjWPxtgmGqKKc+RgTM63U9gN0YzrYc71R2WT/hTA==}
     engines: {node: '>=18'}
 
-  openai@7.4.0:
-    resolution: {integrity: sha512-+C9Muit5x8j9R8ej8ZzVgKcrVDtqFqTy9gxFdov0EItLgU68zrJtF9ZeT0cyqJQW9S3PCJkdFgADtRGquRBtew==}
+  openai@7.10.0:
+    resolution: {integrity: sha512-sn9t2Kls7O52PwuF9BUTYNu4Gk/r0lXJyrgaNht4TNRlZFb3dJIGO0RciSgjARGCBRtWjySubAQFJttlzUvGQQ==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
       '@smithy/hash-node': '>=4.3.0 <5'
       '@smithy/signature-v4': '>=5.4.0 <6'
-      ws: ^8.18.0
+      undici: '>=5 <9'
+      ws: ^8.21.0
       zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       '@aws-sdk/credential-provider-node':
@@ -5498,6 +5499,8 @@ packages:
       '@smithy/hash-node':
         optional: true
       '@smithy/signature-v4':
+        optional: true
+      undici:
         optional: true
       ws:
         optional: true
@@ -8039,35 +8042,35 @@ snapshots:
     dependencies:
       '@octokit/openapi-types': 29.0.1
 
-  '@openai/codex-sdk@0.152.0':
+  '@openai/codex-sdk@0.153.3':
     dependencies:
-      '@openai/codex': 0.152.0
+      '@openai/codex': 0.153.3
 
-  '@openai/codex@0.152.0':
+  '@openai/codex@0.153.3':
     optionalDependencies:
-      '@openai/codex-darwin-arm64': '@openai/codex@0.152.0-darwin-arm64'
-      '@openai/codex-darwin-x64': '@openai/codex@0.152.0-darwin-x64'
-      '@openai/codex-linux-arm64': '@openai/codex@0.152.0-linux-arm64'
-      '@openai/codex-linux-x64': '@openai/codex@0.152.0-linux-x64'
-      '@openai/codex-win32-arm64': '@openai/codex@0.152.0-win32-arm64'
-      '@openai/codex-win32-x64': '@openai/codex@0.152.0-win32-x64'
+      '@openai/codex-darwin-arm64': '@openai/codex@0.153.3-darwin-arm64'
+      '@openai/codex-darwin-x64': '@openai/codex@0.153.3-darwin-x64'
+      '@openai/codex-linux-arm64': '@openai/codex@0.153.3-linux-arm64'
+      '@openai/codex-linux-x64': '@openai/codex@0.153.3-linux-x64'
+      '@openai/codex-win32-arm64': '@openai/codex@0.153.3-win32-arm64'
+      '@openai/codex-win32-x64': '@openai/codex@0.153.3-win32-x64'
 
-  '@openai/codex@0.152.0-darwin-arm64':
+  '@openai/codex@0.153.3-darwin-arm64':
     optional: true
 
-  '@openai/codex@0.152.0-darwin-x64':
+  '@openai/codex@0.153.3-darwin-x64':
     optional: true
 
-  '@openai/codex@0.152.0-linux-arm64':
+  '@openai/codex@0.153.3-linux-arm64':
     optional: true
 
-  '@openai/codex@0.152.0-linux-x64':
+  '@openai/codex@0.153.3-linux-x64':
     optional: true
 
-  '@openai/codex@0.152.0-win32-arm64':
+  '@openai/codex@0.153.3-win32-arm64':
     optional: true
 
-  '@openai/codex@0.152.0-win32-x64':
+  '@openai/codex@0.153.3-win32-x64':
     optional: true
 
   '@openrouter/sdk@1.2.93':
@@ -11042,7 +11045,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.34.0(zod@4.4.3):
+  llm-zoo@1.35.0(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 
@@ -11403,8 +11406,9 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@7.4.0(patch_hash=b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9)(ws@8.21.3)(zod@4.4.3):
+  openai@7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3):
     optionalDependencies:
+      undici: 7.29.0
       ws: 8.21.3
       zod: 4.4.3
 
