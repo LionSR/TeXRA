@@ -578,9 +578,14 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   to render until the row appears, and then it is already there. Ordering the
   two arms is not available anyway: the producer can append before it
   streams, but the fold's two inputs are separate streams and the table drain
-  is asynchronous, so emission order is not delivery order. A consumer-side
-  buffer would need an eviction policy for chunks whose row never arrives;
-  keying the text by row needs neither.
+  is asynchronous, so emission order is not delivery order. A consumer-side buffer
+  ordered against the event stream would need an eviction policy of its own;
+  keying the text by row ties it to the stream lifecycle instead. An entry
+  goes when its row's finalizing event folds, when its stream's terminal
+  status folds (a run can end with a row unfinalized - a crash, an abandoned
+  interrupt), or when `removeStream` closes the stream. Those three cover
+  every way a row stops being live, so nothing needs a timeout and nothing
+  accumulates in a long-lived process.
 - **Durable text wins.** At the other end, a chunk is a preview of a row the
   durable events will settle, so a chunk for a row whose finalizing event has
   already folded is discarded rather than reopening its `inflight` entry, and
@@ -596,9 +601,14 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   it: a chunk for an id the view has never seen is early, not late, and
   §5.2 requires keeping it (its stream's `run.start` has not folded yet).
   Dropping on absence alone would lose valid opening text and put the next
-  delta at `from > length`. `closed` is what tells the two apart, it is
-  bounded by deletions, an id is never reused (decision 9) so it never
-  needs revisiting, and retention prunes it with the rows. Without the
+  delta at `from > length`. `closed` is what tells the two apart, and it is
+  bounded by the only window in which it matters: an id stays only while its
+  owner is still in `local.heldBy`, because a chunk can only be in flight
+  from a process that still holds the lease. Once the owner lets go, no
+  chunk for that stream can arrive and the id drops. (Retention cannot prune
+  it - the fold consumes events, chunks, and local snapshots, and deleting
+  rows produces none of those - which is why the bound has to come from an
+  input the fold actually sees.) Without the
   clear, an entry for a stream that can never render or finalize would sit
   in the session map forever. That makes the merge order of the three arms (7.2)
   irrelevant by construction: a late chunk cannot mutate settled text, and
@@ -746,10 +756,6 @@ class SessionEvents extends Context.Service<
   SessionEvents,
   {
     readonly publish: (event: SessionEvent) => Effect.Effect<void>;
-    readonly events: (
-      streamId: StreamTabId,
-      fromSeq: number,
-    ) => Stream.Stream<SessionEvent>;
     // everything committed above `cursor`, in commit order, then the tail
     readonly all: (cursor: SessionCursor) => Stream.Stream<SessionEvent>;
     // the session's current commit ordinal: how a live-only reader attaches
@@ -806,11 +812,7 @@ class SessionEvents extends Context.Service<
         );
       // globally ordered by commit ordinal, every lane interleaved
       const all = drain((c) => durable.readAll(c));
-      const events = (streamId, fromSeq) =>
-        // a per-stream read, never readAll filtered: one stream's reader
-        // must not scan every other stream's history on every wake
-        drain((c) => durable.read(streamId, fromSeq, c))(fromCommit(fromSeq));
-      return { publish, events, all };
+      return { publish, all };
     }),
   );
 
@@ -822,10 +824,6 @@ class SessionEvents extends Context.Service<
       const frames = yield* SessionFrames;
       return {
         publish: () => Effect.die(new Error('webview cannot publish')),
-        events: (streamId, fromSeq) =>
-          frames
-            .events(streamId, fromSeq)
-            .pipe(Stream.filter((e) => e.streamId === streamId)),
         all: (cursor) => frames.events(cursor),
       };
     }),
@@ -919,11 +917,13 @@ That ordinal is also the level of decision 6: the wake says "the session's
 commit ordinal is now N", and the reader asks for everything above its own.
 One coordinate answers both questions. `all(view.cursor)` is the initial
 subscribe and the resubscribe alike.
-`events(streamId, fromSeq)` stays for single-stream readers - the trace
-viewer, and nothing else: the NDJSON projection reads `all(cursor)` (10.3),
-because the frozen wire carries session-lane facts (status, parent, removal,
-inquiry) that a single-stream reader would drop. It is a per-stream durable
-read, never `readAll` behind a filter: a filter would make every single-stream reader
+There is **no** `events(streamId, fromSeq)` method. It had one candidate
+consumer, the trace viewer, and §10.3 keeps that viewer on its existing
+shared-renderer path - so it would ship with no caller, which the
+export-needs-a-consumer rule forbids. It would also be the wrong shape for a
+future one: the session lane carries status, parent, removal, and inquiry
+facts that a per-stream read drops, so a viewer wanting them needs
+`all(cursor)` anyway. Everything reads the one ordered stream: a filter would make every single-stream reader
 scan every other stream's history on every wake. The rc.112 names used above -
 `Stream.unwrap`, `Stream.flatMap`, `Ref.make`/`Ref.get` - are verified
 against `node_modules/effect/dist`; the v3 `toQueueScoped` and
@@ -978,6 +978,8 @@ class SessionViewService extends Context.Service<
       const roots = yield* WorkspaceRoots;
       const empty = emptySessionView(roots.workspace);
       const ref = yield* SubscriptionRef.make(empty);
+      // catch up to the cursor captured at layer build, THEN publish: a
+      // mounting surface must not render the intermediate scan states
       yield* Effect.forkScoped(
         Stream.mergeAll(
           [events.all(emptyCursor), liveness.changes, chunks.changes],
@@ -999,6 +1001,15 @@ paper a view is of, no `FoldInput` arm carries a `SessionKey`, and seeding
 the scan with anything else would have its first emission overwrite the
 correctly keyed ref. `SessionKey` needs no field of its own - it is
 `roots.workspace`, the same value that keys the `LayerMap` (7.3, 8.1).
+
+The fold folds the replay through before the first value reaches `ref`:
+`Stream.scan` emits one view per input, so publishing them all would let a
+surface mounting onto an existing session render its history - deleted
+streams reappearing, resolved approvals actionable again, non-terminal runs
+briefly `interrupted` because no `local` snapshot has arrived yet - for the
+length of the replay. The layer captures the store's current ordinal, drops
+every scan value below it, and publishes from there; the tail then publishes
+incrementally as before.
 
 `Layer.effect` strips `Scope` from the requirements, so the forked fold
 fiber is owned by the layer's scope and ends on `runtime.dispose()`.
@@ -1592,7 +1603,12 @@ sender's latch pending forever.
 
 If the originating surface goes away first - a reload, a closed view - the
 runtime **stops the recorder and discards the take**, clearing
-`HostSnapshot.recording`. A dictation is a foreground interaction bound to
+`HostSnapshot.recording`. The signal is the transport itself: a webview
+reload drops its port, and the bridge treats a closed port as that
+surface's teardown, failing its outstanding requests and cancelling a
+recording it owns. No seventh message is needed, and `record.stop` keeps
+its one meaning - a user stopping a recording, which completes the take
+rather than discarding it. A dictation is a foreground interaction bound to
 the composer that started it, and the alternative is a parked result that
 some later surface claims: more machinery, and a worse failure when it
 claims the wrong one. Losing an in-progress take on a reload is the accepted
@@ -1677,7 +1693,8 @@ in which each Map is an entry array (`[StreamTabId, V][]`), parsed and
 rebuilt into Maps at load, because webview state crosses `JSON.stringify`
 and a Map serializes to `{}`. Persisted per view and session: `selected`, `launch` (as
 today), `drafts` (text only; images and the polished and transcribed
-variants are not), `inquiryDrafts` (whole, and cleared when the inquiry
+variants are not), `phase`, `inquiryDrafts` (whole, and cleared when the
+inquiry
 resolves - §8.6 removes the round trip that persists them today, so nothing
 else would), `expanded`, `groups`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
 `session` (it is the key) and `focusedRow`; `Shell` persists `active`, `open`, and `collapsed`; its `search` is not
@@ -2370,7 +2387,7 @@ src/shared/session/runtimeRequest.ts     Zod RuntimeRequest, HostRequest, Outcom
 src/shared/session/requestErrors.ts      Data.TaggedError NotOwner | Unavailable | Rejected | Invalid
 src/shared/signals.ts                    + toSignal(runtime, changes, initial)
 src/shared/copy/streamStatus.ts          one status label table with tone; one terminal-state vocabulary
-src/controllers/session/SessionEvents.ts     Context.Service; durableLayer (publish under one permit, all(cursor), events(streamId, fromSeq)) and transportLayer
+src/controllers/session/SessionEvents.ts     Context.Service; durableLayer (publish under one permit, all(cursor)) and transportLayer
 src/controllers/session/sessionSources.ts    LocalRuntimeSource, TextChunkSource; a runtime and a webview layer each
 src/shared/session/sessionFrames.ts          Zod EventsFrame, Subscribe, Response, TextChunk, LocalRuntimeState, HostSnapshot; SessionFrames (per session)
 src/controllers/session/SessionView.ts       Context.Service; ref + changes; fold fiber forkScoped
