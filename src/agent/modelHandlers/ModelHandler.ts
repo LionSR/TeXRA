@@ -146,7 +146,13 @@ export interface CreatedMedia<Media> {
   readonly entries: readonly MediaEntry[];
 }
 
-interface AssistantTextAppendOptions {
+/**
+ * Options for {@link ModelHandler.appendTextToLastAssistantMessage}. Exported
+ * as the single source of truth for the append-options contract so provider
+ * overrides reference this shape by name instead of redeclaring it inline (two
+ * of them had already drifted, silently dropping `fallbackText`).
+ */
+export interface AssistantTextAppendOptions {
   /**
    * True when the current trailing user/system message may be the synthetic
    * continuation prompt. Providers decide whether to append to the previous

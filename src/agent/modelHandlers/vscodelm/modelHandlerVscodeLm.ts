@@ -45,7 +45,7 @@ import type {
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 
 // Local file imports
-import { ModelHandler } from '../ModelHandler';
+import { ModelHandler, type AssistantTextAppendOptions } from '../ModelHandler';
 import { toVscodeLmTools } from '../toolConversion';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 
@@ -372,7 +372,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   protected appendTextToLastAssistantMessage(
     messages: LanguageModelMessage[],
     text: string,
-    options: { afterContinuationPrompt?: boolean } = {},
+    options: AssistantTextAppendOptions = {},
   ): boolean {
     let assistantIndex = messages.length - 1;
     const trailing = messages.at(-1);

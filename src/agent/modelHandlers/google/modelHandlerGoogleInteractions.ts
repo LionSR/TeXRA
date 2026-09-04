@@ -17,6 +17,7 @@ import { logProgressStatus } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   ModelHandler,
+  type AssistantTextAppendOptions,
   type CreatedMedia,
 } from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
@@ -1257,7 +1258,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   protected appendTextToLastAssistantMessage(
     messages: Step[],
     text: string,
-    options: { afterContinuationPrompt?: boolean } = {},
+    options: AssistantTextAppendOptions = {},
   ): boolean {
     const trailingStep = messages.at(-1);
     if (

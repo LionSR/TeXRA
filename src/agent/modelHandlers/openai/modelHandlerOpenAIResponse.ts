@@ -105,6 +105,7 @@ import {
   uploadToolAttachments,
   type UploadedOpenAIResponseAttachment,
 } from './openAIResponseFileUploads';
+import type { AssistantTextAppendOptions } from '../ModelHandler';
 import type { BackgroundRunLifecycle } from '../support/BackgroundRunLifecycle';
 
 // Third-party imports
@@ -1991,7 +1992,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   protected appendTextToLastAssistantMessage(
     messages: ResponseInputItem[],
     text: string,
-    options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
+    options: AssistantTextAppendOptions = {},
   ): boolean {
     let targetIndex = messages.length - 1;
     const trailingMessage = messages.at(-1);

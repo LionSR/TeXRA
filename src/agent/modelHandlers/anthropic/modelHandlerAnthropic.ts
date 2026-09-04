@@ -16,7 +16,10 @@ import type {
   AgentWorkspaceState,
   ThinkingBlock,
 } from '@agent/core/state/AgentWorkspaceState';
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import {
+  ModelHandler,
+  type AssistantTextAppendOptions,
+} from '@agent/modelHandlers/ModelHandler';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/types/mediaTypes';
@@ -1292,7 +1295,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   protected appendTextToLastAssistantMessage(
     messages: MessageParam[],
     text: string,
-    options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
+    options: AssistantTextAppendOptions = {},
   ): boolean {
     return appendAnthropicTextToLastAssistantMessage(messages, text, options, {
       logger: this.logger,
