@@ -35,7 +35,7 @@ export function handleStreamSwitch(
 }
 
 /** Record reversible tab feedback, then ask the backend to hydrate it. */
-export function requestStreamSwitch(streamId: StreamTabId): void {
+function requestStreamSwitch(streamId: StreamTabId): void {
   const requestId = crypto.randomUUID();
   appState.set(
     create(appState.get(), (draft) => {
