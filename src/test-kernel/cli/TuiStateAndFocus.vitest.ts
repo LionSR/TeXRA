@@ -359,7 +359,10 @@ function emitRunStart(
       streamId,
       executionId,
       identity,
-      ...(userFollowUpSupport === undefined ? {} : { userFollowUpSupport }),
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport:
+        userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     },
   });
 }
@@ -3647,7 +3650,9 @@ describe('sessionSignalsAdapter run facts', () => {
           streamId: child1,
           executionId: 'aaaa0008f10e' as ExecutionId,
           identity: { kind: 'agent', agent: 'child1' },
-          agentCategory: AgentCategory.ToolUse,
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         },
       });
       hub.emit({

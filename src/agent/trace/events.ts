@@ -108,12 +108,9 @@ export interface StageStartEvent extends StageStamp {
  * never the event (contract C5).
  */
 interface RunStartEvent
-  extends
-    StageStamp,
-    Omit<RunStartEventBody, 'identity' | 'userFollowUpSupport'> {
+  extends StageStamp, Omit<RunStartEventBody, 'identity'> {
   readonly streamId: StreamTabId;
   readonly identity: RunIdentity;
-  readonly userFollowUpSupport?: UserFollowUpSupport;
 }
 
 /**
@@ -126,7 +123,10 @@ interface RunActivateEvent extends StageStamp {
   readonly type: 'run.activate';
   readonly streamId: StreamTabId;
   readonly category: AgentCategory;
-  readonly isRemote: boolean;
+  /** Agent-registry remoteness, carried only by a run with a registry
+   *  entry: the frozen wire line omits it for a process, agent-CLI, or
+   *  workflow-script child, and a fold reads it from `run.start`. */
+  readonly isRemote?: boolean;
   /** Launched in the background whoever is watching (a delegated child). */
   readonly background: boolean;
 }

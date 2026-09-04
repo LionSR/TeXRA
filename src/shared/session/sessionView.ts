@@ -27,8 +27,10 @@ import {
   PlanSchema,
   RoundKeyedOutputSidecarValueSchemas,
   RunIdentitySchema,
+  RunOutcomeSchema,
   RunUsageMapSchema,
-  StreamLifecycleStatusSchema,
+  STREAM_STATUS,
+  StreamPhaseSchema,
   StreamStageSchema,
   StreamSubstateSchema,
   StreamTabIdSchema,
@@ -48,9 +50,9 @@ const SessionKeySchema = z.string().min(1);
 /**
  * A stream's transcript slice: what hosts paint, and nothing else. The fold
  * keeps its incremental indexes (row and group positions, the compaction
- * projection's working state, live-text cursors, the newest plan marker)
- * beside the value in a module-private map, so a host can neither depend on
- * nor mutate them. `rows`, `taskGroups`, and `compaction` are appended in
+ * projection's working state, the measured live text per streaming row, the
+ * newest plan marker) beside the value in a module-private map, so a host
+ * can neither depend on nor mutate them. `rows`, `taskGroups`, and `compaction` are appended in
  * place by the fold (a copy per entry would make a replay quadratic) and the
  * slice value is replaced on every change; hosts read, never write.
  *
@@ -107,10 +109,20 @@ const StreamViewCommonSchema = z.object({
   /** The run's input files, from `run.config`. */
   inputFiles: z.array(z.string()),
   worktree: WorktreeInfoSchema.nullable(),
-  /** The durable phase. An interrupted stream keeps it and reads as
-   *  interrupted through the copy. */
-  status: StreamLifecycleStatusSchema,
+  /** The durable phase, or `ready` before the first `status` folds. An
+   *  interrupted stream keeps it and reads as interrupted through the copy;
+   *  unavailability is `readOnly`, never a status (5.2). */
+  status: z.union([StreamPhaseSchema, z.literal(STREAM_STATUS.READY)]),
   substate: StreamSubstateSchema.nullable(),
+  /**
+   * The terminal status once nothing can move it: for a run this process
+   * owns, after its lifecycle's `result` has folded (a user stop publishes
+   * CANCELLED while the flow still writes its closing rows); for any other
+   * run, the terminal status itself. Null while anything can still move.
+   * What licenses a host to paint an open group as interrupted and the
+   * session to release the stream's sidecar record.
+   */
+  durableOutcome: RunOutcomeSchema.nullable(),
   /** Banner copy beside the label: the local unreadable detail, else the
    *  interrupted or held notice; null otherwise. */
   statusDetail: z.string().nullable(),
@@ -204,8 +216,16 @@ const SessionViewSchema = z.object({
    *  its transcript tier on eviction; never a commit ordinal. */
   folded: z.map(AggregateIdSchema, z.int().nonnegative()),
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
-   *  listing fact folded for it, so a replayed older one is ignored. */
+   *  listing fact folded for it, so a replayed older one is ignored. The
+   *  lifecycle entry outlives its stream: it is what keeps a tombstone
+   *  final when a read replays the `run.start` beneath it. */
   latest: z.map(z.string(), CommitOrdinalSchema),
+  /** Live text per `${stream}/${row}`, beside the rows rather than inside
+   *  them: a chunk can reach the fold before its row (5.2). A row paints
+   *  its durable text joined with this entry; the entry goes when the row
+   *  finalizes, the stream ends, the stream is removed, or its transcript
+   *  tier is evicted. */
+  inflight: z.map(z.string(), z.string()),
   /** Paper-level aggregate; a rail badge reads it and derives nothing. */
   rollup: z.object({
     running: z.int().nonnegative(),
@@ -241,6 +261,7 @@ export function emptySessionView(key: string, cursor = 0): SessionView {
     cursor,
     folded: new Map(),
     latest: new Map(),
+    inflight: new Map(),
     rollup: { running: 0, waiting: 0, interrupted: 0 },
     approvals: [],
     policy: new Map(),

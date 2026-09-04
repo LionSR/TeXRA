@@ -31,7 +31,7 @@ interface CreateChildStreamOptions {
   /** What owns this stream — the launch site declares the truth once. */
   run: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
-  userFollowUpSupport?: UserFollowUpSupport;
+  userFollowUpSupport: UserFollowUpSupport;
   description: string;
   config: AgentConfig;
   /** Writer atomically reserved by createRehydratedChildStream. */
@@ -139,9 +139,9 @@ export function createChildStream(
       // Launch facts the fold reads verbatim (PRD one-fold-three-renderers,
       // section 6, item 6). Remoteness is an agent-registry fact (a
       // `source: 'remote'` entry); a process, agent-CLI, or workflow-script
-      // child is never one, and the frozen NDJSON `setActiveStream` line for
-      // a child never carried it.
-      agentCategory: options.config.agentCategory,
+      // child has no registry entry and is never remote.
+      category: options.config.agentCategory,
+      isRemote: false,
       worktree: launchWorktreeInfo(options.config.workingDirectory),
       parentStreamId,
       background: true,
@@ -152,6 +152,16 @@ export function createChildStream(
       ...(options.checkpointId ? { checkpointId: options.checkpointId } : {}),
     });
     started = true;
+    // The activation beside the existence fact (PRD 6, item 8): a child is
+    // activated exactly once, here, and the frozen NDJSON `setActiveStream`
+    // line projects from this. No `isRemote`: that line never carried one
+    // for a child, which has no agent-registry entry to be remote.
+    runTrace.trace.emit({
+      type: 'run.activate',
+      streamId: childStreamId,
+      category: options.config.agentCategory,
+      background: true,
+    });
     runTrace.trace.emit({
       type: 'run.config',
       streamId: childStreamId,

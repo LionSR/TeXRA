@@ -40,7 +40,6 @@ import type {
 import { STREAM_LIFECYCLE_UNAVAILABLE, STREAM_STATUS } from '@shared/schemas';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   assertNever,
   createFlushableDebounce,
@@ -461,9 +460,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     );
     const status: StreamPhaseState | undefined =
       phaseOverride ??
-      (view &&
-      view.status !== STREAM_STATUS.READY &&
-      view.status !== STREAM_LIFECYCLE_UNAVAILABLE
+      (view && view.status !== STREAM_STATUS.READY
         ? {
             phase: view.status,
             ...(view.substate ? { substate: view.substate } : {}),
@@ -482,14 +479,9 @@ export class LitSessionRenderer implements SessionRendererPort {
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
       status: statusDetail ? STREAM_LIFECYCLE_UNAVAILABLE : status?.phase,
-      // A terminal outcome nothing can still move: the view's status is a
-      // terminal outcome and no owner holds the run. A phase this caller is
-      // still applying is not final by definition.
+      // A phase this caller is still applying is not final by definition.
       statusDurablyFinal:
-        phaseOverride === undefined &&
-        view !== undefined &&
-        isTerminalOutcomePhase(view.status) &&
-        view.group === 'recent',
+        phaseOverride === undefined && view?.durableOutcome != null,
       statusDetail,
       // The unavailable sentinel travels alone: a hold keeps the phase the
       // stream had, and shipping that phase's substate with the sentinel

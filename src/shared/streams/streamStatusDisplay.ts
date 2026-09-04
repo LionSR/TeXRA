@@ -149,13 +149,10 @@ export function streamInterruptedMessage(): string {
   return 'The process running this run stopped before it finished. Resume it to continue.';
 }
 
-/**
- * Banner and tooltip copy for a run another TeXRA process holds. `owner`
- * names that process the way the caller knows it: a lease record's pid and
- * hostname, or the fold's owner id.
- */
-export function streamHeldMessage(owner: string): string {
-  return `Held by another TeXRA process (${owner}). Let it finish or close it; if it is gone, Delete removes the run.`;
+/** Banner and tooltip copy for a run another TeXRA process holds, named by
+ *  its pid: the one part of a process identity a user can act on. */
+export function streamHeldMessage(pid: number): string {
+  return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the run.`;
 }
 
 /** Banner and tooltip copy for a run whose saved state could not be read. */

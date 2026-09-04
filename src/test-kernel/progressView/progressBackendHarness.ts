@@ -186,8 +186,9 @@ export function emitRunStart(
       streamId: payload.streamId,
       executionId: `e0000${runStartSeq.toString(16)}` as ExecutionId,
       identity: { kind: 'agent', agent: payload.streamId },
-      agentCategory: payload.agentCategory,
+      category: payload.agentCategory ?? AgentCategory.ToolUse,
       isRemote: false,
+      userFollowUpSupport: 'unsupported',
     },
   });
 }

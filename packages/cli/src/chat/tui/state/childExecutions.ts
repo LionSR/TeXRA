@@ -18,7 +18,6 @@ import type {
   StreamExecutionState,
 } from '@controllers/session/SessionState';
 import {
-  STREAM_LIFECYCLE_UNAVAILABLE,
   STREAM_STATUS,
   runIdentityDisplayName,
   type ActiveChildInfo,
@@ -26,7 +25,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { StreamView } from '@shared/session/sessionView';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 
 import type { StreamSlice } from './cliState';
 
@@ -96,13 +94,7 @@ export function sessionStreamPhase(
   streamId: StreamTabId,
 ): StreamPhaseState | undefined {
   const stream = viewStream(streamId);
-  if (
-    !stream ||
-    stream.status === STREAM_STATUS.READY ||
-    stream.status === STREAM_LIFECYCLE_UNAVAILABLE
-  ) {
-    return undefined;
-  }
+  if (!stream || stream.status === STREAM_STATUS.READY) return undefined;
   return {
     phase: stream.status,
     ...(stream.substate ? { substate: stream.substate } : {}),
@@ -121,23 +113,17 @@ function viewStream(streamId: StreamTabId): StreamView | undefined {
 }
 
 /**
- * The outcome a stream's run durably settled on, through the session's one
- * rule ({@link SessionState.streamDurableOutcome}); `undefined` while
- * anything can still move it. The phase alone is not that fact — a user stop
- * publishes CANCELLED while the run is still unwinding here, with its task
- * groups and cards still to settle — so this is what licenses a renderer to
- * paint an unclosed group or an unsettled card as interrupted, and what says
- * which outcome the group is painted with.
+ * The outcome a stream's run durably settled on, the fold's `durableOutcome`;
+ * `undefined` while anything can still move it. The phase alone is not that
+ * fact: a user stop publishes CANCELLED while the run is still unwinding
+ * here, with its task groups and cards still to settle. This is what
+ * licenses a renderer to paint an unclosed group or an unsettled card as
+ * interrupted, and what says which outcome the group is painted with.
  */
 export function sessionStreamDurableOutcome(
   streamId: StreamTabId,
 ): RunOutcome | undefined {
-  const stream = viewStream(streamId);
-  return stream &&
-    isTerminalOutcomePhase(stream.status) &&
-    stream.group === 'recent'
-    ? stream.status
-    : undefined;
+  return viewStream(streamId)?.durableOutcome ?? undefined;
 }
 
 /** Canonical reason a stream is unavailable in this session: held by another

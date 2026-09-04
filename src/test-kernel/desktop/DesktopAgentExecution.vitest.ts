@@ -793,8 +793,9 @@ function startStream(bridge: TestableBridge, streamId: string): void {
     streamId: streamId as StreamTabId,
     executionId: `a0000${activationSeq.toString(16)}` as ExecutionId,
     identity: { kind: 'agent', agent: streamId },
-    agentCategory: AgentCategory.Workflow,
+    category: AgentCategory.Workflow,
     isRemote: false,
+    userFollowUpSupport: 'unsupported',
   });
 }
 
@@ -985,6 +986,9 @@ describe('DesktopProgressBridge', () => {
       streamId,
       executionId,
       identity: { kind: 'multiAgentWorkflow', workflowName: 'proofreader' },
+      category: AgentCategory.Workflow,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     });
     emitRunConfigFact(bridge, { streamId, executionId, config });
     emitRunEvent(bridge, streamId, {
@@ -2233,6 +2237,9 @@ describe('DesktopProgressBridge', () => {
       streamId: 'stream-new' as StreamTabId,
       executionId: 'e7ec0001' as ExecutionId,
       identity: { kind: 'agent', agent: runConfig.agent },
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     });
     emitRunConfigFact(bridge, {
       streamId: 'stream-new',
@@ -2529,6 +2536,9 @@ describe('DesktopProgressBridge', () => {
       streamId: 'stream-1' as StreamTabId,
       executionId: 'ec1002' as ExecutionId,
       identity: { kind: 'agent', agent: 'search' },
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     });
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
@@ -2588,6 +2598,9 @@ describe('DesktopProgressBridge', () => {
       streamId: 'stream-1' as StreamTabId,
       executionId: 'ec1003' as ExecutionId,
       identity: { kind: 'agent', agent: 'search' },
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     });
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
@@ -2867,6 +2880,9 @@ describe('DesktopProgressBridge', () => {
         streamId: childStreamId,
         executionId: childExecutionId,
         identity: { kind: 'agent', agent: 'search' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
       });
       owner.processSession.publishRunEvent(childStreamId, {
         type: 'run.config',
@@ -3568,6 +3584,9 @@ describe('DesktopProgressBridge', () => {
               kind: 'multiAgentWorkflow',
               workflowName: 'reclaimed-workflow',
             },
+            category: AgentCategory.Workflow,
+            isRemote: false,
+            userFollowUpSupport: 'unsupported',
             // No live owner: a replayed start, not a re-claim, so the
             // pending deletion proceeds.
           },
@@ -4005,6 +4024,9 @@ describe('DesktopProgressBridge', () => {
           streamId: childStreamId,
           executionId: childExecutionId,
           identity: { kind: 'agent', agent: 'searcher' },
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+          userFollowUpSupport: 'unsupported',
         });
         owner.processSession.publishRunEvent(childStreamId, {
           type: 'run.config',

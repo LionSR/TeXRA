@@ -203,7 +203,10 @@ export class SessionFactApplier {
     'approval.requested': () => undefined,
     'approval.resolved': () => undefined,
     'approval.policy': () => undefined,
-    result: () => undefined,
+    // The lifecycle's last word is when the view's `durableOutcome` settles
+    // for a run this process owns (a user stop published its terminal phase
+    // earlier), and the wire's `statusDurablyFinal` travels with metadata.
+    result: (streamId) => this.pushStreamMetadata(streamId),
     updateTodos: (_streamId, event) =>
       this.renderer.onTodosChanged(event.streamId, event.todos),
     updatePlan: (_streamId, event) =>
@@ -617,21 +620,13 @@ export class SessionFactApplier {
   private handleRunStart(
     event: Extract<SessionRunFactEvent, { type: 'run.start' }>,
   ): void {
-    const { streamId, agentCategory, isRemote } = event;
+    const { streamId, category, isRemote } = event;
     this.state.streamLogs.ensureStream(streamId);
-    // Only pass fields the event actually knows; omitted fields retain the
-    // canonical metadata already owned by SessionState.
-    const metadata = {
-      ...(agentCategory != null && { agentCategory }),
-      ...(isRemote != null && { isRemote }),
-    };
-    if (Object.keys(metadata).length > 0) {
-      this.state.updateStreamMetadata(streamId, metadata);
-    }
-    // A process stream carries no category; its state waits for the first
-    // fact that resolves one, as before.
-    const category = agentCategory ?? this.getStreamCategory(streamId);
-    if (category) this.state.getOrCreateStreamState(streamId, category);
+    this.state.updateStreamMetadata(streamId, {
+      agentCategory: category,
+      isRemote,
+    });
+    this.state.getOrCreateStreamState(streamId, category);
     this.handleRunConfig(streamId);
   }
 
@@ -789,14 +784,14 @@ export class SessionFactApplier {
   private isRetiredSidecarCandidate(streamId: StreamTabId): boolean {
     // The view's rule, not the status machine: a child restored from disk has
     // no live phase, so keying off the machine kept every hydrated finished
-    // child resident forever. A record is released once the stream's status
-    // is a terminal outcome nothing can move (`isTerminalOutcomePhase`) and
-    // the stream is a child nobody presents. A stream the view does not hold
-    // is not known to be finished, and stays.
+    // child resident forever. A record is released once the stream's outcome
+    // is one nothing can move (`durableOutcome`) and the stream is a child
+    // nobody presents. A stream the view does not hold is not known to be
+    // finished, and stays.
     const stream = SubscriptionRef.getUnsafe(this.state.view).streams.get(
       streamId,
     );
-    if (!stream || !isTerminalOutcomePhase(stream.status)) return false;
+    if (!stream || stream.durableOutcome === null) return false;
     if (stream.parentId === null) return false;
     return this.options.isStreamPresented?.(streamId) !== true;
   }

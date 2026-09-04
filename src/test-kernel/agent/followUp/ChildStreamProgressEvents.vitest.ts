@@ -71,6 +71,7 @@ function startBashChild(executionId: ExecutionId) {
   return createChildStream(executionId, parentStreamId, {
     streamPrefix: 'bash',
     run: { kind: 'process', tool: 'bash' },
+    userFollowUpSupport: 'unsupported',
     description: 'Run a background bash command',
     config,
   });
@@ -80,6 +81,7 @@ function startCodexChild(executionId: ExecutionId, description: string) {
   return createChildStream(executionId, parentStreamId, {
     streamPrefix: 'codex',
     run: { kind: 'agent', agent: 'codex', tool: 'codex' },
+    userFollowUpSupport: 'terminalBacked',
     description,
     config,
   });
@@ -121,10 +123,21 @@ describe('child stream progress events', () => {
           streamId: childStreamId,
           executionId,
           identity: { kind: 'process', tool: 'bash' },
-          agentCategory: AgentCategory.ToolUse,
+          category: AgentCategory.ToolUse,
+          isRemote: false,
           parentStreamId,
         }),
       );
+      // The activation beside the existence fact, with no `isRemote`: the
+      // frozen NDJSON line for a child never carried one.
+      expect(runEventsOfType(recorded.events, 'run.activate')).toEqual([
+        {
+          type: 'run.activate',
+          streamId: childStreamId,
+          category: AgentCategory.ToolUse,
+          background: true,
+        },
+      ]);
       expect(runEventsOfType(recorded.events, 'run.config')).toContainEqual(
         expect.objectContaining({ streamId: childStreamId, executionId }),
       );
@@ -192,6 +205,7 @@ describe('child stream progress events', () => {
       {
         streamPrefix: 'workflow-script',
         run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
+        userFollowUpSupport: 'unsupported',
         description: 'Run a named child task',
         config,
       },
@@ -208,6 +222,7 @@ describe('child stream progress events', () => {
       {
         streamPrefix: 'workflow-script',
         run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
+        userFollowUpSupport: 'unsupported',
         description: 'Resume the named child task',
         config,
       },
@@ -253,6 +268,7 @@ describe('child stream progress events', () => {
         kind: 'multiAgentWorkflow' as const,
         workflowName: 'retry-setup',
       },
+      userFollowUpSupport: 'unsupported' as const,
       description: 'Retry a failed child stream setup',
       config,
     };
@@ -314,6 +330,7 @@ describe('child stream progress events', () => {
             kind: 'multiAgentWorkflow',
             workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
           },
+          userFollowUpSupport: 'unsupported',
           description: 'Audit the repository without editing',
           config: workerConfig,
         },
@@ -357,7 +374,7 @@ describe('child stream progress events', () => {
         expect.objectContaining({
           type: 'run.start',
           streamId: childStreamId,
-          agentCategory: AgentCategory.ToolUse,
+          category: AgentCategory.ToolUse,
           parentStreamId,
         }),
       ]);

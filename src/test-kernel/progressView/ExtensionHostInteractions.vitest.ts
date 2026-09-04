@@ -10,7 +10,6 @@ import { createExtensionHostInteractions } from '@progressView/extensionHostInte
 import type { StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
-import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
 
 // Local file imports
 import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
@@ -703,7 +702,7 @@ describe('createExtensionHostInteractions', () => {
       streamId: STREAM_A,
     });
     session.interactions.use(interactions);
-    const permission = prepareBashApprovalPrompt(
+    const { permission } = bashApprovalRequest(
       { command: 'lake build', streamId: STREAM_A },
       session,
     );

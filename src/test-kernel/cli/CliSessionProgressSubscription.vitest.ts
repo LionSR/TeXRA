@@ -126,12 +126,11 @@ const child = {
 const PROGRESS_PROJECTION_CASES = {
   setActiveStream: {
     source: runEvent({
-      type: 'run.start',
+      type: 'run.activate',
       streamId,
-      executionId,
-      identity: { kind: 'agent', agent: 'proofreader' },
-      agentCategory: AgentCategory.Workflow,
+      category: AgentCategory.Workflow,
       isRemote: false,
+      background: false,
     }),
     payload: {
       streamId,
@@ -386,19 +385,44 @@ const resumingStatusPayload: RunStatusProjectionPayload = {
 };
 
 describe('attachCliSessionProgressProjection', () => {
-  it('keeps the setActiveStream line of a background child byte-identical', () => {
+  it('projects one setActiveStream line per activation, byte-identical for a background child, and none from run.start', () => {
     withProjection(({ events, writeRecord }) => {
+      // A launch: the existence fact projects nothing, its activation the
+      // frozen line; a child's line never carried `isRemote`.
       events.emit(
         runEvent({
           type: 'run.start',
           streamId,
           executionId,
           identity: { kind: 'process', tool: 'bash' },
-          agentCategory: AgentCategory.ToolUse,
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+          userFollowUpSupport: 'unsupported',
+          background: true,
+        }),
+      );
+      events.emit(
+        runEvent({
+          type: 'run.activate',
+          streamId,
+          category: AgentCategory.ToolUse,
+          background: true,
+        }),
+      );
+      // A resume in a fresh process mints no run.start and still activates.
+      events.emit(
+        runEvent({
+          type: 'run.activate',
+          streamId,
+          category: AgentCategory.ToolUse,
           background: true,
         }),
       );
 
+      const activations = vi
+        .mocked(writeRecord)
+        .mock.calls.filter(([record]) => record.event === 'setActiveStream');
+      expect(activations).toHaveLength(2);
       expect(writeRecord).toHaveBeenCalledWith(
         progressRecord('setActiveStream', {
           streamId,

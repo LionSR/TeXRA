@@ -441,7 +441,7 @@ async function assembleAgentLaunchContext(
       identity: { kind: 'agent', agent: config.agent },
       userFollowUpSupport:
         input.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      agentCategory: setting.agentCategory,
+      category: setting.agentCategory,
       isRemote,
       worktree: launchWorktreeInfo(config.workingDirectory),
       ...(input.parentStreamId && input.parentStreamId !== streamId

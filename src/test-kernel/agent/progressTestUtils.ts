@@ -34,7 +34,6 @@ import type {
   ProgressPermissionKind,
   StreamTabId,
 } from '@shared/schemas';
-import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
 import {
   prepareToolEditApprovalPrompt,
   type ToolEditApprovalRequest,
@@ -497,7 +496,13 @@ export function bashApprovalRequest(
 ): HostBashApprovalRequest {
   return {
     ...request,
-    permission: prepareBashApprovalPrompt(request, session),
+    permission: {
+      requestId: `bash-${generateShortId()}`,
+      command: request.command,
+      ...(request.cwd ? { cwd: request.cwd } : {}),
+      allowBypass: true,
+      streamId: request.streamId ?? '',
+    },
   };
 }
 

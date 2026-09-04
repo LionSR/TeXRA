@@ -61,7 +61,7 @@ export function isBashApprovalBypassedForStream(
  * the host owns one (extension, desktop); the CLI hosts run on the default
  * session.
  */
-export function prepareBashApprovalPrompt(
+function prepareBashApprovalPrompt(
   request: Omit<HostBashApprovalRequest, 'permission'>,
   session?: SessionHandle,
 ): BashPermission {

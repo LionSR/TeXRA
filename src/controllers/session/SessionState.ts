@@ -1,5 +1,3 @@
-import { Effect, SubscriptionRef } from 'effect';
-
 import {
   SessionStores,
   type DeleteAllStreamsResult,
@@ -23,12 +21,10 @@ import {
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
-import {
-  emptySessionView,
-  type SessionView,
-} from '@shared/session/sessionView';
+import type { SessionView } from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import type { SubscriptionRef } from 'effect';
 
 /**
  * Config-derived display fields: undefined until the stream's `RunConfig`
@@ -159,9 +155,9 @@ export class SessionState {
 
   /**
    * The one session state every renderer reads (PRD one-fold-three-renderers,
-   * 5.1): the fold over this session's events, held as the level the fold
-   * fiber publishes to (`SessionViewService.ref`, 7.2). Synchronous readers
-   * take `SubscriptionRef.getUnsafe(view)`; nothing here writes it.
+   * 5.1): the session's own view, the level the fold fiber publishes to
+   * (`SessionViewService.ref`, 7.2). Synchronous readers take
+   * `SubscriptionRef.getUnsafe(view)`; nothing here writes it.
    */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
 
@@ -179,10 +175,7 @@ export class SessionState {
     this.followUps = session.followUps;
     this.snapshots = session.snapshots;
     this.stores = stores ?? createSessionStores(session);
-    // The session key is its storage root (PRD 7.3): one per paper.
-    this.view = Effect.runSync(
-      SubscriptionRef.make(emptySessionView(session.roots.storage)),
-    );
+    this.view = session.view;
   }
 
   /**

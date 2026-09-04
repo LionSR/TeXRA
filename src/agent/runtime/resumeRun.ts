@@ -372,7 +372,7 @@ async function resumeRunWithRecoveryProvenance(
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
     session.status.markUnavailableOrLog(
       streamId,
-      streamHeldMessage(`pid ${lease.owner.pid} on ${lease.owner.hostname}`),
+      streamHeldMessage(lease.owner.pid),
       log,
     );
     return { failed: 'owned_elsewhere' };
@@ -444,7 +444,7 @@ function refusalFor(
   if (error instanceof ExecutionLeaseActiveError) {
     session.status.markUnavailableOrLog(
       streamId,
-      streamHeldMessage(`pid ${error.owner.pid} on ${error.owner.hostname}`),
+      streamHeldMessage(error.owner.pid),
       log,
     );
     return { failed: 'owned_elsewhere' };

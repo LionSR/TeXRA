@@ -33,6 +33,9 @@ function startWorkflow(
       streamId: target,
       executionId,
       identity: { kind: 'multiAgentWorkflow', workflowName: 'proof-workflow' },
+      category: 'workflow',
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     },
     target,
   );
@@ -169,6 +172,9 @@ describe('attachWorkflowPlainOutput', () => {
       streamId,
       executionId,
       identity: { kind: 'agent', agent: 'ordinary-workflow' },
+      category: 'workflow',
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     });
     emit(events, {
       type: 'workflow.call',

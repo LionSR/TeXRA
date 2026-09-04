@@ -128,6 +128,9 @@ export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
         streamId,
         executionId,
         identity,
+        category: 'toolUse',
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
       });
     },
     setRunConfig: (streamId, config, executionId) => {

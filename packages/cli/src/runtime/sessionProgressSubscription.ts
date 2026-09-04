@@ -100,10 +100,12 @@ function projectCliSessionFact(
 
 /**
  * Project run facts onto the frozen NDJSON progress-event vocabulary.
- * `run.start` projects to the public `setActiveStream` record it replaced
- * internally, byte for byte: `background` (a delegated child) is the record's
- * `suppressViewSwitch: true`, and `isRemote` appears only where the fact
- * carries one (agent launches; a child stream never did). `context.state`,
+ * `run.activate` projects to the public `setActiveStream` record, one to one
+ * and byte for byte: every activation (a launch, a resume) emits one line,
+ * `background` (a delegated child) is the record's `suppressViewSwitch:
+ * true`, and `isRemote` appears only where the fact carries one (agent
+ * launches; a child stream never did). `run.start` is the existence fact and
+ * projects nothing: a resume mints none, and a launch emits both. `context.state`,
  * the approval facts, and the terminal result are intentionally unprojected
  * (the result has its own NDJSON record, and the public wire carries neither
  * a context-occupancy nor an approval record).
@@ -113,19 +115,17 @@ function projectCliRunFact(
   event: CliRunFactEvent,
 ): CliProjectedNdjsonProgressEvent | undefined {
   switch (event.type) {
-    case 'run.start':
+    case 'run.activate':
       return {
         event: 'setActiveStream',
         payload: {
           streamId: event.streamId,
-          ...(event.agentCategory != null
-            ? { agentCategory: event.agentCategory }
-            : {}),
+          agentCategory: event.category,
           ...(event.isRemote != null ? { isRemote: event.isRemote } : {}),
           ...(event.background ? { suppressViewSwitch: true } : {}),
         },
       };
-    case 'run.activate':
+    case 'run.start':
     case 'approval.requested':
     case 'approval.resolved':
     case 'approval.policy':

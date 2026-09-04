@@ -6,9 +6,9 @@
  * (`session.interactions.x(...)`, `session.executions.y(...)`). It has no
  * readiness gate: a restored session is usable the moment it is constructed,
  * and what a stream with no live flow context in this process is gets decided
- * at read time by `SessionState.resolveStreamPhase`, never by a boot pass. It
- * composes {@link ExecutionRegistry}, {@link SessionHostInteractions}, and the
- * other session-scoped owners.
+ * by the fold's `readOnly` and `group` rules over the session's view, never
+ * by a boot pass. It composes {@link ExecutionRegistry},
+ * {@link SessionHostInteractions}, and the other session-scoped owners.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop Electron process. The default instance is installed
@@ -30,8 +30,7 @@
  * session is justified only as the ownership container.
  */
 
-import { randomUUID } from 'node:crypto';
-
+import { Effect, SubscriptionRef } from 'effect';
 import pDefer, { type DeferredPromise } from 'p-defer';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
@@ -59,6 +58,10 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  emptySessionView,
+  type SessionView,
+} from '@shared/session/sessionView';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -100,14 +103,13 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
 
 export class SessionHandle {
   /**
-   * The owner token this session stamps on the durable facts it appends
-   * (`run.start`'s `ownerId`, the fold envelope): the fold's live-owner
-   * evidence, so a pending approval reads as waiting only while the process
-   * that will answer it is alive (PRD one-fold-three-renderers, 5.2). A UUID
-   * like the execution lease's owner token; lane 2's publisher and the lease
-   * reader's liveness snapshot carry this same value.
+   * The one session state every renderer of this session reads (PRD
+   * one-fold-three-renderers, 5.1), keyed by the session's storage root (7.3).
+   * The fold fiber publishes to it (`SessionViewService.ref`, 7.2) and
+   * resolves it from `Sessions.get(root)` once at construction; until that
+   * layer lands the ref is minted here, empty, at cursor 0.
    */
-  readonly ownerId: string = randomUUID();
+  readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   /**
    * Per-run execution handles: registration, lookup, change listeners, and
    * subagent lineage. Owns the status subscription bound to the hub
@@ -202,6 +204,9 @@ export class SessionHandle {
     // and the SDK build exactly one session over the process roots; the
     // desktop opens one session per paper and passes that paper's roots.
     this.roots = init.roots ?? processWorkspaceRoots();
+    this.view = Effect.runSync(
+      SubscriptionRef.make(emptySessionView(this.roots.storage)),
+    );
     this.followUps = followUps;
     // The sidecar store is a session artifact exactly like `transcripts`: the
     // session projects its own run events into it and flushes it below, so no

@@ -48,6 +48,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
   TOOL_USE_STATUS,
+  USER_FOLLOW_UP_SUPPORT,
   type ActiveChildInfo,
   type ExecutionId,
   type InquiryThreadId,
@@ -1231,6 +1232,9 @@ function seedRunningWorkflow(): void {
         kind: 'multiAgentWorkflow',
         workflowName: 'live-workflow-validation',
       },
+      category: AgentCategory.Workflow,
+      isRemote: false,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     },
   });
   const runStage = runTrace.trace.openStage(
@@ -1416,7 +1420,7 @@ function emitStreamRemoval(streamId: StreamTabId): void {
 // stream never becomes the child (see the wall-clock note above).
 function emitRunStart(
   streamId: StreamTabId,
-  agentCategory?: AgentCategory,
+  category: AgentCategory = AgentCategory.ToolUse,
 ): void {
   defaultSession().events.emit({
     scope: 'run',
@@ -1426,8 +1430,9 @@ function emitRunStart(
       streamId,
       executionId: nanoid(12) as ExecutionId,
       identity: { kind: 'agent', agent: streamId.split('#')[0] ?? streamId },
-      agentCategory,
+      category,
       isRemote: false,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     },
   });
 }

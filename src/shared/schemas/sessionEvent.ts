@@ -49,22 +49,26 @@ import { ExtendedTokenUsageStatsSchema } from './usage';
  * (contract C5). One value per process, stamped on every run it launched;
  * liveness is probed per owner, never per run (PRD 5.2). Never a lease token.
  */
-export const OwnerIdSchema = z.string().min(1);
-export type OwnerId = z.infer<typeof OwnerIdSchema>;
+export const OwnerIdSchema = z.string().regex(/^\d+:.+$/);
 
-/** A stream id, an inquiry thread id, or (after the cutover) an execution id:
- *  the `aggregate_id` half of the event key (contract C2). */
+/** The pid half of an owner id, the one part of a process identity a user
+ *  can act on (`kill`, Activity Monitor). */
+export function ownerPid(ownerId: string): number {
+  return Number(ownerId.slice(0, ownerId.indexOf(':')));
+}
+
+/** A stream id or an inquiry thread id: the `aggregate_id` half of the
+ *  event key (contract C2). The fold resolves a stream aggregate by its id
+ *  alone; the execution aggregate arrives with the cutover's flow rows. */
 export const AggregateIdSchema = z.string().min(1);
 export type AggregateId = z.infer<typeof AggregateIdSchema>;
 
 /** Per-aggregate append order; `run.start` is seq 1 of its stream. */
-export const SeqSchema = z.int().positive();
-export type Seq = z.infer<typeof SeqSchema>;
+const SeqSchema = z.int().positive();
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
  *  first commit", the cursor an empty view starts from. */
 export const CommitOrdinalSchema = z.int().nonnegative();
-export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 
 /**
  * The full approval-policy snapshot after a change, emitted by the single
@@ -103,9 +107,11 @@ function durable<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
 /**
  * Per-stream launch facts. Existence fact: a stream exists iff its
  * `run.start` exists, once per incarnation, seq 1 of its aggregate (decision
- * 9). `identity` is nullish only on the legacy importer's events; live
- * emitters always know it. Category, remoteness, and worktree are launch
- * facts the fold reads verbatim and never derives (PRD 6, item 6). The
+ * 9). `identity` and `worktree` are nullish only on the legacy importer's
+ * events (contract C3); live emitters always know them. `category`,
+ * `isRemote`, and `userFollowUpSupport` are explicit on every run: the
+ * launcher knows them for an agent, a process, and a workflow script alike,
+ * and the fold reads them verbatim and derives nothing (PRD 6, item 6). The
  * initial approval-policy snapshot rides here rather than as its own event
  * (PRD 6, item 2): under the latest-of-type rule a run never edited would
  * otherwise have no policy entry, and on the payload it is atomic with the
@@ -115,11 +121,12 @@ function durable<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
 const RunStartEventSchema = durable('run.start', {
   executionId: ExecutionIdSchema,
   identity: RunIdentitySchema.nullish(),
-  userFollowUpSupport: UserFollowUpSupportSchema.nullish(),
-  /** Agent runs only; a process stream has no category. */
-  agentCategory: AgentCategorySchema.nullish(),
-  /** Agent-registry remoteness; a process, agent-CLI, or workflow-script child has none. */
-  isRemote: z.boolean().nullish(),
+  userFollowUpSupport: UserFollowUpSupportSchema,
+  /** The `StreamView` discriminant: `toolUse` for an agent in tool-use mode
+   *  and for a process stream, `workflow` for a workflow agent or script. */
+  category: AgentCategorySchema,
+  /** Agent-registry remoteness; false for a run with no registry entry. */
+  isRemote: z.boolean(),
   worktree: WorktreeInfoSchema.nullish(),
   parentStreamId: StreamTabIdSchema.nullish(),
   /**
@@ -150,7 +157,10 @@ const SessionEventSchema = z.discriminatedUnion('type', [
    */
   durable('run.activate', {
     category: AgentCategorySchema,
-    isRemote: z.boolean(),
+    /** Agent-registry remoteness, carried only by a run with a registry
+     *  entry: the frozen wire line omits it for a process, agent-CLI, or
+     *  workflow-script child (PRD 10.3), and a fold reads `run.start`. */
+    isRemote: z.boolean().nullish(),
     background: z.boolean(),
   }),
   durable('run.config', {
@@ -163,7 +173,9 @@ const SessionEventSchema = z.discriminatedUnion('type', [
       inputFiles: z.array(z.string()).nullish(),
     }),
   }),
-  /** Terminal outcome; the PRD's `run.end` is this arm. */
+  /** The run lifecycle's last word: emitted once nothing in the owning
+   *  process can still write for the run. The phase is the `status` fact's
+   *  (PRD 6, item 3); this arm says only that the lifecycle has ended. */
   durable('result', {
     outcome: RunOutcomeSchema,
     executionId: z.string(),
@@ -265,8 +277,14 @@ export function withEnvelope(
   return { ...stamp, ...body } as SessionEvent;
 }
 
-/** The listing types the fold keys `latest` by (PRD 5.1): every durable arm
- *  but the transcript tier, with the approval pair sharing one entry. */
+/**
+ * The listing types the fold keys `latest` by (PRD 5.1): every durable arm
+ * but the transcript tier. The approval pair shares one entry because it
+ * folds to one set, and the lifecycle pair (`run.start`, `stream.removed`)
+ * shares one because it folds to one existence: a tombstone's commit then
+ * outranks a replayed `run.start` below it, which is what makes the
+ * tombstone final under every read (5.2, "Existence").
+ */
 export function listingTypeOf(event: SessionEvent): string | null {
   switch (event.type) {
     case 'transcript.entry':
@@ -274,6 +292,9 @@ export function listingTypeOf(event: SessionEvent): string | null {
     case 'approval.requested':
     case 'approval.resolved':
       return 'approval';
+    case 'run.start':
+    case 'stream.removed':
+      return 'lifecycle';
     default:
       return event.type;
   }
@@ -288,14 +309,21 @@ const FoldEventSchema = z.object({
   read: z.enum(['listing', 'aggregate', 'all']),
   event: SessionEventSchema,
 });
-export type FoldEvent = z.infer<typeof FoldEventSchema>;
 
-/** A live text delta for one streaming row; never durable, never a seq. */
+/**
+ * A live text delta for one row, carrying its own offsets into the row's
+ * in-flight text (PRD 5.2, "Live text"): the transient analogue of `seq`.
+ * The fold ignores a chunk whose `to` is not past the text it holds,
+ * otherwise truncates at `from` and appends, so a redelivery in any order is
+ * a no-op, a `from: 0` chunk replaces the row, and two adjacent chunks merge
+ * into one exactly. Never durable, never a seq.
+ */
 const TextChunkSchema = z.object({
   _tag: z.literal('chunk'),
   streamId: StreamTabIdSchema,
-  entryId: z.string(),
-  chunkIndex: z.int().nonnegative(),
+  rowId: z.string(),
+  from: z.int().nonnegative(),
+  to: z.int().positive(),
   text: z.string(),
 });
 export type TextChunk = z.infer<typeof TextChunkSchema>;
@@ -309,7 +337,7 @@ export type TextChunk = z.infer<typeof TextChunkSchema>;
  * so every ownerless run reads as interrupted until the runtime says
  * otherwise.
  */
-export const LocalRuntimeStateSchema = z.object({
+const LocalRuntimeStateSchema = z.object({
   self: z.array(OwnerIdSchema),
   heldBy: z.array(OwnerIdSchema),
   unreadable: z.array(
@@ -324,7 +352,7 @@ export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
  * is a fold input: an aggregate entering it gets its `folded` entry, one
  * leaving it loses its transcript tier.
  */
-export const TranscriptSubscriptionSchema = z.object({
+const TranscriptSubscriptionSchema = z.object({
   id: AggregateIdSchema,
   fromSeq: z.int().nonnegative(),
 });

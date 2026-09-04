@@ -288,6 +288,9 @@ describe('ProgressBackend', () => {
       streamId: 'child' as StreamTabId,
       executionId: 'c41111' as ExecutionId,
       identity: { kind: 'agent', agent: 'search' },
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     });
     emitRunConfig(
       target,
@@ -1170,6 +1173,9 @@ describe('ProgressBackend', () => {
         kind: 'multiAgentWorkflow',
         workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
       },
+      category: AgentCategory.Workflow,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     });
     emitRunConfig(
       target,

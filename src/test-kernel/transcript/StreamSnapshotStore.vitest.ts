@@ -314,6 +314,8 @@ describe('StreamSnapshotStore', () => {
         streamId: STREAM,
         executionId,
         identity: { kind: 'agent', agent: 'session-label' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       },
     });
@@ -491,6 +493,9 @@ describe('StreamSnapshotStore', () => {
         streamId: STREAM,
         executionId,
         identity: workflowIdentity,
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
       },
     });
     detach();
@@ -1115,6 +1120,9 @@ describe('StreamSnapshotStore', () => {
         streamId: STREAM,
         executionId,
         identity: { kind: 'agent', agent: 'search' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
       },
     });
     // Emitter contract (#9590 A4): the authority write to
