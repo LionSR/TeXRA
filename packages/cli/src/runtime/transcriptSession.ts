@@ -4,7 +4,7 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import { createSessionStores } from '@controllers/session/createSessionStores';
+import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 
@@ -52,7 +52,11 @@ async function initializePersistentSession(
       responseTextProcessing,
     }),
   );
-  await createSessionStores(result.session).sweepLeftoverStreams();
+  // Off the ready path: the sweep reads the whole storage root, and no prompt
+  // waits for it. Both CLI shapes schedule it here so headless `texra run`
+  // keeps an owner for the shells it leaves behind; a short headless run
+  // exits before the unref'd timer fires and the next launch sweeps them.
+  scheduleLeftoverStreamSweep(result.session);
   return result;
 }
 

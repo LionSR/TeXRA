@@ -694,10 +694,12 @@ export class SessionState {
 
     // ProgressBackend waits for SessionHandle readiness before entering this
     // method. The session owns transcript opening and sidecar hydration; a
-    // presentation must never reload those live stores. The startup sweep
-    // (dropping leftover background shells, then orphaned persisted state) is
-    // every host's own responsibility at process bring-up, before any
-    // presentation attaches — see `sweepLeftoverStreams`'s callers.
+    // presentation must never reload those live stores. The leftover-stream
+    // sweep (dropping leftover background shells, then orphaned persisted
+    // state) is the host process's own, scheduled off this path once its UI is
+    // up — see `scheduleLeftoverStreamSweep`. A presentation may therefore
+    // attach before it has run, and never waits for it; this only drains
+    // deletions that have already started.
     await this.stores.waitForPendingStreamDeletions();
 
     this.logger.info(

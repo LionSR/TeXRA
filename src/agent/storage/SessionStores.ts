@@ -217,6 +217,15 @@ export class SessionStores {
       stream,
       options?.expectedIncarnation,
       async () => {
+        // Staged residue from a crash makes `stageDeleteStream` throw until it
+        // is reconciled, and the sweep that used to reconcile everything at
+        // bring-up now runs after the UI is up — a user (or the sweep itself)
+        // can reach this stream first. Recover just this stream's residue
+        // here; the reconciliation stays logged.
+        await this.reconcileStagedDeletions(
+          new Set(this.streamLogs.keys()),
+          new Set([stream]),
+        );
         let executionId: ExecutionId | undefined;
         try {
           executionId = await this.executionIdForStream(stream);
@@ -495,11 +504,20 @@ export class SessionStores {
     return undefined;
   }
 
+  /**
+   * Recover deletions a crash interrupted, so a stream with staged residue can
+   * be staged again. `selectedStreams` narrows the recovery to the streams the
+   * caller is about to delete; every other interrupted deletion keeps its own
+   * owner.
+   */
   private async reconcileStagedDeletions(
     liveStreams: ReadonlySet<StreamTabId>,
+    selectedStreams?: ReadonlySet<StreamTabId>,
   ): Promise<void> {
-    const reconciliation =
-      await this.snapshots.reconcileStagedDeletions(liveStreams);
+    const reconciliation = await this.snapshots.reconcileStagedDeletions(
+      liveStreams,
+      selectedStreams,
+    );
     if (
       reconciliation.restored.length > 0 ||
       reconciliation.pendingCleanup.length > 0 ||
@@ -692,18 +710,32 @@ export class SessionStores {
   }
 
   /**
-   * The startup sweep every process owner runs before presenting a rail: drop
-   * leftover background shells, then persisted state no live stream refers to.
+   * The sweep every process owner runs once per launch: drop leftover
+   * background shells, then persisted state no live stream refers to.
    *
    * One entry point so the order lives in one place. It matters: the ephemeral
    * sweep removes streams from the transcript index, and the orphan sweep reads
    * that index as its live set — running them the other way round would take
    * the shells' own sidecars for orphans on the next launch instead of this one.
+   *
+   * `runningStreams` names the streams this process is running right now. It
+   * is what makes the sweep safe off the bring-up path: those streams are
+   * never offered to the ephemeral half (whose deletions would otherwise queue
+   * behind a live execution lane for the run's whole lifetime), and they are
+   * retained by the orphan half. A caller sweeping before any run can exist
+   * may leave it out.
    */
-  async sweepLeftoverStreams(): Promise<void> {
-    await this.sweepEphemeralStreams(new Set(this.streamLogs.keys()));
+  async sweepLeftoverStreams(options?: {
+    readonly runningStreams?: ReadonlySet<StreamTabId>;
+  }): Promise<void> {
+    const running = options?.runningStreams ?? new Set<StreamTabId>();
+    await this.sweepEphemeralStreams(
+      new Set(
+        [...this.streamLogs.keys()].filter((stream) => !running.has(stream)),
+      ),
+    );
     const orphans = await this.sweepOrphanedStreams(
-      new Set(this.streamLogs.keys()),
+      new Set([...this.streamLogs.keys(), ...running]),
     );
     if (orphans.streams.length > 0 || orphans.executionIds.length > 0) {
       log.info(
@@ -714,7 +746,8 @@ export class SessionStores {
   }
 
   /**
-   * Delete background-shell streams a previous process left behind.
+   * Delete background-shell streams left behind by a process that is not
+   * running them any more.
    *
    * A background shell is ephemeral by construction: `autoClose` drops its tab
    * the moment the command finalizes, and the command's output is already
@@ -727,17 +760,25 @@ export class SessionStores {
    * persisted shell hydrates with no status at all and no rail filter can key
    * off one.
    *
-   * A shell still running holds its execution lease, so `deleteStream` answers
-   * `'active'` and keeps it — the durable lease is the liveness authority here,
-   * not an in-memory phase. The cost is that a shell whose host crashed inside
-   * the lease's staleness window is retained (loudly) until the next launch.
+   * `candidates` is the caller's contract that none of these streams is
+   * running in this process. It matters because `deleteStream` does not refuse
+   * a live stream, it queues behind its execution lane: a shell this process
+   * started would hold the sequential loop below (and an unresolved
+   * `pendingStreamDeletions` entry that `waitForPendingStreamDeletions` awaits)
+   * for the command's whole lifetime. `sweepLeftoverStreams` filters them out.
+   *
+   * A shell another process is still running holds its execution lease, so
+   * `deleteStream` answers `'active'` and keeps it — the durable lease is the
+   * liveness authority for those, not an in-memory phase. The cost is that a
+   * shell whose host crashed inside the lease's staleness window is retained
+   * (loudly) until the next launch.
    */
   private async sweepEphemeralStreams(
-    liveStreams: ReadonlySet<StreamTabId>,
+    candidates: ReadonlySet<StreamTabId>,
   ): Promise<void> {
     const swept: StreamTabId[] = [];
     const retained: StreamTabId[] = [];
-    for (const stream of liveStreams) {
+    for (const stream of candidates) {
       // Identity is the one authority on what a stream is: a background shell
       // persists `RunIdentity` `{ kind: 'process' }` in its summary meta
       // mirror. A summary without the mirror is treated as not-a-shell and
@@ -801,7 +842,25 @@ export class SessionStores {
     const sweptStreams: StreamTabId[] = [];
     const sweptExecutionIds: ExecutionId[] = [];
 
-    const { byStream, unreadable } = await readExecutionStreamIndex();
+    // One walk of the executions directory for both halves: the stream half
+    // resolves each orphan's owning execution from it, and the execution half
+    // takes the same references. Reading it twice cost a second full scan of
+    // every execution's metadata for exactly the same answer.
+    let listing: ExecutionStreamReferenceListing;
+    try {
+      listing = await this.listExecutionStreamReferences();
+    } catch (error) {
+      // Ownership is unknown for every row, and unknown state is never swept.
+      log.warn(
+        `Skipping orphan cleanup; the executions directory could not be listed: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+      return { streams: [], executionIds: [] };
+    }
+    const { references, unreadable } = listing;
+    const byStream = new Map(
+      references.map(({ streamId, executionId }) => [streamId, executionId]),
+    );
     await Promise.all(
       orphanedStreams.map(async (stream) => {
         try {
@@ -821,7 +880,7 @@ export class SessionStores {
             }
             if (outcome.kind === 'retained') {
               log.warn(
-                `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
+                `Skipping orphaned execution cleanup for ${executionId}; the sweep continues.`,
                 { data: outcome.error },
               );
               return;
@@ -847,14 +906,14 @@ export class SessionStores {
           sweptStreams.push(stream);
         } catch (error) {
           log.warn(
-            `Skipping orphaned stream cleanup for ${stream}; startup will continue.`,
+            `Skipping orphaned stream cleanup for ${stream}; the sweep continues.`,
             { data: error },
           );
         }
       }),
     );
     sweptExecutionIds.push(
-      ...(await this.sweepOrphanedExecutions(liveStreams)),
+      ...(await this.sweepOrphanedExecutions(liveStreams, references)),
     );
     return { streams: sweptStreams, executionIds: sweptExecutionIds };
   }
@@ -863,21 +922,14 @@ export class SessionStores {
    * Sweep execution directories whose explicit metadata reference is absent
    * from the persistent transcript index. Metadata without a `streamId` and
    * unreadable metadata stay untouched: they do not establish ownership.
+   *
+   * `references` comes from the caller's single walk of the executions
+   * directory rather than a second one of its own.
    */
   private async sweepOrphanedExecutions(
     liveStreams: ReadonlySet<StreamTabId>,
+    references: ExecutionStreamReferenceListing['references'],
   ): Promise<ExecutionId[]> {
-    let references;
-    try {
-      ({ references } = await this.listExecutionStreamReferences());
-    } catch (error) {
-      log.warn(
-        `Skipping execution-side orphan cleanup; startup will continue: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-      return [];
-    }
-
     const swept: ExecutionId[] = [];
     // Await each candidate so a large run history does not enqueue every
     // deletion promise at once; the shared queue is serialized regardless.
@@ -896,7 +948,7 @@ export class SessionStores {
         if (result?.status === 'deleted') swept.push(executionId);
       } catch (error) {
         log.warn(
-          `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
+          `Skipping orphaned execution cleanup for ${executionId}; the sweep continues.`,
           { data: error },
         );
       }

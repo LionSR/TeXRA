@@ -700,7 +700,7 @@ describe('ProgressBackend cleanup', () => {
 
         expect(warnSpy).toHaveBeenCalledWith(
           'SessionStores',
-          `Skipping orphaned execution cleanup for ${failing.executionId}; startup will continue.`,
+          `Skipping orphaned execution cleanup for ${failing.executionId}; the sweep continues.`,
           { data: expect.any(Error) },
         );
         await expectStored(
@@ -757,7 +757,7 @@ describe('ProgressBackend cleanup', () => {
     }
   });
 
-  it('sweeps leftover background shells at startup, keeping real sessions', async () => {
+  it('sweeps leftover background shells, keeping real sessions', async () => {
     // The sweep reads the persisted identity meta (kind 'process'), the
     // authority since the legacy name-prefix reader was retired.
     const shell = {

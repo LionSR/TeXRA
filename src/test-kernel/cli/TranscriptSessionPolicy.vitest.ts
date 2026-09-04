@@ -96,7 +96,7 @@ describe('CLI transcript session policy', () => {
     ).rejects.toBe(failure);
   });
 
-  it('reclaims an orphaned stream sidecar when a headless session opens', async () => {
+  it('reclaims an orphaned stream sidecar after a headless session opens', async () => {
     vi.resetModules();
     const [
       { initPlatform },
@@ -140,9 +140,16 @@ describe('CLI transcript session policy', () => {
       async () => transcripts,
     );
 
-    await expect(
-      result.session.snapshots.listPersistedStreams(),
-    ).resolves.toEqual([]);
+    // The sweep is scheduled off the ready path now, so the reclaim lands a
+    // beat after the session opens instead of before it returns.
+    await vi.waitFor(
+      async () => {
+        await expect(
+          result.session.snapshots.listPersistedStreams(),
+        ).resolves.toEqual([]);
+      },
+      { timeout: 10_000, interval: 100 },
+    );
     expect(GoalStore.getForStream(orphan)).toBeNull();
   });
 });

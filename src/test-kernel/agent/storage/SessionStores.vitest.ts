@@ -571,7 +571,7 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
   });
 });
 
-describe('SessionStores startup sweep', () => {
+describe('SessionStores leftover sweep', () => {
   const shell = 'bash@tool#4f4f4f4f4f4f' as StreamTabId;
   const realSession = 'chat@deepseek#5f5f5f5f5f5f' as StreamTabId;
   // A shell-named stream whose summary never mirrored its identity meta:
@@ -617,6 +617,19 @@ describe('SessionStores startup sweep', () => {
     expect(deleteStream).toHaveBeenCalledWith(shell);
   });
 
+  it('leaves a shell this process is still running alone', async () => {
+    const stores = await storesWithLeftovers();
+    const deleteStream = vi
+      .spyOn(stores, 'deleteStream')
+      .mockResolvedValue('deleted');
+
+    // Deleting it would queue behind the shell's live execution lane and hold
+    // the sweep (and a pending-deletion entry) for the command's lifetime.
+    await stores.sweepLeftoverStreams({ runningStreams: new Set([shell]) });
+
+    expect(deleteStream).not.toHaveBeenCalled();
+  });
+
   it('keeps a shell whose deletion is refused, and says so', async () => {
     const stores = await storesWithLeftovers();
     // What a still-running shell looks like here: it holds its execution lease,
@@ -640,7 +653,7 @@ describe('SessionStores startup sweep', () => {
     );
     const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
 
-    // One unreadable leftover must not fail the load that called the sweep.
+    // One unreadable leftover must not fail the rest of the sweep.
     await expect(stores.sweepLeftoverStreams()).resolves.toBeUndefined();
 
     expect(warn).toHaveBeenCalledWith(
@@ -805,7 +818,7 @@ describe('SessionStores orphan sweep', () => {
     expect(deleteExecution).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(
       'SessionStores',
-      'Skipping execution-side orphan cleanup; startup will continue: execution directory unreadable',
+      'Skipping orphan cleanup; the executions directory could not be listed: execution directory unreadable',
       expect.anything(),
     );
   });
