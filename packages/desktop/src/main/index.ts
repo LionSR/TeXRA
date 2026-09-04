@@ -1375,6 +1375,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         papers = await openDesktopPaperRegistry({
           dataRoot: platformInit.dataRoot,
           processRoots: platformInit.processRoots,
+          globalConfigStore: platformInit.globalConfigStore,
           globalState: platform().globalState,
           attachSession: (session) =>
             agentResumeHandler.add(processResumeOwner.attach({ session })),
@@ -1389,7 +1390,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           warn,
         );
         const unopenedPapers = remembered.missing.map(
-          (root) => `${root} (folder not found; forgotten)`,
+          (root) => `${root} (no such folder; forgotten)`,
         );
         for (const root of remembered.roots) {
           try {
@@ -1437,7 +1438,9 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             resourcesPath: platformInit.resourcesPath,
           });
         reopenMainWindow();
-        for (const paper of [papers.active(), ...papers.list()]) {
+        // The active paper is in the list unless it is the no-workspace
+        // session; the set keeps it to one dialog either way.
+        for (const paper of new Set([papers.active(), ...papers.list()])) {
           warnIfEphemeral(paper);
         }
         if (unopenedPapers.length > 0) {

@@ -11,6 +11,7 @@ import {
 } from '@platform/workspaceRoots';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
+import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
@@ -41,6 +42,12 @@ export interface ElectronPlatformInitResult {
    * and what every paper's roots are built beside.
    */
   processRoots: WorkspaceRoots;
+  /**
+   * The store over the global config file. Every paper's config provider
+   * layers its own workspace store over this one instance, so a global
+   * setting changed from one paper is what the others read.
+   */
+  globalConfigStore: ConfigStore;
   lifecycle: LifecycleHost;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
@@ -164,6 +171,7 @@ export async function initializeElectronPlatform(
 
   return {
     processRoots,
+    globalConfigStore: configStores.global,
     lifecycle,
     dataRoot,
     resourcesPath,

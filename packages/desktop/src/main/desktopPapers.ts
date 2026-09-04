@@ -3,7 +3,7 @@
 // shows before any folder is open. Opening a second folder no longer relaunches
 // the process; the window switches which paper it shows.
 
-import { existsSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { basename } from 'node:path';
 
 import type { SessionStores } from '@agent/storage';
@@ -18,10 +18,11 @@ import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProce
 import { DisposableStore } from '@platform/disposable';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import {
   openNodeWorkspaceStateStore,
-  openTexraConfigStores,
+  openTexraWorkspaceConfigStore,
 } from '@platform/defaults/nodeStores';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -60,14 +61,22 @@ export interface DesktopPaper {
  * end: opening appends, activating moves to the end, closing removes.
  */
 const DESKTOP_OPEN_PAPERS_STATE_KEY = 'texra.desktop.openPapers';
-/** The single-workspace key the relaunch flow stored; folded in once, then deleted. */
-const LEGACY_WORKSPACE_PATH_STATE_KEY = 'texra.desktop.workspacePath';
+
+/** How long a closing paper waits for its stopped runs to settle. */
+const CLOSE_SETTLE_TIMEOUT_MS = 10_000;
 
 interface DesktopPaperRegistryOptions {
   /** Desktop data root (`~/.texra` in production, the e2e profile otherwise). */
   readonly dataRoot: string;
   /** Roots of the no-workspace session; the process roots. */
   readonly processRoots: WorkspaceRoots;
+  /**
+   * The one store over the global config file, shared by every paper's
+   * config provider: a `JsonStore` serves reads from its own open-time view,
+   * so a second instance over the same file would not see a global setting
+   * another paper changed until the next launch.
+   */
+  readonly globalConfigStore: ConfigStore;
   readonly globalState: StateStore;
   /**
    * Process-lifetime attachment each session needs (stream resumption).
@@ -87,9 +96,10 @@ export interface DesktopPaperRegistry {
   /** Make an open paper the one the window shows, and remember it as such. */
   activate(root: string | undefined): void;
   /**
-   * Close an open paper: forget it for the next launch, dispose its session in
-   * its own scope, and show the most recently shown remaining paper if it was
-   * the active one. The other papers' runs are untouched.
+   * Close an open paper: forget it for the next launch, stop its runs and
+   * wait for them to settle, dispose its session in its own scope, and show
+   * the most recently shown remaining paper if it was the active one. The
+   * other papers' runs are untouched.
    */
   close(root: string): Promise<void>;
   /** Workspace state of whichever paper is active at call time. */
@@ -148,37 +158,29 @@ export interface RememberedDesktopPapers {
 
 /**
  * The folders to reopen at launch: the remembered list, deduplicated by
- * canonical root, with the pre-papers single workspace key folded in once and
- * then deleted, and with folders that no longer exist dropped. The list is
- * written back whenever any of that changed it.
+ * canonical root, with entries that are no longer a folder dropped (a
+ * remembered path that a regular file has since replaced is not a paper
+ * either). The list is written back whenever that changed it.
  */
 export async function readRememberedDesktopPapers(
   globalState: StateStore,
   warn: (message: string) => void,
 ): Promise<RememberedDesktopPapers> {
   const stored = readRememberedPapers(globalState, warn);
-  const legacy = globalState.get<string>(LEGACY_WORKSPACE_PATH_STATE_KEY);
-  const candidates = [...stored];
-  if (typeof legacy === 'string' && legacy.trim()) {
-    // The relaunch flow stored the raw dialog path; the list is canonical.
-    candidates.push(legacy.trim());
-  }
   const roots: string[] = [];
   const missing: string[] = [];
-  for (const candidate of candidates) {
+  for (const candidate of stored) {
     const root = canonicalizeWorkspacePath(candidate);
     if (roots.includes(root) || missing.includes(root)) continue;
-    (existsSync(root) ? roots : missing).push(root);
+    const isFolder =
+      statSync(root, { throwIfNoEntry: false })?.isDirectory() ?? false;
+    (isFolder ? roots : missing).push(root);
   }
   const changed =
-    legacy !== undefined ||
     roots.length !== stored.length ||
     roots.some((root, index) => root !== stored[index]);
   if (changed) {
     await writeRememberedPapers(globalState, roots);
-  }
-  if (legacy !== undefined) {
-    await globalState.update(LEGACY_WORKSPACE_PATH_STATE_KEY, undefined);
   }
   return { roots, missing };
 }
@@ -186,6 +188,40 @@ export async function readRememberedDesktopPapers(
 const responseTextProcessing = createTexraResponseTextProcessing(
   agentResponseTextConnector,
 );
+
+/**
+ * Stop every run the paper still owns and wait for their drivers to settle
+ * them (CANCELLED, flow record preserved for a later resume), so the session
+ * is disposed with nothing executing under it: `ExecutionRegistry.dispose`
+ * clears its handles without interrupting them, and a run left driving after
+ * that would continue with no presentation and no stop control. Only roots
+ * are killed; the stop cascades into their children. Bounded: a run that has
+ * not settled by the deadline is named in the log and left to the host-exit
+ * drain, which settles it from its lease.
+ */
+async function stopPaperExecutions(
+  paper: Pick<DesktopPaper, 'root' | 'session'>,
+  warn: (message: string) => void,
+): Promise<void> {
+  const { executions } = paper.session;
+  await runInSession(paper.session, async () => {
+    for (const executionId of executions.getActiveIds()) {
+      if (executions.getHandle(executionId)?.isChildExecution) continue;
+      executions.kill(executionId, { detachActiveChildren: false });
+    }
+    const deadline = AbortSignal.timeout(CLOSE_SETTLE_TIMEOUT_MS);
+    for (;;) {
+      const active = executions.getActiveIds();
+      if (active.length === 0) return;
+      if ((await executions.waitForAnyChange(active, deadline)) === '') {
+        warn(
+          `Closing ${paper.root ?? 'the no-workspace session'} with ${active.length} stopped run(s) not settled after ${CLOSE_SETTLE_TIMEOUT_MS}ms (${active.join(', ')}); the exit drain settles them from their leases`,
+        );
+        return;
+      }
+    }
+  });
+}
 
 /**
  * Open one session over `roots`. The transcript store is opened in the
@@ -269,14 +305,14 @@ export async function openDesktopPaperRegistry(
 
   async function openPaper(root: string): Promise<DesktopPaper> {
     const storage = new WorkspaceStorageProvider(options.dataRoot, root);
-    const [workspaceState, configStores] = await Promise.all([
+    const [workspaceState, workspaceConfig] = await Promise.all([
       openNodeWorkspaceStateStore(storage),
-      openTexraConfigStores(storage, root, options.warn),
+      openTexraWorkspaceConfigStore(storage, root, options.warn),
     ]);
     const roots = createNodeWorkspaceRoots({
       workspacePath: root,
       storage,
-      config: configStores,
+      config: { workspace: workspaceConfig, global: options.globalConfigStore },
       workspaceState,
     });
     const paper = await openPaperSession(root, roots, options);
@@ -344,6 +380,7 @@ export async function openDesktopPaperRegistry(
         notify();
       }
       try {
+        await stopPaperExecutions(paper, options.warn);
         paper.dispose();
       } finally {
         await writeRememberedPapers(

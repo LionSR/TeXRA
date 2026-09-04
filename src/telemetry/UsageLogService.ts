@@ -6,6 +6,7 @@ import pTimeout from 'p-timeout';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { createLog } from '@logger/logUtils';
+import type { ConfigProvider } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import type { UsageRoute } from '@shared/schemas';
 import {
@@ -100,15 +101,18 @@ function isPlanAccounting(entry: Pick<UsageLogEntry, 'usageRoute'>): boolean {
  * drop optional rounds recorded before the opt-out rather than shipping one last
  * batch. `config.enabled` remains a separate, independent gate so a host (or a
  * test) can hold the service off regardless of user settings.
+ *
+ * `config` is the workspace's configuration the consent is read from: the
+ * calling context's by default, or the one captured with a queued entry.
  */
-function isTelemetryEnabledBySetting(): boolean {
+function isTelemetryEnabledBySetting(
+  config: ConfigProvider = workspaceRoots().config,
+): boolean {
   // Checked before the config read so the kill switch also holds on a host that
   // has not initialized its platform yet.
   if (isTelemetryDisabledByEnv()) return false;
 
-  const inspection = workspaceRoots().config.inspect<unknown>(
-    TELEMETRY_ENABLED_KEY,
-  );
+  const inspection = config.inspect<unknown>(TELEMETRY_ENABLED_KEY);
   const configuredValues = [
     inspection?.globalValue,
     inspection?.workspaceValue,
@@ -152,9 +156,27 @@ export function usageLoggingOptOut(): UsageLoggingOptOut {
   return isTelemetryEnabledBySetting() ? null : { source: 'setting' };
 }
 
+/**
+ * A queued entry with the configuration of the workspace it was recorded in.
+ * The flush runs on a timer or at shutdown, outside any run: re-reading
+ * consent from the ambient roots there would consult the process roots (on
+ * the desktop, the no-workspace session) instead of the paper that produced
+ * the entry, and miss that paper's opt-out.
+ */
+interface QueuedUsageEntry {
+  readonly entry: UsageLogEntry;
+  readonly config: ConfigProvider;
+}
+
+/** A batch that failed to send, kept with its consent sources for the retry. */
+interface RetryBatch {
+  readonly batchId: string;
+  readonly entries: readonly QueuedUsageEntry[];
+}
+
 class UsageLogServiceImpl {
-  private queue: UsageLogEntry[] = [];
-  private retryBatch: UsageLogBatch | null = null;
+  private queue: QueuedUsageEntry[] = [];
+  private retryBatch: RetryBatch | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
   private activeFlush: Promise<UsageLogFlushOutcome> | null = null;
   // Copied, never aliased: `dispose()` writes `config.enabled`, so a
@@ -188,7 +210,11 @@ class UsageLogServiceImpl {
     entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>,
   ): void {
     if (!this.config.enabled) return;
-    if (!isPlanAccounting(entry) && !isTelemetryEnabledBySetting()) return;
+    // The originating workspace: a run's session roots when called from a run.
+    const { config } = workspaceRoots();
+    if (!isPlanAccounting(entry) && !isTelemetryEnabledBySetting(config)) {
+      return;
+    }
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
       log.warn('Queue full, dropping oldest entry');
@@ -196,10 +222,13 @@ class UsageLogServiceImpl {
     }
 
     this.queue.push({
-      ...entry,
-      timestamp: new Date().toISOString(),
-      extensionVersion: this.extensionVersion,
-      editorType: this.editorType,
+      entry: {
+        ...entry,
+        timestamp: new Date().toISOString(),
+        extensionVersion: this.extensionVersion,
+        editorType: this.editorType,
+      },
+      config,
     });
     log.debug(`Queued usage entry (queue size: ${this.queue.length})`);
 
@@ -238,7 +267,7 @@ class UsageLogServiceImpl {
   }
 
   private async flushQueuedBatch(): Promise<UsageLogFlushOutcome> {
-    let batch: UsageLogBatch | null = null;
+    let batch: RetryBatch | null = null;
     try {
       const token = await SupabaseClient.getAccessToken();
       if (!token) {
@@ -260,32 +289,38 @@ class UsageLogServiceImpl {
         };
       }
 
-      // Re-read the setting here rather than on entry: the token lookup above is
-      // an await, so a user who opts out while it is in flight would otherwise
-      // have this continuation ship the batch anyway. Applied after the batch is
-      // taken so it also drops optional rounds queued before the opt-out instead
-      // of leaving the timer to send them.
-      if (!isTelemetryEnabledBySetting()) {
-        const kept = batch.entries.filter(isPlanAccounting);
-        const dropped = batch.entries.length - kept.length;
-        if (dropped > 0) {
-          log.debug(
-            `Usage logging is disabled; dropped ${dropped} optional ${dropped === 1 ? 'entry' : 'entries'} without sending`,
-          );
-        }
-        if (kept.length === 0) {
-          // ACCEPTED, not PENDING: these entries are gone for good, and PENDING
-          // means "kept for a later retry" to every caller that inspects it.
-          return USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
-        }
-        batch = { ...batch, entries: kept };
+      // Re-read each entry's consent here rather than on entry: the token
+      // lookup above is an await, so a user who opts out while it is in flight
+      // would otherwise have this continuation ship the batch anyway. Applied
+      // after the batch is taken so it also drops optional rounds queued
+      // before the opt-out instead of leaving the timer to send them, and read
+      // from the workspace each entry was recorded in, since this flush runs
+      // outside any run.
+      const kept = batch.entries.filter(
+        ({ entry, config }) =>
+          isPlanAccounting(entry) || isTelemetryEnabledBySetting(config),
+      );
+      const dropped = batch.entries.length - kept.length;
+      if (dropped > 0) {
+        log.debug(
+          `Usage logging is disabled; dropped ${dropped} optional ${dropped === 1 ? 'entry' : 'entries'} without sending`,
+        );
       }
+      if (kept.length === 0) {
+        // ACCEPTED, not PENDING: these entries are gone for good, and PENDING
+        // means "kept for a later retry" to every caller that inspects it.
+        return USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
+      }
+      batch = { ...batch, entries: kept };
 
       log.debug(
         `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
       );
 
-      const response = await this.sendBatch(batch, token);
+      const response = await this.sendBatch(
+        { batchId: batch.batchId, entries: kept.map(({ entry }) => entry) },
+        token,
+      );
       if (!response.success) {
         const message = response.error ?? 'Usage batch was rejected';
         if (response.retryable === false) {
@@ -310,7 +345,7 @@ class UsageLogServiceImpl {
     }
   }
 
-  private reportPermanentRejection(batch: UsageLogBatch, reason: string): void {
+  private reportPermanentRejection(batch: RetryBatch, reason: string): void {
     log.error(
       `Usage batch ${batch.batchId} was permanently rejected; discarded ${batch.entries.length} entries so later batches can continue`,
       {

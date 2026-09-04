@@ -55,7 +55,9 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
 }
 
 /**
- * Open the store backing the workspace config target.
+ * Open the store backing the workspace config target. The desktop opens one
+ * per paper beside the process-wide global store; single-workspace hosts go
+ * through {@link openTexraConfigStores}.
  *
  * `warn` reports why the project store could not be used: falling back to the
  * internal store is a degradation, so every host says so out loud rather than
@@ -67,7 +69,7 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
  * malformed JSON) fall back to the internal workspace store so settings stay
  * readable and writable — degraded, never fatal.
  */
-async function openTexraWorkspaceConfigStore(
+export async function openTexraWorkspaceConfigStore(
   storage: StorageProvider,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,

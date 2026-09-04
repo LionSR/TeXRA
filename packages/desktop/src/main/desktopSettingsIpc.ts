@@ -1,4 +1,4 @@
-import type { SessionHandle } from '@agent/runtime';
+import { runInSession, type SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
 import { storeCredential } from '@common/secrets/storeCredential';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
@@ -94,11 +94,12 @@ export interface DesktopSettingsIpcOptions {
   config: ConfigProvider;
   ui: DesktopSettingsUiHost;
   /**
-   * Process-owned session the desktop runs execute in. Goal mutations are
-   * emitted on it, so the Goals tab follows a run without a manual refresh.
-   * The desktop has no process-default session, so it must be passed.
+   * The session of the paper this settings surface serves. Goal mutations are
+   * emitted on it, so the Goals tab follows a run without a manual refresh,
+   * and app-signal listeners re-read the paper's state inside its scope. The
+   * desktop has no process-default session, so it must be passed.
    */
-  session: Pick<SessionHandle, 'events' | 'setApprovalPolicy'>;
+  session: SessionHandle;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
@@ -305,6 +306,15 @@ export function createDesktopSettingsIpc(
     void work.catch(onError);
   }
 
+  /**
+   * App signals run their listeners on the emitter's call stack, so a listener
+   * fired from a run in another paper would otherwise resolve `workspaceRoots()`
+   * to that paper. Every refresh a signal triggers runs in this paper's session.
+   */
+  function runAsyncInPaper(work: () => Promise<void>): void {
+    runAsync(Promise.resolve(runInSession(options.session, work)));
+  }
+
   applyCurrentGitAuthorSettings();
 
   // Agent runs execute in this same main process and the settings panel shares
@@ -369,12 +379,16 @@ export function createDesktopSettingsIpc(
   // showing, and until now the desktop only re-read it when the user asked.
   subscriptions.push(
     appSignals.on('githubSubscriptionsChanged', () =>
-      runAsync(postGitHubSubscriptions()),
+      runAsyncInPaper(postGitHubSubscriptions),
     ),
     // `apply_team` writes the roster straight from the setup agent, so the
-    // open view is showing agents and a team it just replaced.
+    // open view is showing agents and a team it just replaced. The signal
+    // comes from whichever paper's run applied the team; the catalog is
+    // rebuilt from this paper's presets, not the emitter's.
     appSignals.on('agentRosterChanged', () =>
-      runAsync(options.agentSettingsController.refreshCatalogData()),
+      runAsyncInPaper(() =>
+        options.agentSettingsController.refreshCatalogData(),
+      ),
     ),
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: `resolveGitHubTokenSource` reports only
