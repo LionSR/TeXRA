@@ -242,8 +242,12 @@ chunks, and `local` do (8.1). Every type that _is_ on the wire uses arrays
 and records, so nothing depends on a `Map` surviving `JSON.stringify`; the
 same rule governs the persisted `Surface` (9).
 
-Two aggregates, one key shape. The event key is `(aggregate_id, seq)`.
-Run-scoped facts use the stream as their aggregate; session-scoped facts -
+Three aggregate kinds, one key shape (contract C2). The event key is
+`(aggregate_id, seq)`. Run-scoped trace facts use the stream as their
+aggregate; the agent runtime's flow rows (`2026-09-04-agent-runtime-on-effect.md`
+section 2.1: `model.message`, `tool.intent`, `flow.step`, `flow.snapshot`,
+...) use the execution, with the execution-to-stream edge on `run.start`;
+session-scoped facts -
 `queuedFollowUps`, `inquiries`, `stream.removed` (today's `stream.removed` fact, C9), and any fact without a
 stream id - use **one session aggregate** per paper. `SessionView` reads
 its session-scoped fields from that aggregate, never from a stream, and
