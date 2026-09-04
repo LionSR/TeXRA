@@ -120,10 +120,14 @@ Re-confirmed at HEAD as a **shipped, multi-implementor SPI, not a design task**:
 `ChildRunStrategy<TTurn>` + `ChildRunPorts` (`src/agent/runtime/childRunLoop.ts`
 `:168` and `:105`) — a deep module with a narrow turn-based interface, driven by
 independent production implementations, which live under `src/tools/delegation/`
-and `src/tools/`, not `src/agent/runtime/`: four strategy constructors, each
-returning a `ChildRunStrategy<…>` — `nativeSubagentStrategy.ts` (`:207`),
-`workflowScriptStrategy.ts` (`:157`), the background-bash strategy in `bash.ts`
-(`:249`), and the shared external-CLI loop in `agentCliShared.ts` (`:515`).
+and `src/tools/`, not `src/agent/runtime/`: **four strategy-construction sites**
+— three factory functions that _return_ a `ChildRunStrategy<…>`
+(`nativeSubagentStrategy.ts` `:207`, `workflowScriptStrategy.ts` `:157`, and the
+background-bash strategy in `bash.ts` `:249`), plus one built inline inside the
+external-CLI loop entrypoint `startAgentCliLoop` (`agentCliShared.ts:515`, a
+`void`-returning function `:463` that constructs the typed strategy locally and
+hands it straight to `startChildRunLoop`, rather than returning it). The
+four-implementor conclusion holds; only the shape of the fourth site differs.
 (`detachedChildRun.ts` is **not** a fifth implementor — it is detached-execution
 choreography that forwards a caller-supplied `strategy` to the loop, so it is
 excluded from this count.) The **two named SPI interfaces did not change** in this
@@ -145,19 +149,27 @@ stays open **correctly**: closing it is interactive-UI design work (the
 `AgentCreatorUI`/approval channel the public `HostInteractions` deliberately
 lacks), not a mechanical move.
 
-## 5. Remaining open items — carried forward from `-09-03`, none a defect
+## 5. Remaining open items — one closed this interval, the rest carried forward, none a defect
 
-Unchanged and design-gated; not restated in full. In brief: (1) `IModelHandler`
-is a hand-maintained `Pick<ModelHandler<…>>` — the correct anti-drift choice
-internally, a manifest-design note for a public SDK; (2) the provider-SDK type
-leak (`M`/`T`) is the floor on `agent`'s 7 specifiers; (3) logger + telemetry are
-process-global singletons whose SDK-correct unlock (injectable owners behind
-Tier-1 doors) is designed for logging, unspecified for usage/telemetry;
-(4) the two open Tier-1 leaf surfaces still to be fronted behind existing doors
-(`agentCreatorFlow`, `core/state`) remain leaf surfaces, not members of the eight
-named doors (all present with `index.ts`); (5) `HostInteractions`
-required/optional is an open maintainer contract decision;
-(6) result-taxonomy documentation; (7) publication remains gated on the
+Design-gated; not restated in full. **One item closed in this interval:** the
+former (6) result-taxonomy documentation — `733b8a4` landed it on the published
+SDK surface. `packages/agent/README.md:58-80` now documents the single
+`AgentFlowResult` (discriminated on `category`), why the non-terminal `WAITING`
+shape is deliberately unexported and never resolves `result`, and why the
+normalized `cost` breakdown and per-file `diffs` stay internal while the contract
+exposes only the coarse `totalCostUsd`; the commit message records
+`agent-sdk-readiness:S6` complete. This is a readiness advance, not a regression.
+
+The rest carry forward unchanged: (1) `IModelHandler` is a hand-maintained
+`Pick<ModelHandler<…>>` — the correct anti-drift choice internally, a
+manifest-design note for a public SDK; (2) the provider-SDK type leak (`M`/`T`)
+is the floor on `agent`'s 7 specifiers; (3) logger + telemetry are process-global
+singletons whose SDK-correct unlock (injectable owners behind Tier-1 doors) is
+designed for logging, unspecified for usage/telemetry; (4) the two open Tier-1
+leaf surfaces still to be fronted behind existing doors (`agentCreatorFlow`,
+`core/state`) remain leaf surfaces, not members of the eight named doors (all
+present with `index.ts`); (5) `HostInteractions` required/optional is an open
+maintainer contract decision; (7) publication remains gated on the
 named-external-consumer hold.
 
 ## 6. Bottom line
