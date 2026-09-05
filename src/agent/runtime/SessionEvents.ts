@@ -139,11 +139,15 @@ export class SessionEventLog extends Context.Service<
     readonly level: SubscriptionRef.SubscriptionRef<CommitOrdinal>;
     /** Assign each draft its aggregate seq and commit ordinal, append it
      *  under the log's permit, and move the level; returns the last ordinal.
-     *  `at` is the publish clock (C1, informational) unless the caller
-     *  names the moment its rows describe, as the pre-cutover history
-     *  import does. */
+     *  `at` is the publish clock (C1, informational) unless a draft names
+     *  the moment its row describes, as the pre-cutover history import
+     *  does per stream. One call is one permit, one array walk with no
+     *  fiber step per row, and one level move, whatever its length: the
+     *  synchronous graph open (`sessionGraphOpener`) appends the whole
+     *  history in one call and must stay under the scheduler's yield
+     *  budget. */
     readonly appendAll: (
-      drafts: readonly SessionEventDraft[],
+      drafts: ReadonlyArray<SessionEventDraft & { readonly at?: number }>,
       at?: number,
     ) => Effect.Effect<CommitOrdinal>;
     readonly readAll: (
@@ -226,6 +230,7 @@ export class SessionEventLog extends Context.Service<
                   for (const draft of drafts) {
                     const commit = rows.length + 1;
                     const seq = nextSeq(draft.aggregateId);
+                    const rowAt = draft.at ?? at;
                     if (draft.type === 'transcript.entry') {
                       rows.push({
                         type: 'transcript.ref',
@@ -233,7 +238,7 @@ export class SessionEventLog extends Context.Service<
                         entryId: draft.entry.id,
                         seq,
                         commit,
-                        at,
+                        at: rowAt,
                       });
                       continue;
                     }
@@ -245,7 +250,7 @@ export class SessionEventLog extends Context.Service<
                       seq,
                       commit,
                       ownerId: identity.ownerId,
-                      at,
+                      at: rowAt,
                     } as SessionEvent);
                   }
                   const last = rows.length;
