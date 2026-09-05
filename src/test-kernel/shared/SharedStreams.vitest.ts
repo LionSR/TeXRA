@@ -16,7 +16,6 @@ import {
   formatStageLabel,
   formatStreamStatusLabel,
   progressHeaderStatus,
-  streamStatusIndicatorClass,
   type StreamStatusLabelStyle,
 } from '@shared/streams/streamStatusDisplay';
 
@@ -198,25 +197,19 @@ describe('stream status display labels', () => {
       }),
     ).toBe('resuming');
     expect(
-      streamStatusIndicatorClass(
-        STREAM_PHASE.RUNNING,
-        STREAM_SUBSTATE.RESUMING,
-      ),
-    ).toBe('is-resuming');
+      progressHeaderStatus(STREAM_PHASE.RUNNING, STREAM_SUBSTATE.RESUMING)
+        .displayKey,
+    ).toBe('resuming');
   });
 
   it.each([
-    [STREAM_PHASE.RUNNING, STREAM_PHASE.RUNNING, 'is-running'],
-    [STREAM_PHASE.COMPLETED, STREAM_PHASE.COMPLETED, 'is-completed'],
-    [STREAM_PHASE.CANCELLED, STREAM_PHASE.CANCELLED, 'is-cancelled'],
-    [STREAM_PHASE.FAILED, STREAM_PHASE.FAILED, 'is-failed'],
-    [STREAM_PHASE.WAITING, STREAM_PHASE.WAITING, 'is-waiting'],
-    [STREAM_STATUS.READY, 'ready', 'is-ready'],
-  ] as const)(
-    'maps lifecycle status %s to display key %s and class %s',
-    (status, key, className) => {
-      expect(progressHeaderStatus(status).displayKey).toBe(key);
-      expect(streamStatusIndicatorClass(status)).toBe(className);
-    },
-  );
+    [STREAM_PHASE.RUNNING, STREAM_PHASE.RUNNING],
+    [STREAM_PHASE.COMPLETED, STREAM_PHASE.COMPLETED],
+    [STREAM_PHASE.CANCELLED, STREAM_PHASE.CANCELLED],
+    [STREAM_PHASE.FAILED, STREAM_PHASE.FAILED],
+    [STREAM_PHASE.WAITING, STREAM_PHASE.WAITING],
+    [STREAM_STATUS.READY, 'ready'],
+  ] as const)('maps lifecycle status %s to display key %s', (status, key) => {
+    expect(progressHeaderStatus(status).displayKey).toBe(key);
+  });
 });

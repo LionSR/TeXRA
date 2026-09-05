@@ -6,10 +6,8 @@ import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLif
 import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
 import {
   appState,
-  phaseStages$,
   resetProgressState,
   setStreamStateForId,
-  topLevelStreams$,
 } from '@progressView/frontend/progressState';
 import {
   createInitialState,
@@ -212,29 +210,6 @@ describe('stream meta frontend state', () => {
       });
       expect(getState().streamStates.get(streamId)).toMatchObject({ goal });
     }
-  });
-
-  it('excludes child streams from the top-level stream list', () => {
-    const workflowId = 'workflow' as StreamTabId;
-    const toolUseId = 'tool-use' as StreamTabId;
-    const childId = 'child' as StreamTabId;
-    const state = createInitialState();
-    registerStream(state, workflowId);
-    registerStream(state, toolUseId, {
-      agentCategory: AgentCategory.ToolUse,
-      creationTimestamp: 2,
-    });
-    registerStream(state, childId, {
-      agentCategory: AgentCategory.ToolUse,
-      creationTimestamp: 3,
-      parentStreamId: workflowId,
-    });
-    seedState(state);
-
-    expect(topLevelStreams$.get().map((stream) => stream.name)).toEqual([
-      workflowId,
-      toolUseId,
-    ]);
   });
 
   it('patches one stream metadata record without replacing siblings', () => {
@@ -504,60 +479,6 @@ describe('stream meta frontend state', () => {
 
     dispatch(streamLifecycleHandlers, metadataPatchMessage(streamId, null));
     expect(getState().streamStates.get(streamId)?.stage).toBeUndefined();
-  });
-
-  it('keeps the phase-stage projection stable across unrelated stream ticks', () => {
-    const streamId = 'stream-a' as StreamTabId;
-    const otherId = 'stream-b' as StreamTabId;
-    const state = createInitialState();
-    registerStream(state, streamId);
-    registerStream(state, otherId);
-    state.streamStates.set(
-      streamId,
-      createStreamState(AgentCategory.Workflow, {
-        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
-      } satisfies Partial<StreamState>),
-    );
-    seedState(state);
-
-    const initial = phaseStages$.get();
-    expect(initial.get(streamId)).toEqual({
-      kind: 'phase',
-      label: 'Reduce',
-      index: 1,
-      total: 3,
-    });
-
-    // An unrelated stream's progress tick rebuilds streamStates, so the
-    // projection recomputes — but its identity must not change, or every
-    // consumer re-renders on a tick that touched no phase.
-    setStreamStateForId(otherId, (prev) => ({
-      ...prev,
-      conversationProgress: { toolCallCount: 7 },
-    }));
-    expect(phaseStages$.get()).toBe(initial);
-
-    // A real phase advance does change identity.
-    setStreamStateForId(streamId, (prev) => ({
-      ...prev,
-      stage: { kind: 'phase', label: 'Publish', index: 2, total: 3 },
-    }));
-    const advanced = phaseStages$.get();
-    expect(advanced).not.toBe(initial);
-    expect(advanced.get(streamId)).toEqual({
-      kind: 'phase',
-      label: 'Publish',
-      index: 2,
-      total: 3,
-    });
-
-    // A structurally identical value arriving as a fresh object (every
-    // metadata patch that crosses postMessage) must not count as a change.
-    setStreamStateForId(streamId, (prev) => ({
-      ...prev,
-      stage: { kind: 'phase', label: 'Publish', index: 2, total: 3 },
-    }));
-    expect(phaseStages$.get()).toBe(advanced);
   });
 
   it('clears the stage slot when synced content explicitly clears it', () => {

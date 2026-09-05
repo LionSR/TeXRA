@@ -8,8 +8,8 @@
  * the root as `surface-action` events. The docked list of the wide editor
  * tab is the same body inside `<progress-app>`, never this element.
  */
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { LitElement, css, html, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -42,7 +42,7 @@ export class SessionDrawer extends LitElement {
       .scrim {
         position: absolute;
         inset: 0;
-        background: rgb(0 0 0 / 0.18);
+        background: var(--wa-color-overlay-modal);
       }
 
       .panel {
@@ -57,7 +57,7 @@ export class SessionDrawer extends LitElement {
         color: var(--wa-color-text-normal);
         border-inline-end: var(--border-thin) solid
           var(--wa-color-surface-border);
-        box-shadow: var(--wa-shadow-l, 8px 0 24px rgb(0 0 0 / 0.08));
+        box-shadow: var(--wa-shadow-l);
       }
 
       .drawer-header {
@@ -117,23 +117,10 @@ export class SessionDrawer extends LitElement {
   @property({ attribute: false }) surface: Surface | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
 
-  /** The search field is shown once asked for; it dies with the drawer,
-   *  the way `Surface.search` itself is never persisted. */
-  @state() private searchOpen = false;
-
   private close = (): void => {
     this.dispatchEvent(
       SessionUiEvents.surface({ kind: 'drawer', open: false }),
     );
-  };
-
-  private toggleSearch = (): void => {
-    if (this.searchOpen && this.surface?.search) {
-      this.dispatchEvent(
-        SessionUiEvents.surface({ kind: 'search', value: '' }),
-      );
-    }
-    this.searchOpen = !this.searchOpen;
   };
 
   private handleSearchInput = (event: Event): void => {
@@ -151,21 +138,12 @@ export class SessionDrawer extends LitElement {
 
   override render(): TemplateResult {
     const search = this.surface?.search ?? '';
-    const searchOpen = this.searchOpen || search !== '';
     const inEditor = this.host?.placement === 'editor';
     return html`
       <div class="scrim" @click=${this.close}></div>
       <div class="panel" role="dialog" aria-label="Sessions">
         <div class="drawer-header">
           <span class="drawer-title">${this.host?.paper.name ?? ''}</span>
-          ${renderIconActionButton({
-            id: 'drawer-search',
-            icon: 'magnifying-glass',
-            label: 'Search sessions',
-            tooltip: 'Search sessions',
-            pressed: searchOpen,
-            onClick: this.toggleSearch,
-          })}
           ${renderIconActionButton({
             id: 'drawer-close',
             icon: 'xmark',
@@ -174,21 +152,16 @@ export class SessionDrawer extends LitElement {
             onClick: this.close,
           })}
         </div>
-        ${
-          searchOpen
-            ? html`<div class="drawer-search">
-                <wa-input
-                  size="small"
-                  placeholder="Filter sessions"
-                  autofocus
-                  .value=${live(search)}
-                  @input=${this.handleSearchInput}
-                >
-                  ${waIcon('magnifying-glass', { slot: 'start' })}
-                </wa-input>
-              </div>`
-            : nothing
-        }
+        <div class="drawer-search">
+          <wa-input
+            size="small"
+            placeholder="Filter sessions"
+            .value=${live(search)}
+            @input=${this.handleSearchInput}
+          >
+            ${waIcon('magnifying-glass', { slot: 'start' })}
+          </wa-input>
+        </div>
         <div class="drawer-body">
           <stream-tabs
             sections

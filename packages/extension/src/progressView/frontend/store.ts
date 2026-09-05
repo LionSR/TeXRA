@@ -77,15 +77,6 @@ function createEmptyStreamLogs(): StreamLogs {
   };
 }
 
-/**
- * Stable empty fallback for read paths (e.g. `activeStreamLogs$`) that need a
- * value before any log has arrived for a stream. Never mutated in place —
- * writers always replace the map entry with a fresh object (see
- * `ensureStreamState` and `logSlice.ts`), so sharing this single reference
- * across reads is safe.
- */
-export const EMPTY_STREAM_LOGS: StreamLogs = createEmptyStreamLogs();
-
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
   /** Reversible user intent awaiting backend hydration and confirmation. */

@@ -303,12 +303,21 @@ export class RequestPanels extends LitElement {
     if (permissions.length === 0) return nothing;
 
     const armedKey = this.armedPermissionKey();
+    // A workflow-script proposal (W0) is its own card, headed by what it
+    // proposes; the kind heading is for the sections whose cards need it.
+    const headless = permissions.every(
+      (permission) =>
+        permission.kind === PERMISSION_KIND.PROPOSAL &&
+        'workflowScript' in permission.data &&
+        permission.data.workflowScript !== undefined,
+    );
     return html`
       <section
         class=${config.cssClass}
-        aria-labelledby="${config.cssClass}-heading"
+        aria-labelledby=${headless ? nothing : `${config.cssClass}-heading`}
+        aria-label=${headless ? config.title : nothing}
       >
-        ${this.renderSectionHeader(config)}
+        ${headless ? nothing : this.renderSectionHeader(config)}
         <div class="${config.cssClass}__list">
           ${repeat(
             permissions,

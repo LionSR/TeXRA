@@ -18,6 +18,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -26,6 +27,7 @@ import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
@@ -45,6 +47,7 @@ import { getBasename } from '@utils/core';
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
 import { dispatchMessage } from './messageDispatcher';
+import { resetProgressState } from './progressState';
 import './components/StreamTabs';
 import './components/StreamConversation';
 import './components/SessionComposer';
@@ -92,6 +95,13 @@ export class ProgressApp extends ProgressAppBase {
   @property({ attribute: false }) host: HostSnapshot | null = null;
   /** The host's clock, for elapsed readings (G4). */
   @property({ type: Number }) nowMs: number | null = null;
+
+  constructor() {
+    super();
+    // The message sink is module-scoped; a fresh app starts it from a
+    // clean slate (a remount in the same JS context: tests, hot reload).
+    resetProgressState();
+  }
 
   protected override handleMessage(raw: unknown): void {
     dispatchMessage(raw, (error) => {
@@ -173,7 +183,7 @@ export class ProgressApp extends ProgressAppBase {
       >
         ${this.renderHeader(stream, host, surface)}
         <div class="shell-body">
-          ${docked ? this.renderDockedList(view, surface, host) : nothing}
+          ${docked ? this.renderDockedList(view, surface) : nothing}
           <main class="reading">
             ${
               stream
@@ -218,51 +228,68 @@ export class ProgressApp extends ProgressAppBase {
       stream !== null &&
       !stream.readOnly &&
       (stream.group === 'running' || stream.group === 'waiting');
+    // One 38px row. Docked wide (the editor tab past 720px), the row is a
+    // 300px + 1fr grid: the dock cell carries the paper name and New task,
+    // the reading cell the stream's actions; the sidebar and the narrow tab
+    // show the sessions button and the title in one cell.
     return html`
       <header class="shell-header">
-        ${renderIconActionButton({
-          id: 'shell-sessions',
-          icon: 'list-ul',
-          label: 'Sessions',
-          tooltip: 'Sessions',
-          className: 'sessions-button',
-          pressed: surface.drawerOpen,
-          onClick: this.toggleDrawer,
-        })}
-        <span class="shell-title"
-          >${stream ? host.paper.name : 'New task'}</span
-        >
-        <span class="spacer"></span>
-        ${
-          canStop
-            ? renderIconActionButton({
-                id: 'shell-stop',
-                icon: 'circle-stop',
-                label: 'Stop',
-                tooltip: 'Stop',
-                className: 'stop-button',
-                onClick: () => this.stopStream(stream),
-              })
-            : nothing
-        }
-        ${renderIconActionButton({
-          id: 'shell-new-task',
-          icon: 'plus',
-          label: 'New task',
-          tooltip: 'New task',
-          onClick: this.selectNew,
-        })}
-        ${
-          stream
-            ? this.renderOverflow(stream, host)
-            : renderIconActionButton({
-                id: 'shell-dashboard',
-                icon: 'gear',
-                label: 'Open dashboard',
-                tooltip: 'Open dashboard',
-                onClick: this.openDashboard,
-              })
-        }
+        <div class="header-dock">
+          <span class="shell-title">${host.paper.name}</span>
+          <span class="spacer"></span>
+          ${renderIconActionButton({
+            id: 'dock-new-task',
+            icon: 'plus',
+            label: 'New task',
+            tooltip: 'New task',
+            onClick: this.selectNew,
+          })}
+        </div>
+        <div class="header-main">
+          ${renderIconActionButton({
+            id: 'shell-sessions',
+            icon: 'list-ul',
+            label: 'Sessions',
+            tooltip: 'Sessions',
+            className: 'sessions-button',
+            pressed: surface.drawerOpen,
+            onClick: this.toggleDrawer,
+          })}
+          <span class="shell-title header-main-title"
+            >${stream ? host.paper.name : 'New task'}</span
+          >
+          <span class="spacer"></span>
+          ${
+            canStop
+              ? renderIconActionButton({
+                  id: 'shell-stop',
+                  icon: 'circle-stop',
+                  label: 'Stop',
+                  tooltip: 'Stop',
+                  className: 'stop-button',
+                  onClick: () => this.stopStream(stream),
+                })
+              : nothing
+          }
+          ${renderIconActionButton({
+            id: 'shell-new-task',
+            icon: 'plus',
+            label: 'New task',
+            tooltip: 'New task',
+            onClick: this.selectNew,
+          })}
+          ${
+            stream
+              ? this.renderOverflow(stream, host)
+              : renderIconActionButton({
+                  id: 'shell-dashboard',
+                  icon: 'gear',
+                  label: 'Open dashboard',
+                  tooltip: 'Open dashboard',
+                  onClick: this.openDashboard,
+                })
+          }
+        </div>
       </header>
     `;
   }
@@ -334,34 +361,29 @@ export class ProgressApp extends ProgressAppBase {
     `;
   }
 
-  /** The wide editor tab's left column: the drawer body, docked. */
+  private handleSearchInput = (event: Event): void => {
+    const value = (event.target as HTMLInputElement).value;
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'search', value }));
+  };
+
+  /** The wide editor tab's left column: the drawer body, docked. Its
+   *  header is the shell header's dock cell; the filter sits above the
+   *  list, bound to `Surface.search` like the drawer's. */
   private renderDockedList(
     view: SessionView,
     surface: Surface,
-    host: HostSnapshot,
   ): TemplateResult {
     return html`
       <aside class="dock" aria-label="Sessions">
-        <div class="dock-header">
-          <span class="dock-title">${host.paper.name}</span>
-          ${renderIconActionButton({
-            id: 'dock-search',
-            icon: 'magnifying-glass',
-            label: 'Search sessions',
-            tooltip: 'Search sessions',
-            pressed: surface.search !== '',
-            onClick: () =>
-              this.dispatchEvent(
-                SessionUiEvents.surface({ kind: 'search', value: '' }),
-              ),
-          })}
-          ${renderIconActionButton({
-            id: 'dock-new-task',
-            icon: 'plus',
-            label: 'New task',
-            tooltip: 'New task',
-            onClick: this.selectNew,
-          })}
+        <div class="dock-search">
+          <wa-input
+            size="small"
+            placeholder="Filter sessions"
+            .value=${live(surface.search)}
+            @input=${this.handleSearchInput}
+          >
+            ${waIcon('magnifying-glass', { slot: 'start' })}
+          </wa-input>
         </div>
         <stream-tabs sections .view=${view} .surface=${surface}></stream-tabs>
       </aside>
@@ -377,9 +399,8 @@ export class ProgressApp extends ProgressAppBase {
     const selectedFiles = host.fileConfigs.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
-    const activeNow = view.order.some(
-      (id) => view.streams.get(id)?.group !== 'recent',
-    );
+    const { rollup } = view;
+    const activeNow = rollup.running + rollup.waiting + rollup.interrupted > 0;
     return html`
       <div class="empty">
         <div class="hero-wrap">

@@ -29,26 +29,18 @@ import {
   handleStreamSwitch,
   handleToolbarCommand,
   runCompileFixer,
-  requestStreamDeselection,
 } from '@progressView/frontend/eventHandlers';
-import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
-import {
-  appState,
-  childStreamsByParent$,
-  displayedActiveStreamId$,
-  pendingApprovalIds$,
-  topLevelStreams$,
-} from '@progressView/frontend/progressState';
+import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { COMMON_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
-
-import { Signal, subscribeToSignalChanges } from '@shared/signals';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
-import { emptySessionView } from '@shared/session/sessionView';
+import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type { SessionView } from '@shared/session/sessionView';
 import { applyShellAction, type Shell } from '@shared/session/shell';
-import { emptySurface } from '@shared/session/surface';
+import type { Surface } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 
@@ -175,17 +167,45 @@ const hasWorkspace = () => !papersKnown || activePaperRoot !== undefined;
 // Which papers are open and which one this window shows, as the rail reads
 // it; the collapsed set is the rail's own fold state.
 let shell: Shell = { active: '', open: [], collapsed: [], search: '' };
-// One SessionView and Surface per open paper. Until the session fold reaches
-// this renderer (lane 4) and one view per paper exists (lane 6), every paper
-// carries the empty view: the rail's shape is final, its data is not yet.
+
+/** One session per open paper: its fold and its surface, keyed by root. */
+interface PaperSession {
+  readonly view: SessionView;
+  readonly surface: Surface;
+}
+// The one seam between the session fold and this renderer: the rail, the
+// conversation shell, the palette, and the chrome all read these two records
+// and nothing else, and `setSessions` is the only writer. The session fold
+// (lane 4) calls it with one view and surface per paper and the host
+// snapshot; until then it runs once, empty, at bootstrap, so the shell's
+// shape is final while its data is not yet.
+let sessions: ReadonlyMap<string, PaperSession> = new Map();
+let hostSnapshot: HostSnapshot | null = null;
+function setSessions(
+  next: ReadonlyMap<string, PaperSession>,
+  host: HostSnapshot | null,
+): void {
+  sessions = next;
+  hostSnapshot = host;
+  rerenderShell();
+}
+// A paper with no session yet is not listed: the rail shows what is known.
 const railPapers = (): RailPaper[] =>
-  openPapers.map((paper) => ({
-    display: paperDisplay(paper),
-    view: emptySessionView(paper.root),
-    surface: emptySurface(paper.root),
-  }));
+  openPapers.flatMap((paper) => {
+    const session = sessions.get(paper.root);
+    return session ? [{ display: paperDisplay(paper), ...session }] : [];
+  });
 const activeRailPaper = (papers: readonly RailPaper[]) =>
   papers.find((paper) => paper.display.key === shell.active);
+/** The active paper's streams in rail order, for the palette. */
+const activeStreams = () => {
+  const active = activeRailPaper(railPapers());
+  if (!active) return [];
+  return active.view.order.flatMap((id) => {
+    const stream = active.view.streams.get(id);
+    return stream ? [stream] : [];
+  });
+};
 const rendererPlatform = getRendererPlatform(document.defaultView);
 document.body.dataset.desktopPlatform = rendererPlatform;
 const desktopMenuEntries = getDesktopCommandMenuEntries(rendererPlatform);
@@ -310,8 +330,9 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 }
 
 // The one conversation shell both hosts render: its empty state is the
-// launcher, its conversation branch the selected stream.
-const conversationView: HTMLElement = document.createElement('progress-app');
+// launcher, its conversation branch the selected stream. `rerenderShell`
+// hands it the active paper's session.
+const conversationView = document.createElement('progress-app') as ProgressApp;
 conversationView.setAttribute('data-desktop-view', 'progress');
 
 const settingsView: HTMLElement = document.createElement('settings-app');
@@ -403,10 +424,7 @@ const workbench = createWorkbenchController({
 const environmentPopover = createEnvironmentPopover({
   getWorkbenchTabs: () => shellState.workbenchTabs,
   getChildStreamCount: () =>
-    [...childStreamsByParent$.get().values()].reduce(
-      (total, children) => total + children.length,
-      0,
-    ),
+    activeStreams().reduce((total, stream) => total + stream.rollup.total, 0),
   postMessage,
 });
 
@@ -419,7 +437,7 @@ function taskConversationTemplate(): TemplateResult {
   // call held at the approval gate — often on a workflow's child stream, not
   // the one on screen — can stall with zero visible affordance (#11511).
   // Surface the same signal on the toggle that reopens the rail.
-  const hasPendingApproval = pendingApprovalIds$.get().size > 0;
+  const hasPendingApproval = (activePaper?.view.rollup.waiting ?? 0) > 0;
   const sidebarCollapsedWithPendingApproval =
     shellState.sidebarCollapsed && hasPendingApproval;
   let sidebarToggleLabel = shellState.sidebarCollapsed
@@ -759,9 +777,10 @@ let sidebarRevealedForApprovalIds = new Set<string>();
  * recursing into another render pass.
  */
 function revealSidebarForOffScreenApproval(): void {
-  const offScreen = [...pendingApprovalIds$.get()].filter(
-    (id) => id !== displayedActiveStreamId$.get(),
-  );
+  const active = activeRailPaper(railPapers());
+  const offScreen = (active?.view.approvals ?? [])
+    .map((approval) => approval.streamId)
+    .filter((id) => id !== active?.surface.selected);
   if (offScreen.length === 0) {
     sidebarRevealedForApprovalIds = new Set();
     return;
@@ -778,6 +797,11 @@ function revealSidebarForOffScreenApproval(): void {
 function rerenderShell(): void {
   if (bootstrapFailed) return;
   revealSidebarForOffScreenApproval();
+  const active = activeRailPaper(railPapers());
+  conversationView.view = active?.view ?? null;
+  conversationView.surface = active?.surface ?? null;
+  conversationView.host = hostSnapshot;
+  conversationView.nowMs = Date.now();
   render(shellTemplate(), appRoot);
   logsController.setActive(
     activeWorkbenchTab(shellState, 'right')?.kind === 'logs' ||
@@ -831,11 +855,9 @@ function recoverFromBootstrapFallback(): void {
     bootstrapFailed = false;
     bootstrapComplete = false;
     logsController.rerenderViewer();
-    rerenderShell();
-    // Recovery must install the signal watcher and then redo the whole normal
-    // bootstrap tail. Without these the recovered shell renders but stays
-    // inert (rail clicks ignored, signal changes don't trigger rerenders).
-    installShellSignalWatcher();
+    setSessions(sessions, hostSnapshot);
+    // Recovery redoes the whole normal bootstrap tail; without it the
+    // recovered shell renders but stays inert (rail clicks ignored).
     completeBootstrap();
   } catch (recoveryError) {
     console.error('TeXRA desktop renderer recovery failed', recoveryError);
@@ -845,34 +867,8 @@ function recoverFromBootstrapFallback(): void {
 }
 
 // =============================================================================
-// Signal watcher + bootstrap
+// Bootstrap
 // =============================================================================
-
-let shellWatcherInstalled = false;
-
-function installShellSignalWatcher(): void {
-  if (shellWatcherInstalled) return;
-  shellWatcherInstalled = true;
-  // Subscribe to the module-level progress signals the chrome still reads
-  // (the pending-approval cue, the environment popover's counts, the
-  // palette's stream list) so they stay live until the session fold feeds
-  // the shell. `subscribeToSignalChanges` wraps the same
-  // `Signal.subtle.Watcher` that `SignalWatcher(LitElement)` uses
-  // internally, coalescing synchronous signal writes into one
-  // microtask-scheduled re-render.
-  const shellDeps = new Signal.Computed(() => {
-    displayedActiveStreamId$.get();
-    topLevelStreams$.get();
-    pendingApprovalIds$.get();
-    childStreamsByParent$.get();
-    return Date.now();
-  });
-  subscribeToSignalChanges([shellDeps], rerenderShell);
-  // Prime the dependency graph so the watcher knows what to listen for: an
-  // unevaluated computed has no dependency set, so watching it alone would
-  // never fire.
-  shellDeps.get();
-}
 
 let bootstrapFailed = false;
 let bootstrapComplete = false;
@@ -889,8 +885,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 try {
   logsController.rerenderViewer();
-  rerenderShell();
-  installShellSignalWatcher();
+  setSessions(sessions, hostSnapshot);
 } catch (error) {
   bootstrapFailed = true;
   console.error('TeXRA desktop renderer bootstrap failed', error);
@@ -981,7 +976,9 @@ function openCommandPalette(): void {
 
 // Clear the active stream so the conversation shell shows its empty state.
 function returnToLauncher(): void {
-  requestStreamDeselection();
+  conversationView.dispatchEvent(
+    SessionUiEvents.surface({ kind: 'selectNew' }),
+  );
 }
 
 const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
@@ -1074,14 +1071,12 @@ const MESSAGE_ROUTES = createMessageRoutes({
   },
 });
 
+// Every other message is the progress view's: the mounted <progress-app>
+// is its one sink (BaseWebviewApp's window listener).
 window.addEventListener('message', (event) => {
   for (const route of MESSAGE_ROUTES) {
     if (route(event.data)) return;
   }
-  // Progress view messages dispatch directly into the shared
-  // messageDispatcher, with no <progress-app> mounted for plumbing.
-  // dispatchMessage validates internally and no-ops on a parse failure.
-  dispatchMessage(event.data);
 });
 
 // Keep the embedded browser aligned when the window resizes: its view is

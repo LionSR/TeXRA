@@ -79,6 +79,8 @@ export abstract class BaseApprovalPanel<
     prefix: string;
     details: TemplateResult;
     approveTitle: string;
+    /** Visible text of the approve button; 'Approve' unless given. */
+    approveLabel?: string;
     rejectTitle: string;
     leadingActions?: TemplateResult | typeof nothing;
     middleActions?: TemplateResult | typeof nothing;
@@ -95,7 +97,7 @@ export abstract class BaseApprovalPanel<
         <div class="${prefix}__details">${options.details}</div>
         <div class="${prefix}__actions">
           ${options.leadingActions ?? nothing}
-          ${this.renderApproveButton(options.approveTitle)}
+          ${this.renderApproveButton(options.approveTitle, options.approveLabel)}
           ${options.middleActions ?? nothing}
           ${this.renderRejectButton(options.rejectTitle)}
           ${options.trailingActions ?? nothing}
@@ -113,7 +115,10 @@ export abstract class BaseApprovalPanel<
    * wiring of every run-scoped menu item. Subclasses configure which items
    * surface via the overridable members above; none re-template this markup.
    */
-  protected renderApproveButton(approveTitle: string): TemplateResult {
+  protected renderApproveButton(
+    approveTitle: string,
+    approveLabel = 'Approve',
+  ): TemplateResult {
     // Rejection feedback is a distinct decision mode. Keep the one-off
     // Approve action available so the user can change course, but hide the
     // conflicting run-scoped grants just as handleKeyboardShortcut blocks
@@ -122,6 +127,7 @@ export abstract class BaseApprovalPanel<
     return html`
       <approve-split-button
         .approveTitle=${approveTitle}
+        .approveLabel=${approveLabel}
         .canBypass=${canUseRunScopedApproval && this.canBypass}
         .bypassAction=${this.bypassAction}
         .canApproveAllDelegatedWork=${

@@ -13,7 +13,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import type { StreamTabId } from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { resolveSelected, type Surface } from '@shared/session/surface';
@@ -381,18 +381,22 @@ export class StreamTabs extends LitElement {
     return this.surface?.expanded.get(stream.id) === 'expanded';
   }
 
+  /** A workflow run's calls live on its run board, never in the list: the
+   *  root row alone carries their rollup (W2). */
+  private childrenOf(stream: StreamView): StreamView[] {
+    if (this.topLevelOnly || stream.category === AgentCategory.Workflow) {
+      return [];
+    }
+    return stream.childIds
+      .map((id) => this.streamOf(id))
+      .filter((child): child is StreamView => child !== undefined);
+  }
+
   private renderNode(
     stream: StreamView,
     selected: StreamTabId | null,
-    visited: ReadonlySet<StreamTabId>,
   ): TemplateResult {
-    const nextVisited = new Set(visited).add(stream.id);
-    const children = this.topLevelOnly
-      ? []
-      : stream.childIds
-          .filter((id) => !nextVisited.has(id))
-          .map((id) => this.streamOf(id))
-          .filter((child): child is StreamView => child !== undefined);
+    const children = this.childrenOf(stream);
     const expandable = children.length > 0;
     const expanded = expandable && this.isExpanded(stream);
     return html`
@@ -408,7 +412,7 @@ export class StreamTabs extends LitElement {
               ${repeat(
                 children,
                 (child) => child.id,
-                (child) => this.renderNode(child, selected, nextVisited),
+                (child) => this.renderNode(child, selected),
               )}
             </div>`
           : nothing
@@ -425,7 +429,7 @@ export class StreamTabs extends LitElement {
       (id) => id,
       (id) => {
         const stream = this.streamOf(id);
-        return stream ? this.renderNode(stream, selected, new Set()) : nothing;
+        return stream ? this.renderNode(stream, selected) : nothing;
       },
     )}`;
   }

@@ -20,7 +20,7 @@ export type RuntimeRequestDetail =
   | { readonly kind: 'stream.resume'; readonly streamId: string }
   | { readonly kind: 'stream.runNew'; readonly streamId: string };
 
-export const SESSION_UI_EVENT = {
+const SESSION_UI_EVENT = {
   runtime: 'runtime-request',
   host: 'host-request',
   surface: 'surface-action',

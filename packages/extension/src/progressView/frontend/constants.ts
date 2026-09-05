@@ -49,6 +49,7 @@ export const ELEMENT_IDS = {
   PLAN_VIEW_CONTAINER: 'planViewContainer',
   PLAN_VIEW: 'planView',
   TOOLBAR_CONTAINER: 'toolbarContainer',
+  HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_NEW_BTN: 'runNewBtn',
   RESUME_BTN: 'resumeBtn',

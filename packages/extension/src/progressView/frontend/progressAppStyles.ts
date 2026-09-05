@@ -38,12 +38,31 @@ export const progressAppStyles = css`
 
   .shell-header {
     display: flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
     flex: 0 0 auto;
     min-height: var(--height-header, 38px);
-    padding: 0 var(--wa-space-2xs);
     border-bottom: var(--border-thin) solid var(--color-border);
+  }
+
+  /* The dock cell of the header exists only docked wide (see the container
+     query); until then the header is one cell. */
+  .header-dock {
+    display: none;
+    align-items: center;
+    gap: var(--wa-space-3xs);
+    min-width: 0;
+    height: 100%;
+    padding: 0 var(--wa-space-2xs) 0 var(--wa-space-xs);
+    border-inline-end: var(--border-thin) solid var(--color-border);
+    background: var(--wa-color-surface-lowered);
+  }
+
+  .header-main {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--wa-space-3xs);
+    min-width: 0;
+    padding: 0 var(--wa-space-2xs);
   }
 
   .shell-title {
@@ -89,23 +108,10 @@ export const progressAppStyles = css`
     background: var(--wa-color-surface-lowered);
   }
 
-  .dock-header {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
+  .dock-search {
     flex: 0 0 auto;
-    min-height: var(--height-header, 38px);
-    padding: 0 var(--wa-space-2xs) 0 var(--wa-space-xs);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     border-bottom: var(--border-thin) solid var(--color-border);
-  }
-
-  .dock-title {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: var(--font-weight-semibold);
   }
 
   .dock stream-tabs {
@@ -115,10 +121,18 @@ export const progressAppStyles = css`
   }
 
   @container (min-width: 720px) {
+    .shell.is-editor .shell-header {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+    }
+    .shell.is-editor .header-dock {
+      display: flex;
+    }
     .shell.is-editor .dock {
       display: flex;
     }
     .shell.is-editor .sessions-button,
+    .shell.is-editor .header-main-title,
     .shell.is-editor session-drawer {
       display: none;
     }
@@ -140,11 +154,12 @@ export const progressAppStyles = css`
     overflow: auto;
   }
 
+  /* Hero, context, and Active now stack at the top; the free space sits
+     below them and the composer alone is at the bottom. */
   .hero-wrap {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     gap: var(--wa-space-m);
     padding: var(--wa-space-l) var(--wa-space-xs);
   }
@@ -235,6 +250,7 @@ export const progressAppStyles = css`
 
   .launch-composer {
     flex: 0 0 auto;
+    margin-top: auto;
     padding: var(--wa-space-3xs) var(--wa-space-xs) var(--wa-space-xs);
   }
 

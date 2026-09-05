@@ -34,6 +34,29 @@ export const CHILD = 'search#bbbbbbbbbbbb' as StreamTabId;
 export const GRANDCHILD = 'lint#dddddddddddd' as StreamTabId;
 export const PROCESS = 'bash@tool#cccccccccccc' as StreamTabId;
 
+/** The board's clock: what a host passes as `nowMs` to read elapsed. Every
+ *  fixture timestamp is anchored to it so the harness reads minutes. */
+export const BOARD_NOW = 10_000_000;
+const min = (n: number): number => n * 60_000;
+const sec = (n: number): number => n * 1000;
+/** The fan-out's beats: the root started 12m ago, the child 4m ago, the
+ *  grandchild finished 1m ago, the process leads the order at 30s ago; the
+ *  tail that closes the run lands in the last 20s. */
+const T = {
+  root: BOARD_NOW - min(12),
+  child: BOARD_NOW - min(4),
+  childProgress: BOARD_NOW - min(3),
+  proposal: BOARD_NOW - min(3) + sec(30),
+  childApproval: BOARD_NOW - min(2) - sec(30),
+  grandchild: BOARD_NOW - min(2),
+  grandchildFiles: BOARD_NOW - min(2) + sec(10),
+  grandchildDone: BOARD_NOW - min(1),
+  process: BOARD_NOW - sec(30),
+  approvalResolved: BOARD_NOW - sec(20),
+  childDone: BOARD_NOW - sec(10),
+  rootDone: BOARD_NOW - sec(8),
+} as const;
+
 export const ROOT_IDENTITY: RunIdentity = {
   kind: 'multiAgentWorkflow',
   workflowName: 'review',
@@ -115,7 +138,7 @@ export class Log {
   }
 }
 
-export function call(
+function call(
   status: 'planned' | 'running' | 'completed',
   childStreamId?: StreamTabId,
 ): WorkflowCallProgress {
@@ -162,7 +185,7 @@ export function buildScenario({ proposal = false } = {}) {
   const log = new Log();
   const rootEntries: StreamLogEntry[] = [];
 
-  log.emit(ROOT, 1000, {
+  log.emit(ROOT, T.root, {
     type: 'run.start',
     executionId: 'aaaaaaaaaaaa',
     identity: ROOT_IDENTITY,
@@ -173,13 +196,13 @@ export function buildScenario({ proposal = false } = {}) {
     approvalPolicy: ROOT_POLICY,
     checkpointId: 'review@chat',
   });
-  log.emit(ROOT, 1000, {
+  log.emit(ROOT, T.root, {
     type: 'run.activate',
     category: AgentCategory.Workflow,
     isRemote: false,
     background: false,
   });
-  log.emit(ROOT, 1000, {
+  log.emit(ROOT, T.root, {
     type: 'run.config',
     executionId: 'aaaaaaaaaaaa',
     config: {
@@ -189,21 +212,21 @@ export function buildScenario({ proposal = false } = {}) {
       inputFiles: ['draft.tex'],
     },
   });
-  log.emit(ROOT, 1000, {
+  log.emit(ROOT, T.root, {
     type: 'status',
     phase: STREAM_PHASE.RUNNING,
     cause: 'lifecycle',
-    runStartedAt: 1000,
+    runStartedAt: T.root,
   });
   rootEntries.push(
-    log.entry(ROOT, 1001, {
+    log.entry(ROOT, T.root + 1, {
       id: 'phase-Map',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
       text: 'Map',
       data: { kind: 'phase', index: 0, total: 1, attemptId: 'attempt-1' },
     }),
   );
-  log.emit(ROOT, 1001, {
+  log.emit(ROOT, T.root + 1, {
     type: 'stage.start',
     id: 'phase-Map',
     label: 'Map',
@@ -212,7 +235,7 @@ export function buildScenario({ proposal = false } = {}) {
     total: 1,
   });
   rootEntries.push(
-    log.entry(ROOT, 1002, {
+    log.entry(ROOT, T.root + 2, {
       id: 'call-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       messageType: MESSAGE_TYPES.WORKFLOW_TASK,
@@ -223,7 +246,7 @@ export function buildScenario({ proposal = false } = {}) {
 
   // The child agent run: its run.start carries the parent, and the registry
   // confirms the edge as a session fact.
-  log.emit(CHILD, 1500, {
+  log.emit(CHILD, T.child, {
     type: 'run.start',
     executionId: 'bbbbbbbbbbbb',
     identity: CHILD_IDENTITY,
@@ -232,20 +255,20 @@ export function buildScenario({ proposal = false } = {}) {
     parentStreamId: ROOT,
     userFollowUpSupport: 'nativeInteractive',
   });
-  log.emit(CHILD, 1500, { type: 'setParentStream', parentStreamId: ROOT });
-  log.emit(CHILD, 1500, {
+  log.emit(CHILD, T.child, { type: 'setParentStream', parentStreamId: ROOT });
+  log.emit(CHILD, T.child, {
     type: 'run.config',
     executionId: 'bbbbbbbbbbbb',
     config: { model: 'claude-sonnet-4-5', instruction: 'search' },
   });
-  log.emit(CHILD, 1500, {
+  log.emit(CHILD, T.child, {
     type: 'status',
     phase: STREAM_PHASE.RUNNING,
     cause: 'lifecycle',
-    runStartedAt: 1500,
+    runStartedAt: T.child,
   });
   rootEntries.push(
-    log.entry(ROOT, 1501, {
+    log.entry(ROOT, T.child + 1, {
       id: 'call-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       messageType: MESSAGE_TYPES.WORKFLOW_TASK,
@@ -253,11 +276,11 @@ export function buildScenario({ proposal = false } = {}) {
       data: call('running', CHILD),
     }),
   );
-  log.emit(CHILD, 1600, {
+  log.emit(CHILD, T.childProgress, {
     type: 'conversation.progress',
     progress: { toolCallCount: 3 },
   });
-  log.emit(CHILD, 1700, {
+  log.emit(CHILD, T.childApproval, {
     type: 'approval.requested',
     requestId: 'req-1',
     payload: {
@@ -273,7 +296,7 @@ export function buildScenario({ proposal = false } = {}) {
 
   // The child's own delegate: a grandchild that starts and finishes while the
   // child waits, and one empty-round file fact the tab must not show.
-  log.emit(GRANDCHILD, 1750, {
+  log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
     executionId: 'dddddddddddd',
     identity: GRANDCHILD_IDENTITY,
@@ -282,24 +305,24 @@ export function buildScenario({ proposal = false } = {}) {
     userFollowUpSupport: 'unsupported',
     parentStreamId: CHILD,
   });
-  log.emit(GRANDCHILD, 1750, {
+  log.emit(GRANDCHILD, T.grandchild, {
     type: 'status',
     phase: STREAM_PHASE.RUNNING,
     cause: 'lifecycle',
-    runStartedAt: 1750,
+    runStartedAt: T.grandchild,
   });
-  log.emit(GRANDCHILD, 1760, {
+  log.emit(GRANDCHILD, T.grandchildFiles, {
     type: 'addOutputFiles',
     filesByRound: { 1: [] },
   });
-  log.emit(GRANDCHILD, 1780, {
+  log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'result',
     outcome: 'completed',
     executionId: 'dddddddddddd',
     category: AgentCategory.ToolUse,
     isSubagent: true,
   });
-  log.emit(GRANDCHILD, 1780, {
+  log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'status',
     phase: STREAM_PHASE.COMPLETED,
     previousPhase: STREAM_PHASE.RUNNING,
@@ -307,7 +330,7 @@ export function buildScenario({ proposal = false } = {}) {
   });
 
   // A background process stream, newer than the root: leads the order.
-  log.emit(PROCESS, 2000, {
+  log.emit(PROCESS, T.process, {
     type: 'run.start',
     executionId: 'cccccccccccc',
     identity: { kind: 'process', tool: 'bash' },
@@ -315,14 +338,28 @@ export function buildScenario({ proposal = false } = {}) {
     isRemote: false,
     userFollowUpSupport: 'unsupported',
   });
-  log.emit(PROCESS, 2000, {
+  log.emit(PROCESS, T.process, {
     type: 'run.config',
     executionId: 'cccccccccccc',
     config: { model: 'unused', instruction: 'npm test' },
   });
+  // Its output arrives as raw stdout chunks, one plain log entry each; the
+  // process conversation paints them back as one terminal text.
+  for (const [offset, text] of [
+    '\n> texra-workspace@0.40.9 test\n> vitest run\n\n',
+    ' RUN  v4.0.0 /paper\n\n',
+    ' ✓ src/test-kernel/latex/Compile.vitest.ts (12 tests) 340ms\n',
+    ' ✓ src/test-kernel/shared/session/sessionFold.vitest.ts (31 tests) 1.2s\n',
+  ].entries()) {
+    log.entry(PROCESS, T.process + sec(1 + offset), {
+      id: `out-${offset}`,
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      text,
+    });
+  }
 
   if (proposal) {
-    log.emit(ROOT, 1650, {
+    log.emit(ROOT, T.proposal, {
       type: 'approval.requested',
       requestId: 'req-plan',
       payload: {
@@ -366,22 +403,25 @@ export function buildScenario({ proposal = false } = {}) {
 
   const pending = log.events.length;
 
-  log.emit(CHILD, 1800, { type: 'approval.resolved', requestId: 'req-1' });
-  log.emit(CHILD, 1900, {
+  log.emit(CHILD, T.approvalResolved, {
+    type: 'approval.resolved',
+    requestId: 'req-1',
+  });
+  log.emit(CHILD, T.childDone, {
     type: 'result',
     outcome: 'completed',
     executionId: 'bbbbbbbbbbbb',
     category: AgentCategory.ToolUse,
     isSubagent: true,
   });
-  log.emit(CHILD, 1900, {
+  log.emit(CHILD, T.childDone, {
     type: 'status',
     phase: STREAM_PHASE.COMPLETED,
     previousPhase: STREAM_PHASE.RUNNING,
     cause: 'lifecycle',
   });
   rootEntries.push(
-    log.entry(ROOT, 1901, {
+    log.entry(ROOT, T.childDone + 1, {
       id: 'call-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       messageType: MESSAGE_TYPES.WORKFLOW_TASK,
@@ -390,21 +430,21 @@ export function buildScenario({ proposal = false } = {}) {
     }),
   );
   rootEntries.push(
-    log.entry(ROOT, 1902, {
+    log.entry(ROOT, T.childDone + 2, {
       id: 'phase-Map',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       text: 'Map',
-      data: { kind: 'phase', status: 'completed', endTime: 1902 },
+      data: { kind: 'phase', status: 'completed', endTime: T.childDone + 2 },
     }),
   );
-  log.emit(ROOT, 1903, {
+  log.emit(ROOT, T.rootDone, {
     type: 'result',
     outcome: 'completed',
     executionId: 'aaaaaaaaaaaa',
     category: AgentCategory.Workflow,
     isSubagent: false,
   });
-  log.emit(ROOT, 1903, {
+  log.emit(ROOT, T.rootDone, {
     type: 'status',
     phase: STREAM_PHASE.COMPLETED,
     previousPhase: STREAM_PHASE.RUNNING,
@@ -486,10 +526,6 @@ const child = (
   startedAt,
   ...extra,
 });
-
-/** The board's clock: what a host passes as `nowMs` to read elapsed. */
-export const BOARD_NOW = 10_000_000;
-const min = (n: number): number => n * 60_000;
 
 /**
  * Two calls in `Scout`, every kind of row in `Review`, `Verify` and `Report`

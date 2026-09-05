@@ -9,7 +9,6 @@ import '@shared/wa';
 // create a <progress-app> element — the same pattern packages/desktop/src/
 // renderer/main.ts already uses to run these components outside VS Code.
 import '@progressView/frontend';
-import type { ArchivableElement } from '@progressView/frontend/streamContexts';
 import {
   handleFileAction,
   handlePermissionAction,
@@ -29,14 +28,10 @@ if (rootElement == null) {
 // the pre-guard narrowing at closure boundaries.
 const root: HTMLElement = rootElement;
 
-const conversationView = document.createElement(
-  'stream-conversation',
-) as ArchivableElement;
-conversationView.archived = true;
+const conversationView = document.createElement('stream-conversation');
 root.append(conversationView);
 
-// Wired for defense-in-depth even though `archived` mode already makes
-// `emitAction`/toolbar dispatches no-ops — nothing here reaches a live host.
+// Wired for defense-in-depth: nothing here reaches a live host.
 conversationView.addEventListener(
   'toolbar-command',
   handleToolbarCommand as EventListener,

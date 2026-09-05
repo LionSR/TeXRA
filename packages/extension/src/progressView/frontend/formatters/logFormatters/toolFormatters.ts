@@ -80,7 +80,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
     HEADER_PREVIEW_MAX_CHARS,
   );
   const titleText = headerPreview
-    ? `${model.headerLabel} — ${headerPreview}`
+    ? `${model.headerLabel}: ${headerPreview}`
     : model.headerLabel;
 
   const sections: TemplateResult[] = renderToolSections(

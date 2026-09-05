@@ -3,8 +3,8 @@
  * `<task-group-list>` per recently shown stream so a switch back restores
  * scroll and render windows, and it maps the file, spill, and label links
  * inside rows to `host-request` arms. Group expansion is the surface's
- * (`Surface.groups`); the toggle store handed to the list is loaded from it
- * and reports every change back as a `SurfaceAction`.
+ * (`Surface.groups`): the list reads the stream's map and every toggle is
+ * dispatched as a `SurfaceAction`, never kept here.
  */
 import { LRUCache } from 'lru-cache';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
@@ -17,18 +17,15 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@shared/wa/spinner';
 import type { StreamTabId } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type { StreamView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { getComposedPathElement } from '../utils';
 import { logStyles } from '../styles/logStyles';
 import type { TaskGroupList } from './TaskGroupList';
 
 interface CachedStream {
   stream: StreamView;
-  inflight: ReadonlyMap<string, string>;
-  toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
 }
 
@@ -37,10 +34,7 @@ export class LogList extends LitElement {
   static override styles = [designTokens, ...logStyles];
 
   @property({ attribute: false }) stream: StreamView | null = null;
-  @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
-  /** A process stream: raw output, no rows. */
-  @property({ type: Boolean, reflect: true }) terminal = false;
 
   private static readonly MAX_CACHED_STREAMS = 5;
   private readonly streamCache = new LRUCache<StreamTabId, CachedStream>({
@@ -74,12 +68,7 @@ export class LogList extends LitElement {
       if (this.streamCache.size > 0) this.streamCache.clear();
       return;
     }
-    const entry = this.getOrCreateEntry(stream.id);
-    entry.stream = stream;
-    entry.inflight = this.view?.inflight ?? new Map();
-    entry.toggleStates.load([
-      ...(this.surface?.groups.get(stream.id) ?? new Map<string, boolean>()),
-    ]);
+    this.getOrCreateEntry(stream.id).stream = stream;
   }
 
   override render(): TemplateResult {
@@ -107,19 +96,14 @@ export class LogList extends LitElement {
             aria-label=${terminal ? nothing : `Activity for ${stream.label}`}
             aria-relevant=${terminal ? nothing : 'additions'}
             ?hidden=${id !== this.activeStreamId}
+            .streamId=${id}
             .groups=${stream.transcript.taskGroups}
-            .entries=${[]}
             .rows=${stream.transcript.rows}
-            .inflight=${data.inflight}
-            .settledRows=${stream.transcript.settledRows}
-            .updatedRowIndices=${[]}
-            .updatedRowBaseGeneration=${-1}
-            .rowGeneration=${stream.transcript.settledSeq}
             .hasStreams=${true}
             .streamStatus=${stream.status}
             .streamDurablyFinal=${stream.durableOutcome !== null}
             .isToolUse=${stream.category === 'toolUse'}
-            .toggleStates=${data.toggleStates}
+            .expanded=${this.surface?.groups.get(id)}
             ?terminal=${terminal}
           ></task-group-list>
         `;
@@ -147,21 +131,8 @@ export class LogList extends LitElement {
   private getOrCreateEntry(streamId: StreamTabId): CachedStream {
     const entry = this.streamCache.get(streamId);
     if (entry) return entry;
-    const toggleStates = new ToggleStateStore(() => {
-      // The list toggled a group: report the entries that differ from the
-      // surface, which is the only owner of expansion.
-      const known = this.surface?.groups.get(streamId);
-      for (const [key, expanded] of toggleStates.entries()) {
-        if (known?.get(key) === expanded) continue;
-        this.dispatchEvent(
-          SessionUiEvents.surface({ kind: 'group', streamId, key, expanded }),
-        );
-      }
-    });
     const created: CachedStream = {
       stream: this.stream!,
-      inflight: new Map(),
-      toggleStates,
       ref: createRef<TaskGroupList>(),
     };
     this.streamCache.set(streamId, created);

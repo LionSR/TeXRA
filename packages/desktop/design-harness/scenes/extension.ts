@@ -20,6 +20,7 @@ import {
   BOARD_NOW,
   CHILD,
   fanOutView,
+  PROCESS,
   ROOT,
   withProposal,
 } from '@test/shared/session/fanOutScenario';
@@ -195,5 +196,10 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   'ext-inline': () => {
     const view = fanOutView();
     return sidebar(view, surface(view, { kind: 'select', streamId: CHILD }));
+  },
+  // The background process stream: its command strip over its raw output.
+  'ext-process': () => {
+    const view = fanOutView();
+    return sidebar(view, surface(view, { kind: 'select', streamId: PROCESS }));
   },
 };

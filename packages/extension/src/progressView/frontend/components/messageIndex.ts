@@ -80,8 +80,6 @@ interface TranscriptIndexUpdate {
   rows: readonly TranscriptRow[];
   previousRows: readonly TranscriptRow[] | undefined;
   rowsChanged: boolean;
-  /** Indices the delta touched, or null when the range must be scanned. */
-  deltaIndices: readonly number[] | null;
 }
 
 /**
@@ -120,7 +118,6 @@ export class TranscriptIndex {
       rows,
       previousRows,
       rowsChanged,
-      deltaIndices,
     } = update;
 
     // Terminal mode renders raw text, so the derived structures are neither
@@ -145,18 +142,13 @@ export class TranscriptIndex {
       this.rebuildTree(groups, rows);
     } else if (rowsChanged) {
       if (rows.length === previousCount && previousRows) {
-        this.updateCachedRowRefs(rows, previousRows, deltaIndices);
+        this.updateCachedRowRefs(rows, previousRows);
       } else if (rows.length > previousCount) {
         this.appendNewRows(rows, previousCount);
         // A LOG_DELTA batch may also contain updates to existing entries
         // (e.g. tool status → completed) alongside the appended entries.
         if (previousRows) {
-          this.updateCachedRowRefs(
-            rows,
-            previousRows,
-            deltaIndices,
-            previousCount,
-          );
+          this.updateCachedRowRefs(rows, previousRows, previousCount);
         }
       } else {
         this.rebuildTree(groups, rows);
@@ -175,9 +167,9 @@ export class TranscriptIndex {
         this.rebuildTimeline();
       } else if (rowsChanged && rows.length > previousCount) {
         this.appendToTimeline(rows, previousCount);
-        this.updateTimelineRowRefs(rows, deltaIndices);
+        this.updateTimelineRowRefs();
       } else if (rowsChanged) {
-        this.updateTimelineRowRefs(rows, deltaIndices);
+        this.updateTimelineRowRefs();
       }
     }
 
@@ -350,11 +342,9 @@ export class TranscriptIndex {
 
   /**
    * Replace stale row references in cached structures with fresh ones.
-   * Pass `upTo` to limit scanning to a prefix range (used when a LOG_DELTA
-   * batch also appends new entries beyond `upTo`).
-   *
-   * When delta indices are supplied they are used directly; otherwise the
-   * caller-side range is scanned with O(1) reference comparison.
+   * Pass `upTo` to limit scanning to a prefix range (used when an update
+   * also appends new entries beyond `upTo`). The range is scanned with O(1)
+   * reference comparison per row.
    *
    * A resync that renumbers entries (hydration merging disk history under
    * live appends) replays the whole log through this ordinary upsert path.
@@ -366,21 +356,10 @@ export class TranscriptIndex {
   updateCachedRowRefs(
     rows: readonly TranscriptRow[],
     prevRows: readonly TranscriptRow[],
-    deltaIndices: readonly number[] | null,
     upTo: number = rows.length,
   ): void {
-    if (this.orderingKeyChanged(rows, prevRows, deltaIndices, upTo)) {
+    if (this.orderingKeyChanged(rows, prevRows, upTo)) {
       this.rebuildRowArrays(rows);
-      return;
-    }
-
-    if (deltaIndices) {
-      for (const index of deltaIndices) {
-        if (index < 0 || index >= upTo || index >= rows.length) continue;
-        if (rows[index] !== prevRows[index]) {
-          this.replaceSingleRow(rows[index]);
-        }
-      }
       return;
     }
 
@@ -401,20 +380,11 @@ export class TranscriptIndex {
   private orderingKeyChanged(
     rows: readonly TranscriptRow[],
     prevRows: readonly TranscriptRow[],
-    deltaIndices: readonly number[] | null,
     upTo: number,
   ): boolean {
     const changed = (prev: TranscriptRow, next: TranscriptRow): boolean =>
       next !== prev &&
       (prev.seqNo !== next.seqNo || prev.timestamp !== next.timestamp);
-
-    if (deltaIndices) {
-      for (const index of deltaIndices) {
-        if (index < 0 || index >= upTo || index >= rows.length) continue;
-        if (changed(prevRows[index], rows[index])) return true;
-      }
-      return false;
-    }
 
     for (let i = upTo - 1; i >= 0; i--) {
       if (changed(prevRows[i], rows[i])) return true;
@@ -469,22 +439,7 @@ export class TranscriptIndex {
    * Update row refs on existing timeline entries.
    * Full scan — status updates can target any position, not just the tail.
    */
-  updateTimelineRowRefs(
-    rows: readonly TranscriptRow[],
-    deltaIndices: readonly number[] | null,
-  ): void {
-    if (deltaIndices) {
-      for (const index of deltaIndices) {
-        const row = rows[index];
-        if (!row) continue;
-        const timelineEntry = this.rowLocations.get(row.id)?.timelineEntry;
-        if (timelineEntry) {
-          timelineEntry.row = row;
-        }
-      }
-      return;
-    }
-
+  updateTimelineRowRefs(): void {
     for (const item of this.timeline) {
       if (!('row' in item)) continue;
       const ungroupedIndex = this.rowLocations.get(item.key)?.ungroupedIndex;

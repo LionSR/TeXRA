@@ -50,10 +50,14 @@ export const workflowRunBoardStyles = css`
     gap: var(--wa-space-2xs);
   }
 
-  /* Phase strip */
+  /* Phase strip. The strip fills the board so the body scrolls and the tally
+     and controls below it sit at the pane's bottom; the track is painted out
+     but its width stays, which is what the active tab's indicator is drawn
+     with. */
   .phases {
-    flex: 0 0 auto;
-    --track-width: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    --track-color: transparent;
   }
 
   .phases::part(base) {

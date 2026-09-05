@@ -7,6 +7,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { workflowCallsNote } from './taskShell';
 
 export interface SubagentsPaneModel {
   readonly view: SessionView;
@@ -49,6 +50,7 @@ export function subagentsPaneTemplate(
         .surface=${model.surface}
         .root=${rootId}
       ></stream-tabs>
+      ${workflowCallsNote(model.view, model.surface)}
       <div class="task-subagents-note">
         Approvals stay in the child's request panel; this tab only navigates.
       </div>

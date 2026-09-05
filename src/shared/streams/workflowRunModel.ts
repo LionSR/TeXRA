@@ -627,7 +627,7 @@ export function formatWorkflowCallLiveParts(
  *  has run, and the two kinds that have not started. */
 export type WorkflowRowGroup = 'finished' | 'queued' | 'declared';
 
-/** `12 queued`, `5 finished · 1 saved result` — the one spelling of a
+/** `12 queued`, `5 finished · 1 saved result`: the one spelling of a
  *  counted group's row. A finished group names its replayed results, since
  *  nothing ran for those this time. */
 export function formatWorkflowRowGroup(row: {
@@ -699,10 +699,10 @@ function matchesFilter(
 
 /**
  * One phase's rows. With a filter every matching card is one flat row;
- * without one, cards needing attention lead — the ones whose child run is
- * waiting on the user (`waiting`, by row id, read off the child streams by
+ * without one, cards needing attention lead (the ones whose child run is
+ * waiting on the user: `waiting`, by row id, read off the child streams by
  * the host that holds them), then failed, then running, transcript order
- * within — and the volume collapses into counted groups that open in place:
+ * within, and the volume collapses into counted groups that open in place:
  * `finished` for every settled card, `queued` and `declared` for the ones
  * that have not started.
  */

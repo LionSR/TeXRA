@@ -25,13 +25,12 @@ export type DesktopPaperSummary = z.infer<typeof DesktopPaperSummarySchema>;
  * strings only (G4), keyed by the paper's root. The renderer derives it from
  * the summary until the host snapshot carries it (PRD 8.1).
  */
-export const DesktopPaperDisplaySchema = z.object({
-  key: z.string(),
-  name: z.string(),
-  initials: z.string(),
-  subtitle: z.string(),
-});
-export type DesktopPaperDisplay = z.infer<typeof DesktopPaperDisplaySchema>;
+export interface DesktopPaperDisplay {
+  readonly key: string;
+  readonly name: string;
+  readonly initials: string;
+  readonly subtitle: string;
+}
 
 export function paperDisplay(paper: DesktopPaperSummary): DesktopPaperDisplay {
   return {

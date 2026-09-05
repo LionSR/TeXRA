@@ -50,14 +50,6 @@ function streamStatusDisplayKey(
   return substate ?? status;
 }
 
-export function streamStatusIndicatorClass(
-  status: StreamLifecycleStatus | undefined,
-  substate?: StreamSubstate,
-): string | undefined {
-  const key = streamStatusDisplayKey(status, substate);
-  return key ? `is-${key}` : undefined;
-}
-
 // cli and cliCompact share every label except the STARTING ellipsis, so
 // cliCompact is derived from cli rather than hand-synced.
 const cliStreamStatusLabels: Record<StreamStatusCopyKey, string> = {
@@ -158,26 +150,6 @@ export function streamHeldMessage(pid: number): string {
 /** Banner and tooltip copy for a run whose saved state could not be read. */
 export function streamUnreadableMessage(cause: string): string {
   return `Could not read this run's state: ${cause}. Delete removes it.`;
-}
-
-/**
- * Status-indicator tooltip and banner copy: an unavailable stream explains
- * itself from `statusDetail`; every other status shows its label.
- */
-export function streamStatusTooltip(
-  state:
-    | {
-        readonly status?: StreamLifecycleStatus;
-        readonly statusDetail?: string;
-      }
-    | null
-    | undefined,
-  label: string | undefined,
-): string | undefined {
-  if (state?.status === STREAM_LIFECYCLE_UNAVAILABLE) {
-    return state.statusDetail ?? label;
-  }
-  return label;
 }
 
 export type StreamStatusLabelStyle = keyof typeof STREAM_STATUS_LABELS;

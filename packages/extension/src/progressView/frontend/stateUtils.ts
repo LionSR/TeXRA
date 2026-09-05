@@ -29,21 +29,6 @@ export function updateRounds<T>(
 }
 
 /**
- * Filter permissions to those relevant to a specific stream.
- * Keeps permissions that have no streamId or match the given streamId.
- */
-export function filterPermissionsForStream(
-  permissions: PermissionPayload[],
-  streamId: string | undefined,
-): PermissionPayload[] {
-  if (!streamId) return [];
-  return permissions.filter(
-    (permission) =>
-      !permission.data.streamId || permission.data.streamId === streamId,
-  );
-}
-
-/**
  * Remove all permissions associated with a specific stream.
  * Keeps permissions that have no streamId (global) or belong to a different stream.
  */

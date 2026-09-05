@@ -1187,6 +1187,12 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   padding: 6px 8px 0;
 }
 
+.task-workflow-calls-note {
+  padding: 4px 10px 6px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+}
+
 /* The conversation pane's paper chip and dock. */
 .task-paper-chip {
   flex: 0 0 auto;

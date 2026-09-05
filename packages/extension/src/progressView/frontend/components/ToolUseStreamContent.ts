@@ -39,11 +39,15 @@ export class ToolUseStreamContent extends BaseStreamContent {
       <div class="conversation-content">
         ${this.renderApprovalDock()}
         <div class="conversation-column conversation-prelude">
-          <todo-list .todos=${stream.todos} .collapseKey=${stream.id}></todo-list>
+          <todo-list
+            .todos=${stream.todos}
+            .collapseKey=${stream.id}
+          ></todo-list>
           <plan-view .plan=${stream.plan} .collapseKey=${stream.id}></plan-view>
           <background-tasks-panel
             .stream=${stream}
             .view=${this.view}
+            .nowMs=${this.nowMs}
           ></background-tasks-panel>
         </div>
         ${this.renderLog()}

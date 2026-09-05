@@ -519,16 +519,29 @@ function ancestorsOf(
   stream: StreamView,
 ): StreamView['ancestors'] {
   const chain: StreamView['ancestors'] = [];
-  const seen = new Set<StreamTabId>([stream.id]);
   let parentId = stream.parentId;
-  while (parentId !== null && !seen.has(parentId)) {
-    seen.add(parentId);
+  while (parentId !== null) {
     const parent = view.streams.get(parentId);
     if (!parent) break;
     chain.unshift({ id: parent.id, label: parent.label });
     parentId = parent.parentId;
   }
   return chain;
+}
+
+/** Whether `stream` is `ancestorId` itself or sits below it. */
+function isDescendantOf(
+  view: SessionView,
+  stream: StreamView,
+  ancestorId: StreamTabId,
+): boolean {
+  let cursor: StreamView | undefined = stream;
+  while (cursor) {
+    if (cursor.id === ancestorId) return true;
+    cursor =
+      cursor.parentId === null ? undefined : view.streams.get(cursor.parentId);
+  }
+  return false;
 }
 
 /** Recompute `ancestors` for a stream and its descendants (a moved subtree,
@@ -1435,9 +1448,15 @@ function relink(
       childIds: withoutId(previousParent.childIds, stream.id),
     });
   }
-  const parent =
+  let parent =
     stream.parentId === null ? undefined : view.streams.get(stream.parentId);
-  if (!parent && stream.parentId !== null) {
+  if (parent && isDescendantOf(view, parent, stream.id)) {
+    // An edge onto the stream's own subtree would close a loop; the tree is
+    // what every reader walks, so the edge is refused and the stream keeps
+    // its previous parent (or the top level).
+    parent = previousParent;
+    setStream(view, { ...stream, parentId: previousParent?.id ?? null });
+  } else if (!parent && stream.parentId !== null) {
     setStream(view, { ...stream, parentId: null });
   }
   if (parent) {

@@ -32,6 +32,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 
 import {
   ELEMENT_IDS,
@@ -172,7 +174,7 @@ export class StreamHeader extends LitElement {
 
       #activeStreamName {
         flex: 1;
-        min-width: 0;
+        min-width: 8ch;
         margin: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -188,6 +190,11 @@ export class StreamHeader extends LitElement {
         flex: 0 0 auto;
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
+        white-space: nowrap;
+      }
+
+      tool-timer {
+        flex: 0 0 auto;
         white-space: nowrap;
       }
 
@@ -216,6 +223,19 @@ export class StreamHeader extends LitElement {
          segmented pill rather than a row of squares. */
       .header-actions .action-icon-button::part(base) {
         border-radius: var(--wa-border-radius-circle, 50%);
+      }
+
+      /* Narrow, the whole toolbar folds behind one trailing icon (see the
+         container query); wide, the toolbar is what the row shows. */
+      .header-overflow {
+        display: none;
+      }
+
+      .header-overflow-status {
+        padding: var(--wa-space-2xs) var(--wa-space-s) var(--wa-space-3xs);
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+        white-space: nowrap;
       }
 
       /* Status indicator overrides - base styles from statusIndicatorStyles.
@@ -264,10 +284,10 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      /* The ancestors path, root first, capped at 40 percent of the header.
-         Segments are laid out in reverse DOM order so that when the path
-         cannot fit, the root end is what the overflow clips: the nearest
-         ancestor always survives (per-segment eviction). */
+      /* The ancestors path, root first. Segments are laid out in reverse DOM
+         order so that when the path cannot fit, the root end is what the
+         overflow clips: the nearest ancestor always survives (per-segment
+         eviction). The title beside it takes the remaining width. */
       .ancestors {
         display: flex;
         flex-direction: row-reverse;
@@ -276,7 +296,6 @@ export class StreamHeader extends LitElement {
         gap: var(--wa-space-3xs);
         flex: 0 1 auto;
         min-width: 0;
-        max-width: 40%;
         overflow: hidden;
         white-space: nowrap;
       }
@@ -327,24 +346,22 @@ export class StreamHeader extends LitElement {
         transform: scaleX(-1);
       }
 
-      @container (max-width: 520px) {
-        .status-label {
+      /* Below the wide width the eight-button toolbar cannot share the row
+         with the path and the title, so it folds behind one trailing icon
+         with the tool-calls count and the status label. */
+      @container (max-width: 880px) {
+        .status-label,
+        wa-tag.progress-badge,
+        .header-actions wa-button-group {
           display: none;
         }
 
         .log-header {
           padding-inline: var(--wa-space-xs);
-          flex-wrap: wrap;
         }
 
-        .header-left {
-          flex-basis: 100%;
-        }
-
-        .header-actions {
-          width: 100%;
-          margin-inline-start: 0;
-          justify-content: flex-start;
+        .header-overflow {
+          display: inline-flex;
         }
       }
     `,
@@ -492,6 +509,14 @@ export class StreamHeader extends LitElement {
       ]
         .filter(Boolean)
         .join(' ');
+      const activate = (): void => {
+        if (disabled) return;
+        if (isCopyRunContext) {
+          void this.copyRunContext.copy(runContext);
+          return;
+        }
+        this.dispatchToolbar(btn, stream);
+      };
       const { button, tooltip } = renderIconActionButtonParts({
         id: btn.id,
         icon: copied ? 'check' : btn.icon,
@@ -502,17 +527,25 @@ export class StreamHeader extends LitElement {
         disabled,
         pressed: btn.bypassKind === undefined ? undefined : isActive,
         ariaHidden: hidden,
-        onClick: () => {
-          if (disabled) return;
-          if (isCopyRunContext) {
-            void this.copyRunContext.copy(runContext);
-            return;
-          }
-          this.dispatchToolbar(btn, stream);
-        },
+        onClick: activate,
       });
-      return { id: btn.id, hidden, button, tooltip };
+      // The same action as one menu row, for the folded toolbar.
+      const item = html`<wa-dropdown-item
+        value=${btn.id}
+        type=${btn.bypassKind === undefined ? 'normal' : 'checkbox'}
+        ?checked=${isActive}
+        ?disabled=${disabled}
+        >${waIcon(copied ? 'check' : btn.icon, { slot: 'icon' })}${
+          btn.label ?? restingTooltip
+        }</wa-dropdown-item
+      >`;
+      return { id: btn.id, hidden, button, tooltip, item, activate };
     });
+    const shownButtons = toolbarButtonViews.filter((view) => !view.hidden);
+    const progressTitle = getProgressBadgeTitle(
+      stream.conversationProgress,
+      stream.stage ?? undefined,
+    );
 
     return html`
       <div class="log-header">
@@ -552,10 +585,43 @@ export class StreamHeader extends LitElement {
             )}
           </wa-button-group>
           ${repeat(
-            toolbarButtonViews.filter((view) => !view.hidden),
+            shownButtons,
             (view) => view.id,
             (view) => view.tooltip,
           )}
+          <wa-dropdown
+            class="header-overflow"
+            placement="bottom-end"
+            @wa-select=${(event: Event) => {
+              const value = (
+                event as CustomEvent<{ item?: { value?: unknown } }>
+              ).detail?.item?.value;
+              shownButtons.find((view) => view.id === value)?.activate();
+            }}
+          >
+            <wa-button
+              slot="trigger"
+              id=${ELEMENT_IDS.HEADER_MORE_BTN}
+              class="action-icon-button"
+              appearance="plain"
+              variant="neutral"
+              size="s"
+              type="button"
+              aria-label="Stream actions"
+              >${waIcon('ellipsis')}</wa-button
+            >
+            <div class="header-overflow-status">
+              ${statusLabel}${progressTitle ? ` · ${progressTitle}` : ''}
+            </div>
+            ${repeat(
+              shownButtons,
+              (view) => view.id,
+              (view) => view.item,
+            )}
+          </wa-dropdown>
+          <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}
+            >Stream actions</wa-tooltip
+          >
         </div>
       </div>
     `;

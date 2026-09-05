@@ -165,6 +165,17 @@ export class SessionComposer extends LitElement {
       .composer.is-compact .row {
         flex: 0 0 auto;
       }
+      /* Collapsed, the pill is the field and one chevron; the tools and the
+         send button appear once the field has focus or text. */
+      .composer.is-compact .tools,
+      .composer:not(.is-compact) .expand,
+      .composer.is-compact:is(:focus-within, .has-text) .expand {
+        display: none;
+      }
+      .composer.is-compact:is(:focus-within, .has-text) .tools,
+      .composer.is-compact .expand {
+        display: contents;
+      }
 
       wa-textarea::part(base) {
         border: none;
@@ -752,7 +763,13 @@ export class SessionComposer extends LitElement {
           ? html`<queued-follow-ups .messages=${queued}></queued-follow-ups>`
           : nothing
       }
-      <div class=${classMap({ composer: true, 'is-compact': compact })}>
+      <div
+        class=${classMap({
+          composer: true,
+          'is-compact': compact,
+          'has-text': text.trim() !== '' || this.draft.images.length > 0,
+        })}
+      >
         <wa-textarea
           name=${compact ? 'follow-up-message' : 'instruction'}
           placeholder=${compact ? 'Follow-up' : 'Describe the outcome you want…'}
@@ -776,44 +793,56 @@ export class SessionComposer extends LitElement {
         </wa-textarea>
         <div class="row">
           ${compact ? html`<span class="spacer"></span>` : this.renderChips()}
-          ${renderIconActionButton({
-            id: 'composer-polish',
-            icon: 'wand-magic-sparkles',
-            label: 'Polish',
-            tooltip: 'Polish with AI',
-            busy: this.polishing,
-            disabled: readOnly || text.trim() === '',
-            onClick: this.polish,
-          })}
-          ${renderIconActionButton({
-            id: 'composer-record',
-            icon: this.recording ? 'circle-stop' : 'microphone',
-            label: this.recording ? 'Stop recording' : 'Dictate',
-            tooltip: this.recording ? 'Stop recording' : 'Dictate',
-            className: this.recording ? 'recording' : '',
-            disabled: readOnly,
-            onClick: this.toggleRecording,
-          })}
-          ${renderIconActionButton({
-            id: 'composer-attach',
-            icon: 'file-circle-plus',
-            label: 'Attach',
-            tooltip: 'Attach media files',
-            disabled: readOnly,
-            onClick: this.attach,
-          })}
-          ${renderIconActionButton({
-            id: 'composer-send',
-            icon: 'arrow-up',
-            label: sendLabel,
-            tooltip: sendLabel,
-            className: 'composer-primary-action',
-            appearance: 'filled',
-            variant: 'brand',
-            size: compact ? 'm' : 'l',
-            disabled: !canSend,
-            onClick: this.send,
-          })}
+          <span class="expand"
+            >${renderIconActionButton({
+              id: 'composer-expand',
+              icon: 'chevron-up',
+              label: 'Write a follow-up',
+              tooltip: 'Write a follow-up',
+              disabled: readOnly,
+              onClick: () => this.textArea?.focus(),
+            })}</span
+          >
+          <span class="tools"
+            >${renderIconActionButton({
+              id: 'composer-polish',
+              icon: 'wand-magic-sparkles',
+              label: 'Polish',
+              tooltip: 'Polish with AI',
+              busy: this.polishing,
+              disabled: readOnly || text.trim() === '',
+              onClick: this.polish,
+            })}
+            ${renderIconActionButton({
+              id: 'composer-record',
+              icon: this.recording ? 'circle-stop' : 'microphone',
+              label: this.recording ? 'Stop recording' : 'Dictate',
+              tooltip: this.recording ? 'Stop recording' : 'Dictate',
+              className: this.recording ? 'recording' : '',
+              disabled: readOnly,
+              onClick: this.toggleRecording,
+            })}
+            ${renderIconActionButton({
+              id: 'composer-attach',
+              icon: 'file-circle-plus',
+              label: 'Attach',
+              tooltip: 'Attach media files',
+              disabled: readOnly,
+              onClick: this.attach,
+            })}
+            ${renderIconActionButton({
+              id: 'composer-send',
+              icon: 'arrow-up',
+              label: sendLabel,
+              tooltip: sendLabel,
+              className: 'composer-primary-action',
+              appearance: 'filled',
+              variant: 'brand',
+              size: compact ? 'm' : 'l',
+              disabled: !canSend,
+              onClick: this.send,
+            })}</span
+          >
         </div>
       </div>
       <div class="visually-hidden" role="status">${this.announcement}</div>

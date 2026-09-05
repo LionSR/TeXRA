@@ -29,10 +29,10 @@ import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
-import { formatResultCount } from '@utils/text/stringUtils';
-
-// Side-effect import to register <tool-timer> custom element
-import '@progressView/frontend/components/ToolTimer';
+import {
+  formatCompactDuration,
+  formatResultCount,
+} from '@utils/text/stringUtils';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
 const TONE_ICONS: Record<StreamView['tone'], TeXRAIconName> = {
@@ -215,6 +215,8 @@ export class BackgroundTasksPanel extends LitElement {
   /** The dispatching stream: its `childIds` are the rows. */
   @property({ attribute: false }) stream: StreamView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
+  /** The host's clock, for a running row's elapsed time (G4). */
+  @property({ type: Number }) nowMs: number | null = null;
 
   /** The complete card, or only the inquiry threads (the workflow body,
    *  whose run board already lists every call). */
@@ -270,7 +272,7 @@ export class BackgroundTasksPanel extends LitElement {
       <wa-details class="dispatch" open>
         <span slot="summary" class="dispatch-summary">${summary}</span>
         <div class="task-list" role="list">
-          ${this.renderChildren(children, 0, new Set([stream.id]))}
+          ${this.renderChildren(children, 0)}
           ${
             children.length > 0 && inquiries.length > 0
               ? html`<div class="section-label">
@@ -299,21 +301,15 @@ export class BackgroundTasksPanel extends LitElement {
   private renderChildren(
     children: readonly StreamView[],
     depth: number,
-    visited: ReadonlySet<StreamTabId>,
   ): TemplateResult {
     return html`${repeat(
       children,
       (child) => child.id,
-      (child) => {
-        const nested = visited.has(child.id)
-          ? []
-          : this.childrenOf(child).filter((grand) => !visited.has(grand.id));
-        return html`${this.renderChildRow(child, depth)}${this.renderChildren(
-          nested,
+      (child) =>
+        html`${this.renderChildRow(child, depth)}${this.renderChildren(
+          this.childrenOf(child),
           depth + 1,
-          new Set(visited).add(child.id),
-        )}`;
-      },
+        )}`,
     )}`;
   }
 
@@ -337,7 +333,7 @@ export class BackgroundTasksPanel extends LitElement {
         ${waIcon(glyph, { className: 'task-icon' })}
         <span class="task-name">${child.label}</span>
         ${latest ? html`<span class="task-latest">${latest}</span>` : nothing}
-        ${renderClock(child, pendingApproval)}
+        ${renderClock(child, pendingApproval, this.nowMs)}
         ${waIcon('chevron-right', { className: 'task-chevron' })}
       </button>
     `;
@@ -387,15 +383,16 @@ export class BackgroundTasksPanel extends LitElement {
 function renderClock(
   child: StreamView,
   pendingApproval: boolean,
+  nowMs: number | null,
 ): TemplateResult | typeof nothing {
   if (pendingApproval) {
     return html`<span class="task-elapsed is-approval">approval</span>`;
   }
   const running = child.group === 'running' || child.group === 'waiting';
-  if (running && child.runStartedAt !== null) {
+  if (running && child.runStartedAt !== null && nowMs !== null) {
     return html`<span class="task-elapsed"
-      ><tool-timer .startTime=${child.runStartedAt}></tool-timer
-    ></span>`;
+      >${formatCompactDuration(nowMs - child.runStartedAt)}</span
+    >`;
   }
   if (child.lastTimestamp !== null) {
     return html`<wa-relative-time

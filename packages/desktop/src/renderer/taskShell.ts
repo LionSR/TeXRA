@@ -14,7 +14,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
-import type { Surface } from '@shared/session/surface';
+import { resolveSelected, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -124,6 +124,29 @@ function streamTabsTemplate(
 }
 
 /**
+ * Under a selected workflow run the list shows the root alone (W2): its
+ * calls are child streams the run board lists, and the note says so. The
+ * selection may sit on one of those calls; the note is the family root's.
+ */
+export function workflowCallsNote(
+  view: SessionView,
+  surface: Surface,
+): TemplateResult | typeof nothing {
+  const selected = resolveSelected(view, surface);
+  const stream = selected === null ? undefined : view.streams.get(selected);
+  const rootId = stream?.ancestors[0]?.id ?? stream?.id;
+  const root = rootId === undefined ? undefined : view.streams.get(rootId);
+  if (root?.category !== 'workflow' || root.rollup.total === 0) {
+    return nothing;
+  }
+  const { total } = root.rollup;
+  return html`<div class="task-workflow-calls-note">
+    ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child streams`},
+    reachable from the board. They never appear here.
+  </div>`;
+}
+
+/**
  * One section per open paper. The active paper's section holds its stream
  * tree (and its file tree behind the row's disclosure); any other paper
  * shows its badge and opens on click. The close control beside the row is
@@ -184,6 +207,7 @@ function paperSection(
         ? html`
             <div class="task-sidebar-sessions task-paper-streams">
               ${streamTabsTemplate(paper, { topLevelOnly: model.subagentsOpen })}
+              ${workflowCallsNote(paper.view, paper.surface)}
             </div>
             <wa-button
               type="button"

@@ -20,6 +20,8 @@ export abstract class BaseStreamContent extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
+  /** The host's clock, for elapsed readings (G4). */
+  @property({ type: Number }) nowMs: number | null = null;
 
   /** The pending approvals asked by this stream, in request order. */
   protected get streamPermissions(): PermissionPayload[] {
@@ -46,11 +48,7 @@ export abstract class BaseStreamContent extends LitElement {
 
   protected renderLog(): TemplateResult {
     return html`<div class="conversation-log">
-      <log-list
-        .stream=${this.stream}
-        .view=${this.view}
-        .surface=${this.surface}
-      ></log-list>
+      <log-list .stream=${this.stream} .surface=${this.surface}></log-list>
     </div>`;
   }
 

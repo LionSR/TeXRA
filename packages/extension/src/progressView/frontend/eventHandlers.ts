@@ -48,21 +48,6 @@ function requestStreamSwitch(streamId: StreamTabId): void {
   });
 }
 
-/** Cancel transient tab intent and ask the backend to confirm no selection. */
-export function requestStreamDeselection(): void {
-  const requestId = crypto.randomUUID();
-  appState.set(
-    create(appState.get(), (draft) => {
-      draft.activeStreamId = null;
-      draft.pendingStreamSelection = null;
-    }),
-  );
-  postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, {
-    stream: '',
-    requestId,
-  });
-}
-
 export function handleStreamDelete(
   event: CustomEvent<StreamEventDetail>,
 ): void {

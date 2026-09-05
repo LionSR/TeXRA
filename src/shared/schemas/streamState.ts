@@ -119,7 +119,7 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
-export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
+const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
 
 // Stream Metadata — the lightweight subset sent over postMessage in UPDATE_STREAMS.
 // Contains only backend-owned fields that mergeBackendOwnedState() actually reads.

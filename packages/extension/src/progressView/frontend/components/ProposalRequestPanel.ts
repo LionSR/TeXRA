@@ -138,10 +138,12 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     const hasModelOptions = modelOptions.length > 0;
     const hasAgentOptions = agentOptions.length > 0;
 
-    return this.renderRequestShell({
-      prefix: 'workflow-proposal',
-      details: html`
-        <div class="workflow-proposal__header-row">
+    // The workflow-script card (W0) opens on its own head, 'Proposes a
+    // multi-agent run'; the kind, agent, and model row belongs to the other
+    // proposals, whose head is that row.
+    const headerRow = workflowScript
+      ? nothing
+      : html`<div class="workflow-proposal__header-row">
           <wa-badge
             variant=${isWorkflow ? 'neutral' : 'brand'}
             appearance="filled"
@@ -190,7 +192,11 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                   >${getModelLabel(data.model)}</span
                 >`
           }
-        </div>
+        </div>`;
+    return this.renderRequestShell({
+      prefix: 'workflow-proposal',
+      details: html`
+        ${headerRow}
         ${
           workflowScript
             ? this.renderWorkflowScriptSummary(data, workflowScript)
@@ -199,7 +205,10 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
               ${this.renderProposalFiles(data)}`
         }
       `,
-      approveTitle: 'Approve this proposal (y)',
+      approveTitle: workflowScript
+        ? 'Approve and run this workflow (y)'
+        : 'Approve this proposal (y)',
+      approveLabel: workflowScript ? 'Approve and run' : 'Approve',
       rejectTitle: 'Reject this proposal (n)',
       trailingActions: html`${renderLabeledActionButton({
         id: 'proposal-setup-button',

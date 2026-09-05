@@ -427,7 +427,7 @@ describe('workflow run model', () => {
           : row.key,
       );
 
-    // Failed, then running — transcript order within each — then one
+    // Failed, then running, transcript order within each, then one
     // counted row per collapsed group: finished, queued, declared.
     expect(
       summarize(workflowPhaseRows(phase, { expanded: new Set(), filter: '' })),

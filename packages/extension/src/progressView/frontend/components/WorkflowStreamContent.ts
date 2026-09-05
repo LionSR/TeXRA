@@ -59,7 +59,11 @@ export class WorkflowStreamContent extends LitElement {
         ${
           approvals.length > 0
             ? html`<div class="conversation-column conversation-approval-dock">
-                <request-panels .permissions=${approvals}></request-panels>
+                <request-panels
+                  .permissions=${approvals}
+                  .view=${view}
+                  .readOnly=${stream.readOnly === true}
+                ></request-panels>
               </div>`
             : nothing
         }
@@ -81,13 +85,7 @@ export class WorkflowStreamContent extends LitElement {
                 .nowMs=${this.nowMs}
               ></workflow-run-board>`
             : html`<div class="conversation-log">
-                <log-list
-                  .rows=${transcript.rows}
-                  .taskGroups=${transcript.taskGroups}
-                  .compaction=${transcript.compaction}
-                  .inflight=${view.inflight}
-                  .settledRows=${transcript.settledRows}
-                ></log-list>
+                <log-list .stream=${stream} .surface=${surface}></log-list>
               </div>`
         }
 

@@ -65,13 +65,15 @@ function withConversation(): SessionView {
   const { log } = scenario;
   const before = log.events.length;
   const LOG = STREAM_LOG_ENTRY_TYPES.LOG;
-  log.entry(CHILD, 1610, {
+  // The chat lands three minutes ago, after the child started (BOARD_NOW).
+  const CHAT = BOARD_NOW - 3 * 60_000;
+  log.entry(CHILD, CHAT, {
     id: 'chat-user',
     type: LOG,
     messageType: MESSAGE_TYPES.USER_MESSAGE,
     text: 'what should we do next',
   });
-  log.entry(CHILD, 1620, {
+  log.entry(CHILD, CHAT + 10, {
     id: 'chat-bash',
     type: LOG,
     messageType: MESSAGE_TYPES.TOOL_USE,
@@ -83,7 +85,7 @@ function withConversation(): SessionView {
       status: 'completed',
     },
   });
-  log.entry(CHILD, 1630, {
+  log.entry(CHILD, CHAT + 20, {
     id: 'chat-glob',
     type: LOG,
     messageType: MESSAGE_TYPES.TOOL_USE,
@@ -95,7 +97,7 @@ function withConversation(): SessionView {
       status: 'completed',
     },
   });
-  log.entry(CHILD, 1640, {
+  log.entry(CHILD, CHAT + 30, {
     id: 'chat-reply',
     type: LOG,
     messageType: MESSAGE_TYPES.MODEL_RESPONSE,
@@ -233,11 +235,7 @@ const conversationPane = (
  *  (label, ancestors path, status) over its transcript. */
 const transcriptBody = (paper: RailPaper, stream: StreamView) =>
   html`<stream-header .stream=${stream} .view=${paper.view}></stream-header>
-    <log-list
-      .stream=${stream}
-      .view=${paper.view}
-      .surface=${paper.surface}
-    ></log-list>`;
+    <log-list .stream=${stream} .surface=${paper.surface}></log-list>`;
 
 const pdfPane = createPdfPane();
 const tab = (

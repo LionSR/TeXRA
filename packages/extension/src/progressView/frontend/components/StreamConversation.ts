@@ -73,6 +73,7 @@ export class StreamConversation extends LitElement {
           .view=${view}
           .surface=${surface}
           .host=${this.host}
+          .nowMs=${this.nowMs}
         ></tool-use-stream-content>`;
       case 'workflow':
         return html`<workflow-stream-content

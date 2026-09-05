@@ -6,7 +6,6 @@
  * cache, not a selection. On the extension and the TUI it is degenerate,
  * one root and `open` of length one.
  */
-import { z } from 'zod';
 
 export interface Shell {
   /** Which paper the view is showing. */
@@ -17,39 +16,6 @@ export interface Shell {
   readonly collapsed: readonly string[];
   /** The rail's search, across papers. Never persisted. */
   readonly search: string;
-}
-
-const SessionKeySchema = z.string().min(1);
-
-export const PersistedShellSchema = z.object({
-  active: SessionKeySchema,
-  open: z.array(SessionKeySchema).prefault([]),
-  collapsed: z.array(SessionKeySchema).prefault([]),
-});
-export type PersistedShell = z.infer<typeof PersistedShellSchema>;
-
-export function emptyShell(active: string): Shell {
-  return { active, open: [active], collapsed: [], search: '' };
-}
-
-export function shellFromPersisted(persisted: PersistedShell): Shell {
-  const open = persisted.open.includes(persisted.active)
-    ? persisted.open
-    : [persisted.active, ...persisted.open];
-  return {
-    active: persisted.active,
-    open,
-    collapsed: persisted.collapsed.filter((key) => open.includes(key)),
-    search: '',
-  };
-}
-
-export function toPersistedShell(shell: Shell): PersistedShell {
-  return {
-    active: shell.active,
-    open: [...shell.open],
-    collapsed: [...shell.collapsed],
-  };
 }
 
 export type ShellAction =

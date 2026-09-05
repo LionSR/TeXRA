@@ -96,7 +96,7 @@ export interface WorkbenchTab {
  * its streams nested beneath it, or the active paper in focus with a
  * switcher on top and the other papers' live streams in one card.
  */
-export const PAPERS_LAYOUTS = ['sections', 'focus'] as const;
+const PAPERS_LAYOUTS = ['sections', 'focus'] as const;
 export type PapersLayout = (typeof PAPERS_LAYOUTS)[number];
 
 export interface DesktopTaskShellState {

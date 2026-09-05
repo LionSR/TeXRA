@@ -59,7 +59,7 @@ export class ToolsSheet extends LitElement {
         background: var(--wa-color-surface-default);
         color: var(--wa-color-text-normal);
         border-top: var(--border-thin) solid var(--wa-color-surface-border);
-        box-shadow: 0 -8px 28px rgb(0 0 0 / 0.1);
+        box-shadow: var(--wa-shadow-l);
       }
 
       .sheet-header {

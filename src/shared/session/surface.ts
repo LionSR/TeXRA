@@ -29,11 +29,11 @@ import type { SessionView } from './sessionView';
  * host's (`openedFiles`) or the Tools sheet's (`toolsSheetOpen` below), so
  * a per-view copy would answer a question the host snapshot already owns.
  */
-export const LaunchSurfaceSchema = MainViewPersistedStateSchema.omit({
+const LaunchSurfaceSchema = MainViewPersistedStateSchema.omit({
   openedFiles: true,
   latexdiffsVisible: true,
 });
-export type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
+type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
 
 /** A follow-up in progress for one stream. Only `text` persists. */
 export interface Draft {
@@ -51,14 +51,14 @@ export const EMPTY_DRAFT: Draft = {
 };
 
 const ExpansionOverrideSchema = z.enum(['expanded', 'collapsed']);
-export type ExpansionOverride = z.infer<typeof ExpansionOverrideSchema>;
+type ExpansionOverride = z.infer<typeof ExpansionOverrideSchema>;
 
 /**
  * The desktop workbench layout rides in the surface as the desktop's own
  * record: `packages/desktop` declares its shape and the shared record only
  * carries it through persistence. Null on hosts without a workbench.
  */
-export type WorkbenchLayout = Readonly<Record<string, unknown>>;
+type WorkbenchLayout = Readonly<Record<string, unknown>>;
 
 export interface Surface {
   /** Which paper this surface is for; the layer key. Never persisted. */
@@ -98,7 +98,7 @@ function entries<K extends z.ZodType, V extends z.ZodType>(key: K, value: V) {
  * a surface saved by an older build is still a valid surface; a corrupt
  * field fails the parse loudly rather than becoming a silent default.
  */
-export const PersistedSurfaceSchema = z.object({
+const PersistedSurfaceSchema = z.object({
   selected: StreamTabIdSchema.nullable().prefault(null),
   launch: LaunchSurfaceSchema.prefault({}),
   /** Text only; images and the polished and transcribed variants are not. */
@@ -111,13 +111,13 @@ export const PersistedSurfaceSchema = z.object({
   drawerOpen: z.boolean().prefault(false),
   workbench: z.record(z.string(), z.unknown()).nullable().prefault(null),
 });
-export type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
+type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
 
 export function emptySurface(session: string): Surface {
   return surfaceFromPersisted(session, PersistedSurfaceSchema.parse({}));
 }
 
-export function surfaceFromPersisted(
+function surfaceFromPersisted(
   session: string,
   persisted: PersistedSurface,
 ): Surface {
@@ -140,23 +140,6 @@ export function surfaceFromPersisted(
     toolsSheetOpen: false,
     search: '',
     workbench: persisted.workbench,
-  };
-}
-
-export function toPersistedSurface(surface: Surface): PersistedSurface {
-  return {
-    selected: surface.selected,
-    launch: surface.launch,
-    drafts: [...surface.drafts]
-      .filter(([, draft]) => draft.text !== '')
-      .map(([id, draft]) => [id, draft.text]),
-    inquiryDrafts: [...surface.inquiryDrafts],
-    expanded: [...surface.expanded],
-    groups: [...surface.groups].map(([id, groups]) => [id, [...groups]]),
-    phase: [...surface.phase],
-    scroll: [...surface.scroll],
-    drawerOpen: surface.drawerOpen,
-    workbench: surface.workbench,
   };
 }
 
@@ -192,45 +175,6 @@ export function resolvePhase(
   }
   const opened = phases.findLast((phase) => phase.opened);
   return opened?.key ?? phases.at(0)?.key ?? null;
-}
-
-function pruneMap<V>(
-  map: ReadonlyMap<StreamTabId, V>,
-  live: ReadonlySet<StreamTabId>,
-): ReadonlyMap<StreamTabId, V> {
-  let pruned: Map<StreamTabId, V> | undefined;
-  for (const id of map.keys()) {
-    if (live.has(id)) continue;
-    pruned ??= new Map(map);
-    pruned.delete(id);
-  }
-  return pruned ?? map;
-}
-
-/**
- * Drop every per-stream entry whose stream has left the view. An id is
- * never reused, so an entry for a removed stream can never become valid
- * again; without this the live maps and the persisted state grow without
- * bound and keep a deleted conversation's draft. Returns the same record
- * when nothing was dropped, so a signal set is a no-op.
- */
-export function pruneSurface(surface: Surface, view: SessionView): Surface {
-  const live = new Set(view.streams.keys());
-  const drafts = pruneMap(surface.drafts, live);
-  const expanded = pruneMap(surface.expanded, live);
-  const groups = pruneMap(surface.groups, live);
-  const phase = pruneMap(surface.phase, live);
-  const scroll = pruneMap(surface.scroll, live);
-  if (
-    drafts === surface.drafts &&
-    expanded === surface.expanded &&
-    groups === surface.groups &&
-    phase === surface.phase &&
-    scroll === surface.scroll
-  ) {
-    return surface;
-  }
-  return { ...surface, drafts, expanded, groups, phase, scroll };
 }
 
 /**

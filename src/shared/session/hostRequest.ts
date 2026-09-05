@@ -18,7 +18,7 @@ import {
 
 const streamScoped = { streamId: StreamTabIdSchema };
 
-export const HostRequestSchema = z.discriminatedUnion('kind', [
+const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('openFile'),
     path: z.string().min(1),

@@ -27,7 +27,7 @@ import {
   type TranscriptRow,
   type WorkflowTaskRow,
 } from '@shared/transcript';
-import { ToggleStateStore } from '@shared/state/ToggleStateStore';
+
 import {
   workflowRunModel,
   type ChildRunProgress,
@@ -52,7 +52,6 @@ type TaskGroupListInternals = HTMLElement & {
   hasStreams: boolean;
   isToolUse: boolean;
   terminal: boolean;
-  toggleStates: ToggleStateStore | null;
   runModel: WorkflowRunModel | null;
   updateComplete: Promise<boolean>;
   readonly index: TranscriptIndex;
@@ -145,14 +144,12 @@ function renderList(
   groups: TaskGroup[],
   rows: TranscriptRow[],
   options: {
-    toggleStates?: ToggleStateStore;
     workflowAttemptId?: string;
     workflowPlan?: WorkflowPlanMarker;
     childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
 ): Promise<TaskGroupListInternals> {
-  const { toggleStates, workflowAttemptId, workflowPlan, childProgress } =
-    options;
+  const { workflowAttemptId, workflowPlan, childProgress } = options;
   // The board takes the run model ready-made from the state selector; build
   // the same one here, gated exactly as `activeRunModel$` gates it.
   const runModel =
@@ -174,7 +171,6 @@ function renderList(
     groups,
     rows,
     runModel,
-    ...(toggleStates === undefined ? {} : { toggleStates }),
   });
 }
 
@@ -219,7 +215,7 @@ describe('task-group-list ungrouped message indexes', () => {
     };
     const next = [original[0], updated, original[2]];
 
-    list.index.updateCachedRowRefs(next, original, [1]);
+    list.index.updateCachedRowRefs(next, original);
 
     expect(list.index.ungrouped[1]).toBe(updated);
 
@@ -229,7 +225,7 @@ describe('task-group-list ungrouped message indexes', () => {
     );
     expect(timelineEntry?.row).toBe(original[1]);
 
-    list.index.updateTimelineRowRefs(next, [1]);
+    list.index.updateTimelineRowRefs();
 
     expect(timelineEntry?.row).toBe(updated);
   });
@@ -256,8 +252,8 @@ describe('task-group-list ungrouped message indexes', () => {
 
     const updated = { ...inserted, text: transcriptText('two updated') };
     const next = [...original, updated];
-    list.index.updateCachedRowRefs(next, withInsertion, [2]);
-    list.index.updateTimelineRowRefs(next, [2]);
+    list.index.updateCachedRowRefs(next, withInsertion);
+    list.index.updateTimelineRowRefs();
 
     expect(list.index.ungrouped[1]).toBe(updated);
     expect(
@@ -434,7 +430,6 @@ describe('task-group-list renumbered resync ordering', () => {
       rows: renumbered,
       previousRows: live,
       rowsChanged: true,
-      deltaIndices: [0, 1, 2],
     });
 
     expect(list.index.ungrouped.map((row) => row.id)).toEqual([
@@ -908,9 +903,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       phases: [{ title: 'Map' }, { title: 'Publish' }],
       tasks: [{ id: 'report', label: 'Write the report', phase: 'Publish' }],
     };
-    const toggleStates = new ToggleStateStore();
     const list = await renderList([run, phase], rows, {
-      toggleStates,
       workflowPlan,
       childProgress: new Map([
         ['researcher@gpt#live' as StreamTabId, { toolCallCount: 3 }],
@@ -941,7 +934,6 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         []),
     ].map((card) => card.getAttribute('data-log-id'));
     expect(cardsAfter).toEqual(['live', 'q1', 'q2', 'q3']);
-    expect(toggleStates.get('phase-map#queued')).toBe(false);
 
     // A phase the plan declares and the run has not opened follows with its
     // hollow glyph and the plan's tasks for it.

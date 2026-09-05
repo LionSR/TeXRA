@@ -15,7 +15,7 @@ import {
   type GettingStartedAction,
   type RunOutcome,
   type StreamLifecycleStatus,
-  type StreamLogEntry,
+  type StreamTabId,
   type TaskGroup,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
@@ -39,7 +39,7 @@ import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
-import { ToggleStateStore } from '@shared/state/ToggleStateStore';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
@@ -95,20 +95,8 @@ export class TaskGroupList extends LitElement {
   /** All transcript rows to render */
   @property({ attribute: false }) rows: TranscriptRow[] = [];
 
-  /**
-   * Source log entries. Read only by the terminal render path, which shows a
-   * process stream's raw output text rather than transcript rows.
-   */
-  @property({ attribute: false }) entries: StreamLogEntry[] = [];
-
-  /** Existing row indices updated by the most recent backend delta. */
-  @property({ attribute: false }) updatedRowIndices: readonly number[] = [];
-
-  /** Generation immediately before updatedRowIndices was collected. */
-  @property({ attribute: false }) updatedRowBaseGeneration = 0;
-
-  /** Current generation for the rows array. */
-  @property({ attribute: false }) rowGeneration = 0;
+  /** The stream these rows belong to; every group toggle names it. */
+  @property({ attribute: false }) streamId: StreamTabId | null = null;
 
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
@@ -137,8 +125,10 @@ export class TaskGroupList extends LitElement {
       : undefined;
   }
 
-  /** Toggle state store for persistence */
-  @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
+  /** `Surface.groups` for this stream: true is expanded, false collapsed,
+   *  a missing key expanded. Toggles go out as surface actions. */
+  @property({ attribute: false }) expanded:
+    ReadonlyMap<string, boolean> | undefined = undefined;
 
   /**
    * Render log output in terminal style (monospace, no bullets/timestamps).
@@ -174,9 +164,6 @@ export class TaskGroupList extends LitElement {
 
   /** Threshold for detecting "near bottom" in scroll listener (px) */
   private static readonly STICKY_THRESHOLD = 150;
-
-  /** Row generation represented by the current cached tree/timeline. */
-  private processedRowGeneration = 0;
 
   /** Handle native scroll events from the log container to track user intent */
   private handleScroll = (): void => {
@@ -239,18 +226,10 @@ export class TaskGroupList extends LitElement {
       previousRows: changedProperties.get('rows') as
         TranscriptRow[] | undefined,
       rowsChanged,
-      deltaIndices:
-        this.updatedRowBaseGeneration === this.processedRowGeneration
-          ? this.updatedRowIndices
-          : null,
     });
     if (renderWindowsStale) {
       this.resetRenderWindows();
     }
-  }
-
-  override updated(): void {
-    this.processedRowGeneration = this.rowGeneration;
   }
 
   /**
@@ -376,8 +355,7 @@ export class TaskGroupList extends LitElement {
 
   /** Check if a group is expanded */
   private isExpanded(groupId: string): boolean {
-    if (!this.toggleStates) return true;
-    return this.toggleStates.get(groupId) !== true;
+    return this.expanded?.get(groupId) !== false;
   }
 
   private isNearBottom(threshold: number): boolean {
@@ -395,17 +373,22 @@ export class TaskGroupList extends LitElement {
    * groups would otherwise re-trigger their ancestors — guard on
    * target === currentTarget. Open state comes from the event type; groupId
    * from the element ID (no per-row closures). Lit binds the host as `this`.
+   * The surface owns the answer: the toggle is dispatched, and the group
+   * body follows the `expanded` map the host hands back.
    */
   private handleGroupToggle(event: Event): void {
     if (event.target !== event.currentTarget) return;
     const details = event.currentTarget as HTMLElement;
     const groupId = details.id.slice(GROUP_DOM_IDS.DETAILS_PREFIX.length);
-    if (this.toggleStates) {
-      // toggleStates stores `true` = collapsed; wa-show means now-open.
-      this.toggleStates.set(groupId, event.type !== 'wa-show');
-    }
-    // Re-render to add/remove children from the DOM (lazy collapsed groups)
-    this.requestUpdate();
+    if (this.streamId === null) return;
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'group',
+        streamId: this.streamId,
+        key: groupId,
+        expanded: event.type === 'wa-show',
+      }),
+    );
   }
 
   /** Render child group header inline (only called for non-root groups) */
@@ -519,10 +502,13 @@ export class TaskGroupList extends LitElement {
     `;
   }
 
+  /** A process stream's output: its plain log rows, in order, as one text. */
   private renderTerminalOutput(): TemplateResult {
     return html`<terminal-output
       fill
-      .text=${this.entries.map((entry) => entry.text ?? '').join('')}
+      .text=${this.rows
+        .map((row) => (row.kind === 'log' ? row.text.full : ''))
+        .join('')}
     ></terminal-output>`;
   }
 
@@ -562,11 +548,7 @@ export class TaskGroupList extends LitElement {
     // Pre-output placeholder, including terminal-mode (process-agent) streams:
     // with no output the terminal buffer is empty and would render a blank
     // pane, so show the same "Run is starting" / idle text instead.
-    if (
-      this.rows.length === 0 &&
-      this.entries.length === 0 &&
-      this.groups.length === 0
-    ) {
+    if (this.rows.length === 0 && this.groups.length === 0) {
       const active = isInFlightPhase(this.streamStatus);
       return html`
         <div class="log-placeholder">
