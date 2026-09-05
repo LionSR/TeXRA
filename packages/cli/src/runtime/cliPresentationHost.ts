@@ -20,6 +20,7 @@ import {
   type Logger,
   type LogSink,
 } from './logSinks';
+import type { ExecutionId } from '@shared/schemas';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
 import type { CliContext } from './cliContext';
@@ -29,7 +30,10 @@ export interface CliRuntimeHost {
     event: K,
     payload: RuntimePresentationEventPayloads[K],
   ): boolean;
-  attachRunProgressRenderer(session: SessionHandle): () => void;
+  attachRunProgressRenderer(
+    session: SessionHandle,
+    options?: { readonly executionId?: ExecutionId },
+  ): () => void;
   prepareInteractivePrompt?: () => void;
   emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
   close(): Promise<void>;
@@ -118,8 +122,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     };
 
   return {
-    attachRunProgressRenderer: (session) =>
-      runProgress ? runProgress.attach(session) : () => undefined,
+    attachRunProgressRenderer: (session, options) =>
+      runProgress ? runProgress.attach(session, options) : () => undefined,
     prepareInteractivePrompt: () => runProgress?.preserve(),
     emitApprovalBypassState({ streamId, kind, bypassActive }) {
       if (closed || !ndjson) return;

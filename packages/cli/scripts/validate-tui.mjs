@@ -58,7 +58,7 @@ const UP = ESC + '[A';
 const DOWN = ESC + '[B';
 const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
-const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] running/;
+const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] Running/;
 const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
   // Keep in sync with FOCUSED_BACKGROUND_TASK in src/shared/copy/nestedRuns.ts.
   'This background task is no longer accepting follow-ups; press Tab to select a session';
@@ -114,21 +114,6 @@ const DEFAULT_HARNESS_RELATIVE_PATH = path.join(
 const HARNESS = process.env.TEXRA_TUI_HARNESS
   ? path.resolve(process.env.TEXRA_TUI_HARNESS)
   : path.resolve(CLI_ROOT, DEFAULT_HARNESS_RELATIVE_PATH);
-// The `child-event-order-*` scenarios (issue #7972) must render
-// byte-identical frames across separate process launches, so they share one
-// fixed working directory instead of each getting its own random
-// `mkdtempSync` cwd (tui-harness.tsx's default) — the harness reflects `cwd`
-// in rendered session chrome, and a different path per scenario would fail
-// the comparison for a reason unrelated to child-stream event ordering.
-// Removed on every exit path (including `--help`/`--list`, which never touch
-// it) rather than only after a run that selects these scenarios, so it never
-// leaks a temp dir the way an un-cleaned-up `mkdtempSync` normally would.
-const CHILD_EVENT_ORDER_CWD = mkdtempSync(
-  path.join(tmpdir(), 'texra-tui-child-event-order-'),
-);
-process.on('exit', () => {
-  rmSync(CHILD_EVENT_ORDER_CWD, { recursive: true, force: true });
-});
 // The static-transcript repaint scenarios compare a resize/resume repaint
 // against a from-scratch render of the same retained tail, so they too need a
 // byte-stable cwd across the canonical/reflow pair.
@@ -138,8 +123,6 @@ const STATIC_TRANSCRIPT_CWD = mkdtempSync(
 process.on('exit', () => {
   rmSync(STATIC_TRANSCRIPT_CWD, { recursive: true, force: true });
 });
-const CHILD_EVENT_ORDER_MARKER_OSC = 777;
-const CHILD_EVENT_ORDER_MARKER_PREFIX = 'texra-harness-child-event-order:';
 
 // --- scenarios (verified against the committed harness) ------------------
 const SCENARIOS = [
@@ -729,7 +712,7 @@ const SCENARIOS = [
       'choose `r run as goal`',
       'Goal mode auto-approves bash only',
     ],
-    unexpect: ['Unknown command: /goal', 'running 1s'],
+    unexpect: ['Unknown command: /goal', 'Running 1s'],
   },
   {
     name: 'backslash-goal-help',
@@ -742,7 +725,7 @@ const SCENARIOS = [
       'choose `r run as goal`',
       'Goal mode auto-approves bash only',
     ],
-    unexpect: ['Unknown command: /goal', 'running 1s'],
+    unexpect: ['Unknown command: /goal', 'Running 1s'],
   },
   {
     name: 'slash-resume-empty',
@@ -1213,7 +1196,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
     frame: 'viewport',
     expectPatterns: [
-      /◆ [-|\/\\] running (?:4[2-9]s|5\ds|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
+      /◆ [-|\/\\] Running (?:4[2-9]s|5\ds|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
     ],
     unexpect: ['✻ Working', '✻ Thinking'],
   },
@@ -2317,7 +2300,7 @@ const SCENARIOS = [
     expect: [
       'PLAN-GOAL',
       'auto-approvals: commands',
-      'status: running',
+      'status: Running',
       'goal: active',
       'goal objective: Coordinate a short math proof through CLI chat.',
       '/status details',
@@ -2434,324 +2417,6 @@ const SCENARIOS = [
     ],
     unexpect: ['Option-p tasks', 'Option-s subagents'],
   },
-  // PTY ordering tests (issue #7972): the harness drives one child stream's
-  // attachment/roster/edge/status/removal facts through the real
-  // `attachSessionSignalsAdapter` rail (`sessionSignalsAdapter.ts`) — the same
-  // wiring `chatSessionController.ts` installs for a real run — which lands
-  // them on the shared `SessionState`; the CLI's `childRosters`/`parentStream`
-  // computed signals (`childExecutions.ts`) re-derive from there, and the
-  // harness keeps no side channel into either. After each fact, the harness
-  // awaits the Ink render flush and emits an out-of-band marker. The validator
-  // snapshots xterm at that exact byte-stream boundary, so a transiently-wrong
-  // frame fails the scenario even when the next fact has already arrived.
-  //
-  // `canonical`/`roster-first`/`edge-first`/`status-first` apply the same four
-  // facts (attachment, running status, roster, edge) in every order the
-  // vitest "child-stream ordered transition matrix" proves order-equivalent
-  // (src/test-kernel/cli/TuiStateAndFocus.vitest.mts, scenarios 1-4) and must
-  // converge on a byte-identical settled frame. `equivalentFrameTo` names the
-  // canonical frame oracle. The remaining four correct old ambiguous transients
-  // (promotion, reattachment, parent removal, completion+removal — matrix
-  // scenarios 6, 7, 11, and 5-then-8) get their own checkpoint expectations
-  // instead of byte-equivalence, per the design doc.
-  {
-    name: 'child-event-order-canonical',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILD_EVENT_ORDER: 'canonical',
-      HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
-    },
-    // Steps: A, S(running), R_P+, E_P+.
-    checkpoints: [
-      {
-        unexpect: ['Tab sessions', '1 agent', 'orderChecker'],
-      },
-      {
-        unexpect: ['Tab sessions', '1 agent', 'orderChecker'],
-      },
-      {
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-      {
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-    ],
-    expect: ['1 agent', 'Tab sessions'],
-    unexpect: ['orderChecker'],
-  },
-  {
-    name: 'child-event-order-roster-first',
-    equivalentFrameTo: 'child-event-order-canonical',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILD_EVENT_ORDER: 'roster-first',
-      HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
-    },
-    // Steps: R_P+, A, S(running), E_P+.
-    checkpoints: [
-      {
-        // Active via the roster's retained-parent fallback, before the
-        // child's own StreamSlice exists — not yet focusable.
-        expect: ['1 agent'],
-        unexpect: ['Tab sessions', 'orderChecker'],
-      },
-      {
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-      {
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-      {
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-    ],
-    expect: ['1 agent', 'Tab sessions'],
-    unexpect: ['orderChecker'],
-  },
-  {
-    name: 'child-event-order-edge-first',
-    equivalentFrameTo: 'child-event-order-canonical',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILD_EVENT_ORDER: 'edge-first',
-      HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
-    },
-    // Steps: E_P+, A, S(running), R_P+.
-    checkpoints: [
-      {
-        // An edge alone cannot be focused until the child's StreamSlice exists.
-        expect: ['◆'],
-        unexpect: [
-          'Tab sessions',
-          '1 agent',
-          'orderChecker',
-          'harness-child-eve',
-        ],
-      },
-      {
-        // Attachment creates the slice and makes the existing edge focusable;
-        // the running marker still waits for the next status fact.
-        expect: ['Tab sessions'],
-        unexpect: ['1 agent', 'orderChecker', 'harness-child-eve'],
-      },
-      {
-        expect: ['Tab sessions'],
-        unexpect: ['1 agent', 'orderChecker', 'harness-child-eve'],
-      },
-      {
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-    ],
-    expect: ['1 agent', 'Tab sessions'],
-    unexpect: ['orderChecker'],
-  },
-  {
-    name: 'child-event-order-status-first',
-    equivalentFrameTo: 'child-event-order-canonical',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILD_EVENT_ORDER: 'status-first',
-      HARNESS_CWD: CHILD_EVENT_ORDER_CWD,
-    },
-    // Steps: S(running), A, E_P+, R_P+.
-    checkpoints: [
-      {
-        unexpect: [
-          'Tab sessions',
-          '1 agent',
-          'orderChecker',
-          'harness-child-eve',
-        ],
-      },
-      {
-        // Attachment does not supply a parent edge, so the running slice is
-        // registered but still absent from the root's session list.
-        unexpect: [
-          'Tab sessions',
-          '1 agent',
-          'orderChecker',
-          'harness-child-eve',
-        ],
-      },
-      {
-        expect: ['Tab sessions'],
-        unexpect: ['1 agent', 'orderChecker', 'harness-child-eve'],
-      },
-      {
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-    ],
-    expect: ['1 agent', 'Tab sessions'],
-    unexpect: ['orderChecker'],
-  },
-  // The remaining four orderings correct old ambiguous transients (promotion,
-  // reattachment, parent removal, completion+removal) instead of being
-  // order-equivalent with the four above, so they get their own checkpoint
-  // expectations and no frame oracle, per the design doc.
-  {
-    name: 'child-event-order-promotion-late-roster',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILD_EVENT_ORDER: 'promotion-late-roster',
-    },
-    // Steps: A, S(running), R_P+, E_P+, E0 (promote to top-level), R_P+ (late,
-    // stale roster from the former parent).
-    checkpoints: [
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      { expect: ['Tab sessions', '1 agent'], unexpect: ['orderChecker'] },
-      { expect: ['Tab sessions', '1 agent'], unexpect: ['orderChecker'] },
-      {
-        // Promoted to top-level: no longer active under root. The historical
-        // relationship still contributes to the retained subagent count, but
-        // the unified root session list omits the unrelated row.
-        expect: ['1 agent', 'Tab sessions'],
-        unexpect: ['orderChecker'],
-      },
-      {
-        // A stale roster resend from the former parent must not resurrect
-        // the edge or active membership; only retained history remains.
-        expect: ['1 agent', 'Tab sessions'],
-        unexpect: ['orderChecker'],
-      },
-    ],
-    // Prove the root session list remains interactive after the late fact.
-    keys: ['\t', DOWN, '\r'],
-    expectExit: true,
-  },
-  {
-    name: 'child-event-order-reattach-late-old-roster',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILD_EVENT_ORDER: 'reattach-late-old-roster',
-    },
-    // Steps: A, S(running), R_other+, E_other+, E0, R_other+ (stale), E_P+
-    // (root), R_P+ (root), R_other+ (late, stale — from the child's former,
-    // never-displayed parent).
-    checkpoints: [
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      // Facts scoped to the never-displayed former parent must not leak into
-      // root's own view at any point.
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      {
-        expect: ['Tab sessions'],
-        unexpect: ['1 agent', 'orderChecker', 'harness-child-eve'],
-      },
-      {
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-      {
-        // A late, stale roster from the child's former parent must not erase
-        // active membership under the new (root) parent.
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-    ],
-    // Prove the TUI is still interactive by focusing the reattached child.
-    keys: ['\t', DOWN, '\r'],
-    expectExit: true,
-  },
-  {
-    name: 'child-event-order-parent-removal',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILD_EVENT_ORDER: 'parent-removal',
-    },
-    // Steps: S(running) [child], R_other+, E_other+, X(other) [parent
-    // removal], R_other+ (late), E_other+ (late) — `other` is never root, so
-    // none of this should ever surface on root's own view; the assertion is
-    // that late facts naming a removed parent don't resurrect it anywhere or
-    // wedge the TUI.
-    checkpoints: [
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      { unexpect: ['1 agent', 'orderChecker'] },
-      { unexpect: ['1 agent', 'orderChecker'] },
-      { unexpect: ['1 agent', 'orderChecker'] },
-      { unexpect: ['1 agent', 'orderChecker'] },
-      { unexpect: ['1 agent', 'orderChecker'] },
-    ],
-    // Prove the TUI is still interactive after the removal + late facts:
-    // nothing under the removed parent is reachable from root. Opening and
-    // confirming the root row must leave the frame and exit path intact.
-    keys: ['\t', DOWN, '\r'],
-    expect: ['◆ — API keys'],
-    unexpect: ['1 agent', 'orderChecker'],
-    expectExit: true,
-  },
-  {
-    name: 'child-event-order-completion-remove',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILD_EVENT_ORDER: 'completion-remove',
-    },
-    // Steps: A, S(running), R_P+, E_P+, R_P- (roster omission), S(terminal),
-    // X(child), R_P+ (late), E_P+ (late), A (late), late resume attempt.
-    checkpoints: [
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      { unexpect: ['Tab sessions', '1 agent', 'orderChecker'] },
-      { expect: ['Tab sessions', '1 agent'], unexpect: ['orderChecker'] },
-      { expect: ['Tab sessions', '1 agent'], unexpect: ['orderChecker'] },
-      {
-        // Untrack (roster omission) arrives before the terminal status: the
-        // retained/historical relationship survives in the compact count.
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-      {
-        expect: ['Tab sessions', '1 agent'],
-        unexpect: ['orderChecker'],
-      },
-      {
-        // Removal scrubs every trace, including the retained/historical row.
-        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
-      },
-      {
-        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
-      },
-      {
-        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
-      },
-      {
-        // A late re-attachment attempt for the removed id must stay ignored.
-        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
-      },
-      {
-        // A late resume-transition attempt is the one status fact that would
-        // otherwise reach the CLI adapter's fold (a repeated terminal
-        // transition is a same-value no-op the status machine drops before
-        // it gets there) — it must still stay suppressed by the removal
-        // tombstone.
-        unexpect: ['orderChecker', '1 agent', 'Tab sessions'],
-      },
-    ],
-    // Prove the TUI is still interactive after the removal + late facts:
-    // the removed child is unreachable, so confirming the root row must leave
-    // the frame and exit path intact.
-    keys: ['\t', DOWN, '\r'],
-    expect: ['◆ — API keys'],
-    unexpect: ['orderChecker', '1 agent'],
-    expectExit: true,
-  },
   {
     name: 'failed-subagent-status',
     frame: 'scrollback',
@@ -2764,13 +2429,13 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t'],
     expect: [
-      'strategy running',
-      'leanSolver idle',
+      'strategy Running',
+      'leanSolver Idle',
       'reviewer error',
       '3 agents',
       'Tab input',
     ],
-    unexpect: ['reviewer running'],
+    unexpect: ['reviewer Running'],
   },
   {
     name: 'subagents-with-todos-compact',
@@ -2864,7 +2529,7 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN, DOWN, '\r'],
     expect: ['strategy is checking the harness-child-strategy details'],
     unexpect: [
-      '✓ ● strategy running',
+      '✓ ● strategy Running',
       'agent: chat · model: harness-model',
       'entry-1 chat history line',
       'entry-4 chat history line',
@@ -2883,7 +2548,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, ESC, '\t'],
-    expect: ['›   ● strategy running', 'Tab input', 'Esc input'],
+    expect: ['›   ● strategy Running', 'Tab input', 'Esc input'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
@@ -2968,7 +2633,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, '\r', '\t'],
-    expect: ['1 agent', 'localChecker running'],
+    expect: ['1 agent', 'localChecker Running'],
     unexpect: [
       'leanSolver',
       'reviewer',
@@ -3018,7 +2683,7 @@ const SCENARIOS = [
       'agent: harness-agent',
       'entry-1 chat history line',
       'entry-4 chat history line',
-      '✓ ● main running',
+      '✓ ● main Running',
       'signal read during notification phase',
       'ERROR',
     ],
@@ -3057,8 +2722,8 @@ const SCENARIOS = [
     bootExpect: 'TeXRA',
     frame: 'viewport',
     expect: ['API keys'],
-    expectPatterns: [/◆ [-|\/\\] running 1m/],
-    unexpect: ['◆running', 'API keys3'],
+    expectPatterns: [/◆ [-|\/\\] Running 1m/],
+    unexpect: ['◆Running', 'API keys3'],
   },
   {
     name: 'stopped-subagent-list',
@@ -3072,7 +2737,7 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN, DOWN, 'k'],
     expect: [
       'Harness kill requested for harness-child-strategy.',
-      '›   ● strategy stopped',
+      '›   ● strategy Stopped',
       'Enter focus',
       'Tab input',
       'Esc input',
@@ -3093,7 +2758,7 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r'],
     frame: 'viewport',
-    expect: ['◆ stopped', 'root active', 'Ctrl-C stop root', 'Esc back'],
+    expect: ['◆ Stopped', 'root active', 'Ctrl-C stop root', 'Esc back'],
     unexpect: [STOPPED_SUBAGENT_INPUT_MESSAGE_START],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
@@ -3107,11 +2772,11 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r', '\t', UP, '\r'],
     frame: 'viewport',
-    expect: ['◆ idle', 'root active'],
+    expect: ['◆ Idle', 'root active'],
     unexpect: [
       'Harness interrupt requested.',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
-      '› ✓ ● strategy stopped',
+      '› ✓ ● strategy Stopped',
     ],
   },
   {
@@ -3134,7 +2799,7 @@ const SCENARIOS = [
       '\r',
     ],
     frame: 'viewport',
-    expect: ['◆ stopped', 'root active', 'Esc back'],
+    expect: ['◆ Stopped', 'root active', 'Esc back'],
     unexpect: [
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
       STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE,
@@ -3195,7 +2860,7 @@ const SCENARIOS = [
     },
     frame: 'viewport',
     expect: [
-      'idle',
+      'Idle',
       'Ctrl-C exit',
       'Waiting for leanSolver',
       'Coordinate a small math proof through nested CLI work.',
@@ -3264,7 +2929,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Harness focused interrupt requested for harness-stream-1.',
-      '◆ stopped API keys',
+      '◆ Stopped API keys',
       'latest stopped prompt',
     ],
     unexpect: ['older stopped prompt', 'Choosing a session'],
@@ -3281,10 +2946,10 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Harness focused interrupt requested for harness-stream-1.',
-      '✓ ● main stopped',
-      'strategy running',
-      'leanSolver idle',
-      'reviewer running',
+      '✓ ● main Stopped',
+      'strategy Running',
+      'leanSolver Idle',
+      'reviewer Running',
       '3 agents',
       'Choosing a session',
     ],
@@ -3301,10 +2966,10 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN, DOWN, '\r', { input: ESC, delayMs: 700 }, '\t'],
     frame: 'viewport',
     expect: [
-      '› ✓ ● main running',
-      'strategy running',
-      'leanSolver idle',
-      'reviewer running',
+      '› ✓ ● main Running',
+      'strategy Running',
+      'leanSolver Idle',
+      'reviewer Running',
       '3 agents',
       'Choosing a session',
       'Ctrl-C stop',
@@ -3312,8 +2977,8 @@ const SCENARIOS = [
     unexpect: [
       'Harness interrupt requested.',
       'Harness focused interrupt requested',
-      'main stopped',
-      'strategy stopped',
+      'main Stopped',
+      'strategy Stopped',
     ],
   },
   {
@@ -3339,8 +3004,8 @@ const SCENARIOS = [
       'Choosing a session',
       'Harness interrupt requested.',
       'Harness focused interrupt requested',
-      'main stopped',
-      'strategy stopped',
+      'main Stopped',
+      'strategy Stopped',
     ],
   },
   {
@@ -3371,11 +3036,11 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: [{ input: ESC, delayMs: 80 }, '2'],
     frame: 'viewport',
-    expect: ['idle', 'root active', 'Tab sessions'],
+    expect: ['Idle', 'root active', 'Tab sessions'],
     unexpect: [
       'Harness focused interrupt requested',
       'Harness interrupt requested.',
-      '› ✓ ● main stopped',
+      '› ✓ ● main Stopped',
     ],
   },
   {
@@ -3405,7 +3070,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Harness interrupt requested.',
-      '◆ stopped API keys',
+      '◆ Stopped API keys',
       '3 agents',
       'Tab sessions',
       'Ctrl-C exit',
@@ -4249,16 +3914,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
   let lastData = Date.now();
   let exited = null;
   let rawOutput = '';
-  const childEventFrames = new Map();
   const writeQueue = new PQueue({ concurrency: 1 });
-  if (scenario.env?.HARNESS_CHILD_EVENT_ORDER) {
-    term.parser.registerOscHandler(CHILD_EVENT_ORDER_MARKER_OSC, (data) => {
-      if (!data.startsWith(CHILD_EVENT_ORDER_MARKER_PREFIX)) return false;
-      const label = data.slice(CHILD_EVENT_ORDER_MARKER_PREFIX.length);
-      childEventFrames.set(label, renderFrame(term));
-      return true;
-    });
-  }
   const frameSnapshot = async () => {
     await writeQueue.onIdle();
     return renderFrame(term);
@@ -4319,60 +3975,7 @@ async function runScenarioWithResources(scenario, fakeClipboard, index) {
     }
   }
 
-  // The harness writes one marker only after each event's Ink render has
-  // flushed. The xterm OSC handler snapshots its buffer at the marker's exact
-  // position in the PTY byte stream, so checkpoint identity comes from fixture
-  // progression, not from a second wall-clock schedule in this process.
   const checkpointFailures = [];
-  const waitForChildEventFrame = async (label, timeoutMs) => {
-    const deadline = Date.now() + timeoutMs;
-    let checkpointFrame = childEventFrames.get(label);
-    while (checkpointFrame === undefined && Date.now() < deadline) {
-      if (exited) break;
-      await sleep(40);
-      await frameSnapshot();
-      checkpointFrame = childEventFrames.get(label);
-    }
-    return checkpointFrame;
-  };
-  if ((scenario.checkpoints?.length ?? 0) > 0) {
-    const mountedFrame = await waitForChildEventFrame(
-      'mounted',
-      Number(scenario.checkpointMs ?? 4000),
-    );
-    if (mountedFrame === undefined) {
-      checkpointFailures.push('fixture mount render marker missing');
-    }
-  }
-  for (const [checkpointIndex, checkpoint] of (
-    scenario.checkpoints ?? []
-  ).entries()) {
-    const fullCheckpointFrame = await waitForChildEventFrame(
-      `step-${checkpointIndex + 1}`,
-      Number(checkpoint.timeoutMs ?? scenario.checkpointMs ?? 4000),
-    );
-    if (fullCheckpointFrame === undefined) {
-      checkpointFailures.push(
-        `checkpoint ${checkpointIndex + 1}: fixture render marker missing`,
-      );
-      continue;
-    }
-    const checkpointFrame = scenarioFrame(scenario, fullCheckpointFrame, rows);
-    for (const t of checkpoint.expect ?? []) {
-      if (!checkpointFrame.includes(t)) {
-        checkpointFailures.push(
-          `checkpoint ${checkpointIndex + 1}: expected text missing: ${JSON.stringify(t)}`,
-        );
-      }
-    }
-    for (const t of checkpoint.unexpect ?? []) {
-      if (checkpointFrame.includes(t)) {
-        checkpointFailures.push(
-          `checkpoint ${checkpointIndex + 1}: unexpected text present: ${JSON.stringify(t)}`,
-        );
-      }
-    }
-  }
 
   for (const key of scenario.keys ?? []) {
     const input = typeof key === 'string' ? key : key.input;

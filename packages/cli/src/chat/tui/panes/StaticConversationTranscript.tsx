@@ -12,28 +12,29 @@ import { Box, Static, Text } from 'ink';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
+import type { SessionView } from '@shared/session/sessionView';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
+  rootStreamId as rootStreamIdSignal,
   sessionMeta as sessionMetaSignal,
-  streamPhaseFor,
-  streams as streamsSignal,
   type SessionMeta,
-  type StreamSlice,
 } from '../state/cliState';
 import {
-  childRosters as childRostersSignal,
-  parentStream as parentStreamSignal,
-  sessionStateRevision,
-  streamMetadataFor,
-  streamStateFor,
-  type ChildRosters,
-} from '../state/childExecutions';
+  ancestorPhaseLabel,
+  sessionView,
+  streamPhaseOf,
+  streamViewOf,
+} from '../state/sessionView';
 import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
-import { streamLabelForId, streamViewForId } from '../state/streamViews';
-import { ancestorWorkflowPhaseLabel } from '../state/workflowPhase';
+import {
+  mergeLocalNotices,
+  mergedSettledRows,
+  notices as noticesSignal,
+  noticesFor,
+} from '../state/transcript';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
@@ -118,48 +119,62 @@ function shortenCwd(cwd: string): string {
   return cwd;
 }
 
+/** The header facts of a child scrollback stream, read from the fold. */
+interface ChildHeader {
+  readonly label: string;
+  readonly modelLabel: string | null;
+  readonly streamKind: 'workflow script' | 'subagent';
+  readonly phaseText: string | undefined;
+  readonly parentLabel: string;
+}
+
+/**
+ * What the scrollback paints: the stream's folded rows joined with this
+ * TUI's notices, its settled prefix, and the facts the session header names.
+ */
+interface StaticScrollbackSource {
+  readonly entries: readonly TranscriptRow[] | undefined;
+  readonly settledRows: number;
+  readonly status: StreamPhase | undefined;
+  /** A child whose model the fold has not folded yet: the header waits. */
+  readonly waitingForChildIdentity: boolean;
+  /** The child header; undefined paints the session (root) header. */
+  readonly child: ChildHeader | undefined;
+  /** No scrollback stream and nothing local: `/clear` emptied the screen. */
+  readonly hardReset: boolean;
+}
+
+function childHeaderFor(
+  view: SessionView,
+  streamId: StreamTabId | undefined,
+): ChildHeader | undefined {
+  const stream = streamViewOf(view, streamId);
+  if (!stream?.parentId) return undefined;
+  const parent = streamViewOf(view, stream.parentId);
+  return {
+    label: stream.label,
+    modelLabel: stream.modelLabel,
+    streamKind:
+      stream.identity?.kind === 'multiAgentWorkflow'
+        ? 'workflow script'
+        : 'subagent',
+    phaseText: ancestorPhaseLabel(view, stream.id),
+    parentLabel:
+      parent === undefined || parent.parentId === null ? 'main' : parent.label,
+  };
+}
+
 export function sessionHeaderIdentityLine(
   meta: SessionMeta,
-  context: {
-    readonly childRosters?: ChildRosters;
-    readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
-    readonly streamId?: StreamTabId;
-    readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
-  } = {},
+  child?: ChildHeader,
 ): string {
-  const parentStream = context.parentStream;
-  const parentStreamId =
-    context.streamId && parentStream?.get(context.streamId);
-  if (context.streamId && parentStreamId && parentStream && context.streams) {
-    const view = streamViewForId({
-      activeStreamId: context.streamId,
-      childRosters: context.childRosters ?? new Map(),
-      parentStream,
-      streamId: context.streamId,
-      streams: context.streams,
-    });
-    // The shared tab projection owns the model label; the session's own model
-    // is the fallback for a stream whose config has not resolved.
-    const model = view.info?.modelLabel ?? getModelLabel(meta.model || '—');
-    const streamKind =
-      view.info?.identity?.kind === 'multiAgentWorkflow'
-        ? 'workflow script'
-        : 'subagent';
-    const phaseText = ancestorWorkflowPhaseLabel({
-      stageOf: (id) => streamStateFor(id)?.stage,
-      parentStream,
-      streamId: context.streamId,
-    });
-    const parentLabel = streamLabelForId({
-      childRosters: context.childRosters ?? new Map(),
-      parentStream,
-      streamId: parentStreamId,
-    });
-    return phaseText
-      ? `${streamKind}: ${view.label} · ${phaseText} · parent: ${parentLabel} · model: ${model}`
-      : `${streamKind}: ${view.label} · parent: ${parentLabel} · model: ${model}`;
+  if (child) {
+    const model = child.modelLabel ?? getModelLabel(meta.model || '-');
+    return child.phaseText
+      ? `${child.streamKind}: ${child.label} · ${child.phaseText} · parent: ${child.parentLabel} · model: ${model}`
+      : `${child.streamKind}: ${child.label} · parent: ${child.parentLabel} · model: ${model}`;
   }
-  const model = getModelLabel(meta.model || '—');
+  const model = getModelLabel(meta.model || '-');
   const agent = meta.agent || 'chat';
   if (meta.teamName) {
     return `team: ${meta.teamName} · root: ${agent} · model: ${model}`;
@@ -598,43 +613,23 @@ function staticTranscriptItemsEquivalent(
   });
 }
 
-function shouldWaitForChildIdentity({
-  parentStream,
-  scrollbackStreamId,
-}: {
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly scrollbackStreamId: StreamTabId | undefined;
-}): boolean {
-  return (
-    scrollbackStreamId !== undefined &&
-    parentStream.has(scrollbackStreamId) &&
-    !streamMetadataFor(scrollbackStreamId)?.config?.model
-  );
-}
-
 function ensureStaticSessionHeader({
   byteCount,
-  childRosters,
   executionLabels,
   items,
   maxRows,
   meta,
-  parentStream,
   rowCount,
-  scrollbackStreamId,
-  streams,
+  source,
   width,
 }: {
   readonly byteCount: number;
-  readonly childRosters: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
   readonly items: readonly StaticTranscriptItem[];
   readonly maxRows?: number;
   readonly meta: SessionMeta;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly rowCount: number;
-  readonly scrollbackStreamId: StreamTabId | undefined;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  readonly source: StaticScrollbackSource;
   readonly width?: number;
 }): {
   readonly items: readonly StaticTranscriptItem[];
@@ -645,26 +640,15 @@ function ensureStaticSessionHeader({
   if (items[0]?.id === SESSION_HEADER_ID) {
     return { items, rowCount, byteCount, inserted: false };
   }
-  if (
-    shouldWaitForChildIdentity({
-      parentStream,
-      scrollbackStreamId,
-    })
-  ) {
+  if (source.waitingForChildIdentity) {
     return { items, rowCount, byteCount, inserted: false };
   }
-
   const compact = maxRows !== undefined && maxRows < FULL_SESSION_HEADER_ROWS;
   const header: StaticTranscriptItem = {
     id: SESSION_HEADER_ID,
     kind: 'header',
     compact,
-    identityLine: sessionHeaderIdentityLine(meta, {
-      childRosters,
-      parentStream,
-      streamId: scrollbackStreamId,
-      streams,
-    }),
+    identityLine: sessionHeaderIdentityLine(meta, source.child),
     meta,
   };
   const headerMetrics = staticTranscriptItemMetrics(
@@ -716,18 +700,10 @@ function ensureStaticSessionHeader({
 }
 
 interface BuildStaticTranscriptItemsOptions {
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-  /** Lifecycle phase of `scrollbackStreamId`, read by the caller from the
-   *  session status machine (`streamPhaseFor`) — this projection stays pure.
-   *  Absent is a real value: a stream with no phase yet, which is also what a
-   *  fixture that does not care about settlement passes. */
-  readonly status?: StreamPhase;
-  readonly childRosters?: ChildRosters;
+  readonly source: StaticScrollbackSource;
   readonly executionLabels?: ExecutionLabels;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
-  readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
   readonly ringBudgets?: StaticTranscriptRingBudgets;
 }
@@ -739,66 +715,36 @@ interface StaticTranscriptBuildResult {
   readonly trimmed: boolean;
 }
 
-/** Full from-scratch build: the oracle used on owner switch, hard reset, and
- *  fold rebuild; ordinary ticks use the incremental scan in
- *  {@link incrementalStaticTranscriptEntries} via
- *  {@link advanceStaticTranscriptState}. */
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
 ): StaticTranscriptBuildResult {
   const {
-    streams,
-    status,
-    childRosters = new Map(),
+    source,
     executionLabels,
     meta,
     maxRows,
-    parentStream = new Map(),
-    scrollbackStreamId,
     width,
     ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   } = options;
-  // A focused child without a model yet holds neither header nor entries;
-  // `buildStaticTranscriptState` keeps its scan cursor at zero so they are
-  // still pending when the model arrives.
-  if (
-    shouldWaitForChildIdentity({
-      parentStream,
-      scrollbackStreamId,
-    })
-  ) {
+  if (source.waitingForChildIdentity) {
     return { items: [], rowCount: 0, byteCount: 0, trimmed: false };
   }
-
-  // Same insert-if-it-fits logic `advanceStaticTranscriptState` uses on
-  // ordinary ticks, applied to an empty transcript.
   const header = ensureStaticSessionHeader({
     byteCount: 0,
-    childRosters,
     executionLabels,
     items: [],
     maxRows,
     meta,
-    parentStream,
     rowCount: 0,
-    scrollbackStreamId,
-    streams,
+    source,
     width,
   });
   const items: StaticTranscriptItem[] = [...header.items];
-
-  // Only the selected scrollback owner feeds `<Static>` output. Root focus owns
-  // root history; child focus owns that child's history. Other streams stay
-  // available through their own focus.
-  const slice = scrollbackStreamId
-    ? streams.get(scrollbackStreamId)
-    : undefined;
   const orderedStaticEntries = orderedStaticTranscriptEntries(
-    slice?.entries ?? [],
-    slice?.finalizedFrontier ?? 0,
-    status,
+    source.entries ?? [],
+    source.settledRows,
+    source.status,
   );
-  // Dedupe by the entry's own stable id, as the incremental path does.
   const seen = new Set<string>();
   for (const entry of orderedStaticEntries) {
     if (seen.has(entry.id)) continue;
@@ -861,87 +807,58 @@ function StaticTranscriptItemContent({
 
 function scanStaticTranscriptFromStart(
   entries: readonly TranscriptRow[] | undefined,
-  finalizedFrontier: number,
+  settledRows: number,
   status: StreamPhase | undefined,
 ): StaticTranscriptScanCursor {
-  return incrementalStaticTranscriptEntries(
-    entries,
-    finalizedFrontier,
-    status,
-    {
-      entriesRef: undefined,
-      scannedIndex: 0,
-      lastScannedEntry: undefined,
-      status: undefined,
-      lastAppendedKey: undefined,
-    },
-  ).cursor;
+  return incrementalStaticTranscriptEntries(entries, settledRows, status, {
+    entriesRef: undefined,
+    scannedIndex: 0,
+    lastScannedEntry: undefined,
+    status: undefined,
+    lastAppendedKey: undefined,
+  }).cursor;
 }
 
 export function buildStaticTranscriptState({
-  childRosters,
   executionLabels,
   eraseRequest,
   maxRows,
   meta,
   ownerKey,
-  parentStream,
   repaintEpoch,
   ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
-  scrollbackStreamId,
-  status,
-  streams,
+  source,
   width,
 }: {
-  readonly childRosters: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
   readonly maxRows?: number;
   readonly meta: SessionMeta;
   readonly ownerKey: string;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly repaintEpoch: number;
   readonly ringBudgets?: StaticTranscriptRingBudgets;
-  readonly scrollbackStreamId: StreamTabId | undefined;
-  readonly status?: StreamPhase;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  readonly source: StaticScrollbackSource;
   readonly width?: number;
   readonly eraseRequest?: number;
 }): StaticTranscriptState {
   const built = buildStaticTranscriptItems({
-    streams,
-    status,
-    childRosters,
+    source,
     executionLabels,
     meta,
     maxRows,
-    parentStream,
     ringBudgets,
-    scrollbackStreamId,
     width,
   });
-  const slice = scrollbackStreamId
-    ? streams.get(scrollbackStreamId)
-    : undefined;
-  // While a focused child has no model yet, buildStaticTranscriptItems
-  // intentionally holds neither the header nor entries. Keep the scan cursor
-  // at zero with the current entries reference so the entries are still
-  // pending when the model arrives; scanning them now would mark them
-  // consumed and drop them later.
-  const waitingForChildIdentity = shouldWaitForChildIdentity({
-    parentStream,
-    scrollbackStreamId,
-  });
-  const scan = waitingForChildIdentity
+  const scan = source.waitingForChildIdentity
     ? incrementalStaticTranscriptEntries(
-        slice?.entries,
-        slice?.finalizedFrontier ?? 0,
-        status,
+        source.entries,
+        source.settledRows,
+        source.status,
         undefined,
       ).cursor
     : scanStaticTranscriptFromStart(
-        slice?.entries,
-        slice?.finalizedFrontier ?? 0,
-        status,
+        source.entries,
+        source.settledRows,
+        source.status,
       );
   return {
     ownerKey,
@@ -959,67 +876,41 @@ export function buildStaticTranscriptState({
 export function advanceStaticTranscriptState(
   current: StaticTranscriptState,
   {
-    childRosters,
     executionLabels,
     eraseRequest = current.eraseRequest,
     maxRows,
     meta,
     ownerKey,
-    parentStream,
     ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
-    scrollbackStreamId,
-    status,
-    streams,
+    source,
     width,
   }: {
-    readonly childRosters: ChildRosters;
     readonly executionLabels?: ExecutionLabels;
     readonly eraseRequest?: number;
     readonly maxRows?: number;
     readonly meta: SessionMeta;
     readonly ownerKey: string;
-    readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
     readonly ringBudgets?: StaticTranscriptRingBudgets;
-    readonly scrollbackStreamId: StreamTabId | undefined;
-    readonly status?: StreamPhase;
-    readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+    readonly source: StaticScrollbackSource;
     readonly width: number;
   },
 ): StaticTranscriptState {
-  const isHardReset = streams.size === 0 && scrollbackStreamId === undefined;
-  const slice = scrollbackStreamId
-    ? streams.get(scrollbackStreamId)
-    : undefined;
-  // Pass `slice?.entries` through unchanged. `incrementalStaticTranscriptEntries`
-  // normalizes a missing slice to its frozen empty entries array; a fresh `[]`
-  // here would break cursor identity on every dependency tick while the
-  // scrollback slice is absent.
-  const entries = slice?.entries;
-  const finalizedFrontier = slice?.finalizedFrontier ?? 0;
-
-  // Rebuilds below share every render input; only the repaint epoch differs
-  // per call site.
+  const isHardReset = source.hardReset;
+  const entries = source.entries;
+  const settledRows = source.settledRows;
+  const status = source.status;
   const rebuildState = (repaintEpoch: number): StaticTranscriptState =>
     buildStaticTranscriptState({
-      childRosters,
       eraseRequest,
       executionLabels,
       maxRows,
       meta,
       ownerKey,
-      parentStream,
       repaintEpoch,
       ringBudgets,
-      scrollbackStreamId,
-      status,
-      streams,
+      source,
       width,
     });
-
-  // An out-of-band terminal erase (`/clear`) forces a rebuild even when the
-  // items are unchanged — the terminal no longer shows them. Running here,
-  // after the reset state committed, keeps the remounted `<Static>` free of
-  // stale rows.
   if (eraseRequest !== current.eraseRequest) {
     return rebuildState(current.repaintEpoch + 1);
   }
@@ -1053,10 +944,7 @@ export function advanceStaticTranscriptState(
 
   if (
     !current.items.some((item) => item.id === SESSION_HEADER_ID) &&
-    shouldWaitForChildIdentity({
-      parentStream,
-      scrollbackStreamId,
-    })
+    source.waitingForChildIdentity
   ) {
     return current;
   }
@@ -1097,7 +985,7 @@ export function advanceStaticTranscriptState(
 
   const plan = incrementalStaticTranscriptEntries(
     entries,
-    finalizedFrontier,
+    settledRows,
     status,
     current.scan,
   );
@@ -1107,15 +995,12 @@ export function advanceStaticTranscriptState(
 
   const header = ensureStaticSessionHeader({
     byteCount: nextByteCount,
-    childRosters,
     executionLabels,
     items: nextItems,
     maxRows,
     meta,
-    parentStream,
     rowCount: nextRowCount,
-    scrollbackStreamId,
-    streams,
+    source,
     width,
   });
   if (header.inserted) {
@@ -1206,84 +1091,80 @@ export function StaticConversationTranscript({
   readonly width?: number;
 }): React.JSX.Element {
   const normalizedWidth = transcriptColumns(width);
-  const streams = useSignal(streamsSignal);
+  const view = useSignal(sessionView());
+  const allNotices = useSignal(noticesSignal);
+  const rootStreamId = useSignal(rootStreamIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
-  const parentStream = useSignal(parentStreamSignal);
-  const childRosters = useSignal(childRostersSignal);
   const eraseRequest = useSignal(staticTranscriptEraseEpoch);
-  // Header identity and the child-identity latch read stream metadata from the
-  // bound SessionState; the revision drives the advance effect when metadata
-  // (e.g. a focused child's model) lands without any other dependency moving.
-  const sessionRevision = useSignal(sessionStateRevision);
-  // The one status read for this component: the session status machine owns
-  // the phase, gated on the scrollback owner having a slice at all.
-  const status = streamPhaseFor(scrollbackStreamId)?.phase;
-
+  const source = useMemo((): StaticScrollbackSource => {
+    const stream = streamViewOf(view, scrollbackStreamId);
+    const streamNotices = noticesFor(allNotices, scrollbackStreamId);
+    const entries =
+      stream === undefined && streamNotices.length === 0
+        ? undefined
+        : mergeLocalNotices(stream?.transcript.rows ?? [], streamNotices);
+    return {
+      entries,
+      settledRows: mergedSettledRows(
+        stream?.transcript.rows ?? [],
+        stream?.transcript.settledRows ?? 0,
+        streamNotices,
+      ),
+      status: streamPhaseOf(stream),
+      waitingForChildIdentity:
+        stream !== undefined &&
+        stream.parentId !== null &&
+        stream.model === null,
+      child: childHeaderFor(view, scrollbackStreamId),
+      hardReset:
+        scrollbackStreamId === undefined &&
+        rootStreamId === undefined &&
+        allNotices.length === 0,
+    };
+  }, [allNotices, rootStreamId, scrollbackStreamId, view]);
   const [state, setState] = useState<StaticTranscriptState>(() =>
     buildStaticTranscriptState({
-      childRosters,
       eraseRequest,
       executionLabels: subagentExecutionLabels,
       maxRows,
       meta: sessionMeta,
       ownerKey,
-      parentStream,
       repaintEpoch: 0,
-      scrollbackStreamId,
-      status,
-      streams,
+      source,
       width: normalizedWidth,
     }),
   );
-
-  // On an owner switch the committed state still belongs to the previous
-  // owner, so this render paints a fresh build; the effect below replaces it.
   const items =
     state.ownerKey === ownerKey
       ? state.items
       : buildStaticTranscriptItems({
-          streams,
-          status,
-          childRosters,
+          source,
           executionLabels: subagentExecutionLabels,
           meta: sessionMeta,
           maxRows,
-          parentStream,
-          scrollbackStreamId,
           width: normalizedWidth,
         }).items;
-
   useEffect(() => {
     setState((current) =>
       advanceStaticTranscriptState(current, {
-        childRosters,
         eraseRequest,
         executionLabels: subagentExecutionLabels,
         maxRows,
         meta: sessionMeta,
         ownerKey,
-        parentStream,
-        scrollbackStreamId,
-        status,
-        streams,
+        source,
         width: normalizedWidth,
       }),
     );
   }, [
-    childRosters,
     eraseRequest,
     maxRows,
     ownerKey,
-    parentStream,
-    scrollbackStreamId,
     sessionMeta,
-    sessionRevision,
-    status,
-    streams,
+    source,
     subagentExecutionLabels,
     normalizedWidth,
   ]);
-
   const repaintKey = `${renderKey}:${state.repaintEpoch}`;
   const previousRenderKey = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {
@@ -1293,13 +1174,7 @@ export function StaticConversationTranscript({
       onRenderKeyChange?.();
     }
   }, [onRenderKeyChange, repaintKey]);
-
-  // Keep our scrollback state readonly and adapt once at the Ink boundary.
-  // `<Static>` declares `items: T[]`; memoizing the defensive copy avoids the
-  // old O(history) spread on unrelated renders without exposing state to a
-  // mutable third-party prop.
   const staticItems = useMemo(() => [...items], [items]);
-
   return (
     <Static
       key={`transcript:${renderKey}:${normalizedWidth}:${state.repaintEpoch}`}

@@ -1,15 +1,21 @@
-// TUI implementation of the session-owned HostInteractions approval port.
+// TUI implementation of the session-owned HostInteractions port (PRD
+// one-fold-three-renderers, 10.1).
 //
-// Approval requests are routed through the typed queue (-> ApprovalModal ->
-// user). When the modal resolves, the interaction promise resolves with the
-// same host-facing result shape.
+// The runtime publishes `approval.requested` before it dispatches a request
+// here, and the fold lists it in `view.approvals` until `approval.resolved`;
+// the modal reads that list (`approvalQueue.ts`). A hook therefore parks:
+// its promise stays pending while the surface answers through a
+// `decision.*` runtime request, which settles the runtime's pending set.
+// Three kinds still settle through their hook, because the runtime has no
+// request arm for them yet or their answer is host work: a tool edit (no
+// `decision.toolEdit` arm), a retry (its credential switch and
+// `prepareRetry` run on this host), and an external inquiry (a durable
+// thread, not a pending request). Each takes a host reservation the modal
+// reads its presentation payload from.
 //
-// Bash and edit policy is honored at the shared tool boundary before this
-// presentation adapter is called. Plans, proposals, retries, and human-input
-// requests retain their focused CLI decisions here.
-//
-// Tool-edit is part of this port because it returns a typed
-// Promise<ToolEditApprovalResult>, not a fire-and-forget event.
+// Policy is honored at the shared tool boundary before a request reaches
+// this port for bash and edits; plans, proposals, retries, and human-input
+// requests keep their CLI policy decision here, answered on the spot.
 
 import PQueue from 'p-queue';
 
@@ -17,7 +23,6 @@ import {
   currentSession,
   matchesCancelSelector,
   type BashSettlement,
-  type HostApprovalBypassStateUpdate,
   type HostBashApprovalRequest,
   type HostInteractionCancelSelector,
   type HostInteractions,
@@ -45,7 +50,6 @@ import {
 } from '@cli/runtime/approval/settleApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { USER_QUESTION_SKIPPED_FEEDBACK } from '@cli/runtime/userQuestionAnswer';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
 import { subscriptionProvider } from '@controllers/modelAccess/subscriptionProviders';
 import { warn as logWarning } from '@logger/logUtils';
@@ -67,35 +71,29 @@ import {
 import {
   type AgentProposalPermission,
   type ExternalInquiryPermission,
+  type PermissionPayload,
   type PlanApprovalPermission,
+  type StreamTabId,
 } from '@shared/schemas';
-import { setToolEditApprovalSessionBypass } from '@tools/approval';
-import { setBashApprovalSessionBypass } from '@tools/approval/bashApproval';
+import { subscribeToSignalChanges } from '@shared/signals';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
-import { foregroundReader, patchStream } from './cliState';
-import {
-  directChildStreamIds,
-  isWorkflowScriptStream,
-  presentStream,
-} from './childControls';
-import { childRosters, parentStream } from './childExecutions';
+import { foregroundReader } from './cliState';
+import { isWorkflowScriptStream, presentStream } from './childControls';
+import { currentView, streamViewOf } from './sessionView';
 import {
   refreshSubscriptionPreferenceViews,
   setCliCodingPlanSubscription,
   setCliSubscriptionPreference,
 } from './subscriptionPreference';
 import {
-  approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
-  clearApprovalsForOwner,
-  clearApprovalsWhere,
-  clearRetryApprovalsForStream,
-  enqueueApproval,
-  reserveApproval,
+  currentApproval,
+  reserveHostRequest,
+  settleHostRequestsWhere,
   type ApprovalDecision,
   type ApprovalPayload,
   type RetryApprovalPayload,
@@ -135,6 +133,24 @@ function maybeAutoSwitchRetry(
   return { accepted: true, disableQuotaRoute: route.id };
 }
 
+/** A request the surface answers through a `decision.*` runtime request:
+ *  the hook's promise stays pending; the runtime's own settlement resolves
+ *  the caller. A streamless request has no fact for the fold to list, so
+ *  nothing could answer it; it is declined rather than parked forever. */
+function park<T>(
+  kind: PermissionPayload['kind'],
+  streamId: StreamTabId | string | null | undefined,
+): Promise<T> | undefined {
+  if (!streamId) {
+    logWarning(
+      'cli.tui',
+      `A ${kind} request named no stream; the TUI cannot present it.`,
+    );
+    return undefined;
+  }
+  return new Promise<T>(() => {});
+}
+
 /**
  * Create the typed approval pipeline for the active TUI session.
  */
@@ -146,39 +162,46 @@ export function createTuiHostInteractions(
   // lifetime. Keeping the queue session-owned prevents stale work leaking
   // across disposed hosts or tests.
   const retryCredentialCommitQueue = new PQueue({ concurrency: 1 });
-  // Identity of this attachment in the shared approval queue.
+  // Identity of this attachment's host reservations.
   const interactionOwner = {};
 
   return {
     emit: (event, payload) => host.emit(event, payload),
     async requestToolEditApproval(request) {
       // The prompt the tool boundary prepared is the `approval.requested`
-      // payload: showing it keeps one requestId per request.
-      const decision = await enqueueDecision({
-        kind: 'toolEdit',
-        data: request.permission,
-        tui: {
-          originalContent: request.originalContent,
-          proposedContent: request.proposedContent,
+      // payload: presenting it keeps one requestId per request.
+      const reservation = reserveHostRequest(
+        {
+          kind: 'toolEdit',
+          data: request.permission,
+          tui: {
+            originalContent: request.originalContent,
+            proposedContent: request.proposedContent,
+          },
         },
-      });
-      if (
-        decision.accepted &&
-        decision.bypass === 'toolEdit' &&
-        request.streamId
-      ) {
-        setToolEditApprovalSessionBypass(request.streamId, true);
+        { owner: interactionOwner, presentable: true },
+      );
+      try {
+        const decision = await reservation.decided;
+        return toToolEditResult(decision, request.proposedContent);
+      } finally {
+        reservation.release();
       }
-      return toToolEditResult(decision, request.proposedContent);
     },
-    requestBashApproval(request) {
-      return requestBashInteraction(request);
+    requestBashApproval(request: HostBashApprovalRequest) {
+      return park<BashSettlement>('bash', request.streamId);
     },
-    requestPlanApproval(request) {
-      return requestPlanInteraction(request, context);
+    requestPlanApproval(request: PlanApprovalPermission) {
+      return (
+        settleByPolicy<PlanApprovalResult>(context) ??
+        park('planApproval', request.streamId)
+      );
     },
-    requestAgentProposal(request) {
-      return requestProposalInteraction(request, context);
+    requestAgentProposal(request: AgentProposalPermission) {
+      return (
+        settleByPolicy<ProposalResult>(context) ??
+        park('proposal', request.streamId)
+      );
     },
     requestRetry(request, options) {
       return requestRetryInteraction(
@@ -188,32 +211,61 @@ export function createTuiHostInteractions(
         options,
       );
     },
-    askUserQuestion(request) {
-      return requestUserQuestionInteraction(request, context);
+    askUserQuestion(request: HostUserQuestionRequest) {
+      const denial = settleHumanInputDenial(context);
+      if (denial != null) {
+        return Promise.resolve<UserQuestionSettlement>({
+          action: 'reject',
+          reason: denial.reason,
+        });
+      }
+      return park<UserQuestionSettlement>('userQuestion', request.streamId);
     },
     async openExternalInquiry(request) {
-      handleExternalInquiry(request, context);
+      handleExternalInquiry(request, context, interactionOwner);
     },
+    // The badge reads the fold's policy snapshot; the host only mirrors the
+    // change onto its NDJSON wire.
     setApprovalBypassState(update) {
-      setTuiApprovalBypassState(update);
       host.emitApprovalBypassState(update);
     },
+    // The runtime settles its own pending set; this drops the host's hold on
+    // the hook-settled kinds so their work stops.
     cancel(selector: HostInteractionCancelSelector = {}) {
-      clearApprovalsWhere((payload) =>
-        matchesCancelSelector(
-          { kind: payload.kind, streamId: approvalPayloadStreamId(payload) },
-          selector,
-        ),
+      settleHostRequestsWhere(
+        (payload) =>
+          matchesCancelSelector(
+            { kind: payload.kind, streamId: approvalPayloadStreamId(payload) },
+            selector,
+          ),
+        {
+          accepted: false,
+          rejectionCause: selector.cause ?? 'Approval request was cancelled.',
+        },
       );
     },
     dispose() {
-      // Retries are the only requests that carry work bound to this host (the
-      // key lookup and the credential commit queue above), so detaching must
-      // settle them. Other queued approvals stay decidable at the modal, and a
-      // newer host's retries belong to that host's reservations, not these.
-      clearApprovalsForOwner(interactionOwner);
+      // Only the reservations bound to this host's work (its key lookup and
+      // credential commit queue) settle on detach; a newer host's belong to
+      // that host, and the runtime's requests stay decidable there.
+      settleHostRequestsWhere((_payload, owner) => owner === interactionOwner);
     },
   };
+}
+
+/** The CLI policy's answer for a gated plan or proposal, or undefined to ask. */
+function settleByPolicy<T extends PlanApprovalResult | ProposalResult>(
+  context: CliContext,
+): Promise<T> | undefined {
+  const policy = settleExecutable(context);
+  if (!policy) return undefined;
+  if (policy.accepted) return Promise.resolve({ action: 'approve' } as T);
+  return Promise.resolve(
+    toApprovalSettlement({
+      accepted: false,
+      rejectionReason: policy.userMessage ?? '',
+    }) as T,
+  );
 }
 
 function runRetryTask<T>(
@@ -256,99 +308,14 @@ function prepareRetryClient(
   return runRetryTask(() => prepare(selection, signal), signal);
 }
 
-// Retry carries its own policy lookup (`requestRetry`) and owns a queue
-// reservation, so it does not enter through this path.
-async function enqueueDecision(
-  payload: ApprovalPayload,
-): Promise<ApprovalDecision> {
-  try {
-    return await enqueueTuiApproval(payload);
-  } catch (error) {
-    logWarning(
-      'cli.tui',
-      `The approval prompt failed: ${toErrorMessage(error)}`,
-    );
-    return {
-      accepted: false,
-      rejectionCause: 'CLI approval prompt failed.',
-    };
-  }
-}
-
-async function decideWithPolicy(
-  context: CliContext,
-  payload: Extract<ApprovalPayload, { kind: 'planApproval' | 'proposal' }>,
-): Promise<ApprovalDecision> {
-  const policy = settleExecutable(context);
-  if (policy && !policy.accepted) {
-    return {
-      accepted: false,
-      rejectionReason: policy.userMessage ?? '',
-    };
-  }
-  return policy ?? enqueueDecision(payload);
-}
-
-async function requestBashInteraction(
-  request: HostBashApprovalRequest,
-): Promise<BashSettlement> {
-  const decision = await enqueueDecision({
-    kind: 'bash',
-    data: request.permission,
-  });
-  if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
-    setBashApprovalSessionBypass(request.streamId, true);
-  }
-  return toApprovalSettlement(decision);
-}
-
-async function requestPlanInteraction(
-  request: PlanApprovalPermission,
-  context: CliContext,
-): Promise<PlanApprovalResult> {
-  const decision = await decideWithPolicy(context, {
-    kind: 'planApproval',
-    data: request,
-  });
-  // `approve_and_goal` is a TUI-only plan action; every other outcome is the
-  // shared approve/reject settlement.
-  if (decision.accepted && decision.planAction) {
-    return {
-      action: decision.planAction,
-      ...(decision.goalAutoApproveAll ? { autoApproveAll: true } : {}),
-    };
-  }
-  return toApprovalSettlement(decision);
-}
-
-async function requestProposalInteraction(
-  request: AgentProposalPermission,
-  context: CliContext,
-): Promise<ProposalResult> {
-  const decision = await decideWithPolicy(context, {
-    kind: 'proposal',
-    data: request,
-  });
-  if (
-    decision.accepted &&
-    decision.bypass === 'superYolo' &&
-    request.streamId
-  ) {
-    currentSession().approvals.setDelegatedWorkBypasses(request.streamId, true);
-    approveQueuedDelegatedWorkForStream(request.streamId);
-  }
-  return toApprovalSettlement(decision);
-}
-
 /**
- * The queue entry is this retry's liveness: reserving it replaces whatever
- * retry the same host owned for the stream (its pre-modal lookup, its modal, or
- * the credential switch it had already started), and holding it until
- * `release` means a later cancel reaches the commit as well. Another host may
- * temporarily overlap during attachment handoff, so its reservation remains
- * isolated. Nothing here re-checks whether the request is still current — a
- * settled entry ignores `present` and `settle`, and its abort signal stops the
- * work in flight.
+ * The host reservation is this retry's liveness on this host: taking it
+ * replaces whatever retry the same host held for the stream (its pre-modal
+ * lookup, its modal, or the credential switch it had already started), and
+ * holding it until `release` means a later cancel reaches the commit as
+ * well. Nothing here re-checks whether the request is still current: a
+ * settled entry ignores `present` and `settle`, and its abort signal stops
+ * the work in flight.
  */
 async function requestRetryInteraction(
   request: HostRetryRequest,
@@ -356,10 +323,16 @@ async function requestRetryInteraction(
   attachment: { readonly owner: object; readonly commitQueue: PQueue },
   options: HostRetryInteractionOptions | undefined,
 ): Promise<RetryResult> {
-  clearRetryApprovalsForStream(request.streamId, attachment.owner);
-  const reservation = reserveApproval(
+  settleHostRequestsWhere(
+    (payload, owner) =>
+      owner === attachment.owner &&
+      payload.kind === 'retry' &&
+      payload.data.streamId === request.streamId &&
+      payload.data.requestId !== request.requestId,
+  );
+  const reservation = reserveHostRequest(
     { kind: 'retry', data: request, tui: {} },
-    { onPresent: announceApproval, owner: attachment.owner },
+    { owner: attachment.owner },
   );
   // Written before any path that can produce a credential-changing decision:
   // only the modal and the auto-switch produce one, and both run after this.
@@ -428,18 +401,7 @@ async function requestRetryInteraction(
         reservation.settle(autoSwitch);
         return;
       }
-      try {
-        reservation.present(promptRequest);
-      } catch (error) {
-        logWarning(
-          'cli.tui',
-          `The retry request could not be shown: ${toErrorMessage(error)}`,
-        );
-        reservation.settle({
-          accepted: false,
-          userMessage: toErrorMessage(error),
-        });
-      }
+      reservation.present(promptRequest);
     })();
   }
 
@@ -492,63 +454,37 @@ async function requestRetryInteraction(
   }
 }
 
-async function requestUserQuestionInteraction(
-  payload: HostUserQuestionRequest,
-  context: CliContext,
-): Promise<UserQuestionSettlement> {
-  const denial = settleHumanInputDenial(context);
-  if (denial != null) {
-    return { action: 'reject', reason: denial.reason };
-  }
-
-  const decision = await enqueueTuiApproval({
-    kind: 'userQuestion',
-    data: payload,
-  });
-  if (decision.rejectionCause !== undefined) {
-    return { action: 'reject', cause: decision.rejectionCause };
-  }
-  return decision.accepted && decision.userQuestionAnswers
-    ? { action: 'submit', answers: decision.userQuestionAnswers }
-    : {
-        action: 'skip',
-        feedback: decision.userMessage || USER_QUESTION_SKIPPED_FEEDBACK,
-      };
-}
-
-export function enqueueTuiApproval(
-  payload: ApprovalPayload,
-): Promise<ApprovalDecision> {
-  return enqueueApproval(payload, { onPresent: announceApproval });
-}
-
-/** Focus the asking stream and ring the terminal when a modal appears. */
-function announceApproval(payload: ApprovalPayload): void {
-  const streamId = approvalPayloadStreamId(payload);
-  const reader = foregroundReader.get();
-  const workflowOwnsApproval =
-    streamId !== undefined &&
-    reader !== undefined &&
-    isWorkflowScriptStream(reader.streamId) &&
-    directChildStreamIds({
-      parentStreamId: reader.streamId,
-      childRosters: childRosters.get(),
-      parentStream: parentStream.get(),
-    }).has(streamId);
-  // Focus is this surface's own selection, never a fact.
-  if (streamId && !workflowOwnsApproval) presentStream(streamId);
-  notify('approvalNeeded');
-}
-
-function setTuiApprovalBypassState({
-  streamId,
-  kind,
-  bypassActive,
-}: HostApprovalBypassStateUpdate): void {
-  patchStream(streamId, (s) => ({
-    ...s,
-    bypass: { ...s.bypass, [kind]: bypassActive },
-  }));
+/**
+ * Focus the asking stream and ring the terminal when a request first
+ * becomes the foreground modal. One subscription per TUI session; a
+ * re-presentation after a promotion never re-fires it.
+ */
+export function announceForegroundApprovals(): () => void {
+  const announced = new Set<string>();
+  const announce = (payload: ApprovalPayload): void => {
+    const streamId = approvalPayloadStreamId(payload);
+    const reader = foregroundReader.get();
+    const view = currentView();
+    const workflowOwnsApproval =
+      streamId !== undefined &&
+      reader !== undefined &&
+      isWorkflowScriptStream(view, reader.streamId) &&
+      (streamViewOf(view, reader.streamId)?.childIds.includes(streamId) ??
+        false);
+    // Focus is this surface's own selection, never a fact.
+    if (streamId && !workflowOwnsApproval) presentStream(streamId);
+    notify('approvalNeeded');
+  };
+  const check = (): void => {
+    const pending = currentApproval.get();
+    if (!pending) return;
+    const id = pending.payload.data.requestId;
+    if (announced.has(id)) return;
+    announced.add(id);
+    announce(pending.payload);
+  };
+  check();
+  return subscribeToSignalChanges([currentApproval], check);
 }
 
 /**
@@ -835,37 +771,47 @@ async function switchRetryToPersonalCredentials(
   }
 }
 
+/**
+ * An external inquiry is a durable thread, not a runtime pending request:
+ * the fold lists it in `view.inquiries` while open, and this host holds its
+ * full question for the modal. The decision writes the thread through the
+ * inquiry action, whose `inquiryThreadUpdated` fact closes it in the fold.
+ */
 function handleExternalInquiry(
   payload: ExternalInquiryPermission,
   context: CliContext,
+  owner: object,
 ): void {
   const threadId = payload.threadId;
   if (!threadId) return;
 
   if (denyExternalInquiryIfNoHumanInput(threadId, context)) return;
-  void enqueueTuiApproval({ kind: 'externalInquiry', data: payload }).then(
-    (decision) => {
-      // User-accept with text submits an answer; empty text, reject, and
-      // modal-cancel all drop the durable inquiry thread.
-      let action: Parameters<typeof handleExternalInquiryAction>[0];
-      if (decision.accepted && decision.userMessage) {
-        action = { action: 'submit', threadId, answer: decision.userMessage };
-      } else if (decision.rejectionCause !== undefined) {
-        action = { action: 'drop', threadId, cause: decision.rejectionCause };
-      } else if (decision.userMessage) {
-        action = { action: 'drop', threadId, feedback: decision.userMessage };
-      } else {
-        action = { action: 'drop', threadId };
-      }
-      // Persisting the action writes the inquiry thread; nothing else owns
-      // this promise, so its rejection is logged here instead of surfacing as
-      // an unhandled rejection.
-      handleExternalInquiryAction(action).catch((error: unknown) => {
-        logWarning(
-          'cli.tui',
-          `External inquiry ${threadId} ${action.action} failed: ${toErrorMessage(error)}`,
-        );
-      });
-    },
+  const reservation = reserveHostRequest(
+    { kind: 'externalInquiry', data: payload },
+    { owner, presentable: true },
   );
+  void reservation.decided.then((decision) => {
+    reservation.release();
+    // User-accept with text submits an answer; empty text, reject, and
+    // modal-cancel all drop the durable inquiry thread.
+    let action: Parameters<typeof handleExternalInquiryAction>[0];
+    if (decision.accepted && decision.userMessage) {
+      action = { action: 'submit', threadId, answer: decision.userMessage };
+    } else if (decision.rejectionCause !== undefined) {
+      action = { action: 'drop', threadId, cause: decision.rejectionCause };
+    } else if (decision.userMessage) {
+      action = { action: 'drop', threadId, feedback: decision.userMessage };
+    } else {
+      action = { action: 'drop', threadId };
+    }
+    // Persisting the action writes the inquiry thread; nothing else owns
+    // this promise, so its rejection is logged here instead of surfacing as
+    // an unhandled rejection.
+    handleExternalInquiryAction(action).catch((error: unknown) => {
+      logWarning(
+        'cli.tui',
+        `External inquiry ${threadId} ${action.action} failed: ${toErrorMessage(error)}`,
+      );
+    });
+  });
 }

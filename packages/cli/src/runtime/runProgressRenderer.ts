@@ -1,42 +1,32 @@
-// Node imports
+/**
+ * Headless progress rendering over the session view (PRD
+ * one-fold-three-renderers, 10.3): the stderr status line of `texra run`,
+ * and the plain-text workflow progress lines. Both read `SessionHandle.view`
+ * and derive nothing the fold already states; the renderer keeps only its
+ * own output state (what it last wrote).
+ */
 import path from 'node:path';
 
-// Local imports
+import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+
 import { getAgent } from '@agent/index';
-import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
-import type {
-  AgentConfig,
-  SessionHandle,
-  StreamPhaseState,
-} from '@agent/runtime';
-import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
-import type {
-  SessionRendererPort,
-  SessionRenderSlice,
-} from '@controllers/session/SessionRendererPort';
-import { SessionState } from '@controllers/session/SessionState';
+import type { SessionHandle } from '@agent/runtime';
 import { redactSecrets } from '@logger/redaction';
-import type {
-  ActiveChildInfo,
-  ConversationProgress,
-  GoalStatus,
-  InquiryThreadUpdatedEvent,
-  Plan,
-  StreamPhase,
-  StreamStage,
-  StreamTabId,
-  TodoItem,
-  TokenUsageStats,
-} from '@shared/schemas';
-import { AgentCategory, STREAM_PHASE } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { effectRuntime } from '@platform/processRuntime';
 import {
-  formatRoundStageLabel,
-  formatStreamStatusLabel,
-} from '@shared/streams/streamStatusDisplay';
+  AgentCategory,
+  STREAM_PHASE,
+  WORKFLOW_TASK_STATUS_LABEL,
+  type ExecutionId,
+  type StreamPhase,
+  type StreamTabId,
+} from '@shared/schemas';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { pluralize } from '@utils/text/stringUtils';
 
-// Local file imports
 import {
   safeTerminalText,
   textDisplayWidth,
@@ -45,17 +35,26 @@ import {
 import { getStderrColumns, writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 
-// Carriage return + erase-line (CSI 2K): rewind to column 0 and clear the row
-// so the single live status line can be repainted in place.
 const CLEAR_LINE = '\r\x1b[2K';
 const ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH = 48;
 
+/** What the renderer reads of a session: its view. */
+type RunProgressSession = Pick<SessionHandle, 'view'>;
+
+/** The plain workflow output also subscribes the workflow transcripts it
+ *  prints, since transcript rows fold only for subscribed aggregates. */
+export type WorkflowPlainSession = Pick<
+  SessionHandle,
+  'view' | 'setTranscriptSubscriptions'
+>;
+
 export interface RunProgressRenderer {
-  /**
-   * Fold this session's facts into the shared `SessionState` and repaint from
-   * it. Returns the detach handle.
-   */
-  attach(session: SessionHandle): () => void;
+  /** Follow the session's view; `executionId` names the run to describe
+   *  (the first root run the view gains after attach, when omitted). */
+  attach(
+    session: RunProgressSession,
+    options?: { readonly executionId?: ExecutionId },
+  ): () => void;
   clear(): void;
   preserve(): void;
 }
@@ -66,7 +65,6 @@ export interface RunProgressRendererInit {
   readonly nowMs?: () => number;
   readonly minIntervalMs?: number;
   readonly heartbeatIntervalMs?: number;
-  /** Supplies the current stderr width, allowing live terminal resizes. */
   readonly getColumns?: () => number | undefined;
   readonly setInterval?: typeof setInterval;
   readonly clearInterval?: typeof clearInterval;
@@ -97,9 +95,22 @@ export function createRunProgressRenderer(
   });
 }
 
+/** Follow a view level with a callback; returns the detach. */
+function followView(
+  session: RunProgressSession,
+  onView: (view: SessionView) => void,
+): () => void {
+  const fiber = effectRuntime().runFork(
+    Stream.runForEach(SubscriptionRef.changes(session.view), (view) =>
+      Effect.sync(() => onView(view)),
+    ),
+  );
+  return () => {
+    effectRuntime().runFork(Fiber.interrupt(fiber));
+  };
+}
+
 class DefaultRunProgressRenderer implements RunProgressRenderer {
-  /** Fallback elapsed origin for the window before the status machine opens a
-   *  run window (a live line painted off `run.config` alone). */
   private readonly attachedAt: number;
   private readonly write: (text: string) => void;
   private readonly nowMs: () => number;
@@ -112,53 +123,13 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastRenderAt = 0;
   private lastLine = '';
   private liveLine = false;
-  private state: SessionState | undefined;
+  private view: SessionView | undefined;
   private rootStreamId: StreamTabId | undefined;
-  /**
-   * Last-write-wins subject line for the root stream: a status transition
-   * writes its label, a description fact replaces it with the run's own
-   * one-liner, and the next transition takes it back. Ordering is the whole
-   * semantic, so it stays a written field rather than a read of the two
-   * shared sources.
-   */
-  private rootPhaseText: string | undefined;
-  /**
-   * The phase `rootPhaseText` was last written for — the ordering companion of
-   * that field, not a second copy of the machine's state (terminal-ness and
-   * the run window are read from the machine). It exists because
-   * `StreamStatusMachine.transition` publishes on a substate-only change too:
-   * without it, a RUNNING/STARTING → RUNNING clear would look like a new
-   * transition and overwrite the run's own description.
-   */
-  private rootStreamPhase: StreamPhase | undefined;
+  private wantedExecutionId: ExecutionId | undefined;
+  private attachCursor = 0;
+  /** The last root phase the renderer painted; a repeat is not a change. */
+  private paintedPhase: StreamPhase | undefined;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
-
-  /** The root stream's lifecycle record, from the session status machine. */
-  private rootPhaseState(): StreamPhaseState | undefined {
-    return this.rootStreamId
-      ? this.state?.streamStatus.getStreamState(this.rootStreamId)
-      : undefined;
-  }
-
-  /** Read from the one status owner, never mirrored into a second flag. */
-  private get rootStreamTerminal(): boolean {
-    return isTerminalOutcomePhase(this.rootPhaseState()?.phase);
-  }
-
-  /**
-   * The root run's `AgentConfig`, from the snapshot store's canonical run
-   * record. The store subscribes to the session hub in `SessionHandle`'s
-   * constructor — before any host attaches a renderer — so it has already
-   * accumulated the `run.config` this renderer is repainting for. `quiet`
-   * because a headless run paints from whatever has landed and must not
-   * emit an unseeded-read warning for a record it never preloads.
-   */
-  private rootRunConfig(): AgentConfig | undefined {
-    return this.rootStreamId
-      ? this.state?.snapshots.getRunMetadata(this.rootStreamId, { quiet: true })
-          .config
-      : undefined;
-  }
 
   constructor(
     init: RunProgressRendererInit & {
@@ -176,36 +147,16 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.attachedAt = this.nowMs();
   }
 
-  attach(session: SessionHandle): () => void {
-    const state = new SessionState(session);
-    this.state = state;
-    const applier = new SessionFactApplier(state, new HeadlessPort(this), {
-      // Headless owns no durable deletion: reporting nothing keeps the
-      // removal barrier, which is exactly what the live line wants — a
-      // removed child drops out of the roster it reads.
-      deleteStream: () => undefined,
-    });
-    const detachSessionFacts = session.events.subscribeSessionFacts((fact) =>
-      applier.handleSessionFact(fact),
-    );
-    const detachRunFacts = session.events.subscribeRunFacts(
-      (runFact) => {
-        applier.handleRunFact(runFact.streamId, runFact.event);
-        // The run config carries the live line's subject and its declared
-        // round count. The snapshot store subscribed to this hub in the
-        // session's constructor, so it has already accumulated the config by
-        // now: this claims the root slot and repaints, it copies nothing.
-        if (runFact.event.type === 'run.config') {
-          this.refreshFor(runFact.event.streamId, true);
-        }
-      },
-      { types: RUN_FACT_EVENT_TYPES },
-    );
+  attach(
+    session: RunProgressSession,
+    options: { readonly executionId?: ExecutionId } = {},
+  ): () => void {
+    this.wantedExecutionId = options.executionId;
+    this.attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
+    const detach = followView(session, (view) => this.applyView(view));
     return () => {
-      detachRunFacts();
-      detachSessionFacts();
-      applier.dispose();
-      this.state = undefined;
+      detach();
+      this.view = undefined;
     };
   }
 
@@ -225,67 +176,66 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     }
   }
 
+  private root(): StreamView | undefined {
+    return this.rootStreamId
+      ? this.view?.streams.get(this.rootStreamId)
+      : undefined;
+  }
+
+  private get rootStreamTerminal(): boolean {
+    return isTerminalOutcomePhase(this.root()?.status);
+  }
+
   /**
-   * Repaint after a fact the applier has already landed on `SessionState`.
-   * The first stream to report progress claims the root slot, exactly as the
-   * first `run.config` does — a headless run renders one stream's line.
+   * The run this renderer describes: the stream of the named execution, or
+   * the first top-level stream created after attach. A child's later
+   * appearance never moves it.
    */
-  refreshFor(streamId: StreamTabId, force = false): void {
-    if (!this.claimRootStream(streamId) || this.rootStreamTerminal) return;
+  private claimRoot(view: SessionView): void {
+    if (this.rootStreamId !== undefined) return;
+    const candidates = [...view.streams.values()].filter((stream) =>
+      this.wantedExecutionId !== undefined
+        ? stream.executionId === this.wantedExecutionId
+        : stream.parentId === null && stream.createdAt > this.attachCursor,
+    );
+    candidates.sort((a, b) => a.createdAt - b.createdAt);
+    this.rootStreamId = candidates.at(0)?.id;
+  }
+
+  private applyView(view: SessionView): void {
+    const previous = this.view;
+    this.view = view;
+    this.claimRoot(view);
+    const root = this.root();
+    if (!root) return;
+    const wasTerminal = isTerminalOutcomePhase(
+      previous && this.rootStreamId
+        ? previous.streams.get(this.rootStreamId)?.status
+        : undefined,
+    );
+    const phase = root.status;
+    const phaseChanged = phase !== 'ready' && phase !== this.paintedPhase;
+    if (phaseChanged) this.paintedPhase = phase;
+    // A terminal root freezes the line: the final status is its last paint.
+    if (wasTerminal && !phaseChanged) return;
     this.updateHeartbeat();
-    this.render(force);
+    this.render(phaseChanged || this.rootStreamTerminal);
   }
 
-  applyStatus(streamId: StreamTabId, status: StreamPhase | undefined): void {
-    // The first stream to report a phase claims the root slot: a headless run
-    // renders one stream's line, and the status machine holds the phase this
-    // callback announces by the time it fires.
-    if (status === undefined || !this.claimRootStream(streamId)) return;
-    // Only a phase change takes the subject line back. A substate-only fact
-    // (STARTING/RESUMING cleared) is still a published `status`, and treating
-    // it as a transition would overwrite a description the run set for this
-    // same phase.
-    if (this.rootStreamPhase === status) return;
-
-    this.rootStreamPhase = status;
-    this.rootPhaseText = formatStreamStatusLabel(status, { style: 'cli' });
-    this.updateHeartbeat();
-    this.render(true);
-  }
-
-  applyStreamDescription(streamId: StreamTabId, description: string): void {
-    if (this.rootStreamTerminal) return;
-    if (this.rootStreamId === streamId) {
-      this.rootPhaseText = description;
-    } else if (
-      !this.liveChildren().some((child) => child.childStreamId === streamId)
-    ) {
-      // A stream the live line does not name has nothing to repaint for.
-      return;
-    }
-    this.updateHeartbeat();
-    this.render(true);
-  }
-
-  private claimRootStream(streamId: StreamTabId): boolean {
-    this.rootStreamId ??= streamId;
-    return this.rootStreamId === streamId;
-  }
-
-  /** Live (not yet retired) children of the root run, from the shared roster. */
-  private liveChildren(): readonly ActiveChildInfo[] {
-    if (this.rootStreamTerminal || !this.rootStreamId) return [];
-    const roster = this.state?.getStreamState(this.rootStreamId)?.subagents;
-    return roster?.filter((child) => child.finishedAt === undefined) ?? [];
+  private liveChildren(): readonly StreamView[] {
+    const root = this.root();
+    if (!root || this.rootStreamTerminal) return [];
+    return root.childIds.flatMap((childId) => {
+      const child = this.view?.streams.get(childId);
+      return child && !isTerminalOutcomePhase(child.status) ? [child] : [];
+    });
   }
 
   private render(force = false): void {
     const now = this.nowMs();
     if (!force && now - this.lastRenderAt < this.minIntervalMs) return;
-
     const line = this.formatLine(now);
     if (!line || line === this.lastLine) return;
-
     if (this.ansi) {
       this.write(`${CLEAR_LINE}${line}`);
       this.liveLine = true;
@@ -302,7 +252,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       return;
     }
     if (!this.ansi || this.heartbeatTimer) return;
-
     this.heartbeatTimer = this.setInterval(() => {
       this.render(true);
     }, this.heartbeatIntervalMs);
@@ -316,19 +265,16 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private formatLine(now: number): string {
-    const rootStreamId = this.rootStreamId;
-    const execution = rootStreamId
-      ? this.state?.getStreamState(rootStreamId)
-      : undefined;
-    const roundStage =
-      execution?.stage?.kind === 'round' ? execution.stage : undefined;
-    const config = this.rootRunConfig();
+    const root = this.root();
+    if (!root) return '';
+    const roundStage = root.stage?.kind === 'round' ? root.stage : undefined;
+    const agentName =
+      root.identity?.kind === 'agent' ? root.identity.agent : undefined;
     const declaredRounds =
-      config?.agentCategory === AgentCategory.Workflow
-        ? getAgent(config.agent, AgentCategory.Workflow)?.rounds
+      root.category === AgentCategory.Workflow && agentName !== undefined
+        ? getAgent(agentName, AgentCategory.Workflow)?.rounds
         : undefined;
     const plannedRounds = roundStage?.total ?? declaredRounds;
-
     const parts: string[] = [];
     if (roundStage) {
       parts.push(
@@ -338,35 +284,28 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         })}]`,
       );
     }
-
-    const subject = [config?.agent, formatInputLabel(config?.inputFiles ?? [])]
+    const subject = [agentName, formatInputLabel(root.inputFiles)]
       .filter(Boolean)
       .join(' ');
-    const phase = this.rootPhaseText;
-    parts.push(subject || phase || 'running');
-    if (subject && phase && phase !== 'running') parts.push(phase);
+    const phase = livePhaseText(root);
+    parts.push(subject || phase || 'Running');
+    if (subject && phase && phase !== 'Running') parts.push(phase);
     if (!roundStage && isMultiRound(plannedRounds)) {
       parts.push(`${plannedRounds} rounds`);
     }
-
-    // Elapsed measures the run window the status machine opened — the same
-    // origin the TUI status bar and the progress board render from — falling
-    // back to attach time only before any run window exists.
-    const runStartedAt = this.rootPhaseState()?.runStartedAt ?? this.attachedAt;
+    const runStartedAt = root.runStartedAt ?? this.attachedAt;
     const elapsed = formatElapsed(now - runStartedAt);
     const children = this.liveChildren();
-    const describe = (child: ActiveChildInfo): string | undefined =>
-      this.state?.getStreamMetadata(child.childStreamId).description;
-    const nameOnlySubagents = formatActiveChildren(children, describe, 0);
+    const nameOnlySubagents = formatActiveChildren(children, 0);
     if (nameOnlySubagents) {
       const descriptionColumns = this.descriptionColumnBudget(
         parts,
         nameOnlySubagents,
         elapsed,
       );
-      parts.push(formatActiveChildren(children, describe, descriptionColumns)!);
+      parts.push(formatActiveChildren(children, descriptionColumns)!);
     }
-    const toolCallCount = execution?.conversationProgress.toolCallCount;
+    const toolCallCount = root.conversationProgress.toolCallCount;
     if (toolCallCount && !nameOnlySubagents) {
       parts.push(`tools: ${toolCallCount}`);
     }
@@ -400,98 +339,35 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 }
 
-/**
- * The headless host's `SessionRendererPort`. Every fact is already folded into
- * `SessionState` by the time these fire, so each one only decides whether the
- * single live stderr line is worth repainting — the two exceptions are the
- * root stream's phase and description, which are last-write-wins ordering the
- * shared record does not encode.
- */
-class HeadlessPort implements SessionRendererPort {
-  constructor(private readonly renderer: DefaultRunProgressRenderer) {}
-
-  isAvailable(): boolean {
-    return true;
+/** The fold's label (G4, one table) for every state but a running run,
+ *  whose live task is its description once the AI one-liner has arrived. */
+function livePhaseText(root: StreamView): string | undefined {
+  if (root.status === 'ready') return undefined;
+  if (root.status === STREAM_PHASE.RUNNING) {
+    return root.description ?? root.statusLabel;
   }
-
-  dispose(): void {}
-
-  invalidate(streamId: StreamTabId, slice: SessionRenderSlice): void {
-    if (slice === 'subagents') this.renderer.refreshFor(streamId, true);
-  }
-
-  onStreamMetadataChanged(
-    streamId: StreamTabId,
-    options?: Parameters<SessionRendererPort['onStreamMetadataChanged']>[1],
-  ): void {
-    // A new stream and a new RUNNING transition report their phase here
-    // instead of through `onStreamStatusChanged`.
-    this.renderer.applyStatus(streamId, options?.phaseOverride?.phase);
-  }
-
-  onStreamStatusChanged(streamId: StreamTabId, status: StreamPhase): void {
-    this.renderer.applyStatus(streamId, status);
-  }
-
-  onStreamDescriptionChanged(streamId: StreamTabId, description: string): void {
-    this.renderer.applyStreamDescription(streamId, description);
-  }
-
-  onConversationProgressChanged(
-    streamId: StreamTabId,
-    _progress: ConversationProgress,
-  ): void {
-    this.renderer.refreshFor(streamId);
-  }
-
-  onStageChanged(streamId: StreamTabId, _stage: StreamStage): void {
-    this.renderer.refreshFor(streamId);
-  }
-
-  onRunUsageChanged(
-    _streamId: StreamTabId,
-    _storageKey: string,
-    _usage: TokenUsageStats,
-  ): void {}
-
-  onTodosChanged(_streamId: StreamTabId, _todos: TodoItem[]): void {}
-
-  onPlanChanged(_streamId: StreamTabId, _plan: Plan | null): void {}
-
-  onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}
-
-  onGoalActiveChanged(
-    _streamId: StreamTabId,
-    _active: boolean,
-    _details?: { status?: GoalStatus; objective?: string },
-  ): void {}
-
-  clearPendingConversationProgress(_streamId: StreamTabId): void {}
+  return root.statusLabel;
 }
 
 function formatInputLabel(files: readonly string[]): string | undefined {
   const first = files.at(0);
   if (!first) return undefined;
-
   const firstName = path.basename(first);
   return files.length === 1 ? firstName : `${firstName} +${files.length - 1}`;
 }
 
+/** The named agent children (a process child has no agent to name). */
 function formatActiveChildren(
-  children: readonly ActiveChildInfo[],
-  describe: (child: ActiveChildInfo) => string | undefined,
+  children: readonly StreamView[],
   descriptionColumns: number,
 ): string | undefined {
-  const namedChildren = children.filter((child) => child.agentName.length > 0);
+  const agents = children.filter((child) => child.identity?.kind === 'agent');
   const first =
-    namedChildren.find((child) => child.status === STREAM_PHASE.RUNNING) ??
-    namedChildren[0];
+    agents.find((child) => child.status === STREAM_PHASE.RUNNING) ?? agents[0];
   if (!first) return undefined;
-
-  const label = pluralize(namedChildren.length, 'subagent');
-  const suffix =
-    namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
-  const description = describe(first);
+  const label = pluralize(agents.length, 'subagent');
+  const suffix = agents.length > 1 ? ` +${agents.length - 1}` : '';
+  const description = first.description;
   const safeDescription =
     description && descriptionColumns > 0
       ? truncateSummaryToWidth(
@@ -500,7 +376,7 @@ function formatActiveChildren(
         )
       : '';
   const task = safeDescription ? ` — ${safeDescription}` : '';
-  return `${label}: ${first.agentName}${task}${suffix}`;
+  return `${label}: ${first.label}${task}${suffix}`;
 }
 
 function normalizeTerminalColumns(
@@ -514,14 +390,105 @@ function isMultiRound(rounds: number | undefined): rounds is number {
   return rounds != null && rounds > 1;
 }
 
-// Deliberately stays in minute-second form past 60 minutes (`100m 00s`, not
-// `1h 40m`) — unlike `formatCompactDuration`, which rounds to a compact
-// two-unit display. A long-running task should keep showing precise elapsed
-// minutes rather than snapping to hour granularity.
 function formatElapsed(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   if (minutes === 0) return `${remainingSeconds}s`;
   return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
+}
+
+// ---------------------------------------------------------------------------
+// Plain-text workflow progress
+// ---------------------------------------------------------------------------
+
+interface WorkflowPlainOutputOptions {
+  readonly writeLine: (line: string) => void;
+  readonly beforeWrite?: () => void;
+}
+
+/** The lines one workflow-script stream's view level says: phase headings,
+ *  task lines, log lines, and its outcome, keyed by the row they come from. */
+function workflowPlainLines(stream: StreamView): ReadonlyMap<string, string> {
+  const lines = new Map<string, string>();
+  const run = stream.transcript.run;
+  for (const phase of run?.phases ?? []) {
+    if (phase.opened) {
+      lines.set(
+        `phase:${phase.key}`,
+        `◆ ${formatWorkflowPhaseHeading(phase.heading)}`,
+      );
+    }
+  }
+  for (const row of stream.transcript.rows) {
+    if (row.kind === 'workflowTask') {
+      lines.set(row.id, row.line);
+    } else if (
+      row.kind === 'log' &&
+      row.level !== 'debug' &&
+      row.verbose !== false &&
+      row.text.full.trim().length > 0
+    ) {
+      lines.set(row.id, row.text.full);
+    }
+  }
+  if (
+    isTerminalOutcomePhase(stream.status) &&
+    stream.identity?.kind === 'multiAgentWorkflow'
+  ) {
+    lines.set(
+      'outcome',
+      `${WORKFLOW_TASK_STATUS_LABEL[stream.status]}: ${stream.identity.workflowName}`,
+    );
+  }
+  return lines;
+}
+
+/**
+ * The plain-text workflow progress of `texra run` (text output): what
+ * `transcript.run` and the stream's rows say, printed as they change
+ * between consecutive view levels (PRD 10.3). A line prints when its entry
+ * is new or reads differently than at the previous level; nothing here
+ * folds, gates, or relabels.
+ */
+export function attachWorkflowPlainOutput(
+  session: WorkflowPlainSession,
+  options: WorkflowPlainOutputOptions,
+): () => void {
+  const previous = new Map<StreamTabId, ReadonlyMap<string, string>>();
+  let subscribed = '';
+  const write = (line: string): void => {
+    options.beforeWrite?.();
+    options.writeLine(line);
+  };
+  const printStream = (stream: StreamView): void => {
+    const before = previous.get(stream.id);
+    const lines = workflowPlainLines(stream);
+    previous.set(stream.id, lines);
+    for (const [id, line] of lines) {
+      if (before?.get(id) !== line) write(line);
+    }
+  };
+  const detach = followView(session, (view) => {
+    for (const streamId of [...previous.keys()]) {
+      if (!view.streams.has(streamId)) previous.delete(streamId);
+    }
+    const workflows = [...view.streams.values()].filter(
+      (stream) => stream.identity?.kind === 'multiAgentWorkflow',
+    );
+    const key = workflows.map((stream) => stream.id).join('\0');
+    if (key !== subscribed) {
+      subscribed = key;
+      session.setTranscriptSubscriptions(
+        'workflow-plain-output',
+        workflows.map((stream) => ({ id: stream.id, fromSeq: 0 })),
+      );
+    }
+    for (const stream of workflows) printStream(stream);
+  });
+  return () => {
+    detach();
+    previous.clear();
+    session.setTranscriptSubscriptions('workflow-plain-output', []);
+  };
 }

@@ -1,26 +1,17 @@
-// Transcript region for the current stream's in-flight assistant/tool rows.
-// Finalized history is owned by the static scrollback renderer.
-
 import { Box } from 'ink';
 
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
+import { activeStreamId as activeStreamIdSignal } from '../state/cliState';
+import { sessionView, streamPhaseOf, streamViewOf } from '../state/sessionView';
 import {
-  activeStreamId as activeStreamIdSignal,
-  streamPhaseFor,
-  streams as streamsSignal,
-} from '../state/cliState';
-import {
-  sessionStateRevision,
-  sessionStreamDurableOutcome,
-  streamMetadataFor,
-} from '../state/childExecutions';
-import {
-  readStreamArtifacts,
-  streamArtifactRevision,
-} from '../state/subscribeStreamArtifacts';
+  mergeLocalNotices,
+  mergedSettledRows,
+  notices as noticesSignal,
+  noticesFor,
+} from '../state/transcript';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
@@ -42,9 +33,7 @@ import {
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 
 interface ConversationPaneProps {
-  /** Transcript measurement width, which callers may clamp to layout minimums. */
   readonly width?: number;
-  /** Physical parent width; metadata must not render beyond this boundary. */
   readonly availableWidth?: number;
   readonly maxRows?: number;
   readonly colorEnabled?: boolean;
@@ -64,9 +53,6 @@ function renderConversationPaneEntry({
   readonly subagentExecutionLabels?: ExecutionLabels;
   readonly width?: number;
 }): React.JSX.Element | null {
-  // When the newest row alone overflows the pane, the bounded renderer is the
-  // paint contract. Apply it before kind/mode branches so sizing and painting
-  // stay in lockstep.
   const content = ((): React.JSX.Element | null => {
     if (rowLimit !== undefined) {
       return (
@@ -112,15 +98,11 @@ function renderConversationPaneEntry({
             width={width}
           />
         );
-      // Compact detail rows (thinking, web search/fetch, usage, status, …)
-      // have no live presentation: they appear once they reach scrollback.
       default:
         return null;
     }
   })();
   if (content === null) return null;
-  // Isolate per row so a single throwing renderer can't blank the live pane.
-  // The key moves to the boundary since it is now the list child.
   return (
     <EntryErrorBoundary key={entry.id} label={entry.kind}>
       {content}
@@ -128,26 +110,31 @@ function renderConversationPaneEntry({
   );
 }
 
+/**
+ * The live tail of the active conversation: the rows the scrollback has not
+ * settled yet, read from the fold and joined with this TUI's local notices.
+ */
 export function ConversationPane(
   props: ConversationPaneProps = {},
 ): React.JSX.Element {
   const activeStreamId = useSignal(activeStreamIdSignal);
-  const streams = useSignal(streamsSignal);
-  useSignal(streamArtifactRevision);
-  useSignal(sessionStateRevision);
-  const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const category = activeStreamId
-    ? streamMetadataFor(activeStreamId)?.agentCategory
-    : undefined;
-  const artifacts =
-    activeStreamId && slice ? readStreamArtifacts(activeStreamId) : undefined;
-  const entries = slice?.entries ?? [];
+  const view = useSignal(sessionView());
+  const allNotices = useSignal(noticesSignal);
+  const stream = streamViewOf(view, activeStreamId);
+  const streamNotices = noticesFor(allNotices, activeStreamId);
+  const entries = mergeLocalNotices(
+    stream?.transcript.rows ?? [],
+    streamNotices,
+  );
   const displayEntries = pendingTranscriptEntries(
     entries,
-    slice?.finalizedFrontier ?? 0,
-    slice && streamPhaseFor(activeStreamId)?.phase,
+    mergedSettledRows(
+      stream?.transcript.rows ?? [],
+      stream?.transcript.settledRows ?? 0,
+      streamNotices,
+    ),
+    streamPhaseOf(stream),
   );
-
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   const metadataWidth =
     props.availableWidth !== undefined && props.width !== undefined
@@ -165,25 +152,20 @@ export function ConversationPane(
       )
     : 0;
   const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
-  const workflowFacts = slice
-    ? {
-        taskGroups: slice.taskGroups,
-        // A group the run never closed paints as interrupted once nothing is
-        // left to close it — not merely once the phase turns terminal, which
-        // a stop does while the run is still unwinding here — and it paints
-        // as the outcome the exit drain would have closed it with.
-        runDurableOutcome: activeStreamId
-          ? sessionStreamDurableOutcome(activeStreamId)
-          : undefined,
-        outputFilesByRound: artifacts?.outputFilesByRound ?? {},
-        missingOutputsByRound: artifacts?.missingOutputsByRound ?? {},
-        compileFailuresByRound: artifacts?.compileFailuresByRound ?? {},
-      }
-    : undefined;
-  const visibleWorkflowDetails =
-    category === AgentCategory.Workflow
-      ? selectWorkflowRunDetailLines(workflowFacts, detailCapacity)
-      : [];
+  const workflowFacts =
+    stream?.category === AgentCategory.Workflow
+      ? {
+          taskGroups: stream.transcript.taskGroups,
+          runDurableOutcome: stream.durableOutcome ?? undefined,
+          outputFilesByRound: stream.files,
+          missingOutputsByRound: stream.missingOutputs,
+          compileFailuresByRound: stream.compileFailures,
+        }
+      : undefined;
+  const visibleWorkflowDetails = selectWorkflowRunDetailLines(
+    workflowFacts,
+    detailCapacity,
+  );
   const detailRows = visibleWorkflowDetails.length;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
@@ -192,10 +174,6 @@ export function ConversationPane(
     props.subagentExecutionLabels,
   );
   const visibleRows = detailRows + visibleEntries.usedRows;
-
-  // Keep stream order intact so in-flight text stays interleaved with tool rows.
-  // The explicit height keeps the input bar pinned and prevents bursts from
-  // stealing rows reserved for the footer chrome.
   return (
     <Box flexDirection="column" height={visibleRows} overflowY="hidden">
       <WorkflowRunDetails

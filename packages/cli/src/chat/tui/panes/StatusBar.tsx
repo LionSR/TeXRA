@@ -17,7 +17,6 @@ import type {
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { approvalQueueStatus } from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
@@ -26,31 +25,24 @@ import {
   rootRunPending as rootRunPendingSignal,
   rootRunStreamId as rootRunStreamIdSignal,
   sessionMeta as sessionMetaSignal,
-  streamPhaseFor,
-  streams as streamsSignal,
-  NO_BYPASS,
+  rootStreamId as rootStreamIdSignal,
 } from '../state/cliState';
+import {
+  ancestorPhaseLabel,
+  cumulativeUsageOf,
+  descendantStreamIds,
+  sessionView,
+  streamPhaseOf,
+  streamViewOf,
+} from '../state/sessionView';
 import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
 } from '../state/sessionRunState';
-import {
-  childRosters as childRostersSignal,
-  parentStream as parentStreamSignal,
-  queuedFollowUpsFor,
-  sessionStateRevision,
-  streamMetadataFor,
-  streamStateFor,
-  visibleSubagentRows,
-} from '../state/childExecutions';
-import {
-  readStreamArtifacts,
-  streamArtifactRevision,
-} from '../state/subscribeStreamArtifacts';
-import { streamLabelForId } from '../state/streamViews';
-import { ancestorWorkflowPhaseLabel } from '../state/workflowPhase';
+import { attentionRequests } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
 import {
+  approvalQueueStatusKind,
   buildStatusBarDisplay,
   statusBarStreamTarget,
   subscriptionUsageProviderForStatus,
@@ -76,18 +68,14 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsage = useMemo(() => new SubscriptionUsageService(), []);
   const { write: writeStderr } = useStderr();
   const activeStreamId = useSignal(activeStreamIdSignal);
-  const streams = useSignal(streamsSignal);
-  const parentStream = useSignal(parentStreamSignal);
-  const childRosters = useSignal(childRostersSignal);
+  const view = useSignal(sessionView());
+  const rootStreamId = useSignal(rootStreamIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   // Subscribe to the shared SessionState: the model/stage/queued-follow-up
   // reads below go through its helpers rather than the streams map.
-  useSignal(sessionStateRevision);
   // The usage gauge projects `StreamArtifactProjection.cumulativeUsage`, which
   // repaints on this revision rather than on the streams map.
-  useSignal(streamArtifactRevision);
   const transientNotice = useSignal(transientNoticeSignal);
-  const approvals = useSignal(approvalQueueStatus);
   const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
   // The Ctrl-C stop/exit hint derives from published run-state signals, never
@@ -99,8 +87,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const runStopFacts = {
     runPending: rootRunPending,
     streamId: rootRunStreamId,
-    status: streamPhaseFor(rootRunStreamId)?.phase,
+    status: streamPhaseOf(streamViewOf(view, rootRunStreamId)),
   };
+  const ownedStreamIds = useMemo(
+    () => descendantStreamIds(view, rootStreamId),
+    [view, rootStreamId],
+  );
   const target = statusBarStreamTarget({
     activeStreamId,
     canStopActiveRun: chatTuiCanStopVisibleRun(runStopFacts),
@@ -108,23 +100,17 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     // stream's phase is derived, so a run whose stream has not reported one
     // yet must still read "stop" — Ctrl-C would stop it.
     canStopPendingRun: chatTuiCanStopActiveRun(runStopFacts),
-    parentStream,
-    phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
-    streams,
+    ownedStreamIds,
+    view,
   });
-  const statusSlice = target.displaySlice;
   const displayStreamId = target.displayStreamId;
-  const displayPhase = streamPhaseFor(displayStreamId);
-  // Cumulative per-run usage for the displayed stream — the store's own sum,
-  // the same figure the subagent rows and the exit summary present.
-  const displayUsage = displayStreamId
-    ? readStreamArtifacts(displayStreamId)?.cumulativeUsage
-    : undefined;
+  const displayStream = streamViewOf(view, displayStreamId);
+  const displayStatus = streamPhaseOf(displayStream);
+  // The run's cumulative usage: the same figure the subagent rows and the
+  // exit summary present.
+  const displayUsage = cumulativeUsageOf(displayStream);
   // Use root-session access facts only before any stream exists.
-  const accessModel =
-    (displayStreamId === undefined
-      ? undefined
-      : streamMetadataFor(displayStreamId)?.config?.model) ?? sessionMeta.model;
+  const accessModel = displayStream?.model ?? sessionMeta.model;
 
   // Which subscription, if any, would serve the selected stream's model on its
   // next request. The completed usage snapshot supersedes this prospective
@@ -259,25 +245,16 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? subscriptionQuotaRead.snapshot
       : undefined;
 
-  // Shared execution record for the displayed stream: stage and the model
-  // handler's context-occupancy snapshot both come from it.
-  const displayStreamState =
-    displayStreamId === undefined ? undefined : streamStateFor(displayStreamId);
-
-  const runStartedAt = isActivePhase(displayPhase?.phase)
-    ? displayPhase?.runStartedAt
-    : undefined;
+  const runStartedAt =
+    isActivePhase(displayStatus) && displayStream?.runStartedAt !== null
+      ? displayStream?.runStartedAt
+      : undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
-  // Reads the retained + active child roster, so keep it off the 1 Hz
-  // elapsed-time re-render path.
-  const subagentCount = useMemo(
-    () =>
-      displayStreamId === undefined
-        ? 0
-        : visibleSubagentRows(displayStreamId, childRosters).length,
-    [childRosters, displayStreamId],
-  );
+  const subagentCount = displayStream?.rollup.total ?? 0;
+  // Every request awaiting the user: the fold's approvals and open
+  // inquiries, the same list the modal and the title read.
+  const attention = attentionRequests(view);
 
   // Nested-session location: the nearest workflow-script ancestor's open
   // phase, then the focused stream's label.
@@ -285,39 +262,38 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const focusedLabel =
     focusedStreamId === undefined
       ? undefined
-      : streamLabelForId({
-          childRosters,
-          parentStream,
-          streamId: focusedStreamId,
-        });
+      : (streamViewOf(view, focusedStreamId)?.label ?? focusedStreamId);
   const focusedPhaseHeading =
     focusedStreamId === undefined
       ? undefined
-      : ancestorWorkflowPhaseLabel({
-          stageOf: (id) => streamStateFor(id)?.stage,
-          parentStream,
-          streamId: focusedStreamId,
-        });
+      : ancestorPhaseLabel(view, focusedStreamId);
 
   const display = buildStatusBarDisplay({
-    status: displayPhase?.phase,
-    substate: displayPhase?.substate,
+    status: displayStatus,
+    statusLabel: displayStream?.statusLabel,
     elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
     runningFrame: runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
     transientNotice,
     commandName: props.commandName,
-    bypass: statusSlice?.bypass ?? NO_BYPASS,
-    thinkingActive: statusSlice?.thinkingActive ?? false,
-    compactingActive: statusSlice?.compactingActive ?? false,
+    bypass:
+      displayStreamId === undefined
+        ? undefined
+        : view.policy.get(displayStreamId)?.bypasses,
+    thinkingActive: displayStream?.thinkingActive ?? false,
+    compactingActive: displayStream?.compactingActive ?? false,
     queuedFollowUpMessages:
-      displayStreamId === undefined ? [] : queuedFollowUpsFor(displayStreamId),
+      displayStreamId === undefined
+        ? []
+        : (view.queuedFollowUps.get(displayStreamId) ?? []),
     usage: displayUsage,
-    contextState: displayStreamState?.contextState,
-    stage: displayStreamState?.stage,
+    contextState: displayStream?.context ?? undefined,
+    stage: displayStream?.stage ?? undefined,
     subagents: subagentCount,
     runningSessions: props.runningSessions ?? 0,
-    approvalDepth: approvals.depth,
-    approvalKind: approvals.kind,
+    approvalDepth: attention.length,
+    approvalKind: approvalQueueStatusKind(
+      attention.map((request) => request.kind),
+    ),
     modelAccess,
     subscriptionProbeFailed,
     subscriptionQuota,
@@ -343,7 +319,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       chatInputAvailable: props.chatInputAvailable,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable:
-        activeStreamId !== undefined && parentStream.has(activeStreamId),
+        streamViewOf(view, activeStreamId)?.parentId != null,
       streamFocusAvailable: props.streamFocusAvailable,
       shiftEnterNewline: caps.kittyKeyboard,
       transcriptAvailable: props.transcriptAvailable,

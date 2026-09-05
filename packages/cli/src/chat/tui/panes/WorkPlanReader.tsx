@@ -25,8 +25,6 @@ import type { WorkPlanProvenance } from '@transcript';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
-import { streamArtifactRevision } from '../state/subscribeStreamArtifacts';
-import { useSignal } from '../state/useSignal';
 
 const TODO_STATUS_LABELS: Record<TodoStatus, string> = {
   [TODO_STATUS.PENDING]: 'pending',
@@ -132,7 +130,6 @@ export function WorkPlanReader({
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
-  useSignal(streamArtifactRevision);
   const snapshots = loading ? undefined : tryDefaultSession()?.snapshots;
   const workPlan = snapshots?.getWorkPlan(streamId);
   // A field this reader's own load could not vouch for stays masked only while

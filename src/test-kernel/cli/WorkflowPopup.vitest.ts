@@ -2,22 +2,25 @@
 // terminal decides — that the frame renders around a phase and that a big
 // phase windows to the row budget with attention rows first.
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { WorkflowPopup } from '@cli/chat/tui/panes/WorkflowPopup';
-import { retainedWorkflowPopupProjection } from '@cli/chat/tui/state/transcriptFold';
+import type { WorkflowPopupView } from '@cli/chat/tui/state/cliState';
 import {
-  emptySlice,
-  type WorkflowPopupView,
-} from '@cli/chat/tui/state/cliState';
-import type {
-  StreamTabId,
-  TaskGroup,
-  WorkflowCallProgress,
+  AgentCategory,
+  type StreamTabId,
+  type TaskGroup,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
+import {
+  bindTestSessionView,
+  makeStreamView,
+  seedView,
+  viewWith,
+} from './fixtures/sessionViewFixture';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
 const ROOT = 'workflow-root' as StreamTabId;
@@ -57,16 +60,31 @@ async function renderPopup(
   rows: readonly TranscriptRow[],
   availableRows: number,
 ) {
-  const slice = { ...emptySlice(), taskGroups, entries: rows };
-  const retained = retainedWorkflowPopupProjection(slice);
   const model = workflowRunModel({
-    taskGroups: retained.taskGroups,
-    rows: retained.rows,
-    plan: retained.plan,
+    taskGroups,
+    rows,
+    plan: undefined,
     streamPhase: undefined,
     runDurablyFinal: false,
     childProgress: new Map(),
   });
+  seedView(
+    viewWith([
+      makeStreamView({
+        id: ROOT,
+        category: AgentCategory.Workflow,
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'review' },
+        transcript: {
+          rows: [...rows],
+          taskGroups: [...taskGroups],
+          compaction: [],
+          settledSeq: rows.length,
+          settledRows: rows.length,
+          run: model,
+        },
+      }),
+    ]),
+  );
   const { ink, React } = await loadInk();
   const onViewChange = vi.fn();
   const rendered = renderInteractive(
@@ -83,7 +101,6 @@ async function renderPopup(
       onWorkflowControl: vi.fn(),
       pendingApprovals: new Map(),
       streamId: ROOT,
-      streams: new Map([[ROOT, slice]]),
       view: VIEW,
     }),
     { columns: 100 },
@@ -92,6 +109,7 @@ async function renderPopup(
 }
 
 describe('workflow popup', () => {
+  beforeAll(bindTestSessionView);
   it('renders a frame around a current empty dynamic phase', async () => {
     // A phase the script opened dynamically carries no declared position.
     const { instance, stdout } = await renderPopup(

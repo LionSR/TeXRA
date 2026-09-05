@@ -9,17 +9,20 @@ import {
   type SessionTitleState,
 } from '@shared/sessionTitle';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { isActivePhase } from '@shared/streams/streamStatus';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-import { approvalQueueStatus } from './state/approvalQueue';
-import { sessionStateRevision } from './state/childExecutions';
 import {
   rootRunPending,
   rootRunStreamId,
-  streamPhaseFor,
-  streams,
+  rootStreamId,
 } from './state/cliState';
+import { attentionRequests } from './state/approvalQueue';
+import {
+  anyStreamRunning,
+  sessionView,
+  streamPhaseOf,
+  streamViewOf,
+} from './state/sessionView';
 import { chatTuiCanStopActiveRun } from './state/sessionRunState';
 import { terminalCapabilities } from './state/terminalCapabilities';
 
@@ -64,18 +67,16 @@ function writeTerminalTitle(title: string): void {
 }
 
 function currentTerminalTitleState(): SessionTitleState {
-  if (approvalQueueStatus.get().depth > 0) return 'approval';
-  const streamSlices = streams.get();
-  const rootStreamId = rootRunStreamId.get();
+  const view = sessionView().get();
+  if (attentionRequests(view).length > 0) return 'approval';
+  const pendingRootStreamId = rootRunStreamId.get();
   if (
     chatTuiCanStopActiveRun({
       runPending: rootRunPending.get(),
-      streamId: rootStreamId,
-      status: streamPhaseFor(rootStreamId)?.phase,
+      streamId: pendingRootStreamId,
+      status: streamPhaseOf(streamViewOf(view, pendingRootStreamId)),
     }) ||
-    [...streamSlices.keys()].some((streamId) =>
-      isActivePhase(streamPhaseFor(streamId)?.phase),
-    )
+    anyStreamRunning(view, rootStreamId.get())
   ) {
     return 'running';
   }
@@ -137,13 +138,7 @@ export function installTerminalTitleUpdates(
     updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
-    [
-      approvalQueueStatus,
-      rootRunPending,
-      rootRunStreamId,
-      sessionStateRevision,
-      streams,
-    ],
+    [sessionView(), rootRunPending, rootRunStreamId, rootStreamId],
     synchronize,
   );
   synchronize();

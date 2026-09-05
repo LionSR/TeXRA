@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  formatCliStatusLabel,
   formatCliSessionStatus,
   type CliSessionStatusInput,
 } from '@cli/chat/tui/sessionStatus';
-import { STREAM_PHASE } from '@shared/schemas';
 
 function sessionStatus(overrides: Partial<CliSessionStatusInput> = {}): string {
   return formatCliSessionStatus({
@@ -13,7 +11,7 @@ function sessionStatus(overrides: Partial<CliSessionStatusInput> = {}): string {
     model: 'harness-model',
     modelAccess: 'personal',
     approvalPolicy: 'ask',
-    status: STREAM_PHASE.RUNNING,
+    statusLabel: 'Running',
     activeSkills: [],
     queuedFollowUpMessages: [],
     ...overrides,
@@ -35,7 +33,7 @@ describe('CLI session status formatter', () => {
         'model: harness-model',
         'model access: Your own API keys',
         'approval: Control Bash and edit prompts independently.',
-        'status: running',
+        'status: Running',
         'queued follow-ups: 2',
         '1. First queued follow-up is to re-run the narrow layout proof check.',
         '2. Second queued message asks for the theorem statement cleanup.',
@@ -143,14 +141,14 @@ describe('CLI session status formatter', () => {
   it('reports an empty follow-up queue explicitly', () => {
     expect(
       sessionStatus({
-        status: STREAM_PHASE.WAITING,
+        statusLabel: 'Idle',
       }),
     ).toContain('queued follow-ups: 0');
   });
 
   it('reports active child sessions only when the count is nonzero', () => {
     expect(sessionStatus({ activeChildSessions: 1 })).toContain(
-      ['status: running', 'active background tasks: 1'].join('\n'),
+      ['status: Running', 'active background tasks: 1'].join('\n'),
     );
     expect(sessionStatus({ activeChildSessions: 0 })).not.toContain(
       'active background tasks:',
@@ -161,7 +159,7 @@ describe('CLI session status formatter', () => {
   it('reports active session approval bypasses', () => {
     const status = sessionStatus({
       approvalBypasses: { superYolo: true, bash: true, toolEdit: true },
-      status: STREAM_PHASE.WAITING,
+      statusLabel: 'Idle',
     });
 
     expect(status).toContain(
@@ -173,7 +171,7 @@ describe('CLI session status formatter', () => {
   it('surfaces an active goal in status details', () => {
     const status = sessionStatus({
       modelAccess: 'included',
-      status: STREAM_PHASE.CANCELLED,
+      statusLabel: 'Stopped',
       goal: {
         status: 'active',
         objective:
@@ -182,7 +180,7 @@ describe('CLI session status formatter', () => {
       sessionId: 'goal123',
     });
 
-    expect(status).toContain('status: stopped');
+    expect(status).toContain('status: Stopped');
     expect(status).toContain('goal: active');
     expect(status).toContain(
       'goal objective: Solve the autonomous goal problem and produce a verifier before stopping.',
@@ -224,33 +222,13 @@ describe('CLI session status formatter', () => {
   });
 
   it('uses the footer label for an idle waiting stream', () => {
-    expect(formatCliStatusLabel(STREAM_PHASE.WAITING)).toBe('idle');
-    expect(formatCliStatusLabel(undefined, undefined, true)).toBe('');
     expect(
       sessionStatus({
         agent: 'research',
         model: 'deepseekT',
         modelAccess: 'included',
-        status: STREAM_PHASE.WAITING,
+        statusLabel: 'Idle',
       }),
-    ).toContain('status: idle');
-  });
-
-  it('uses the idle wording for a subagent stalled on follow-up', () => {
-    expect(formatCliStatusLabel(STREAM_PHASE.WAITING, undefined, true)).toBe(
-      'idle',
-    );
-  });
-
-  it('keeps a single lowercase register across child-stream status labels', () => {
-    expect(formatCliStatusLabel(STREAM_PHASE.RUNNING, undefined, true)).toBe(
-      'running',
-    );
-    expect(formatCliStatusLabel(STREAM_PHASE.CANCELLED, undefined, true)).toBe(
-      'stopped',
-    );
-    expect(formatCliStatusLabel(STREAM_PHASE.FAILED, undefined, true)).toBe(
-      'error',
-    );
+    ).toContain('status: Idle');
   });
 });

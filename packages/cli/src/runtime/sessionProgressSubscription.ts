@@ -1,11 +1,13 @@
-import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
-import {
-  agentConfigToTaskState,
-  type SessionEventHub,
-  type SessionFact,
-} from '@agent/runtime';
+import { Effect, Fiber, Stream } from 'effect';
+
+import { agentConfigToTaskState, type SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
+import { effectRuntime } from '@platform/processRuntime';
+import type {
+  ActiveChildInfo,
+  SessionEvent,
+  StreamTabId,
+} from '@shared/schemas';
 import { roundStageFromStageStart } from '@shared/streams/stage';
 import { assertNever } from '@utils/core';
 import { writeNdjsonStdout } from './logSinks';
@@ -51,75 +53,32 @@ type CliProjectedNdjsonProgressEvent = {
 
 export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 
-/** The run-fact vocabulary this projection's subscription filter admits. */
-type CliRunFactEvent = Extract<
-  AgentEvent,
-  { type: (typeof RUN_FACT_EVENT_TYPES)[number] }
->;
-
 /**
- * Project session facts onto the frozen NDJSON progress-event vocabulary.
- * `followUpSent` and `streamHoldChanged` are intentionally session-local.
- */
-function projectCliSessionFact(
-  fact: SessionFact,
-): CliProjectedNdjsonProgressEvent | undefined {
-  switch (fact.type) {
-    case 'goalStateChanged':
-      return { event: 'goalStateChanged', payload: fact.payload };
-    case 'inquiryThreadUpdated':
-      return { event: 'inquiryThreadUpdated', payload: fact.payload };
-    case 'updateQueuedFollowUps':
-      return { event: 'updateQueuedFollowUps', payload: fact.payload };
-    case 'followUpSent':
-      return undefined;
-    // A read-only hold is a session-local display fact; the frozen NDJSON
-    // vocabulary carries no record for it.
-    case 'streamHoldChanged':
-      return undefined;
-    case 'updateStreamDescription':
-      return { event: 'updateStreamDescription', payload: fact.payload };
-    case 'status':
-      return {
-        event: 'updateStreamStatus',
-        payload: {
-          streamId: fact.streamId,
-          status: fact.phase,
-          cause: fact.cause,
-          ...(fact.previousPhase ? { previousStatus: fact.previousPhase } : {}),
-          ...(fact.substate ? { substate: fact.substate } : {}),
-        },
-      };
-    case 'setParentStream':
-      return { event: 'setParentStream', payload: fact.payload };
-    case 'removeStream':
-      return { event: 'removeStream', payload: fact.payload };
-  }
-  assertNever(fact, 'Unhandled CLI NDJSON session fact');
-}
-
-/**
- * Project run facts onto the frozen NDJSON progress-event vocabulary.
+ * Project one session event onto the frozen NDJSON progress-event
+ * vocabulary: one event to zero or one line, no cumulative state (PRD 10.3).
+ *
  * `run.activate` projects to the public `setActiveStream` record, one to one
  * and byte for byte: every activation (a launch, a resume) emits one line,
  * `background` (a delegated child) is the record's `suppressViewSwitch:
  * true`, and `isRemote` appears only where the fact carries one (agent
  * launches; a child stream never did). `run.start` is the existence fact and
- * projects nothing: a resume mints none, and a launch emits both. `context.state`,
- * the approval facts, and the terminal result are intentionally unprojected
- * (the result has its own NDJSON record, and the public wire carries neither
- * a context-occupancy nor an approval record).
+ * projects nothing: a resume mints none, and a launch emits both.
+ * `context.state`, the approval facts, the terminal result, and transcript
+ * rows are intentionally unprojected (the result has its own NDJSON record,
+ * and the public wire carries neither a context-occupancy, an approval, nor a
+ * transcript record). The goal and queued-follow-up records carry only the
+ * stream they name, as the public wire always did.
  */
-function projectCliRunFact(
-  streamId: StreamTabId,
-  event: CliRunFactEvent,
+function projectCliSessionEvent(
+  event: SessionEvent,
 ): CliProjectedNdjsonProgressEvent | undefined {
+  const streamId = event.aggregateId as StreamTabId;
   switch (event.type) {
     case 'run.activate':
       return {
         event: 'setActiveStream',
         payload: {
-          streamId: event.streamId,
+          streamId,
           agentCategory: event.category,
           ...(event.isRemote != null ? { isRemote: event.isRemote } : {}),
           ...(event.background ? { suppressViewSwitch: true } : {}),
@@ -130,20 +89,43 @@ function projectCliRunFact(
     case 'approval.resolved':
     case 'approval.policy':
     case 'result':
-      return undefined;
-    case 'usage':
-      return { event: 'updateStreamUsage', payload: event.payload };
     case 'context.state':
-      // The frozen public wire carries no context-state record; occupancy is
-      // an interactive-surface gauge, not a scriptable progress event.
+    case 'transcript.entry':
       return undefined;
+    case 'status':
+      return {
+        event: 'updateStreamStatus',
+        payload: {
+          streamId,
+          status: event.phase,
+          cause: event.cause,
+          ...(event.previousPhase
+            ? { previousStatus: event.previousPhase }
+            : {}),
+          ...(event.substate ? { substate: event.substate } : {}),
+        },
+      };
+    case 'usage':
+      return {
+        event: 'updateStreamUsage',
+        payload: {
+          streamId,
+          storageKey: event.storageKey,
+          usage: event.usage,
+        },
+      };
     case 'run.config':
+      // The producers publish the run's whole `AgentConfig`; the durable
+      // schema is a loose object that keeps every key, so the frozen
+      // `taskState` line carries the same bytes it always did.
       return {
         event: 'setTaskState',
         payload: {
-          streamId: event.streamId,
+          streamId,
           executionId: event.executionId,
-          taskState: agentConfigToTaskState(event.config),
+          taskState: agentConfigToTaskState(
+            event.config as Parameters<typeof agentConfigToTaskState>[0],
+          ),
         },
       };
     case 'conversation.progress':
@@ -154,67 +136,102 @@ function projectCliRunFact(
     case 'updateTodos':
       return {
         event: 'updateTodos',
-        payload: { streamId: event.streamId, todos: event.todos },
+        payload: { streamId, todos: event.todos },
       };
     case 'updatePlan':
       return {
         event: 'updatePlan',
-        payload: { streamId: event.streamId, plan: event.plan },
+        payload: { streamId, plan: event.plan },
       };
     case 'addOutputFiles':
       return {
         event: 'addOutputFiles',
-        payload: {
-          streamId: event.streamId,
-          filesByRound: event.filesByRound,
-        },
+        payload: { streamId, filesByRound: event.filesByRound },
       };
     case 'updateMissingOutputs':
       return {
         event: 'updateMissingOutputs',
-        payload: {
-          streamId: event.streamId,
-          filesByRound: event.filesByRound,
-        },
+        payload: { streamId, filesByRound: event.filesByRound },
       };
     case 'updateCompileFailures':
       return {
         event: 'updateCompileFailures',
-        payload: {
-          streamId: event.streamId,
-          filesByRound: event.filesByRound,
-        },
+        payload: { streamId, filesByRound: event.filesByRound },
       };
     case 'goalPaused':
-      return { event: 'goalPaused', payload: { streamId: event.streamId } };
+      return { event: 'goalPaused', payload: { streamId } };
     case 'stage.start': {
       // The frozen public wire carries round progress only; phase progress
       // stays internal.
-      const roundStage = roundStageFromStageStart(event);
+      const roundStage = roundStageFromStageStart({
+        label: event.label,
+        kind: event.kind ?? undefined,
+        index: event.index ?? undefined,
+        total: event.total ?? undefined,
+      });
       if (!roundStage) return undefined;
       return { event: 'updateRoundStage', payload: { streamId, roundStage } };
     }
-    case 'child.activity':
+    case 'goalStateChanged':
+      return { event: 'goalStateChanged', payload: { streamId } };
+    case 'inquiryThreadUpdated': {
+      const {
+        aggregateId: _aggregateId,
+        seq: _seq,
+        commit: _commit,
+        ownerId: _ownerId,
+        at: _at,
+        type: _type,
+        ...thread
+      } = event;
+      return { event: 'inquiryThreadUpdated', payload: thread };
+    }
+    case 'updateQueuedFollowUps':
+      return { event: 'updateQueuedFollowUps', payload: { streamId } };
+    case 'updateStreamDescription':
       return {
-        event: 'updateActiveSubagents',
+        event: 'updateStreamDescription',
+        payload: { streamId, description: event.description },
+      };
+    case 'setParentStream':
+      return {
+        event: 'setParentStream',
         payload: {
+          childStreamId: streamId,
           parentStreamId: event.parentStreamId,
-          children: event.items.map(projectCliActiveChildRow),
         },
       };
+    case 'stream.removed':
+      return { event: 'removeStream', payload: { streamId } };
   }
-  assertNever(event, 'Unhandled CLI NDJSON run fact');
+  assertNever(event, 'Unhandled CLI NDJSON session event');
 }
 
 /**
  * Headless CLI compatibility adapter. Public NDJSON output still speaks the
  * frozen progress-event vocabulary inside `kind: "progress"` records, so this
- * boundary alone projects session/run facts into that public wire shape.
+ * boundary alone translates the session's events into that public wire.
+ *
+ * It reads `events.all(session.now())` directly (PRD 10.3): every event
+ * above the current ordinal in commit order, never the view, so a
+ * `stage.start` no surface subscribed to still becomes its line and two
+ * same-type updates never collapse. The child roster is the one line with no
+ * durable event behind it: `child.activity` is process-local registry state
+ * (contract C3) and reaches this projection through the registry's
+ * listener. It is written in publish order all the same: a roster observed
+ * at ordinal N follows every event committed at or below N, so it waits for
+ * the tail to deliver N and goes out before anything committed after it.
+ *
+ * Detaching drains: the tail runs to the ordinal captured at detach, so the
+ * last line published before the run settled is on the wire before the
+ * caller writes its result record.
  */
 export function attachCliSessionProgressProjection(
-  events: SessionEventHub,
+  session: Pick<SessionHandle, 'events' | 'now'> & {
+    readonly executions: Pick<SessionHandle['executions'], 'onChildActivity'>;
+  },
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
-): () => void {
+): () => Promise<void> {
   function emitProjected(projected: CliProjectedNdjsonProgressEvent): void {
     writeRecord({
       kind: 'progress',
@@ -224,20 +241,62 @@ export function attachCliSessionProgressProjection(
     });
   }
 
-  const detachSessionFacts = events.subscribeSessionFacts((fact) => {
-    const projected = projectCliSessionFact(fact);
-    if (projected) emitProjected(projected);
+  /** The last commit the tail delivered; rosters observed above it wait. */
+  let delivered = session.now();
+  /** The ordinal detach cut at; nothing above it is written. */
+  let stopAt: number | undefined;
+  const heldRosters: Array<{
+    readonly at: number;
+    readonly projected: CliProjectedNdjsonProgressEvent;
+  }> = [];
+  let resolveDrained!: () => void;
+  const drained = new Promise<void>((resolve) => {
+    resolveDrained = resolve;
   });
-  const detachRunFacts = events.subscribeRunFacts(
-    (runFact) => {
-      const projected = projectCliRunFact(runFact.streamId, runFact.event);
-      if (projected) emitProjected(projected);
+  const flushRosters = (upTo: number): void => {
+    while (heldRosters.length > 0 && heldRosters[0]!.at <= upTo) {
+      emitProjected(heldRosters.shift()!.projected);
+    }
+  };
+  const settleIfDrained = (): void => {
+    if (stopAt === undefined || delivered < stopAt) return;
+    flushRosters(stopAt);
+    resolveDrained();
+  };
+
+  const fiber = effectRuntime().runFork(
+    Stream.runForEach(session.events.all(delivered), (event) =>
+      Effect.sync(() => {
+        if (stopAt !== undefined && event.commit > stopAt) return;
+        const projected = projectCliSessionEvent(event);
+        if (projected) emitProjected(projected);
+        delivered = event.commit;
+        flushRosters(delivered);
+        settleIfDrained();
+      }),
+    ),
+  );
+  const detachRosters = session.executions.onChildActivity(
+    (parentStreamId, items) => {
+      const projected: CliProjectedNdjsonProgressEvent = {
+        event: 'updateActiveSubagents',
+        payload: {
+          parentStreamId,
+          children: items.map(projectCliActiveChildRow),
+        },
+      };
+      const at = session.now();
+      if (at <= delivered) emitProjected(projected);
+      else heldRosters.push({ at, projected });
     },
-    { types: RUN_FACT_EVENT_TYPES },
   );
 
-  return () => {
-    detachRunFacts();
-    detachSessionFacts();
+  return async () => {
+    if (stopAt !== undefined) return drained;
+    detachRosters();
+    stopAt = session.now();
+    settleIfDrained();
+    await drained;
+    effectRuntime().runFork(Fiber.interrupt(fiber));
   };
 }

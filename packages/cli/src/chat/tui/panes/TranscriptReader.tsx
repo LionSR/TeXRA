@@ -30,7 +30,7 @@ import {
   scrollableModalTextRowsBudget,
 } from '../modals/ScrollableModalText';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
-import { streams as streamsSignal, type StreamSlice } from '../state/cliState';
+import { sessionView, streamViewOf } from '../state/sessionView';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import {
@@ -72,11 +72,10 @@ function withSpillNotice(preview: string, notice: string): string {
 }
 
 export function hydratedTranscript(
-  slice: StreamSlice | undefined,
+  rows: readonly TranscriptRow[],
   spills: ReadonlyMap<string, SpillHydration>,
-): StreamSlice | undefined {
-  if (!slice) return slice;
-  const entries = slice.entries.map((row): TranscriptRow => {
+): readonly TranscriptRow[] {
+  return rows.map((row): TranscriptRow => {
     if (!row.spillPath) return row;
     const spill = spills.get(row.spillPath);
     if (spill === undefined) return { ...row, spillPath: undefined };
@@ -105,7 +104,6 @@ export function hydratedTranscript(
         : withSpillNotice(transcriptRowHeadline(row), spill.notice);
     return hydrateRowHeadline(row, recovered, spill.kind === 'failed');
   });
-  return { ...slice, entries };
 }
 
 /**
@@ -149,8 +147,8 @@ export function TranscriptReader({
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
-  const streams = useSignal(streamsSignal);
-  const slice = streams.get(streamId);
+  const view = useSignal(sessionView());
+  const rows = streamViewOf(view, streamId)?.transcript.rows ?? [];
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
   const [spillState, setSpillState] = useState<{
@@ -163,12 +161,8 @@ export function TranscriptReader({
   }>({ streamId, paths: new Set() });
 
   const spillPaths = useMemo(
-    () => [
-      ...new Set(
-        slice?.entries.flatMap((entry) => entry.spillPath ?? []) ?? [],
-      ),
-    ],
-    [slice],
+    () => [...new Set(rows.flatMap((entry) => entry.spillPath ?? []))],
+    [rows],
   );
   const spillPathsKey = spillPaths.join('\0');
 
@@ -219,19 +213,19 @@ export function TranscriptReader({
       ? spillState.values
       : EMPTY_SPILL_HYDRATIONS;
 
-  const hydratedSlice = useMemo(
-    () => hydratedTranscript(slice, spills),
-    [slice, spills],
+  const hydratedRows = useMemo(
+    () => hydratedTranscript(rows, spills),
+    [rows, spills],
   );
 
   // Recomputed as the run appends rows, so the reader stays live rather than
   // freezing at the content present when it opened.
   const text = useMemo(() => {
-    const body = transcriptToLines(hydratedSlice, width, executionLabels)
+    const body = transcriptToLines(hydratedRows, width, executionLabels)
       .join('\n')
       .trimEnd();
     return body || EMPTY_TRANSCRIPT_TEXT;
-  }, [executionLabels, hydratedSlice, width]);
+  }, [executionLabels, hydratedRows, width]);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {

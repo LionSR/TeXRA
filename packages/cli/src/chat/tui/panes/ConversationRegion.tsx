@@ -30,21 +30,13 @@ import {
 import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
-import {
-  queuedFollowUpsFor,
-  sessionStateRevision,
-} from '../state/childExecutions';
+import { AgentCategory } from '@shared/schemas';
 import { inputBarContentRows } from '../state/cliState';
-import {
-  readStreamArtifacts,
-  streamArtifactRevision,
-} from '../state/subscribeStreamArtifacts';
+import { sessionView, streamViewOf } from '../state/sessionView';
 import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { StreamSlice } from '../state/cliState';
-import type { StreamView } from '../state/streamViews';
 
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation, even though they now render below the input bar.
@@ -53,14 +45,15 @@ interface ConversationRegionSnapshot {
   readonly activeStreamId: StreamTabId | undefined;
   readonly foregroundMaxRows: number | undefined;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  /** The active stream's parent, when it is a child. */
+  readonly parentId: StreamTabId | undefined;
   readonly reverseSearchOpen: boolean;
   readonly rootStreamId: StreamTabId | undefined;
   readonly slashPaletteOpen: boolean;
   readonly selectedChildValue: StreamTabId | undefined;
   readonly childListFocused: boolean;
-  readonly sessionViews: readonly StreamView[];
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  /** The child-list rows: the list root, then its descendants newest first. */
+  readonly sessions: readonly StreamTabId[];
   readonly subagentExecutionLabels: ExecutionLabels;
   readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
   readonly listRootStreamId: StreamTabId | undefined;
@@ -103,7 +96,7 @@ export function ConversationRegion({
   const { key: viewportKey, scoped: scopedTranscript } =
     activeTranscriptViewport({
       activeStreamId: snapshot.activeStreamId,
-      parentStream: snapshot.parentStream,
+      parentId: snapshot.parentId,
     });
   const scrollbackTarget = staticScrollbackTarget({
     activeStreamId: snapshot.activeStreamId,
@@ -113,20 +106,16 @@ export function ConversationRegion({
   const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
   const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
-  const activeSlice = snapshot.activeStreamId
-    ? snapshot.streams.get(snapshot.activeStreamId)
-    : undefined;
-  useSignal(streamArtifactRevision);
-  useSignal(sessionStateRevision);
-  const activeArtifacts =
-    snapshot.activeStreamId && activeSlice
-      ? readStreamArtifacts(snapshot.activeStreamId)
-      : undefined;
-  const activeTodos = activeArtifacts?.todos ?? [];
-  const activePlan = activeArtifacts?.plan ?? null;
-  const queuedFollowUpMessages = snapshot.activeStreamId
-    ? queuedFollowUpsFor(snapshot.activeStreamId)
-    : [];
+  const view = useSignal(sessionView());
+  const activeStream = streamViewOf(view, snapshot.activeStreamId);
+  const activeTodos =
+    activeStream?.category === AgentCategory.ToolUse ? activeStream.todos : [];
+  const activePlan =
+    activeStream?.category === AgentCategory.ToolUse ? activeStream.plan : null;
+  const queuedFollowUpMessages =
+    snapshot.activeStreamId === undefined
+      ? []
+      : (view.queuedFollowUps.get(snapshot.activeStreamId) ?? []);
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
   // Round-border chrome is the default input height minus its single content
@@ -173,10 +162,10 @@ export function ConversationRegion({
   // while it has focus, otherwise the todos/plan panel. Reserve only as many
   // rows as that panel actually needs.
   const todosPlanContentRows =
-    hasTodosPlanPanel && activeSlice
+    hasTodosPlanPanel && activeStream
       ? todosPlanPanelRowCount(activeTodos, activePlan)
       : 0;
-  const sessionPanelItemCount = snapshot.sessionViews.length;
+  const sessionPanelItemCount = snapshot.sessions.length;
   const minimumSessionPanelRows = 2;
   const {
     bottomPanelRows: bottomPanelBudget,
@@ -263,7 +252,7 @@ export function ConversationRegion({
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.listRootStreamId}
               selectedValue={snapshot.selectedChildValue}
-              sessions={snapshot.sessionViews}
+              sessions={snapshot.sessions}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
             />
             <TodosPlanPanel

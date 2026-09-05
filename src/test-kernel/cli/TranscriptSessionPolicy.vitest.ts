@@ -21,6 +21,7 @@ afterEach(async () => {
 describe('CLI transcript session policy', () => {
   it('fails a headless execution before runtime construction when opening fails', async () => {
     vi.resetModules();
+    await import('@test/support/sessionGraphTestSetup');
     const failure = new Error('transcript directory is unreadable');
     const runAgent = vi.fn();
     const createCliRuntimeHost = vi.fn();
@@ -53,6 +54,7 @@ describe('CLI transcript session policy', () => {
 
   it('selects ephemeral mode only through the explicit interactive policy', async () => {
     vi.resetModules();
+    await import('@test/support/sessionGraphTestSetup');
     const { installPlatform } = await import('@test/support/setupPlatform');
     await installPlatform();
     const { initializeCliTranscriptSession } =
@@ -84,6 +86,7 @@ describe('CLI transcript session policy', () => {
 
   it('does not fall back when the interactive policy requires persistence', async () => {
     vi.resetModules();
+    await import('@test/support/sessionGraphTestSetup');
     const { initializeCliTranscriptSession } =
       await import('@cli/runtime/transcriptSession');
     const failure = new Error('permission denied');
@@ -100,6 +103,7 @@ describe('CLI transcript session policy', () => {
 
   it('reclaims an orphaned stream sidecar after a headless session opens', async () => {
     vi.resetModules();
+    await import('@test/support/sessionGraphTestSetup');
     const [
       { installFakeHost },
       { createTempDirPlatform },

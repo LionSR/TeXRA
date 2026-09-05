@@ -1,380 +1,143 @@
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
+/**
+ * The TUI's approval Surface over the fold: which request the modal shows,
+ * in what order, and how the status bar's attention list reads.
+ */
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
-const notifyMock = vi.hoisted(() => vi.fn());
-
-vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
-  notify: notifyMock,
-}));
-
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   approvalPayloadStreamId,
-  approvalQueueStatus,
-  clearApprovals,
-  clearApprovalsWhere,
+  attentionRequests,
   currentApproval,
-  enqueueApproval,
-  pendingApprovalSummaries,
   promoteApprovalsForStream,
-  ROOT_APPROVAL_STREAM_KEY,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
-import { activeStreamId } from '@cli/chat/tui/state/cliState';
-import { enqueueTuiApproval } from '@cli/chat/tui/state/subscribeApprovals';
+import { resetCliState } from '@cli/chat/tui/state/cliState';
 import type { StreamTabId } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
 
-const INTERRUPTED = {
-  accepted: false,
-  rejectionCause: 'Session interrupted.',
-};
+import {
+  bindTestSessionView,
+  makeStreamView,
+  seedView,
+  viewWith,
+} from './fixtures/sessionViewFixture';
 
-function bashPayload(streamId: string): ApprovalPayload {
+function bashPayload(streamId: string, requestId = `bash-${streamId}`) {
   return {
     kind: 'bash',
-    data: {
-      requestId: `bash-${streamId}`,
-      allowBypass: true,
-      streamId,
-      command: 'echo ok',
-    },
-  };
+    data: { requestId, allowBypass: true, streamId, command: 'echo ok' },
+  } satisfies ApprovalPayload;
 }
 
-function externalInquiryPayload(streamId: string): ApprovalPayload {
+function questionPayload(streamId: string) {
   return {
-    kind: 'externalInquiry',
+    kind: 'userQuestion',
     data: {
-      requestId: `external-${streamId}`,
-      question: 'Please verify the finite enumeration independently.',
-      threadId: 'ei_000000000001',
+      requestId: `question-${streamId}`,
       allowBypass: false,
       streamId,
+      questions: [{ question: 'Continue?', options: [{ label: 'Yes' }] }],
     },
-  };
+  } satisfies ApprovalPayload;
 }
 
-function decideForeground(accepted: boolean): void {
-  currentApproval.get()?.decide({ accepted });
-}
-
-async function waitForForeground(payload: ApprovalPayload): Promise<void> {
-  await vi.waitFor(() => {
-    expect(currentApproval.get()?.payload).toBe(payload);
+/** The view after each payload's `approval.requested` folded, in order. */
+function viewOfApprovals(...payloads: readonly ApprovalPayload[]): SessionView {
+  const streams = [...new Set(payloads.map((p) => p.data.streamId))].map((id) =>
+    makeStreamView({ id }),
+  );
+  return viewWith(streams, {
+    approvals: payloads.map((payload) => ({
+      streamId: payload.data.streamId as StreamTabId,
+      requestId: payload.data.requestId,
+      payload,
+    })),
   });
 }
 
-function promoteStream(
-  streamId: string,
-  options?: { includeSessionWide: boolean },
-): void {
-  promoteApprovalsForStream(streamId as StreamTabId, options);
-}
+beforeAll(bindTestSessionView);
+afterEach(() => resetCliState());
 
-afterEach(() => {
-  clearApprovals();
-  activeStreamId.set(undefined);
-  notifyMock.mockClear();
-});
+describe('CLI approval surface', () => {
+  it("shows the fold's first outstanding approval and reads the rest as attention", () => {
+    const first = bashPayload('stream-a');
+    const second = questionPayload('stream-b');
+    const view = viewOfApprovals(first, second);
+    seedView(view);
 
-describe('CLI approval queue', () => {
-  it('activates each approval only when it becomes the foreground modal', async () => {
-    const presented: string[] = [];
-    const first = bashPayload('child-1');
-    const second = bashPayload('child-2');
+    expect(currentApproval.get()?.payload).toEqual(first);
+    expect(attentionRequests(view).map((r) => r.kind)).toEqual([
+      'bash',
+      'userQuestion',
+    ]);
+  });
 
-    const firstResult = enqueueApproval(first, {
-      onPresent: () => presented.push('child-1'),
-    });
-    await waitForForeground(first);
-    expect(presented).toEqual(['child-1']);
+  it('drops a request the moment the fold resolves it', () => {
+    const first = bashPayload('stream-a');
+    const second = bashPayload('stream-b');
+    seedView(viewOfApprovals(first, second));
+    expect(currentApproval.get()?.payload).toEqual(first);
 
-    const secondResult = enqueueApproval(second, {
-      onPresent: () => presented.push('child-2'),
-    });
-    await Promise.resolve();
-    expect(currentApproval.get()?.payload).toBe(first);
-    expect(presented).toEqual(['child-1']);
+    seedView(viewOfApprovals(second));
+    expect(currentApproval.get()?.payload).toEqual(second);
 
-    decideForeground(true);
-    await expect(firstResult).resolves.toEqual({ accepted: true });
-    await waitForForeground(second);
-    expect(presented).toEqual(['child-1', 'child-2']);
-
-    decideForeground(false);
-    await expect(secondResult).resolves.toEqual({ accepted: false });
+    seedView(viewOfApprovals());
     expect(currentApproval.get()).toBeUndefined();
   });
 
-  it('labels queued human-input prompts separately from approvals', async () => {
-    const question = externalInquiryPayload('question-1');
-    const questionResult = enqueueApproval(question);
+  it('promotes a stream to the head without settling or re-presenting', () => {
+    const a = bashPayload('stream-a');
+    const b1 = bashPayload('stream-b', 'bash-b-1');
+    const b2 = bashPayload('stream-b', 'bash-b-2');
+    const view = viewOfApprovals(a, b1, b2);
+    seedView(view);
+    expect(currentApproval.get()?.payload).toEqual(a);
 
-    expect(approvalQueueStatus.get()).toEqual({
-      depth: 1,
-      kind: 'question',
-    });
-    await waitForForeground(question);
-
-    decideForeground(true);
-    await expect(questionResult).resolves.toEqual({ accepted: true });
-    expect(approvalQueueStatus.get()).toEqual({
-      depth: 0,
-      kind: 'approval',
-    });
-
-    const approval = bashPayload('approval-1');
-    const mixedQuestion = externalInquiryPayload('question-2');
-    const approvalResult = enqueueApproval(approval);
-    const mixedQuestionResult = enqueueApproval(mixedQuestion);
-
-    expect(approvalQueueStatus.get()).toEqual({
-      depth: 2,
-      kind: 'request',
-    });
-    decideForeground(false);
-    await expect(approvalResult).resolves.toEqual({ accepted: false });
-    await waitForForeground(mixedQuestion);
-    expect(approvalQueueStatus.get()).toEqual({
-      depth: 1,
-      kind: 'question',
-    });
-
-    decideForeground(false);
-    await expect(mixedQuestionResult).resolves.toEqual({ accepted: false });
+    promoteApprovalsForStream('stream-b' as StreamTabId);
+    expect(currentApproval.get()?.payload).toEqual(b1);
+    expect(attentionRequests(view).map((r) => r.requestId)).toEqual([
+      'bash-b-1',
+      'bash-b-2',
+      'bash-stream-a',
+    ]);
   });
 
-  it('interrupts active and queued approvals without wedging the queue', async () => {
-    const first = bashPayload('child-1');
-    const second = bashPayload('child-2');
-    const firstResult = enqueueApproval(first);
-    const secondResult = enqueueApproval(second);
+  it("promotes the requests of a workflow popup's children with it", () => {
+    const a = bashPayload('stream-a');
+    const child = bashPayload('workflow-child');
+    const view = viewOfApprovals(a, child);
+    seedView(view);
 
-    await waitForForeground(first);
-    expect(approvalQueueStatus.get()).toEqual({
-      depth: 2,
-      kind: 'approval',
+    promoteApprovalsForStream('workflow' as StreamTabId, {
+      includeStreamIds: new Set(['workflow-child' as StreamTabId]),
     });
-
-    clearApprovals();
-
-    await expect(firstResult).resolves.toEqual(INTERRUPTED);
-    await expect(secondResult).resolves.toEqual(INTERRUPTED);
-    expect(currentApproval.get()).toBeUndefined();
-    expect(approvalQueueStatus.get()).toEqual({
-      depth: 0,
-      kind: 'approval',
-    });
-
-    const next = bashPayload('child-3');
-    const nextResult = enqueueApproval(next);
-    await waitForForeground(next);
-
-    decideForeground(true);
-    await expect(nextResult).resolves.toEqual({ accepted: true });
-
-    const cancelledDuringPresentation = enqueueApproval(
-      bashPayload('child-4'),
-      { onPresent: clearApprovals },
-    );
-    await expect(cancelledDuringPresentation).resolves.toEqual(INTERRUPTED);
-    expect(currentApproval.get()).toBeUndefined();
+    expect(currentApproval.get()?.payload).toEqual(child);
   });
 
-  it('notifies only when a TUI approval becomes the foreground modal', async () => {
-    const first = bashPayload('child-1');
-    const second = bashPayload('child-2');
+  it('holds a tool edit or retry back until its hook presents the payload', () => {
+    const edit = {
+      kind: 'toolEdit',
+      data: {
+        requestId: 'edit-1',
+        allowBypass: true,
+        streamId: 'stream-a',
+        path: 'paper.tex',
+        summary: 'Edit paper.tex',
+        diff: '',
+        sourceTool: 'edit',
+      },
+    } as unknown as ApprovalPayload;
+    const bash = bashPayload('stream-a');
+    seedView(viewOfApprovals(edit, bash));
 
-    const firstResult = enqueueTuiApproval(first);
-    await waitForForeground(first);
-    // The asking stream is focused by this surface's own selection.
-    expect(activeStreamId.get()).toBe('child-1');
-    expect(notifyMock).toHaveBeenNthCalledWith(1, 'approvalNeeded');
-
-    const secondResult = enqueueTuiApproval(second);
-    await Promise.resolve();
-    expect(currentApproval.get()?.payload).toBe(first);
-    expect(notifyMock).toHaveBeenCalledTimes(1);
-
-    decideForeground(true);
-    await expect(firstResult).resolves.toEqual({ accepted: true });
-    await waitForForeground(second);
-    expect(activeStreamId.get()).toBe('child-2');
-    expect(notifyMock).toHaveBeenNthCalledWith(2, 'approvalNeeded');
-
-    decideForeground(false);
-    await expect(secondResult).resolves.toEqual({ accepted: false });
+    expect(currentApproval.get()?.payload).toEqual(bash);
   });
 
   it('extracts stream ids from every approval payload used by the TUI', () => {
-    expect(approvalPayloadStreamId(bashPayload('child-bash'))).toBe(
-      'child-bash',
+    expect(approvalPayloadStreamId(bashPayload('stream-a'))).toBe('stream-a');
+    expect(approvalPayloadStreamId(questionPayload('stream-b'))).toBe(
+      'stream-b',
     );
-    expect(
-      approvalPayloadStreamId({
-        kind: 'toolEdit',
-        data: { streamId: 'child-edit' },
-      } as ApprovalPayload),
-    ).toBe('child-edit');
-    expect(
-      approvalPayloadStreamId({
-        kind: 'retry',
-        data: { streamId: 'child-retry' },
-      } as ApprovalPayload),
-    ).toBe('child-retry');
-    expect(
-      approvalPayloadStreamId({
-        kind: 'externalInquiry',
-        data: { streamId: '' },
-      } as ApprovalPayload),
-    ).toBeUndefined();
-  });
-
-  // Regression coverage for #7306: the per-stream cancel previously only cancelled
-  // retry routes, leaving bash/tool-edit/plan/proposal/user-question requests
-  // permanently pending on a stream-scoped interrupt. HostInteractions.cancel
-  // now settles a stream via clearApprovalsWhere with a streamId predicate
-  // (see subscribeApprovals.ts), so this exercises that same multi-kind clear.
-  it('clears every pending kind for a stream via clearApprovalsWhere, leaving other streams alone', async () => {
-    const planPayload = {
-      kind: 'planApproval',
-      data: { requestId: 'approval-1', streamId: 'stream-a' },
-    } as ApprovalPayload;
-    const staleForStreamA = bashPayload('stream-a');
-    const untouched = bashPayload('stream-b');
-    const presented: string[] = [];
-
-    const planResult = enqueueApproval(planPayload, {
-      onPresent: () => presented.push('plan'),
-    });
-    const staleResult = enqueueApproval(staleForStreamA, {
-      onPresent: () => presented.push('stale'),
-    });
-    const untouchedResult = enqueueApproval(untouched, {
-      onPresent: () => presented.push('untouched'),
-    });
-
-    await waitForForeground(planPayload);
-
-    clearApprovalsWhere(
-      (payload) => approvalPayloadStreamId(payload) === 'stream-a',
-    );
-
-    await expect(planResult).resolves.toEqual(INTERRUPTED);
-    await expect(staleResult).resolves.toEqual(INTERRUPTED);
-
-    // stream-b was never touched and now becomes the foreground modal.
-    await waitForForeground(untouched);
-    expect(presented).toEqual(['plan', 'untouched']);
-    decideForeground(true);
-    await expect(untouchedResult).resolves.toEqual({ accepted: true });
-  });
-
-  it('summarizes pending items in global FIFO order, keying stream-less payloads to the root', async () => {
-    enqueueApproval(bashPayload('child-1'));
-    // Empty streamId is normalized to undefined by approvalPayloadStreamId,
-    // so session-wide payloads carry the root stream key — interleaved here
-    // to pin that consumers folding buckets still see first-to-present order.
-    enqueueApproval(bashPayload(''));
-    enqueueApproval(externalInquiryPayload('child-1'));
-    enqueueApproval(bashPayload('child-2'));
-
-    expect(pendingApprovalSummaries.get()).toEqual([
-      { streamKey: 'child-1', kind: 'bash' },
-      { streamKey: ROOT_APPROVAL_STREAM_KEY, kind: 'bash' },
-      { streamKey: 'child-1', kind: 'externalInquiry' },
-      { streamKey: 'child-2', kind: 'bash' },
-    ]);
-
-    clearApprovals();
-    expect(pendingApprovalSummaries.get()).toEqual([]);
-  });
-
-  it('promotes a stream to the head without settling, resolving, or re-presenting', async () => {
-    const presented: string[] = [];
-    const first = bashPayload('child-1');
-    const second = bashPayload('child-2');
-    const firstResult = enqueueApproval(first, {
-      onPresent: () => presented.push('child-1'),
-    });
-    const secondResult = enqueueApproval(second, {
-      onPresent: () => presented.push('child-2'),
-    });
-    await waitForForeground(first);
-
-    promoteStream('child-2');
-
-    // The promoted item is foregrounded; nothing was settled or resolved.
-    expect(currentApproval.get()?.payload).toBe(second);
-    expect(approvalQueueStatus.get().depth).toBe(2);
-    expect(presented).toEqual(['child-1', 'child-2']);
-
-    // The summaries reflect the promoted order, so per-row suffixes agree
-    // with what will present next.
-    expect(pendingApprovalSummaries.get()).toEqual([
-      { streamKey: 'child-2', kind: 'bash' },
-      { streamKey: 'child-1', kind: 'bash' },
-    ]);
-
-    // Promoting an absent stream is a no-op.
-    promoteStream('missing');
-    expect(currentApproval.get()?.payload).toBe(second);
-
-    // A matching head does not short-circuit gathering the stream's later
-    // items: with [child-2, child-1, child-2'] promoting child-2 pulls the
-    // trailing item up behind the head without re-projecting the foreground.
-    const third = bashPayload('child-2');
-    const thirdResult = enqueueApproval(third);
-    promoteStream('child-2');
-    expect(currentApproval.get()?.payload).toBe(second);
-    expect(pendingApprovalSummaries.get()).toEqual([
-      { streamKey: 'child-2', kind: 'bash' },
-      { streamKey: 'child-2', kind: 'bash' },
-      { streamKey: 'child-1', kind: 'bash' },
-    ]);
-    // Settling the promoted head presents the pulled-up item next; the
-    // demoted item re-presents last, but its presentation side effects do
-    // not fire a second time.
-    decideForeground(true);
-    await expect(secondResult).resolves.toEqual({ accepted: true });
-    await waitForForeground(third);
-    decideForeground(true);
-    await expect(thirdResult).resolves.toEqual({ accepted: true });
-    await waitForForeground(first);
-    expect(presented).toEqual(['child-1', 'child-2']);
-
-    decideForeground(false);
-    await expect(firstResult).resolves.toEqual({ accepted: false });
-  });
-
-  it('promotes session-wide items together with the root stream when asked', async () => {
-    const childItem = bashPayload('child-1');
-    const sessionWide = bashPayload('');
-    const rootItem = bashPayload('root');
-    const childResult = enqueueApproval(childItem);
-    const sessionWideResult = enqueueApproval(sessionWide);
-    const rootResult = enqueueApproval(rootItem);
-    await waitForForeground(childItem);
-
-    promoteStream('root', { includeSessionWide: true });
-
-    // Session-wide and root items lead, preserving their relative order.
-    expect(pendingApprovalSummaries.get()).toEqual([
-      { streamKey: ROOT_APPROVAL_STREAM_KEY, kind: 'bash' },
-      { streamKey: 'root', kind: 'bash' },
-      { streamKey: 'child-1', kind: 'bash' },
-    ]);
-    expect(currentApproval.get()?.payload).toBe(sessionWide);
-
-    decideForeground(true);
-    await expect(sessionWideResult).resolves.toEqual({ accepted: true });
-    await waitForForeground(rootItem);
-    decideForeground(true);
-    await expect(rootResult).resolves.toEqual({ accepted: true });
-    await waitForForeground(childItem);
-    decideForeground(false);
-    await expect(childResult).resolves.toEqual({ accepted: false });
+    expect(approvalPayloadStreamId(bashPayload(''))).toBeUndefined();
   });
 });

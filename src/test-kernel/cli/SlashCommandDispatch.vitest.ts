@@ -3,7 +3,15 @@ import '@test/support/defaultSessionTestSetup';
 
 // Slash command execution dispatch.
 
-import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
@@ -27,7 +35,11 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
-import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
+import {
+  CLI_LOCAL_STREAM_ID,
+  notices,
+  noticesFor,
+} from '@cli/chat/tui/state/transcript';
 import {
   activeForm,
   activeStreamId,
@@ -37,16 +49,9 @@ import {
   infoPane,
   patchSessionMeta,
   resetCliState,
-  patchStream,
-  streams,
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
-import {
-  bindChildStreamState,
-  invalidateChildStreams,
-  unbindChildStreamState,
-} from '@cli/chat/tui/state/childExecutions';
-import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
+import type { StreamArtifactReader } from '@cli/chat/tui/commands/handlers/sessionCommands';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -54,7 +59,6 @@ import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as providerApiKey from '@cli/runtime/providerApiKey';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { SessionState } from '@controllers/session/SessionState';
 import * as codexPreference from '@model/codex/codexPreference';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
@@ -69,7 +73,7 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
-import { setCliStreamPhase } from '@test/support/cliStreamStatus';
+import type { StreamView } from '@shared/session/sessionView';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
@@ -77,49 +81,59 @@ import {
   StreamSnapshotPreloadError,
   type WorkPlanProvenance,
 } from '@transcript';
+import {
+  bindTestSessionView,
+  makeStreamView,
+  seedView,
+  viewWith,
+} from './fixtures/sessionViewFixture';
 
-// Child rosters and parent edges live on the adapter-bound `SessionState`;
-// /status resolves both its child counts and the root transcript target from
-// there, so each roster row lands together with its metadata parent edge.
-let childState: SessionState | undefined;
-
+// The streams a case names live in the fold's view: /status reads child
+// counts, parent edges, and each stream's phase from there.
+const seeded = new Map<StreamTabId, StreamView>();
+function syncSeededView(): void {
+  seedView(viewWith([...seeded.values()]));
+}
+function ensureStream(
+  id: StreamTabId,
+  over: Partial<Omit<StreamView, 'category'>> = {},
+): void {
+  const current = seeded.get(id);
+  seeded.set(
+    id,
+    makeStreamView({ ...(current ?? {}), ...over, id }) as StreamView,
+  );
+  syncSeededView();
+}
+beforeAll(bindTestSessionView);
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
-  if (childState) {
-    unbindChildStreamState(childState);
-    childState = undefined;
-  }
+  seeded.clear();
+  syncSeededView();
   resetCliState();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
-
-/** Bind a `SessionState` over the default session on first use: /status reads
- *  child rosters, parent edges, and the stream's lifecycle phase through it. */
-function ensureBoundChildState(): SessionState {
-  childState ??= new SessionState(defaultSession());
-  bindChildStreamState(childState);
-  return childState;
-}
-
 function seedChildRoster(
   parentStreamId: StreamTabId,
   rows: readonly ActiveChildInfo[],
 ): void {
-  const state = ensureBoundChildState();
-  state.streamLogs.ensureStream(parentStreamId);
-  state.getOrCreateStreamState(parentStreamId, AgentCategory.ToolUse);
-  state.updateStreamState(parentStreamId, (prev) => ({
-    ...prev,
-    subagents: [...rows],
-  }));
+  ensureStream(parentStreamId);
+  const parent = seeded.get(parentStreamId);
   for (const row of rows) {
-    state.streamLogs.ensureStream(row.childStreamId);
-    state.setStreamParent(row.childStreamId, parentStreamId);
+    ensureStream(row.childStreamId, {
+      parentId: parentStreamId,
+      ancestors: [
+        ...(parent?.ancestors ?? []),
+        { id: parentStreamId, label: parentStreamId },
+      ],
+      executionId: row.executionId,
+      label: row.agentName,
+      identity: row.identity,
+      status: row.status ?? STREAM_PHASE.COMPLETED,
+    });
   }
-  invalidateChildStreams();
 }
-
 function createSession(): TuiSession {
   return new TuiSession();
 }
@@ -180,12 +194,12 @@ function createContext(
 function lastEntryText(
   streamId: StreamTabId = CLI_LOCAL_STREAM_ID,
 ): string | undefined {
-  const last = streams.get().get(streamId)?.entries.at(-1);
+  const last = noticesFor(notices.get(), streamId).at(-1)?.row;
   return last && transcriptRowHeadline(last);
 }
 
 function localEntries(): readonly TranscriptRow[] {
-  return streams.get().get(CLI_LOCAL_STREAM_ID)?.entries ?? [];
+  return noticesFor(notices.get(), CLI_LOCAL_STREAM_ID).map(({ row }) => row);
 }
 
 function localEntryPairs(): Array<{ kind: string; text: string }> {
@@ -196,7 +210,7 @@ function localEntryPairs(): Array<{ kind: string; text: string }> {
 }
 
 function transcriptJson(): string {
-  return JSON.stringify([...streams.get().values()]);
+  return JSON.stringify(notices.get());
 }
 
 async function expectFormOpens(
@@ -235,10 +249,7 @@ function workPlanSnapshots(
 ): StreamArtifactReader {
   return {
     preload: vi.fn(preload),
-    getOutputFiles: () => ({}),
-    getMissingOutputs: () => ({}),
-    getCompileFailures: () => ({}),
-    getRunUsage: () => new Map(),
+    workPlanProvenance: () => ({ plan: false, todos: false }),
     getWorkPlan: (streamId) => {
       const { plan, todos } = read(streamId);
       return { plan, todos: [...todos], planSummary: null };
@@ -322,7 +333,7 @@ describe('handleTuiSlashCommand', () => {
     expect(transientNotice.get()?.text).toBe('No focused session.');
 
     const streamId = 'plan-reader' as StreamTabId;
-    patchStream(streamId, (slice) => ({ ...slice }));
+    ensureStream(streamId);
     activeStreamId.set(streamId);
     await handleTuiSlashCommand('/plan', context);
     expect(transientNotice.get()?.text).toBe(
@@ -361,7 +372,7 @@ describe('handleTuiSlashCommand', () => {
         () => preload,
       ),
     });
-    patchStream(streamId, (slice) => ({ ...slice }));
+    ensureStream(streamId);
     activeStreamId.set(streamId);
 
     const dispatched = handleTuiSlashCommand('/plan', createContext());
@@ -394,8 +405,8 @@ describe('handleTuiSlashCommand', () => {
         }),
     );
     registerBuiltinSlashCommands({ workPlanSnapshots: snapshots });
-    patchStream(streamA, (slice) => ({ ...slice }));
-    patchStream(streamB, (slice) => ({ ...slice }));
+    ensureStream(streamA);
+    ensureStream(streamB);
 
     activeStreamId.set(streamA);
     const requestA = handleTuiSlashCommand('/plan', createContext());
@@ -433,7 +444,7 @@ describe('handleTuiSlashCommand', () => {
         () => preload,
       ),
     });
-    patchStream(streamId, (slice) => ({ ...slice }));
+    ensureStream(streamId);
     activeStreamId.set(streamId);
 
     const first = handleTuiSlashCommand('/plan', createContext());
@@ -457,7 +468,7 @@ describe('handleTuiSlashCommand', () => {
         () => preload,
       ),
     });
-    patchStream(streamId, (slice) => ({ ...slice }));
+    ensureStream(streamId);
     activeStreamId.set(streamId);
 
     const dispatched = handleTuiSlashCommand('/plan', createContext());
@@ -479,7 +490,7 @@ describe('handleTuiSlashCommand', () => {
         () => preload,
       ),
     });
-    patchStream(streamId, (slice) => ({ ...slice }));
+    ensureStream(streamId);
     activeStreamId.set(streamId);
 
     const dispatched = handleTuiSlashCommand('/plan', createContext());
@@ -534,7 +545,7 @@ describe('handleTuiSlashCommand', () => {
           () => preload,
         ),
       });
-      patchStream(streamId, (slice) => ({ ...slice }));
+      ensureStream(streamId);
       activeStreamId.set(streamId);
 
       const dispatched = handleTuiSlashCommand('/plan', createContext());
@@ -946,10 +957,7 @@ describe('handleTuiSlashCommand', () => {
     session.streamId = streamId;
     session.executionId = 'exec-1' as ExecutionId;
     activeStreamId.set(streamId);
-    setCliStreamPhase({
-      streamId,
-      status: STREAM_PHASE.WAITING,
-    });
+    ensureStream(streamId, { status: STREAM_PHASE.WAITING });
 
     const handled = await handleTuiSlashCommand(
       '/status',
@@ -968,14 +976,8 @@ describe('handleTuiSlashCommand', () => {
     const rootStreamId = 'stream-root' as StreamTabId;
     const childStreamId = 'stream-child' as StreamTabId;
     activeStreamId.set(rootStreamId);
-    setCliStreamPhase({
-      streamId: rootStreamId,
-      status: STREAM_PHASE.WAITING,
-    });
-    setCliStreamPhase({
-      streamId: childStreamId,
-      status: STREAM_PHASE.RUNNING,
-    });
+    ensureStream(rootStreamId, { status: STREAM_PHASE.WAITING });
+    ensureStream(childStreamId, { status: STREAM_PHASE.RUNNING });
     seedChildRoster(rootStreamId, [
       {
         executionId: 'child-exec',
@@ -990,7 +992,7 @@ describe('handleTuiSlashCommand', () => {
     await handleTuiSlashCommand('/status', createContext(session));
 
     const statusText = lastEntryText(rootStreamId);
-    expect(statusText).toContain('status: idle');
+    expect(statusText).toContain('status: Idle');
     expect(statusText).toContain('active background tasks: 1');
   });
 
@@ -1007,23 +1009,11 @@ describe('handleTuiSlashCommand', () => {
     const waitingChildId = 'stream-child-waiting' as StreamTabId;
     activeStreamId.set(parentStreamId);
     for (const streamId of rootSiblingIds) {
-      setCliStreamPhase({
-        streamId,
-        status: STREAM_PHASE.RUNNING,
-      });
+      ensureStream(streamId, { status: STREAM_PHASE.RUNNING });
     }
-    setCliStreamPhase({
-      streamId: parentStreamId,
-      status: STREAM_PHASE.WAITING,
-    });
-    setCliStreamPhase({
-      streamId: runningChildId,
-      status: STREAM_PHASE.RUNNING,
-    });
-    setCliStreamPhase({
-      streamId: waitingChildId,
-      status: STREAM_PHASE.WAITING,
-    });
+    ensureStream(parentStreamId, { status: STREAM_PHASE.WAITING });
+    ensureStream(runningChildId, { status: STREAM_PHASE.RUNNING });
+    ensureStream(waitingChildId, { status: STREAM_PHASE.WAITING });
     const rosterRow = (
       childStreamId: StreamTabId,
       index: number,
@@ -1063,13 +1053,9 @@ describe('handleTuiSlashCommand', () => {
       'stream-child-2',
     ] as StreamTabId[];
     activeStreamId.set(rootStreamId);
-    setCliStreamPhase({
-      streamId: rootStreamId,
-      status: STREAM_PHASE.WAITING,
-    });
+    ensureStream(rootStreamId, { status: STREAM_PHASE.WAITING });
     for (const [index, childStreamId] of childStreamIds.entries()) {
-      setCliStreamPhase({
-        streamId: childStreamId,
+      ensureStream(childStreamId, {
         status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
       });
     }
@@ -1100,10 +1086,7 @@ describe('handleTuiSlashCommand', () => {
     const siblingChildId = 'stream-sibling-child' as StreamTabId;
     activeStreamId.set(focusedChildId);
     for (const streamId of [focusedChildId, siblingChildId]) {
-      setCliStreamPhase({
-        streamId,
-        status: STREAM_PHASE.RUNNING,
-      });
+      ensureStream(streamId, { status: STREAM_PHASE.RUNNING });
     }
     seedChildRoster(
       rootStreamId,
@@ -1120,7 +1103,7 @@ describe('handleTuiSlashCommand', () => {
     await handleTuiSlashCommand('/status', createContext(session));
 
     const statusText = lastEntryText(rootStreamId);
-    expect(statusText).toContain('status: running');
+    expect(statusText).toContain('status: Running');
     expect(statusText).toContain('active background tasks: 2');
   });
 
@@ -1132,18 +1115,9 @@ describe('handleTuiSlashCommand', () => {
     const runningSiblingId = 'stream-running-sibling' as StreamTabId;
     const idleSiblingId = 'stream-idle-sibling' as StreamTabId;
     activeStreamId.set(focusedChildId);
-    setCliStreamPhase({
-      streamId: focusedChildId,
-      status: STREAM_PHASE.WAITING,
-    });
-    setCliStreamPhase({
-      streamId: runningSiblingId,
-      status: STREAM_PHASE.RUNNING,
-    });
-    setCliStreamPhase({
-      streamId: idleSiblingId,
-      status: STREAM_PHASE.WAITING,
-    });
+    ensureStream(focusedChildId, { status: STREAM_PHASE.WAITING });
+    ensureStream(runningSiblingId, { status: STREAM_PHASE.RUNNING });
+    ensureStream(idleSiblingId, { status: STREAM_PHASE.WAITING });
     seedChildRoster(
       rootStreamId,
       [focusedChildId, runningSiblingId, idleSiblingId].map(
@@ -1180,10 +1154,7 @@ describe('handleTuiSlashCommand', () => {
     const grandchildId = 'stream-grandchild' as StreamTabId;
     activeStreamId.set(parentStreamId);
     for (const streamId of [parentStreamId, ...rootSiblingIds, grandchildId]) {
-      setCliStreamPhase({
-        streamId,
-        status: STREAM_PHASE.RUNNING,
-      });
+      ensureStream(streamId, { status: STREAM_PHASE.RUNNING });
     }
     const rosterRow = (childStreamId: StreamTabId, index: number) => ({
       executionId: `nested-exec-${index}`,
@@ -1213,22 +1184,17 @@ describe('handleTuiSlashCommand', () => {
     const streamId = 'stream-access' as StreamTabId;
     activeStreamId.set(streamId);
     patchSessionMeta({ model: 'gpt55' });
-    ensureBoundChildState();
-    patchStream(streamId, (slice) => ({ ...slice }));
-    // The access route comes off the store's cumulative usage projection.
-    snapshotFacts(defaultSession().snapshots).addUsage(
-      streamId,
-      'stream-access-run' as ExecutionId,
-      {
-        inputTokens: 1_000,
-        outputTokens: 100,
-        cost: 0,
-        usageRoute: 'relay',
-      },
-    );
-    setCliStreamPhase({
-      streamId,
+    // The access route comes off the fold's cumulative usage for the stream.
+    ensureStream(streamId, {
       status: STREAM_PHASE.WAITING,
+      usage: {
+        'stream-access-run': {
+          inputTokens: 1_000,
+          outputTokens: 100,
+          cost: 0,
+          usageRoute: 'relay',
+        },
+      },
     });
 
     await handleTuiSlashCommand('/status', createContext(session));
@@ -1263,10 +1229,7 @@ describe('handleTuiSlashCommand', () => {
     session.executionId = 'exec-ephemeral' as ExecutionId;
     activeStreamId.set(streamId);
     patchSessionMeta({ transcriptMode: 'ephemeral' });
-    setCliStreamPhase({
-      streamId,
-      status: STREAM_PHASE.WAITING,
-    });
+    ensureStream(streamId, { status: STREAM_PHASE.WAITING });
 
     await handleTuiSlashCommand('/status', createContext(session));
 

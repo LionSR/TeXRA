@@ -5,12 +5,12 @@ import { type StreamTabId } from '@shared/schemas';
 import { assertNever, groupBy } from '@utils/core';
 
 // Local imports - TUI state
+import type { SessionView } from '@shared/session/sessionView';
+
 import {
   approvalPayloadStreamId,
-  ROOT_APPROVAL_STREAM_KEY,
   type PendingApproval,
   type PendingApprovalKind,
-  type PendingApprovalSummary,
 } from './state/approvalQueue';
 
 const FORM_FOREGROUND_MAX_ROWS = 18;
@@ -204,21 +204,13 @@ export function foregroundMaxRowsForKind({
 // the workflow-dashboard heading while that surface replaces the session
 // list. Grouping from the flat list keeps each row's first shown kind the
 // first-to-present even when bound and stream-less items interleave globally.
+/** The pending approvals of the view, grouped by the list row they badge. */
 export function groupPendingApprovalsByRow(
-  summaries: readonly PendingApprovalSummary[],
-  rootStreamId: StreamTabId | undefined,
+  approvals: SessionView['approvals'],
 ): Map<string, PendingApprovalKind[]> {
-  const keyed: { key: string; summary: PendingApprovalSummary }[] = [];
-  for (const summary of summaries) {
-    const key =
-      summary.streamKey === ROOT_APPROVAL_STREAM_KEY
-        ? rootStreamId
-        : summary.streamKey;
-    if (key !== undefined) keyed.push({ key, summary });
-  }
   return groupBy(
-    keyed,
-    (entry) => entry.key,
-    (entry) => entry.summary.kind,
+    approvals,
+    (approval) => approval.streamId,
+    (approval) => approval.payload.kind,
   );
 }
