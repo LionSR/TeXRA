@@ -131,7 +131,7 @@ describe('CLI session status formatter', () => {
 
   it('omits session lines before the first run starts', () => {
     const status = sessionStatus({
-      status: undefined,
+      statusLabel: undefined,
     });
 
     expect(status).not.toContain('session:');

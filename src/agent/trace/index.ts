@@ -16,7 +16,6 @@ export type {
   StageStartEvent,
   StatusEvent,
 } from './events';
-export { RUN_FACT_EVENT_TYPES } from './events';
 
 export type {
   AgentTrace,

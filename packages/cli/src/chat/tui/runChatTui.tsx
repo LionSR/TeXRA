@@ -598,9 +598,12 @@ export async function runChat(
   try {
     await ink.waitUntilExit();
   } finally {
-    // The exit policy reads the view (a resumable idle root), so the bridge
-    // outlives the session's disposables and unbinds last.
+    // The exit policy reads the view (a resumable idle root) after it has
+    // released the store, so the bridge outlives the session's disposables.
+    // A signal exit leaves the store to process.exit; releasing it here keeps
+    // the order on every path: nothing subscribed to the view outlives it.
     await exitController.gracefulTeardown();
+    disposables.dispose();
     unbindSessionView();
   }
   return { exitCode: session.runExitCode };

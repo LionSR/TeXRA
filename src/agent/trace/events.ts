@@ -419,32 +419,3 @@ export type AgentEvent =
   | ResponseFinalizedEvent
   | DomainEvent
   | ResultEvent;
-
-/**
- * Event types consumed by both progress-view and headless CLI projections.
- * This host subscription vocabulary is intentionally broader than
- * `RunFactEvent`: it also includes transient runtime events that hosts project.
- *
- * `status` is not an `AgentEvent` at all: `StreamStatusMachine` publishes
- * every transition as a canonical `status` session fact, and every consumer —
- * including `TexraTranscriptRecorder`, via its `handleStatus` port — reads
- * that one rail.
- */
-export const RUN_FACT_EVENT_TYPES = Object.freeze([
-  'conversation.progress',
-  'updateTodos',
-  'updatePlan',
-  'addOutputFiles',
-  'updateMissingOutputs',
-  'updateCompileFailures',
-  'goalPaused',
-  'run.config',
-  'approval.requested',
-  'approval.resolved',
-  'approval.policy',
-  'result',
-  'usage',
-  'context.state',
-  'stage.start',
-  'child.activity',
-] as const satisfies readonly AgentEvent['type'][]);

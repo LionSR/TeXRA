@@ -37,7 +37,6 @@ export {
 } from './transcriptRow';
 export {
   toolHeaderPreview,
-  toolRowModel,
   type ToolChecklistSection,
   type ToolFileGroupsSection,
   type ToolFileListSection,

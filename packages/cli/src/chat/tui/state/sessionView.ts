@@ -9,7 +9,7 @@
  * case to paper over with an empty view.
  */
 import { signal, type Signal } from '@lit-labs/signals';
-import { SubscriptionRef } from 'effect';
+import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
@@ -22,7 +22,6 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { toSignal } from '@shared/signals';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
@@ -33,17 +32,38 @@ const bound = signal<
   (Signal.State<SessionView> & { dispose: () => void }) | undefined
 >(undefined);
 
+/**
+ * The only meeting point between Effect and the components (PRD 7.5): a
+ * signal fed by the view's change stream on the process runtime. Coalescing
+ * is here, by draining arrays and assigning the last element; `dispose`
+ * interrupts the feeding fiber.
+ */
+function viewSignal(
+  view: SubscriptionRef.SubscriptionRef<SessionView>,
+): Signal.State<SessionView> & { dispose: () => void } {
+  const runtime = effectRuntime();
+  const s = signal(SubscriptionRef.getUnsafe(view));
+  const fiber = runtime.runFork(
+    Stream.runForEachArray(SubscriptionRef.changes(view), (values) =>
+      Effect.sync(() => {
+        const last = values.at(-1);
+        if (last !== undefined) s.set(last);
+      }),
+    ),
+  );
+  return Object.assign(s, {
+    dispose: () => {
+      runtime.runFork(Fiber.interrupt(fiber));
+    },
+  });
+}
+
 /** Bridge a session's view level into the TUI's signal; returns the unbind. */
 export function bindSessionView(
   view: SubscriptionRef.SubscriptionRef<SessionView>,
 ): () => void {
   bound.get()?.dispose();
-  // The one meeting point between Effect and the components (PRD 7.5).
-  const bridgedBound = toSignal(
-    effectRuntime(),
-    SubscriptionRef.changes(view),
-    SubscriptionRef.getUnsafe(view),
-  );
+  const bridgedBound = viewSignal(view);
   bound.set(bridgedBound);
   return () => {
     if (bound.get() !== bridgedBound) return;

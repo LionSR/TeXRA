@@ -226,8 +226,6 @@ export function describeRequestError(error: RequestError): string {
     case 'Unavailable':
     case 'Rejected':
       return error.reason;
-    case 'Invalid':
-      return error.issues.join('; ');
   }
 }
 

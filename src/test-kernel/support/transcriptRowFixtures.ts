@@ -26,7 +26,6 @@ import {
 } from '@shared/schemas';
 import {
   projectTranscriptRow,
-  toolRowModel,
   transcriptText,
   type ToolRow,
   type TranscriptRow,
@@ -34,6 +33,7 @@ import {
   type FileListRow,
   type PhaseRow,
 } from '@shared/transcript';
+import { toolRowModel } from '@shared/transcript/toolRowModel';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';

@@ -114,9 +114,9 @@ const inquiryThread = {
 
 const PROGRESS_PROJECTION_CASES = {
   setActiveStream: {
-    source: runEvent({
+    source: draft({
       type: 'run.activate',
-      streamId,
+      aggregateId: streamId,
       category: AgentCategory.Workflow,
       isRemote: false,
       background: false,
@@ -363,9 +363,9 @@ const resumingStatusPayload: RunStatusProjectionPayload = {
   substate: STREAM_SUBSTATE.RESUMING,
 };
 
-const activation: AgentEvent = {
+const activation: SessionEventDraft = {
   type: 'run.activate',
-  streamId,
+  aggregateId: streamId,
   category: AgentCategory.ToolUse,
   background: true,
 };
@@ -378,9 +378,9 @@ describe('attachCliSessionProgressProjection', () => {
       // A launch: the existence fact projects nothing, its activation the
       // frozen line; a child's line never carried `isRemote`.
       await publish(
-        runEvent({
+        draft({
           type: 'run.start',
-          streamId,
+          aggregateId: streamId,
           executionId,
           identity: { kind: 'process', tool: 'bash' },
           category: AgentCategory.ToolUse,
@@ -389,8 +389,8 @@ describe('attachCliSessionProgressProjection', () => {
           background: true,
         }),
       );
-      await publish(runEvent(activation));
-      await publish(runEvent(activation));
+      await publish(draft(activation));
+      await publish(draft(activation));
 
       const activations = vi
         .mocked(writeRecord)
@@ -412,23 +412,23 @@ describe('attachCliSessionProgressProjection', () => {
     const session = createTestSession();
     // The recorded history: a launch that ran and stopped before this
     // process attached its projection.
-    session.publishRunEvent(streamId, {
-      type: 'run.start',
-      streamId,
-      executionId,
-      identity: { kind: 'agent', agent: 'polish' },
-      category: AgentCategory.ToolUse,
-      isRemote: false,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    });
-    session.publishRunEvent(streamId, {
-      type: 'run.activate',
-      streamId,
-      category: AgentCategory.ToolUse,
-      isRemote: false,
-      background: false,
-    });
     session.publish([
+      {
+        type: 'run.start',
+        aggregateId: streamId,
+        executionId,
+        identity: { kind: 'agent', agent: 'polish' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      },
+      {
+        type: 'run.activate',
+        aggregateId: streamId,
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        background: false,
+      },
       {
         type: 'updateStreamDescription',
         aggregateId: streamId,
@@ -441,9 +441,9 @@ describe('attachCliSessionProgressProjection', () => {
     try {
       // A resume mints no run.start: the activation is its only new fact.
       await publish(
-        runEvent({
+        draft({
           type: 'run.activate',
-          streamId,
+          aggregateId: streamId,
           category: AgentCategory.ToolUse,
           isRemote: false,
           background: false,
