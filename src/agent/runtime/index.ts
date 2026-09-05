@@ -101,7 +101,6 @@ export type {
 
 // textEnhancement
 export { polishTextWithAI } from './textEnhancement';
-export type { FileContext } from './textEnhancement';
 
 // selectAutoOpenFinalOutput
 export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';

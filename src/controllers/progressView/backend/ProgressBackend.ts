@@ -27,7 +27,11 @@ import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { RequestError } from '@shared/session/requestErrors';
+import {
+  Rejected,
+  Unavailable,
+  type RequestError,
+} from '@shared/session/requestErrors';
 import {
   UpMessageSchema,
   type DownMessage,
@@ -35,6 +39,7 @@ import {
   type RequestErrorWire,
   type Response,
   type Subscribe,
+  type SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -49,8 +54,13 @@ const RequestEnvelopeSchema = z.object({
 
 export interface ProgressBackendOptions {
   readonly session: SessionHandle;
-  /** The host's capabilities (8.3), performed on the surface's behalf. */
-  readonly handleHostRequest: (request: HostRequest) => Promise<HostOutcome>;
+  /** The host's capabilities (8.3), performed on the surface's behalf. A
+   *  handler refuses with `Unavailable` or `Rejected`; anything else it
+   *  throws is a defect, answered as a worded rejection and logged. */
+  readonly handleHostRequest: (
+    request: HostRequest,
+    port: string,
+  ) => Promise<HostOutcome>;
 }
 
 /** One attached transport port: the host posts `send`'s messages to it. */
@@ -130,7 +140,10 @@ export class ProgressBackend {
   private readonly host = effectRuntime().runSync(
     SubscriptionRef.make<HostSnapshot | null>(null),
   );
-  private readonly ports = new Map<string, PortFramer>();
+  private readonly ports = new Map<
+    string,
+    { readonly port: ProgressPort; readonly framer: PortFramer }
+  >();
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
@@ -145,11 +158,24 @@ export class ProgressBackend {
     effectRuntime().runFork(SubscriptionRef.set(this.host, snapshot));
   }
 
+  /** The host acting on surface-owned state (8.5): every attached port
+   *  applies it, so the sidebar and the editor tab follow together. */
+  surfaceAction(action: SurfaceActionMessage['action']): void {
+    if (this.disposed) return;
+    for (const port of this.ports.keys()) {
+      this.portOf(port)?.send({
+        kind: 'surface.action',
+        session: this.key,
+        action,
+      });
+    }
+  }
+
   attach(port: ProgressPort): AttachedPort {
     if (this.disposed) {
       throw new Error('ProgressBackend is disposed; cannot attach a port');
     }
-    this.ports.get(port.id)?.close();
+    this.ports.get(port.id)?.framer.close();
     const { session } = this;
     const source: FramerSource = {
       key: this.key,
@@ -161,11 +187,11 @@ export class ProgressBackend {
         Effect.sync(() => session.setTranscriptSubscriptions(id, set)),
     };
     const framer = new PortFramer(source, port, this.host);
-    this.ports.set(port.id, framer);
+    this.ports.set(port.id, { port, framer });
     return {
       receive: (message) => this.receive(port, framer, message),
       close: () => {
-        if (this.ports.get(port.id) !== framer) return;
+        if (this.ports.get(port.id)?.framer !== framer) return;
         this.ports.delete(port.id);
         framer.close();
       },
@@ -175,7 +201,7 @@ export class ProgressBackend {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const framer of this.ports.values()) framer.close();
+    for (const { framer } of this.ports.values()) framer.close();
     this.ports.clear();
   }
 
@@ -233,12 +259,25 @@ export class ProgressBackend {
           );
         return;
       case 'host.request':
-        void this.handleHostRequest(up.request).then(
+        void this.handleHostRequest(up.request, port.id).then(
           (outcome) => this.respond(port, up.requestId, { ok: true, outcome }),
-          (defect: unknown) => this.defect(port, up.requestId, defect),
+          (error: unknown) => {
+            if (error instanceof Unavailable || error instanceof Rejected) {
+              this.respond(port, up.requestId, {
+                ok: false,
+                error: wireError(error),
+              });
+              return;
+            }
+            this.defect(port, up.requestId, error);
+          },
         );
         return;
     }
+  }
+
+  private portOf(id: string): ProgressPort | undefined {
+    return this.ports.get(id)?.port;
   }
 
   private respond(

@@ -29,11 +29,23 @@ import type { SessionView } from './sessionView';
  * host's (`openedFiles`) or the Tools sheet's (`toolsSheetOpen` below), so
  * a per-view copy would answer a question the host snapshot already owns.
  */
-const LaunchSurfaceSchema = MainViewPersistedStateSchema.omit({
+export const LaunchSurfaceSchema = MainViewPersistedStateSchema.omit({
   openedFiles: true,
   latexdiffsVisible: true,
 });
 type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
+
+/** A change to the launcher: the per-category records merge one level
+ *  deep, so a host can name the tool-use agent without knowing the
+ *  workflow one. Zod because the host's `surface.action` carries it. */
+const PerCategoryPatchSchema = z
+  .object({ workflow: z.string().optional(), toolUse: z.string().optional() })
+  .optional();
+export const LaunchPatchSchema = LaunchSurfaceSchema.partial().extend({
+  agent: PerCategoryPatchSchema,
+  instruction: PerCategoryPatchSchema,
+});
+type LaunchPatch = z.infer<typeof LaunchPatchSchema>;
 
 /** A follow-up in progress for one stream. Only `text` persists. */
 export interface Draft {
@@ -83,6 +95,8 @@ export interface Surface {
   readonly scroll: ReadonlyMap<StreamTabId, number>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
+  /** The output list's "where files are stored" hint, dismissed once. */
+  readonly storageHintDismissed: boolean;
   /** The drawer's filter. Never persisted. */
   readonly search: string;
   readonly workbench: WorkbenchLayout | null;
@@ -109,6 +123,7 @@ export const PersistedSurfaceSchema = z.object({
   phase: entries(StreamTabIdSchema, z.string()),
   scroll: entries(StreamTabIdSchema, z.number()),
   drawerOpen: z.boolean().prefault(false),
+  storageHintDismissed: z.boolean().prefault(false),
   workbench: z.record(z.string(), z.unknown()).nullable().prefault(null),
 });
 export type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
@@ -139,6 +154,7 @@ export function loadSurface(
     scroll: new Map(persisted.scroll),
     drawerOpen: persisted.drawerOpen,
     toolsSheetOpen: false,
+    storageHintDismissed: persisted.storageHintDismissed,
     search: '',
     workbench: persisted.workbench,
   };
@@ -158,6 +174,7 @@ export function persistSurface(surface: Surface): PersistedSurface {
     phase: [...surface.phase],
     scroll: [...surface.scroll],
     drawerOpen: surface.drawerOpen,
+    storageHintDismissed: surface.storageHintDismissed,
     workbench: surface.workbench,
   };
 }
@@ -246,7 +263,7 @@ export type SurfaceAction =
       readonly streamId: StreamTabId;
       readonly patch: Partial<Draft>;
     }
-  | { readonly kind: 'launch'; readonly patch: Partial<LaunchSurface> }
+  | { readonly kind: 'launch'; readonly patch: LaunchPatch }
   | {
       readonly kind: 'inquiryDraft';
       readonly key: string;
@@ -274,7 +291,8 @@ export type SurfaceAction =
       readonly streamId: StreamTabId;
       readonly top: number;
     }
-  | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null };
+  | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null }
+  | { readonly kind: 'dismissStorageHint' };
 
 function withEntry<K, V>(map: ReadonlyMap<K, V>, key: K, value: V | null) {
   const next = new Map(map);
@@ -298,6 +316,8 @@ export function applySurfaceAction(
       return { ...surface, drawerOpen: action.open };
     case 'toolsSheet':
       return { ...surface, toolsSheetOpen: action.open };
+    case 'dismissStorageHint':
+      return { ...surface, storageHintDismissed: true };
     case 'search':
       return { ...surface, search: action.value };
     case 'draft':
@@ -308,8 +328,18 @@ export function applySurfaceAction(
           ...action.patch,
         }),
       };
-    case 'launch':
-      return { ...surface, launch: { ...surface.launch, ...action.patch } };
+    case 'launch': {
+      const { agent, instruction, ...rest } = action.patch;
+      return {
+        ...surface,
+        launch: {
+          ...surface.launch,
+          ...rest,
+          agent: { ...surface.launch.agent, ...agent },
+          instruction: { ...surface.launch.instruction, ...instruction },
+        },
+      };
+    }
     case 'inquiryDraft':
       return {
         ...surface,

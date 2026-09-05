@@ -68,14 +68,14 @@ export type InquiryThreadUpdatedEvent = z.infer<
 // Action payloads — sent from inquiry panel to the host (keyed by threadId)
 // ============================================================================
 
-export const InquirySubmitActionSchema = z.object({
+const InquirySubmitActionSchema = z.object({
   action: z.literal('submit'),
   threadId: InquiryThreadIdSchema,
   answer: z.string().min(1),
   sessionLinks: InquirySessionLinksSchema.nullish(),
 });
 
-export const InquiryDropActionSchema = z.object({
+const InquiryDropActionSchema = z.object({
   action: z.literal('drop'),
   threadId: InquiryThreadIdSchema,
   feedback: z.string().optional(),

@@ -158,13 +158,13 @@ describe('tool-edit-request-panel', () => {
     selectDiffMenuItem(element, 'showLatexdiff');
 
     expect(actions.map((request) => request.kind)).toStrictEqual([
-      'toolEditPreview',
-      'toolEditPreview',
-      'toolEditPreview',
+      'toolEdit',
+      'toolEdit',
+      'toolEdit',
     ]);
     expect(
       actions.map((request) =>
-        request.kind === 'toolEditPreview' ? request.action : null,
+        request.kind === 'toolEdit' ? request.action : null,
       ),
     ).toStrictEqual(['openDiff', 'previewProposed', 'showLatexdiff']);
   });
@@ -233,8 +233,18 @@ describe('tool-edit-request-panel', () => {
     await element.updateComplete;
 
     expect(actions).toEqual([
-      { kind: 'toolEditPreview', requestId: 'request-1', action: 'openDiff' },
-      { kind: 'toolEditPreview', requestId: 'request-1', action: 'openDiff' },
+      {
+        kind: 'toolEdit',
+        requestId: 'request-1',
+        action: 'openDiff',
+        feedback: null,
+      },
+      {
+        kind: 'toolEdit',
+        requestId: 'request-1',
+        action: 'openDiff',
+        feedback: null,
+      },
     ]);
     expect(element.shadowRoot?.querySelector('texra-diff-view')).toBeNull();
   });
@@ -274,7 +284,7 @@ describe('tool-edit-request-panel', () => {
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(actions.map((request) => request.kind)).toEqual([
       'policy.set',
-      'decision.toolEdit',
+      'toolEdit',
     ]);
   });
 

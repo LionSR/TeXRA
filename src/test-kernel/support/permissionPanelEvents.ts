@@ -1,7 +1,7 @@
 import type { HostRequest } from '@shared/session/hostRequest';
-import type { RuntimeRequestDetail } from '@shared/session/uiEvents';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 
-export type PanelRequest = RuntimeRequestDetail | HostRequest;
+export type PanelRequest = RuntimeRequest | HostRequest;
 
 /**
  * Every permission panel answers the user through the shell's two request

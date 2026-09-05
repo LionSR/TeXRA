@@ -1,4 +1,3 @@
-import { buildStreamInfo } from '@controllers/session/streamInfoUtils';
 import type { StreamTabId } from '@shared/schemas';
 
 import {
@@ -15,20 +14,14 @@ export async function revealProgressStream(
 
 /**
  * Select a stream this window just launched (the launch's `onStreamResolved`
- * callback). The provider's own selection; a fact never carries focus.
+ * callback). The surface's own selection; a fact never carries focus.
  */
 export function presentLaunchedProgressStream(streamId: StreamTabId): void {
-  ProgressViewProvider.getInstance()?.backend.presentLaunchedStream(streamId);
+  ProgressViewProvider.getInstance()?.presentLaunchedStream(streamId);
 }
 
 export function getProgressStreamLabel(
   streamId: StreamTabId,
 ): string | undefined {
-  const provider = ProgressViewProvider.getInstance();
-  if (!provider) return undefined;
-  return buildStreamInfo(
-    provider.state,
-    streamId,
-    provider.backend.presentation.activeStream,
-  ).label;
+  return ProgressViewProvider.getInstance()?.streamLabel(streamId);
 }

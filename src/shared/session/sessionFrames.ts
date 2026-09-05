@@ -44,6 +44,7 @@ import {
 import { HostRequestSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
 import { OutcomeSchema, RuntimeRequestSchema } from './runtimeRequest';
+import { LaunchPatchSchema } from './surface';
 
 /** The workspace root that keys the layer maps, on every message. */
 const SessionKeySchema = z.string().min(1);
@@ -127,8 +128,13 @@ const SurfaceActionMessageSchema = z.object({
     z.object({ kind: z.literal('select'), streamId: StreamTabIdSchema }),
     z.object({ kind: z.literal('toggleDrawer') }),
     z.object({ kind: z.literal('submitLaunch') }),
+    /** A run's setup restored into the launcher (`restoreIntoLauncher`,
+     *  `restoreProposalConfig`), or the setup agent selected by the
+     *  onboarding funnel. */
+    z.object({ kind: z.literal('launch'), patch: LaunchPatchSchema }),
   ]),
 });
+export type SurfaceActionMessage = z.infer<typeof SurfaceActionMessageSchema>;
 
 const RuntimeRequestMessageSchema = z.object({
   kind: z.literal('runtime.request'),

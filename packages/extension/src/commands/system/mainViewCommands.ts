@@ -2,14 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { computeAgentOptionsData, refresh } from '@agent/index';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
-import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
-import { getMainWebview } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { computeModelOptionsData } from '@model/computeModelOptions';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 const CHANNEL = 'mainViewCommands';
 
@@ -21,40 +17,19 @@ interface RefreshAllOptionsArgs {
 /**
  * Registers main view commands for the extension.
  *
- * `texra.mainView.reset` and `texra.showImportOptions` are now registered
+ * `texra.mainView.reset` and `texra.showImportOptions` are registered
  * through the shared command registry in `extensionCommandSurface.ts`.
  */
 export function registerMainViewCommands(
   context: vscode.ExtensionContext,
+  progressViewProvider: ProgressViewProvider,
 ): void {
   registerCommandEntries(context, [
     {
       id: 'texra.refreshAllOptions',
       handler: async (args?: RefreshAllOptionsArgs) => {
-        const webview = await getMainWebview(CHANNEL);
-        if (!webview) return;
-
         try {
-          if (!args?.agentCatalogAlreadyFresh) await refresh();
-          const [modelOptions, agentOptionsData] = await Promise.all([
-            computeModelOptionsData(),
-            computeAgentOptionsData(),
-          ]);
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-            optionsData: modelOptions,
-          });
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-            optionsData: agentOptionsData,
-            ...(args?.selectedToolUseAgent && {
-              selectedToolUseAgent: args.selectedToolUseAgent,
-            }),
-          });
-          webview.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-            optionsData: await loadMainViewTeamOptions(),
-          });
+          await progressViewProvider.refreshCatalogs(args ?? {});
         } catch (error) {
           await showLoggedErrorMessage(
             CHANNEL,

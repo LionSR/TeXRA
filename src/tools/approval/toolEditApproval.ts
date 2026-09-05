@@ -82,13 +82,6 @@ export function setToolEditApprovalSessionBypass(
   );
 }
 
-export function isApprovalBypassedForStream(
-  streamId: StreamTabId,
-  session: SessionHandle = currentSession(),
-): boolean {
-  return session.approvals.toolEdit.bypass.isBypassed(streamId);
-}
-
 /**
  * Build the tool-edit permission payload every host publishes to its approval
  * surface, the tool-edit counterpart of `prepareBashApprovalPrompt`.

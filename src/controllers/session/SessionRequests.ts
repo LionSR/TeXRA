@@ -33,6 +33,7 @@ import {
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
 import { createSessionStores } from './createSessionStores';
 
 const done: Outcome = { kind: 'done' };
@@ -288,9 +289,8 @@ function handle(
           : Effect.fail(settled(req.streamId, 'user question')),
       );
     case 'decision.retry':
-      return Effect.suspend(() =>
-        session.interactions.settleRequest(
-          'retry',
+      return Effect.promise(() =>
+        session.interactions.settleRetry(
           req.approvalId,
           req.decision.action === 'retry'
             ? {
@@ -300,10 +300,38 @@ function handle(
                   : { feedback: req.decision.feedback }),
               }
             : { action: 'cancel' },
-        )
-          ? Effect.succeed(done)
-          : Effect.fail(settled(req.streamId, 'retry')),
+          req.decision.action === 'retry'
+            ? (req.decision.credentials ?? 'configured')
+            : 'configured',
+        ),
+      ).pipe(
+        Effect.flatMap((accepted) =>
+          accepted
+            ? Effect.succeed(done)
+            : Effect.fail(settled(req.streamId, 'retry')),
+        ),
       );
+    case 'externalInquiry.submit':
+    case 'externalInquiry.drop':
+      return Effect.promise(() =>
+        handleExternalInquiryAction(
+          req.kind === 'externalInquiry.submit'
+            ? {
+                action: 'submit',
+                threadId: req.threadId,
+                answer: req.answer,
+                ...(req.sessionLinks == null
+                  ? {}
+                  : { sessionLinks: req.sessionLinks }),
+              }
+            : {
+                action: 'drop',
+                threadId: req.threadId,
+                ...(req.feedback == null ? {} : { feedback: req.feedback }),
+              },
+          { session },
+        ),
+      ).pipe(Effect.as(done));
     case 'policy.set':
       return Effect.sync(() => {
         const { change } = req;

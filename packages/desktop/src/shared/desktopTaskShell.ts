@@ -473,18 +473,6 @@ export function setWorkbenchWidth(
   };
 }
 
-export function workspaceInitials(workspacePath: string | undefined): string {
-  if (!workspacePath) return 'TX';
-  const name = getBasename(workspacePath);
-  if (!name) return 'TX';
-  const words = name.split(/[\s._-]+/).filter(Boolean);
-  const initials = words
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join('');
-  return initials || 'TX';
-}
-
 export function workspaceName(workspacePath: string | undefined): string {
   if (!workspacePath) return 'No project open';
   // A slash-only root has no basename, so show the path rather than nothing.

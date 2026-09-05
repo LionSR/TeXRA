@@ -60,14 +60,9 @@ export * from './diffResult';
 // Layer 4: MainView schemas
 export * from './mainView/state';
 export * from './mainView/executeMessage';
-export * from './mainView/outbound';
-export * from './mainView/inbound';
 
 // Layer 5: ProgressView schemas
 export * from './progressView/data';
-export * from './progressView/projectionShape';
-export * from './progressView/outbound';
-export * from './progressView/inbound';
 
 // Layer 6: Other view message schemas
 export * from './commonViewMessages';

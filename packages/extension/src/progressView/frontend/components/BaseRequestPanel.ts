@@ -8,10 +8,8 @@ import { property } from 'lit/decorators.js';
 import type { PermissionPayload } from '@shared/schemas';
 import { getExhaustionReason } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
-import {
-  SessionUiEvents,
-  type RuntimeRequestDetail,
-} from '@shared/session/uiEvents';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 
 // Local imports - progress view events
 import {
@@ -22,7 +20,7 @@ import {
 } from '../events';
 
 type Arm =
-  { readonly runtime: RuntimeRequestDetail } | { readonly host: HostRequest };
+  { readonly runtime: RuntimeRequest } | { readonly host: HostRequest };
 
 /**
  * The arms one decision names (PRD 8.2): a session-wide approval is the
@@ -42,41 +40,25 @@ function decisionArms<K extends PermissionKind>(
   });
   switch (permission.kind) {
     case 'toolEdit': {
+      // The host staged the preview and applies the proposed file as the
+      // user left it, so every tool-edit verb is a host capability.
       const d = decision as PermissionDecision<'toolEdit'>;
-      if (d.action === 'approve' || d.action === APPROVE_SESSION_ACTION) {
-        const approve: Arm = {
-          runtime: {
-            kind: 'decision.toolEdit',
-            streamId,
-            approvalId,
-            decision: { action: 'approve' },
-          },
-        };
-        return d.action === 'approve'
-          ? [approve]
-          : [bypass('toolEdit'), approve];
-      }
-      if (d.action === 'reject') {
-        return [
-          {
-            runtime: {
-              kind: 'decision.toolEdit',
-              streamId,
-              approvalId,
-              decision: { action: 'reject', feedback: d.feedback ?? null },
-            },
-          },
-        ];
-      }
-      return [
-        {
-          host: {
-            kind: 'toolEditPreview',
-            requestId: approvalId,
-            action: d.action,
-          },
+      const host = (
+        action: Extract<HostRequest, { kind: 'toolEdit' }>['action'],
+        feedback?: string | null,
+      ): Arm => ({
+        host: {
+          kind: 'toolEdit',
+          requestId: approvalId,
+          action,
+          feedback: feedback ?? null,
         },
-      ];
+      });
+      if (d.action === APPROVE_SESSION_ACTION) {
+        return [bypass('toolEdit'), host('approve')];
+      }
+      if (d.action === 'reject') return [host('reject', d.feedback)];
+      return [host(d.action)];
     }
     case 'bash': {
       const d = decision as PermissionDecision<'bash'>;
@@ -104,10 +86,10 @@ function decisionArms<K extends PermissionKind>(
       if (d.action === 'useOwnApiKey') {
         return [
           {
-            runtime: {
-              kind: 'credentials.useOwnApiKey',
+            host: {
+              kind: 'useOwnApiKey',
               streamId,
-              approvalId,
+              requestId: approvalId,
               model: data.model,
               provider: data.errorDetails?.provider ?? null,
               exhaustionReason: getExhaustionReason(data.errorDetails),
@@ -132,7 +114,7 @@ function decisionArms<K extends PermissionKind>(
       const d = decision as PermissionDecision<'proposal'>;
       const arm = (
         inner: Extract<
-          RuntimeRequestDetail,
+          RuntimeRequest,
           { kind: 'decision.proposal' }
         >['decision'],
       ): Arm => ({
@@ -215,10 +197,7 @@ function decisionArms<K extends PermissionKind>(
 
 function userQuestionDecision(
   d: PermissionDecision<'userQuestion'>,
-): Extract<
-  RuntimeRequestDetail,
-  { kind: 'decision.userQuestion' }
->['decision'] {
+): Extract<RuntimeRequest, { kind: 'decision.userQuestion' }>['decision'] {
   if (d.action === 'submit') return { action: 'submit', answers: d.answers };
   if (d.action === 'skip')
     return { action: 'skip', feedback: d.feedback ?? null };

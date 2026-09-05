@@ -46,12 +46,11 @@ import {
   showProgressView as progressShowProgressView,
 } from '@commands/progress/progressViewCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
-import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping/clean';
+import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { emptySurface } from '@shared/session/surface';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 
 // Local file imports
@@ -60,11 +59,10 @@ import {
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
 
-const RESET_CHANNEL = 'mainViewCommands';
-
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
   settingsViewProvider: SettingsViewProvider,
+  progressViewProvider: ProgressViewProvider,
 ): ExtensionCommandActions {
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
@@ -74,18 +72,13 @@ export function createExtensionCommandActions(
       return settingsViewProvider.showSettingsView(tab, agentSubTab);
     },
     async resetMainView() {
-      const webviewView = await getMainWebview(RESET_CHANNEL);
-      if (!webviewView) {
-        void vscode.window.showWarningMessage(
-          'Main view is not available. Please ensure the TeXRA view is open.',
-        );
-        return;
-      }
-      webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-        state: {},
-        isResetOperation: true,
+      // The launcher's selections back to their defaults, and the New-task
+      // state into view.
+      progressViewProvider.surfaceAction({
+        kind: 'launch',
+        patch: emptySurface(progressViewProvider.backend.key).launch,
       });
+      await progressViewProvider.showLauncher();
     },
     cleanBuild: runCleanBuild,
     cleanOutput: runCleanOutput,
@@ -124,10 +117,9 @@ export function createExtensionCommandActions(
     removeApiKey: () => apiRemoveApiKey(refreshAfterProviderKeyChange),
     showImportOptions: sysShowImportOptions,
     async toggleView() {
-      const target =
-        getActiveSidebarView() === SIDEBAR_VIEWS.MAIN
-          ? 'texra.showProgressView'
-          : 'texra.showMainView';
+      const target = progressViewProvider.sidebarShowsProgress()
+        ? 'texra.showMainView'
+        : 'texra.showProgressView';
       await vscode.commands.executeCommand(target);
     },
     showProgressView: progressShowProgressView,

@@ -68,6 +68,7 @@ import {
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
+import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { RunTrace, RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -80,11 +81,7 @@ import {
 import { ExecutionRegistry } from './executionRegistry';
 import { StreamStatusMachine } from './StreamStatusService';
 import { SessionHostInteractions } from './HostInteractions';
-import {
-  runEventDraft,
-  statusDraft,
-  type SessionEventsShape,
-} from './SessionEvents';
+import { runEventDraft, statusDraft } from './SessionEvents';
 import { openSessionGraph, type SessionGraph } from './sessionGraph';
 import { ModelRetryGate } from './ModelRetryGate';
 import {
@@ -132,12 +129,6 @@ export class SessionHandle {
    * bookkeeping before the log moves, and nothing else can append.
    */
   readonly events: Omit<SessionEventsShape, 'publish'>;
-  /**
-   * The tail as the view has folded it (PRD 7.2): what a reader that reads
-   * {@link view} beside each row reads, from `now()`, so no row reaches it
-   * before the fold has landed the state that row produced.
-   */
-  readonly folded: SessionGraph['folded'];
   /**
    * The one handler of every request a surface issues to this session (PRD
    * 7.6, 8.2): an in-process surface runs it on the process runtime
@@ -220,7 +211,6 @@ export class SessionHandle {
     this.graph = graph;
     this.events = graph.events;
     this.view = graph.view;
-    this.folded = graph.folded;
     this.requests = graph.requests;
     this.local = graph.local;
     this.chunks = graph.chunks;

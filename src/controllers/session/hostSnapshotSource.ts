@@ -1,10 +1,14 @@
-// The `host` snapshot of one paper (PRD one-fold-three-renderers, 8.1): what
-// the shell renders but does not own. It rides on every frame that follows a
-// change and on every subscribe, so a surface never asks for a catalog and
-// never holds a stale one. Every producer is a read the host already owns;
-// nothing here is a fact about a run (`SessionView`) or a choice of the
-// user's (`Surface`).
-
+/**
+ * The `host` snapshot of one session (PRD one-fold-three-renderers, 8.1):
+ * what the shell renders but does not own. It rides on every frame that
+ * follows a change and on every subscribe, so a surface never asks for a
+ * catalog and never holds a stale one. Every producer is a read the host
+ * already owns; nothing here is a fact about a run (`SessionView`) or a
+ * choice of the user's (`Surface`). The catalogs are host-neutral; the
+ * host injects its file lists, its git probe, its sign-in probe, and the
+ * banners only it can answer (a VS Code host knows its API-key status and
+ * its missing tools; the desktop keeps both in Settings).
+ */
 import { computeAgentOptionsData } from '@agent/index';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
@@ -13,24 +17,32 @@ import {
   getEnabledModels,
 } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
+import type { FileOptions } from '@shared/schemas';
 import { FILE_SELECT_CONFIGS } from '@shared/launcher/fileSelectConfigs';
 import type { HostSnapshot, PaperDisplay } from '@shared/session/hostSnapshot';
 
-import type { DesktopFileSelection } from './desktopFileSelection.js';
+type Banners = HostSnapshot['banners'];
 
-interface DesktopHostSnapshotOptions {
+export interface HostSnapshotSourceOptions {
   paper: PaperDisplay;
+  placement: HostSnapshot['placement'];
   globalState: StateStore;
-  files: DesktopFileSelection;
+  /** The launcher's single-slot catalogs: base and edited candidates. */
+  fileOptions(): Promise<FileOptions>;
   readRecentCommits(): Promise<{ commits: string[]; isGitRepo: boolean }>;
   /** Whether the user is signed in; the login banner is its negation. */
   isAuthenticated(): Promise<boolean>;
+  /** The launcher's root picker; empty where a session has exactly one. */
+  workspaceRoots?: () => HostSnapshot['workspaceRoots'];
+  debugMode?: () => boolean;
+  /** Hosts that surface these outside Settings answer them; absent means
+   *  never shown. */
+  apiKeyBanner?: () => Promise<Banners['apiKey']>;
+  dependencyBanner?: () => Promise<Banners['dependency']>;
   onError(error: unknown): void;
 }
 
-type Banners = HostSnapshot['banners'];
-
-export interface DesktopHostSnapshotSource {
+export interface HostSnapshotSource {
   /** The snapshot as last assembled; null until the first `refresh`. */
   current(): HostSnapshot | null;
   /** Reassemble every catalog and publish the result. */
@@ -43,6 +55,10 @@ export interface DesktopHostSnapshotSource {
   refreshCommits(): Promise<void>;
   /** The sign-in state changed. */
   refreshAuth(): Promise<void>;
+  /** The host's own banners changed (a key stored, a tool installed). */
+  refreshHostBanners(): Promise<void>;
+  /** The workspace folders changed. */
+  refreshWorkspaceRoots(): void;
   /** The one recorder per process started or stopped. */
   setRecording(recording: HostSnapshot['recording']): void;
   /** The agent-config notice: a run loaded an agent from the custom
@@ -55,10 +71,10 @@ export interface DesktopHostSnapshotSource {
   onChange(listener: (snapshot: HostSnapshot) => void): () => void;
 }
 
-/** The paper's display record and the catalogs, assembled per paper. */
-export function createDesktopHostSnapshot(
-  options: DesktopHostSnapshotOptions,
-): DesktopHostSnapshotSource {
+/** The paper's display record and the catalogs, assembled per session. */
+export function createHostSnapshotSource(
+  options: HostSnapshotSourceOptions,
+): HostSnapshotSource {
   const listeners = new Set<(snapshot: HostSnapshot) => void>();
   let snapshot: HostSnapshot | null = null;
   let catalogs: Pick<
@@ -69,7 +85,7 @@ export function createDesktopHostSnapshot(
     modelOptions: [],
     teamOptions: [],
   };
-  let fileOptions: HostSnapshot['fileOptions'] = {
+  let fileOptions: FileOptions = {
     baseFile: [],
     editedFile: [],
     commit: ['HEAD'],
@@ -80,6 +96,8 @@ export function createDesktopHostSnapshot(
     isGitRepo: false,
   };
   let authenticated = true;
+  let apiKey: Banners['apiKey'] = { visible: false };
+  let dependency: Banners['dependency'] = { visible: false };
   let recording: HostSnapshot['recording'] = null;
   let agentConfig: Banners['agentConfig'] = { visible: false };
   let onboarding: HostSnapshot['onboarding'] = 'done';
@@ -88,22 +106,21 @@ export function createDesktopHostSnapshot(
   function publish(): void {
     snapshot = {
       paper: options.paper,
-      placement: 'desktop',
+      placement: options.placement,
       ...catalogs,
-      // The desktop shows one paper per window: the launcher's root picker
-      // has exactly that root to offer.
-      workspaceRoots: [],
+      workspaceRoots: options.workspaceRoots?.() ?? [],
       fileConfigs: [...FILE_SELECT_CONFIGS],
       fileOptions: { ...fileOptions, commit: ['HEAD', ...commits.commits] },
       isGitRepo: commits.isGitRepo,
       recording,
-      debugMode: false,
+      debugMode: options.debugMode?.() ?? false,
       banners: {
-        // Keys live in Settings on the desktop; the dependency check is
-        // the Tools tab's.
-        apiKey: { visible: false },
+        apiKey,
         agentConfig,
-        dependency: { visible: false },
+        dependency: {
+          ...dependency,
+          visible: dependency.visible && !dismissed.has('dependency'),
+        },
         gettingStarted: !hasInputFiles && !dismissed.has('gettingStarted'),
         login: !authenticated && !dismissed.has('login'),
       },
@@ -122,7 +139,7 @@ export function createDesktopHostSnapshot(
   }
 
   async function loadFiles(): Promise<void> {
-    fileOptions = await options.files.fileOptions();
+    fileOptions = await options.fileOptions();
     hasInputFiles = fileOptions.baseFile.length > 0;
   }
 
@@ -132,6 +149,15 @@ export function createDesktopHostSnapshot(
 
   async function loadAuth(): Promise<void> {
     authenticated = await options.isAuthenticated();
+  }
+
+  async function loadHostBanners(): Promise<void> {
+    const [key, tools] = await Promise.all([
+      options.apiKeyBanner?.(),
+      options.dependencyBanner?.(),
+    ]);
+    if (key) apiKey = key;
+    if (tools) dependency = tools;
   }
 
   const guarded = (load: () => Promise<void>) => async (): Promise<void> => {
@@ -152,12 +178,15 @@ export function createDesktopHostSnapshot(
         loadFiles(),
         loadCommits(),
         loadAuth(),
+        loadHostBanners(),
       ]);
     }),
     refreshCatalogs: guarded(loadCatalogs),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshAuth: guarded(loadAuth),
+    refreshHostBanners: guarded(loadHostBanners),
+    refreshWorkspaceRoots: publish,
     setRecording(next) {
       recording = next;
       publish();

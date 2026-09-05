@@ -16,7 +16,11 @@ import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
-import { StreamTabIdSchema, UserQuestionAnswersSchema } from '@shared/schemas';
+import {
+  InquiryThreadIdSchema,
+  StreamTabIdSchema,
+  UserQuestionAnswersSchema,
+} from '@shared/schemas';
 
 const streamScoped = { streamId: StreamTabIdSchema };
 
@@ -93,13 +97,36 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
       z.object({ action: z.literal('skip'), feedback: z.string().nullish() }),
     ]),
   }),
+  /** A retry runs the run's client preparation before it settles: on the
+   *  configured credentials, or on the user's own key once the host has
+   *  stored one (`credentials: 'personal'`, the host's `useOwnApiKey`). */
   z.object({
     kind: z.literal('decision.retry'),
     ...decision,
     decision: z.discriminatedUnion('action', [
-      z.object({ action: z.literal('retry'), feedback: z.string().nullish() }),
+      z.object({
+        action: z.literal('retry'),
+        feedback: z.string().nullish(),
+        credentials: z.enum(['configured', 'personal']).nullish(),
+      }),
       z.object({ action: z.literal('cancel') }),
     ]),
+  }),
+  /** An external inquiry's terminal answers: persisted on the thread, then
+   *  the run continues from it. The aggregate is the thread; the stream is
+   *  the run the thread belongs to. */
+  z.object({
+    kind: z.literal('externalInquiry.submit'),
+    ...streamScoped,
+    threadId: InquiryThreadIdSchema,
+    answer: z.string(),
+    sessionLinks: z.array(z.string()).nullish(),
+  }),
+  z.object({
+    kind: z.literal('externalInquiry.drop'),
+    ...streamScoped,
+    threadId: InquiryThreadIdSchema,
+    feedback: z.string().nullish(),
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy` (PRD 6, item 2). */

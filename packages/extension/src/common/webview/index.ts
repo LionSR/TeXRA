@@ -13,12 +13,10 @@ export {
   type ViewSliceHost,
 } from './BaseViewMessageHandler';
 export { BaseWebviewProvider } from './BaseWebviewProvider';
-export { SessionBridge, type SessionBridgeOptions } from './SessionBridge';
 export {
   SIDEBAR_VIEWS,
   getActiveSidebarView,
   setActiveSidebarView,
-  type SidebarView,
 } from './viewState';
 export {
   getSharedLocalResourceRoots,

@@ -6,9 +6,3 @@
 
 /** The session that owned the interaction was torn down. */
 export const SESSION_DISPOSED_CAUSE = 'Session disposed.';
-
-/** A newer request took the pending request's slot before the user answered. */
-export const APPROVAL_REPLACED_CAUSE = 'Approval request was replaced.';
-
-/** Every stream was deleted, so no interaction has an owner left to answer it. */
-export const ALL_STREAMS_DELETED_CAUSE = 'All streams deleted.';

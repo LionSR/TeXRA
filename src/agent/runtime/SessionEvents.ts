@@ -47,13 +47,14 @@ import type {
   SessionEventDraft,
   StreamTabId,
 } from '@shared/schemas';
-import { SessionFrames } from '@shared/session/sessionFrames';
+import {
+  ProcessIdentity,
+  SessionEvents,
+  type SessionCursor,
+} from '@shared/session/sessionEvents';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 
 const logger = createLog('sessionEvents');
-
-/** A publisher's position in the commit space: what `all` reads from. */
-export type SessionCursor = CommitOrdinal;
 
 /** The start-identity half of an owner id when the host could not read its
  *  own: a process whose start no probe can compare is unprovable, never
@@ -70,21 +71,6 @@ export function processOwnerId(processStart: string | undefined): OwnerId {
 export function ownerProcessStart(ownerId: OwnerId): string | null {
   const start = ownerId.slice(ownerId.indexOf(':') + 1);
   return start === UNREADABLE_PROCESS_START ? null : start;
-}
-
-/**
- * The identity of this process, `${pid}:${processStart}` (contract C5): the
- * `ownerId` stamped on every event the process appends and the `self` entry
- * of its local runtime snapshot. Resolved once at each process entry, where
- * the start identity can be awaited, and provided to the process layer.
- */
-export class ProcessIdentity extends Context.Service<
-  ProcessIdentity,
-  { readonly ownerId: OwnerId }
->()('@texra/session/ProcessIdentity') {
-  static layer(ownerId: OwnerId): Layer.Layer<ProcessIdentity> {
-    return Layer.succeed(ProcessIdentity)({ ownerId });
-  }
 }
 
 /**
@@ -325,16 +311,13 @@ export class SessionEventLog extends Context.Service<
   }
 }
 
-/**
- * THE tail drain (C7): `read` forward from the caller's position, once per
+/** * THE tail drain (C7): `read` forward from the caller's position, once per
  * value of `level` above what this drain delivered, never past the value
  * that woke it. A level says "there is more", not "there is one more", so a
  * burst of commits during a read collapses into one further read. A read
  * delivers up to the level it started at whether or not every row in
  * between materialized, so a row the read could not deliver is not read
- * again on every later wake. The plane's tail wakes on the log's level; the
- * view's tail (`SessionViewService.all`) wakes on the view's cursor, so its
- * reader sees each row only once the fold has.
+ * again on every later wake.
  *
  * `drained`, when given, receives the commit each forward read covered,
  * rows the read could not materialize included, and only once every row of
@@ -343,7 +326,7 @@ export class SessionEventLog extends Context.Service<
  * that must know the tail passed an ordinal (the NDJSON detach drain) waits
  * on this coordinate, never on the events alone.
  */
-export function tailFrom(
+function tailFrom(
   read: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>,
   level: {
     readonly get: Effect.Effect<CommitOrdinal>;
@@ -385,103 +368,48 @@ export function tailFrom(
   );
 }
 
-export class SessionEvents extends Context.Service<
+
+/**
+ * The plane over the in-memory log: the publisher and the three reads over
+ * a `SessionEventLog`; whatever the log holds when this builds is history
+ * under the anchor.
+ */
+export const sessionEventsLayer = Layer.effect(
   SessionEvents,
-  {
-    /** An ordered batch, committed in one transaction (PRD 6, item 8). */
-    readonly publish: (
+  Effect.gen(function* () {
+    const log = yield* SessionEventLog;
+    const publish = Effect.fn('SessionEvents.publish')(function* (
       events: readonly SessionEventDraft[],
-    ) => Effect.Effect<void>;
-    /** The cold listing hydrate (C8): the latest row per aggregate and type
-     *  for the listing fact types plus the outstanding approvals, in commit
-     *  order; never a transcript row; completes. */
-    readonly listing: () => Stream.Stream<SessionEvent>;
-    /** Every event with commit above `fromCommit`, in commit order across
-     *  aggregates, then the tail. Transcript rows of unsubscribed aggregates
-     *  included: the live tail and the frozen NDJSON projection read it.
-     *  `drained` is the tail's own coordinate (`tailFrom`). */
-    readonly all: (
+    ) {
+      yield* log.appendAll(events);
+    });
+    // The tail anchor: read once, here, before any cold read this layer
+    // serves.
+    const anchor = yield* SubscriptionRef.get(log.level);
+    // THE tail (C7): the drain woken by the log's level.
+    const all = (
       fromCommit: SessionCursor,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ) => Stream.Stream<SessionEvent>;
-    /** One aggregate's rows from `fromSeq`, in seq order; completes. A
-     *  history read, never a tail. */
-    readonly aggregate: (
-      aggregateId: AggregateId,
-      fromSeq: number,
-    ) => Stream.Stream<SessionEvent>;
-    /** Where this layer's tail starts, fixed at layer build. A value, not a
-     *  query: the fold never reads a durable ordinal. */
-    readonly anchor: SessionCursor;
-  }
->()('@texra/session/SessionEvents') {
-  /** The publisher and the three reads over a `SessionEventLog`; whatever
-   *  the log holds when this builds is history under the anchor. */
-  static readonly layer = Layer.effect(
-    SessionEvents,
-    Effect.gen(function* () {
-      const log = yield* SessionEventLog;
-      const publish = Effect.fn('SessionEvents.publish')(function* (
-        events: readonly SessionEventDraft[],
-      ) {
-        yield* log.appendAll(events);
-      });
-      // The tail anchor: read once, here, before any cold read this layer
-      // serves.
-      const anchor = yield* SubscriptionRef.get(log.level);
-      // THE tail (C7): the drain woken by the log's level.
-      const all = (
-        fromCommit: SessionCursor,
-        drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-      ): Stream.Stream<SessionEvent> =>
-        tailFrom(
-          log.readAll,
-          {
-            get: SubscriptionRef.get(log.level),
-            changes: SubscriptionRef.changes(log.level),
-          },
-          fromCommit,
-          drained,
-        );
-      return {
-        publish,
-        listing: log.readListing,
-        all,
-        aggregate: log.readAggregate,
-        anchor,
-      };
-    }),
-  );
-
-  /**
-   * A webview's plane (PRD 7.1, 7.7): no database, no publish; the bridge's
-   * frames are the source. The runtime ran this `Subscribe`'s reads in the
-   * fold fiber's order (7.4) and framed their rows tagged by read; the
-   * decoder routes each row to its read's queue and ends the listing and
-   * aggregate queues at the frame that carries `replayComplete` (8.1), so
-   * the fold fiber's `Stream.concat` over these reads is the same code as
-   * in the runtime. `all` ignores its argument: the tail is the frames after
-   * that marker, anchored by the runtime at the `Subscribe` cursor. The
-   * anchor is that cursor, 0 on a cold mount; no durable ordinal exists
-   * here and none is read.
-   */
-  static readonly transportLayer = Layer.effect(
-    SessionEvents,
-    Effect.gen(function* () {
-      const frames = yield* SessionFrames;
-      return {
-        publish: () => Effect.die(new Error('A webview cannot publish')),
-        listing: () => frames.listing(),
-        all: () => frames.events(),
-        aggregate: (aggregateId, fromSeq) =>
-          frames.aggregate(aggregateId, fromSeq),
-        anchor: frames.cursor,
-      };
-    }),
-  );
-}
-
-export type SessionEventsShape = Context.Service.Shape<typeof SessionEvents>;
+    ): Stream.Stream<SessionEvent> =>
+      tailFrom(
+        log.readAll,
+        {
+          get: SubscriptionRef.get(log.level),
+          changes: SubscriptionRef.changes(log.level),
+        },
+        fromCommit,
+        drained,
+      );
+    return {
+      publish,
+      listing: () => log.readListing(),
+      all,
+      aggregate: (aggregateId, fromSeq) =>
+        log.readAggregate(aggregateId, fromSeq),
+      anchor,
+    };
+  }),
+);
 
 /**
  * The durable arm of one run-trace event on its stream's aggregate, or null

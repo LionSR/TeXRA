@@ -14,15 +14,14 @@
 import type {
   CommitOrdinal,
   LocalRuntimeState,
-  SessionEvent,
   TextChunk,
   TranscriptSubscription,
 } from '@shared/schemas';
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
+import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { Effect, Stream, SubscriptionRef } from 'effect';
-import type { SessionEventsShape } from './SessionEvents';
 import type { SessionHandle } from './SessionHandle';
 
 /** What a session holds of its graph, resolved once at construction. */
@@ -33,10 +32,6 @@ export interface SessionGraph {
   readonly publish: SessionEventsShape['publish'];
   /** The one session state every renderer reads: the fold fiber's level. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
-  /** The plane's tail as `view` has folded it (PRD 7.2): every row above
-   *  `fromCommit`, released once the view holds the state that folded it,
-   *  for a reader that reads the view beside each row. */
-  readonly folded: (fromCommit: CommitOrdinal) => Stream.Stream<SessionEvent>;
   /** This process's local truth; the status machine writes `unreadable`. */
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
   /** The in-flight text deltas, derived per subscriber from the level so a

@@ -7,7 +7,7 @@ import { ELEMENT_IDS } from '@progressView/frontend/constants';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import type { SurfaceAction } from '@shared/session/surface';
-import type { RuntimeRequestDetail } from '@shared/session/uiEvents';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { CHILD, fanOutView, ROOT } from '@test/shared/session/fanOutScenario';
 
 // Local file imports
@@ -23,7 +23,7 @@ useLitComponentTestDom(
 interface Mounted {
   readonly element: StreamHeader;
   readonly surfaceActions: SurfaceAction[];
-  readonly requests: (RuntimeRequestDetail | HostRequest)[];
+  readonly requests: (RuntimeRequest | HostRequest)[];
 }
 
 function streamOf(view: SessionView, id: string): StreamView {
@@ -41,7 +41,7 @@ async function mountHeader(
     stream,
   });
   const surfaceActions: SurfaceAction[] = [];
-  const requests: (RuntimeRequestDetail | HostRequest)[] = [];
+  const requests: (RuntimeRequest | HostRequest)[] = [];
   element.addEventListener('surface-action', (event) => {
     surfaceActions.push(event.detail);
   });

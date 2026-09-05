@@ -79,9 +79,10 @@ describe('desktop composition root and launch environment', () => {
       papersSource.match(/StreamLogStore\.openOrEphemeral\(\)/gu),
     ).toHaveLength(1);
     expect(source).toMatch(/createWindow\(\{[\s\S]*?\bpapers,[\s\S]*?\}\)/u);
-    // Every open paper is bound to the window: one session bridge (the
-    // framer's port), one host snapshot, one presentation each.
-    expect(source).toContain('createDesktopSessionBridge({');
+    // Every open paper is bound to the window: one backend with this
+    // window's port (the framer's), one host snapshot, one presentation each.
+    expect(source).toContain('new ProgressBackend({');
+    expect(source).toContain('createHostSnapshotSource({');
     expect(source).toContain('for (const [key, paper] of open)');
 
     expectOrderedAfter(source, 'installDesktopWindowTitle(', [

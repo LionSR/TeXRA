@@ -14,6 +14,7 @@ import {
 import PQueue from 'p-queue';
 
 import { SubscriptionRef } from 'effect';
+import { z } from 'zod';
 import { runInSession } from '@agent/runtime';
 import {
   computeAgentOptionsData,
@@ -29,6 +30,11 @@ import {
 } from '@common/teams/TeamPlan';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import {
+  ProgressBackend,
+  type AttachedPort,
+} from '@controllers/progressView/backend/ProgressBackend';
+import { createHostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
@@ -39,6 +45,7 @@ import {
   type InstructionAction,
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
+import { paperDisplayOf } from '@shared/session/hostSnapshot';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import {
   getLastCheckResults,
@@ -60,11 +67,6 @@ import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopHostRequests } from './desktopHostRequests.js';
-import { createDesktopHostSnapshot } from './desktopHostSnapshot.js';
-import {
-  createDesktopSessionBridge,
-  type DesktopSessionBridge,
-} from './desktopSessionBridge.js';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopLogIpc } from './desktopLogIpc.js';
@@ -74,7 +76,6 @@ import {
 } from './desktopIpcTypes.js';
 import {
   openDesktopPaperRegistry,
-  paperDisplay,
   readRememberedDesktopPapers,
   type DesktopPaper,
   type DesktopPaperRegistry,
@@ -252,6 +253,9 @@ function installContentSecurityPolicy(): void {
     });
   });
 }
+
+/** The one field every session message carries: which paper it names. */
+const SessionMessageEnvelopeSchema = z.object({ session: z.string() });
 
 /** Warn once a window exists when a paper's transcripts could not persist. */
 function warnIfEphemeral(paper: DesktopPaper): void {
@@ -713,8 +717,10 @@ function createWindow(options: {
    */
   interface PaperBinding {
     readonly paper: DesktopPaper;
-    readonly bridge: DesktopSessionBridge;
-    readonly snapshot: ReturnType<typeof createDesktopHostSnapshot>;
+    readonly backend: ProgressBackend;
+    /** This window's port on the paper's backend. */
+    readonly port: AttachedPort;
+    readonly snapshot: ReturnType<typeof createHostSnapshotSource>;
     readonly execution: ReturnType<typeof createDesktopAgentExecution>;
     dispose(): void;
   }
@@ -724,10 +730,11 @@ function createWindow(options: {
       workspacePath: paper.root,
       showOpenFileDialog: openFileDialog,
     });
-    const snapshot = createDesktopHostSnapshot({
-      paper: paperDisplayOf(paper),
+    const snapshot = createHostSnapshotSource({
+      paper: paperDisplayOf(paper.key, paper.root),
+      placement: 'desktop',
       globalState: platform().globalState,
-      files,
+      fileOptions: () => files.fileOptions(),
       readRecentCommits: () => recentCommitsOf(paper.root),
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
       onError: reportBackgroundError,
@@ -754,7 +761,7 @@ function createWindow(options: {
       workspacePath: paper.root,
       resourcesPath: options.resourcesPath,
       postToRenderer: postToRendererIfAlive,
-      postSurfaceAction: (action) => bridge.postSurfaceAction(action),
+      postSurfaceAction: (action) => backend.surfaceAction(action),
       shell: shellActions,
       onboarding: requireOnboardingIpc(),
       openExternalUrl: (url) => previewHost.openExternal(url),
@@ -763,42 +770,41 @@ function createWindow(options: {
       },
       logger: console,
     });
-    const bridge = createDesktopSessionBridge({
+    // The paper's backend and this window's port on it: the framer cuts
+    // frames from the paper's session graph, and the host snapshot rides
+    // them (PRD 8.1).
+    const backend = new ProgressBackend({
       session: paper.session,
-      sessionKey: paper.key,
-      port: `window:${window.id}`,
-      postToRenderer: postToRendererIfAlive,
-      hostRequests,
-      snapshot,
-      logger: console,
+      handleHostRequest: (request) => hostRequests.handle(request),
+    });
+    const detachSnapshot = snapshot.onChange((next) => backend.setHost(next));
+    const port = backend.attach({
+      id: `window:${window.id}`,
+      send: (message) => {
+        postToRendererIfAlive(message);
+      },
     });
     // A run launched from this window is the window's selection: the
     // launching surface selects the stream (PRD 9).
     const detachLaunched = execution.onLaunched((streamId) =>
-      bridge.postSurfaceAction({ kind: 'select', streamId }),
+      backend.surfaceAction({ kind: 'select', streamId }),
     );
     void snapshot.refresh();
     return {
       paper,
-      bridge,
+      backend,
+      port,
       snapshot,
       execution,
       dispose() {
         detachLaunched();
-        bridge.dispose();
+        detachSnapshot();
+        backend.dispose();
+        hostRequests.dispose();
         execution.dispose();
       },
     };
   };
-  const paperDisplayOf = (paper: DesktopPaper) =>
-    paper.root === undefined
-      ? {
-          key: paper.key,
-          name: 'No paper open',
-          initials: 'TX',
-          subtitle: 'Open a folder to start',
-        }
-      : paperDisplay(paper.key, paper.root);
   const syncPaperBindings = () => {
     const open = new Map(
       options.papers.list().map((paper) => [paper.key, paper] as const),
@@ -853,7 +859,7 @@ function createWindow(options: {
       if (!binding) return 'unavailable';
       const view = SubscriptionRef.getUnsafe(binding.paper.session.view);
       if (!view.streams.has(streamId)) return 'missing';
-      binding.bridge.postSurfaceAction({ kind: 'select', streamId });
+      binding.backend.surfaceAction({ kind: 'select', streamId });
       return 'revealed';
     },
     getStreamLabel: (streamId) =>
@@ -1370,12 +1376,18 @@ function createWindow(options: {
         });
         return;
       }
-      for (const binding of paperBindings.values()) {
-        const claimed = runInSession(binding.paper.session, () =>
-          binding.bridge.handleMessage(message),
+      // A session message names its paper: that paper's port answers it
+      // inside the paper's session scope.
+      const addressed = SessionMessageEnvelopeSchema.safeParse(message);
+      if (!addressed.success) return;
+      const binding = paperBindings.get(addressed.data.session);
+      if (!binding) {
+        console.warn(
+          `Dropped a renderer message for session ${addressed.data.session}: not open`,
         );
-        if (claimed === true) return;
+        return;
       }
+      runInSession(binding.paper.session, () => binding.port.receive(message));
     },
   });
   windowResources.add(() => {

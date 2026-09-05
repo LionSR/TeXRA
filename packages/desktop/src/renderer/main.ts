@@ -18,7 +18,9 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 import { z } from 'zod';
 import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
+import type { StateStore } from '@platform/interfaces';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
+import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import '@settingsView/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import { DESKTOP_THEME_KIND } from '@shared/schemas';
@@ -102,7 +104,6 @@ import {
   requestFiles,
 } from './fileRequests';
 import { createMessageRoutes } from './messageRoutes';
-import { createPaperSessions, rendererStateStore } from './paperSessions';
 
 const appRoot = document.querySelector<HTMLElement>('#app')!;
 
@@ -160,8 +161,20 @@ const startupTeamPanel = createStartupTeamPanel({
 // The conversation is the permanent task canvas. Project navigation stays in
 // the left sidebar, while files and tools share one optional right workbench.
 
-// The renderer's own state store: interaction state survives a reload.
-const rendererState = rendererStateStore(window.localStorage);
+// The renderer's own interaction state survives a reload in
+// `localStorage`; the preload bridge's `getState` is in-memory only.
+const rendererState: StateStore = {
+  get<T>(key: string, defaultValue?: T): T {
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return defaultValue as T;
+    return JSON.parse(raw) as T;
+  },
+  update(key, value) {
+    if (value === undefined) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, JSON.stringify(value));
+    return Promise.resolve();
+  },
+};
 // The one Shell of this window (PRD 9): which papers are open and which one
 // the window shows come from the main process; the collapsed set is the
 // rail's own and persists. Until the first papers report the launcher is
@@ -191,7 +204,7 @@ function setShell(next: Shell): void {
 // One fold, one surface, and one host snapshot per open paper, on the one
 // webview runtime; the rail, the conversation shell, the palette, and the
 // chrome read those three records and nothing else.
-const paperSessions = createPaperSessions({ storage: rendererState });
+const paperSessions = createSessionSurfaces({ storage: rendererState });
 paperSessions.onChange(rerenderShell);
 // A paper whose session is not open yet is not listed: the rail shows what
 // is known.

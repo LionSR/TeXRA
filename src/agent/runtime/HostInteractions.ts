@@ -22,6 +22,7 @@ import type {
   ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type {
   AgentRuntimeEmitOptions,
@@ -409,6 +410,8 @@ interface PendingSessionInteraction {
   readonly cancellationResult: (cause?: string) => unknown;
   readonly settle: (result: unknown) => void;
   readonly reject: (reason?: unknown) => void;
+  /** A retry's client preparation, forwarded by the run (`prepareRetry`). */
+  readonly prepareRetry?: HostRetryInteractionOptions['prepareRetry'];
   cancellationRequested: boolean;
 }
 
@@ -643,6 +646,7 @@ export class SessionHostInteractions implements HostInteractions {
       request.streamId,
       (interactions) => interactions.requestRetry?.(request, options),
       { kind: 'retry', data: request },
+      options?.prepareRetry,
     );
   }
 
@@ -684,15 +688,51 @@ export class SessionHostInteractions implements HostInteractions {
     requestId: string,
     result: HostInteractionResultByKind[K],
   ): boolean {
-    for (const pending of this.pending) {
-      if (pending.kind !== kind || pending.fact?.requestId !== requestId) {
-        continue;
+    const pending = this.findPending(kind, requestId);
+    if (!pending || !this.deletePending(pending)) return false;
+    pending.settle(result);
+    return true;
+  }
+
+  /**
+   * Settle a pending retry after the run's client preparation ran on the
+   * chosen credentials (`decision.retry`): the preparation is the rebind
+   * the run forwarded with its request, so a retry never resumes on a
+   * client the host's credential change left stale. A failed preparation
+   * settles the request as a denial. False when no such retry is pending
+   * once the preparation returns: a cancellation or a newer request under
+   * the same id took it.
+   */
+  async settleRetry(
+    requestId: string,
+    result: RetrySettlement,
+    selection: ModelCredentialSelection = 'configured',
+  ): Promise<boolean> {
+    const pending = this.findPending('retry', requestId);
+    if (!pending) return false;
+    if (result.action === 'retry' && pending.prepareRetry) {
+      try {
+        await pending.prepareRetry(selection);
+      } catch (error) {
+        return this.settleRequest('retry', requestId, {
+          action: 'deny',
+          reason: toErrorMessage(error),
+        });
       }
-      if (!this.deletePending(pending)) return false;
-      pending.settle(result);
-      return true;
     }
-    return false;
+    return this.settleRequest('retry', requestId, result);
+  }
+
+  private findPending(
+    kind: SettledInteractionKind,
+    requestId: string,
+  ): PendingSessionInteraction | undefined {
+    for (const pending of this.pending) {
+      if (pending.kind === kind && pending.fact?.requestId === requestId) {
+        return pending;
+      }
+    }
+    return undefined;
   }
 
   cancel(selector: HostInteractionCancelSelector = {}): void {
@@ -771,6 +811,7 @@ export class SessionHostInteractions implements HostInteractions {
       interactions: HostInteractions,
     ) => Promise<HostInteractionResultByKind[K]> | undefined,
     permission: PermissionPayloadFor<K>,
+    prepareRetry?: HostRetryInteractionOptions['prepareRetry'],
   ): Promise<HostInteractionResultByKind[K]> {
     type TResult = HostInteractionResultByKind[K];
     if (this.disposed) {
@@ -787,6 +828,7 @@ export class SessionHostInteractions implements HostInteractions {
         cancellationResult: (cause) => cancellationResultFor(kind, cause),
         settle: (result) => resolve(result as TResult),
         reject,
+        ...(prepareRetry ? { prepareRetry } : {}),
         cancellationRequested: false,
       };
       this.pending.add(pending);

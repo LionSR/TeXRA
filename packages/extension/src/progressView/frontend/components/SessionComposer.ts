@@ -375,9 +375,13 @@ export class SessionComposer extends LitElement {
       );
       return;
     }
-    if (text === '') return;
+    if (text === '' || !this.surface) return;
     this.dispatchEvent(
-      SessionUiEvents.host({ kind: 'launch', instruction: text }),
+      SessionUiEvents.host({
+        kind: 'launch',
+        launch: this.surface.launch,
+        instruction: text,
+      }),
     );
   };
 

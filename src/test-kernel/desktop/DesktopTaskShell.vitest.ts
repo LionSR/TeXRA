@@ -19,7 +19,6 @@ import {
   toggleSidebar,
   toggleSummaryBar,
   toggleWorkbench,
-  workspaceInitials,
   workspaceName,
   type DesktopTaskShellState,
   type OpenWorkbenchTabRequest,
@@ -276,11 +275,5 @@ describe('desktop task shell model', () => {
     expect(workspaceName('/work/My Paper/')).toBe('My Paper');
     expect(workspaceName(String.raw`C:\work\TeXRA.paper`)).toBe('TeXRA.paper');
     expect(workspaceName(undefined)).toBe('No project open');
-
-    expect(workspaceInitials('/work/My Paper/')).toBe('MP');
-    expect(workspaceInitials(String.raw`C:\work\TeXRA.paper`)).toBe('TP');
-    expect(workspaceInitials('/work/single')).toBe('S');
-    expect(workspaceInitials('/work/.__-')).toBe('TX');
-    expect(workspaceInitials(undefined)).toBe('TX');
   });
 });

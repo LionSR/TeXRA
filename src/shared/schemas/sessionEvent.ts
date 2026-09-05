@@ -24,7 +24,7 @@ import { GoalStateSchema } from './goal';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { InquiryThreadUpdatedEventSchema } from './inquiry';
 import { PlanSchema } from './plan';
-import { PermissionPayloadSchema } from './progressView/outbound';
+import { PermissionPayloadSchema } from './progressView/data';
 import { RunIdentitySchema } from './runIdentity';
 import {
   RunOutcomeSchema,

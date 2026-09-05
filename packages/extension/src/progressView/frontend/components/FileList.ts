@@ -6,7 +6,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -29,6 +29,7 @@ import {
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import type { HostRequest } from '@shared/session/hostRequest';
+import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -36,7 +37,6 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import { ELEMENT_IDS } from '../constants';
 import { getComposedPathElement } from '../utils';
-import { webviewStorage } from '../webviewStorage';
 
 // Local imports - styles
 import { fileListStyles } from './FileList.styles';
@@ -91,8 +91,6 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
   `;
 }
 
-const STORAGE_HINT_DISMISS_KEY = 'generatedFilesStorageHint.dismissed';
-
 /** Parse a path into directory and basename components */
 function parsePath(path: string): { dir: string; basename: string } {
   const normalized = normalizeFilePath(path);
@@ -121,9 +119,8 @@ export class FileList extends LitElement {
     CompileFailure[]
   > = {};
 
-  @state()
-  private storageHintDismissed =
-    webviewStorage.get(STORAGE_HINT_DISMISS_KEY) === true;
+  /** The surface owns the hint's dismissal (PRD 9). */
+  @property({ attribute: false }) surface: Surface | null = null;
 
   // Flattened from failuresByRound to avoid O(rounds) scan per file item in render.
   private failureByPath = new Map<string, CompileFailure>();
@@ -193,7 +190,7 @@ export class FileList extends LitElement {
   }
 
   private renderStorageHint(): TemplateResult | typeof nothing {
-    if (this.storageHintDismissed) return nothing;
+    if (this.surface?.storageHintDismissed) return nothing;
 
     return html`
       <div class="storage-hint" role="note">
@@ -216,8 +213,7 @@ export class FileList extends LitElement {
   }
 
   private handleDismissStorageHint = (): void => {
-    void webviewStorage.update(STORAGE_HINT_DISMISS_KEY, true);
-    this.storageHintDismissed = true;
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'dismissStorageHint' }));
   };
 
   private renderRound(
@@ -393,8 +389,8 @@ export class FileList extends LitElement {
   private runLatexFixer(): void {
     if (this.streamId === null) return;
     this.dispatchEvent(
-      SessionUiEvents.runtime({
-        kind: 'misc.runCompileFixer',
+      SessionUiEvents.host({
+        kind: 'runCompileFixer',
         streamId: this.streamId,
       }),
     );

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -6,10 +6,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import {
-  appState,
-  resetProgressState,
-} from '@progressView/frontend/progressState';
 import {
   AgentCategory,
   LOG_LEVELS,
@@ -21,6 +17,8 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { fold } from '@shared/session/sessionFold';
+import { emptySessionView } from '@shared/session/sessionView';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -36,17 +34,29 @@ import { assembleTrace, StreamLogStore } from '@transcript';
 // with no path alias into the root vitest config, but this suite exercises
 // the real replay pipeline (`@progressView/frontend`'s dispatcher + slices),
 // so a plain relative import is the simplest way to reach it.
-import { replayTrace } from '../../../packages/trace-viewer/src/replayTrace';
+import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
 
 const tempDirs = useTempDirs();
 
 setupPlatform(() => createTempDirPlatform('texra-replay-trace-', tempDirs));
 
-beforeEach(() => {
-  // replayTrace's slices write the shared progressState singletons directly;
-  // reset them so each test starts from a clean slate.
-  resetProgressState();
-});
+/** The view the fold reaches over the trace's listing and transcript rows,
+ *  with the transcript tier subscribed for the run's stream. */
+function foldTrace(trace: TraceDocument) {
+  const frame = traceFrame(trace, 'trace', {
+    kind: 'subscribe',
+    session: 'trace',
+    generation: 1,
+    cursor: 0,
+    aggregates: [{ id: trace.streamId, fromSeq: 0 }],
+  });
+  const view = fold(emptySessionView('trace', 0), [
+    { _tag: 'subscriptions', set: [{ id: trace.streamId, fromSeq: 0 }] },
+    ...frame.events,
+    { _tag: 'local', local: { self: [], heldBy: [], unreadable: [] } },
+  ]);
+  return view.streams.get(trace.streamId);
+}
 
 type TraceEntry = TraceDocument['entries'][number];
 
@@ -97,13 +107,11 @@ function legacyTrace(
   };
 }
 
-describe('replayTrace legacy-status fallback (issue #7188)', () => {
+describe('traceEvents legacy-status fallback (issue #7188)', () => {
   it('replays workflow content without tool-use state', () => {
     const trace = legacyTrace(undefined);
 
-    replayTrace(trace);
-
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = foldTrace(trace);
     expect(replayed).toMatchObject({
       category: AgentCategory.Workflow,
       files: {},
@@ -130,9 +138,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       }),
     };
 
-    replayTrace(trace);
-
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = foldTrace(trace);
     expect(replayed).toMatchObject({
       category: AgentCategory.ToolUse,
       todos: [{ content: 'Replay the plan' }],
@@ -173,10 +179,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     expect(result.trace.meta?.outcome).toBeUndefined();
     expect(result.trace.snapshot.status).toBeUndefined();
 
-    replayTrace(result.trace);
-
-    const replayed = appState.get().streamStates.get(result.trace.streamId);
-    expect(replayed?.status).toBe('failed');
+    expect(foldTrace(result.trace)?.status).toBe('failed');
   });
 
   it('ignores nested group-end status when the root run stage never closed', () => {
@@ -212,10 +215,9 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       ],
     };
 
-    replayTrace(trace);
-
-    const replayed = appState.get().streamStates.get(trace.streamId);
-    expect(replayed?.status).toBe(STREAM_STATUS.READY);
+    // No terminal fact: an exported trace with no producer folds as an
+    // interrupted run, never as a finished one.
+    expect(foldTrace(trace)?.durableOutcome).toBeNull();
   });
 
   it('ignores a cleanly-closed tool-use round when the root run stage never closed (issue #7267)', () => {
@@ -251,10 +253,9 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       ],
     };
 
-    replayTrace(trace);
-
-    const replayed = appState.get().streamStates.get(trace.streamId);
-    expect(replayed?.status).toBe(STREAM_STATUS.READY);
+    // No terminal fact: an exported trace with no producer folds as an
+    // interrupted run, never as a finished one.
+    expect(foldTrace(trace)?.durableOutcome).toBeNull();
   });
 
   it('ignores a cleanly-closed tool-use round with no data.kind at all — archived before the stage.end kind fix (issue #7291)', () => {
@@ -303,10 +304,9 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       ],
     };
 
-    replayTrace(trace);
-
-    const replayed = appState.get().streamStates.get(trace.streamId);
-    expect(replayed?.status).toBe(STREAM_STATUS.READY);
+    // No terminal fact: an exported trace with no producer folds as an
+    // interrupted run, never as a finished one.
+    expect(foldTrace(trace)?.durableOutcome).toBeNull();
   });
 
   // STOPPED folds into the canonical COMPLETED phase (the same collapse
@@ -321,20 +321,17 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     ({ snapshotStatus, expected }) => {
       const trace = legacyTrace(snapshotStatus);
 
-      replayTrace(trace);
-
-      const replayed = appState.get().streamStates.get(trace.streamId);
-      expect(replayed?.status).not.toBe(STREAM_STATUS.READY);
+      const replayed = foldTrace(trace);
       expect(replayed?.status).toBe(expected);
+      expect(replayed?.durableOutcome).toBe(expected);
     },
   );
 
-  it('still reports READY when neither meta.outcome nor snapshot.status is set', () => {
+  it('reports no durable outcome when neither meta.outcome nor snapshot.status is set', () => {
     const trace = legacyTrace(undefined);
 
-    replayTrace(trace);
-
-    const replayed = appState.get().streamStates.get(trace.streamId);
-    expect(replayed?.status).toBe(STREAM_STATUS.READY);
+    // No terminal fact: an exported trace with no producer folds as an
+    // interrupted run, never as a finished one.
+    expect(foldTrace(trace)?.durableOutcome).toBeNull();
   });
 });

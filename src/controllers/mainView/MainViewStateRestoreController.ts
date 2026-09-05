@@ -1,6 +1,4 @@
 // Third-party imports
-import { z } from 'zod';
-
 // Local imports
 import { resolveAgentKey } from '@agent/index';
 import {
@@ -12,7 +10,6 @@ import {
   type MainViewPersistedState,
   AgentCategory,
 } from '@shared/schemas';
-import { isNonEmptyString } from '@utils/core';
 
 /**
  * Entry-point schema for a restore-into-the-main-view payload: a plain
@@ -20,21 +17,6 @@ import { isNonEmptyString } from '@utils/core';
  * prefaults every field — without it, malformed input would validate as an
  * empty default workflow config and silently restore a blank form.
  */
-export const RestoreRunConfigInputSchema = z
-  .unknown()
-  .refine((input) => {
-    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-      return false;
-    }
-    const identities = [
-      'agent' in input ? input.agent : undefined,
-      'model' in input ? input.model : undefined,
-    ].filter((value) => value !== undefined);
-    return identities.length > 0 && identities.every(isNonEmptyString);
-  }, 'A restored run configuration must identify a non-empty agent or model.')
-  .pipe(AgentConfigSchema);
-
-/** Convert a run config into a full main view state snapshot. */
 export function buildMainViewState(
   agentConfig: AgentConfig,
 ): MainViewPersistedState {

@@ -1,14 +1,14 @@
 import { resolve } from 'node:path';
 
 import {
-  getEditedFileListConfig,
   getFileListConfig,
   loadFileListSettings,
-  type FileFilterConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
-import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import { platform } from '@platform/platform';
+import {
+  listWorkspaceFilesOfType,
+  workspaceFileOptions,
+} from '@controllers/session/workspaceFileOptions';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { FileOptions } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
@@ -58,33 +58,6 @@ const DIALOG_TITLE_BY_FILE_TYPE: Record<ListableFileType, string> = {
   media: 'Select media files',
 };
 
-function listFiles(
-  root: string,
-  rawConfig: FileFilterConfig,
-): Promise<string[]> {
-  return listWorkspaceFiles({
-    root,
-    config: rawConfig,
-    readDirectory: (directory) => platform().fs.readDirectory(directory),
-  });
-}
-
-/**
- * List the workspace files of one listable type under the current file-list
- * settings. Empty when no workspace is open.
- */
-export async function listDesktopWorkspaceFiles(
-  fileType: ListableFileType,
-  // Not a default parameter: callers inject a getter that returns undefined to
-  // mean "no workspace", and a default would discard that and re-read the
-  // process-wide workspace instead.
-  workspacePath: string | undefined,
-): Promise<string[]> {
-  const config = getFileListConfig(fileType, loadFileListSettings());
-  if (!workspacePath) return [];
-  return listFiles(workspacePath, config);
-}
-
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const absolutePath = resolve(workspacePath, filePath);
   // relativeToRoot shares the canonicalize-then-compare fallback
@@ -103,28 +76,12 @@ export function createDesktopFileSelection(
   options: DesktopFileSelectionOptions,
 ): DesktopFileSelection {
   const { workspacePath } = options;
-  const list = (fileType: ListableFileType) =>
-    listDesktopWorkspaceFiles(fileType, workspacePath);
-
   return {
-    async fileOptions() {
-      if (!workspacePath) {
-        return { baseFile: [], editedFile: [], commit: ['HEAD'] };
-      }
-      // The base file is listed from the input rules: base is a single-slot
-      // view over the input list. Edited candidates are every file the
-      // edited rules admit; the sheet narrows them to the chosen base.
-      const [baseFile, editedFile] = await Promise.all([
-        list('input'),
-        listFiles(
-          workspacePath,
-          getEditedFileListConfig(loadFileListSettings()),
-        ),
-      ]);
-      return { baseFile, editedFile, commit: ['HEAD'] };
-    },
+    fileOptions: () => workspaceFileOptions(workspacePath),
     async hasInputFiles() {
-      return (await list('input')).length > 0;
+      return (
+        (await listWorkspaceFilesOfType('input', workspacePath)).length > 0
+      );
     },
     async pickFiles(fileType, currentFile) {
       if (!workspacePath) return null;

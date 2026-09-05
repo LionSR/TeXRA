@@ -11,7 +11,7 @@ import {
   type Surface,
   type SurfaceAction,
 } from '@shared/session/surface';
-import type { RuntimeRequestDetail } from '@shared/session/uiEvents';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   CHILD,
   fanOutView,
@@ -37,7 +37,7 @@ function settleChildRender(): Promise<unknown> {
 interface Mounted {
   readonly element: StreamTabs;
   readonly surfaceActions: SurfaceAction[];
-  readonly requests: (RuntimeRequestDetail | HostRequest)[];
+  readonly requests: (RuntimeRequest | HostRequest)[];
 }
 
 async function mountTabs(
@@ -51,7 +51,7 @@ async function mountTabs(
     ...props,
   });
   const surfaceActions: SurfaceAction[] = [];
-  const requests: (RuntimeRequestDetail | HostRequest)[] = [];
+  const requests: (RuntimeRequest | HostRequest)[] = [];
   element.addEventListener('surface-action', (event) => {
     surfaceActions.push(event.detail);
   });

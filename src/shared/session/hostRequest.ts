@@ -19,6 +19,8 @@ import {
   StreamTabIdSchema,
 } from '@shared/schemas';
 
+import { LaunchSurfaceSchema } from './surface';
+
 const streamScoped = { streamId: StreamTabIdSchema };
 
 export const HostRequestSchema = z.discriminatedUnion('kind', [
@@ -32,13 +34,34 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('openTaskStorage'), ...streamScoped }),
   z.object({ kind: z.literal('exportTranscript'), ...streamScoped }),
   z.object({ kind: z.literal('restoreIntoLauncher'), ...streamScoped }),
+  /** Relaunch a settled run: a workflow through the host's launcher with
+   *  its execution id, a tool-use run through the resume port. */
+  z.object({ kind: z.literal('resume'), ...streamScoped }),
+  /** A fresh run from a settled run's setup. */
+  z.object({ kind: z.literal('runNew'), ...streamScoped }),
+  /** The latexFixer follow-up over a workflow run's compile failures. */
+  z.object({ kind: z.literal('runCompileFixer'), ...streamScoped }),
+  /** A retry on the user's own API key: the host stores one, then settles
+   *  the pending retry on personal credentials. */
+  z.object({
+    kind: z.literal('useOwnApiKey'),
+    ...streamScoped,
+    requestId: z.string().min(1),
+    model: z.string().nullish(),
+    provider: z.string().nullish(),
+    exhaustionReason: z.string().nullish(),
+    kimiCodeRoutedOnFailure: z.boolean().nullish(),
+  }),
   z.object({ kind: z.literal('latexdiff'), ...streamScoped }),
   z.object({ kind: z.literal('pack'), ...streamScoped }),
   z.object({ kind: z.literal('clean'), ...streamScoped }),
   /** The Tools sheet's LaTeXDiffs verbs over the launcher's base and
-   *  edited files; `base`, `edited`, and `commit` ride in `Surface.launch`. */
+   *  edited files and its commit, as the sheet's surface holds them. */
   z.object({
     kind: z.literal('latexdiffs'),
+    baseFile: z.string().nullish(),
+    editedFile: z.string().nullish(),
+    commit: z.string().nullish(),
     action: z.enum([
       'latexdiff',
       'latexdiffvc',
@@ -89,9 +112,11 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     paths: z.array(z.string()),
     category: DocumentFileTypeSchema,
   }),
-  /** The launcher's Send: the host validates `Surface.launch` and runs. */
+  /** The launcher's Send: the surface's selections and the instruction the
+   *  composer holds; the host validates them and runs. */
   z.object({
     kind: z.literal('launch'),
+    launch: LaunchSurfaceSchema,
     instruction: z.string(),
   }),
   z.object({ kind: z.literal('polish'), text: z.string() }),
@@ -105,12 +130,26 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('compileInputPdf') }),
   z.object({ kind: z.literal('extractFigures') }),
-  /** A tool-edit prompt's non-terminal verbs: they open editors and leave
-   *  the approval pending. */
+  /** A tool-edit prompt's verbs over the preview the host staged: the
+   *  approval applies the proposed file as the user left it, so the host
+   *  settles it; the others open editors and leave the approval pending. */
   z.object({
-    kind: z.literal('toolEditPreview'),
+    kind: z.literal('toolEdit'),
     requestId: z.string().min(1),
-    action: z.enum(['openDiff', 'previewProposed', 'showLatexdiff']),
+    action: z.enum([
+      'approve',
+      'reject',
+      'openDiff',
+      'previewProposed',
+      'showLatexdiff',
+    ]),
+    feedback: z.string().nullish(),
+  }),
+  /** The sidebar port reports which state it shows, for the view-title
+   *  menus that differ between the New-task state and a conversation. */
+  z.object({
+    kind: z.literal('setActiveView'),
+    view: z.enum(['main', 'progress']),
   }),
   /** An output file's verbs on a workflow run's file list. */
   z.object({

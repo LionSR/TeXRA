@@ -219,27 +219,6 @@ function isUnrecognizedCommand(error: z.ZodError): boolean {
 // as silently passing.
 
 /**
- * Asserts that `message` conforms to `schema` — for a send boundary where
- * every message is known to belong to exactly one outbound domain (e.g.
- * `MainViewMessageHandler.postToManagerTarget`, which only ever sends
- * `MainViewMessage`s).
- * Throws on any mismatch, including a `command` the schema doesn't recognize
- * at all.
- */
-export function assertOutboundMessage<TMessage extends CommandMessage>(
-  schema: z.ZodType<TMessage>,
-  message: unknown,
-): void {
-  if (!isDevAssertionMode()) return;
-  const result = schema.safeParse(message);
-  if (!result.success) {
-    throw new Error(
-      `Outbound message failed schema validation: ${result.error.message}`,
-    );
-  }
-}
-
-/**
  * Asserts (dev/test only) that `message` conforms to the outbound schema
  * that recognizes its `command` — for a send boundary that multiplexes
  * several outbound domains onto one channel (desktop's single

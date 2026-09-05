@@ -1,19 +1,14 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
+import { describe, expect, it, vi } from 'vitest';
+import { currentSession } from '@agent/runtime/SessionHandle';
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import {
-  cleanupUnscopedApprovals,
-  isBashApprovalBypassedForStream,
-  proposalApprovals,
-  releaseStreamResources,
-  setBashApprovalSessionBypass,
-} from '@tools/approval';
+import { proposalApprovals, releaseStreamResources } from '@tools/approval';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   bashApprovalRequest,
@@ -42,10 +37,10 @@ describe('approval cleanup scope', () => {
   it("per-stream cleanup leaves another stream's approval state intact", () => {
     const a = sid('s:appr-scope-a');
     const b = sid('s:appr-scope-b');
-    setBashApprovalSessionBypass(a, true, {
+    currentSession().approvals.bash.bypass.setBypass(a, true, {
       silent: true,
     });
-    setBashApprovalSessionBypass(b, true, {
+    currentSession().approvals.bash.bypass.setBypass(b, true, {
       silent: true,
     });
 
@@ -54,8 +49,8 @@ describe('approval cleanup scope', () => {
       // (this is what `deleteAllStreams` loops), so a sibling stream `b`
       // keeps its bypass state.
       releaseStreamResources(a);
-      expect(isBashApprovalBypassedForStream(a)).toBe(false);
-      expect(isBashApprovalBypassedForStream(b)).toBe(true);
+      expect(currentSession().approvals.bash.bypass.isBypassed(a)).toBe(false);
+      expect(currentSession().approvals.bash.bypass.isBypassed(b)).toBe(true);
     } finally {
       releaseStreamResources(b);
     }
@@ -136,7 +131,10 @@ describe('approval cleanup scope', () => {
         sessionBSettled = true;
       });
 
-      cleanupUnscopedApprovals(sessionA);
+      sessionA.interactions.cancel({
+        streamId: null,
+        cause: 'Streamless approval cleanup.',
+      });
 
       await expect(Promise.all([toolA, bashA])).resolves.toEqual(
         streamlessCleanupSettlements,
@@ -147,7 +145,10 @@ describe('approval cleanup scope', () => {
         cause: 'Streamless approval cleanup.',
       });
 
-      cleanupUnscopedApprovals(sessionB);
+      sessionB.interactions.cancel({
+        streamId: null,
+        cause: 'Streamless approval cleanup.',
+      });
 
       await expect(Promise.all([toolB, bashB])).resolves.toEqual(
         streamlessCleanupSettlements,
@@ -198,15 +199,16 @@ describe('session-owned approval state (#8144)', () => {
     const streamId = sid('s:appr-same-id');
 
     try {
-      setBashApprovalSessionBypass(streamId, true, {
+      sessionA.approvals.bash.bypass.setBypass(streamId, true, {
         silent: true,
-        session: sessionA,
       });
 
-      expect(isBashApprovalBypassedForStream(streamId, sessionA)).toBe(true);
-      expect(isBashApprovalBypassedForStream(streamId, sessionB)).toBe(false);
+      expect(sessionA.approvals.bash.bypass.isBypassed(streamId)).toBe(true);
+      expect(sessionB.approvals.bash.bypass.isBypassed(streamId)).toBe(false);
       // The no-session call reads the process default session, untouched here.
-      expect(isBashApprovalBypassedForStream(streamId)).toBe(false);
+      expect(currentSession().approvals.bash.bypass.isBypassed(streamId)).toBe(
+        false,
+      );
     } finally {
       sessionA.dispose();
       sessionB.dispose();
@@ -246,9 +248,8 @@ describe('session-owned approval state (#8144)', () => {
     const pending = session.interactions.requestToolEditApproval(
       toolEditRequest('dispose.tex', streamId),
     );
-    setBashApprovalSessionBypass(streamId, true, {
+    session.approvals.bash.bypass.setBypass(streamId, true, {
       silent: true,
-      session,
     });
 
     session.dispose();
@@ -257,6 +258,6 @@ describe('session-owned approval state (#8144)', () => {
       action: 'reject',
       cause: 'Session disposed.',
     });
-    expect(isBashApprovalBypassedForStream(streamId, session)).toBe(false);
+    expect(session.approvals.bash.bypass.isBypassed(streamId)).toBe(false);
   });
 });

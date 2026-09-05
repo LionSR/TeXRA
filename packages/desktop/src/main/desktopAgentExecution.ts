@@ -67,10 +67,13 @@ export interface DesktopAgentExecution {
   ): Promise<void>;
   /** The stream a launch from this window resolved to, if one is pending. */
   onLaunched(listener: (streamId: StreamTabId) => void): () => void;
-  /** A tool-edit prompt's non-terminal verbs over its staged preview. */
-  previewToolEdit(
+  /** A tool-edit prompt's verbs over its staged preview: the approval
+   *  applies the proposed file as the user left it. */
+  toolEditAction(
     requestId: string,
-    action: 'openDiff' | 'previewProposed' | 'showLatexdiff',
+    action:
+      'approve' | 'reject' | 'openDiff' | 'previewProposed' | 'showLatexdiff',
+    feedback?: string,
   ): void;
   dispose(): void;
 }
@@ -224,8 +227,12 @@ export function createDesktopAgentExecution(
         launchListeners.delete(listener);
       };
     },
-    previewToolEdit(requestId, action) {
-      toolEditApprovals.handleAction({ requestId, action });
+    toolEditAction(requestId, action, feedback) {
+      toolEditApprovals.handleAction({
+        requestId,
+        action,
+        ...(feedback === undefined ? {} : { feedback }),
+      });
     },
     dispose() {
       if (disposed) return;

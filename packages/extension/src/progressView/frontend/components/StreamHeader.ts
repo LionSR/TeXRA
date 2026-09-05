@@ -424,14 +424,10 @@ export class StreamHeader extends LitElement {
         );
         return;
       case ELEMENT_IDS.RESUME_BTN:
-        this.dispatchEvent(
-          SessionUiEvents.runtime({ kind: 'stream.resume', streamId }),
-        );
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', streamId }));
         return;
       case ELEMENT_IDS.RUN_NEW_BTN:
-        this.dispatchEvent(
-          SessionUiEvents.runtime({ kind: 'stream.runNew', streamId }),
-        );
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'runNew', streamId }));
         return;
       case ELEMENT_IDS.RESTORE_STATE_BTN:
         this.dispatchEvent(

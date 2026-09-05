@@ -114,9 +114,7 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
 /** Open workspace folder offered as an execution working directory. */
 export const WorkspaceRootOptionDataSchema = PickerOptionBaseSchema;
-export type WorkspaceRootOptionData = z.infer<
-  typeof WorkspaceRootOptionDataSchema
->;
+type WorkspaceRootOptionData = z.infer<typeof WorkspaceRootOptionDataSchema>;
 
 /**
  * Team picker option row for the main-view "Run with: Team" target. `value`
@@ -232,7 +230,7 @@ const SingleFilesSchema = z.object({
   baseFile: z.string(),
   editedFile: z.string(),
 });
-export type SingleFiles = z.infer<typeof SingleFilesSchema>;
+type SingleFiles = z.infer<typeof SingleFilesSchema>;
 
 export const FileOptionsSchema = z.object({
   baseFile: z.array(z.string()),

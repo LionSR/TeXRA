@@ -1,12 +1,10 @@
 import { z } from 'zod';
 
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-
 import { AgentCategorySchema } from '../agent';
 import { ToolConfigInputFieldsSchema } from '../toolConfig';
 import { LaunchTargetSchema } from './state';
 
-export const MainViewExecuteFilesSchema = z.object({
+const MainViewExecuteFilesSchema = z.object({
   inputFiles: z.array(z.string()).optional(),
   contextFiles: z.array(z.string()).optional(),
   mediaFiles: z.array(z.string().nullable()).optional(),
@@ -45,8 +43,3 @@ const MainViewExecuteMessageSchema = z.object({
 export type MainViewExecuteMessage = z.infer<
   typeof MainViewExecuteMessageSchema
 >;
-
-export const MainViewExecuteInboundMessageSchema =
-  MainViewExecuteMessageSchema.extend({
-    command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE),
-  });

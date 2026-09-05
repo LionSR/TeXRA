@@ -8,14 +8,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { StreamTabId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
 import {
   proposalApprovals,
-  setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 import { AskUserQuestionTool } from '@tools/userQuestion/UserQuestionTool';
@@ -193,7 +192,16 @@ describe('human prompt progress events', () => {
       kind: 'toolEdit',
       setBypass: setToolEditApprovalSessionBypass,
     },
-    { label: 'bash', kind: 'bash', setBypass: setBashApprovalSessionBypass },
+    {
+      label: 'bash',
+      kind: 'bash',
+      setBypass: (streamId, enabled, options) =>
+        (options?.session ?? currentSession()).approvals.bash.bypass.setBypass(
+          streamId,
+          enabled,
+          { silent: options?.silent },
+        ),
+    },
     {
       label: 'proposal',
       kind: 'superYolo',
@@ -249,7 +257,7 @@ describe('human prompt progress events', () => {
       expect(show.payload.command).toBe('echo still asks');
 
       explicit.events.length = 0;
-      setBashApprovalSessionBypass(streamId, true, {
+      currentSession().approvals.bash.bypass.setBypass(streamId, true, {
         silent: true,
       });
 

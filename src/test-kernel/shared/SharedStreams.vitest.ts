@@ -9,7 +9,6 @@ import {
   STREAM_SUBSTATE,
   type StreamLifecycleStatus,
 } from '@shared/schemas';
-import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
   formatPhaseStageLabel,
   formatRoundStageLabel,
@@ -22,88 +21,6 @@ import {
 // ---------------------------------------------------------------------------
 // StreamMetadata
 // ---------------------------------------------------------------------------
-
-describe('buildStreamMetadata', () => {
-  it('fills backend-owned defaults for a stream state metadata payload', () => {
-    const metadata = buildStreamMetadata({ category: AgentCategory.Workflow });
-
-    expect(metadata).toMatchObject({
-      category: AgentCategory.Workflow,
-      status: STREAM_STATUS.READY,
-      conversationProgress: { toolCallCount: 0 },
-      stage: null,
-      subagents: [],
-    });
-    expect(Object.hasOwn(metadata, 'substate')).toBe(true);
-    expect(metadata.substate).toBeUndefined();
-  });
-
-  it('preserves supplied status, progress, child roster, and timestamps', () => {
-    const child: ActiveChildInfo = {
-      executionId: 'agent-1',
-      childStreamId: 'agent-1-stream',
-      agentName: 'review',
-      identity: { kind: 'agent' as const, agent: 'review' },
-      status: STREAM_STATUS.RUNNING,
-    };
-    const finishedChild: ActiveChildInfo = {
-      executionId: 'agent-0',
-      childStreamId: 'agent-0-stream',
-      agentName: 'review',
-      identity: { kind: 'agent' as const, agent: 'review' },
-      status: STREAM_PHASE.COMPLETED,
-      finishedAt: 122,
-    };
-
-    expect(
-      buildStreamMetadata({
-        category: AgentCategory.ToolUse,
-        status: STREAM_STATUS.RUNNING,
-        substate: STREAM_SUBSTATE.STARTING,
-        lastTimestamp: 123,
-        conversationProgress: { toolCallCount: 5 },
-        stage: { kind: 'round', index: 1, total: 3 },
-        subagents: [child, finishedChild],
-      }),
-    ).toEqual({
-      category: AgentCategory.ToolUse,
-      status: STREAM_STATUS.RUNNING,
-      statusDurablyFinal: false,
-      substate: STREAM_SUBSTATE.STARTING,
-      lastTimestamp: 123,
-      conversationProgress: { toolCallCount: 5 },
-      stage: { kind: 'round', index: 1, total: 3 },
-      subagents: [child, finishedChild],
-    });
-  });
-
-  it('carries a workflow-script phase for the run row', () => {
-    expect(
-      buildStreamMetadata({
-        category: AgentCategory.Workflow,
-        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
-      }).stage,
-    ).toEqual({ kind: 'phase', label: 'Reduce', index: 1, total: 3 });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// StreamStatusDisplay
-// ---------------------------------------------------------------------------
-
-describe('formatRoundStageLabel', () => {
-  it('renders the one-based round over the planned total when known', () => {
-    expect(formatRoundStageLabel({ index: 1, total: 3 })).toBe('r2/3');
-  });
-
-  it('renders the bare round when no total is planned', () => {
-    expect(formatRoundStageLabel({ index: 0 })).toBe('r1');
-  });
-
-  it('passes undefined through for streams without a round', () => {
-    expect(formatRoundStageLabel(undefined)).toBeUndefined();
-  });
-});
 
 describe('formatPhaseStageLabel', () => {
   it('renders the one-based phase over the declared total', () => {

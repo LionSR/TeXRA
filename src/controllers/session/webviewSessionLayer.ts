@@ -25,7 +25,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { SessionEvents } from '@agent/runtime/SessionEvents';
+import { SessionEvents } from '@shared/session/sessionEvents';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { SessionFrames } from '@shared/session/sessionFrames';
 import {

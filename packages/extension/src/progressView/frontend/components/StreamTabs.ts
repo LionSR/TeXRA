@@ -510,9 +510,7 @@ export class StreamTabs extends LitElement {
         );
         break;
       case 'resume':
-        this.dispatchEvent(
-          SessionUiEvents.runtime({ kind: 'stream.resume', streamId }),
-        );
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', streamId }));
         break;
       case 'toggle-children': {
         const stream = this.streamOf(streamId);

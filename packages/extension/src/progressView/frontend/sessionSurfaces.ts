@@ -1,19 +1,17 @@
-// The renderer's open sessions (PRD one-fold-three-renderers, 7.7, 8, 9,
-// 12.2): one fold per open paper on the one webview runtime, one `Surface`
-// per paper owned and persisted here, and the request round trip. The
-// renderer root (`main.ts`) assigns each paper's three records to the rail
-// and the conversation shell and forwards the shell's events here; nothing
-// else in the renderer reaches the runtime or the host bridge for a session.
-
+/**
+ * The open sessions of one webview (PRD one-fold-three-renderers, 7.7, 8,
+ * 9, 12.2): one fold per session on the one webview runtime, one `Surface`
+ * per session owned and persisted here, and the request round trip whose
+ * responses land back on the surface (a follow-up rejected keeps its
+ * draft, a picker returns its paths, a polish its text). The sidebar and
+ * the editor tab hold one session; the Electron renderer holds one per
+ * open paper. A root assigns each session's three records to its shell and
+ * forwards the shell's events here; nothing else reaches the runtime or
+ * the host bridge for a session.
+ */
 import { signal, type Signal } from '@lit-labs/signals';
-import { z } from 'zod';
 
 import type { StateStore } from '@platform/interfaces';
-import {
-  installWebviewTransport,
-  transcriptAggregates,
-  type WebviewSession,
-} from '@progressView/frontend/sessionTransport';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -31,27 +29,32 @@ import {
   type Surface,
   type SurfaceAction,
 } from '@shared/session/surface';
-import type { RuntimeRequestDetail } from '@shared/session/uiEvents';
 import { PersistedState } from '@shared/state/PersistedState';
 
-/** One open paper as the renderer holds it: its three records as signals. */
-interface PaperSession {
+import {
+  installWebviewTransport,
+  transcriptAggregates,
+  type WebviewSession,
+} from './sessionTransport';
+
+/** One open session as the root holds it: its three records as signals. */
+interface SessionSurface {
   readonly key: string;
   readonly view$: Signal.State<SessionView>;
   readonly surface$: Signal.State<Surface>;
   readonly host$: Signal.State<HostSnapshot | null>;
 }
 
-export interface PaperSessions {
-  /** Open the papers the main process lists and close the rest. */
+export interface SessionSurfaces {
+  /** Open the sessions the host names and close the rest. */
   sync(keys: readonly string[]): void;
-  get(key: string): PaperSession | undefined;
-  list(): readonly PaperSession[];
-  /** Apply a surface action to one paper's surface. */
+  get(key: string): SessionSurface | undefined;
+  list(): readonly SessionSurface[];
+  /** Apply a surface action to one session's surface. */
   act(key: string, action: SurfaceAction): void;
-  runtimeRequest(key: string, request: RuntimeRequestDetail): void;
+  runtimeRequest(key: string, request: RuntimeRequest): void;
   hostRequest(key: string, request: HostRequest): void;
-  /** Fires after any paper's view, surface, or host changed. */
+  /** Fires after any session's view, surface, or host changed. */
   onChange(listener: () => void): () => void;
   dispose(): void;
 }
@@ -73,38 +76,15 @@ function withPickedPaths(
   return { [field]: [...new Set([...launch[field], ...paths])] };
 }
 
-/**
- * The renderer's own interaction state survives a reload in
- * `localStorage`; the preload bridge's `getState` is in-memory only.
- */
-export function rendererStateStore(storage: Storage): StateStore {
-  return {
-    get<T>(key: string, defaultValue?: T): T {
-      const raw = storage.getItem(key);
-      if (raw === null) return defaultValue as T;
-      return JSON.parse(raw) as T;
-    },
-    update(key, value) {
-      if (value === undefined) storage.removeItem(key);
-      else storage.setItem(key, JSON.stringify(value));
-      return Promise.resolve();
-    },
-  };
-}
-
-const SurfacePersistenceSchema = PersistedSurfaceSchema as z.ZodType<
-  z.infer<typeof PersistedSurfaceSchema>
->;
-
-export function createPaperSessions(options: {
+export function createSessionSurfaces(options: {
   readonly storage: StateStore;
-}): PaperSessions {
-  // The same transport, runtime, and fold the extension's webview mounts:
-  // one graph per open paper on the one webview runtime.
+}): SessionSurfaces {
   const transport = installWebviewTransport();
-  interface Held extends PaperSession {
+  interface Held extends SessionSurface {
     readonly session: WebviewSession;
-    readonly persisted: PersistedState<z.infer<typeof PersistedSurfaceSchema>>;
+    readonly persisted: PersistedState<
+      ReturnType<typeof PersistedSurfaceSchema.parse>
+    >;
     subscribedTranscript: string;
     unsubscribe(): void;
   }
@@ -119,31 +99,31 @@ export function createPaperSessions(options: {
   }
 
   /** The transcript tier follows the resolved selection (C7). */
-  function subscribeTranscript(paper: Held): void {
-    const view = paper.view$.get();
+  function subscribeTranscript(entry: Held): void {
+    const view = entry.view$.get();
     const aggregates = transcriptAggregates(
       view,
-      resolveSelected(view, paper.surface$.get()),
+      resolveSelected(view, entry.surface$.get()),
     );
-    const transcript = aggregates.map((entry) => entry.id).join('/');
+    const transcript = aggregates.map((aggregate) => aggregate.id).join('/');
     if (
-      transcript === paper.subscribedTranscript &&
-      paper.session.generation > 0
+      transcript === entry.subscribedTranscript &&
+      entry.session.generation > 0
     ) {
       return;
     }
-    paper.subscribedTranscript = transcript;
-    transport.subscribe(paper.session, aggregates);
+    entry.subscribedTranscript = transcript;
+    transport.subscribe(entry.session, aggregates);
   }
 
-  function setSurface(paper: Held, next: Surface): void {
-    if (next === paper.surface$.get()) return;
-    paper.surface$.set(next);
-    paper.persisted.setState(persistSurface(next));
+  function setSurface(entry: Held, next: Surface): void {
+    if (next === entry.surface$.get()) return;
+    entry.surface$.set(next);
+    entry.persisted.setState(persistSurface(next));
   }
 
-  function act(paper: Held, action: SurfaceAction): void {
-    setSurface(paper, applySurfaceAction(paper.surface$.get(), action));
+  function act(entry: Held, action: SurfaceAction): void {
+    setSurface(entry, applySurfaceAction(entry.surface$.get(), action));
   }
 
   function open(key: string): Held {
@@ -151,10 +131,10 @@ export function createPaperSessions(options: {
     const persisted = new PersistedState(
       options.storage,
       `surface:${key}`,
-      SurfacePersistenceSchema,
+      PersistedSurfaceSchema,
     );
     const surface$ = signal<Surface>(loadSurface(key, persisted.getState()));
-    const paper: Held = {
+    const entry: Held = {
       key,
       view$: session.view$,
       surface$,
@@ -166,32 +146,32 @@ export function createPaperSessions(options: {
     };
     // The per-stream maps drop what the view no longer holds (PRD 9), and
     // the transcript subscription follows the selection.
-    paper.unsubscribe = subscribeToSignalChanges(
+    entry.unsubscribe = subscribeToSignalChanges(
       [session.view$, surface$, session.host$],
       () => {
         setSurface(
-          paper,
-          pruneSurface(paper.surface$.get(), session.view$.get()),
+          entry,
+          pruneSurface(entry.surface$.get(), session.view$.get()),
         );
-        subscribeTranscript(paper);
+        subscribeTranscript(entry);
         notify();
       },
     );
-    held.set(key, paper);
-    subscribeTranscript(paper);
-    return paper;
+    held.set(key, entry);
+    subscribeTranscript(entry);
+    return entry;
   }
 
   /** The response of a `runtime.request`, folded onto the surface. */
   function settleRuntime(
-    paper: Held,
-    request: RuntimeRequestDetail,
+    entry: Held,
+    request: RuntimeRequest,
     result: Response['result'],
   ): void {
     if (result.ok || request.kind !== 'followUp.send') return;
     // A rejected follow-up keeps its draft (8.4): the composer cleared it
     // optimistically on send.
-    act(paper, {
+    act(entry, {
       kind: 'draft',
       streamId: request.streamId,
       patch: { text: request.text },
@@ -201,14 +181,14 @@ export function createPaperSessions(options: {
   /** A polished or transcribed text lands on the selected stream's draft,
    *  or on the launcher's instruction in the New-task state. */
   function setDraftText(
-    paper: Held,
+    entry: Held,
     variant: 'polished' | 'transcribed',
     text: string,
   ): void {
-    const surface = paper.surface$.get();
-    const streamId = resolveSelected(paper.view$.get(), surface);
+    const surface = entry.surface$.get();
+    const streamId = resolveSelected(entry.view$.get(), surface);
     if (streamId !== null) {
-      act(paper, { kind: 'draft', streamId, patch: { [variant]: text } });
+      act(entry, { kind: 'draft', streamId, patch: { [variant]: text } });
       return;
     }
     const { launch } = surface;
@@ -217,7 +197,7 @@ export function createPaperSessions(options: {
     if (variant === 'transcribed' && current) {
       next = `${current.replace(/\s+$/, '')} ${text}`;
     }
-    act(paper, {
+    act(entry, {
       kind: 'launch',
       patch: {
         instruction: { ...launch.instruction, [launch.sessionType]: next },
@@ -227,19 +207,20 @@ export function createPaperSessions(options: {
 
   /** The response of a `host.request`, folded onto the surface. */
   function settleHost(
-    paper: Held,
+    entry: Held,
     request: HostRequest,
     result: Response['result'],
   ): void {
     if (!result.ok) {
       // The composer clears its polishing state when a polished variant
       // lands; a failed polish lands the text itself.
-      if (request.kind === 'polish')
-        setDraftText(paper, 'polished', request.text);
+      if (request.kind === 'polish') {
+        setDraftText(entry, 'polished', request.text);
+      }
       return;
     }
     const { outcome } = result;
-    const { launch } = paper.surface$.get();
+    const { launch } = entry.surface$.get();
     switch (request.kind) {
       case 'pickFiles':
       case 'useCurrentFile':
@@ -250,25 +231,26 @@ export function createPaperSessions(options: {
           request.kind === 'attachDroppedFiles'
             ? request.category
             : request.fileType;
-        act(paper, {
+        act(entry, {
           kind: 'launch',
           patch: withPickedPaths(launch, fileType, outcome.paths),
         });
         return;
       }
       case 'polish':
-        if (outcome.kind === 'text')
-          setDraftText(paper, 'polished', outcome.text);
+        if (outcome.kind === 'text') {
+          setDraftText(entry, 'polished', outcome.text);
+        }
         return;
       case 'record':
         if (outcome.kind === 'text') {
-          setDraftText(paper, 'transcribed', outcome.text);
+          setDraftText(entry, 'transcribed', outcome.text);
         }
         return;
       case 'launch':
         // The host reveals the stream it started through `surface.action`;
         // the instruction draft is spent.
-        act(paper, {
+        act(entry, {
           kind: 'launch',
           patch: {
             instruction: { ...launch.instruction, [launch.sessionType]: '' },
@@ -280,41 +262,41 @@ export function createPaperSessions(options: {
     }
   }
 
-  transport.onSurfaceAction((key, action) => {
-    const paper = held.get(key);
-    if (!paper) return;
-    if (action.kind === 'submitLaunch') {
-      // The run accelerator: send the launcher's instruction as the
-      // composer would.
-      const { launch } = paper.surface$.get();
-      const instruction = launch.instruction[launch.sessionType].trim();
-      if (instruction !== '') {
-        hostRequestFor(paper, { kind: 'launch', instruction });
-      }
-      return;
-    }
-    act(paper, action);
-  });
-
-  function hostRequestFor(paper: Held, hostRequest: HostRequest): void {
+  function hostRequestFor(entry: Held, hostRequest: HostRequest): void {
     void transport
       .request({
         kind: 'host.request',
-        session: paper.key,
+        session: entry.key,
         requestId: requestId(),
         request: hostRequest,
       })
-      .then((result) => settleHost(paper, hostRequest, result));
+      .then((result) => settleHost(entry, hostRequest, result));
   }
+
+  transport.onSurfaceAction((key, action) => {
+    const entry = held.get(key);
+    if (!entry) return;
+    if (action.kind === 'submitLaunch') {
+      // The run accelerator: send the launcher's instruction as the
+      // composer would.
+      const { launch } = entry.surface$.get();
+      const instruction = launch.instruction[launch.sessionType].trim();
+      if (instruction !== '') {
+        hostRequestFor(entry, { kind: 'launch', launch, instruction });
+      }
+      return;
+    }
+    act(entry, action);
+  });
 
   return {
     sync(keys) {
-      // A closed paper's surface stays persisted for its next opening; its
-      // graph is released with the transport, once, on dispose.
-      for (const [key, paper] of held) {
+      // A closed session's surface stays persisted for its next opening;
+      // its graph is released with the transport, once, on dispose.
+      for (const [key, entry] of held) {
         if (keys.includes(key)) continue;
         held.delete(key);
-        paper.unsubscribe();
+        entry.unsubscribe();
       }
       for (const key of keys) {
         if (!held.has(key)) open(key);
@@ -324,24 +306,24 @@ export function createPaperSessions(options: {
     get: (key) => held.get(key),
     list: () => [...held.values()],
     act(key, action) {
-      const paper = held.get(key);
-      if (paper) act(paper, action);
+      const entry = held.get(key);
+      if (entry) act(entry, action);
     },
-    runtimeRequest(key, detail) {
-      const paper = held.get(key);
-      if (!paper) return;
+    runtimeRequest(key, request) {
+      const entry = held.get(key);
+      if (!entry) return;
       void transport
         .request({
           kind: 'runtime.request',
           session: key,
           requestId: requestId(),
-          request: detail as RuntimeRequest,
+          request,
         })
-        .then((result) => settleRuntime(paper, detail, result));
+        .then((result) => settleRuntime(entry, request, result));
     },
     hostRequest(key, hostRequest) {
-      const paper = held.get(key);
-      if (paper) hostRequestFor(paper, hostRequest);
+      const entry = held.get(key);
+      if (entry) hostRequestFor(entry, hostRequest);
     },
     onChange(listener) {
       listeners.add(listener);
@@ -350,7 +332,7 @@ export function createPaperSessions(options: {
       };
     },
     dispose() {
-      for (const paper of held.values()) paper.unsubscribe();
+      for (const entry of held.values()) entry.unsubscribe();
       held.clear();
       transport.dispose();
     },

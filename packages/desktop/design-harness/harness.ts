@@ -18,8 +18,9 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
-import '@progressView/frontend';
-import '@webview/frontend';
+// The components only: the progress entry mounts a live session, which the
+// harness replaces with fixtures.
+import '@progressView/frontend/ProgressApp';
 import { html, render, type TemplateResult } from 'lit';
 
 import { desktopScenes } from './scenes/desktop';

@@ -407,7 +407,7 @@ export class WorkflowRunBoard extends LitElement {
     if (waiting && child) {
       return html`<span class="row-actions"
         ><wa-button
-          size="small"
+          size="s"
           variant="brand"
           @click=${(event: Event) => {
             event.stopPropagation();
@@ -421,7 +421,7 @@ export class WorkflowRunBoard extends LitElement {
     const canAct = !this.stream.readOnly && child !== undefined;
     return html`<span class="row-actions"
       ><wa-button
-        size="small"
+        size="s"
         appearance="outlined"
         ?disabled=${!canAct}
         @click=${(event: Event) => {
@@ -430,7 +430,7 @@ export class WorkflowRunBoard extends LitElement {
         }}
         >${waIcon('rotate-right', { slot: 'start' })} Retry</wa-button
       ><wa-button
-        size="small"
+        size="s"
         appearance="outlined"
         ?disabled=${!canAct}
         @click=${(event: Event) => {
@@ -587,14 +587,14 @@ export class WorkflowRunBoard extends LitElement {
     const disabled = this.stream.readOnly;
     return html`<div class="controls">
       <wa-button
-        size="small"
+        size="s"
         appearance="outlined"
         ?disabled=${failed === 0}
         @click=${this.nextFailed}
         >Next failed</wa-button
       >
       <wa-button
-        size="small"
+        size="s"
         appearance="outlined"
         ?disabled=${disabled || failed === 0}
         @click=${this.retryFailed}
@@ -607,7 +607,7 @@ export class WorkflowRunBoard extends LitElement {
         ></span
       >
       <wa-button
-        size="small"
+        size="s"
         variant="danger"
         appearance="outlined"
         ?disabled=${disabled || this.stream.durableOutcome !== null}

@@ -385,7 +385,7 @@ export class ProgressApp extends LitElement {
       <aside class="dock" aria-label="Sessions">
         <div class="dock-search">
           <wa-input
-            size="small"
+            size="s"
             placeholder="Filter sessions"
             .value=${live(surface.search)}
             @input=${this.handleSearchInput}

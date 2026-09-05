@@ -32,7 +32,6 @@
  */
 import { Effect, Stream, SubscriptionRef } from 'effect';
 
-import type { SessionEventsShape } from '@agent/runtime/SessionEvents';
 import type {
   CommitOrdinal,
   LocalRuntimeState,
@@ -40,6 +39,7 @@ import type {
   TextChunk,
   TranscriptSubscription,
 } from '@shared/schemas';
+import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type {
   EventsFrame,
@@ -50,7 +50,7 @@ import type { SessionView } from '@shared/session/sessionView';
 
 /** Rows per frame before the window cuts it. */
 const FRAME_ROWS = 256;
-/** The framing window: today's `LOG_DELTA` cadence. */
+/** The framing window: the 16 ms cadence of the old delta batches. */
 const FRAME_WINDOW = '16 millis';
 /** Frames buffered ahead of the port before the framer suspends. */
 const FRAME_BUFFER = 64;

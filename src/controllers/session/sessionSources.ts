@@ -23,12 +23,12 @@
  */
 import { Context, Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
-import { ProcessIdentity } from '@agent/runtime/SessionEvents';
 import type {
   LocalRuntimeState,
   TextChunk,
   TranscriptSubscription,
 } from '@shared/schemas';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { SessionFrames } from '@shared/session/sessionFrames';
 
 export class LocalRuntimeSource extends Context.Service<

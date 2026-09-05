@@ -655,19 +655,13 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(), 0);
-  const mainViewProvider = registerCommands(context);
+  registerCommands(context, progressViewProvider);
   // The leftover-stream sweep reads the whole storage root, so it runs after
   // the commands and views are wired rather than in front of them; nothing
   // here awaits it, and deactivation cancels it if it has not started.
   const cancelLeftoverStreamSweep = scheduleLeftoverStreamSweep(runtimeSession);
   context.subscriptions.push({ dispose: cancelLeftoverStreamSweep });
   registerWalkthroughWorkspaceAction(context, true);
-  // Wire the two sidebar surfaces to each other before anything can invoke a
-  // placement command: `texra.showProgressView` is registered above and is
-  // also the status bar item's command, and a progress view without its main
-  // view provider would claim the sidebar placement without swapping content.
-  progressViewProvider.setMainViewProvider(mainViewProvider);
-  mainViewProvider.setProgressViewProvider(progressViewProvider);
   registerFileDecorations(context);
 
   setLeanLanguageServices(vscodeLeanLanguageServices);
@@ -873,7 +867,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       // palette, walkthrough, welcome card), so the onboarding funnel must
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
-      await mainViewProvider.refreshOnboardingFunnel().catch((err) => {
+      await progressViewProvider.refreshOnboardingFunnel().catch((err) => {
         log.warn(`Onboarding funnel refresh failed: ${toErrorMessage(err)}`);
       });
     }),

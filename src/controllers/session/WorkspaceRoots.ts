@@ -12,9 +12,9 @@
  */
 import { Context } from 'effect';
 
-import type { WorkspaceRoots as HostWorkspaceRoots } from '@platform/workspaceRoots';
-
 export class WorkspaceRoots extends Context.Service<
   WorkspaceRoots,
-  Pick<HostWorkspaceRoots, 'storage'>
+  /** The storage root of `@platform/workspaceRoots`, as a plain string: a
+   *  webview's graph must not name the host module, which reaches Node. */
+  { readonly storage: string }
 >()('@texra/session/WorkspaceRoots') {}

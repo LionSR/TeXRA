@@ -13,9 +13,8 @@ import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 import {
-  ProcessIdentity,
   SessionEventLog,
-  SessionEvents,
+  sessionEventsLayer,
 } from '@agent/runtime/SessionEvents';
 import {
   frameSubscription,
@@ -36,6 +35,7 @@ import {
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
@@ -84,7 +84,7 @@ const runtimeGraph = (history: readonly SessionEventDraft[]) => {
   );
   return SessionViewService.layer.pipe(
     Layer.provideMerge(
-      SessionEvents.layer.pipe(
+      sessionEventsLayer.pipe(
         Layer.provideMerge(
           seeded.pipe(
             Layer.provideMerge(

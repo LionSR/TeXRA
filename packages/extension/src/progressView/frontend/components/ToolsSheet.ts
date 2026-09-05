@@ -138,6 +138,9 @@ export class ToolsSheet extends LitElement {
               SessionUiEvents.host({
                 kind: 'latexdiffs',
                 action: detail.action,
+                baseFile: launch.baseFile,
+                editedFile: launch.editedFile ?? null,
+                commit: launch.commit,
               }),
             )}
           @base-file-change=${({ detail }: CustomEvent<BaseFileChangeDetail>) =>

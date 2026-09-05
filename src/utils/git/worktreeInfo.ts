@@ -34,10 +34,8 @@ const cache = new LRUCache<string, WorktreeInfo>({
 const inflight = new Map<string, Promise<WorktreeInfo>>();
 
 /** Read the last-known worktree info synchronously. Returns stale entries
- *  too — callers are expected to trigger an async refresh separately. */
-export function peekWorktreeInfo(
-  workingDirectory: string,
-): WorktreeInfo | undefined {
+ *  too: callers are expected to trigger an async refresh separately. */
+function peekWorktreeInfo(workingDirectory: string): WorktreeInfo | undefined {
   // `allowStale` so a render path can show the last-known value while a
   // refresh is in flight; an empty slot still returns undefined.
   return cache.get(workingDirectory, { allowStale: true });
@@ -54,21 +52,6 @@ export function launchWorktreeInfo(
   const cwd = workingDirectory?.trim();
   if (!cwd) return undefined;
   return peekWorktreeInfo(cwd) ?? { workingDirectory: cwd };
-}
-
-/**
- * Resolve branch + dirty status for `workingDirectory`. Results are cached
- * for a short TTL; concurrent callers share one in-flight probe.
- */
-export async function resolveWorktreeInfo(
-  workingDirectory: string,
-): Promise<WorktreeInfo> {
-  return coalesceAsync<string, WorktreeInfo>(
-    cache,
-    inflight,
-    workingDirectory,
-    () => probeWorktree(workingDirectory),
-  );
 }
 
 async function probeWorktree(workingDirectory: string): Promise<WorktreeInfo> {

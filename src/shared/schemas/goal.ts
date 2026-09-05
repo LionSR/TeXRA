@@ -9,7 +9,7 @@ export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
  * (`active`) or waiting for the user (`paused`). Finishing or abandoning one
  * drops the record entirely rather than parking it in a terminal state.
  */
-export const GoalStatusSchema = z.enum(['active', 'paused']);
+const GoalStatusSchema = z.enum(['active', 'paused']);
 export type GoalStatus = z.infer<typeof GoalStatusSchema>;
 
 /**

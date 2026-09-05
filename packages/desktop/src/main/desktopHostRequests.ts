@@ -9,9 +9,12 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { SubscriptionRef } from 'effect';
-import { polishTextWithAI, type SessionHandle } from '@agent/runtime';
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
+import {
+  AgentConfigSchema,
+  polishTextWithAI,
+  type SessionHandle,
+} from '@agent/runtime';
+import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportStreamTranscript } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
@@ -21,19 +24,28 @@ import {
   type WorkflowFileOperation,
   type WorkflowFileOperationRequest,
 } from '@controllers/progressView/ProgressWorkflowRunActionsController';
+import {
+  createHostRunActions,
+  launchPatchOf,
+} from '@controllers/session/hostRunActions';
+import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
+import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   cloneRoundIndexed,
   type ExecutionId,
   type FileOpResult,
-  type MainViewPersistedState,
   type StreamTabId,
 } from '@shared/schemas';
+import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected, Unavailable } from '@shared/session/requestErrors';
-import type { HostOutcome } from '@shared/session/sessionFrames';
+import type {
+  HostOutcome,
+  SurfaceActionMessage,
+} from '@shared/session/sessionFrames';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
-import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import {
   findTranscriptSpillFile,
   spillArtifactOpenFailedMessage,
@@ -53,14 +65,11 @@ import {
   type DesktopLatexdiffRunContext,
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
-import { listDesktopWorkspaceFiles } from './desktopFileSelection.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
-import type { DesktopSurfaceAction } from './desktopSessionBridge.js';
 import type { DesktopShellActions } from './desktopShellIpc.js';
 import type { DesktopAgentExecution } from './desktopAgentExecution.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
-import type { DesktopHostSnapshotSource } from './desktopHostSnapshot.js';
 
 interface DesktopHostRequestsOptions {
   session: SessionHandle;
@@ -69,13 +78,13 @@ interface DesktopHostRequestsOptions {
   host: DesktopAgentExecutionHost;
   execution: DesktopAgentExecution;
   files: DesktopFileSelection;
-  snapshot: DesktopHostSnapshotSource;
+  snapshot: HostSnapshotSource;
   workspacePath: string | undefined;
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
   postToRenderer(message: unknown): boolean | void;
   /** A host-initiated change to the surface (PRD 8.5). */
-  postSurfaceAction(action: DesktopSurfaceAction): void;
+  postSurfaceAction(action: SurfaceActionMessage['action']): void;
   shell: Pick<
     DesktopShellActions,
     'signIn' | 'openAgentDirectory' | 'showFirstRunWalkthrough'
@@ -112,14 +121,6 @@ function operationLabel(operation: WorkflowFileOperation): {
     : { verb: 'clean', gerund: 'cleaning' };
 }
 
-/** The arm's optional file pair: the Tools sheet names the launcher's base
- *  and edited files when it has them. */
-type LatexdiffsRequest = Extract<HostRequest, { kind: 'latexdiffs' }> & {
-  readonly baseFile?: string;
-  readonly editedFile?: string;
-  readonly streamId?: StreamTabId;
-};
-
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
@@ -138,16 +139,44 @@ export function createDesktopHostRequests(
     return found;
   };
 
-  const getRunMetadata = (streamId: StreamTabId): RunMetadata => {
-    // The sidecar-backed record is the execution authority; the view's
-    // execution id fills in when the sidecar has none.
-    const metadata = snapshots.getRunMetadata(streamId);
-    return {
-      ...metadata,
-      executionId:
-        metadata.executionId ?? view().streams.get(streamId)?.executionId,
-    };
-  };
+  const runActions = createHostRunActions({
+    session,
+    runExecutionRequest: (request, runOptions) =>
+      execution.runExecutionRequest(request, {
+        ...(runOptions?.preferHelperModel ? { preferHelperModel: true } : {}),
+      }),
+    runUntilStarted: async (request, runOptions) => {
+      let started = false;
+      await execution.runExecutionRequest(request, {
+        ...(runOptions.copilotRouteOverride
+          ? { copilotRouteOverride: runOptions.copilotRouteOverride }
+          : {}),
+        onRun: () => {
+          started = true;
+        },
+      });
+      return started;
+    },
+    loadModelOptions: () => computeModelOptionsData(),
+    // Only the "ask the user for a key" step is host-specific: on the
+    // desktop that means opening the Models tab rather than a modal prompt.
+    // The controller re-reads the secret store after this returns.
+    promptForApiKey: async () => {
+      postDesktopSettingsView(
+        (message) => options.postToRenderer(message),
+        'models',
+      );
+      await host.showInfoMessage(
+        'Add a provider API key in Models, then use "Retry" on the request.',
+      );
+    },
+    showInfo: (message) => host.showInfoMessage(message),
+    showWarning: (message) => host.showWarningMessage(message),
+    showError: (message) => host.showErrorMessage(message),
+    logError: (message, error) =>
+      logger.error(message, { data: toLogData(error) }),
+  });
+  const { getRunMetadata } = runActions;
 
   const snapshotPort = {
     getActiveStream: () => '' as const,
@@ -163,8 +192,8 @@ export function createDesktopHostRequests(
     const workspacePath = options.workspacePath;
     if (!workspacePath) return [];
     const files = [
-      ...(await listDesktopWorkspaceFiles('input', workspacePath)),
-      ...(await listDesktopWorkspaceFiles('context', workspacePath)),
+      ...(await listWorkspaceFilesOfType('input', workspacePath)),
+      ...(await listWorkspaceFilesOfType('context', workspacePath)),
     ];
     return files.map((file) => path.resolve(workspacePath, file));
   };
@@ -259,11 +288,17 @@ export function createDesktopHostRequests(
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
     },
+    // Programmatic send with no composer behind it (the workflow-file
+    // "user modified the suggested output" note), so `acknowledge` is a
+    // no-op: there is no draft to hand back.
     sendFollowUp: async (streamId, text) => {
-      const result = await submitFollowUp(streamId, { text }, { session });
-      if (result.status === 'failed') {
-        await host.showInfoMessage(result.reason);
-      }
+      await submitProgressFollowUp({
+        session,
+        streamId,
+        input: { text },
+        acknowledge: () => {},
+        showInfo: (message) => host.showInfoMessage(message),
+      });
     },
   });
 
@@ -389,34 +424,13 @@ export function createDesktopHostRequests(
     });
   }
 
-  /**
-   * A run's setup back into the launcher (PRD 8.3): the persisted-state
-   * snapshot of its config. The wire carries no arm that lands a launch
-   * patch on the surface (8.5 names four actions; `HostOutcome` no
-   * launch state), so the request is refused with that reason rather
-   * than answered done with nothing restored.
-   */
-  function restoreIntoLauncher(streamId: StreamTabId): never {
-    stream(streamId);
-    const { config } = getRunMetadata(streamId);
-    if (!config) {
-      throw new Unavailable({
-        streamId,
-        reason: 'This run has no saved setup to restore.',
-      });
-    }
-    try {
-      buildMainViewState(config);
-    } catch (error) {
-      logger.error('Failed to build main-view state for restore', {
-        data: toLogData(error),
-      });
-      throw new Rejected({ reason: 'Failed to restore state' });
-    }
-    throw new Rejected({
-      reason:
-        'Restoring a setup into the launcher is not carried by the session protocol yet.',
-    });
+  /** A run's saved setup into the launcher (PRD 8.3, 8.5): the launch
+   *  patch rides a surface action, and the launcher comes into view. */
+  function restoreIntoLauncher(
+    config: Parameters<typeof launchPatchOf>[0],
+  ): void {
+    options.postSurfaceAction({ kind: 'launch', patch: launchPatchOf(config) });
+    options.postSurfaceAction({ kind: 'selectNew' });
   }
 
   async function openSpillArtifact(spillPath: string): Promise<void> {
@@ -478,8 +492,11 @@ export function createDesktopHostRequests(
   }
 
   /** The Tools sheet's verbs over the launcher's base and edited files. */
-  async function latexdiffs(request: LatexdiffsRequest): Promise<void> {
-    const { baseFile, editedFile, streamId } = request;
+  async function latexdiffs(
+    request: Extract<HostRequest, { kind: 'latexdiffs' }>,
+  ): Promise<void> {
+    const baseFile = request.baseFile ?? undefined;
+    const editedFile = request.editedFile ?? undefined;
     switch (request.action) {
       case 'latexdiffvc':
       case 'packLatexdiffvc':
@@ -504,7 +521,7 @@ export function createDesktopHostRequests(
         await fileActions.runMergeFile(baseFile, editedFile);
         return;
       case 'latexdiff':
-        await runLatexdiffFile(baseFile, editedFile, streamId);
+        await runLatexdiffFile(baseFile, editedFile);
         return;
     }
   }
@@ -613,7 +630,20 @@ export function createDesktopHostRequests(
         await exportTranscript(request.streamId);
         return done;
       case 'restoreIntoLauncher':
-        return restoreIntoLauncher(request.streamId);
+        restoreIntoLauncher(await runActions.restoreState(request.streamId));
+        return done;
+      case 'resume':
+        await runActions.resume(request.streamId);
+        return done;
+      case 'runNew':
+        await runActions.runNew(request.streamId);
+        return done;
+      case 'runCompileFixer':
+        await runActions.runCompileFixer(request.streamId);
+        return done;
+      case 'useOwnApiKey':
+        await runActions.useOwnApiKey(request);
+        return done;
       case 'latexdiff':
         stream(request.streamId);
         await workflowRunActions.diffStream(request.streamId);
@@ -627,7 +657,7 @@ export function createDesktopHostRequests(
         );
         return done;
       case 'latexdiffs':
-        await latexdiffs(request as LatexdiffsRequest);
+        await latexdiffs(request);
         return done;
       case 'record':
         return record(request.action);
@@ -666,10 +696,30 @@ export function createDesktopHostRequests(
           kind: 'files',
           paths: options.files.relativize(request.paths),
         };
-      case 'launch':
-        throw new Rejected({
-          reason: 'The launch request carries no selections to run.',
-        });
+      case 'launch': {
+        const { launch: form } = request;
+        await execution.handleExecute(
+          buildMainViewExecuteMessage({
+            sessionType: form.sessionType,
+            agent: form.agent,
+            model: form.model,
+            instruction: request.instruction,
+            multiFiles: {
+              inputFiles: form.inputFiles,
+              contextFiles: form.contextFiles,
+              mediaFiles: form.mediaFiles,
+              outputFiles: form.outputFiles,
+            },
+            checkboxValues: form,
+            session: {
+              launchTarget: form.launchTarget,
+              teamId: form.selectedTeamId || undefined,
+              workingDirectory: form.workingDirectory || undefined,
+            },
+          }),
+        );
+        return done;
+      }
       case 'polish': {
         const result = await polishTextWithAI(request.text, undefined, session);
         if (!result.success) {
@@ -690,18 +740,30 @@ export function createDesktopHostRequests(
         throw notOnDesktop('Compiling the input PDF');
       case 'extractFigures':
         throw notOnDesktop('Figure extraction');
-      case 'toolEditPreview':
-        execution.previewToolEdit(request.requestId, request.action);
+      case 'toolEdit':
+        execution.toolEditAction(
+          request.requestId,
+          request.action,
+          request.feedback ?? undefined,
+        );
         return done;
       case 'fileAction':
         stream(request.streamId);
         await fileAction(request);
         return done;
-      case 'restoreProposalConfig':
-        throw new Rejected({
-          reason:
-            'Restoring a proposal into the launcher is not carried by the session protocol yet.',
-        });
+      case 'restoreProposalConfig': {
+        const parsed = AgentConfigSchema.safeParse(request.proposal);
+        if (!parsed.success) {
+          logger.warn('Invalid proposal config', {
+            data: { errors: parsed.error.issues },
+          });
+          throw new Rejected({
+            reason: 'This proposal does not carry a restorable setup.',
+          });
+        }
+        restoreIntoLauncher(parsed.data);
+        return done;
+      }
       case 'apiKeyBanner':
         if (request.action === 'set') {
           postDesktopSettingsView(
@@ -743,6 +805,9 @@ export function createDesktopHostRequests(
         return done;
       case 'onboarding':
         await onboarding(request.action);
+        return done;
+      case 'setActiveView':
+        // The desktop has one window per paper and no view-title menu.
         return done;
     }
   }

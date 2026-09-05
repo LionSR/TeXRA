@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
-import type { MainViewAuthStatus } from '@controllers/mainView/MainViewStartupController';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { confirmModal } from '@frontend/ui/dialogs';
 import {
@@ -158,6 +157,6 @@ export async function signOut(): Promise<void> {
  * consumed, so this deliberately avoids the profile and tier round-trips that
  * the settings-view profile message makes.
  */
-export async function getAuthStatus(): Promise<MainViewAuthStatus> {
+export async function getAuthStatus(): Promise<{ authenticated: boolean }> {
   return { authenticated: await SupabaseClient.isAuthenticated() };
 }

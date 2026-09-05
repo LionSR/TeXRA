@@ -10,47 +10,6 @@ import type { HostRequest } from './hostRequest';
 import type { RuntimeRequest } from './runtimeRequest';
 import type { SurfaceAction } from './surface';
 
-/**
- * Arms named by PRD 8.2 and not yet in `RuntimeRequestSchema`; the
- * components dispatch them under the same event until the schema gains
- * them (the handler side lands with `SessionRequests`).
- */
-export type RuntimeRequestDetail =
-  | RuntimeRequest
-  | { readonly kind: 'stream.resume'; readonly streamId: string }
-  | { readonly kind: 'stream.runNew'; readonly streamId: string }
-  | {
-      readonly kind: 'decision.toolEdit';
-      readonly streamId: string;
-      readonly approvalId: string;
-      readonly decision:
-        | { readonly action: 'approve' }
-        | { readonly action: 'reject'; readonly feedback?: string | null };
-    }
-  | {
-      readonly kind: 'externalInquiry.submit';
-      readonly streamId: string;
-      readonly threadId: string;
-      readonly answer: string;
-      readonly sessionLinks?: readonly string[] | null;
-    }
-  | {
-      readonly kind: 'externalInquiry.drop';
-      readonly streamId: string;
-      readonly threadId: string;
-      readonly feedback?: string | null;
-    }
-  | {
-      readonly kind: 'credentials.useOwnApiKey';
-      readonly streamId: string;
-      readonly approvalId: string;
-      readonly model?: string | null;
-      readonly provider?: string | null;
-      readonly exhaustionReason?: string | null;
-      readonly kimiCodeRoutedOnFailure?: boolean | null;
-    }
-  | { readonly kind: 'misc.runCompileFixer'; readonly streamId: string };
-
 const SESSION_UI_EVENT = {
   runtime: 'runtime-request',
   host: 'host-request',
@@ -62,7 +21,7 @@ function uiEvent<T>(type: string, detail: T): CustomEvent<T> {
 }
 
 export const SessionUiEvents = {
-  runtime: (detail: RuntimeRequestDetail) =>
+  runtime: (detail: RuntimeRequest) =>
     uiEvent(SESSION_UI_EVENT.runtime, detail),
   host: (detail: HostRequest) => uiEvent(SESSION_UI_EVENT.host, detail),
   surface: (detail: SurfaceAction) => uiEvent(SESSION_UI_EVENT.surface, detail),
@@ -70,7 +29,7 @@ export const SessionUiEvents = {
 
 declare global {
   interface HTMLElementEventMap {
-    'runtime-request': CustomEvent<RuntimeRequestDetail>;
+    'runtime-request': CustomEvent<RuntimeRequest>;
     'host-request': CustomEvent<HostRequest>;
     'surface-action': CustomEvent<SurfaceAction>;
   }

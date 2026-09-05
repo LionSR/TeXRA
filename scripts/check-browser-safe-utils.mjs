@@ -36,7 +36,6 @@ const frontendDirs = [
 // both guidance files below.
 const EXPECTED_REACHABLE = [
   '@utils/core',
-  '@utils/core/boundedIdSet',
   '@utils/core/keyedMutex',
   '@utils/errors/errorMessage',
   '@utils/files/pastedImageName',

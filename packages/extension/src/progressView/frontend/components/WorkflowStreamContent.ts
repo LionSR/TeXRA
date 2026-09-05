@@ -92,6 +92,7 @@ export class WorkflowStreamContent extends LitElement {
         <div class="conversation-column conversation-epilogue">
           <file-list
             .streamId=${stream.id}
+            .surface=${surface}
             .filesByRound=${stream.files}
             .failuresByRound=${stream.compileFailures}
           ></file-list>

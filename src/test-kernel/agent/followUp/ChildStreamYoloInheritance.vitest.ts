@@ -9,11 +9,8 @@ import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import {
   configureDelegatedChildApprovals,
-  isApprovalBypassedForStream,
-  isBashApprovalBypassedForStream,
   proposalApprovals,
   releaseStreamResources,
-  setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 
@@ -37,13 +34,17 @@ describe('child subagent stream approval inheritance', () => {
 
   it('mirrors the parent bash bypass onto the child stream', () => {
     const { parent, child } = streamPair('bash');
-    setBashApprovalSessionBypass(parent, true, { silent: true });
+    currentSession().approvals.bash.bypass.setBypass(parent, true, {
+      silent: true,
+    });
     // Sanity: the parent bypass round-trips through the public barrel.
-    expect(isBashApprovalBypassedForStream(parent)).toBe(true);
+    expect(currentSession().approvals.bash.bypass.isBypassed(parent)).toBe(
+      true,
+    );
 
     configureDelegatedChildApprovals(child, parent);
 
-    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
   });
 
   it('mirrors the parent tool-edit bypass onto the child stream', () => {
@@ -52,9 +53,13 @@ describe('child subagent stream approval inheritance', () => {
 
     configureDelegatedChildApprovals(child, parent);
 
-    expect(isApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
+      true,
+    );
     // Edit-YOLO inheritance must not drag bash along — bypass values stay independent.
-    expect(isBashApprovalBypassedForStream(child)).toBe(false);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(
+      false,
+    );
   });
 
   it('leaves the child gated when the parent still prompts', () => {
@@ -62,8 +67,12 @@ describe('child subagent stream approval inheritance', () => {
 
     configureDelegatedChildApprovals(child, parent);
 
-    expect(isBashApprovalBypassedForStream(child)).toBe(false);
-    expect(isApprovalBypassedForStream(child)).toBe(false);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(
+      false,
+    );
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
+      false,
+    );
   });
 
   it('mirrors bash independently of tool-edit YOLO (CLI AUTO-BASH, no AUTO-APPROVE)', () => {
@@ -71,13 +80,17 @@ describe('child subagent stream approval inheritance', () => {
     // still gated must propagate bash to the child without also granting the
     // child tool-edit YOLO.
     const { parent, child } = streamPair('bash-only');
-    setBashApprovalSessionBypass(parent, true, { silent: true });
+    currentSession().approvals.bash.bypass.setBypass(parent, true, {
+      silent: true,
+    });
 
     configureDelegatedChildApprovals(child, parent);
 
-    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
     // The parent's edits are gated, so the child's stay gated too.
-    expect(isApprovalBypassedForStream(child)).toBe(false);
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
+      false,
+    );
   });
 
   it('picks up a parent bash bypass toggled after the child stream already started', () => {
@@ -88,11 +101,15 @@ describe('child subagent stream approval inheritance', () => {
     const { parent, child } = streamPair('late-toggle');
 
     configureDelegatedChildApprovals(child, parent);
-    expect(isBashApprovalBypassedForStream(child)).toBe(false);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(
+      false,
+    );
 
-    setBashApprovalSessionBypass(parent, true, { silent: true });
+    currentSession().approvals.bash.bypass.setBypass(parent, true, {
+      silent: true,
+    });
 
-    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
   });
 
   it('picks up a parent edit-YOLO toggled after the child stream already started', () => {
@@ -104,15 +121,21 @@ describe('child subagent stream approval inheritance', () => {
     const { parent, child } = streamPair('late-edit');
 
     configureDelegatedChildApprovals(child, parent);
-    expect(isApprovalBypassedForStream(child)).toBe(false);
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
+      false,
+    );
 
     setToolEditApprovalSessionBypass(parent, true, { silent: true });
-    expect(isApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
+      true,
+    );
 
     // And back off: the child follows the parent's current state, not a
     // snapshot taken at delegation time.
     setToolEditApprovalSessionBypass(parent, false, { silent: true });
-    expect(isApprovalBypassedForStream(child)).toBe(false);
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
+      false,
+    );
   });
 
   it('announces inherited edit-bypass changes for visible descendants', () => {
@@ -158,7 +181,9 @@ describe('child subagent stream approval inheritance', () => {
           },
         },
       ]);
-      expect(isApprovalBypassedForStream(pinnedChild)).toBe(true);
+      expect(
+        currentSession().approvals.toolEdit.bypass.isBypassed(pinnedChild),
+      ).toBe(true);
     } finally {
       detach();
     }
@@ -176,40 +201,62 @@ describe('child subagent stream approval inheritance', () => {
     currentSession().approvals.registerStreamParent(roundTwo, roundOne);
 
     expect(proposalApprovals().isBypassed(roundTwo)).toBe(true);
-    expect(isApprovalBypassedForStream(roundTwo)).toBe(true);
-    expect(isBashApprovalBypassedForStream(roundTwo)).toBe(true);
+    expect(
+      currentSession().approvals.toolEdit.bypass.isBypassed(roundTwo),
+    ).toBe(true);
+    expect(currentSession().approvals.bash.bypass.isBypassed(roundTwo)).toBe(
+      true,
+    );
 
     // An explicit toggle on the later round still wins over the inherited one.
-    setBashApprovalSessionBypass(roundTwo, false, { silent: true });
-    expect(isBashApprovalBypassedForStream(roundTwo)).toBe(false);
-    expect(isBashApprovalBypassedForStream(roundOne)).toBe(true);
+    currentSession().approvals.bash.bypass.setBypass(roundTwo, false, {
+      silent: true,
+    });
+    expect(currentSession().approvals.bash.bypass.isBypassed(roundTwo)).toBe(
+      false,
+    );
+    expect(currentSession().approvals.bash.bypass.isBypassed(roundOne)).toBe(
+      true,
+    );
     expect(proposalApprovals().isBypassed(roundTwo)).toBe(true);
-    expect(isApprovalBypassedForStream(roundTwo)).toBe(true);
+    expect(
+      currentSession().approvals.toolEdit.bypass.isBypassed(roundTwo),
+    ).toBe(true);
   });
 
   it('an explicit child value overrides inherited bypass without touching the parent', () => {
     const { parent, child } = streamPair('toggle');
-    setBashApprovalSessionBypass(parent, true, { silent: true });
+    currentSession().approvals.bash.bypass.setBypass(parent, true, {
+      silent: true,
+    });
     configureDelegatedChildApprovals(child, parent);
-    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
 
-    setBashApprovalSessionBypass(child, false);
-    expect(isBashApprovalBypassedForStream(child)).toBe(false);
+    currentSession().approvals.bash.bypass.setBypass(child, false);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(
+      false,
+    );
     // The parent's own bypass is untouched by the child's explicit value.
-    expect(isBashApprovalBypassedForStream(parent)).toBe(true);
+    expect(currentSession().approvals.bash.bypass.isBypassed(parent)).toBe(
+      true,
+    );
   });
 
   it('preserves a surviving child state when its parent is torn down', () => {
     const { parent, child } = streamPair('torn-down');
-    setBashApprovalSessionBypass(parent, true, { silent: true });
+    currentSession().approvals.bash.bypass.setBypass(parent, true, {
+      silent: true,
+    });
     configureDelegatedChildApprovals(child, parent);
-    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
 
     releaseStreamResources(parent);
 
-    expect(isBashApprovalBypassedForStream(child)).toBe(true);
-    setBashApprovalSessionBypass(parent, false, { silent: true });
-    expect(isBashApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
+    currentSession().approvals.bash.bypass.setBypass(parent, false, {
+      silent: true,
+    });
+    expect(currentSession().approvals.bash.bypass.isBypassed(child)).toBe(true);
   });
 
   it('pins edit approval for an auto-approved delegation', () => {
@@ -217,8 +264,12 @@ describe('child subagent stream approval inheritance', () => {
 
     configureDelegatedChildApprovals(child, parent, 'auto-approved');
 
-    expect(isApprovalBypassedForStream(parent)).toBe(false);
-    expect(isApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(parent)).toBe(
+      false,
+    );
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
+      true,
+    );
   });
 
   it('super-YOLO on an inheriting child pins its own edit bypass', () => {
@@ -229,13 +280,19 @@ describe('child subagent stream approval inheritance', () => {
     const { parent, child } = streamPair('pin');
     setToolEditApprovalSessionBypass(parent, true, { silent: true });
     configureDelegatedChildApprovals(child, parent);
-    expect(isApprovalBypassedForStream(child)).toBe(true);
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
+      true,
+    );
 
     currentSession().approvals.setDelegatedWorkBypasses(child, true);
     setToolEditApprovalSessionBypass(parent, false, { silent: true });
 
-    expect(isApprovalBypassedForStream(child)).toBe(true);
-    expect(isApprovalBypassedForStream(parent)).toBe(false);
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
+      true,
+    );
+    expect(currentSession().approvals.toolEdit.bypass.isBypassed(parent)).toBe(
+      false,
+    );
   });
 
   it('propagates delegated-task approval through nested orchestrators', () => {

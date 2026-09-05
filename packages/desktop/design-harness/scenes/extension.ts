@@ -15,7 +15,7 @@ import {
   type Surface,
   type SurfaceAction,
 } from '@shared/session/surface';
-import { FILE_SELECT_CONFIGS } from '@webview/frontend/store';
+import { FILE_SELECT_CONFIGS } from '@shared/launcher/fileSelectConfigs';
 import {
   BOARD_NOW,
   CHILD,

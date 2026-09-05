@@ -40,9 +40,8 @@ import {
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import {
   ownerProcessStart,
-  ProcessIdentity,
   SessionEventLog,
-  SessionEvents,
+  sessionEventsLayer,
 } from '@agent/runtime/SessionEvents';
 import {
   initSessionGraphs,
@@ -61,6 +60,7 @@ import {
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
@@ -276,7 +276,7 @@ function historicalStream(
  * The history import (above): the first layer of a root's graph, one
  * ordered append per stream under the log's permit, parents before
  * children, stamped at the stream's own time, and complete before
- * `SessionEvents.layer` reads its anchor, so the listing hydrate sees every
+ * `sessionEventsLayer` reads its anchor, so the listing hydrate sees every
  * historical stream and the tail starts after them.
  */
 const historyImport = (transcripts: StreamLogStore) =>
@@ -365,7 +365,7 @@ const sessionLayer = (key: SessionKey) =>
     Layer.mergeAll(ownerLiveness, transcriptBridge(key.transcripts)).pipe(
       Layer.provideMerge(SessionViewService.layer),
       Layer.provideMerge(
-        SessionEvents.layer.pipe(
+        sessionEventsLayer.pipe(
           Layer.provideMerge(
             historyImport(key.transcripts).pipe(
               Layer.provideMerge(
@@ -446,7 +446,6 @@ function sessionGraphOpener(
       events: reads,
       publish,
       view: view.ref,
-      folded: view.all,
       local: Context.get(context, LocalRuntimeSource).ref,
       chunks: Context.get(context, TextChunkSource).changes,
       subscriptions: Context.get(context, TranscriptSubscriptions),

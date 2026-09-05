@@ -262,7 +262,7 @@ export function projectStreamIdentityFields(
  * driving the store by hand); absent renders as pending, never as a default
  * kind.
  */
-export const StreamTabInfoSchema = StreamIdentityFieldsSchema.extend({
+const StreamTabInfoSchema = StreamIdentityFieldsSchema.extend({
   name: z.string(),
   /**
    * Canonical display name. When `identity` is present, every producer must
