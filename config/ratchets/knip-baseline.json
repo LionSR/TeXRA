@@ -464,12 +464,6 @@
       "name": "TuiRepaintOptions"
     },
     {
-      "file": "packages/cli/src/chat/tui/state/resumeHint.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatResumeUsage"
-    },
-    {
       "file": "packages/cli/src/chat/tui/state/transcript.ts",
       "category": "production-dead",
       "kind": "exports",

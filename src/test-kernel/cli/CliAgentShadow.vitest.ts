@@ -10,7 +10,6 @@ import { refresh } from '@agent/index/agentRegistry';
 import { chatToolUseAgentUsageError } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import {
   assertCliAgentLaunch,
-  chatAgentSupportsDelegation,
   resolveCliAgentInCategory,
 } from '@cli/runtime/agents';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -79,7 +78,6 @@ describe('CLI agent validation with a shadowed name', () => {
     expect(
       resolveCliAgentInCategory('assistant', AgentCategory.Workflow)?.source,
     ).toBe('custom');
-    expect(chatAgentSupportsDelegation('assistant')).toBe(true);
   });
 
   it('still reports the category mismatch for a workflow-only agent', () => {

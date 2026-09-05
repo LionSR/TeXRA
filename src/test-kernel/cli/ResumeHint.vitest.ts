@@ -5,7 +5,6 @@ import {
   collectResumeTargets,
   formatResumeCommand,
   formatResumeHint,
-  formatResumeUsage,
   type ResumeCommandOptions,
   type ResumeTarget,
 } from '@cli/chat/tui/state/resumeHint';
@@ -251,23 +250,49 @@ describe('formatResumeHint', () => {
     );
   });
 
-  it('flows the session cost line through the full hint', () => {
-    expect(
-      formatResumeHint([{ executionId: 'root', label: 'main', isRoot: true }], {
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 0.012,
-        usageRoute: 'relay',
-      } satisfies TokenUsageStats),
-    ).toBe(
-      [
-        'Token usage: total=120 input=100 output=20',
-        'Session cost: $0.012 via included access',
-        'Resume this session with:',
-        '  texra resume root  (main)',
-      ].join('\n'),
-    );
-  });
+  it.each<{
+    usageRoute: TokenUsageStats['usageRoute'];
+    cost: number;
+    expected: string;
+  }>([
+    {
+      usageRoute: 'relay',
+      cost: 0.012,
+      expected: '$0.012 via included access',
+    },
+    {
+      usageRoute: 'chatgpt-subscription',
+      cost: 0,
+      expected: 'Free via ChatGPT',
+    },
+    {
+      usageRoute: 'api-key',
+      cost: 0.5,
+      expected: '$0.500 via your own API keys',
+    },
+  ])(
+    'includes the $usageRoute session cost in the full hint',
+    ({ usageRoute, cost, expected }) => {
+      expect(
+        formatResumeHint(
+          [{ executionId: 'root', label: 'main', isRoot: true }],
+          {
+            inputTokens: 100,
+            outputTokens: 20,
+            cost,
+            usageRoute,
+          } satisfies TokenUsageStats,
+        ),
+      ).toBe(
+        [
+          'Token usage: total=120 input=100 output=20',
+          `Session cost: ${expected}`,
+          'Resume this session with:',
+          '  texra resume root  (main)',
+        ].join('\n'),
+      );
+    },
+  );
 
   it('is undefined when there is nothing to resume', () => {
     expect(formatResumeHint([])).toBeUndefined();
@@ -306,70 +331,5 @@ describe('collectResumeUsage', () => {
       cacheCreationInputTokens: 0,
       reasoningTokens: 5,
     });
-  });
-});
-
-describe('formatResumeUsage', () => {
-  it('omits empty usage', () => {
-    expect(
-      formatResumeUsage({ inputTokens: 0, outputTokens: 0, cost: 0 }),
-    ).toBeUndefined();
-  });
-
-  it('appends the session cost with the relay route label', () => {
-    expect(
-      formatResumeUsage({
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 0.012,
-        usageRoute: 'relay',
-      }),
-    ).toBe(
-      'Token usage: total=120 input=100 output=20\n' +
-        'Session cost: $0.012 via included access',
-    );
-  });
-
-  it('shows a covered subscription as free', () => {
-    expect(
-      formatResumeUsage({
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 0,
-        usageRoute: 'chatgpt-subscription',
-      }),
-    ).toBe(
-      'Token usage: total=120 input=100 output=20\n' +
-        'Session cost: Free via ChatGPT',
-    );
-  });
-
-  it('labels your own API keys', () => {
-    expect(
-      formatResumeUsage({
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 0.5,
-        usageRoute: 'api-key',
-      }),
-    ).toBe(
-      'Token usage: total=120 input=100 output=20\n' +
-        'Session cost: $0.500 via your own API keys',
-    );
-  });
-
-  it('shows the bare cost when no route is stamped', () => {
-    expect(
-      formatResumeUsage({ inputTokens: 100, outputTokens: 20, cost: 0.3 }),
-    ).toBe(
-      'Token usage: total=120 input=100 output=20\n' + 'Session cost: $0.300',
-    );
-  });
-
-  it('omits the cost line when there is no cost and no route', () => {
-    const usage = { inputTokens: 100, outputTokens: 20, cost: 0 };
-    expect(formatResumeUsage(usage)).toBe(
-      'Token usage: total=120 input=100 output=20',
-    );
   });
 });

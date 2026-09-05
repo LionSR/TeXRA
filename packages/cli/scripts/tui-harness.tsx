@@ -256,7 +256,6 @@ const AGENT_PROPOSAL_INSTRUCTION =
     '5. Write a structured report with any gaps or a confirmation of correctness.',
     '6. Include a short independent enumeration so the orchestrator can compare results.',
   ].join('\n');
-const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const CAN_SELECT_MODEL = process.env.HARNESS_CAN_SELECT_MODEL === '1';
 const DISABLED_MODEL_SWITCHES = new Set(
   parseList(process.env.HARNESS_DISABLED_MODEL_SWITCHES),
@@ -1237,12 +1236,10 @@ function harnessInitialEntries(): StreamLogAppendInput[] {
 
 sessionMeta.set({
   agent: 'chat',
-  category: AgentCategory.ToolUse,
   model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
-  canDelegate: CAN_DELEGATE,
   transcriptMode: 'persistent',
   teamName: TEAM_NAME,
   version: '0.0.0-harness',
