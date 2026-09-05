@@ -59,7 +59,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
       <div class="conversation-composer-dock">
         <div class="conversation-column">
           <session-banners
-            .host=${this.host}
+            .banners=${this.host.banners}
             .sessionType=${stream.category}
           ></session-banners>
           <div

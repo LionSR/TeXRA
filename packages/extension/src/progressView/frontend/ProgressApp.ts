@@ -115,10 +115,6 @@ export class ProgressApp extends LitElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'toggleDrawer' }));
   };
 
-  private openDashboard = (): void => {
-    this.dispatchEvent(SessionUiEvents.host({ kind: 'openDashboard' }));
-  };
-
   private stopStream(stream: StreamView): void {
     this.dispatchEvent(
       SessionUiEvents.runtime({ kind: 'stream.stop', streamId: stream.id }),
@@ -277,25 +273,15 @@ export class ProgressApp extends LitElement {
             tooltip: 'New task',
             onClick: this.selectNew,
           })}
-          ${
-            stream
-              ? nothing
-              : renderIconActionButton({
-                  id: 'shell-dashboard',
-                  icon: 'gear',
-                  label: 'Open dashboard',
-                  tooltip: 'Open dashboard',
-                  onClick: this.openDashboard,
-                })
-          }
           ${this.renderOverflow(stream, host)}
         </div>
       </header>
     `;
   }
 
-  /** The overflow in both states, so the Tools sheet is reachable from the
-   *  New-task state; the debug section needs a stream's output. */
+  /** The overflow in both states, so Open dashboard and the Tools sheet
+   *  have one home reachable from the New-task state; the debug section
+   *  needs a stream's output. */
   private renderOverflow(
     stream: StreamView | null,
     host: HostSnapshot,
@@ -545,7 +531,7 @@ export class ProgressApp extends LitElement {
         }
         <session-banners
           class="launch-banners"
-          .host=${host}
+          .banners=${host.banners}
           .sessionType=${launch.sessionType}
         ></session-banners>
         <session-composer

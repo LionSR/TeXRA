@@ -405,34 +405,10 @@ export class SessionComposer extends LitElement {
     return this.draft.images.some((image) => image.path === null);
   }
 
+  /** Send is the root's decision (`SessionSurfaces.submit`): the same one
+   *  the run accelerator reaches, so the two cannot diverge. */
   private send = (): void => {
-    const text = this.text.trim();
-    const stream = this.stream;
-    if (stream) {
-      const draft = this.draft;
-      if (text === '' && draft.images.length === 0) return;
-      if (this.imagesPending) return;
-      const mediaFiles = draft.images.flatMap((image) =>
-        image.path === null ? [] : [image.path],
-      );
-      this.dispatchEvent(
-        SessionUiEvents.runtime({
-          kind: 'followUp.send',
-          streamId: stream.id,
-          text: text === '' ? '(image)' : text,
-          mediaFiles: mediaFiles.length > 0 ? mediaFiles : null,
-        }),
-      );
-      return;
-    }
-    if (text === '' || !this.surface) return;
-    this.dispatchEvent(
-      SessionUiEvents.host({
-        kind: 'launch',
-        launch: this.surface.launch,
-        instruction: text,
-      }),
-    );
+    this.dispatchEvent(SessionUiEvents.submit());
   };
 
   private polish = (): void => {

@@ -44,7 +44,7 @@ export class SessionBanners extends LitElement {
     }
   `;
 
-  @property({ attribute: false }) host: HostSnapshot | null = null;
+  @property({ attribute: false }) banners!: HostSnapshot['banners'];
   /** The launcher's mode, which the agent-config banner's actions name. */
   @property() sessionType: SessionType = 'toolUse';
 
@@ -52,10 +52,8 @@ export class SessionBanners extends LitElement {
     this.dispatchEvent(SessionUiEvents.host(request));
   }
 
-  override render(): TemplateResult | null {
-    const host = this.host;
-    if (!host) return null;
-    const { banners } = host;
+  override render(): TemplateResult {
+    const { banners } = this;
     return html`
       <div
         class="strip"

@@ -116,10 +116,10 @@ export function createExtensionCommandActions(
     createAgentWithAI: (category) =>
       agentHandleCreateAgentWithAI(context, category),
     // Without a configuration the command is the composer's accelerator
-    // (Cmd+Alt+E): the launcher's instruction runs as its Send would.
+    // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>
       input === undefined
-        ? Promise.resolve(progressViewProvider.submitLaunch())
+        ? progressViewProvider.submit()
         : agentRunExecuteCommand(input),
   };
 }

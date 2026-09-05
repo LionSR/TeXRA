@@ -66,7 +66,6 @@ import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKeyOf,
   AgentCategory,
-  STREAM_PHASE,
   type OnboardingFunnelState,
   type StreamTabId,
 } from '@shared/schemas';
@@ -97,7 +96,7 @@ export type ProgressStreamRevealResult = 'revealed' | 'missing';
 interface Port {
   readonly attached: AttachedPort;
   readonly disposables: vscode.Disposable[];
-  /** A frame for this port alone (`surfaceActionOnce`). */
+  /** A frame for this port alone (the chime, the accelerator, the drawer). */
   readonly send: (message: DownMessage) => void;
 }
 
@@ -117,9 +116,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** The sidebar's `WebviewView` while VS Code holds one resolved. */
   private sidebarView: vscode.WebviewView | undefined;
   private sidebarPort: Port | undefined;
-  /** The editor tab while popped out. */
-  private editorPanel: vscode.WebviewPanel | undefined;
-  private editorPort: Port | undefined;
+  /** The popped-out tab and its port, attached and released together. */
+  private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
 
   /** Last computed funnel state, so credential hooks can detect the
    *  in-session State 0 to 1 transition. Session-scoped by design. */
@@ -201,43 +199,31 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       resolveToolEditPermission: () => undefined,
       detachCause: SESSION_DISPOSED_CAUSE,
     });
-    const resolvedApprovals = effectRuntime().runFork(
+    // The session's events from now on: a resolved approval discards its
+    // staged preview, and a workflow run's `result` is the completion
+    // chime, one per process (PRD 12.4), never a renderer transition hook
+    // that every subscriber would replay. A failed run does not chime.
+    const sessionEvents = effectRuntime().runFork(
       Stream.runForEach(session.events.all(session.now()), (event) =>
         Effect.sync(() => {
-          if (event.type !== 'approval.resolved') return;
-          this.toolEditApprovals.handleAction({
-            requestId: event.requestId,
-            action: 'reject',
-          });
-        }),
-      ),
-    );
-    // The completion chime: one per process, decided here from the view's
-    // status transitions and sent to one port (PRD 12.4), never a renderer
-    // transition hook that every subscriber would replay.
-    let statuses = new Map<StreamTabId, string>();
-    const chimes = effectRuntime().runFork(
-      Stream.runForEach(SubscriptionRef.changes(session.view), (view) =>
-        Effect.sync(() => {
-          const next = new Map<StreamTabId, string>();
-          let chime = false;
-          for (const stream of view.streams.values()) {
-            next.set(stream.id, stream.status);
-            chime ||=
-              stream.category === 'workflow' &&
-              statuses.get(stream.id) === STREAM_PHASE.RUNNING &&
-              (stream.status === STREAM_PHASE.COMPLETED ||
-                stream.status === STREAM_PHASE.CANCELLED);
+          if (event.type === 'approval.resolved') {
+            this.toolEditApprovals.handleAction({
+              requestId: event.requestId,
+              action: 'reject',
+            });
+          } else if (
+            event.type === 'result' &&
+            event.category === 'workflow' &&
+            event.outcome !== 'failed'
+          ) {
+            this.chime();
           }
-          statuses = next;
-          if (chime) this.surfaceActionOnce({ kind: 'chime' });
         }),
       ),
     );
     this.disposables.push({
       dispose: () => {
-        effectRuntime().runFork(Fiber.interrupt(resolvedApprovals));
-        effectRuntime().runFork(Fiber.interrupt(chimes));
+        effectRuntime().runFork(Fiber.interrupt(sessionEvents));
       },
     });
 
@@ -525,30 +511,44 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.bridge.surfaceAction(action);
   }
 
-  /** An action for one surface, not every port: the sidebar's when it is
-   *  attached, else the editor tab's. A chime plays once per process, a
-   *  keybinding launches once, and the drawer toggles where the keybinding
-   *  is bound (the sidebar). */
-  private surfaceActionOnce(action: SurfaceActionMessage['action']): void {
-    const port = this.sidebarPort ?? this.editorPort;
-    port?.send({ kind: 'surface.action', session: this.bridge.key, action });
+  private frameOf(
+    action: SurfaceActionMessage['action'],
+  ): SurfaceActionMessage {
+    return { kind: 'surface.action', session: this.bridge.key, action };
   }
 
-  /** `texra.execute` with no configuration: send the launcher's instruction
-   *  as the composer's Run would (Cmd+Alt+E). */
-  public submitLaunch(): void {
-    this.surfaceActionOnce({ kind: 'submitLaunch' });
+  /** The completion chime plays once per process: in the sidebar when it
+   *  has ever been resolved (it retains its context while hidden, so a
+   *  collapsed sidebar still receives and plays it), else in the editor
+   *  tab. No port means no renderer to play it, and nothing to play. */
+  private chime(): void {
+    const port = this.sidebarPort ?? this.editor?.port;
+    port?.send(this.frameOf({ kind: 'chime' }));
+  }
+
+  /** `texra.execute` with no configuration (Cmd+Alt+E): the composer's
+   *  Send in the view the user is in. The editor tab when it is the active
+   *  panel; otherwise the sidebar, shown first so the action has a surface
+   *  to land on. */
+  public async submit(): Promise<void> {
+    const editor = this.editor;
+    if (editor?.panel.active === true) {
+      editor.port.send(this.frameOf({ kind: 'submit' }));
+      return;
+    }
+    await this.showInSidebar();
+    this.sidebarPort?.send(this.frameOf({ kind: 'submit' }));
   }
 
   /** `texra.toggleView`: the Sessions drawer of the sidebar. */
   public async toggleDrawer(): Promise<void> {
     await this.showInSidebar();
-    this.surfaceActionOnce({ kind: 'toggleDrawer' });
+    this.sidebarPort?.send(this.frameOf({ kind: 'toggleDrawer' }));
   }
 
   public isViewVisible(): boolean {
     return (
-      this.sidebarView?.visible === true || this.editorPanel?.visible === true
+      this.sidebarView?.visible === true || this.editor?.panel.visible === true
     );
   }
 
@@ -570,8 +570,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public async showProgressView(options?: {
     inPlace?: boolean;
   }): Promise<void> {
-    if (this.editorPanel) {
-      this.editorPanel.reveal(vscode.ViewColumn.One);
+    if (this.editor) {
+      this.editor.panel.reveal(vscode.ViewColumn.One);
       return;
     }
     if (!options?.inPlace) await this.showInSidebar();
@@ -606,8 +606,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public async popOutToEditor(): Promise<void> {
-    if (this.editorPanel) {
-      this.editorPanel.reveal(vscode.ViewColumn.One);
+    if (this.editor) {
+      this.editor.panel.reveal(vscode.ViewColumn.One);
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -625,24 +625,21 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       },
     );
     panel.iconPath = new vscode.ThemeIcon('pulse');
-    this.editorPanel = panel;
     const port = this.attach('editor', panel);
-    this.editorPort = port;
+    this.editor = { panel, port };
     port.disposables.push(
       panel.onDidDispose(() => {
-        this.closePort(this.editorPort);
-        this.editorPort = undefined;
-        this.editorPanel = undefined;
+        this.closePort(port);
+        this.editor = undefined;
       }),
     );
   }
 
   public dispose(): void {
     this.closeSidebarPort();
-    this.closePort(this.editorPort);
-    this.editorPort = undefined;
-    this.editorPanel?.dispose();
-    this.editorPanel = undefined;
+    this.closePort(this.editor?.port);
+    this.editor?.panel.dispose();
+    this.editor = undefined;
     this.bridge.dispose();
     for (const disposable of this.disposables.splice(0)) disposable.dispose();
     if (ProgressViewProvider._instance === this) {

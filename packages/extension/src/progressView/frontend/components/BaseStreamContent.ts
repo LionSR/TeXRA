@@ -19,7 +19,9 @@ export abstract class BaseStreamContent extends LitElement {
   @property({ attribute: false }) stream: StreamView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
-  @property({ attribute: false }) host: HostSnapshot | null = null;
+  /** The app renders a conversation only once the first snapshot is in
+   *  (`ProgressApp.render`), so there is no null arm here. */
+  @property({ attribute: false }) host!: HostSnapshot;
   /** The host's clock, for elapsed readings (G4). */
   @property({ type: Number }) nowMs: number | null = null;
 

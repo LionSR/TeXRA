@@ -40,6 +40,9 @@ export function mountProgressWebview(app: ProgressApp): void {
   app.addEventListener('surface-action', (event) => {
     sessions.act(sessionKey, event.detail);
   });
+  app.addEventListener('composer-submit', () => {
+    sessions.submit(sessionKey);
+  });
 
   let reportedView: 'main' | 'progress' | null = null;
   const assign = (): void => {

@@ -80,12 +80,11 @@ export function createDesktopShellActions(
     void openCustomAgentDirectory().catch(reportAsyncError);
   }
 
+  // New Session is the header's "+" (PRD 12.4): the New-task state with
+  // the launcher's selections as they are.
   function resetMainView() {
     renderer.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
-    });
-    renderer.postToRenderer({
-      command: DESKTOP_SHELL_COMMANDS.RESET_LAUNCHER,
     });
   }
 
