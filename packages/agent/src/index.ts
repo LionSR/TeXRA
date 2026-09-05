@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect, Stream, SubscriptionRef } from 'effect';
+
 // Local imports - agent runtime
 //
 // Values, and types used only inside function bodies, come through the curated
@@ -38,6 +41,7 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
 import {
   claudeAgentSessionsFor,
   codexThreadsFor,
@@ -59,6 +63,11 @@ export type {
   ToolUseFlowResult,
   WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
+export type {
+  SessionView,
+  StreamView,
+  TranscriptView,
+} from '@shared/session/sessionView';
 
 /** Select pending host interactions to cancel. */
 export interface HostInteractionCancelSelector {
@@ -105,6 +114,14 @@ export interface RunAgentInput {
  */
 export interface AgentRun extends AsyncIterable<AgentEvent> {
   readonly result: Promise<AgentFlowResult>;
+  /**
+   * The session view the run folds into (PRD one-fold-three-renderers,
+   * 10.3): the same state every TeXRA host renders, so an embedder reads
+   * stream status, transcript rows, and approvals from here instead of
+   * re-folding the trace. Each iteration yields the current view first, then
+   * every later level, and ends when the run settles or the consumer breaks.
+   */
+  readonly view: AsyncIterable<SessionView>;
   interrupt(): void;
 }
 
@@ -134,14 +151,36 @@ class AgentRunStream implements AgentRun {
   private iteratorStarted = false;
   private failure: { readonly error: unknown } | undefined;
   private readonly launchAbortController = new AbortController();
+  private attachSession: (session: RuntimeSessionHandle) => void = () => {};
   readonly launchSignal = this.launchAbortController.signal;
   readonly result: Promise<AgentFlowResult>;
+  readonly view: AsyncIterable<SessionView>;
 
   constructor(start: (stream: AgentRunStream) => Promise<AgentFlowResult>) {
+    const session = new Promise<RuntimeSessionHandle>((resolve) => {
+      this.attachSession = resolve;
+    });
     this.result = start(this);
     void this.result.then(
       () => this.end(),
       (error: unknown) => this.end({ error }),
+    );
+    // The session's view level, read through Effect's own async-iterable
+    // destructor: `SubscriptionRef.changes` replays the current view on
+    // subscribe, so no level is missed, and `interruptWhen` ends the
+    // iteration once the run has settled (also when it settled before the
+    // session existed). Breaking the loop closes the stream's scope.
+    const settled = this.result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.view = Stream.toAsyncIterable(
+      Stream.unwrap(
+        Effect.map(
+          Effect.promise(() => session),
+          (live) => SubscriptionRef.changes(live.view),
+        ),
+      ).pipe(Stream.interruptWhen(Effect.promise(() => settled))),
     );
   }
 
@@ -161,6 +200,11 @@ class AgentRunStream implements AgentRun {
   /** The live handle once the run is tracked: what `interrupt()` targets. */
   attachHandle(handle: RuntimeAgentRunHandle): void {
     this.liveHandle = handle;
+  }
+
+  /** The run's session once it exists: what `view` reads. */
+  attachView(session: RuntimeSessionHandle): void {
+    this.attachSession(session);
   }
 
   interrupt(): void {
@@ -275,6 +319,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
     const session = new RuntimeSessionHandle({
       transcripts: StreamLogStore.ephemeral('npm package consumer'),
     });
+    stream.attachView(session);
     const interactions: RuntimeHostInteractions = {
       cancel: (selector) => input.interactions.cancel(selector),
       requestRetry: async () => ({

@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   detachEvents: vi.fn(),
   detachInteractions: vi.fn(),
   disposeSession: vi.fn(),
+  executionId: 'execution-1',
   interruptClaudeAgentSessions: vi.fn(),
   interruptCodexThreads: vi.fn(),
   killBackgroundProcesses: vi.fn(),
@@ -72,18 +73,30 @@ vi.mock('@agent/index', () => ({
 
 // The package reaches the runtime through the curated `@agent/runtime` barrel,
 // so the suite mocks that one door instead of each runtime module by path.
-vi.mock('@agent/runtime', () => ({
-  SessionHandle: class {
-    readonly executions = {
-      killBackgroundProcesses: mocks.killBackgroundProcesses,
-    };
+vi.mock('@agent/runtime', async () => {
+  const { Effect, SubscriptionRef } = await import('effect');
+  const { emptySessionView } = await import('@shared/session/sessionView');
+  return {
+    SessionHandle: class {
+      readonly executions = {
+        killBackgroundProcesses: mocks.killBackgroundProcesses,
+      };
 
-    readonly interactions = { use: mocks.useInteractions };
-    dispose = mocks.disposeSession;
-  },
-  runAgent: mocks.runValidatedAgent,
-  processOwnerId: (processStart: string) => `${process.pid}:${processStart}`,
-}));
+      readonly interactions = { use: mocks.useInteractions };
+      /** The session's view level, holding the run's one stream. */
+      readonly view = Effect.runSync(
+        SubscriptionRef.make({
+          ...emptySessionView('package'),
+          streams: new Map([['stream-1', { executionId: mocks.executionId }]]),
+        }),
+      );
+
+      dispose = mocks.disposeSession;
+    },
+    runAgent: mocks.runValidatedAgent,
+    processOwnerId: (processStart: string) => `${process.pid}:${processStart}`,
+  };
+});
 
 vi.mock('@tools/agentCliSessionStores', () => ({
   claudeAgentSessionsFor: (session: unknown) => ({
@@ -117,6 +130,7 @@ import {
   type AgentPlatform,
   type HostInteractionCancelSelector,
   type PendingInteractionKind,
+  type SessionView,
 } from '../../../packages/agent/src/index';
 import { nodePlatform } from '../../../packages/agent/src/node';
 
@@ -128,7 +142,7 @@ const PLATFORM = {
 /** The run's trace as `onStreamResolved` hands it over: the event source. */
 const TRACE = { subscribe: mocks.subscribe };
 /** The run's handle as `onRun` hands it over: the interrupt target. */
-const HANDLE = { interrupt: vi.fn() };
+const HANDLE = { executionId: mocks.executionId, interrupt: vi.fn() };
 const RESULT = { outcome: 'COMPLETED' } as never;
 const EVENT = { type: 'run.start' } as never;
 const INPUT = {
@@ -334,6 +348,33 @@ describe('agent package run lifecycle', () => {
     expect(mocks.detachEvents).toHaveBeenCalledOnce();
 
     finishRun?.(RESULT);
+    await expect(run.result).resolves.toBe(RESULT);
+  });
+
+  it('reads the session view: `view` replays the level holding the run, then ends when the run settles', async () => {
+    let finishRun: ((result: typeof RESULT) => void) | undefined;
+    mocks.runValidatedAgent.mockImplementationOnce(
+      async (_input: unknown, options: RunAgentOptions) => {
+        options.onStreamResolved?.('stream-1', TRACE);
+        await options.onRun?.(HANDLE);
+        return await new Promise<typeof RESULT>((resolve) => {
+          finishRun = resolve;
+        });
+      },
+    );
+
+    const run = runAgent(INPUT);
+    const views = run.view[Symbol.asyncIterator]();
+    const view = (await views.next()).value as SessionView;
+    expect(
+      [...view.streams.values()].map((stream) => stream.executionId),
+    ).toContain(HANDLE.executionId);
+
+    finishRun?.(RESULT);
+    await expect(views.next()).resolves.toEqual({
+      done: true,
+      value: undefined,
+    });
     await expect(run.result).resolves.toBe(RESULT);
   });
 });

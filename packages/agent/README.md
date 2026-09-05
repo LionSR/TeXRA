@@ -47,6 +47,7 @@ console.log(result.outcome);
 ```ts
 interface AgentRun extends AsyncIterable<AgentEvent> {
   readonly result: Promise<AgentFlowResult>;
+  readonly view: AsyncIterable<SessionView>;
   interrupt(): void;
 }
 ```
@@ -54,6 +55,13 @@ interface AgentRun extends AsyncIterable<AgentEvent> {
 Event delivery starts at the iterator's first `next()`. Awaiting only `result`
 does not retain trace events, and ending iteration detaches the event source
 while the run itself continues.
+
+`view` is the folded session state every TeXRA host renders, so stream
+status, transcript rows, and pending approvals are read from it rather than
+re-folded from the trace. Each `for await` over it yields the current view
+first, then every later change, and ends when the run settles or the loop
+breaks. The `SessionView`, `StreamView`, and `TranscriptView` types are
+exported beside it.
 
 ## Run results
 
