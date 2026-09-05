@@ -1,5 +1,6 @@
 // Node imports
 import { createHash } from 'node:crypto';
+import * as path from 'node:path';
 
 // Local imports
 import { getExecutionStore, resolveChildRunOutput } from '@agent/storage';
@@ -23,6 +24,7 @@ import type {
 } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { deriveExecutionId } from '@utils/core/idHash';
 import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/runStorageFs';
@@ -46,10 +48,20 @@ async function resolveInvocationFileList(
   label: string,
   files: readonly string[],
 ): Promise<string[]> {
-  const references = files.map((file) => ({
-    file,
-    runStorage: runStorageLocationFromAnyAbsolutePath(file) !== undefined,
-  }));
+  const references = files.map((file) => {
+    const runStorage =
+      runStorageLocationFromAnyAbsolutePath(file) !== undefined;
+    if (!runStorage && path.isAbsolute(file)) {
+      const relative = path.relative(StorageFS.fullPath(''), file);
+      if (!path.isAbsolute(relative) && relative.split(path.sep)[0] !== '..') {
+        throw new WorkflowRunAbortError(
+          `Workflow ${label} could not be resolved: ${file}; ` +
+            'workspace-storage files must be declared outputs of a completed child run.',
+        );
+      }
+    }
+    return { file, runStorage };
+  });
   const workspaceFiles = references
     .filter((reference) => !reference.runStorage)
     .map((reference) => reference.file);
