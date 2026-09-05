@@ -53,6 +53,7 @@ import {
   type SessionCursor,
 } from '@shared/session/sessionEvents';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
+import { historicalListing, isHistoricalStream } from './historicalListing';
 
 const logger = createLog('sessionEvents');
 
@@ -126,12 +127,15 @@ function listingRows(rows: readonly LogRow[]): SessionEvent[] {
  * wakes nobody cannot exist. The writer of every row is this process (C5),
  * stamped here from `ProcessIdentity`; no caller passes it.
  *
- * The memory layer is the pre-cutover store, and its transcript tier is the
- * transcript store's: `aggregate(id, fromSeq)` reads that store's rows for
- * the stream (the store's row `seqNo` is the aggregate seq), and the tail
- * holds a transcript row's place only, materialized from the store when
- * read. Nothing here reaches disk, and the cutover replaces this layer with
- * the SQLite write path under the same shape.
+ * The memory layer is the pre-cutover store, and two of its tiers are the
+ * transcript store's: the listing tier derives every historical stream from
+ * the store's resident summary tier when a reader subscribes
+ * (`historicalListing.ts`; nothing is walked at graph open, nothing held),
+ * and the transcript tier reads that store's rows for a subscribed stream
+ * (`aggregate(id, fromSeq)`, the store's row `seqNo` is the aggregate seq),
+ * while the tail holds a transcript row's place only, materialized from the
+ * store when read. Nothing here reaches disk, and the cutover replaces this
+ * layer with the SQLite write path under the same shape.
  */
 export class SessionEventLog extends Context.Service<
   SessionEventLog,
@@ -139,15 +143,9 @@ export class SessionEventLog extends Context.Service<
     readonly level: SubscriptionRef.SubscriptionRef<CommitOrdinal>;
     /** Assign each draft its aggregate seq and commit ordinal, append it
      *  under the log's permit, and move the level; returns the last ordinal.
-     *  `at` is the publish clock (C1, informational) unless a draft names
-     *  the moment its row describes, as the pre-cutover history import
-     *  does per stream. One call is one permit, one array walk with no
-     *  fiber step per row, and one level move, whatever its length: the
-     *  synchronous graph open (`sessionGraphOpener`) appends the whole
-     *  history in one call and must stay under the scheduler's yield
-     *  budget. */
+     *  `at` is the publish clock (C1, informational). */
     readonly appendAll: (
-      drafts: ReadonlyArray<SessionEventDraft & { readonly at?: number }>,
+      drafts: readonly SessionEventDraft[],
       at?: number,
     ) => Effect.Effect<CommitOrdinal>;
     readonly readAll: (
@@ -158,9 +156,9 @@ export class SessionEventLog extends Context.Service<
       aggregateId: AggregateId,
       fromSeq: number,
     ) => Stream.Stream<SessionEvent>;
-    /** Whether the aggregate's sequence row exists and is not closed (C2,
-     *  C9): a stream exists from the publish of its `run.start` until its
-     *  tombstone. Synchronous at publish: `appendAll` crosses no
+    /** Whether the aggregate exists and is not closed (C2, C9): a stream
+     *  exists from its listing (the summary tier's, or the publish of its
+     *  `run.start`) until its tombstone. Synchronous at publish: `appendAll` crosses no
      *  asynchronous boundary, so the fork `SessionHandle.publish` makes has
      *  minted its rows before that call returns, ahead of every fold. */
     readonly exists: (aggregateId: AggregateId) => Effect.Effect<boolean>;
@@ -177,6 +175,12 @@ export class SessionEventLog extends Context.Service<
         const level = yield* SubscriptionRef.make<CommitOrdinal>(0);
         const gate = yield* Semaphore.make(1);
         const rows: LogRow[] = [];
+        // The listing tier's membership (`historicalListing.ts`): the
+        // streams that exist as this log is built. One key-set copy, no
+        // facts read; the facts are read when a reader subscribes.
+        const historical: ReadonlySet<StreamTabId> = new Set(
+          transcripts.keys(),
+        );
         // The sequence table (C1, C2): one seq counter per aggregate for
         // every row it holds, and the aggregates a tombstone closed. The
         // transcript rows already in the store when an aggregate's first
@@ -230,7 +234,6 @@ export class SessionEventLog extends Context.Service<
                   for (const draft of drafts) {
                     const commit = rows.length + 1;
                     const seq = nextSeq(draft.aggregateId);
-                    const rowAt = draft.at ?? at;
                     if (draft.type === 'transcript.entry') {
                       rows.push({
                         type: 'transcript.ref',
@@ -238,7 +241,7 @@ export class SessionEventLog extends Context.Service<
                         entryId: draft.entry.id,
                         seq,
                         commit,
-                        at: rowAt,
+                        at,
                       });
                       continue;
                     }
@@ -250,7 +253,7 @@ export class SessionEventLog extends Context.Service<
                       seq,
                       commit,
                       ownerId: identity.ownerId,
-                      at: rowAt,
+                      at,
                     } as SessionEvent);
                   }
                   const last = rows.length;
@@ -272,9 +275,23 @@ export class SessionEventLog extends Context.Service<
                 ),
               ),
             ),
+          // The listing tier is the summary tier's plus the log's own
+          // listing rows: every historical stream derived from the store
+          // at read time at commit 0, then the facts this process appended,
+          // which outrank them per key under the fold's commit order. No
+          // history is walked at graph open and no history row is held.
           readListing: () =>
             Stream.unwrap(
-              Effect.sync(() => Stream.fromIterable(listingRows(rows))),
+              Effect.sync(() =>
+                Stream.fromIterable([
+                  ...historicalListing(
+                    transcripts,
+                    historical,
+                    identity.ownerId,
+                  ),
+                  ...listingRows(rows),
+                ]),
+              ),
             ),
           // The transcript tier is the store's: its rows for the stream
           // above `fromSeq`, read once without adding residency, stamped
@@ -306,9 +323,19 @@ export class SessionEventLog extends Context.Service<
                 );
               }),
             ),
+          // A stream exists from its listing (a historical stream the
+          // summary tier lists, or a `run.start` this process appended)
+          // until its tombstone.
           exists: (aggregateId) =>
             Effect.sync(
-              () => seqs.has(aggregateId) && !closed.has(aggregateId),
+              () =>
+                !closed.has(aggregateId) &&
+                (seqs.has(aggregateId) ||
+                  isHistoricalStream(
+                    transcripts,
+                    historical,
+                    aggregateId as StreamTabId,
+                  )),
             ),
         };
       }),
