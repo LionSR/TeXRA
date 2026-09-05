@@ -95,6 +95,17 @@ export function streamViewOf(
   return streamId === undefined ? undefined : view.streams.get(streamId);
 }
 
+/** The execution to stop when a child is still running or waiting. */
+export function killableExecutionId(
+  stream: StreamView | undefined,
+): string | undefined {
+  return stream &&
+    stream.parentId !== null &&
+    (stream.group === 'running' || stream.group === 'waiting')
+    ? stream.executionId
+    : undefined;
+}
+
 /** Whether a focused child stream takes the composer's follow-ups (PRD 10.1). */
 export function focusedChildAcceptsFollowUps(stream: StreamView): boolean {
   return (

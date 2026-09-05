@@ -90,6 +90,7 @@ import {
 import {
   currentView,
   focusTreeOf,
+  killableExecutionId,
   sessionView,
   streamPhaseOf,
   streamLabelOf,
@@ -130,26 +131,6 @@ function executionLabelsOf(view: SessionView): ExecutionLabels {
     }
   }
   return labels;
-}
-
-/** Execution ids of the in-flight child streams among `ids`: the fold's
- *  `running` and `waiting` groups, the two a kill can still reach. */
-function activeChildExecutionIds(
-  view: SessionView,
-  ids: readonly StreamTabId[],
-): Map<StreamTabId, string> {
-  const out = new Map<StreamTabId, string>();
-  for (const id of ids) {
-    const stream = streamViewOf(view, id);
-    if (
-      stream &&
-      stream.parentId !== null &&
-      (stream.group === 'running' || stream.group === 'waiting')
-    ) {
-      out.set(id, stream.executionId);
-    }
-  }
-  return out;
 }
 
 export interface AppProps {
@@ -288,10 +269,6 @@ export function App(props: AppProps): React.JSX.Element {
     view,
     streamViewOf(view, childListTarget),
   );
-  const activeSubagentExecutionIds = useMemo(
-    () => activeChildExecutionIds(view, sessions),
-    [sessions, view],
-  );
   const workflowPopupStreamId =
     foregroundReader?.kind === 'workflow'
       ? foregroundReader.streamId
@@ -299,12 +276,6 @@ export function App(props: AppProps): React.JSX.Element {
   const workflowPopupRoot = streamViewOf(view, workflowPopupStreamId);
   const workflowPopupModel = workflowPopupRoot?.transcript.run ?? undefined;
   const workflowPopup = useSignal(workflowPopupViewSignal);
-  // The popup controls its own grandchildren: the workflow's in-flight
-  // children, read from the fold.
-  const workflowPopupExecutionIds = useMemo(
-    () => activeChildExecutionIds(view, workflowPopupRoot?.childIds ?? []),
-    [view, workflowPopupRoot],
-  );
   const pendingApprovalsForRows = useMemo(
     () => groupPendingApprovalsByRow(view.approvals),
     [view.approvals],
@@ -312,8 +283,7 @@ export function App(props: AppProps): React.JSX.Element {
   const childListValues = sessions;
   const childListAvailable = childListValues.length > 0;
   const selectedChildKillable =
-    selectedChildValue !== undefined &&
-    activeSubagentExecutionIds.has(selectedChildValue);
+    killableExecutionId(streamViewOf(view, selectedChildValue)) !== undefined;
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',
@@ -422,7 +392,6 @@ export function App(props: AppProps): React.JSX.Element {
         }
         return (
           <WorkflowPopup
-            activeSubagentExecutionIds={workflowPopupExecutionIds}
             availableRows={availableRows}
             model={workflowPopupModel}
             onClose={closeForegroundReader}
@@ -745,7 +714,6 @@ export function App(props: AppProps): React.JSX.Element {
           sessions,
           selectedChildValue,
           subagentExecutionLabels,
-          activeSubagentExecutionIds,
           listRootStreamId: childListTarget,
           pendingApprovals: pendingApprovalsForRows,
         }}

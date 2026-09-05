@@ -14,6 +14,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import { childElapsed } from '../state/childControls';
 import {
   cumulativeUsageOf,
+  killableExecutionId,
   sessionView,
   streamLabelOf,
   streamPhaseOf,
@@ -179,7 +180,6 @@ export interface SubagentListProps {
   /** The focus tree: the list root first, then its children. */
   readonly sessions?: readonly StreamTabId[];
   readonly listRootStreamId?: StreamTabId;
-  readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
 }
 
 export function SubagentList(
@@ -219,7 +219,7 @@ export function SubagentList(
       const streamId = props.selectedValue;
       if (!streamId) return;
       if (input.toLowerCase() !== 'k') return;
-      const executionId = props.activeSubagentExecutionIds?.get(streamId);
+      const executionId = killableExecutionId(streamsByValue.get(streamId));
       if (executionId) props.onKillExecution?.(executionId);
     },
     { isActive: props.keyboardActive ?? false },

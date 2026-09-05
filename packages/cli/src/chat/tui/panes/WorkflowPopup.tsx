@@ -60,6 +60,7 @@ import { scrollableModalTextRowsBudget } from '../modals/ScrollableModalText';
 import { type WorkflowPopupView } from '../state/cliState';
 import {
   cumulativeUsageOf,
+  killableExecutionId,
   sessionView,
   streamViewOf,
 } from '../state/sessionView';
@@ -230,7 +231,6 @@ interface WorkflowPopupProps {
   readonly streamId: StreamTabId;
   readonly model: WorkflowRunModel;
   readonly view: WorkflowPopupView;
-  readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
   readonly pendingApprovals: ReadonlyMap<
     string,
     readonly PendingApprovalKind[]
@@ -247,7 +247,6 @@ interface WorkflowPopupProps {
 }
 
 export function WorkflowPopup({
-  activeSubagentExecutionIds,
   availableRows,
   model,
   onClose,
@@ -332,19 +331,13 @@ export function WorkflowPopup({
   const selectedChildStreamId = selectedTask
     ? childStreamOf(selectedTask)
     : undefined;
-  const selectedExecutionId =
-    selectedChildStreamId !== undefined
-      ? activeSubagentExecutionIds.get(selectedChildStreamId)
-      : undefined;
+  const selectedChildStream = streamViewOf(sessionState, selectedChildStreamId);
+  const selectedExecutionId = killableExecutionId(selectedChildStream);
   // A workflow-script grandchild `agent()` call is the only skip/retry-able
   // row: a native agent run (an external CLI tool's child is driven by that
   // tool and would no-op) whose parent is the workflow run — one identity
   // hop, which excludes the run stream itself.
-  const selectedChildIdentity =
-    selectedChildStreamId !== undefined
-      ? (streamViewOf(sessionState, selectedChildStreamId)?.identity ??
-        undefined)
-      : undefined;
+  const selectedChildIdentity = selectedChildStream?.identity;
   const controllable =
     selectedExecutionId !== undefined &&
     selectedChildIdentity?.kind === 'agent' &&
