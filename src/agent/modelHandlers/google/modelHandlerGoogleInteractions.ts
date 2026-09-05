@@ -813,13 +813,12 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   /**
    * Media blocks for the entries (inline when small enough, uploaded
-   * otherwise). Unlike the base template this reports only the entries that
-   * were actually appended, since an upload can drop one.
+   * otherwise). Upload failures propagate to the shared attachment policy;
+   * entries are returned only when the entire batch succeeds.
    */
   protected async uploadMediaEntries(
     entries: MediaEntry[],
   ): Promise<CreatedMedia<Content>> {
-    const insertedEntries: MediaEntry[] = [];
     const media = await uploadGoogleMediaEntries<Content>(entries, {
       getClient: () => this.getClient(),
       inlineLimit: this.getInlineUploadLimitBytes(),
@@ -829,9 +828,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         this.textMedia(
           `${media.type[0].toUpperCase()}${media.type.slice(1)}: ${fileName}`,
         ),
-      onInsertedEntry: (entry) => insertedEntries.push(entry),
     });
-    return { media, entries: insertedEntries };
+    return { media, entries };
   }
 
   // ===========================================================================

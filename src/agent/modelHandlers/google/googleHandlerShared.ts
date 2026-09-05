@@ -3,7 +3,6 @@ import { basename } from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/types/mediaTypes';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { isNonEmptyString } from '@utils/core';
 
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
@@ -24,7 +23,6 @@ interface UploadGoogleMediaEntriesOptions<T> {
   logger: AgentTrace;
   buildMedia: (source: GoogleMediaSource, mimeType: string) => T;
   buildLabel: (media: T, fileName: string) => T;
-  onInsertedEntry?: (entry: MediaEntry) => void;
 }
 
 /**
@@ -40,22 +38,12 @@ export async function uploadGoogleMediaEntries<T>(
     return [];
   }
 
-  const {
-    getClient,
-    inlineLimit,
-    logger,
-    buildMedia,
-    buildLabel,
-    onInsertedEntry,
-  } = options;
+  const { getClient, inlineLimit, logger, buildMedia, buildLabel } = options;
   const client = await getClient();
   const parts: T[] = [];
   const appendMedia = (entry: MediaEntry, media: T): void => {
     parts.push(buildLabel(media, entry.file_name), media);
-    onInsertedEntry?.(entry);
   };
-  let hadFailure = false;
-  const failures: string[] = [];
 
   for (const entry of entries) {
     const fileName = entry.file_name;
@@ -83,50 +71,28 @@ export async function uploadGoogleMediaEntries<T>(
     const uploadPath =
       entry.bytes_match_source !== false ? entry.source_path : undefined;
     if (!uploadPath) {
-      logger.error(
-        `Skipping media entry ${fileName} due to missing upload source`,
-      );
-      hadFailure = true;
-      continue;
+      throw new Error(`Media entry ${fileName} is missing an upload source.`);
     }
 
-    try {
-      logger.debug(
-        `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
-      );
-      const uploaded: File = await client.files.upload({
-        file: uploadPath,
-        // `fileName` may be workspace-relative; displayName is a filename.
-        config: { mimeType, displayName: basename(fileName) },
-      });
-      const fileUri = uploaded.uri;
-      if (!fileUri) {
-        logger.error(
-          `Upload result for ${fileName} is missing a URI. Skipping entry.`,
-        );
-        hadFailure = true;
-        continue;
-      }
-      const resolvedMimeType =
-        uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
-      const media = buildMedia({ uri: fileUri }, resolvedMimeType);
-      appendMedia(entry, media);
-    } catch (error) {
-      hadFailure = true;
-      failures.push(`${fileName}: ${getSdkErrorMessage(error)}`);
-    }
-  }
-
-  if (hadFailure) {
-    const failureSummary = failures.join('; ');
-    logger.warn(
-      failureSummary
-        ? `Some media files failed to upload via Google GenAI SDK: ${failureSummary}`
-        : 'Some media files failed to upload via Google GenAI SDK',
-      {
-        data: failures,
-      },
+    logger.debug(
+      `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
     );
+    // The caller's createMediaForRound applies the shared failure policy:
+    // initial requests fail; later rounds report the missing attachments.
+    const uploaded: File = await client.files.upload({
+      file: uploadPath,
+      // `fileName` may be workspace-relative; displayName is a filename.
+      config: { mimeType, displayName: basename(fileName) },
+    });
+    const fileUri = uploaded.uri;
+    if (!fileUri) {
+      throw new Error(`Upload result for ${fileName} is missing a URI.`);
+    }
+    const resolvedMimeType =
+      uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
+    const media = buildMedia({ uri: fileUri }, resolvedMimeType);
+    appendMedia(entry, media);
   }
+
   return parts;
 }
