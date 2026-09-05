@@ -243,29 +243,29 @@ const WORKFLOW_ROUNDS = {
   'packages/extension/resources/agents/write/paper2poster.yaml': 2,
   'packages/extension/resources/agents/write/paper2slide.yaml': 2,
   'packages/extension/resources/templates/agentTemplate-workflowSingle.yaml': 2,
-  'prompts/agents/remote/apply.yaml': 1,
-  'prompts/agents/remote/criticize.yaml': 2,
-  'prompts/agents/remote/devise.yaml': 2,
-  'prompts/agents/remote/elevate.yaml': 2,
-  'prompts/agents/remote/enhance.yaml': 2,
-  'prompts/agents/remote/firstread.yaml': 2,
-  'prompts/agents/remote/generic.yaml': 2,
-  'prompts/agents/remote/humanize.yaml': 2,
-  'prompts/agents/remote/logic.yaml': 2,
-  'prompts/agents/remote/notation.yaml': 2,
-  'prompts/agents/remote/verifyFix.yaml': 3,
+  'prompts/agents/remote/workflow/apply.yaml': 1,
+  'prompts/agents/remote/workflow/criticize.yaml': 2,
+  'prompts/agents/remote/workflow/devise.yaml': 2,
+  'prompts/agents/remote/workflow/elevate.yaml': 2,
+  'prompts/agents/remote/workflow/enhance.yaml': 2,
+  'prompts/agents/remote/workflow/firstread.yaml': 2,
+  'prompts/agents/remote/workflow/generic.yaml': 2,
+  'prompts/agents/remote/workflow/humanize.yaml': 2,
+  'prompts/agents/remote/workflow/logic.yaml': 2,
+  'prompts/agents/remote/workflow/notation.yaml': 2,
+  'prompts/agents/remote/workflow/verifyFix.yaml': 3,
 } as const;
 
 const FILE_ORDER_WORKFLOWS = [
   'packages/extension/resources/agents/polish.yaml',
-  'prompts/agents/remote/apply.yaml',
-  'prompts/agents/remote/criticize.yaml',
-  'prompts/agents/remote/devise.yaml',
-  'prompts/agents/remote/elevate.yaml',
-  'prompts/agents/remote/enhance.yaml',
-  'prompts/agents/remote/generic.yaml',
-  'prompts/agents/remote/logic.yaml',
-  'prompts/agents/remote/notation.yaml',
+  'prompts/agents/remote/workflow/apply.yaml',
+  'prompts/agents/remote/workflow/criticize.yaml',
+  'prompts/agents/remote/workflow/devise.yaml',
+  'prompts/agents/remote/workflow/elevate.yaml',
+  'prompts/agents/remote/workflow/enhance.yaml',
+  'prompts/agents/remote/workflow/generic.yaml',
+  'prompts/agents/remote/workflow/logic.yaml',
+  'prompts/agents/remote/workflow/notation.yaml',
 ];
 
 describe('built-in authored prompt inventory', () => {
@@ -381,7 +381,7 @@ describe('YAML prompt structure contracts', () => {
       .update(JSON.stringify(markerInventory))
       .digest('hex');
     expect(digest).toBe(
-      '76913c0793d40ae2b610ca69ade62281944e5e02b9f3f2d1238c14972b2a3807',
+      '38f4d3061c885b0ecba2ef2bce43a15fed7a5bb67c626ae1f01bec901ae081f0',
     );
   });
 
@@ -601,7 +601,7 @@ describe('engineer agent prompt', () => {
 
 describe('Lean orchestrator agent prompt', () => {
   const agent = loadAgentYaml<ToolUseAgentYaml>(
-    'prompts/agents/remote/Lean4/leanOrchestrator.yaml',
+    'prompts/agents/remote/tool_use/Lean4/leanOrchestrator.yaml',
   );
 
   it('can run deterministic workflow scripts when globally enabled', () => {
@@ -612,14 +612,14 @@ describe('Lean orchestrator agent prompt', () => {
 
 describe('progress-check agent prompts', () => {
   const progressCheck = loadAgentYaml<ToolUseAgentYaml>(
-    'prompts/agents/remote/progressCheck.yaml',
+    'prompts/agents/remote/tool_use/progressCheck.yaml',
   );
   const { systemPrompt } = progressCheck.prompts;
   const orchestrator = loadAgentYaml<ToolUseAgentYaml>(
-    'prompts/agents/remote/orchestrator.yaml',
+    'prompts/agents/remote/tool_use/orchestrator.yaml',
   );
   const leanOrchestrator = loadAgentYaml<ToolUseAgentYaml>(
-    'prompts/agents/remote/Lean4/leanOrchestrator.yaml',
+    'prompts/agents/remote/tool_use/Lean4/leanOrchestrator.yaml',
   );
 
   it('keeps self-contained read-only reviews on the narrow evidence path', () => {

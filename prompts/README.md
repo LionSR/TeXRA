@@ -5,8 +5,10 @@ by a specific package.
 
 ## Layout
 
-- `agents/remote/` contains the canonical source for agents that TeXRA Cloud
-  may deliver remotely.
+- `agents/remote/workflow/` contains canonical workflow agents that TeXRA Cloud
+  may deliver remotely for whole-document transformations.
+- `agents/remote/tool_use/` contains canonical tool-use agents and specialists
+  (including Lean 4 agents under `agents/remote/tool_use/Lean4/`).
 - `.github/prompts/` contains the public prompts used by the repository's
   AI-powered GitHub workflows. They stay next to the workflow configuration
   rather than being duplicated here.
