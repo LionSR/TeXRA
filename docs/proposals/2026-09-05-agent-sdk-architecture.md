@@ -15,6 +15,13 @@ host projection, persistence mirror or generic plugin interpreter.
 The API sketch below describes proposed semantics; it is not currently executable.
 This document is intended to settle ownership and consumer contracts before expanding exports.
 
+**Companion proposal:** the [view replication evaluation](./2026-09-05-event-fold-versus-view-replication-evaluation.md)
+reopens the G1/G2 transport choice retained here. The ownership and lifecycle contracts in
+this document apply to either transport. Runtime-owned publication is the companion's
+leading hypothesis, conditional on its comparison gate; the two documents do not jointly
+ratify a transport cutover. References below to input-only transport describe this
+proposal's original baseline and remain subject to that evaluation.
+
 ## 1. Evidence and scope
 
 Reviewed TeXRA main `47b7e8522a7dfe0d13b1a46c547cd49d9f1ef997` (M), lane 4
