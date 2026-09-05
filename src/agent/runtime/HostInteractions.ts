@@ -21,7 +21,6 @@ import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type {
@@ -469,8 +468,6 @@ function redactedForFact(payload: PermissionPayload): PermissionPayload {
 export class SessionHostInteractions implements HostInteractions {
   private readonly attachments: HostInteractionAttachment[] = [];
   private readonly pending = new Set<PendingSessionInteraction>();
-  private readonly pendingCountListeners: ListenerSet<(count: number) => void> =
-    createListenerSet();
   private readonly pendingPresentationReplays: Array<
     (interactions: HostInteractions) => unknown
   > = [];
@@ -484,17 +481,6 @@ export class SessionHostInteractions implements HostInteractions {
    *   `SessionHandle` constructs this surface with itself.
    */
   constructor(private readonly session: SessionHandle) {}
-
-  /** Number of response-bearing requests awaiting a host decision. */
-  get pendingCount(): number {
-    return this.pending.size;
-  }
-
-  /** Observe transitions between no pending requests and at least one. */
-  onPendingCountChange(listener: (count: number) => void): () => void {
-    if (this.disposed) return () => {};
-    return this.pendingCountListeners.add(listener);
-  }
 
   use(interactions: HostInteractions): () => void {
     if (this.disposed) {
@@ -785,7 +771,6 @@ export class SessionHostInteractions implements HostInteractions {
     }
     this.attachments.length = 0;
     this.pendingPresentationReplays.length = 0;
-    this.pendingCountListeners.clear();
     if (firstError !== undefined) throw firstError;
   }
 
@@ -832,7 +817,6 @@ export class SessionHostInteractions implements HostInteractions {
         cancellationRequested: false,
       };
       this.pending.add(pending);
-      if (this.pending.size === 1) this.notifyPendingCountChange();
       this.dispatch(pending);
     });
   }
@@ -982,18 +966,7 @@ export class SessionHostInteractions implements HostInteractions {
         requestId: pending.fact.requestId,
       });
     }
-    if (this.pending.size === 0) this.notifyPendingCountChange();
     return true;
-  }
-
-  private notifyPendingCountChange(): void {
-    for (const listener of this.pendingCountListeners) {
-      try {
-        listener(this.pending.size);
-      } catch (error) {
-        logger.warn('Pending interaction observer failed', { data: error });
-      }
-    }
   }
 
   private isCurrentDispatch(
