@@ -48,7 +48,6 @@ function createDeps(
 
   return {
     state: {
-      getActiveStream: () => '',
       getRunMetadata: () => ({}),
       getOutputFiles: () => ({}),
     },
@@ -129,7 +128,6 @@ describe('ProgressWorkflowFileActionsController', () => {
       acceptEditedFile: async () => acceptResults.shift(),
       readFile: async () => readResults.shift() ?? '',
     });
-    deps.state.getActiveStream = () => 'workflow';
     deps.sendFollowUp = async (_stream, text) => {
       followUps.push(text);
     };
@@ -138,12 +136,21 @@ describe('ProgressWorkflowFileActionsController', () => {
     await controller.compareOriginal(
       '/workspace/edited.tex',
       '/workspace/base.tex',
+      'workflow',
     );
-    await controller.acceptFile('/workspace/edited.tex', '/workspace/base.tex');
+    await controller.acceptFile(
+      '/workspace/edited.tex',
+      '/workspace/base.tex',
+      'workflow',
+    );
 
     expect(followUps).toEqual([]);
 
-    await controller.acceptFile('/workspace/edited.tex', '/workspace/base.tex');
+    await controller.acceptFile(
+      '/workspace/edited.tex',
+      '/workspace/base.tex',
+      'workflow',
+    );
 
     expect(followUps).toHaveLength(1);
     expect(followUps[0]).toMatch(/edited\.tex/);

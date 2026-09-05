@@ -103,19 +103,25 @@ export function createSessionSurfaces(options: {
   }
 
   /** The transcript tier follows the resolved selection (C7). */
-  function subscribeTranscript(entry: Held): void {
+  function transcriptTier(entry: Held): {
+    transcript: string;
+    aggregates: ReturnType<typeof transcriptAggregates>;
+  } {
     const view = entry.view$.get();
     const aggregates = transcriptAggregates(
       view,
       resolveSelected(view, entry.surface$.get()),
     );
-    const transcript = aggregates.map((aggregate) => aggregate.id).join('/');
-    if (
-      transcript === entry.subscribedTranscript &&
-      entry.session.generation > 0
-    ) {
-      return;
-    }
+    return {
+      transcript: aggregates.map((aggregate) => aggregate.id).join('/'),
+      aggregates,
+    };
+  }
+
+  /** A new generation over the tier: on every open, then whenever the
+   *  tier moves. */
+  function subscribeTranscript(entry: Held): void {
+    const { transcript, aggregates } = transcriptTier(entry);
     entry.subscribedTranscript = transcript;
     transport.subscribe(entry.session, aggregates);
   }
@@ -160,7 +166,9 @@ export function createSessionSurfaces(options: {
         if (view !== beforeReplay) {
           setSurface(entry, pruneSurface(entry.surface$.get(), view));
         }
-        subscribeTranscript(entry);
+        if (transcriptTier(entry).transcript !== entry.subscribedTranscript) {
+          subscribeTranscript(entry);
+        }
         notify();
       },
     );
@@ -222,6 +230,17 @@ export function createSessionSurfaces(options: {
         });
         return;
       }
+      case 'savePastedImage':
+        // A follow-up draft keeps its images itself; the launcher has no
+        // image draft, so the saved name joins its media list as a picker's
+        // paths would.
+        if (origin.streamId === null && outcome.kind === 'savedImage') {
+          act(entry, {
+            kind: 'launch',
+            patch: withPickedPaths(launch, 'media', [outcome.fileName]),
+          });
+        }
+        return;
       case 'polish':
         // A reply to an earlier text cannot replace edits made while it ran.
         if (

@@ -18,6 +18,7 @@ import {
 } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import type { FileOptions } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FILE_SELECT_CONFIGS } from '@shared/launcher/fileSelectConfigs';
 import type { HostSnapshot, PaperDisplay } from '@shared/session/hostSnapshot';
 
@@ -100,7 +101,9 @@ export function createHostSnapshotSource(
   let recording: HostSnapshot['recording'] = null;
   let agentConfig: Banners['agentConfig'] = { visible: false };
   let onboarding: HostSnapshot['onboarding'] = 'done';
-  const dismissed = new Set<'login' | 'gettingStarted' | 'dependency'>();
+  // The login banner's dismissal is the host's persisted record; the other
+  // two last a session.
+  const dismissed = new Set<'gettingStarted' | 'dependency'>();
 
   function publish(): void {
     snapshot = {
@@ -120,7 +123,12 @@ export function createHostSnapshotSource(
           visible: dependency.visible && !dismissed.has('dependency'),
         },
         gettingStarted: !hasInputFiles && !dismissed.has('gettingStarted'),
-        login: !authenticated && !dismissed.has('login'),
+        login:
+          !authenticated &&
+          !options.globalState.get<boolean>(
+            GlobalStateKey.LOGIN_BANNER_DISMISSED,
+            false,
+          ),
       },
       onboarding,
     };
@@ -194,7 +202,13 @@ export function createHostSnapshotSource(
       publish();
     },
     dismissBanner(banner) {
-      dismissed.add(banner);
+      if (banner === 'login') {
+        void options.globalState
+          .update(GlobalStateKey.LOGIN_BANNER_DISMISSED, true)
+          .then(undefined, options.onError);
+      } else {
+        dismissed.add(banner);
+      }
       publish();
     },
     setOnboarding(state) {

@@ -95,7 +95,6 @@ export function createHostRunActions(
   };
 
   const snapshotPort = {
-    getActiveStream: () => '' as const,
     getRunMetadata,
     getOutputFiles: (streamId: StreamTabId) =>
       snapshots.getOutputFiles(streamId),

@@ -181,12 +181,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         this.logger.error('Host snapshot refresh failed', { data: error });
       },
     });
-    this.disposables.push({
-      dispose: this.snapshot.onChange((snapshot) =>
-        this.bridge.setHost(snapshot),
-      ),
-    });
-
     const storageRoot = context.storageUri ?? context.globalStorageUri;
     // The tool-edit preview: staged copies of the original and proposed
     // content the diff editor shows. The request itself is the session's
@@ -234,6 +228,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       session,
       handleHostRequest: (request, port) => hostRequests.handle(request, port),
       onPortClosed: hostRequests.closePort,
+    });
+    // After the bridge: creating the host requests already published a
+    // snapshot (the recorder's first observation), and `initialize` refreshes
+    // the full one once the provider stands.
+    this.disposables.push({
+      dispose: this.snapshot.onChange((snapshot) =>
+        this.bridge.setHost(snapshot),
+      ),
     });
 
     // Attached for the window's life: the runtime parks a request until a
@@ -524,6 +526,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     if (!options?.inPlace) await this.showInSidebar();
+    // Showing progress from the launcher means showing a conversation: the
+    // newest stream, the one the sidebar would open on by itself.
+    if (this.sidebarShowsProgress()) return;
+    const newest = SubscriptionRef.getUnsafe(this.session.view).order.at(0);
+    if (newest !== undefined) {
+      this.surfaceAction({ kind: 'select', streamId: newest });
+    }
   }
 
   /** Select a stream this window just launched (the launch's

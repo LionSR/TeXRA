@@ -53,7 +53,6 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import { platform } from '@platform/platform';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
@@ -67,7 +66,6 @@ import type {
   HostOutcome,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
@@ -199,7 +197,6 @@ export function createExtensionHostRequests(
   });
 
   const snapshotPort = {
-    getActiveStream: () => '' as const,
     getRunMetadata: runActions.getRunMetadata,
     getOutputFiles: (streamId: StreamTabId) =>
       session.snapshots.getOutputFiles(streamId),
@@ -402,7 +399,11 @@ export function createExtensionHostRequests(
     const base = request.base ?? undefined;
     switch (request.action) {
       case 'compareOriginal':
-        await workflowFileActions.compareOriginal(request.file, base);
+        await workflowFileActions.compareOriginal(
+          request.file,
+          base,
+          request.streamId,
+        );
         return;
       case 'comparePrevious':
         await workflowFileActions.comparePrevious(
@@ -411,7 +412,11 @@ export function createExtensionHostRequests(
         );
         return;
       case 'accept':
-        await workflowFileActions.acceptFile(request.file, base);
+        await workflowFileActions.acceptFile(
+          request.file,
+          base,
+          request.streamId,
+        );
         return;
       case 'merge':
         await workflowFileActions.mergeFile(request.file, base);
@@ -481,17 +486,18 @@ export function createExtensionHostRequests(
       throw new Rejected({ reason: 'The launch was cancelled.' });
     }
     if (prepared.status === 'error') {
+      // The shell has no notice of its own yet: the host shows the message,
+      // with the guide when the check names one, and the refusal keeps the
+      // composer's text.
       const { docsCommand } = prepared;
-      if (docsCommand) {
-        const openDocs = 'Open file management guide';
-        void vscode.window
-          .showErrorMessage(prepared.message, openDocs)
-          .then((choice) => {
-            if (choice === openDocs) {
-              void vscode.commands.executeCommand('texra.openDoc', docsCommand);
-            }
-          });
-      }
+      const openDocs = 'Open file management guide';
+      void vscode.window
+        .showErrorMessage(prepared.message, ...(docsCommand ? [openDocs] : []))
+        .then((choice) => {
+          if (choice === openDocs) {
+            void vscode.commands.executeCommand('texra.openDoc', docsCommand);
+          }
+        });
       throw new Rejected({ reason: prepared.message });
     }
     if (prepared.infoMessage) void showInfo(prepared.infoMessage);
@@ -908,7 +914,7 @@ export function createExtensionHostRequests(
           });
         }
         const [command, ...args] = docsCommand.split(',');
-        await runCommand(command, args);
+        await runCommand(command, ...args);
         return done;
       }
       case 'signIn': {
@@ -919,12 +925,6 @@ export function createExtensionHostRequests(
         return done;
       }
       case 'dismissBanner':
-        if (request.banner === 'login') {
-          await platform().globalState.update(
-            GlobalStateKey.LOGIN_BANNER_DISMISSED,
-            true,
-          );
-        }
         snapshot.dismissBanner(request.banner);
         return done;
       case 'gettingStarted':
