@@ -39,8 +39,10 @@ interface TaskSidebarModel {
   /** Every open paper, in `shell.open` order. */
   readonly papers: readonly RailPaper[];
   readonly shell: Shell;
-  /** The stream tree lives in the Subagents workbench tab while it is open;
-   *  the rail then lists top-level streams only. */
+  /** The shown workbench (the active paper's) has its Subagents tab open:
+   *  that paper's tree lives there and its section lists top-level streams
+   *  only. Other papers' workbenches are not shown, so their sections keep
+   *  their trees. */
   readonly subagentsOpen: boolean;
   /** Canonical name of the command palette action, from the command catalog. */
   readonly commandsLabel: string;
@@ -110,14 +112,13 @@ function paperBadge(view: SessionView): TemplateResult | typeof nothing {
 
 function streamTabsTemplate(
   paper: RailPaper,
-  options: { topLevelOnly: boolean; activeOnly?: boolean },
+  options: { topLevelOnly: boolean },
 ): TemplateResult {
   return html`<div data-session=${paper.display.key}>
     <stream-tabs
       .view=${paper.view}
       .surface=${paper.surface}
       .topLevelOnly=${options.topLevelOnly}
-      .activeOnly=${options.activeOnly ?? false}
     ></stream-tabs>
   </div>`;
 }
@@ -211,7 +212,9 @@ function paperSection(
         ? nothing
         : html`
             <div class="task-sidebar-sessions task-paper-streams">
-              ${streamTabsTemplate(paper, { topLevelOnly: model.subagentsOpen })}
+              ${streamTabsTemplate(paper, {
+                topLevelOnly: active && model.subagentsOpen,
+              })}
               ${workflowCallsNote(paper.view, paper.surface)}
             </div>
           `

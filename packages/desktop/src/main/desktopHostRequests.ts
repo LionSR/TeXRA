@@ -27,7 +27,10 @@ import {
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
-import { runPackLatexdiffvc } from '@housekeeping/packLatexdiffvc';
+import {
+  latexdiffPackMessage,
+  runPackLatexdiffvc,
+} from '@housekeeping/packLatexdiffvc';
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
@@ -496,19 +499,8 @@ export function createDesktopHostRequests(
       commit,
       action === 'cleanLatexdiffvc',
     );
-    switch (packed.status) {
-      case 'no-files':
-        await host.showInfoMessage('No LaTeX diff files found to process');
-        return;
-      case 'cleaned':
-        await host.showInfoMessage('LaTeXdiff files cleaned');
-        return;
-      case 'packed':
-        await host.showInfoMessage(`Files packed into ${packed.outputFolder}`);
-        return;
-      case 'processed':
-        return;
-    }
+    const message = latexdiffPackMessage(packed);
+    if (message) await host.showInfoMessage(message);
   }
 
   /** The Tools sheet's verbs over the launcher's base and edited files. */

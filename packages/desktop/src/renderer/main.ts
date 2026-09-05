@@ -523,6 +523,7 @@ function taskConversationTemplate(): TemplateResult {
               ? html`
                   <section
                     class="task-launcher-surface"
+                    data-session=${activePaper ? activePaper.display.key : nothing}
                     ?hidden=${startupPanelVisible}
                   >
                     ${conversationView} ${conversationDockTemplate()}
@@ -577,7 +578,7 @@ function paperWorkbenchesTemplate(
     (paper) =>
       html` <div
         class="task-paper-workbench"
-        data-workbench-session=${paper.session}
+        data-session=${paper.session}
         ?hidden=${paper.session !== shell.active || !activeWorkbenchTab(paper.getState(), placement)}
       >
         ${paper.workbench.template(placement)}
@@ -782,7 +783,6 @@ function rerenderShell(): void {
   revealSidebarForOffScreenApproval();
   const active = activeRailPaper(railPapers());
   const session = active ? paperSessions.get(active.display.key) : undefined;
-  conversationView.dataset.session = active?.display.key ?? '';
   conversationView.view = active?.view ?? null;
   conversationView.surface = active?.surface ?? null;
   conversationView.host = session?.host$.get() ?? null;
@@ -1146,8 +1146,9 @@ window.addEventListener('resize', () => {
 //
 // Every component dispatches the arm it wants as a bubbling, composed event
 // (`uiEvents.ts`); the root forwards it to the paper it came from. The paper
-// is the nearest `data-session` on the event's path: the conversation shell
-// carries the shown paper's key and every rail tree its own.
+// is the nearest `data-session` on the event's path: the conversation column
+// (the shell and its dock) carries the shown paper's key, and each paper's
+// workbench and rail tree its own.
 
 // The guard below protects the wiring against double-registration: a
 // bootstrap recovery attempt that itself fails re-renders the same fallback
