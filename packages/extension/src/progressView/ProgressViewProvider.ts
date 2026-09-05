@@ -10,7 +10,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { SubscriptionRef } from 'effect';
 
 import { getAgent, refresh } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
@@ -69,7 +69,6 @@ import {
   type OnboardingFunnelState,
   type StreamTabId,
 } from '@shared/schemas';
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { paperDisplayOf } from '@shared/session/hostSnapshot';
 import type { SurfaceActionMessage } from '@shared/session/sessionFrames';
 import {
@@ -191,24 +190,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
       ),
-      showToolEditPermission: () => undefined,
-      resolveToolEditPermission: () => undefined,
-      detachCause: SESSION_DISPOSED_CAUSE,
-    });
-    const resolvedApprovals = effectRuntime().runFork(
-      Stream.runForEach(session.events.all(session.now()), (event) =>
-        Effect.sync(() => {
-          if (event.type !== 'approval.resolved') return;
-          this.toolEditApprovals.handleAction({
-            requestId: event.requestId,
-            action: 'reject',
-          });
-        }),
-      ),
-    );
-    this.disposables.push({
-      dispose: () =>
-        effectRuntime().runFork(Fiber.interrupt(resolvedApprovals)),
+      session,
     });
 
     const hostRequests = createExtensionHostRequests({

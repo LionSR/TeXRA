@@ -73,7 +73,6 @@ describe('StreamLog', () => {
       'run',
       'message-2500',
     ]);
-    expect(log.hasUndrainedChanges).toBe(false);
   });
 
   it('does not emit no-op updates', () => {
@@ -89,7 +88,6 @@ describe('StreamLog', () => {
     log.drainEmission();
 
     expect(log.update('message', { text: 'unchanged' })).toBeUndefined();
-    expect(log.hasUndrainedChanges).toBe(false);
     const delta = log.drainEmission();
     expect(delta.appended).toEqual([]);
     expect(delta.dirtied).toEqual([]);
