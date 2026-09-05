@@ -42,6 +42,7 @@ import {
   ownerProcessStart,
   SessionEventLog,
   sessionEventsLayer,
+  tailFrom,
 } from '@agent/runtime/SessionEvents';
 import {
   initSessionGraphs,
@@ -449,6 +450,23 @@ function sessionGraphOpener(
       events: reads,
       publish,
       view: view.ref,
+      viewChanges: view.changes,
+      // The plane's tail woken by the view's cursor instead of the log's
+      // level: the same rows `events.all` delivers, none before the fold
+      // has landed the state it produced.
+      folded: (fromCommit) =>
+        tailFrom(
+          eventLog.readAll,
+          {
+            get: SubscriptionRef.get(view.ref).pipe(
+              Effect.map((v) => v.cursor),
+            ),
+            changes: SubscriptionRef.changes(view.ref).pipe(
+              Stream.map((v) => v.cursor),
+            ),
+          },
+          fromCommit,
+        ),
       local: Context.get(context, LocalRuntimeSource).ref,
       inputs: Context.get(context, SessionInputs).read,
       subscriptions: Context.get(context, TranscriptSubscriptions),

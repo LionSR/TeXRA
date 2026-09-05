@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -59,12 +59,38 @@ function readAgentYaml(filePath) {
   const name = parsed.name ?? basename(filePath, '.yaml');
   const explicitCategory =
     settings.agentCategory ?? parsed.agentCategory ?? undefined;
+  const relativePath = relative(remoteAgentsDir, filePath).replaceAll(
+    '\\',
+    '/',
+  );
+  const inferredCategory = relativePath.startsWith('tool_use/')
+    ? 'toolUse'
+    : 'workflow';
+
+  if (
+    relativePath.startsWith('workflow/') &&
+    explicitCategory !== undefined &&
+    explicitCategory !== 'workflow'
+  ) {
+    throw new Error(
+      `Agent "${name}" is located in workflow/ but specifies agentCategory "${explicitCategory}".`,
+    );
+  }
+  if (
+    relativePath.startsWith('tool_use/') &&
+    explicitCategory !== undefined &&
+    explicitCategory !== 'toolUse'
+  ) {
+    throw new Error(
+      `Agent "${name}" is located in tool_use/ but specifies agentCategory "${explicitCategory}".`,
+    );
+  }
 
   return {
     name,
     description: parsed.description,
     inherits: parsed.inherits,
-    agentCategory: explicitCategory ?? 'workflow',
+    agentCategory: explicitCategory ?? inferredCategory,
     explicitCategory: explicitCategory !== undefined,
     tools: normalizeTools(settings.tools),
   };

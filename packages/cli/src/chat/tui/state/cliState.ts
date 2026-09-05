@@ -9,7 +9,6 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { AgentDelegationScope, StreamTabId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
 import type { WorkPlanProvenance } from '@transcript';
 import { sessionView } from './sessionView';
@@ -34,12 +33,10 @@ import type { PastedImageEntry } from '../input/draftAttachments';
  */
 export interface SessionMeta {
   readonly agent: string;
-  readonly category: AgentCategory;
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly approvalPolicy: TexraApprovalPolicy;
-  readonly canDelegate: boolean;
   readonly transcriptMode: 'persistent' | 'ephemeral';
   readonly teamName?: string;
   readonly cliMultiAgentPresetId?: string;
@@ -49,12 +46,10 @@ export interface SessionMeta {
 
 const EMPTY_SESSION_META: SessionMeta = {
   agent: '',
-  category: AgentCategory.ToolUse,
   model: '',
   modelSource: 'builtin-default',
   cwd: '',
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
-  canDelegate: false,
   transcriptMode: 'persistent',
   version: '',
 };

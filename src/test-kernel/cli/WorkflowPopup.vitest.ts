@@ -90,7 +90,6 @@ async function renderPopup(
   const rendered = renderInteractive(
     ink,
     React.createElement(WorkflowPopup, {
-      activeSubagentExecutionIds: new Map(),
       availableRows,
       model,
       onClose: vi.fn(),

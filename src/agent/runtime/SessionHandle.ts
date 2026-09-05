@@ -30,7 +30,7 @@
  * session is justified only as the ownership container.
  */
 
-import { SubscriptionRef } from 'effect';
+import { SubscriptionRef, type Stream } from 'effect';
 import pDefer, { type DeferredPromise } from 'p-defer';
 
 import type {
@@ -117,6 +117,15 @@ export class SessionHandle {
    */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   /**
+   * {@link view} as a level stream (`SessionViewService.changes`, 7.2): the
+   * current view on subscribe, then every later one, ending as the fold
+   * does, with the fold's defect if it died and cleanly when the graph
+   * closes. A reader that waits on a view the fold has yet to publish (the
+   * SDK's drain to a run's final view) reads this, so a dead fold fails it
+   * instead of hanging it.
+   */
+  readonly viewChanges: Stream.Stream<SessionView>;
+  /**
    * Per-run execution handles: registration, lookup, change listeners, and
    * subagent lineage. Hears every canonical `status` fact from
    * {@link publishStatus}, in publish order.
@@ -135,6 +144,12 @@ export class SessionHandle {
    * (`effectRuntime()`) and reads the Effect's own result as the response.
    */
   readonly requests: SessionGraph['requests'];
+  /**
+   * The tail as the view has folded it (PRD 7.2): what a reader that reads
+   * {@link view} beside each row reads, from `now()`, so no row reaches it
+   * before the fold has landed the state that row produced.
+   */
+  readonly folded: SessionGraph['folded'];
   /** Ordered replay and live inputs for each transport subscription. */
   readonly inputs: SessionGraph['inputs'];
   /** Session-scoped status plane. */
@@ -206,6 +221,8 @@ export class SessionHandle {
     this.graph = graph;
     this.events = graph.events;
     this.view = graph.view;
+    this.viewChanges = graph.viewChanges;
+    this.folded = graph.folded;
     this.requests = graph.requests;
     this.inputs = graph.inputs;
     const status = new StreamStatusMachine(

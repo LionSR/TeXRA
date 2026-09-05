@@ -27,7 +27,6 @@ import {
   type FollowUpQueueInput,
   type FollowUpRecoveryLease,
 } from '@agent/followUp';
-import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
@@ -336,7 +335,6 @@ export function createChatSessionController(
       agent: config.agent,
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
-      canDelegate: chatAgentSupportsDelegation(config.agent),
       teamName: readCliMultiAgentPresetName(cliMultiAgentPresetId),
       cliMultiAgentPresetId,
       delegationAgentScope: config.delegationAgentScope ?? undefined,

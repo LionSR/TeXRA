@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // Local imports
 import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
 import type { SessionMeta } from '@cli/chat/tui/state/cliState';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import {
   FakeStdin,
@@ -51,11 +51,9 @@ afterAll(() => {
 
 const TRANSCRIPT_SESSION: Omit<SessionMeta, 'cwd'> = {
   agent: 'research',
-  category: AgentCategory.ToolUse,
   model: 'test-model',
   modelSource: 'builtin-default',
   approvalPolicy: 'ask',
-  canDelegate: false,
   transcriptMode: 'persistent',
   version: '0.0.0-test',
 };

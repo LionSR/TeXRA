@@ -31,7 +31,6 @@ const run = runAgent({
   platform,
   agent: 'polish',
   instruction: 'Tighten the abstract in paper.tex.',
-  interactions: { cancel: () => {} },
 });
 
 for await (const event of run) {
@@ -47,6 +46,7 @@ console.log(result.outcome);
 ```ts
 interface AgentRun extends AsyncIterable<AgentEvent> {
   readonly result: Promise<AgentFlowResult>;
+  readonly view: AsyncIterable<SessionView>;
   interrupt(): void;
 }
 ```
@@ -54,6 +54,35 @@ interface AgentRun extends AsyncIterable<AgentEvent> {
 Event delivery starts at the iterator's first `next()`. Awaiting only `result`
 does not retain trace events, and ending iteration detaches the event source
 while the run itself continues.
+
+`view` is the folded session state every TeXRA host renders, so stream
+status, transcript rows, and pending approvals are read from it rather than
+re-folded from the trace. Each `for await` over it yields the current view
+first, then subsequent changes through the first view containing the run's
+durable outcome. That final view is included even when iteration starts after
+`result` settles, and the first view yielded always holds the run's stream.
+`result` settles only once the final view has folded, independently of whether
+the caller reads it; if the session's fold dies first, `result` and every
+`view` iteration fail with its defect instead of waiting. A run that fails on
+its own settles `result` with its own error without waiting for the fold; the
+fold's defect then reaches `view` iterations only. Breaking the loop
+stops that reader while the run continues. If launch fails before the run
+enters the session, `view` ends without a value and `result` carries the
+failure.
+
+Each view is the runtime's own value, not a copy: a yielded view supersedes
+the one before it, and the maps and arrays beneath an older view may already
+show a later level. The exported `SessionView`, `StreamView`, and
+`TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
+arrays); a write through a cast corrupts the session every later run in the
+process reads. The run's transcript rows (`StreamView.transcript`) are
+subscribed on its behalf, its stream and its descendants as they appear, and
+stay resident for the life of the process.
+
+Runs share one session per workspace storage root for the life of the
+process. It is disposed, after its live executions settle, on the platform's
+shutdown path (`lifecycle.runShutdown()`), which an embedder runs before it
+exits.
 
 ## Run results
 
@@ -117,8 +146,9 @@ These are enforced, not undocumented — each throws or degrades loudly rather
 than failing quietly:
 
 - **Approval-requiring tools are refused.** A tool with `requiresApproval` throws
-  at launch. The public `HostInteractions` is deliberately the minimal
-  `cancel()` shape; there is no interactive approval channel yet.
+  at launch. There is no interactive approval channel yet: the package attaches
+  one headless host to each session for its whole life, so concurrent runs on a
+  root never displace each other's host.
 - **Interactive retry always denies.** A run that would prompt to retry gets a
   denial with a reason instead.
 - **No resume.** `nodePlatform` reports no resumable streams; resuming a

@@ -326,7 +326,7 @@ export class SessionEventLog extends Context.Service<
  * that must know the tail passed an ordinal (the NDJSON detach drain) waits
  * on this coordinate, never on the events alone.
  */
-function tailFrom(
+export function tailFrom(
   read: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>,
   level: {
     readonly get: Effect.Effect<CommitOrdinal>;
