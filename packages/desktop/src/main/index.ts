@@ -1378,7 +1378,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       let papers!: DesktopPaperRegistry;
       const processResumeOwner = new DesktopProcessResumeOwner({
         sessions: () =>
-          new Set([papers.active(), ...papers.list()].map((p) => p.session)),
+          [papers.fallback(), ...papers.list()].map((p) => p.session),
       });
       const platformInit = await initializeElectronPlatform(
         desktopMainDir,

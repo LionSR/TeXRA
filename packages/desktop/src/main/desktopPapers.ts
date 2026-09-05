@@ -78,6 +78,8 @@ export interface DesktopPaperRegistry {
   list(): readonly DesktopPaper[];
   /** The paper the window shows: the active folder, else the no-workspace session. */
   active(): DesktopPaper;
+  /** The no-workspace session's paper; open for the process lifetime, never in `list()`. */
+  fallback(): DesktopPaper;
   /** Make an open paper the one the window shows, and remember it as such. */
   activate(root: string | undefined): void;
   /**
@@ -354,6 +356,7 @@ export async function openDesktopPaperRegistry(
     },
     list: openPapers,
     active,
+    fallback: () => fallback,
     activate,
     close(root) {
       const inProgress = closing.get(root);
