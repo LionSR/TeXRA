@@ -207,7 +207,7 @@ describe('workflow popup', () => {
       20,
     );
     try {
-      await waitFor(() => stdout.output.includes('done'));
+      await waitFor(() => stdout.output.includes('1 finished'));
       stdin.write('f');
       await waitFor(() => onViewChange.mock.calls.length > 0);
       expect(onViewChange).toHaveBeenLastCalledWith({

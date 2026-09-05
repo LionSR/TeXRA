@@ -5,38 +5,36 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { ProgressEvents } from '@progressView/frontend/events';
 
 // Local imports - shared contracts
-import {
-  WORKFLOW_TASK_STATUS_LABEL,
-  type StreamTabId,
-  type WorkflowCallIdentity,
-  type WorkflowCallProgress,
-} from '@shared/schemas';
+import { type StreamTabId, type WorkflowCallProgress } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { assertNever } from '@utils/core';
 
-function statusIcon(call: WorkflowCallProgress): TemplateResult {
-  switch (call.status) {
+/** One icon per call status, for a card and for a board row alike. */
+export function workflowCallStatusIcon(
+  status: WorkflowCallProgress['status'],
+): Parameters<typeof waIcon>[0] {
+  switch (status) {
     case 'declared':
-      return waIcon('circle');
+      return 'circle';
     case 'planned':
     case 'queued':
-      return waIcon('circle-dot');
+      return 'circle-dot';
     case 'running':
-      return waIcon(terminalStatusIcon('running'));
+      return terminalStatusIcon('running');
     case 'completed':
-      return waIcon(terminalStatusIcon('completed'));
+      return terminalStatusIcon('completed');
     case 'cached':
       // A replayed result from an earlier attempt: nothing ran this time.
-      return waIcon('clock-rotate-left');
+      return 'clock-rotate-left';
     case 'skipped':
     case 'cancelled':
-      return waIcon(terminalStatusIcon('cancelled'));
+      return terminalStatusIcon('cancelled');
     case 'failed':
-      return waIcon(terminalStatusIcon('failed'));
+      return terminalStatusIcon('failed');
     default:
-      return assertNever(call, 'Unhandled workflow call status');
+      return assertNever(status, 'Unhandled workflow call status');
   }
 }
 
@@ -51,26 +49,6 @@ function callMetadata(
         )}</span
       >`
     : nothing;
-}
-
-/** A plan task the run has not issued yet: the card's quiet, dashed twin. */
-export function formatWorkflowDeclaredTaskTemplate(
-  task: WorkflowCallIdentity,
-): TemplateResult {
-  return html`
-    <div
-      class="workflow-task workflow-task--declared"
-      data-declared-id=${task.id}
-    >
-      <span class="workflow-task-icon">${waIcon('circle')}</span>
-      <span class="workflow-task-body">
-        <bdi class="workflow-task-title" dir="auto">${task.label}</bdi>
-      </span>
-      <span class="workflow-task-status"
-        >${WORKFLOW_TASK_STATUS_LABEL.declared}</span
-      >
-    </div>
-  `;
 }
 
 /** Render one workflow call as a status card updated in place by log id;
@@ -113,7 +91,9 @@ export function formatWorkflowCallTemplate(
       @click=${hasChildStream ? openChildStream : nothing}
       @keydown=${hasChildStream ? handleKeydown : nothing}
     >
-      <span class="workflow-task-icon">${statusIcon(call)}</span>
+      <span class="workflow-task-icon"
+        >${waIcon(workflowCallStatusIcon(call.status))}</span
+      >
       <span class="workflow-task-body">
         <bdi class="workflow-task-title" dir="auto">${call.label}</bdi>
         ${callMetadata([...row.metadataParts, ...liveParts])}

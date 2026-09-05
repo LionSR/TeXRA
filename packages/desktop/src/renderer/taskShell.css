@@ -1103,7 +1103,7 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 /* Focus layout: the switcher and the Other papers card. */
 .task-paper-switcher {
   display: block;
-  margin: 4px 10px 2px;
+  margin: 0 0 6px;
 }
 
 .task-paper-switcher-trigger {

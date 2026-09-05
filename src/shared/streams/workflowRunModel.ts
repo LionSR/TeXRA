@@ -623,15 +623,22 @@ export function formatWorkflowCallLiveParts(
 // A phase's rows: attention first, volume collapsed
 // ---------------------------------------------------------------------------
 
-/** The counted groups a phase's quiet rows collapse into. */
-export type WorkflowRowGroup = 'queued' | 'declared';
+/** The counted groups a phase's quiet rows collapse into: the volume that
+ *  has run, and the two kinds that have not started. */
+export type WorkflowRowGroup = 'finished' | 'queued' | 'declared';
 
-/** `12 queued` — the one spelling of a counted group's row. */
+/** `12 queued`, `5 finished · 1 saved result` — the one spelling of a
+ *  counted group's row. A finished group names its replayed results, since
+ *  nothing ran for those this time. */
 export function formatWorkflowRowGroup(row: {
   readonly count: number;
   readonly group: WorkflowRowGroup;
+  readonly cached?: number;
 }): string {
-  return `${row.count} ${row.group}`;
+  const cached = row.cached ?? 0;
+  return cached > 0
+    ? `${row.count} ${row.group} · ${cached} ${pluralize(cached, 'saved result')}`
+    : `${row.count} ${row.group}`;
 }
 
 export type WorkflowPhaseRow =
@@ -650,14 +657,18 @@ export type WorkflowPhaseRow =
       readonly key: string;
       readonly group: WorkflowRowGroup;
       readonly count: number;
+      /** Members that are replayed results (`cached`); finished only. */
+      readonly cached: number;
       readonly expanded: boolean;
     };
 
-/** Rows that failed lead, rows worth watching follow. */
+/** Rows waiting on the user lead, rows that failed follow, rows worth
+ *  watching come after. */
 type AttentionStatus = 'failed' | 'running';
-const ATTENTION_RANK: Record<AttentionStatus, number> = {
-  failed: 0,
-  running: 1,
+const ATTENTION_RANK: Record<'waiting' | AttentionStatus, number> = {
+  waiting: 0,
+  failed: 1,
+  running: 2,
 };
 
 function isAttentionStatus(
@@ -688,16 +699,19 @@ function matchesFilter(
 
 /**
  * One phase's rows. With a filter every matching card is one flat row;
- * without one, cards needing attention (failed, then running — transcript
- * order within) lead, finished cards follow as rows of their own (a ticked
- * box is the record of what ran), and the cards that have not started
- * collapse into `queued` / `declared` groups that open in place.
+ * without one, cards needing attention lead — the ones whose child run is
+ * waiting on the user (`waiting`, by row id, read off the child streams by
+ * the host that holds them), then failed, then running, transcript order
+ * within — and the volume collapses into counted groups that open in place:
+ * `finished` for every settled card, `queued` and `declared` for the ones
+ * that have not started.
  */
 export function workflowPhaseRows(
   phase: WorkflowPhaseModel,
   view: {
     readonly expanded: ReadonlySet<WorkflowRowGroup>;
     readonly filter: string;
+    readonly waiting?: ReadonlySet<string>;
   },
 ): readonly WorkflowPhaseRow[] {
   const filter = view.filter.trim().toLowerCase();
@@ -734,17 +748,18 @@ export function workflowPhaseRows(
     else if (QUEUED_STATUSES.has(status)) queued.push(row);
     else done.push(row);
   }
+  const rank = (row: WorkflowTaskRow): number =>
+    view.waiting?.has(row.id)
+      ? ATTENTION_RANK.waiting
+      : ATTENTION_RANK[row.call.status as AttentionStatus];
   // Stable within a rank: `toSorted` keeps transcript order for equal keys.
   const attentionRows = attention
-    .toSorted(
-      (a, b) =>
-        ATTENTION_RANK[a.call.status as AttentionStatus] -
-        ATTENTION_RANK[b.call.status as AttentionStatus],
-    )
+    .toSorted((a, b) => rank(a) - rank(b))
     .map(taskRowOf);
   const groupRows = (
     group: WorkflowRowGroup,
     members: readonly WorkflowPhaseRow[],
+    cached = 0,
   ): readonly WorkflowPhaseRow[] => {
     if (members.length === 0) return [];
     const expanded = view.expanded.has(group);
@@ -753,13 +768,18 @@ export function workflowPhaseRows(
       key: `group:${group}`,
       group,
       count: members.length,
+      cached,
       expanded,
     };
     return expanded ? [header, ...members] : [header];
   };
   return [
     ...attentionRows,
-    ...done.map(taskRowOf),
+    ...groupRows(
+      'finished',
+      done.map(taskRowOf),
+      done.filter((row) => row.call.status === 'cached').length,
+    ),
     ...groupRows('queued', queued.map(taskRowOf)),
     ...groupRows('declared', phase.declaredTasks.map(declaredRowOf)),
   ];

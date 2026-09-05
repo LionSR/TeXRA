@@ -445,9 +445,8 @@ export function taskSidebarTemplate(
         </wa-button>
       </header>
 
-      ${focus ? paperSwitcherTemplate(model, callbacks) : nothing}
-
       <nav class="task-sidebar-primary" aria-label="Task actions">
+        ${focus ? paperSwitcherTemplate(model, callbacks) : nothing}
         ${sidebarAction({
           icon: 'pencil',
           label: 'New task',

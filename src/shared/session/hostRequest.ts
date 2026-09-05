@@ -92,6 +92,14 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     instruction: z.string(),
   }),
   z.object({ kind: z.literal('polish'), text: z.string() }),
+  /** A pasted image, stored host-side; the outcome names the file the
+   *  follow-up's `mediaFiles` then carries. */
+  z.object({
+    kind: z.literal('savePastedImage'),
+    fileName: z.string().min(1),
+    base64: z.string().min(1),
+    mediaType: z.string().min(1),
+  }),
   z.object({ kind: z.literal('compileInputPdf') }),
   z.object({ kind: z.literal('extractFigures') }),
 ]);

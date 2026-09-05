@@ -1,40 +1,32 @@
 // Third-party imports
 import {
   LitElement,
+  css,
   html,
   nothing,
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import {
-  DEFAULT_STREAM_METADATA_STATUS,
-  STREAM_LIFECYCLE_UNAVAILABLE,
-  STREAM_PHASE,
-  STREAM_SUBSTATE,
-  type StreamLifecycleStatus,
-  type StreamState,
-  type StreamSubstate,
-  type StreamTabId,
-  type StreamTabInfo,
-} from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import { resolveSelected, type Surface } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { focusRingStyles } from '@shared/styles/controlStyles';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-import {
-  progressHeaderStatus,
-  type StreamStatusDisplayKey,
-} from '@shared/streams/streamStatusDisplay';
 import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@shared/wa/icons';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import './WorktreeChip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { type TeXRAIconName } from '@shared/wa/iconNames';
@@ -46,174 +38,124 @@ import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
 import { streamTabsContainerStyles } from './StreamTabsContainer.styles';
 import { ELEMENT_IDS } from '../constants';
-import { ProgressEvents } from '../events';
-import {
-  getComposedPathElement,
-  setsEqual,
-  streamDisplayLabel,
-} from '../utils';
-import {
-  computeStreamTreeProjection,
-  type StreamTreeExpansionOverride,
-} from '../streamTree';
+import { getComposedPathElement } from '../utils';
 
-// Web Awesome native components
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
-
-/** Shape cue for every canonical lifecycle state. */
-const STATUS_ICONS: Record<StreamStatusDisplayKey, TeXRAIconName> = {
-  [STREAM_SUBSTATE.STARTING]: 'spinner',
-  [STREAM_SUBSTATE.RESUMING]: 'spinner',
-  [STREAM_PHASE.RUNNING]: 'play',
-  [STREAM_PHASE.WAITING]: 'clock',
-  [STREAM_PHASE.COMPLETED]: 'circle-check',
-  [STREAM_PHASE.FAILED]: 'circle-exclamation',
-  [STREAM_PHASE.CANCELLED]: 'circle-stop',
-  ready: 'circle',
-  [STREAM_LIFECYCLE_UNAVAILABLE]: 'circle-question',
+/** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
+const TONE_ICONS: Record<StreamView['tone'], TeXRAIconName> = {
+  running: 'play',
+  success: 'circle-check',
+  danger: 'circle-exclamation',
+  warning: 'triangle-exclamation',
+  neutral: 'circle',
 };
 
-function buildTooltip(
-  info: StreamTabInfo,
-  lastTimestamp: number | undefined,
-  statusLabel: string,
-): string {
+/** One section per `group` arm, in union order. */
+const GROUP_LABELS: Record<StreamView['group'], string> = {
+  running: 'Running',
+  waiting: 'Waiting on you',
+  interrupted: 'Interrupted',
+  recent: 'Recent',
+};
+const GROUP_ORDER = Object.keys(GROUP_LABELS) as StreamView['group'][];
+
+function buildTooltip(stream: StreamView): string {
   const modelDisplay =
-    info.identity?.kind === 'agent' && info.model
-      ? (info.modelLabel ?? info.model)
+    stream.identity?.kind === 'agent' && stream.model
+      ? (stream.modelLabel ?? stream.model)
       : undefined;
-  const worktree = info.worktree;
+  const worktree = stream.worktree;
   const worktreeDisplay = worktree
     ? `Worktree: ${worktree.branch ?? getBasename(worktree.workingDirectory)}`
     : undefined;
   const mainLine = [
-    // `label` already is the identity display name (`buildStreamTabInfo`).
-    streamDisplayLabel(info),
-    `Status: ${statusLabel}`,
+    stream.label,
+    `Status: ${stream.approval === 'none' ? stream.statusLabel : 'Approval required'}`,
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
   ]
     .filter(Boolean)
     .join(' · ');
   const parts = [mainLine];
-  if (info.description) {
-    parts.push(info.description);
-  }
-  // The opaque id: off the row's visible text, but kept in the row's
-  // accessible name — it is what tells two parallel runs of the same agent
-  // apart. This summary is deliberately aria-only (#9168): a visual tooltip
-  // spanning the whole row would fight the specific per-icon hints
-  // (`stream-tab-kind`, `stream-tab-remote`, the worktree chip) it encloses.
-  // The header and parent-breadcrumb do carry it on hover.
-  parts.push(info.name);
-  if (lastTimestamp) {
-    const lastSeen = formatRelativeTime(lastTimestamp);
+  if (stream.description) parts.push(stream.description);
+  if (stream.statusDetail) parts.push(stream.statusDetail);
+  // The opaque id stays in the accessible name: it is what tells two
+  // parallel runs of the same agent apart.
+  parts.push(stream.id);
+  if (stream.lastTimestamp) {
+    const lastSeen = formatRelativeTime(stream.lastTimestamp);
     if (lastSeen) parts.push(`Last activity ${lastSeen}`);
   }
   return parts.join('\n');
 }
 
+function streamDecorator(stream: StreamView) {
+  const kind = stream.identity?.kind;
+  return kind === 'multiAgentWorkflow' || kind === 'process'
+    ? AGENT_DECORATORS.streamKinds[kind]
+    : getAgentCategoryDecorator(stream.category);
+}
+
 // =============================================================================
-// StreamTab — individual tab component
+// StreamTab: one row
 // =============================================================================
 
 /**
- * Individual stream tab.  Re-renders only when its own `.info` ref or
- * `.active` flag changes.  Since the upstream `streams.map()` preserves
- * object references for unchanged items, most tabs skip rendering entirely
- * on status updates to a single stream.
+ * One stream row. Re-renders only when its own `.stream` ref or a flag
+ * changes; the fold replaces a stream's value only when that stream changes,
+ * so rows of untouched streams skip rendering on every update.
  */
 @customElement('stream-tab')
 class StreamTab extends LitElement {
   static override styles = [designTokens, focusRingStyles, streamTabStyles];
 
-  @property({ attribute: false }) info!: StreamTabInfo;
-  @property({ attribute: false }) status: StreamLifecycleStatus =
-    DEFAULT_STREAM_METADATA_STATUS;
-  @property({ attribute: false }) substate: StreamSubstate | undefined;
-  @property({ attribute: false }) lastTimestamp: number | undefined = undefined;
+  @property({ attribute: false }) stream!: StreamView;
   @property({ type: Boolean }) active = false;
-  @property({ type: Boolean }) compact = false;
-  @property({ type: Boolean }) hasPendingApproval = false;
-  /** Number of nested background tasks (0 = no toggle shown). */
-  @property({ type: Number }) childCount = 0;
-  /** Whether the child list is expanded. */
+  /** Children are shown beneath this row. */
   @property({ type: Boolean, reflect: true }) expanded = false;
+  /** This row has a child list to expand. */
+  @property({ type: Boolean }) expandable = false;
 
-  private _streamDecorator: {
-    readonly icon: TeXRAIconName;
-    readonly label: string;
-  } = getAgentCategoryDecorator('toolUse');
+  private decorator = getAgentCategoryDecorator('toolUse');
 
   protected override willUpdate(changed: PropertyValues): void {
-    if (!changed.has('info')) return;
-    const identityKind = this.info.identity?.kind;
-    this._streamDecorator =
-      identityKind === 'multiAgentWorkflow' || identityKind === 'process'
-        ? AGENT_DECORATORS.streamKinds[identityKind]
-        : getAgentCategoryDecorator(this.info.agentCategory);
+    if (changed.has('stream')) this.decorator = streamDecorator(this.stream);
   }
 
   override render(): TemplateResult {
-    const stream = this.info;
-    const status = this.status;
-    const { label, displayKey } = progressHeaderStatus(status, this.substate);
-    const statusKey = displayKey ?? status;
-    const lifecycleStatusLabel = label ?? status;
-    // Pending approval outranks the lifecycle phase: a run held at the
-    // approval gate is still "running", and the gate is what you act on.
-    const statusGlyph = this.hasPendingApproval
+    const stream = this.stream;
+    const pendingApproval = stream.approval !== 'none';
+    const statusGlyph = pendingApproval
       ? 'triangle-exclamation'
-      : displayKey && STATUS_ICONS[displayKey];
-    const accessibleStatusLabel = this.hasPendingApproval
+      : TONE_ICONS[stream.tone];
+    const accessibleStatusLabel = pendingApproval
       ? 'Approval required'
-      : lifecycleStatusLabel;
-    // Also names the delete button: one "Delete" repeated down the rail tells
-    // a screen-reader user nothing about which session it destroys.
-    const streamTitle = stream.description || streamDisplayLabel(stream);
-    const streamDecorator = this._streamDecorator;
-    const hasChildren = this.childCount > 0 && !this.compact;
-    const showCompactChildHint = this.childCount > 0 && this.compact;
-    // "Background task" covers every nested run — delegated agents, agent CLIs
-    // and background commands — matching the Background tasks panel; "child
-    // stream" is the internal stream-tree name and stays out of the UI.
+      : stream.statusLabel;
+    const streamTitle = stream.description || stream.label;
     const childCountLabel = formatResultCount(
-      this.childCount,
+      stream.rollup.total,
       BACKGROUND_TASK.countNoun,
     );
     const childToggleLabel = this.expanded
       ? BACKGROUND_TASK.collapseAction
       : childCountLabel;
-    const selectLabel = buildTooltip(
-      stream,
-      this.lastTimestamp,
-      accessibleStatusLabel,
-    );
-    const compactSelectLabel = showCompactChildHint
-      ? `${selectLabel}\n${childCountLabel}`
-      : selectLabel;
-    // RunIdentity is the declared authority for what owns the stream, shown
-    // in the meta line so a glance at the row says who ran it. Only when the
-    // title is the AI one-liner (`stream.description`) — otherwise the title
-    // already *is* this same identity name (see `streamTitle` above) and
-    // repeating it in the meta line underneath would just echo the title.
     const metaAgentName =
       stream.identity?.kind === 'agent' && stream.description
         ? stream.label
         : undefined;
+    const showRollup = this.expandable && !this.expanded;
 
     return html`
       <div
         class=${classMap({
           'tab-container': true,
           'is-active': this.active,
-          'is-compact': this.compact,
-          [`status-${statusKey}`]: Boolean(statusKey),
-          'has-pending-approval': this.hasPendingApproval,
+          [`tone-${stream.tone}`]: true,
+          'has-pending-approval': pendingApproval,
+          'is-read-only': stream.readOnly,
         })}
       >
         ${
-          hasChildren
+          this.expandable
             ? html`<wa-button
                   id="stream-tab-expand-button"
                   class="action-icon-button tab-expand"
@@ -221,7 +163,7 @@ class StreamTab extends LitElement {
                   variant="neutral"
                   size="s"
                   type="button"
-                  data-stream=${stream.name}
+                  data-stream=${stream.id}
                   data-action="toggle-children"
                   aria-label=${childToggleLabel}
                   aria-expanded=${this.expanded ? 'true' : 'false'}
@@ -231,119 +173,119 @@ class StreamTab extends LitElement {
                 >`
             : nothing
         }
-        <div
-          id="stream-tab-select-tooltip-anchor"
-          class="tab-select-tooltip-anchor"
-        >
+        <div class="tab-select-tooltip-anchor">
           <button
             id="stream-tab-select-button"
             class="tab focus-ring-inset"
-            data-stream=${stream.name}
+            data-stream=${stream.id}
             data-action="select"
-            aria-label=${compactSelectLabel}
+            aria-label=${buildTooltip(stream)}
           >
             <div class="tab-header">
               <span id="stream-tab-title" class="tab-title"
                 >${
-                  stream.parentStreamId
+                  stream.parentId
                     ? waIcon('chevron-right', {
                         className: 'nested-stream-icon',
                       })
                     : nothing
                 }${streamTitle}</span
               >
+              ${
+                showRollup
+                  ? html`<span class="tab-rollup" aria-label=${childCountLabel}
+                      ><wa-badge variant="neutral" appearance="outlined" pill
+                        >${stream.rollup.total}</wa-badge
+                      >${
+                        stream.rollup.running > 0
+                          ? html`<wa-badge variant="success" pill
+                              >${stream.rollup.running}</wa-badge
+                            >`
+                          : nothing
+                      }</span
+                    >`
+                  : nothing
+              }
               <span
                 id="stream-tab-status"
                 class="tab-status"
                 role="img"
                 aria-label=${accessibleStatusLabel}
               >
-                ${
-                  statusGlyph
-                    ? waIcon(statusGlyph, { className: 'tab-status-icon' })
-                    : html`<span class="tab-status-label"
-                        >${lifecycleStatusLabel}</span
-                      >`
-                }
+                ${waIcon(statusGlyph, { className: 'tab-status-icon' })}
               </span>
             </div>
+            <div id="stream-tab-meta" class="tab-meta">
+              ${
+                metaAgentName
+                  ? html`<span class="agent-name">${metaAgentName}</span>`
+                  : nothing
+              }
+              ${
+                stream.worktree
+                  ? html`<worktree-chip .info=${stream.worktree}></worktree-chip>`
+                  : nothing
+              }
+              ${
+                stream.lastTimestamp
+                  ? html`<wa-relative-time
+                      class="last-active"
+                      .date=${new Date(stream.lastTimestamp)}
+                      format="narrow"
+                      sync
+                    ></wa-relative-time>`
+                  : nothing
+              }
+              <span class="model"
+                >${
+                  stream.identity?.kind === 'agent'
+                    ? (stream.modelLabel ?? stream.model ?? '')
+                    : ''
+                }</span
+              >
+              ${waIcon(this.decorator.icon, { id: 'stream-tab-kind', className: 'stream-kind' })}
+              ${when(
+                stream.isRemote,
+                () => html`
+                  ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'stream-tab-remote', className: 'remote-agent' })}
+                `,
+              )}
+            </div>
             ${
-              this.compact
-                ? nothing
-                : html`
-                    <div id="stream-tab-meta" class="tab-meta">
-                      ${
-                        metaAgentName
-                          ? html`<span class="agent-name"
-                              >${metaAgentName}</span
-                            >`
-                          : nothing
-                      }
-                      ${
-                        stream.worktree
-                          ? html`<worktree-chip
-                              .info=${stream.worktree}
-                            ></worktree-chip>`
-                          : nothing
-                      }
-                      ${
-                        this.lastTimestamp
-                          ? html`<wa-relative-time
-                              class="last-active"
-                              .date=${new Date(this.lastTimestamp)}
-                              format="narrow"
-                              sync
-                            ></wa-relative-time>`
-                          : nothing
-                      }
-                      <span class="model"
-                        >${
-                          stream.identity?.kind === 'agent'
-                            ? (stream.modelLabel ?? stream.model ?? '')
-                            : ''
-                        }</span
-                      >
-                      ${waIcon(streamDecorator.icon, { id: 'stream-tab-kind', className: 'stream-kind' })}
-                      ${when(
-                        stream.isRemote,
-                        () => html`
-                          ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'stream-tab-remote', className: 'remote-agent' })}
-                        `,
-                      )}
-                    </div>
-                  `
+              stream.statusDetail
+                ? html`<div class="tab-detail">${stream.statusDetail}</div>`
+                : nothing
             }
           </button>
-          ${
-            statusGlyph
-              ? html`<wa-tooltip for="stream-tab-status"
-                  >${accessibleStatusLabel}</wa-tooltip
-                >`
-              : nothing
-          }
+          <wa-tooltip for="stream-tab-status">${accessibleStatusLabel}</wa-tooltip>
         </div>
+        <wa-tooltip for="stream-tab-kind"
+          >${
+            stream.identity === null || stream.identity.kind === 'agent'
+              ? `Category: ${this.decorator.label}`
+              : this.decorator.label
+          }</wa-tooltip
+        >${when(
+          stream.isRemote,
+          () =>
+            html`<wa-tooltip for="stream-tab-remote"
+              >${AGENT_DECORATORS.properties.remote.hint}</wa-tooltip
+            >`,
+        )}
         ${
-          this.compact
-            ? html`<wa-tooltip for="stream-tab-select-tooltip-anchor"
-                >${streamTitle}</wa-tooltip
+          stream.group === 'interrupted' && !stream.readOnly
+            ? html`<wa-button
+                id="stream-tab-resume-button"
+                class="tab-resume"
+                appearance="outlined"
+                variant="brand"
+                size="s"
+                type="button"
+                data-stream=${stream.id}
+                data-action="resume"
+                >${waIcon('forward-step', { slot: 'start' })} Resume</wa-button
               >`
-            : html`<wa-tooltip for="stream-tab-kind"
-                  >${
-                    // Only agent runs have an execution-mode category; other
-                    // stream kinds (and pending streams) show their label bare.
-                    (stream.identity === undefined ||
-                      stream.identity.kind === 'agent') &&
-                    stream.agentCategory !== undefined
-                      ? `Category: ${streamDecorator.label}`
-                      : streamDecorator.label
-                  }</wa-tooltip
-                >${when(
-                  stream.isRemote,
-                  () =>
-                    html`<wa-tooltip for="stream-tab-remote"
-                      >${AGENT_DECORATORS.properties.remote.hint}</wa-tooltip
-                    >`,
-                )}`
+            : nothing
         }
         <wa-button
           id="stream-tab-delete-button"
@@ -353,8 +295,9 @@ class StreamTab extends LitElement {
           size="s"
           type="button"
           aria-label=${`Delete ${streamTitle}`}
-          data-stream=${stream.name}
+          data-stream=${stream.id}
           data-action="delete"
+          ?disabled=${stream.readOnly}
         >
           ${waIcon('xmark')}
         </wa-button>
@@ -365,7 +308,7 @@ class StreamTab extends LitElement {
 }
 
 // =============================================================================
-// StreamTabs — tab list container
+// StreamTabs: the list
 // =============================================================================
 
 @customElement('stream-tabs')
@@ -375,109 +318,93 @@ export class StreamTabs extends LitElement {
     commonViewStyles,
     layoutStyles,
     streamTabsContainerStyles,
+    css`
+      .group-heading {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-xs) var(--wa-space-xs) var(--wa-space-3xs);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-semibold);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+      }
+      .group-heading .group-count {
+        font-weight: var(--font-weight-normal);
+        color: var(--color-text-muted);
+      }
+      .group-heading.group-waiting {
+        color: var(--color-warning);
+      }
+      .group-heading.group-interrupted {
+        color: var(--color-warning);
+      }
+    `,
   ];
 
-  @property({ attribute: false }) streams: StreamTabInfo[] = [];
-  @property({ type: Boolean, reflect: true }) compact = false;
-  @property({ attribute: false }) activeStreamId: string | null = null;
-  /**
-   * Stream states map — passed directly from ProgressApp's streamStates$.
-   * Stable Mutative reference (only changed entries get new refs), so
-   * Lit's Object.is() check prevents unnecessary re-renders.
-   */
-  @property({ attribute: false })
-  streamStates: Map<StreamTabId, StreamState> = new Map();
-  @property({ attribute: false })
-  pendingApprovalStreamIds: Set<string> = new Set();
-  @property({ attribute: false })
-  childStreamsByParent: Map<string, StreamTabInfo[]> = new Map();
+  @property({ attribute: false }) view: SessionView | null = null;
+  @property({ attribute: false }) surface: Surface | null = null;
+  /** Only top-level rows, no tree: the Active-now strip and the desktop
+   *  rail whose workbench Subagents tab owns the tree. */
+  @property({ type: Boolean }) topLevelOnly = false;
+  /** Streams that need the user or are still running; `recent` is left
+   *  out. */
+  @property({ type: Boolean }) activeOnly = false;
+  /** Group headings (Running, Waiting on you, Interrupted, Recent). */
+  @property({ type: Boolean }) sections = false;
+  /** The subtree to show instead of `view.order`: the Subagents pane. */
+  @property({ attribute: false }) root: StreamTabId | null = null;
 
-  /** Which parent streams have their child list expanded — derived from
-   *  inputs + `userOverride` on every reactive update. Not a source of truth. */
-  @state() private expandedParents: Set<string> = new Set();
-  /** Self or ancestor of a pending-approval stream — derived with expansion. */
-  private approvalBadgeStreamIds: Set<string> = new Set();
-
-  /**
-   * Per-parent user intent. Child lists start collapsed; this map records
-   * whether the user has expanded or collapsed a given parent. Entries live
-   * as long as the parent is in `childStreamsByParent`.
-   */
-  private userOverride: Map<string, StreamTreeExpansionOverride> = new Map();
-
-  protected override willUpdate(changed: PropertyValues): void {
-    if (
-      !changed.has('childStreamsByParent') &&
-      !changed.has('pendingApprovalStreamIds') &&
-      !changed.has('activeStreamId')
-    ) {
-      return;
-    }
-
-    const projection = computeStreamTreeProjection({
-      childStreamsByParent: this.childStreamsByParent,
-      userOverrides: this.userOverride,
-      pendingApprovalStreamIds: this.pendingApprovalStreamIds,
-      activeStreamId: this.activeStreamId,
-    });
-
-    this.userOverride = projection.userOverrides;
-    this.approvalBadgeStreamIds = projection.approvalBadgeStreamIds;
-    if (!setsEqual(projection.expandedParents, this.expandedParents)) {
-      this.expandedParents = projection.expandedParents;
-    }
+  private streamOf(id: StreamTabId): StreamView | undefined {
+    return this.view?.streams.get(id);
   }
 
-  private renderStreamNode(
-    stream: StreamTabInfo,
-    options: { compact: boolean; visited: Set<string> },
-  ): TemplateResult {
-    const nextVisited = new Set(options.visited);
-    nextVisited.add(stream.name);
-
-    const children = (this.childStreamsByParent.get(stream.name) ?? []).filter(
-      (child) => {
-        if (nextVisited.has(child.name)) return false;
-        // Background bash/process tabs are ephemeral: once terminal, drop
-        // them from the Sessions tree even if autoClose has not removed the
-        // stream record yet. isTerminalOutcomePhase only matches the three
-        // terminal phases, so the unstarted 'ready' default needs no special
-        // handling here.
-        if (child.identity?.kind === 'process') {
-          const childStatus = this.streamStates.get(child.name)?.status;
-          if (isTerminalOutcomePhase(childStatus)) return false;
-        }
-        return true;
-      },
+  private matchesSearch(stream: StreamView, needle: string): boolean {
+    if (needle === '') return true;
+    return (
+      stream.label.toLowerCase().includes(needle) ||
+      (stream.description?.toLowerCase().includes(needle) ?? false) ||
+      stream.childIds.some((id) => {
+        const child = this.streamOf(id);
+        return child !== undefined && this.matchesSearch(child, needle);
+      })
     );
-    const childCount = children.length;
-    const showChildren = !options.compact && childCount > 0;
-    const expanded = showChildren && this.expandedParents.has(stream.name);
-    const streamState = this.streamStates.get(stream.name);
+  }
 
+  private isExpanded(stream: StreamView): boolean {
+    if (stream.forceExpanded) return true;
+    return this.surface?.expanded.get(stream.id) === 'expanded';
+  }
+
+  private renderNode(
+    stream: StreamView,
+    selected: StreamTabId | null,
+    visited: ReadonlySet<StreamTabId>,
+  ): TemplateResult {
+    const nextVisited = new Set(visited).add(stream.id);
+    const children = this.topLevelOnly
+      ? []
+      : stream.childIds
+          .filter((id) => !nextVisited.has(id))
+          .map((id) => this.streamOf(id))
+          .filter((child): child is StreamView => child !== undefined);
+    const expandable = children.length > 0;
+    const expanded = expandable && this.isExpanded(stream);
     return html`
       <stream-tab
-        .info=${stream}
-        .compact=${options.compact}
-        .status=${streamState?.status ?? DEFAULT_STREAM_METADATA_STATUS}
-        .substate=${streamState?.substate}
-        .lastTimestamp=${streamState?.lastTimestamp}
-        ?active=${stream.name === this.activeStreamId}
-        .hasPendingApproval=${this.approvalBadgeStreamIds.has(stream.name)}
-        .childCount=${childCount}
+        .stream=${stream}
+        ?active=${stream.id === selected}
+        ?expandable=${expandable || (this.topLevelOnly && stream.rollup.total > 0)}
         ?expanded=${expanded}
       ></stream-tab>
       ${
-        showChildren
+        expandable
           ? html`<div class="child-streams" ?hidden=${!expanded}>
               ${repeat(
                 children,
-                (child) => child.name,
-                (child) =>
-                  this.renderStreamNode(child, {
-                    compact: false,
-                    visited: nextVisited,
-                  }),
+                (child) => child.id,
+                (child) => this.renderNode(child, selected, nextVisited),
               )}
             </div>`
           : nothing
@@ -485,26 +412,64 @@ export class StreamTabs extends LitElement {
     `;
   }
 
+  private renderRows(
+    ids: readonly StreamTabId[],
+    selected: StreamTabId | null,
+  ): TemplateResult {
+    return html`${repeat(
+      ids,
+      (id) => id,
+      (id) => {
+        const stream = this.streamOf(id);
+        return stream ? this.renderNode(stream, selected, new Set()) : nothing;
+      },
+    )}`;
+  }
+
   override render(): TemplateResult {
+    const view = this.view;
+    const surface = this.surface;
+    const selected = view && surface ? resolveSelected(view, surface) : null;
+    const needle = (surface?.search ?? '').trim().toLowerCase();
+    const rootStream = this.root === null ? undefined : this.streamOf(this.root);
+    const top = (rootStream ? [rootStream.id] : (view?.order ?? []))
+      .map((id) => this.streamOf(id))
+      .filter((stream): stream is StreamView => stream !== undefined)
+      .filter((stream) => !this.activeOnly || stream.group !== 'recent')
+      .filter((stream) => this.matchesSearch(stream, needle));
+
+    let body: TemplateResult;
+    if (!this.sections) {
+      body = this.renderRows(
+        top.map((stream) => stream.id),
+        selected,
+      );
+    } else {
+      body = html`${GROUP_ORDER.map((group) => {
+        const rows = top.filter((stream) => stream.group === group);
+        if (rows.length === 0) return nothing;
+        return html`<div class="group-heading group-${group}">
+            <span>${GROUP_LABELS[group]}</span>
+            <span class="group-count">${rows.length}</span>
+          </div>
+          ${this.renderRows(
+            rows.map((stream) => stream.id),
+            selected,
+          )}`;
+      })}`;
+    }
+
     return html`
       <div class="tabs">
         <div class="tabs-content">
           <div id=${ELEMENT_IDS.STREAM_TABS} @click=${this.handleTabClick}>
-            ${repeat(
-              this.streams,
-              (stream) => stream.name,
-              (stream) =>
-                this.renderStreamNode(stream, {
-                  compact: this.compact,
-                  visited: new Set(),
-                }),
-            )}
+            ${body}
           </div>
-          ${when(this.streams.length === 0, () =>
+          ${when((view?.order.length ?? 0) === 0, () =>
             renderEmptyState({
               icon: 'terminal',
               title: 'No runs yet',
-              body: 'Run a TeXRA command to get started.',
+              body: 'Start a task to see it here.',
               headingTag: 'h3',
               className: 'log-placeholder',
             }),
@@ -526,23 +491,38 @@ export class StreamTabs extends LitElement {
 
     switch (action) {
       case 'select':
-        this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
+        this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', streamId }));
         break;
       case 'delete':
-        this.dispatchEvent(ProgressEvents.streamDelete({ streamId }));
+        this.dispatchEvent(
+          SessionUiEvents.runtime({ kind: 'stream.delete', streamId }),
+        );
         break;
-      case 'toggle-children':
-        this.toggleChildren(streamId);
+      case 'resume':
+        this.dispatchEvent(
+          SessionUiEvents.runtime({ kind: 'stream.resume', streamId }),
+        );
         break;
+      case 'toggle-children': {
+        const stream = this.streamOf(streamId);
+        if (!stream) return;
+        if (this.topLevelOnly) {
+          // The rail owns no tree here; the Subagents pane does. Selecting
+          // the row is the navigation.
+          this.dispatchEvent(
+            SessionUiEvents.surface({ kind: 'select', streamId }),
+          );
+          return;
+        }
+        this.dispatchEvent(
+          SessionUiEvents.surface({
+            kind: 'expand',
+            streamId,
+            override: this.isExpanded(stream) ? 'collapsed' : 'expanded',
+          }),
+        );
+        break;
+      }
     }
-  }
-
-  private toggleChildren(parentId: string): void {
-    const next = new Set(this.expandedParents);
-    const nowExpanded = !next.has(parentId);
-    if (nowExpanded) next.add(parentId);
-    else next.delete(parentId);
-    this.userOverride.set(parentId, nowExpanded ? 'expanded' : 'collapsed');
-    this.expandedParents = next;
   }
 }

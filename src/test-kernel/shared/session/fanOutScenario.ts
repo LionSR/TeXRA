@@ -476,11 +476,11 @@ const child = (
   > = {},
 ): NonNullable<BoardCall['child']> => ({
   id: `${id}#${id
-    .replace(/[^a-z]/g, '')
+    .replaceAll(/[^a-z]/g, '')
     .padEnd(12, 'e')
     .slice(0, 12)}` as StreamTabId,
   executionId: id
-    .replace(/[^a-z]/g, '')
+    .replaceAll(/[^a-z]/g, '')
     .padEnd(12, 'e')
     .slice(0, 12),
   startedAt,
