@@ -556,8 +556,9 @@ async function buildModelOptionData(
  * reads behind `hasUsableApiKey` are cached and invalidated in `apiProviders`
  * (`invalidateApiKeyCache`), the Copilot route catalogue in
  * `runtimeModelRegistry` (`invalidateRuntimeModelRegistry`), and the rest are
- * synchronous config and state reads, so there is no second cache to keep
- * fresh here.
+ * synchronous config and state reads plus the probe-backed sign-in status
+ * (`isCodexSignedIn`, `isXaiSignedIn`, live by design), so there is no second
+ * cache to keep fresh here.
  */
 export async function computeModelOptionsData(
   models?: readonly string[],
