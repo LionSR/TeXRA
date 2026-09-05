@@ -151,7 +151,7 @@ class AgentRunStream implements AgentRun {
   private iteratorStarted = false;
   private failure: { readonly error: unknown } | undefined;
   private readonly launchAbortController = new AbortController();
-  private attachSession: (session: RuntimeSessionHandle) => void = () => {};
+  private attachSession!: (session: RuntimeSessionHandle) => void;
   readonly launchSignal = this.launchAbortController.signal;
   readonly result: Promise<AgentFlowResult>;
   readonly view: AsyncIterable<SessionView>;
