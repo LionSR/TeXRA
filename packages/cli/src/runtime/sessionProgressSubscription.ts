@@ -1,4 +1,4 @@
-import { Effect, Fiber, Stream } from 'effect';
+import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 
 import { agentConfigToTaskState, type SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
@@ -224,7 +224,10 @@ function projectCliSessionEvent(
  *
  * Detaching drains: the tail runs to the ordinal captured at detach, so the
  * last line published before the run settled is on the wire before the
- * caller writes its result record.
+ * caller writes its result record. The drain waits on the tail's own
+ * coordinate (`SessionEvents.all`'s `drained`), not on the events: a
+ * transcript row the store no longer holds emits nothing, and the ordinal
+ * captured at detach may be exactly that row's.
  */
 export function attachCliSessionProgressProjection(
   session: Pick<SessionHandle, 'events' | 'now'> & {
@@ -241,7 +244,7 @@ export function attachCliSessionProgressProjection(
     });
   }
 
-  /** The last commit the tail delivered; rosters observed above it wait. */
+  /** The last commit the tail passed; rosters observed above it wait. */
   let delivered = session.now();
   /** The ordinal detach cut at; nothing above it is written. */
   let stopAt: number | undefined;
@@ -263,17 +266,29 @@ export function attachCliSessionProgressProjection(
     flushRosters(stopAt);
     resolveDrained();
   };
+  const passed = (commit: number): void => {
+    delivered = Math.max(delivered, commit);
+    flushRosters(delivered);
+    settleIfDrained();
+  };
 
+  // The tail's coordinate: set to the commit each forward read covered once
+  // that read's events have all been handled below, so a value here never
+  // runs ahead of an event this fiber has yet to write.
+  const drainedTo = effectRuntime().runSync(SubscriptionRef.make(delivered));
   const fiber = effectRuntime().runFork(
-    Stream.runForEach(session.events.all(delivered), (event) =>
+    Stream.runForEach(session.events.all(delivered, drainedTo), (event) =>
       Effect.sync(() => {
         if (stopAt !== undefined && event.commit > stopAt) return;
         const projected = projectCliSessionEvent(event);
         if (projected) emitProjected(projected);
-        delivered = event.commit;
-        flushRosters(delivered);
-        settleIfDrained();
+        passed(event.commit);
       }),
+    ),
+  );
+  const coordinateFiber = effectRuntime().runFork(
+    Stream.runForEach(SubscriptionRef.changes(drainedTo), (commit) =>
+      Effect.sync(() => passed(commit)),
     ),
   );
   const detachRosters = session.executions.onChildActivity(
@@ -298,5 +313,6 @@ export function attachCliSessionProgressProjection(
     settleIfDrained();
     await drained;
     effectRuntime().runFork(Fiber.interrupt(fiber));
+    effectRuntime().runFork(Fiber.interrupt(coordinateFiber));
   };
 }

@@ -12,6 +12,7 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import {
+  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   AgentCategory,
@@ -594,6 +595,33 @@ describe('attachCliSessionProgressProjection', () => {
         description: 'after detach',
       }),
     );
+    expect(writeRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('drains at detach past a transcript row the store no longer holds', async () => {
+    const { writeRecord, publish, detach } =
+      projectionOver(createTestSession());
+    await publish(draft(activation));
+    // The row's stream is not in the store, so the tail materializes nothing
+    // for its commit: no event says the tail passed the ordinal detach cuts
+    // at, only the tail's own coordinate does.
+    await publish(
+      draft({
+        type: 'transcript.entry',
+        aggregateId: 'stream:evicted',
+        entry: {
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          id: 'row-1',
+          seqNo: 1,
+          level: 'info',
+          timestamp: 1,
+          text: 'gone',
+        },
+      }),
+    );
+
+    await detach();
+
     expect(writeRecord).toHaveBeenCalledTimes(1);
   });
 

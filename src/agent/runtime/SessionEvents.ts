@@ -334,6 +334,13 @@ export class SessionEventLog extends Context.Service<
  * again on every later wake. The plane's tail wakes on the log's level; the
  * view's tail (`SessionViewService.all`) wakes on the view's cursor, so its
  * reader sees each row only once the fold has.
+ *
+ * `drained`, when given, receives the commit each forward read covered,
+ * rows the read could not materialize included, and only once every row of
+ * that read has reached the reader (it is set after the read's stream
+ * completes). A row the store no longer holds emits nothing, so a reader
+ * that must know the tail passed an ordinal (the NDJSON detach drain) waits
+ * on this coordinate, never on the events alone.
  */
 export function tailFrom(
   read: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>,
@@ -342,6 +349,7 @@ export function tailFrom(
     readonly changes: Stream.Stream<CommitOrdinal>;
   },
   fromCommit: SessionCursor,
+  drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
 ): Stream.Stream<SessionEvent> {
   return Stream.unwrap(
     Effect.gen(function* () {
@@ -356,7 +364,12 @@ export function tailFrom(
               Stream.tap((event) => Ref.set(at, event.commit)),
             ),
             Stream.fromEffect(
-              Ref.update(at, (delivered) => Math.max(delivered, upTo)),
+              Effect.gen(function* () {
+                const covered = yield* Ref.updateAndGet(at, (delivered) =>
+                  Math.max(delivered, upTo),
+                );
+                if (drained) yield* SubscriptionRef.set(drained, covered);
+              }),
             ).pipe(Stream.drain),
           );
         }),
@@ -384,8 +397,12 @@ export class SessionEvents extends Context.Service<
     readonly listing: () => Stream.Stream<SessionEvent>;
     /** Every event with commit above `fromCommit`, in commit order across
      *  aggregates, then the tail. Transcript rows of unsubscribed aggregates
-     *  included: the live tail and the frozen NDJSON projection read it. */
-    readonly all: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>;
+     *  included: the live tail and the frozen NDJSON projection read it.
+     *  `drained` is the tail's own coordinate (`tailFrom`). */
+    readonly all: (
+      fromCommit: SessionCursor,
+      drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
+    ) => Stream.Stream<SessionEvent>;
     /** One aggregate's rows from `fromSeq`, in seq order; completes. A
      *  history read, never a tail. */
     readonly aggregate: (
@@ -412,7 +429,10 @@ export class SessionEvents extends Context.Service<
       // serves.
       const anchor = yield* SubscriptionRef.get(log.level);
       // THE tail (C7): the drain woken by the log's level.
-      const all = (fromCommit: SessionCursor): Stream.Stream<SessionEvent> =>
+      const all = (
+        fromCommit: SessionCursor,
+        drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
+      ): Stream.Stream<SessionEvent> =>
         tailFrom(
           log.readAll,
           {
@@ -420,6 +440,7 @@ export class SessionEvents extends Context.Service<
             changes: SubscriptionRef.changes(log.level),
           },
           fromCommit,
+          drained,
         );
       return {
         publish,
