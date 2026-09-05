@@ -64,6 +64,10 @@ export interface WebviewTransport {
   onSurfaceAction(
     listener: (session: string, action: WireSurfaceAction) => void,
   ): void;
+  /** Release a session's graph: its signals, its scope (the LayerMap
+   *  entry, the fold fiber, the frames), and its slot, so a later `open`
+   *  of the key builds a fresh one. A key that is not open is a no-op. */
+  close(session: string): void;
   dispose(): void;
 }
 
@@ -135,6 +139,15 @@ export function installWebviewTransport(): WebviewTransport {
     }
   };
 
+  const close = (key: string): void => {
+    const session = sessions.get(key);
+    if (!session) return;
+    sessions.delete(key);
+    session.view$.dispose();
+    session.host$.dispose();
+    runtime.runFork(Scope.close(session.scope, Exit.void));
+  };
+
   return {
     receive,
     open(key) {
@@ -195,13 +208,9 @@ export function installWebviewTransport(): WebviewTransport {
     onSurfaceAction(listener) {
       surfaceListener = listener;
     },
+    close,
     dispose() {
-      for (const session of sessions.values()) {
-        session.view$.dispose();
-        session.host$.dispose();
-        runtime.runFork(Scope.close(session.scope, Exit.void));
-      }
-      sessions.clear();
+      for (const key of [...sessions.keys()]) close(key);
       void runtime.dispose();
     },
   };

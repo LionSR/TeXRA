@@ -334,11 +334,12 @@ export function createSessionSurfaces(options: {
     receive: transport.receive,
     sync(keys) {
       // A closed session's surface stays persisted for its next opening;
-      // its graph is released with the transport, once, on dispose.
+      // its graph is released now, and its next opening builds a fresh one.
       for (const [key, entry] of held) {
         if (keys.includes(key)) continue;
         held.delete(key);
         entry.unsubscribe();
+        transport.close(key);
       }
       for (const key of keys) {
         if (!held.has(key)) open(key);

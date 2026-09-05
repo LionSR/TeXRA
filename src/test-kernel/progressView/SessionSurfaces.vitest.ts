@@ -28,6 +28,7 @@ const transport = vi.hoisted(() => ({
   subscribe: vi.fn(),
   request: vi.fn<WebviewTransport['request']>(),
   onSurfaceAction: vi.fn(),
+  close: vi.fn(),
   dispose: vi.fn(),
 }));
 vi.mock('@progressView/frontend/sessionTransport', async (original) => ({
@@ -76,6 +77,12 @@ function response(): (result: Response['result']) => void {
 }
 
 describe('session Surface ownership', () => {
+  it('releases the graph of a session that leaves the sync set', () => {
+    surfaces.sync([]);
+    expect(transport.close).toHaveBeenCalledExactlyOnceWith(KEY);
+    expect(surfaces.get(KEY)).toBeUndefined();
+  });
+
   it('keeps persisted drafts through host updates before listing replay, then prunes authoritative absence', async () => {
     host.set(
       emptyHostSnapshot({
