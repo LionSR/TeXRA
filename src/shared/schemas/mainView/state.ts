@@ -254,10 +254,7 @@ type StringValueDetail = z.infer<typeof StringValueDetailSchema>;
 
 export type BaseFileChangeDetail = StringValueDetail;
 export type EditedFileChangeDetail = StringValueDetail;
-export type ModelChangeDetail = StringValueDetail;
-export type InstructionChangeDetail = StringValueDetail;
 export type CommitChangeDetail = StringValueDetail;
-export type WorkingDirectoryChangeDetail = StringValueDetail;
 
 const FileActionDetailSchema = z.object({
   type: CurrentFileTypeSchema,
@@ -387,38 +384,3 @@ const LatexDiffsActionDetailSchema = z.object({
 export type LatexDiffsActionDetail = z.infer<
   typeof LatexDiffsActionDetailSchema
 >;
-
-const FocusInstructionDetailSchema = z.object({
-  key: z.string(),
-  text: z.string(),
-});
-export type FocusInstructionDetail = z.infer<
-  typeof FocusInstructionDetailSchema
->;
-
-const SessionTypeChangeDetailSchema = z.object({
-  value: SessionTypeSchema,
-});
-export type SessionTypeChangeDetail = z.infer<
-  typeof SessionTypeChangeDetailSchema
->;
-
-const AgentChangeDetailSchema = z.object({
-  sessionType: SessionTypeSchema,
-  value: z.string(),
-});
-export type AgentChangeDetail = z.infer<typeof AgentChangeDetailSchema>;
-
-const LaunchTargetChangeDetailSchema = z.object({
-  value: LaunchTargetSchema,
-});
-export type LaunchTargetChangeDetail = z.infer<
-  typeof LaunchTargetChangeDetailSchema
->;
-
-export type TeamChangeDetail = StringValueDetail;
-
-const ActionDetailSchema = z.object({
-  action: z.string(),
-});
-export type ActionDetail = z.infer<typeof ActionDetailSchema>;

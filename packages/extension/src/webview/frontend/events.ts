@@ -6,8 +6,6 @@
 
 // Local imports - shared utilities
 import type {
-  ActionDetail,
-  AgentChangeDetail,
   AgentConfigBannerActionDetail,
   ApiKeyBannerActionDetail,
   BaseFileChangeDetail,
@@ -15,20 +13,13 @@ import type {
   CommitChangeDetail,
   EditedFileChangeDetail,
   FileActionDetail,
-  FocusInstructionDetail,
   GettingStartedActionDetail,
   InstallGuideDetail,
-  InstructionChangeDetail,
   LatexDiffsActionDetail,
-  LaunchTargetChangeDetail,
-  ModelChangeDetail,
   MultipleFilesActionDetail,
   MultipleFilesTypeActionDetail,
   ReorderFilesDetail,
   RemoveFileDetail,
-  SessionTypeChangeDetail,
-  TeamChangeDetail,
-  WorkingDirectoryChangeDetail,
 } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 export const MainViewEvents = {
@@ -67,9 +58,6 @@ export const MainViewEvents = {
     createEvent('commit-change', detail),
 
   refreshCommits: () => createEvent('refresh-commits', undefined),
-
-  focusInstruction: (detail: FocusInstructionDetail) =>
-    createEvent('focus-instruction', detail),
 
   // Banner events
   apiKeyAction: (detail: ApiKeyBannerActionDetail) =>
@@ -112,39 +100,4 @@ export const MainViewEvents = {
   // LaTeXDiffs events
   latexDiffsAction: (detail: LatexDiffsActionDetail) =>
     createEvent('latexdiffs-action', detail),
-
-  // InstructionPanel events
-  sessionTypeChange: (detail: SessionTypeChangeDetail) =>
-    createEvent('session-type-change', detail),
-
-  launchTargetChange: (detail: LaunchTargetChangeDetail) =>
-    createEvent('launch-target-change', detail),
-
-  teamChange: (detail: TeamChangeDetail) => createEvent('team-change', detail),
-
-  agentChange: (detail: AgentChangeDetail) =>
-    createEvent('agent-change', detail),
-
-  modelChange: (detail: ModelChangeDetail) =>
-    createEvent('model-change', detail),
-
-  workingDirectoryChange: (detail: WorkingDirectoryChangeDetail) =>
-    createEvent('working-directory-change', detail),
-
-  instructionInput: (detail: InstructionChangeDetail) =>
-    createEvent('instruction-input', detail),
-
-  panelAction: (detail: ActionDetail) => createEvent('panel-action', detail),
-
-  execute: () => createEvent('execute', undefined),
-
-  agentSettings: () => createEvent('agent-settings', undefined),
-
-  browseAllAgents: () => createEvent('browse-all-agents', undefined),
-
-  teamSettings: () => createEvent('team-settings', undefined),
-
-  manageTeams: () => createEvent('manage-teams', undefined),
-
-  modelSettings: () => createEvent('model-settings', undefined),
 } as const;
