@@ -1010,6 +1010,9 @@ describe('CLI run progress renderer', () => {
         }),
       );
       const detach = host.attachRunProgressRenderer(session);
+      // The session's graph is fresh: let its fold subscribe before the
+      // facts land, so each fact paints as its own level.
+      await settle();
       await publishRun(session, { streamId: 'gate-stream' });
       detach();
       await host.close();
@@ -1030,6 +1033,9 @@ describe('CLI run progress renderer', () => {
         }),
       );
       const detach = host.attachRunProgressRenderer(session);
+      // The session's graph is fresh: let its fold subscribe before the
+      // facts land, so each fact paints as its own level.
+      await settle();
 
       await publishRun(session, { streamId: 'status-line-stream' });
       // Status travels only as a session fact (run-scope status is no longer

@@ -11,14 +11,21 @@
  * process holds (`self`) or whose owner is alive (`heldBy`) folds to
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
+import '@test/support/sessionGraphTestSetup';
+
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
-import { describe, expect } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import {
   SessionEventLog,
   sessionEventsLayer,
 } from '@agent/runtime/SessionEvents';
+import {
+  forEachLiveSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { closeSession, openSession } from '@agent/runtime/sessionGraph';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -27,6 +34,7 @@ import {
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   AgentCategory,
   STREAM_PHASE,
@@ -37,6 +45,7 @@ import {
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
@@ -305,4 +314,64 @@ describe('session events and view', () => {
         expect(live.streams.size).toBe(3);
       }).pipe(Effect.provide(graph([], storeWithHistory()))),
   );
+});
+
+/**
+ * The session owner (proposal 2026-09-05, sections 3 and 9): `closeSession`
+ * is how a session the `Sessions` map holds behind `openSession` ends.
+ */
+describe('Sessions owner', () => {
+  const open = (storagePath: string) =>
+    openSession({
+      roots: createFakeWorkspaceRoots({ storagePath }),
+      transcripts: StreamLogStore.ephemeral('sessions owner test'),
+    });
+  const isLive = (session: SessionHandle): boolean => {
+    let live = false;
+    forEachLiveSession((candidate) => {
+      live ||= candidate === session;
+    });
+    return live;
+  };
+  const track = (session: SessionHandle, executionId: string) =>
+    session.executions.track(
+      testExecutionHandle({
+        executionId,
+        parentStreamId: `stream:${executionId}` as StreamTabId,
+        agent: 'chat',
+      }),
+    );
+
+  it('close reports settled once the run ended, and releases the session', async () => {
+    const session = open('/workspace/owner/settled');
+    track(session, 'exec:settled');
+    // The run completes: its driver untracks it as it unwinds.
+    session.executions.untrack('exec:settled');
+
+    await expect(closeSession('/workspace/owner/settled')).resolves.toEqual({
+      settled: true,
+      abandoned: [],
+    });
+    expect(isLive(session)).toBe(false);
+  });
+
+  it('close reports a run still live past the budget as abandoned, and releases the session at its settlement', async () => {
+    const session = open('/workspace/owner/abandoned');
+    // A run that ignores its interrupt: no handler, no driver to unwind it.
+    track(session, 'exec:slow');
+    vi.useFakeTimers();
+    try {
+      const closing = closeSession('/workspace/owner/abandoned');
+      await vi.advanceTimersByTimeAsync(SHUTDOWN_PHASE_DEADLINE_MS);
+      await expect(closing).resolves.toEqual({
+        settled: false,
+        abandoned: ['exec:slow'],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(isLive(session)).toBe(true);
+    session.executions.untrack('exec:slow');
+    await vi.waitFor(() => expect(isLive(session)).toBe(false));
+  });
 });

@@ -79,10 +79,19 @@ process reads. The run's transcript rows (`StreamView.transcript`) are
 subscribed on its behalf, its stream and its descendants as they appear, and
 stay resident for the life of the process.
 
-Runs share one session per workspace storage root for the life of the
-process. It is disposed, after its live executions settle, on the platform's
-shutdown path (`lifecycle.runShutdown()`), which an embedder runs before it
-exits.
+Runs share one session per workspace storage root. The runtime's session
+owner holds it, the same owner every TeXRA host opens its sessions through, so
+opening a root twice (two runs, or a run beside a host in the same process)
+resolves the one session already open there; a second root gets its own. A
+session ends only through `closeSession(roots)`: it refuses new runs on the
+root, interrupts the runs it owns and waits for them to settle within the
+runtime's shutdown budget (or the `signal` you pass, when the close runs under
+a budget of your own), flushes its artifacts, and releases the session,
+returning `{ settled, abandoned }`. `settled` is true when every run ended in
+time; otherwise `abandoned` names the runs still live, and the session stays
+open, refusing new runs, until they end. The platform's shutdown path
+(`lifecycle.runShutdown()`), which an embedder runs before it exits, closes
+the platform's session this way after the runs it owns have settled.
 
 ## Run results
 
@@ -110,11 +119,11 @@ files.
 
 ## Entry points
 
-| Entry                     | Contents                                                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/agent`         | `runAgent`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` types |
-| `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                      |
-| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                    |
+| Entry                     | Contents                                                                                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/agent`         | `runAgent`, `closeSession`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` / `SessionCloseReport` types |
+| `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                                             |
+| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                                           |
 
 ## The platform
 

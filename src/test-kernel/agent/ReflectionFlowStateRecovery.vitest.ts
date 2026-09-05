@@ -32,7 +32,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import { createProcessSession } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { testModelCell } from './modelCellTestUtils';
@@ -67,7 +67,7 @@ async function runPersistedReflectionFlow(
   logger: RunReflectionFlowInput['logger'] = noopTrace,
   options: { rounds?: number; aborted?: boolean } = {},
 ): Promise<Awaited<ReturnType<typeof runReflectionFlow>>> {
-  const session = createTestSession();
+  const session = createProcessSession();
   const runScope = createRunScope({
     streamId,
     executionId,

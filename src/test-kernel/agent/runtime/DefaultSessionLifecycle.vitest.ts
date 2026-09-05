@@ -51,13 +51,16 @@ async function importSessionRuntime() {
   await import('@test/support/sessionGraphTestSetup');
   const sessionModule = await import('@agent/runtime/SessionHandle');
   const { StreamLogStore } = await import('@transcript');
-  return { ...sessionModule, StreamLogStore };
+  // A session beside the process default: its own storage root, as a
+  // desktop paper's, since one root holds one session.
+  const { createTestSession } = await import('@test/support/sessionTestUtils');
+  return { ...sessionModule, createTestSession, StreamLogStore };
 }
 
 describe('default session lifecycle', () => {
   it('warns once only when a non-default session is live at resolution', async () => {
     const {
-      SessionHandle,
+      createTestSession,
       defaultSession,
       initializeDefaultSession,
       teardownDefaultSession,
@@ -71,14 +74,14 @@ describe('default session lifecycle', () => {
       expect(defaultSession()).toBe(processDefault);
       expect(channelTraceMocks.warn).not.toHaveBeenCalled();
 
-      const disposedSession = new SessionHandle({
+      const disposedSession = createTestSession({
         transcripts: StreamLogStore.ephemeral('disposed non-default'),
       });
       disposedSession.dispose();
       expect(defaultSession()).toBe(processDefault);
       expect(channelTraceMocks.warn).not.toHaveBeenCalled();
 
-      const liveSession = new SessionHandle({
+      const liveSession = createTestSession({
         transcripts: StreamLogStore.ephemeral('live non-default'),
       });
       try {
@@ -101,7 +104,7 @@ describe('default session lifecycle', () => {
       throw warningFailure;
     });
     const {
-      SessionHandle,
+      createTestSession,
       defaultSession,
       initializeDefaultSession,
       teardownDefaultSession,
@@ -110,7 +113,7 @@ describe('default session lifecycle', () => {
     const processDefault = initializeDefaultSession({
       transcripts: StreamLogStore.ephemeral('process default'),
     });
-    const liveSession = new SessionHandle({
+    const liveSession = createTestSession({
       transcripts: StreamLogStore.ephemeral('live non-default'),
     });
 
@@ -168,11 +171,15 @@ describe('default session lifecycle', () => {
   });
 
   it('resolves an explicitly threaded session without a process default', async () => {
-    const { SessionHandle, currentSession, tryDefaultSession, StreamLogStore } =
-      await importSessionRuntime();
+    const {
+      createTestSession,
+      currentSession,
+      tryDefaultSession,
+      StreamLogStore,
+    } = await importSessionRuntime();
     const { createRunContext, withRunContext } =
       await import('@agent/runtime/RunContext');
-    const owned = new SessionHandle({
+    const owned = createTestSession({
       transcripts: StreamLogStore.ephemeral('explicitly threaded session'),
     });
 
