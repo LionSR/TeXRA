@@ -108,7 +108,6 @@ export class LogList extends LitElement {
             aria-relevant=${terminal ? nothing : 'additions'}
             ?hidden=${id !== this.activeStreamId}
             .groups=${stream.transcript.taskGroups}
-            .runModel=${stream.transcript.run}
             .entries=${[]}
             .rows=${stream.transcript.rows}
             .inflight=${data.inflight}

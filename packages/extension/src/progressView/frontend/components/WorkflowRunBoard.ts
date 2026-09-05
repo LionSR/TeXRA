@@ -30,7 +30,6 @@ import { resolvePhase, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { formatWorkflowTally } from '@shared/copy/workflowCall';
 import {
-  formatWorkflowCallLiveParts,
   formatWorkflowRowGroup,
   workflowPhaseRows,
   type WorkflowPhaseModel,
@@ -443,16 +442,33 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
+  /** `attempt 2`, `6m · ↓4k`: what a row shows beside its last line. The
+   *  card's kind, agent, and model stay in the child's header; the board
+   *  keeps the attempt, the elapsed time while it runs, and its tokens. */
+  private rowMeta(row: WorkflowTaskRow): readonly string[] {
+    const { call } = row;
+    const live = this.run?.liveOf.get(row.id);
+    return [
+      call.attemptNumber === undefined
+        ? undefined
+        : `attempt ${call.attemptNumber}`,
+      call.status === 'running' &&
+      live?.runStartedAt !== undefined &&
+      this.nowMs !== null
+        ? formatCompactDuration(this.nowMs - live.runStartedAt)
+        : undefined,
+      live?.outputTokens !== undefined && live.outputTokens > 0
+        ? `↓${formatCompactTokenCount(live.outputTokens)}`
+        : undefined,
+    ].filter((part) => part !== undefined);
+  }
+
   private renderTask(row: WorkflowTaskRow): TemplateResult {
     const { call } = row;
     const child = this.childOf(row.id);
     const approval = this.approvalOf(row.id);
     const waiting = approval !== undefined;
-    const live = this.run?.liveOf.get(row.id);
-    const meta = [
-      ...row.metadataParts,
-      ...formatWorkflowCallLiveParts(call, live, this.nowMs ?? undefined),
-    ];
+    const meta = this.rowMeta(row);
     const last = waiting
       ? approvalLine(approval)
       : (row.detail?.text ?? child?.latestLine ?? child?.statusLabel ?? '');

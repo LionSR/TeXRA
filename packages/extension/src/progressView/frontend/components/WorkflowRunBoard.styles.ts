@@ -98,6 +98,13 @@ export const workflowRunBoardStyles = css`
     padding: var(--wa-space-2xs) 0 var(--wa-space-s);
   }
 
+  /* The desktop's headline variant keeps the rows in a bordered card. */
+  :host([summary]) .rows {
+    margin-top: var(--wa-space-xs);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border-radius: var(--wa-border-radius-m);
+  }
+
   .section {
     display: flex;
     align-items: center;
@@ -144,7 +151,8 @@ export const workflowRunBoardStyles = css`
   }
 
   .row-label {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
+    max-width: 45%;
     font-weight: var(--wa-font-weight-semibold);
     white-space: nowrap;
     overflow: hidden;
@@ -165,7 +173,7 @@ export const workflowRunBoardStyles = css`
   }
 
   .row-meta {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     max-width: 40%;
     white-space: nowrap;
     overflow: hidden;
