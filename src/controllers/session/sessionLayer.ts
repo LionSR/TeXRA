@@ -49,7 +49,6 @@ import {
   type SessionGraph,
   type SessionGraphOpener,
 } from '@agent/runtime/sessionGraph';
-import { createLog } from '@logger/logUtils';
 import {
   initProcessRuntime,
   type ProcessRuntime,
@@ -74,8 +73,6 @@ import {
 import { SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
-
-const log = createLog('sessionLayer');
 
 /** How often the owners the view names are re-probed (PRD 5.2). */
 const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
