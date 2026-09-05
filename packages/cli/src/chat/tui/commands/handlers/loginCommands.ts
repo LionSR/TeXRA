@@ -1,7 +1,5 @@
-import {
-  refreshSubscriptionPreferenceViews,
-  setCliSubscriptionPreference,
-} from '@cli/chat/tui/state/subscriptionPreference';
+import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
+import { setCliSubscriptionPreference } from '@cli/chat/tui/state/subscriptionPreference';
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
@@ -206,7 +204,7 @@ export async function logoutFromChat(
   ): Promise<void> {
     try {
       const update = await signOutCliSubscription(providerId);
-      refreshSubscriptionPreferenceViews();
+      bumpCodexPreferenceVersion();
       lines.push(ACCOUNT_OUTCOME.signedOut(label));
       lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
     } catch (error: unknown) {

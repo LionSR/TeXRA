@@ -1,5 +1,5 @@
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
-import { refreshSubscriptionPreferenceViews } from '@cli/chat/tui/state/subscriptionPreference';
+import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
 import {
   parseCliModelAccessSelection,
@@ -30,7 +30,7 @@ export async function applyCliProviderApiKey(
   key: string,
 ): Promise<string | undefined> {
   await saveProviderApiKey(provider, key);
-  refreshSubscriptionPreferenceViews();
+  bumpCodexPreferenceVersion();
   const codingPlan = codingPlanForApiProvider(provider);
   if (!codingPlan) return undefined;
   if (!codingPlan.exclusiveCredential) {
@@ -53,7 +53,7 @@ async function applyCliModelAccessSelectionWithSignal(
       output.writeProgress(message, { copyable: true }),
     signal,
   });
-  refreshSubscriptionPreferenceViews();
+  bumpCodexPreferenceVersion();
   output.appendOutcome(collapseWhitespace(access.message));
 }
 
