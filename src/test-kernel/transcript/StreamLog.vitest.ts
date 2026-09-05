@@ -6,7 +6,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type StreamLogEntry,
 } from '@shared/schemas';
-import { StreamLog } from '@transcript';
+import { StreamLog } from '@transcript/StreamLog';
 
 function logWithMessage(text = ''): StreamLog {
   const log = new StreamLog();

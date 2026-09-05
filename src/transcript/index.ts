@@ -15,7 +15,6 @@ export {
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
 } from './StreamLogStore';
-export { StreamLog, StreamLogDeltaBuffer } from './StreamLog';
 export { createRunTrace, type RunTrace } from './runTrace';
 export {
   findTranscriptSpillFile,
