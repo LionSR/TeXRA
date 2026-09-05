@@ -35,6 +35,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
+import { Rejected } from '@shared/session/requestErrors';
 
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
 import { toLogData } from './desktopLogUtils.js';
@@ -196,10 +197,14 @@ export function createDesktopAgentExecution(
   return {
     async handleExecute(message) {
       const launch = await prepareMainViewExecutionLaunch(message, host);
-      if (launch.status === 'cancelled') return;
+      // A refused launch is a Rejected response, as on the extension: the
+      // surface's settle path early-returns and keeps the composer's text.
+      if (launch.status === 'cancelled') {
+        throw new Rejected({ reason: 'The launch was cancelled.' });
+      }
       if (launch.status === 'error') {
         void host.showErrorMessage(launch.message);
-        return;
+        throw new Rejected({ reason: launch.message });
       }
       if (launch.infoMessage) {
         void settleHostDialog(
