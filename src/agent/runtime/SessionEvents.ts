@@ -53,6 +53,11 @@ import {
   type SessionCursor,
 } from '@shared/session/sessionEvents';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
+import {
+  HISTORICAL_COMMITS_PER_STREAM,
+  historicalListing,
+  isHistoricalStream,
+} from './historicalListing';
 
 const logger = createLog('sessionEvents');
 
@@ -126,12 +131,15 @@ function listingRows(rows: readonly LogRow[]): SessionEvent[] {
  * wakes nobody cannot exist. The writer of every row is this process (C5),
  * stamped here from `ProcessIdentity`; no caller passes it.
  *
- * The memory layer is the pre-cutover store, and its transcript tier is the
- * transcript store's: `aggregate(id, fromSeq)` reads that store's rows for
- * the stream (the store's row `seqNo` is the aggregate seq), and the tail
- * holds a transcript row's place only, materialized from the store when
- * read. Nothing here reaches disk, and the cutover replaces this layer with
- * the SQLite write path under the same shape.
+ * The memory layer is the pre-cutover store, and two of its tiers are the
+ * transcript store's: the listing tier derives every historical stream from
+ * the store's resident summary tier when a reader subscribes
+ * (`historicalListing.ts`; nothing is walked at graph open, nothing held),
+ * and the transcript tier reads that store's rows for a subscribed stream
+ * (`aggregate(id, fromSeq)`, the store's row `seqNo` is the aggregate seq),
+ * while the tail holds a transcript row's place only, materialized from the
+ * store when read. Nothing here reaches disk, and the cutover replaces this
+ * layer with the SQLite write path under the same shape.
  */
 export class SessionEventLog extends Context.Service<
   SessionEventLog,
@@ -139,15 +147,9 @@ export class SessionEventLog extends Context.Service<
     readonly level: SubscriptionRef.SubscriptionRef<CommitOrdinal>;
     /** Assign each draft its aggregate seq and commit ordinal, append it
      *  under the log's permit, and move the level; returns the last ordinal.
-     *  `at` is the publish clock (C1, informational) unless a draft names
-     *  the moment its row describes, as the pre-cutover history import
-     *  does per stream. One call is one permit, one array walk with no
-     *  fiber step per row, and one level move, whatever its length: the
-     *  synchronous graph open (`sessionGraphOpener`) appends the whole
-     *  history in one call and must stay under the scheduler's yield
-     *  budget. */
+     *  `at` is the publish clock (C1, informational). */
     readonly appendAll: (
-      drafts: ReadonlyArray<SessionEventDraft & { readonly at?: number }>,
+      drafts: readonly SessionEventDraft[],
       at?: number,
     ) => Effect.Effect<CommitOrdinal>;
     readonly readAll: (
@@ -158,9 +160,9 @@ export class SessionEventLog extends Context.Service<
       aggregateId: AggregateId,
       fromSeq: number,
     ) => Stream.Stream<SessionEvent>;
-    /** Whether the aggregate's sequence row exists and is not closed (C2,
-     *  C9): a stream exists from the publish of its `run.start` until its
-     *  tombstone. Synchronous at publish: `appendAll` crosses no
+    /** Whether the aggregate exists and is not closed (C2, C9): a stream
+     *  exists from its listing (the summary tier's, or the publish of its
+     *  `run.start`) until its tombstone. Synchronous at publish: `appendAll` crosses no
      *  asynchronous boundary, so the fork `SessionHandle.publish` makes has
      *  minted its rows before that call returns, ahead of every fold. */
     readonly exists: (aggregateId: AggregateId) => Effect.Effect<boolean>;
@@ -174,7 +176,24 @@ export class SessionEventLog extends Context.Service<
       SessionEventLog,
       Effect.gen(function* () {
         const identity = yield* ProcessIdentity;
-        const level = yield* SubscriptionRef.make<CommitOrdinal>(0);
+        // The listing tier's membership (`historicalListing.ts`): the
+        // streams that exist as this log is built. One key-set copy, no
+        // facts read; the facts are read when a reader first subscribes and
+        // held from then on. Their commits are reserved below the log's
+        // first row, so a log commit is the row's 1-based position above
+        // `reserved`, and the level starts there.
+        const historical: ReadonlySet<StreamTabId> = new Set(
+          transcripts.keys(),
+        );
+        const reserved = historical.size * HISTORICAL_COMMITS_PER_STREAM;
+        let listing: SessionEvent[] | undefined;
+        const historicalRows = (): SessionEvent[] =>
+          (listing ??= historicalListing(
+            transcripts,
+            historical,
+            identity.ownerId,
+          ));
+        const level = yield* SubscriptionRef.make<CommitOrdinal>(reserved);
         const gate = yield* Semaphore.make(1);
         const rows: LogRow[] = [];
         // The sequence table (C1, C2): one seq counter per aggregate for
@@ -228,9 +247,8 @@ export class SessionEventLog extends Context.Service<
               Effect.uninterruptible(
                 Effect.gen(function* () {
                   for (const draft of drafts) {
-                    const commit = rows.length + 1;
+                    const commit = reserved + rows.length + 1;
                     const seq = nextSeq(draft.aggregateId);
-                    const rowAt = draft.at ?? at;
                     if (draft.type === 'transcript.entry') {
                       rows.push({
                         type: 'transcript.ref',
@@ -238,7 +256,7 @@ export class SessionEventLog extends Context.Service<
                         entryId: draft.entry.id,
                         seq,
                         commit,
-                        at: rowAt,
+                        at,
                       });
                       continue;
                     }
@@ -250,31 +268,44 @@ export class SessionEventLog extends Context.Service<
                       seq,
                       commit,
                       ownerId: identity.ownerId,
-                      at: rowAt,
+                      at,
                     } as SessionEvent);
                   }
-                  const last = rows.length;
+                  const last = reserved + rows.length;
                   yield* SubscriptionRef.set(level, last);
                   return last;
                 }),
               ),
             ),
-          // `commit` is the row's 1-based position, so the rows above a
-          // commit are the slice past it.
+          // `commit` is the row's 1-based position above `reserved`, so
+          // the rows above a commit are the slice past it; a cursor inside
+          // the listing tier's space reads every log row.
           readAll: (fromCommit) =>
             Stream.unwrap(
               Effect.sync(() =>
                 Stream.fromIterable(
-                  rows.slice(fromCommit).flatMap((row) => {
-                    const event = materialize(row);
-                    return event === null ? [] : [event];
-                  }),
+                  rows
+                    .slice(Math.max(0, fromCommit - reserved))
+                    .flatMap((row) => {
+                      const event = materialize(row);
+                      return event === null ? [] : [event];
+                    }),
                 ),
               ),
             ),
+          // The listing tier is the summary tier's plus the log's own
+          // listing rows: every historical stream derived from the store
+          // on the first read, in the reserved commit space, then the facts
+          // this process appended, which outrank them per key under the
+          // fold's commit order. No history is walked at graph open.
           readListing: () =>
             Stream.unwrap(
-              Effect.sync(() => Stream.fromIterable(listingRows(rows))),
+              Effect.sync(() =>
+                Stream.fromIterable([
+                  ...historicalRows(),
+                  ...listingRows(rows),
+                ]),
+              ),
             ),
           // The transcript tier is the store's: its rows for the stream
           // above `fromSeq`, read once without adding residency, stamped
@@ -306,9 +337,19 @@ export class SessionEventLog extends Context.Service<
                 );
               }),
             ),
+          // A stream exists from its listing (a historical stream the
+          // summary tier lists, or a `run.start` this process appended)
+          // until its tombstone.
           exists: (aggregateId) =>
             Effect.sync(
-              () => seqs.has(aggregateId) && !closed.has(aggregateId),
+              () =>
+                !closed.has(aggregateId) &&
+                (seqs.has(aggregateId) ||
+                  isHistoricalStream(
+                    transcripts,
+                    historical,
+                    aggregateId as StreamTabId,
+                  )),
             ),
         };
       }),

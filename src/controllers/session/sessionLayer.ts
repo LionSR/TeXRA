@@ -11,14 +11,13 @@
  * on dispose, so two handles on one root share the graph and never each
  * other's session.
  *
- * Two pieces of this file exist only until the persistence cutover and are
- * marked so: the hydration importer, the first layer of the root graph,
- * which reads the summary tier once per root and seeds the memory log with
- * the historical streams before the plane's anchor is read (the only path a
- * historical stream enters the view; the event table replaces it), and the
- * transcript bridge, which turns the root's transcript store's change feed
- * into `transcript.entry` rows and in-flight text (the runtime's flow rows
- * replace it).
+ * One piece of this file exists only until the persistence cutover and is
+ * marked so: the transcript bridge, which turns the root's transcript
+ * store's change feed into `transcript.entry` rows and in-flight text (the
+ * runtime's flow rows replace it). The historical streams enter the view
+ * through the memory log's listing tier (`historicalListing.ts`), read
+ * from the summary tier when a reader subscribes; the event table replaces
+ * that.
  */
 import * as os from 'node:os';
 
@@ -50,18 +49,12 @@ import {
   type SessionGraph,
   type SessionGraphOpener,
 } from '@agent/runtime/sessionGraph';
-import { createLog } from '@logger/logUtils';
 import {
   initProcessRuntime,
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import type { WorkspaceRoots as HostWorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  USER_FOLLOW_UP_SUPPORT,
-  type OwnerId,
-  type SessionEventDraft,
-  type StreamTabId,
-} from '@shared/schemas';
+import { type OwnerId, type StreamTabId } from '@shared/schemas';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
@@ -80,8 +73,6 @@ import {
 import { SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
-
-const log = createLog('sessionLayer');
 
 /** How often the owners the view names are re-probed (PRD 5.2). */
 const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
@@ -182,128 +173,6 @@ const ownerLiveness = Layer.effectDiscard(
   }),
 );
 
-/** The summary tier's streams, parents before children and older before
- *  newer, so the fold's creation order is the transcript's: a child folded
- *  before its parent exists is re-rooted for good (PRD 5.2, `ancestors`). */
-function streamsParentsFirst(transcripts: StreamLogStore): StreamTabId[] {
-  const known = new Set(transcripts.keys());
-  let remaining = [...known].sort(
-    (a, b) =>
-      (transcripts.getTimestampRange(a).first ?? 0) -
-      (transcripts.getTimestampRange(b).first ?? 0),
-  );
-  const ordered: StreamTabId[] = [];
-  const placed = new Set<StreamTabId>();
-  while (remaining.length > 0) {
-    const next = remaining.filter((id) => {
-      const parent = transcripts.getSummaryMeta(id)?.parentStreamId;
-      return !parent || !known.has(parent) || placed.has(parent);
-    });
-    if (next.length === 0) {
-      // A parent cycle is a corrupt summary tier; import the rest as roots.
-      log.warn(
-        `Stream summaries form a parent cycle among ${remaining.join(', ')}; importing them as top-level streams`,
-      );
-      ordered.push(...remaining);
-      break;
-    }
-    for (const id of next) placed.add(id);
-    ordered.push(...next);
-    remaining = remaining.filter((id) => !placed.has(id));
-  }
-  return ordered;
-}
-
-/**
- * Pre-cutover hydration: one historical stream's facts from the summary
- * tier alone. `run.start` carries the summary's identity (nullish where it
- * has none, contract C3), the launch facts the summary recorded, and the
- * description. The summary holds no status and no holder: a historical
- * stream's outcome is the cutover's event table, or it is not in the
- * listing; nothing here reads an execution record or a lease. A summary
- * that names no execution or no category predates the summary mirror and
- * is reported and skipped rather than given a fabricated launch fact.
- */
-function historicalStream(
-  transcripts: StreamLogStore,
-  streamId: StreamTabId,
-): SessionEventDraft[] | null {
-  const meta = transcripts.getSummaryMeta(streamId);
-  if (meta?.executionId === undefined) {
-    log.warn(
-      `Stream ${streamId} has no execution in its summary; not imported into the session view`,
-    );
-    return null;
-  }
-  if (meta.agentCategory === undefined) {
-    log.warn(
-      `Stream ${streamId} has no category in its summary; not imported into the session view`,
-    );
-    return null;
-  }
-  const { executionId } = meta;
-  const parent = meta.parentStreamId;
-  const drafts: SessionEventDraft[] = [
-    {
-      type: 'run.start',
-      aggregateId: streamId,
-      executionId,
-      identity: meta.identity ?? null,
-      userFollowUpSupport:
-        meta.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      category: meta.agentCategory,
-      isRemote: false,
-      worktree: null,
-      parentStreamId:
-        parent && transcripts.has(parent as StreamTabId) ? parent : null,
-    },
-  ];
-  if (meta.model !== undefined || meta.command !== undefined) {
-    drafts.push({
-      type: 'run.config',
-      aggregateId: streamId,
-      executionId,
-      config: { model: meta.model, instruction: meta.command },
-    });
-  }
-  if (meta.description) {
-    drafts.push({
-      type: 'updateStreamDescription',
-      aggregateId: streamId,
-      description: meta.description,
-    });
-  }
-  return drafts;
-}
-
-/**
- * The history import (above): the first layer of a root's graph, the whole
- * history in ONE append under the log's permit, parents before children,
- * each row stamped at its stream's own time, and complete before
- * `sessionEventsLayer` reads its anchor, so the listing hydrate sees every
- * historical stream and the tail starts after them.
- *
- * One call, not one per stream: the graph is built by a synchronous run
- * (`sessionGraphOpener`), and a fiber yields to the scheduler every
- * `Scheduler.MaxOpsBeforeYield` steps, so an import that took the permit
- * and moved the level once per stream crossed that budget on a few
- * thousand streams and the open read as asynchronous. Building the drafts
- * is plain code; the log sees one permit, one array walk, one level move.
- */
-const historyImport = (transcripts: StreamLogStore) =>
-  Layer.effectDiscard(
-    Effect.gen(function* () {
-      const log = yield* SessionEventLog;
-      const drafts = streamsParentsFirst(transcripts).flatMap((streamId) => {
-        const stream = historicalStream(transcripts, streamId);
-        if (stream === null) return [];
-        const at = transcripts.getTimestampRange(streamId).last ?? Date.now();
-        return stream.map((draft) => ({ ...draft, at }));
-      });
-      if (drafts.length > 0) yield* log.appendAll(drafts);
-    }),
-  );
-
 /**
  * The transcript bridge, until the cutover: the root's transcript store's
  * change feed, in emission order, as `transcript.entry` rows on the plane
@@ -378,11 +247,7 @@ const sessionLayer = (key: SessionKey) =>
       Layer.provideMerge(
         sessionEventsLayer.pipe(
           Layer.provideMerge(
-            historyImport(key.transcripts).pipe(
-              Layer.provideMerge(
-                SessionEventLog.memoryLayer(key.transcripts, key.roots),
-              ),
-            ),
+            SessionEventLog.memoryLayer(key.transcripts, key.roots),
           ),
         ),
       ),
@@ -432,19 +297,18 @@ export function installProcessRuntime(
 /**
  * The opener a process installs through `installProcessRuntime`: resolves
  * the graph of the session's root under a scope the session closes on
- * dispose (building it, history import first, when the session is the
- * root's first) and builds the session-bound services under it.
+ * dispose (building it when the session is the root's first) and builds
+ * the session-bound services under it.
  */
 function sessionGraphOpener(
   runtime: ManagedRuntime.ManagedRuntime<Sessions, never>,
 ): SessionGraphOpener {
   return (session) => {
-    // The build runs under `runSync`, so everything a root's graph does at
-    // build time, the history import included, must complete inside the
-    // scheduler's yield budget (`Scheduler.MaxOpsBeforeYield` steps per
-    // yield) or the open reads as asynchronous and throws. The import
-    // appends the whole history in one call for that reason; moving it to
-    // row open (#11907) is what removes the history pass from here.
+    // The build runs under `runSync`: nothing a root's graph does at build
+    // time may walk the history or cross the scheduler's yield budget
+    // (`Scheduler.MaxOpsBeforeYield` steps per yield), or the open reads as
+    // asynchronous and throws. History is read when a reader subscribes
+    // (`SessionEventLog.memoryLayer`), never here.
     const scope = runtime.runSync(Scope.make());
     const context = runtime.runSync(
       Sessions.contextEffect(
