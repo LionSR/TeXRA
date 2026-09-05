@@ -138,8 +138,6 @@ function transcriptOf(
   return {
     rows: [...rows],
     taskGroups: [],
-    compaction: [],
-    settledSeq: rows.length,
     settledRows: rows.length,
     run: workflowRunModel({
       taskGroups: [],

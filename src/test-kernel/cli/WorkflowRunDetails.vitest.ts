@@ -263,8 +263,6 @@ describe('selectWorkflowRunDetailLines', () => {
                 status: STREAM_PHASE.RUNNING,
               },
             ],
-            compaction: [],
-            settledSeq: 0,
             settledRows: 0,
             run: null,
           },

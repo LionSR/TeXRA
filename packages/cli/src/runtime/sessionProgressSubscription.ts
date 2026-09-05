@@ -26,12 +26,7 @@ import type {
 function projectCliActiveChildRow(
   item: ActiveChildInfo,
 ): CliNdjsonActiveChildRow {
-  const {
-    identity,
-    childStreamId,
-    resumeEligible: _resumeEligible,
-    ...rest
-  } = item;
+  const { identity, childStreamId, ...rest } = item;
   const toolName =
     identity.kind === 'multiAgentWorkflow'
       ? 'delegate_multi_agents'

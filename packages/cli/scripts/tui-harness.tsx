@@ -74,12 +74,12 @@ import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval'
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import type { StreamLogAppendInput } from '@transcript/StreamLog';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import { showCliWorkPlan } from '../src/chat/tui/commands/handlers/sessionCommands';
-import { cliSettingsStores } from '../src/runtime/settingsStores';
 import {
   formatSlashCommandHelp,
   GOAL_MODE_HELP,
@@ -1905,7 +1905,7 @@ registerBuiltinSlashCommands({
     appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
   },
   workPlanSnapshots: defaultSession().snapshots,
-  getConfigStores: cliSettingsStores,
+  getConfigStores: platformSettingsStores,
   onError: (error) => {
     appendHarnessAssistantTranscript(
       `Slash command failed: ${toErrorMessage(error)}`,

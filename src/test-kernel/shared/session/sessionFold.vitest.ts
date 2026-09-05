@@ -141,14 +141,6 @@ describe('sessionFold', () => {
       taskGroupsOf(scenario.rootEntries),
     );
     expect(root.transcript.rows).toStrictEqual(rowsOf(scenario.rootEntries));
-    // The last session commit folded for the stream, not a per-aggregate seq.
-    expect(root.transcript.settledSeq).toBe(
-      Math.max(
-        ...scenario.log.events
-          .filter((e) => e.aggregateId === ROOT)
-          .map((e) => e.commit),
-      ),
-    );
     // The transcript tier retained the rows: the aggregate's newest seq.
     expect(view.folded.get(ROOT)).toBe(
       Math.max(
@@ -408,7 +400,6 @@ describe('sessionFold', () => {
     expect(first.kind === 'assistant' && first.streaming).toBe(true);
     expect(streaming.inflight.get(`${CHILD}/response-1`)).toBe('Hello');
     expect(streaming.inflight.get(`${CHILD}/response-2`)).toBe('Ear');
-    expect(child.transcript.settledSeq).toBe(2);
     // A streaming reply is not settled and not yet the latest line.
     expect(child.transcript.settledRows).toBe(0);
     expect(child.latestLine).toBeNull();

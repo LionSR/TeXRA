@@ -101,8 +101,6 @@ export function makeStreamView(over: StreamViewOverrides): StreamView {
     transcript: {
       rows: [],
       taskGroups: [],
-      compaction: [],
-      settledSeq: 0,
       settledRows: 0,
       run: null,
     },

@@ -77,8 +77,6 @@ async function renderPopup(
         transcript: {
           rows: [...rows],
           taskGroups: [...taskGroups],
-          compaction: [],
-          settledSeq: rows.length,
           settledRows: rows.length,
           run: model,
         },

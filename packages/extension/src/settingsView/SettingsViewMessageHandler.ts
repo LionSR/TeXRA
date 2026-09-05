@@ -80,7 +80,6 @@ import {
 
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import {
   getLastCheckResults,
@@ -91,6 +90,7 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { setToolEnabled } from '@utils/config/constants';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
@@ -494,21 +494,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Catalog-derived settings snapshots
   // ============================================================
 
-  private settingsStores(): SettingsStores {
-    return {
-      config: workspaceRoots().config,
-      workspaceState: workspaceRoots().workspaceState,
-      globalState: platform().globalState,
-    };
-  }
-
   /** Post one catalog-derived snapshot. Every field comes from the catalog. */
   private async sendSettingsSnapshot(
     webview: vscode.Webview,
     snapshot: DerivedSettingsSnapshot,
   ): Promise<void> {
     await webview.postMessage(
-      buildSettingsSnapshotMessage(snapshot, this.settingsStores(), 'vscode'),
+      buildSettingsSnapshotMessage(
+        snapshot,
+        platformSettingsStores(),
+        'vscode',
+      ),
     );
   }
 
@@ -534,7 +530,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
     const result = await applyStateSettingUpdate(key, value, {
       host: 'vscode',
-      stores: this.settingsStores(),
+      stores: platformSettingsStores(),
       // The shared function already gates this hook on
       // `configTarget !== 'global'`; this checks only the workspace half.
       requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
