@@ -780,11 +780,13 @@ export class StreamSnapshotStore {
             fact.payload.parentStreamId,
           );
           return;
-        // Liveness/status and the goal, inquiry, follow-up, active-stream,
-        // hold, and removal facts carry nothing this store persists (see the
-        // liveness note above) — listed explicitly so a newly added
-        // SessionFact fails the `never` check below instead of silently
-        // no-op'ing.
+        // `status` carries liveness, which the class doc above says this
+        // store deliberately does not persist. The rest — goal, inquiry,
+        // follow-up, active-stream, hold, and removal facts — are
+        // session/render state owned by SessionFactApplier/SessionState, not
+        // by this sidecar. Both groups are listed explicitly so a newly
+        // added SessionFact fails the `never` check below instead of
+        // silently no-op'ing.
         case 'status':
         case 'goalStateChanged':
         case 'inquiryThreadUpdated':
