@@ -319,16 +319,18 @@ export async function runChat(
   // it outlives session subscriptions so a later teardown failure cannot leave
   // the user's shell in raw/kitty/mouse mode with a hidden cursor.
   const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit();
+  // The one session state the TUI renders (PRD 10.1): the session's fold
+  // bridged into a signal, with every stream's transcript tier subscribed
+  // for this surface. The TUI shows the whole session, so its subscription
+  // set is the view's stream set. Bound before anything reads the view:
+  // the terminal title below derives its attention state from it on
+  // install.
+  const unbindSessionView = bindSessionView(runtimeSession.view);
   // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
   // shell prompt in every tab makes a multi-session workflow hard to
   // navigate. Keep the project name while surfacing live attention state.
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposables.add(terminalTitleUpdates.dispose);
-  // The one session state the TUI renders (PRD 10.1): the session's fold
-  // bridged into a signal, with every stream's transcript tier subscribed
-  // for this surface. The TUI shows the whole session, so its subscription
-  // set is the view's stream set.
-  const unbindSessionView = bindSessionView(runtimeSession.view);
   disposables.add(announceForegroundApprovals());
   let subscribedStreams = '';
   const syncTranscriptSubscriptions = (): void => {
