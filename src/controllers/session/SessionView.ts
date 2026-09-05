@@ -13,6 +13,10 @@
  * fold's seq threshold order-safe, `switchMap` closes the previous set's
  * reads, and nothing is published before the marker, so a surface mounting
  * onto an existing session never renders the intermediate states of a replay.
+ * The fold's unit is a frame: the cold reads arrive in frames of
+ * `REPLAY_FRAME_INPUTS`, so a workflow board the replay touches derives its
+ * run model once per frame rather than once per entry, while the marker, the
+ * tail, and the two live inputs arrive one per frame.
  *
  * `all` is the plane's tail as this view has folded it: the same rows
  * `SessionEvents.all` delivers, woken by the view's cursor instead of the
@@ -43,6 +47,13 @@ import {
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 const logger = createLog('sessionView');
+
+/** What one `fold` call consumes: the cold reads in frames of this many
+ *  inputs, everything else one input per frame. Nothing is published before
+ *  the marker, so the frame size costs no latency, only buffer. */
+type Frame = readonly FoldInput[];
+const REPLAY_FRAME_INPUTS = 512;
+const single = (input: FoldInput): Frame => [input];
 
 export class SessionViewService extends Context.Service<
   SessionViewService,
@@ -79,23 +90,23 @@ export class SessionViewService extends Context.Service<
             SubscriptionRef.get(ref).pipe(
               Effect.map((view) =>
                 Stream.concat(
-                  set.reduce(
-                    (history, s) =>
-                      Stream.concat(
-                        history,
-                        events
-                          .aggregate(s.id, view.folded.get(s.id) ?? s.fromSeq)
-                          .pipe(from('aggregate')),
-                      ),
-                    Stream.concat(
-                      events.listing().pipe(from('listing')),
-                      Stream.make<[FoldInput]>({
-                        _tag: 'subscriptions',
-                        set: [...set],
-                      }),
-                    ),
-                  ),
                   Stream.concat(
+                    set.reduce(
+                      (history, s) =>
+                        Stream.concat(
+                          history,
+                          events
+                            .aggregate(s.id, view.folded.get(s.id) ?? s.fromSeq)
+                            .pipe(from('aggregate')),
+                        ),
+                      Stream.concat(
+                        events.listing().pipe(from('listing')),
+                        Stream.make<[FoldInput]>({
+                          _tag: 'subscriptions',
+                          set: [...set],
+                        }),
+                      ),
+                    ),
                     // The local snapshot is a level: read once here, ahead
                     // of the marker, so the first published view has it.
                     Stream.fromEffect(SubscriptionRef.get(liveness.ref)).pipe(
@@ -104,10 +115,12 @@ export class SessionViewService extends Context.Service<
                         local,
                       })),
                     ),
-                    Stream.concat(
-                      Stream.make<[FoldInput]>({ _tag: 'replay.complete' }),
-                      events.all(view.cursor).pipe(from('all')),
-                    ),
+                  ).pipe(Stream.grouped(REPLAY_FRAME_INPUTS)),
+                  Stream.concat(
+                    Stream.make(single({ _tag: 'replay.complete' })),
+                    events
+                      .all(view.cursor)
+                      .pipe(from('all'), Stream.map(single)),
                   ),
                 ),
               ),
@@ -117,20 +130,23 @@ export class SessionViewService extends Context.Service<
       );
       const local = liveness.changes.pipe(
         Stream.map((local): FoldInput => ({ _tag: 'local', local })),
+        Stream.map(single),
       );
-      const text = chunks.changes.pipe(Stream.map((chunk): FoldInput => chunk));
+      const text = chunks.changes.pipe(Stream.map(single));
       yield* Effect.forkScoped(
         Stream.mergeAll([reads, local, text], { concurrency: 3 }).pipe(
-          // Each state paired with the input that produced it, so the gate
+          // Each state paired with the frame that produced it, so the gate
           // can see the marker without the view carrying a flag for it.
           Stream.mapAccum(
             () => empty,
-            (view, input: FoldInput) => {
-              const next = fold(view, input);
-              return [next, [{ view: next, input }]] as const;
+            (view, inputs: Frame) => {
+              const next = fold(view, inputs);
+              return [next, [{ view: next, inputs }]] as const;
             },
           ),
-          Stream.dropWhile(({ input }) => input._tag !== 'replay.complete'),
+          Stream.dropWhile(
+            ({ inputs }) => !inputs.some((i) => i._tag === 'replay.complete'),
+          ),
           Stream.runForEach(({ view }) => SubscriptionRef.set(ref, view)),
           // A fold defect ends the view here: every renderer of the session
           // and every reader of `all` stop at this cursor, so the cause is

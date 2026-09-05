@@ -668,6 +668,10 @@ describe('sessionFold', () => {
     expect(child.statusDetail).toContain('pid 4242');
     expect(stream(held, ROOT).readOnly).toBe(true);
     expect(stream(held, ROOT).group).toBe('running');
+    // The holder becomes us: the same owner, still held, now ours to act on.
+    const taken = fold(held, local({ self: [OWNER] }));
+    expect(stream(taken, CHILD).readOnly).toBe(false);
+    expect(stream(taken, ROOT).readOnly).toBe(false);
 
     const unreadable = foldAll([
       ...scenario.pending,

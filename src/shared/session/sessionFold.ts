@@ -1651,8 +1651,9 @@ function foldLocal(
     if (!heldBefore.has(owner)) changedOwners.add(owner);
   }
   // `self` and `heldBy` are separate only so `readOnly` can ask who holds:
-  // an owner moving between them changes that answer.
-  for (const owner of local.heldBy) {
+  // an owner moving between them, in either direction, changes that answer
+  // while staying held.
+  for (const owner of heldAfter) {
     if (previous.self.includes(owner) !== local.self.includes(owner)) {
       changedOwners.add(owner);
     }
