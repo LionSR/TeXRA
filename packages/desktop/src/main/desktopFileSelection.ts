@@ -4,33 +4,14 @@ import {
   getEditedFileListConfig,
   getFileListConfig,
   loadFileListSettings,
-  matchesEditedFile,
   type FileFilterConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  MainViewInboundMessageSchema,
-  type MainViewInboundMessage,
-} from '@shared/schemas';
+import type { FileOptions } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
-
-import {
-  createDesktopErrorReporter,
-  type DesktopCommandMessage,
-  type DesktopMessageHandler,
-} from './desktopIpcTypes.js';
-
-const logger = createLog('DesktopFileSelection');
-
-type SelectMultipleFilesMessage = Extract<
-  MainViewInboundMessage,
-  { command: typeof MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES }
->;
 
 interface DesktopFileSelectionDialogOptions {
   title: string;
@@ -40,44 +21,42 @@ interface DesktopFileSelectionDialogOptions {
 }
 
 interface DesktopFileSelectionOptions {
-  postToRenderer(message: unknown): void;
-  /** Root of the paper the adapter serves; undefined for the no-workspace session. */
+  /** The paper's folder; undefined for the no-workspace session. */
   workspacePath: string | undefined;
-  showOpenFileDialog: (
+  showOpenFileDialog(
     options: DesktopFileSelectionDialogOptions,
-  ) => Promise<string[] | undefined>;
-  onError: (error: unknown) => void;
+  ): Promise<string[] | undefined>;
 }
 
-export interface DesktopFileSelection extends DesktopMessageHandler {
+/**
+ * The file lists and pickers of one paper: the `host` snapshot's file
+ * catalogs (PRD 8.1) and the `pickFiles` and `attachDroppedFiles` arms of
+ * `host.request` (8.3).
+ */
+export interface DesktopFileSelection {
+  /** The launcher's single-slot catalogs: base candidates, edited
+   *  candidates, and the commit list's fixed head. */
+  fileOptions(): Promise<FileOptions>;
+  /** Whether the paper has any input file at all (the empty-workspace cue). */
+  hasInputFiles(): Promise<boolean>;
   /**
-   * Close the adapter's renderer port. A scan still running for this paper
-   * finishes against a closed port, so its lists never reach the renderer
-   * document of the paper the window has since moved to.
+   * The native picker for one multi-file list. Resolves to the chosen
+   * files, workspace-relative where they are inside the paper, or null when
+   * the dialog was cancelled.
    */
-  dispose(): void;
+  pickFiles(
+    fileType: ListableFileType,
+    currentFile?: string | null,
+  ): Promise<string[] | null>;
+  /** Paths dropped onto the launcher, made workspace-relative. */
+  relativize(paths: readonly string[]): string[];
 }
 
-// Only base/edited use single-file SET commands; input/context/media
-// route through SELECT_MULTIPLE_FILES.
-const SET_COMMAND_BY_FILE_TYPE = {
-  edited: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
-  base: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
-} as const;
-
-const MULTI_SET_COMMAND_BY_FILE_TYPE = {
-  input: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
-  context: MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
-  media: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
-} as const;
-
-const MULTI_DIALOG_TITLE_BY_FILE_TYPE = {
+const DIALOG_TITLE_BY_FILE_TYPE: Record<ListableFileType, string> = {
   input: 'Select input files',
   context: 'Select context files',
   media: 'Select media files',
-} as const;
-
-type DesktopMultiFileType = keyof typeof MULTI_SET_COMMAND_BY_FILE_TYPE;
+};
 
 function listFiles(
   root: string,
@@ -96,6 +75,9 @@ function listFiles(
  */
 export async function listDesktopWorkspaceFiles(
   fileType: ListableFileType,
+  // Not a default parameter: callers inject a getter that returns undefined to
+  // mean "no workspace", and a default would discard that and re-read the
+  // process-wide workspace instead.
   workspacePath: string | undefined,
 ): Promise<string[]> {
   const config = getFileListConfig(fileType, loadFileListSettings());
@@ -103,17 +85,13 @@ export async function listDesktopWorkspaceFiles(
   return listFiles(workspacePath, config);
 }
 
-function resolveWorkspaceFile(workspacePath: string, filePath: string): string {
-  return resolve(workspacePath, filePath);
-}
-
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
-  const absolutePath = resolveWorkspaceFile(workspacePath, filePath);
+  const absolutePath = resolve(workspacePath, filePath);
   // relativeToRoot shares the canonicalize-then-compare fallback
   // WorkspaceFS.relativePath uses, so a native dialog pick that
   // resolves through a symlink (e.g. a symlinked folder inside the workspace)
   // lands workspace-relative here too. Unlike that identity fallback, an
-  // outside-workspace pick stays an explicit normalized absolute path — the
+  // outside-workspace pick stays an explicit normalized absolute path: the
   // renderer must be able to open a file chosen outside the workspace.
   return (
     relativeToRoot(workspacePath, absolutePath) ??
@@ -121,149 +99,61 @@ function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   );
 }
 
-/**
- * The file lists and pickers of one paper: the adapter lives as long as the
- * window shows that paper, and `dispose` closes its renderer port.
- */
 export function createDesktopFileSelection(
   options: DesktopFileSelectionOptions,
 ): DesktopFileSelection {
   const { workspacePath } = options;
-  const onError = createDesktopErrorReporter(options.onError);
-  let port: DesktopFileSelectionOptions['postToRenderer'] | undefined =
-    options.postToRenderer;
-  const post = (message: unknown) => port?.(message);
-
-  function runAsync(work: Promise<void>): void {
-    void work.catch(onError);
-  }
-
-  function postFileList(
-    fileType: keyof typeof SET_COMMAND_BY_FILE_TYPE,
-    files: string[],
-    preserveBaseFile = false,
-  ) {
-    post({
-      command: SET_COMMAND_BY_FILE_TYPE[fileType],
-      files,
-      ...(preserveBaseFile && { preserveBaseFile: true }),
-    });
-  }
-
-  function list(fileType: ListableFileType): Promise<string[]> {
-    return listDesktopWorkspaceFiles(fileType, workspacePath);
-  }
-
-  // The base file is listed from the input rules: base is a single-slot view
-  // over the input list.
-  async function requestBaseFileList(preserveBaseFile: boolean) {
-    const files = await list('input');
-    postFileList('base', files, preserveBaseFile);
-  }
-
-  // Multi-list categories (input/context/media) are user-owned and only
-  // mutated via the picker / drag-drop / Add opened — so we just refresh
-  // the still-single-slot base-file dropdown and the empty-workspace banner.
-  async function refreshDiskBackedDropdowns() {
-    const inputFiles = await list('input');
-    postFileList('base', inputFiles, true);
-    post({
-      command: MAIN_VIEW_COMMANDS.SET_BANNER,
-      banner: 'gettingStarted',
-      visible: inputFiles.length === 0,
-    });
-  }
-
-  async function updateEditedFiles(baseFile?: string) {
-    if (!baseFile || !workspacePath) {
-      postFileList('edited', []);
-      return;
-    }
-    const config = getEditedFileListConfig(loadFileListSettings());
-    const files = (await listFiles(workspacePath, config)).filter((file) =>
-      matchesEditedFile(file, baseFile),
-    );
-    postFileList('edited', files);
-  }
-
-  function isDesktopMultiFileType(
-    value: string,
-  ): value is DesktopMultiFileType {
-    return Object.hasOwn(MULTI_SET_COMMAND_BY_FILE_TYPE, value);
-  }
-
-  async function selectMultipleFiles(message: SelectMultipleFilesMessage) {
-    if (!isDesktopMultiFileType(message.fileType)) {
-      // The shared webview posts this for 'output' too, which the desktop has
-      // no picker for. Say so rather than dropping it: handleMessage already
-      // reported the message as handled.
-      logger.warn(`Unsupported multiple file selection: ${message.fileType}`);
-      return;
-    }
-    if (!workspacePath) return;
-
-    const fileType = message.fileType;
-    const listConfig = getFileListConfig(fileType, loadFileListSettings());
-    const currentFile = message.currentFile;
-    const defaultPath =
-      currentFile != null
-        ? resolveWorkspaceFile(workspacePath, currentFile)
-        : workspacePath;
-    const selectedFiles = await options.showOpenFileDialog({
-      title: MULTI_DIALOG_TITLE_BY_FILE_TYPE[fileType],
-      defaultPath,
-      allowMultiple: true,
-      filters: [
-        {
-          name: 'Supported files',
-          // Electron's dialog filter extensions must not include the leading
-          // dot (unlike getFileListConfig's `.tex`-style entries); the VS
-          // Code picker gets this right via getFilterExtensions.
-          extensions: listConfig.include.map((ext) => ext.replace(/^\./, '')),
-        },
-      ],
-    });
-    if (!selectedFiles) return;
-    post({
-      command: MULTI_SET_COMMAND_BY_FILE_TYPE[fileType],
-      files: selectedFiles.map((file) =>
-        toWorkspaceRelative(workspacePath, file),
-      ),
-    });
-  }
-
-  function dispatch(message: MainViewInboundMessage): boolean {
-    switch (message.command) {
-      case MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES:
-        runAsync(selectMultipleFiles(message));
-        return true;
-      case MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE:
-        runAsync(requestBaseFileList(message.preserveBaseFile === true));
-        return true;
-      case MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES:
-        runAsync(refreshDiskBackedDropdowns());
-        return true;
-      case MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE:
-        runAsync(updateEditedFiles(message.baseFile));
-        return true;
-      default:
-        return false;
-    }
-  }
-
-  // Single discriminated-union parse at the entry point, matching every
-  // other desktop IPC adapter (see desktopShellIpc.ts) — the switch above
-  // then operates on the narrowed variant with no per-case guessing at field
-  // types or presence.
-  function handleMessage(message: DesktopCommandMessage): boolean {
-    const parsed = MainViewInboundMessageSchema.safeParse(message);
-    return parsed.success && dispatch(parsed.data);
-  }
+  const list = (fileType: ListableFileType) =>
+    listDesktopWorkspaceFiles(fileType, workspacePath);
 
   return {
-    handleMessage,
-    dispose() {
-      port = undefined;
+    async fileOptions() {
+      if (!workspacePath) {
+        return { baseFile: [], editedFile: [], commit: ['HEAD'] };
+      }
+      // The base file is listed from the input rules: base is a single-slot
+      // view over the input list. Edited candidates are every file the
+      // edited rules admit; the sheet narrows them to the chosen base.
+      const [baseFile, editedFile] = await Promise.all([
+        list('input'),
+        listFiles(
+          workspacePath,
+          getEditedFileListConfig(loadFileListSettings()),
+        ),
+      ]);
+      return { baseFile, editedFile, commit: ['HEAD'] };
+    },
+    async hasInputFiles() {
+      return (await list('input')).length > 0;
+    },
+    async pickFiles(fileType, currentFile) {
+      if (!workspacePath) return null;
+      const listConfig = getFileListConfig(fileType, loadFileListSettings());
+      const defaultPath =
+        currentFile == null
+          ? workspacePath
+          : resolve(workspacePath, currentFile);
+      const selectedFiles = await options.showOpenFileDialog({
+        title: DIALOG_TITLE_BY_FILE_TYPE[fileType],
+        defaultPath,
+        allowMultiple: true,
+        filters: [
+          {
+            name: 'Supported files',
+            // Electron's dialog filter extensions must not include the
+            // leading dot (unlike getFileListConfig's `.tex`-style entries).
+            extensions: listConfig.include.map((ext) => ext.replace(/^\./, '')),
+          },
+        ],
+      });
+      if (!selectedFiles) return null;
+      return selectedFiles.map((file) =>
+        toWorkspaceRelative(workspacePath, file),
+      );
+    },
+    relativize(paths) {
+      if (!workspacePath) return paths.map((file) => normalizeFilePath(file));
+      return paths.map((file) => toWorkspaceRelative(workspacePath, file));
     },
   };
 }

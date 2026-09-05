@@ -13,10 +13,10 @@ import {
 } from 'electron';
 import PQueue from 'p-queue';
 
+import { SubscriptionRef } from 'effect';
 import { runInSession } from '@agent/runtime';
 import {
   computeAgentOptionsData,
-  getAgent,
   getAgentsByCategory,
   getVisibleAgents,
   loadAgents,
@@ -28,16 +28,12 @@ import {
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { DisposableStore } from '@platform/disposable';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  AgentCategory,
-  agentKeyOf,
   INSTRUCTION_ACTION,
   type AgentSource,
   type InstructionAction,
@@ -60,15 +56,25 @@ import {
   checkToolInstalled,
   detectPackageManager,
 } from '@utils/system/toolUtils';
-import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
+import { createDesktopFileSelection } from './desktopFileSelection.js';
+import { createDesktopHostRequests } from './desktopHostRequests.js';
+import { createDesktopHostSnapshot } from './desktopHostSnapshot.js';
 import {
-  createDesktopFileSelection,
-  type DesktopFileSelection,
-} from './desktopFileSelection.js';
+  createDesktopSessionBridge,
+  type DesktopSessionBridge,
+} from './desktopSessionBridge.js';
+import { createDesktopAgentExecution } from './desktopAgentExecution.js';
+import { installDesktopHostBridge } from './hostBridge.js';
+import { createDesktopLogIpc } from './desktopLogIpc.js';
+import {
+  isDesktopCommandMessage,
+  type DesktopMessageHandler,
+} from './desktopIpcTypes.js';
 import {
   openDesktopPaperRegistry,
+  paperDisplay,
   readRememberedDesktopPapers,
   type DesktopPaper,
   type DesktopPaperRegistry,
@@ -90,7 +96,6 @@ import {
   DesktopClosePaperMessageSchema,
   DesktopSelectPaperMessageSchema,
 } from '../shared/desktopPaperMessages.js';
-import { createCommandHandler } from './desktopIpcTypes.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import {
   attachRendererConsoleLog,
@@ -103,7 +108,6 @@ import {
   type DesktopOnboardingIpc,
 } from './desktopOnboardingIpc.js';
 import { DesktopPromptController } from './desktopPromptController.js';
-import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import {
@@ -113,7 +117,10 @@ import {
 } from './desktopSettingsIpc.js';
 import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 import { chooseDesktopOAuthProvider } from './desktopOAuthProviderPrompt.js';
-import { createDesktopShellActions } from './desktopShellIpc.js';
+import {
+  createDesktopShellActions,
+  createDesktopShellIpc,
+} from './desktopShellIpc.js';
 import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
@@ -139,7 +146,6 @@ import {
   isFatalDesktopShutdownRequested,
   reportFatalStartupError,
 } from './fatalStartupError.js';
-import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
@@ -147,7 +153,6 @@ import {
   DESKTOP_DOCS_URL,
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
-import type { DesktopProgressBridge } from './desktopAgentExecution.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
 const moduleDirname = import.meta.dirname;
@@ -330,7 +335,7 @@ function createWindow(options: {
   let pendingPaperActivation: string | undefined;
   let pendingPaperClose: string | undefined;
   const ipcRef: {
-    current?: ReturnType<typeof installDesktopMainViewIpc>;
+    current?: { postToRenderer(message: unknown): void };
   } = {};
   // `installDesktopHostBridge.postToRenderer` is itself a no-op when
   // `webContents.isDestroyed()`. Without checking that here too, callers would
@@ -351,9 +356,6 @@ function createWindow(options: {
   });
   const settingsIpcRef: {
     current?: DesktopSettingsIpc;
-  } = {};
-  const fileSelectionRef: {
-    current?: DesktopFileSelection;
   } = {};
   const onboardingIpcRef: {
     current?: DesktopOnboardingIpc;
@@ -518,12 +520,11 @@ function createWindow(options: {
   };
   let teamSignInPending = false;
   const refreshDesktopAuthSurfaces = async () => {
-    const authenticated = await SupabaseClient.isAuthenticated();
-    ipcRef.current?.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_BANNER,
-      banner: 'login',
-      visible: !authenticated,
-    });
+    await Promise.all(
+      [...paperBindings.values()].map((binding) =>
+        binding.snapshot.refreshAuth(),
+      ),
+    );
     await settingsIpcRef.current?.refreshAuthDependentData({
       deferAgentCatalogRefresh: teamSignInPending,
     });
@@ -583,10 +584,12 @@ function createWindow(options: {
    * will-prevent-unload handler below clears the request when the user keeps
    * a dirty editor, and the reload's navigation commits it otherwise.
    */
-  const selectPaper = (root: string) => {
-    if (root === activePaper().root) return;
-    if (!options.papers.list().some((paper) => paper.root === root)) return;
-    pendingPaperActivation = root;
+  const paperByKey = (key: string) =>
+    options.papers.list().find((paper) => paper.key === key);
+  const selectPaper = (key: string) => {
+    const paper = paperByKey(key);
+    if (!paper || paper.root === undefined || paper === activePaper()) return;
+    pendingPaperActivation = paper.root;
     window.webContents.reload();
   };
 
@@ -596,13 +599,14 @@ function createWindow(options: {
    * editor can keep it open, and the registry moves the window to the paper
    * shown before it.
    */
-  const closePaper = (root: string) => {
-    if (!options.papers.list().some((paper) => paper.root === root)) return;
-    if (root !== activePaper().root) {
-      void options.papers.close(root).catch(reportAsyncError);
+  const closePaper = (key: string) => {
+    const paper = paperByKey(key);
+    if (!paper || paper.root === undefined) return;
+    if (paper !== activePaper()) {
+      void options.papers.close(paper.root).catch(reportAsyncError);
       return;
     }
-    pendingPaperClose = root;
+    pendingPaperClose = paper.root;
     window.webContents.reload();
   };
 
@@ -616,7 +620,7 @@ function createWindow(options: {
     if (!selectedPath) return;
     const paper = await options.papers.open(selectedPath);
     warnIfEphemeral(paper);
-    if (paper.root !== undefined) selectPaper(paper.root);
+    if (paper.root !== undefined) selectPaper(paper.key);
   };
   attachRendererConsoleLog(window.webContents);
   const desktopDiffHost = createDesktopDiffHost({
@@ -679,73 +683,160 @@ function createWindow(options: {
       void onboardingIpcRef.current?.refreshOnboardingFunnel();
     },
   };
-  // One progress bridge per paper, created lazily for the paper the window
-  // shows and released when the window switches papers or closes. The
-  // session outlives it; reattachment replays through `interactions.use`.
-  let agentExecution: DesktopProgressBridge | undefined;
-  let agentExecutionLoad: Promise<DesktopProgressBridge> | undefined;
-  // Aborted when the bridge is released: the signal is both the presentation
-  // cancellation token and the bridge's "gone" fact.
-  let presentationAbort = new AbortController();
-  const releaseAgentExecution = () => {
-    // Abort first, cancelling an in-flight lazy load.
-    presentationAbort.abort();
-    if (agentExecution) {
-      agentExecution.dispose();
-    } else {
-      void agentExecutionLoad
-        ?.then((execution) => execution.dispose())
-        .catch((error: unknown) => {
-          if (!(error instanceof Error && error.name === 'AbortError')) {
-            reportBackgroundError(error);
-          }
-        });
-    }
-    agentExecution = undefined;
-    agentExecutionLoad = undefined;
-    presentationAbort = new AbortController();
+  const openFileDialog = async (dialogOptions: {
+    title: string;
+    defaultPath?: string;
+    filters: Array<{ name: string; extensions: string[] }>;
+    allowMultiple?: boolean;
+  }) => {
+    const result = await dialog.showOpenDialog(window, {
+      title: dialogOptions.title,
+      defaultPath: dialogOptions.defaultPath,
+      filters: dialogOptions.filters,
+      properties: dialogOptions.allowMultiple
+        ? ['openFile', 'multiSelections']
+        : ['openFile'],
+    });
+    return result.canceled ? undefined : result.filePaths;
   };
-  const getAgentExecution = async (): Promise<DesktopProgressBridge> => {
-    if (agentExecution) return agentExecution;
-    const abort = presentationAbort;
-    if (abort.signal.aborted) {
-      throw new Error(
-        'Cannot load desktop agent execution after window close.',
+  const recentCommitsOf = async (workspacePath: string | undefined) => {
+    if (!workspacePath) return { commits: [] as string[], isGitRepo: false };
+    return readRecentCommits(workspacePath, DESKTOP_RECENT_COMMIT_LIMIT, {
+      onError: reportBackgroundError,
+    });
+  };
+  /**
+   * One binding per open paper for this window (PRD 8.1, 12.2): the
+   * session bridge the renderer subscribes to, the paper's `host` snapshot,
+   * and its presentation and launch path. Every open paper is bound, not
+   * only the shown one: the rail lists them all from their own views.
+   */
+  interface PaperBinding {
+    readonly paper: DesktopPaper;
+    readonly bridge: DesktopSessionBridge;
+    readonly snapshot: ReturnType<typeof createDesktopHostSnapshot>;
+    readonly execution: ReturnType<typeof createDesktopAgentExecution>;
+    dispose(): void;
+  }
+  const paperBindings = new Map<string, PaperBinding>();
+  const bindPaper = (paper: DesktopPaper): PaperBinding => {
+    const files = createDesktopFileSelection({
+      workspacePath: paper.root,
+      showOpenFileDialog: openFileDialog,
+    });
+    const snapshot = createDesktopHostSnapshot({
+      paper: paperDisplayOf(paper),
+      globalState: platform().globalState,
+      files,
+      readRecentCommits: () => recentCommitsOf(paper.root),
+      isAuthenticated: () => SupabaseClient.isAuthenticated(),
+      onError: reportBackgroundError,
+    });
+    const funnel = onboardingIpcRef.current?.funnelState();
+    if (funnel) snapshot.setOnboarding(funnel);
+    const execution = createDesktopAgentExecution({
+      host: agentExecutionHost,
+      session: paper.session,
+      showAgentConfigBanner: ({ agentName }) =>
+        snapshot.setAgentConfigBanner({
+          visible: true,
+          agentName,
+          customDirSet: true,
+        }),
+    });
+    const hostRequests = createDesktopHostRequests({
+      session: paper.session,
+      sessionKey: paper.key,
+      host: agentExecutionHost,
+      execution,
+      files,
+      snapshot,
+      workspacePath: paper.root,
+      resourcesPath: options.resourcesPath,
+      postToRenderer: postToRendererIfAlive,
+      postSurfaceAction: (action) => bridge.postSurfaceAction(action),
+      shell: shellActions,
+      onboarding: requireOnboardingIpc(),
+      openExternalUrl: (url) => previewHost.openExternal(url),
+      recheckTools: async () => {
+        await refreshToolAvailability();
+      },
+      logger: console,
+    });
+    const bridge = createDesktopSessionBridge({
+      session: paper.session,
+      sessionKey: paper.key,
+      port: `window:${window.id}`,
+      postToRenderer: postToRendererIfAlive,
+      hostRequests,
+      snapshot,
+      logger: console,
+    });
+    // A run launched from this window is the window's selection: the
+    // launching surface selects the stream (PRD 9).
+    const detachLaunched = execution.onLaunched((streamId) =>
+      bridge.postSurfaceAction({ kind: 'select', streamId }),
+    );
+    void snapshot.refresh();
+    return {
+      paper,
+      bridge,
+      snapshot,
+      execution,
+      dispose() {
+        detachLaunched();
+        bridge.dispose();
+        execution.dispose();
+      },
+    };
+  };
+  const paperDisplayOf = (paper: DesktopPaper) =>
+    paper.root === undefined
+      ? {
+          key: paper.key,
+          name: 'No paper open',
+          initials: 'TX',
+          subtitle: 'Open a folder to start',
+        }
+      : paperDisplay(paper.key, paper.root);
+  const syncPaperBindings = () => {
+    const open = new Map(
+      options.papers.list().map((paper) => [paper.key, paper] as const),
+    );
+    for (const [key, binding] of paperBindings) {
+      if (open.has(key)) continue;
+      paperBindings.delete(key);
+      void runInSession(binding.paper.session, () => binding.dispose());
+    }
+    for (const [key, paper] of open) {
+      if (paperBindings.has(key)) continue;
+      paperBindings.set(
+        key,
+        runInSession(paper.session, () => bindPaper(paper)) as PaperBinding,
       );
     }
-
-    if (!agentExecutionLoad) {
-      const paper = activePaper();
-      const load: Promise<DesktopProgressBridge> = Promise.resolve(
-        runInSession(paper.session, () =>
-          import('./desktopAgentExecution.js').then(
-            async ({ createDesktopAgentExecution }) => {
-              const created = await createDesktopAgentExecution({
-                postToRenderer: postToRendererIfAlive,
-                host: agentExecutionHost,
-                session: paper.session,
-                sessionStores: paper.stores,
-                resourcesPath: options.resourcesPath,
-                presentationSignal: abort.signal,
-              });
-              if (abort.signal.aborted) {
-                created.dispose();
-                throw new Error(
-                  'Desktop window closed before agent execution finished loading.',
-                );
-              }
-              agentExecution = created;
-              return created;
-            },
-          ),
-        ),
-      ).catch((error: unknown) => {
-        if (agentExecutionLoad === load) agentExecutionLoad = undefined;
-        throw error;
-      });
-      agentExecutionLoad = load;
+  };
+  windowResources.add(() => {
+    for (const binding of paperBindings.values()) {
+      void runInSession(binding.paper.session, () => binding.dispose());
     }
-    return agentExecutionLoad;
+    paperBindings.clear();
+  });
+  const activeBinding = () => paperBindings.get(activePaper().key);
+  const requireOnboardingIpc = (): DesktopOnboardingIpc => {
+    const onboarding = onboardingIpcRef.current;
+    if (!onboarding) throw new Error('Desktop onboarding IPC is not attached.');
+    return onboarding;
+  };
+  // The launcher's agent is the surface's choice (PRD 9); a team that was
+  // just applied names its tool-use root, which the catalog change alone
+  // cannot select: the wire carries no launch patch (8.5).
+  const refreshCatalogs = async () => {
+    await Promise.all(
+      [...paperBindings.values()].map((binding) =>
+        binding.snapshot.refreshCatalogs(),
+      ),
+    );
   };
   const subscriptionUsage = new SubscriptionUsageService();
   const settingsUi: DesktopSettingsUiHost = {
@@ -754,19 +845,21 @@ function createWindow(options: {
     confirmAction: (message, confirmLabel) =>
       confirmDialog({ message, confirmLabel }),
     openPath: previewHost.openPath,
+    // Selection is the surface's: a settings jump asks the shown paper's
+    // surface to select the stream, and reports a stream the view no longer
+    // holds as missing.
     revealStream: async (streamId) => {
-      try {
-        const execution = await getAgentExecution();
-        return await execution.revealStream(streamId);
-      } catch (error) {
-        if (!presentationAbort.signal.aborted) reportBackgroundError(error);
-        return 'unavailable';
-      }
+      const binding = activeBinding();
+      if (!binding) return 'unavailable';
+      const view = SubscriptionRef.getUnsafe(binding.paper.session.view);
+      if (!view.streams.has(streamId)) return 'missing';
+      binding.bridge.postSurfaceAction({ kind: 'select', streamId });
+      return 'revealed';
     },
-    // Only a live presentation knows a stream's label, so this reads the
-    // already-constructed bridge rather than creating one; the Git tab falls
-    // back to the raw stream id when no window is attached.
-    getStreamLabel: (streamId) => agentExecution?.getStreamLabel(streamId),
+    getStreamLabel: (streamId) =>
+      SubscriptionRef.getUnsafe(activePaper().session.view).streams.get(
+        streamId,
+      )?.label,
     promptForSecret: (input) =>
       promptController.request({ ...input, password: true }),
     // Not previewHost.openExternal: that one shows an error dialog and
@@ -1011,55 +1104,14 @@ function createWindow(options: {
       }
       settingsIpc.dispose();
     });
-    // The file lists belong to the paper: a scan the previous paper started
-    // finishes against its own disposed adapter instead of posting into the
-    // renderer document this paper has since loaded.
-    const fileSelection = createDesktopFileSelection({
-      postToRenderer: postToRendererIfAlive,
-      workspacePath: paper.root,
-      showOpenFileDialog: async (options) => {
-        const result = await dialog.showOpenDialog(window, {
-          title: options.title,
-          defaultPath: options.defaultPath,
-          filters: options.filters,
-          properties: options.allowMultiple
-            ? ['openFile', 'multiSelections']
-            : ['openFile'],
-        });
-        return result.canceled ? undefined : result.filePaths;
-      },
-      onError: reportAsyncError,
-    });
-    fileSelectionRef.current = fileSelection;
-    paperResources.add(() => {
-      if (fileSelectionRef.current === fileSelection) {
-        fileSelectionRef.current = undefined;
-      }
-      fileSelection.dispose();
-    });
-    paperResources.add(releaseAgentExecution);
   };
   windowResources.add(
     options.papers.onChange(() => {
+      syncPaperBindings();
       attachActivePaper();
       postPapers();
     }),
   );
-  const progressIpc = createDesktopProgressIpc({
-    source: {
-      get: () => agentExecution,
-      ensure: getAgentExecution,
-    },
-    onAsyncError: reportAsyncError,
-    // A registry entry declared `unsupported(...)` carries a user-facing
-    // reason; fall back to a generic message for a truly unrecognized
-    // command (a version-skew edge case, not expected in practice).
-    onUnsupportedCommand: (message, reason) => {
-      void showInfoMessage(
-        reason ?? `"${message.command}" is not available in the desktop app.`,
-      );
-    },
-  });
   const onboardingIpc = createDesktopOnboardingIpc(
     { postToRenderer: postToRendererIfAlive },
     {
@@ -1068,14 +1120,10 @@ function createWindow(options: {
       // logic can't drift between them.
       hasCredential: () =>
         hasUsableSetupCredential(platform().secrets, credentialLog.warn),
-      selectSetupAgent: async () => {
-        const entry = getAgent('setup', AgentCategory.ToolUse);
-        ipcRef.current?.postToRenderer({
-          command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
-          agentId: entry ? agentKeyOf(entry) : 'setup',
-          sessionType: 'toolUse' as const,
-        });
-      },
+      // The setup card launches its own request (`kickoffSetup` below), so
+      // the launcher's agent selection, which is the surface's (PRD 9),
+      // is not moved from here.
+      selectSetupAgent: async () => {},
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
       // `handleExecute` path: resolve a model the user's credentials can call,
@@ -1088,12 +1136,11 @@ function createWindow(options: {
         // The paper the user started setup in, taken before the first await:
         // the run and its presentation belong to it even when the window
         // moves to another paper while the model resolves and agents load.
-        const paper = activePaper();
-        // Initialize the presentation subscription before launch so a fast
-        // terminal result is eligible for replay. This await ends before the
-        // process-owned run begins and therefore cannot retain the window for
-        // the duration of the run.
-        const execution = await getAgentExecution();
+        const binding = activeBinding();
+        if (!binding) {
+          await showErrorMessage('Open a folder before running setup.');
+          throw new Error('Setup launch: no paper is open.');
+        }
         const { buildDesktopSetupExecuteMessage } =
           await import('@controllers/onboarding/setupLaunch');
         const message = await buildDesktopSetupExecuteMessage();
@@ -1109,18 +1156,8 @@ function createWindow(options: {
         // racing the startup `loadAgents()` cannot hit "Could not find agent:
         // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
         await loadAgents();
-        const preparation = prepareMainViewExecutionRequest(message);
-        if (!preparation.valid) {
-          await showErrorMessage(preparation.message);
-          throw new Error(preparation.message);
-        }
-        return launchDesktopAgent(
-          { kind: 'fresh', ...preparation.request },
-          { session: paper.session },
-          {
-            onStreamResolved: (streamId) =>
-              execution.presentLaunchedStream(streamId),
-          },
+        await runInSession(binding.paper.session, () =>
+          binding.execution.handleExecute(message),
         );
       },
       signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
@@ -1133,18 +1170,14 @@ function createWindow(options: {
     },
   );
   onboardingIpcRef.current = onboardingIpc;
-  // Git reads re-probe the active workspace per request, so workspace
-  // switches don't need cache invalidation. Both lambdas map a missing
-  // workspace to the host's empty-result convention.
-  const getRecentCommits = async () => {
-    const workspacePath = activePaper().root;
-    if (!workspacePath) {
-      return { commits: [] as string[], isGitRepo: false };
-    }
-    return readRecentCommits(workspacePath, DESKTOP_RECENT_COMMIT_LIMIT, {
-      onError: reportBackgroundError,
-    });
-  };
+  // The funnel is host state every open paper's snapshot carries (8.1).
+  windowResources.add(
+    onboardingIpc.onFunnelChange((state) => {
+      for (const binding of paperBindings.values()) {
+        binding.snapshot.setOnboarding(state);
+      }
+    }),
+  );
   const getEnvironmentSummary = async () => {
     const workspacePath = activePaper().root;
     if (!workspacePath) {
@@ -1165,7 +1198,6 @@ function createWindow(options: {
       openPath: previewHost.openPath,
       openWorkspaceFolder,
       signIn,
-      getRecentCommits,
       showInfoMessage,
       onAsyncError: reportAsyncError,
     },
@@ -1270,50 +1302,9 @@ function createWindow(options: {
       continueQuitAfterWindowClose = undefined;
     },
   });
-  const mainViewIpc = installDesktopMainViewIpc(window, {
-    workspace: workspaceIpc,
-    handleExecuteMessage: async (message) => {
-      const execution = await getAgentExecution();
-      void execution.handleExecute(message).catch(reportAsyncError);
-    },
-    fileSelection: {
-      handleMessage: (message) =>
-        fileSelectionRef.current?.handleMessage(message) ?? false,
-    },
-    prompt: promptController,
-    settings: {
-      handleMessage: (message) =>
-        settingsIpcRef.current?.handleMessage(message) ?? false,
-    },
-    progress: progressIpc,
-    onboarding: onboardingIpc,
-    papers: createCommandHandler(
-      {
-        // A broadcast like the progress ready signal: the main view's ready
-        // message still reaches the startup handler.
-        [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: {
-          when: (message) => message.view === 'main',
-          run: postPapers,
-          claim: false,
-        },
-        // safeParse, not parse: dispatch runs under `runInSession` with no
-        // catch, so a malformed message is dropped, not an unhandled rejection.
-        [DESKTOP_PAPER_COMMANDS.SELECT_PAPER]: (message) => {
-          const parsed = DesktopSelectPaperMessageSchema.safeParse(message);
-          if (parsed.success) selectPaper(parsed.data.root);
-        },
-        [DESKTOP_PAPER_COMMANDS.CLOSE_PAPER]: (message) => {
-          const parsed = DesktopClosePaperMessageSchema.safeParse(message);
-          if (parsed.success) closePaper(parsed.data.root);
-        },
-      },
-      { onAsyncError: reportAsyncError },
-    ),
-    globalState: platform().globalState,
-    inActiveSession: (dispatch) => {
-      void runInSession(activePaper().session, dispatch);
-    },
-    logs: {
+  const logsIpc = createDesktopLogIpc(
+    { postToRenderer: postToRendererIfAlive },
+    {
       readLog: () =>
         readDesktopLogSnapshot({ workspacePath: activePaper().root }),
       copyLog: async (text) => clipboard.writeText(text),
@@ -1326,13 +1317,72 @@ function createWindow(options: {
         if (result.canceled || !result.filePath) return;
         await writeFile(result.filePath, text, 'utf8');
       },
+      onAsyncError: reportAsyncError,
     },
-    shellActions,
-    getAuthStatus: async () => ({
-      authenticated: await SupabaseClient.isAuthenticated(),
-    }),
-    onAsyncError: reportAsyncError,
+  );
+  // The desktop-only handlers, in match order. A message every one of them
+  // declines is a session message: the paper it names answers it inside
+  // that paper's session scope.
+  // Renderer traffic about papers: the list it asks for once it boots, and
+  // the select and close requests. safeParse, not parse: dispatch runs under
+  // `runInSession` with no catch, so a malformed message is dropped, not an
+  // unhandled rejection.
+  const papersIpc: DesktopMessageHandler = {
+    handleMessage(message) {
+      switch (message.command) {
+        case DESKTOP_PAPER_COMMANDS.REQUEST_PAPERS:
+          postPapers();
+          return true;
+        case DESKTOP_PAPER_COMMANDS.SELECT_PAPER: {
+          const parsed = DesktopSelectPaperMessageSchema.safeParse(message);
+          if (parsed.success) selectPaper(parsed.data.key);
+          return true;
+        }
+        case DESKTOP_PAPER_COMMANDS.CLOSE_PAPER: {
+          const parsed = DesktopClosePaperMessageSchema.safeParse(message);
+          if (parsed.success) closePaper(parsed.data.key);
+          return true;
+        }
+        default:
+          return false;
+      }
+    },
+  };
+  const desktopHandlers: DesktopMessageHandler[] = [
+    promptController,
+    {
+      handleMessage: (message) =>
+        settingsIpcRef.current?.handleMessage(message) ?? false,
+    },
+    onboardingIpc,
+    papersIpc,
+    workspaceIpc,
+    logsIpc,
+    createDesktopShellIpc(shellActions),
+  ];
+  const hostBridge = installDesktopHostBridge(window, {
+    onRendererMessage: (message) => {
+      if (isDesktopCommandMessage(message)) {
+        void runInSession(activePaper().session, () => {
+          for (const handler of desktopHandlers) {
+            if (handler.handleMessage(message)) return;
+          }
+        });
+        return;
+      }
+      for (const binding of paperBindings.values()) {
+        const claimed = runInSession(binding.paper.session, () =>
+          binding.bridge.handleMessage(message),
+        );
+        if (claimed === true) return;
+      }
+    },
   });
+  windowResources.add(() => {
+    promptController.dispose();
+    hostBridge.dispose();
+  });
+  const mainViewIpc = { postToRenderer: hostBridge.postToRenderer };
   ipcRef.current = mainViewIpc;
   attachActivePaper();
   Menu.setApplicationMenu(

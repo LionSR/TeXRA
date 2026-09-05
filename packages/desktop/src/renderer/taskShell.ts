@@ -115,12 +115,14 @@ function streamTabsTemplate(
   paper: RailPaper,
   options: { topLevelOnly: boolean; activeOnly?: boolean },
 ): TemplateResult {
-  return html`<stream-tabs
-    .view=${paper.view}
-    .surface=${paper.surface}
-    .topLevelOnly=${options.topLevelOnly}
-    .activeOnly=${options.activeOnly ?? false}
-  ></stream-tabs>`;
+  return html`<div data-session=${paper.display.key}>
+    <stream-tabs
+      .view=${paper.view}
+      .surface=${paper.surface}
+      .topLevelOnly=${options.topLevelOnly}
+      .activeOnly=${options.activeOnly ?? false}
+    ></stream-tabs>
+  </div>`;
 }
 
 /**

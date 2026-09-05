@@ -15,32 +15,17 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
-import '@progressView/frontend';
+import { z } from 'zod';
+import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
-import {
-  handleFileAction,
-  handleFollowUpChange,
-  handleFollowUpFocusComplete,
-  handleFollowUpPolish,
-  handleFollowUpSend,
-  handleGettingStartedAction,
-  handlePermissionAction,
-  handleStreamDelete,
-  handleStreamSwitch,
-  handleToolbarCommand,
-  runCompileFixer,
-} from '@progressView/frontend/eventHandlers';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import { COMMON_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
-import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
+import { DESKTOP_THEME_KIND } from '@shared/schemas';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { SessionView } from '@shared/session/sessionView';
 import { applyShellAction, type Shell } from '@shared/session/shell';
-import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { emptySurface } from '@shared/session/surface';
+import { PersistedState } from '@shared/state/PersistedState';
 
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 
@@ -54,7 +39,6 @@ import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {
-  buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
   getDesktopCommandMenuEntries,
@@ -101,8 +85,7 @@ import {
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import {
   DESKTOP_PAPER_COMMANDS,
-  paperDisplay,
-  type DesktopPaperSummary,
+  type DesktopPaperDisplay,
 } from '../shared/desktopPaperMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
@@ -119,12 +102,32 @@ import {
   requestFiles,
 } from './fileRequests';
 import { createMessageRoutes } from './messageRoutes';
+import { createPaperSessions, rendererStateStore } from './paperSessions';
 
 const appRoot = document.querySelector<HTMLElement>('#app')!;
 
 if (appRoot == null) {
   throw new Error('TeXRA desktop renderer root was not found.');
 }
+
+// The theme is the renderer's own environment: Chromium follows the OS
+// (and Electron's `nativeTheme`) through these media queries, so no host
+// message carries it.
+const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+const forcedColors = window.matchMedia('(forced-colors: active)');
+function currentTheme() {
+  if (forcedColors.matches) return DESKTOP_THEME_KIND.HIGH_CONTRAST;
+  return darkScheme.matches
+    ? DESKTOP_THEME_KIND.DARK
+    : DESKTOP_THEME_KIND.LIGHT;
+}
+function applyTheme(): void {
+  const theme = currentTheme();
+  applyHostBodyTheme(theme);
+  reviewPane.setTheme(theme);
+}
+darkScheme.addEventListener('change', applyTheme);
+forcedColors.addEventListener('change', applyTheme);
 const startupTeamPanel = createStartupTeamPanel({
   dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
   onVisibilityChanged: rerenderShell,
@@ -157,43 +160,53 @@ const startupTeamPanel = createStartupTeamPanel({
 // The conversation is the permanent task canvas. Project navigation stays in
 // the left sidebar, while files and tools share one optional right workbench.
 
-// The open papers and the one this window shows, as the main process last
-// reported them. Until the first report the launcher is assumed usable so the
-// empty state does not flash before the papers arrive.
-let openPapers: readonly DesktopPaperSummary[] = [];
-let activePaperRoot: string | undefined;
+// The renderer's own state store: interaction state survives a reload.
+const rendererState = rendererStateStore(window.localStorage);
+// The one Shell of this window (PRD 9): which papers are open and which one
+// the window shows come from the main process; the collapsed set is the
+// rail's own and persists. Until the first papers report the launcher is
+// assumed usable so the empty state does not flash before the papers arrive.
+const persistedShell = new PersistedState(
+  rendererState,
+  'shell',
+  z.object({ collapsed: z.array(z.string()).prefault([]) }),
+);
+let shell: Shell = {
+  active: '',
+  open: [],
+  collapsed: persistedShell.getState().collapsed,
+  search: '',
+};
 let papersKnown = false;
-const hasWorkspace = () => !papersKnown || activePaperRoot !== undefined;
-// Which papers are open and which one this window shows, as the rail reads
-// it; the collapsed set is the rail's own fold state.
-let shell: Shell = { active: '', open: [], collapsed: [], search: '' };
-
-/** One session per open paper: its fold and its surface, keyed by root. */
-interface PaperSession {
-  readonly view: SessionView;
-  readonly surface: Surface;
-}
-// The one seam between the session fold and this renderer: the rail, the
-// conversation shell, the palette, and the chrome all read these two records
-// and nothing else, and `setSessions` is the only writer. The session fold
-// (lane 4) calls it with one view and surface per paper and the host
-// snapshot; until then it runs once, empty, at bootstrap, so the shell's
-// shape is final while its data is not yet.
-let sessions: ReadonlyMap<string, PaperSession> = new Map();
-let hostSnapshot: HostSnapshot | null = null;
-function setSessions(
-  next: ReadonlyMap<string, PaperSession>,
-  host: HostSnapshot | null,
-): void {
-  sessions = next;
-  hostSnapshot = host;
+// The display record of every open paper, as the main process produced it
+// (PRD 8.1); the no-workspace session is never among them.
+let paperDisplays: ReadonlyMap<string, DesktopPaperDisplay> = new Map();
+const activePaperRoot = () => paperDisplays.get(shell.active)?.root;
+const hasWorkspace = () => !papersKnown || activePaperRoot() !== undefined;
+function setShell(next: Shell): void {
+  shell = next;
+  persistedShell.setState({ collapsed: [...next.collapsed] });
   rerenderShell();
 }
-// A paper with no session yet is not listed: the rail shows what is known.
+// One fold, one surface, and one host snapshot per open paper, on the one
+// webview runtime; the rail, the conversation shell, the palette, and the
+// chrome read those three records and nothing else.
+const paperSessions = createPaperSessions({ storage: rendererState });
+paperSessions.onChange(rerenderShell);
+// A paper whose session is not open yet is not listed: the rail shows what
+// is known.
 const railPapers = (): RailPaper[] =>
-  openPapers.flatMap((paper) => {
-    const session = sessions.get(paper.root);
-    return session ? [{ display: paperDisplay(paper), ...session }] : [];
+  shell.open.flatMap((key) => {
+    const display = paperDisplays.get(key);
+    const session = paperSessions.get(key);
+    if (!display || !session) return [];
+    return [
+      {
+        display,
+        view: session.view$.get(),
+        surface: session.surface$.get(),
+      },
+    ];
   });
 const activeRailPaper = (papers: readonly RailPaper[]) =>
   papers.find((paper) => paper.display.key === shell.active);
@@ -385,6 +398,7 @@ const terminalPane = createTerminalPane({
 });
 
 const reviewPane = createReviewPane();
+applyTheme();
 const pdfPane = createPdfPane();
 const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
   hostBridge.postMessage(message),
@@ -416,7 +430,7 @@ const workbench = createWorkbenchController({
   settingsView,
   logsPane,
   getState: () => shellState,
-  getWorkspacePath: () => activePaperRoot,
+  getWorkspacePath: activePaperRoot,
   updateShell,
   postMessage,
 });
@@ -446,7 +460,7 @@ function taskConversationTemplate(): TemplateResult {
   if (sidebarCollapsedWithPendingApproval) {
     sidebarToggleLabel = 'Show sidebar - approval pending';
   }
-  const workspacePath = activePaperRoot;
+  const workspacePath = activePaperRoot();
   // Names the button even when the ≤560px container query collapses it to the
   // icon: the shadow button then has no visible text, so only `title` reaches
   // its accessible name.
@@ -657,8 +671,8 @@ function taskMainTemplate(
   `;
 }
 
-function selectPaper(root: string): void {
-  postMessage(DESKTOP_PAPER_COMMANDS.SELECT_PAPER, { root });
+function selectPaper(key: string): void {
+  postMessage(DESKTOP_PAPER_COMMANDS.SELECT_PAPER, { key });
 }
 
 function shellTemplate(): TemplateResult {
@@ -718,16 +732,16 @@ function shellTemplate(): TemplateResult {
             onOpenFolder: () =>
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
             onSelectPaper: selectPaper,
-            onClosePaper: (root) =>
-              postMessage(DESKTOP_PAPER_COMMANDS.CLOSE_PAPER, { root }),
-            onTogglePaperCollapsed: (key) => {
-              shell = applyShellAction(shell, {
-                kind: 'collapse',
-                session: key,
-                collapsed: !shell.collapsed.includes(key),
-              });
-              rerenderShell();
-            },
+            onClosePaper: (key) =>
+              postMessage(DESKTOP_PAPER_COMMANDS.CLOSE_PAPER, { key }),
+            onTogglePaperCollapsed: (key) =>
+              setShell(
+                applyShellAction(shell, {
+                  kind: 'collapse',
+                  session: key,
+                  collapsed: !shell.collapsed.includes(key),
+                }),
+              ),
             onTogglePapersLayout: () =>
               updateShell(togglePapersLayout(shellState)),
             onOpenTerminal: () => workbench.openKind('terminal'),
@@ -798,9 +812,11 @@ function rerenderShell(): void {
   if (bootstrapFailed) return;
   revealSidebarForOffScreenApproval();
   const active = activeRailPaper(railPapers());
+  const session = active ? paperSessions.get(active.display.key) : undefined;
+  conversationView.dataset.session = active?.display.key ?? '';
   conversationView.view = active?.view ?? null;
   conversationView.surface = active?.surface ?? null;
-  conversationView.host = hostSnapshot;
+  conversationView.host = session?.host$.get() ?? null;
   conversationView.nowMs = Date.now();
   render(shellTemplate(), appRoot);
   logsController.setActive(
@@ -855,7 +871,7 @@ function recoverFromBootstrapFallback(): void {
     bootstrapFailed = false;
     bootstrapComplete = false;
     logsController.rerenderViewer();
-    setSessions(sessions, hostSnapshot);
+    rerenderShell();
     // Recovery redoes the whole normal bootstrap tail; without it the
     // recovered shell renders but stays inert (rail clicks ignored).
     completeBootstrap();
@@ -885,7 +901,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 try {
   logsController.rerenderViewer();
-  setSessions(sessions, hostSnapshot);
+  rerenderShell();
 } catch (error) {
   bootstrapFailed = true;
   console.error('TeXRA desktop renderer bootstrap failed', error);
@@ -939,13 +955,7 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   toggleBottomBar: toggleBottomBarVisibility,
   toggleSidePanel: toggleSidePanelVisibility,
   toggleSummaryBar: toggleSummaryBarVisibility,
-  resetMainView: () => {
-    returnToLauncher();
-    window.postMessage(
-      buildDesktopMainViewResetMessage(),
-      resolvePostMessageTargetOrigin(window.location.origin),
-    );
-  },
+  resetMainView: resetLauncher,
 };
 const shortcutBootstrap = createDesktopShortcutBootstrap({
   createRegistry: (openCommands) =>
@@ -976,9 +986,16 @@ function openCommandPalette(): void {
 
 // Clear the active stream so the conversation shell shows its empty state.
 function returnToLauncher(): void {
-  conversationView.dispatchEvent(
-    SessionUiEvents.surface({ kind: 'selectNew' }),
-  );
+  paperSessions.act(shell.active, { kind: 'selectNew' });
+}
+
+// The launcher's selections back to their defaults, and the empty state.
+function resetLauncher(): void {
+  paperSessions.act(shell.active, {
+    kind: 'launch',
+    patch: emptySurface(shell.active).launch,
+  });
+  returnToLauncher();
 }
 
 const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
@@ -1000,15 +1017,12 @@ const MESSAGE_ROUTES = createMessageRoutes({
   },
   isBootstrapFailed: () => bootstrapFailed,
   returnToLauncher,
+  resetLauncher,
   openKind: workbench.openKind,
   toggleLayoutPanel: (panel) => LAYOUT_PANEL_TOGGLES[panel](),
   onboarding: {
     show: () => startupTeamPanel.show(),
     hide: () => startupTeamPanel.hide(),
-  },
-  applyTheme(theme) {
-    applyHostBodyTheme(theme);
-    reviewPane.setTheme(theme);
   },
   logs: { applySnapshot: (message) => logsController.applySnapshot(message) },
   review: {
@@ -1051,17 +1065,21 @@ const MESSAGE_ROUTES = createMessageRoutes({
   renameBrowserTab: (tabId, title) =>
     updateShell(renameWorkbenchTab(shellState, tabId, title)),
   papers: (message) => {
-    const previousRoot = activePaperRoot;
-    openPapers = message.papers;
-    activePaperRoot = message.activeRoot ?? undefined;
+    const previousRoot = activePaperRoot();
+    paperDisplays = new Map(
+      message.papers.map((paper) => [paper.key, paper] as const),
+    );
     papersKnown = true;
-    shell = {
+    const open = message.papers.map((paper) => paper.key);
+    paperSessions.sync(open);
+    setShell({
       ...shell,
-      active: message.activeRoot ?? '',
-      open: message.papers.map((paper) => paper.root),
-    };
-    rerenderShell();
-    if (activePaperRoot !== undefined && activePaperRoot !== previousRoot) {
+      active: message.activeKey,
+      open,
+      collapsed: shell.collapsed.filter((key) => open.includes(key)),
+    });
+    const root = activePaperRoot();
+    if (root !== undefined && root !== previousRoot) {
       void editorPane.refresh();
     }
   },
@@ -1088,36 +1106,45 @@ window.addEventListener('resize', () => {
 });
 
 // =============================================================================
-// Wire <stream-tabs> + <stream-conversation> events to shared handlers
+// Shell events: the identity translation of PRD 8
 // =============================================================================
+//
+// Every component dispatches the arm it wants as a bubbling, composed event
+// (`uiEvents.ts`); the root forwards it to the paper it came from. The paper
+// is the nearest `data-session` on the event's path: the conversation shell
+// carries the shown paper's key and every rail tree its own.
 
 // The guard below protects the wiring against double-registration: a
 // bootstrap recovery attempt that itself fails re-renders the same fallback
 // UI, whose button re-invokes recoverFromBootstrapFallback() against this
-// same module-level conversationView element, which never gets recreated or
-// torn down for the life of the renderer.
-let conversationWired = false;
+// same module-level document, which is never torn down for the life of the
+// renderer.
+let shellEventsWired = false;
 
-const CONVERSATION_EVENTS: ReadonlyArray<[string, EventListener]> = [
-  ['stream-switch', handleStreamSwitch as EventListener],
-  ['toolbar-command', handleToolbarCommand as EventListener],
-  ['permission-action', handlePermissionAction as EventListener],
-  ['file-action', handleFileAction as EventListener],
-  ['compile-fixer-run', runCompileFixer as EventListener],
-  ['getting-started-action', handleGettingStartedAction as EventListener],
-  ['followup-change', handleFollowUpChange as EventListener],
-  ['followup-send', handleFollowUpSend as EventListener],
-  ['followup-polish', handleFollowUpPolish as EventListener],
-  // followup-focus-complete clears the focus/polish/transcribe trigger flags.
-  ['followup-focus-complete', handleFollowUpFocusComplete as EventListener],
-];
-
-function wireConversation(): void {
-  if (conversationWired) return;
-  conversationWired = true;
-  for (const [event, handler] of CONVERSATION_EVENTS) {
-    conversationView.addEventListener(event, handler);
+function sessionOf(event: Event): string | undefined {
+  for (const node of event.composedPath()) {
+    if (node instanceof HTMLElement && node.dataset.session) {
+      return node.dataset.session;
+    }
   }
+  return undefined;
+}
+
+function wireShellEvents(): void {
+  if (shellEventsWired) return;
+  shellEventsWired = true;
+  appRoot.addEventListener('runtime-request', (event) => {
+    const key = sessionOf(event);
+    if (key) paperSessions.runtimeRequest(key, event.detail);
+  });
+  appRoot.addEventListener('host-request', (event) => {
+    const key = sessionOf(event);
+    if (key) paperSessions.hostRequest(key, event.detail);
+  });
+  appRoot.addEventListener('surface-action', (event) => {
+    const key = sessionOf(event);
+    if (key) paperSessions.act(key, event.detail);
+  });
 }
 
 /**
@@ -1127,14 +1154,15 @@ function wireConversation(): void {
  * installed shortcuts at all). Every step is idempotent.
  */
 function completeBootstrap(): void {
-  wireConversation();
+  wireShellEvents();
   // Runs here rather than at module scope so a shell recovering from a
   // bootstrap failure re-installs shortcuts too; every step is idempotent.
   shortcutBootstrap.ensure();
   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
-  // The papers list arrives in reply to the main view's ready signal; the
-  // file tree refreshes when it names the paper this window shows.
-  postWebviewReady();
+  // The papers list arrives in reply; each paper's session subscribes as it
+  // opens, and the file tree refreshes when the list names the paper this
+  // window shows.
+  postMessage(DESKTOP_PAPER_COMMANDS.REQUEST_PAPERS);
   document.body.dataset.desktopReady = 'true';
   bootstrapComplete = true;
 }
@@ -1155,14 +1183,7 @@ window.addEventListener(
     disposePendingFileRequests();
     editorPane.dispose();
     terminalPane.disposeAll();
+    paperSessions.dispose();
   },
   { once: true },
 );
-
-function postWebviewReady(): void {
-  // The desktop main process expects `WEBVIEW_READY` from both the 'main' and
-  // 'progress' views to drive startup messages and a full progress sync; this
-  // single renderer plays both roles.
-  postMessage(COMMON_COMMANDS.WEBVIEW_READY, { view: 'main' });
-  postMessage(COMMON_COMMANDS.WEBVIEW_READY, { view: 'progress' });
-}

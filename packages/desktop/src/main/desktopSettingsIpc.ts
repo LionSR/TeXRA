@@ -46,7 +46,6 @@ import {
   type DesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
-import type { DesktopStreamRevealResult } from './desktopAgentExecution.js';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
@@ -61,9 +60,11 @@ export interface DesktopSettingsUiHost extends Pick<
    * presentation that could not be reached at all; the reveal is then reported
    * through {@link DesktopSettingsUiHost.onError} rather than here.
    */
+  /** Select a stream in the shown paper's surface: `missing` when the view
+   *  no longer holds it, `unavailable` when no paper is shown. */
   revealStream(
     streamId: string,
-  ): Promise<DesktopStreamRevealResult | 'unavailable'>;
+  ): Promise<'revealed' | 'missing' | 'unavailable'>;
   /**
    * Display label for a stream, used by the Git tab to name each subscription's
    * owning agent run. Returns undefined when no presentation is attached, in
@@ -220,7 +221,7 @@ export function createDesktopSettingsIpc(
     await settingsHost.setModelEnabled(input, {
       // The options cache is invalidated by the writer itself.
       afterPost: () =>
-        options.credentialSettingsController.postMainModelOptionsData(),
+        options.credentialSettingsController.refreshModelOptions(),
     });
   }
 

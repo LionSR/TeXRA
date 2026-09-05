@@ -115,7 +115,13 @@ const display = (
   key: string,
   name: string,
   subtitle: string,
-): DesktopPaperDisplay => ({ key, name, initials: key, subtitle });
+): DesktopPaperDisplay => ({
+  key,
+  root: subtitle,
+  name,
+  initials: key,
+  subtitle,
+});
 
 function paper(
   displayRecord: DesktopPaperDisplay,

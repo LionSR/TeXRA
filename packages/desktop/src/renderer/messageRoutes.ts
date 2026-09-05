@@ -4,7 +4,6 @@
 // main.ts-scoped closures the routes act on; the route bodies only ever reach
 // renderer state through them.
 
-import { SetThemeMessageSchema, type Theme } from '@shared/schemas';
 import {
   DesktopSetLogMessageSchema,
   type DesktopSetLogMessage,
@@ -12,6 +11,7 @@ import {
 
 import {
   DesktopOpenWorkbenchMessageSchema,
+  DesktopResetLauncherMessageSchema,
   DesktopSaveFileMessageSchema,
   DesktopShowLauncherMessageSchema,
   DesktopToggleLayoutMessageSchema,
@@ -64,13 +64,14 @@ interface DesktopMessageRouteHandlers {
   /** Live read of whether bootstrap failed (routes must not fire then). */
   isBootstrapFailed(): boolean;
   returnToLauncher(): void;
+  /** The launcher's selections back to their defaults. */
+  resetLauncher(): void;
   openKind(kind: WorkbenchKind): void;
   toggleLayoutPanel(panel: DesktopLayoutPanel): void;
   onboarding: {
     show(): void;
     hide(): void;
   };
-  applyTheme(theme: Theme): void;
   logs: { applySnapshot(message: DesktopSetLogMessage): void };
   review: {
     open(message: DesktopShowDiffMessage): void;
@@ -122,6 +123,9 @@ export function createMessageRoutes(
     messageRoute(DesktopShowLauncherMessageSchema, () => {
       if (!handlers.isBootstrapFailed()) handlers.returnToLauncher();
     }),
+    messageRoute(DesktopResetLauncherMessageSchema, () => {
+      if (!handlers.isBootstrapFailed()) handlers.resetLauncher();
+    }),
     messageRoute(DesktopOpenWorkbenchMessageSchema, (message) => {
       if (!handlers.isBootstrapFailed()) handlers.openKind(message.kind);
     }),
@@ -135,9 +139,6 @@ export function createMessageRoutes(
         handlers.onboarding.hide();
       }
     }),
-    messageRoute(SetThemeMessageSchema, (message) =>
-      handlers.applyTheme(message.theme),
-    ),
     messageRoute(DesktopSetLogMessageSchema, (message) =>
       handlers.logs.applySnapshot(message),
     ),

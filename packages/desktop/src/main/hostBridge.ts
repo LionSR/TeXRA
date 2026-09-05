@@ -1,10 +1,5 @@
 import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron';
 
-import {
-  CommonViewMessageSchema,
-  MainViewMessageSchema,
-  ProgressViewOutboundMessageSchema,
-} from '@shared/schemas';
 import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
 
 import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages.js';
@@ -12,6 +7,17 @@ import {
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
 } from '../shared/hostBridgeChannels.js';
+
+/** The session protocol's messages are keyed by `kind`; every other push
+ *  on the channel by `command`. */
+function isSessionMessage(message: unknown): boolean {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'kind' in message &&
+    !('command' in message)
+  );
+}
 
 interface DesktopHostBridgeOptions {
   onRendererMessage?: (message: unknown, window: BrowserWindow) => void;
@@ -42,24 +48,16 @@ export function installDesktopHostBridge(
   return {
     postToRenderer: (message) => {
       // Dev/test-only shape check (no-op in prod, see `isDevAssertionMode`
-      // in `assertKnownOutboundMessage`). Desktop multiplexes
-      // `MainViewMessage`s, `ProgressViewOutboundMessage`s, common host
-      // pushes (theme / debug-mode / state-restore), and desktop-only
-      // `desktop:*` commands (workspace file I/O, terminal, overlays,
-      // shell, logs, onboarding) onto this one renderer-push channel.
-      // `DesktopOutboundMessageSchema` composes the per-surface desktop
-      // schemas, so those are shape-checked too; a command no listed
-      // schema claims (settings-domain pushes) still passes through
-      // unchecked.
-      assertKnownOutboundMessage(
-        [
-          MainViewMessageSchema,
-          ProgressViewOutboundMessageSchema,
-          CommonViewMessageSchema,
-          DesktopOutboundMessageSchema,
-        ],
-        message,
-      );
+      // in `assertKnownOutboundMessage`). Desktop multiplexes the session
+      // protocol's three down messages (frames, responses, surface
+      // actions; PRD 8), which the session bridge builds as typed
+      // `DownMessage`s, and the desktop-only `desktop:*` commands
+      // (workspace file I/O, terminal, overlays, shell, logs, onboarding,
+      // papers) onto this one renderer-push channel; the settings view's
+      // pushes pass through unchecked, as before.
+      if (!isSessionMessage(message)) {
+        assertKnownOutboundMessage([DesktopOutboundMessageSchema], message);
+      }
       if (window.isDestroyed() || window.webContents.isDestroyed()) return;
       window.webContents.send(ELECTRON_WEBVIEW_PUSH_CHANNEL, message);
     },

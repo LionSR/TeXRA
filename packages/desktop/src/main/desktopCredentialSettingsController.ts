@@ -12,11 +12,7 @@ import { SettingsProfileKeyController } from '@controllers/settingsView/Settings
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { ExternalOpener, MessageHost, PromptHost } from '@hosts/uiHosts';
-import {
-  computeModelOptionsData,
-  getEnabledModels,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   API_PROVIDERS,
   invalidateApiKeyCache,
@@ -24,7 +20,7 @@ import {
 } from '@model/apiProviders';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   codingPlanForApiProvider,
   codingPlanForUsageSetting,
@@ -74,6 +70,9 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     'getUsage' | 'invalidate'
   >;
   readonly onCredentialChanged: () => Promise<void>;
+  /** The model catalog changed: every open paper's `host` snapshot reloads
+   *  it (PRD 8.1). */
+  readonly onModelOptionsChanged: () => Promise<void>;
   readonly onError: (error: unknown) => void;
 }
 
@@ -138,7 +137,8 @@ export interface DesktopCredentialSettingsController {
   readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController;
-  postMainModelOptionsData(): Promise<void>;
+  /** The enabled-model set or a credential changed the model catalog. */
+  refreshModelOptions(): Promise<void>;
   /** Re-posts the profile snapshot after a catalog-routed credential write. */
   postProfileData(): Promise<void>;
   postStartupData(): Promise<void>;
@@ -254,19 +254,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     });
   }
 
-  async postMainModelOptionsData(): Promise<void> {
-    const visibleModels = getEnabledModels(this.options.globalState);
-    const modelOptions = await computeModelOptionsData(visibleModels);
-    this.options.renderer.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      optionsData: modelOptions,
-    });
+  refreshModelOptions(): Promise<void> {
+    return this.options.onModelOptionsChanged();
   }
 
   async refreshAuthDependentData(): Promise<void> {
     invalidateModelOptionsCache();
     await this.postModelSelectionData();
-    await this.postMainModelOptionsData();
+    await this.refreshModelOptions();
     await this.postProfileData();
   }
 
@@ -387,7 +382,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       await this.postSubscriptionUsage();
     }
     await this.postModelSelectionData();
-    await this.postMainModelOptionsData();
+    await this.refreshModelOptions();
     await this.options.onCredentialChanged();
   }
 
@@ -398,7 +393,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await this.postProfileData();
     await this.postModelSelectionData();
-    await this.postMainModelOptionsData();
+    await this.refreshModelOptions();
     if (usageProvider) await this.postSubscriptionUsage();
     await this.options.onCredentialChanged();
   }
@@ -412,7 +407,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await Promise.all([
       this.postAuthStatus(providerId),
       this.postModelSelectionData(),
-      this.postMainModelOptionsData(),
+      this.refreshModelOptions(),
       ...(usageProvider ? [this.postSubscriptionUsage()] : []),
     ]);
     await this.options.onCredentialChanged();

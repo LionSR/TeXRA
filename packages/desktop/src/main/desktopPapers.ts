@@ -37,10 +37,17 @@ import { StreamLogStore } from '@transcript';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import type {
+  DesktopPaperDisplay,
+  DesktopPapersMessage,
+} from '../shared/desktopPaperMessages.js';
+import { workspaceInitials } from '../shared/desktopTaskShell.js';
 import { initializeDesktopProcessStores } from './desktopProcessStores.js';
-import type { DesktopPapersMessage } from '../shared/desktopPaperMessages.js';
 
 export interface DesktopPaper {
+  /** The session key: the storage root the fold's `SessionView.key`
+   *  carries, and the paper's name on every renderer message. */
+  readonly key: string;
   /** Canonical folder path, or undefined for the no-workspace session. */
   readonly root: string | undefined;
   readonly roots: WorkspaceRoots;
@@ -199,6 +206,13 @@ async function stopPaperExecutions(session: SessionHandle): Promise<void> {
   });
 }
 
+/** The display record of one open paper (PRD 8.1): produced here once, so
+ *  no renderer derives a name or initials from a path. */
+export function paperDisplay(key: string, root: string): DesktopPaperDisplay {
+  const name = basename(root) || root;
+  return { key, root, name, initials: workspaceInitials(root), subtitle: root };
+}
+
 /**
  * Open one session over `roots`. The transcript store is opened in the
  * workspace scope (it reads `StorageFS` before the session exists); everything
@@ -243,6 +257,7 @@ async function openPaperSession(
       // or shutting the process down cancels it if it has not started.
       resources.add(scheduleLeftoverStreamSweep(session));
       return {
+        key: roots.storage,
         root,
         roots,
         session,
@@ -391,11 +406,10 @@ export async function openDesktopPaperRegistry(
       return closed;
     },
     summary: () => ({
-      papers: openPapers().map(({ root = '' }) => ({
-        root,
-        name: basename(root) || root,
-      })),
-      activeRoot: activeRoot ?? null,
+      papers: openPapers().flatMap((paper) =>
+        paper.root === undefined ? [] : [paperDisplay(paper.key, paper.root)],
+      ),
+      activeKey: active().key,
     }),
     onChange(listener) {
       listeners.add(listener);

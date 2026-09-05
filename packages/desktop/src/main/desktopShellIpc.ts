@@ -1,10 +1,5 @@
 import type { MessageHost } from '@hosts/uiHosts';
-import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  MainViewInboundMessage,
-  SettingsTabPanelName,
-} from '@shared/schemas';
-import { AgentCategory, MainViewInboundMessageSchema } from '@shared/schemas';
+import type { AgentCategory, SettingsTabPanelName } from '@shared/schemas';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
@@ -18,12 +13,10 @@ import {
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
 import {
-  buildDesktopMainViewResetMessage,
   DESKTOP_DOCS_URL,
   DESKTOP_SHELL_IPC_COMMANDS,
   dispatchDesktopCommand,
   postDesktopSettingsView,
-  vsCodeOnlyGettingStartedMessage,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
 
@@ -37,26 +30,16 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openPath(filePath: string): Promise<void>;
   openWorkspaceFolder(): Promise<void>;
   signIn(): Promise<void>;
-  /**
-   * Async git log host. The shell forwards its recent-commit result to the
-   * renderer. The host converts expected git failures into an empty result
-   * with its best-effort `isGitRepo` value.
-   */
-  getRecentCommits(): Promise<{
-    commits: string[];
-    isGitRepo: boolean;
-  }>;
   onAsyncError?: (error: unknown) => void;
 }
 
+/**
+ * The window's shell actions: what the native menu, the command palette,
+ * and the host request arms reach the shell through.
+ */
 export interface DesktopShellActions extends DesktopCommandActions {
   signIn(): void;
   openAgentDirectory(customDirSet?: boolean): void;
-  /**
-   * Posts the most recent git commits to the renderer in response to
-   * `MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS`.
-   */
-  sendRecentCommits(): void;
   showInfoMessage(message: string): void;
 }
 
@@ -101,7 +84,9 @@ export function createDesktopShellActions(
     renderer.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
     });
-    renderer.postToRenderer(buildDesktopMainViewResetMessage());
+    renderer.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.RESET_LAUNCHER,
+    });
   }
 
   function toggleLayout(panel: DesktopLayoutPanel) {
@@ -125,25 +110,6 @@ export function createDesktopShellActions(
       });
     },
     resetMainView,
-    sendRecentCommits: () => {
-      const postReply = (commits: string[], isGitRepo: boolean) => {
-        renderer.postToRenderer({
-          command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-          commits,
-          isGitRepo,
-        });
-      };
-      void options
-        .getRecentCommits()
-        .then(({ commits, isGitRepo }) => postReply(commits, isGitRepo))
-        .catch((error) => {
-          // The git host swallows expected errors; reaching this catch is a
-          // programmer bug. Log and send a conservative reply so the launcher
-          // banner does not hang.
-          reportAsyncError(error);
-          postReply([], false);
-        });
-    },
     showLauncher: () => {
       renderer.postToRenderer({
         command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
@@ -166,94 +132,16 @@ export function createDesktopShellActions(
 }
 
 /**
- * Dispatch a fully-validated `MainViewInboundMessage` against the shell
- * actions. The discriminated-union narrowing means each case sees a
- * fully-typed payload — no per-handler `safeParse` calls are needed.
- *
- * Returns `true` when the message was claimed by a shell handler, `false`
- * when the variant is recognised by the schema but has no shell mapping
- * (e.g. EXECUTE, file-selection, banner toggles — those are handled by
- * sibling IPC adapters in the dispatcher chain).
+ * The desktop-local commands the renderer posts by id (open log folder, the
+ * walkthrough, the docs): they originate from the native menu's registry,
+ * not from a session, so they dispatch through the one command registry the
+ * menu also uses.
  */
-function dispatchMainViewInboundOnShell(
-  message: MainViewInboundMessage,
-  actions: DesktopShellActions,
-): boolean {
-  switch (message.command) {
-    case COMMON_COMMANDS.SWITCH_VIEW: {
-      switch (message.view) {
-        case 'main':
-          actions.showLauncher();
-          break;
-        case 'dashboard':
-          actions.showSettings();
-          break;
-        case 'progress':
-          // The conversation is the permanent desktop canvas, so progress is
-          // already visible and intentionally needs no action.
-          break;
-        default:
-          message.view satisfies never;
-      }
-      return true;
-    }
-    case MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS:
-      actions.showSettings(
-        'agents',
-        message.sessionType === AgentCategory.ToolUse
-          ? AgentCategory.ToolUse
-          : undefined,
-      );
-      return true;
-    case MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS:
-      actions.showSettings('models');
-      return true;
-    case MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER:
-      actions.signIn();
-      return true;
-    case MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY:
-    case MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY:
-      actions.showSettings('models');
-      return true;
-    case MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS:
-      actions.showSettings('multi-agent');
-      return true;
-    case MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY:
-      actions.openAgentDirectory(message.customDirSet === true);
-      return true;
-    case MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS:
-      actions.sendRecentCommits();
-      return true;
-    case MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION:
-      if (message.action === 'openWalkthrough') {
-        actions.showFirstRunWalkthrough();
-      } else {
-        actions.showInfoMessage(
-          vsCodeOnlyGettingStartedMessage(message.action),
-        );
-      }
-      return true;
-    default:
-      return false;
-  }
-}
-
 export function createDesktopShellIpc(
   actions: DesktopShellActions,
 ): DesktopMessageHandler {
   return {
     handleMessage(message: DesktopCommandMessage): boolean {
-      // Single discriminated-union parse at the entry point. Every shell
-      // case below operates on the narrowed variant — no scattered
-      // per-handler `safeParse` calls.
-      const parsed = MainViewInboundMessageSchema.safeParse(message);
-      if (parsed.success) {
-        return dispatchMainViewInboundOnShell(parsed.data, actions);
-      }
-      // Desktop-local commands (open log folder, walkthrough, docs) are not
-      // part of the main-view inbound union — they originate from the native
-      // menu, not the renderer schema — so after the union parse fails they go
-      // to the one command registry the menu also dispatches through.
       const id = DESKTOP_SHELL_IPC_COMMANDS.find(
         (candidate) => candidate === message.command,
       );

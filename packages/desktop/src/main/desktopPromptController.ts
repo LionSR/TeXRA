@@ -22,7 +22,7 @@ interface DesktopPromptRenderer {
 
 type PromptResolver = (value: string | undefined) => void;
 
-export interface DesktopPromptIpc extends DesktopMessageHandler {
+interface DesktopPromptIpc extends DesktopMessageHandler {
   request(input: DesktopPromptInput): Promise<string | undefined>;
   dispose(): void;
 }

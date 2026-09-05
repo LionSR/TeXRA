@@ -79,7 +79,10 @@ describe('desktop composition root and launch environment', () => {
       papersSource.match(/StreamLogStore\.openOrEphemeral\(\)/gu),
     ).toHaveLength(1);
     expect(source).toMatch(/createWindow\(\{[\s\S]*?\bpapers,[\s\S]*?\}\)/u);
-    expect(source).toContain('presentationSignal: abort.signal');
+    // Every open paper is bound to the window: one session bridge (the
+    // framer's port), one host snapshot, one presentation each.
+    expect(source).toContain('createDesktopSessionBridge({');
+    expect(source).toContain('for (const [key, paper] of open)');
 
     expectOrderedAfter(source, 'installDesktopWindowTitle(', [
       'window.loadURL(',

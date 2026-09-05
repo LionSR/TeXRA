@@ -1,22 +1,25 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
+// The desktop's presentation of one paper's session and its launch path.
+//
+// The session's facts reach the renderer through the fold and the framer;
+// what remains host-side is what a session asks its host to do with no
+// renderer in the loop: the runtime's presentation events (an error dialog,
+// an instruction with actions, a file to open when a run finishes) and the
+// tool-edit preview a request stages on disk. Decisions never pass through
+// here: a surface answers an approval with `runtime.request`, and the
+// session settles the pending request itself.
+
+import { Effect, Fiber, Stream } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-
 import { createChannelTrace } from '@agent/trace';
-import type { SessionStores } from '@agent/storage';
 import {
   dispatchPresentationEvent,
-  polishTextWithAI,
   toPresentationDelivery,
-  trackTerminalResultPresentation,
-  type AgentConfig,
   type PresentationDelivery,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
   type SessionHandle,
-  type SessionHostInteractions,
 } from '@agent/runtime';
 import {
   validateExecutionRequest,
@@ -25,945 +28,68 @@ import {
 } from '@agent/core/state/executionRequests';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import {
-  createProgressHostInteractions,
-  type ProgressHostInteractions,
-} from '@controllers/progressView/backend/progressHostInteractions';
-import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { buildStreamInfo } from '@controllers/session/streamInfoUtils';
-import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
-import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
-import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
-import { ProgressFollowUpController } from '@controllers/progressView/ProgressFollowUpController';
-import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
-import {
-  applyFollowUpPlan,
-  applyFollowUpPolishResult,
-  type FollowUpApplyPorts,
-} from '@controllers/progressView/followUpApply';
-import {
-  ProgressWorkflowRunActionsController,
-  type WorkflowDiffRequest,
-  type WorkflowFileOperation,
-  type WorkflowFileOperationRequest,
-} from '@controllers/progressView/ProgressWorkflowRunActionsController';
-import type { ChatExportController } from '@controllers/progressView/ChatExportController';
-import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import {
-  createProgressAgentProposalController,
-  type ProgressAgentProposalController,
-} from '@controllers/progressView/ProgressAgentProposalController';
-import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
-import {
-  createProgressViewCommandHandlers,
-  createProgressViewSecondTierHandlers,
-  type ProgressViewSecondTierActions,
-} from '@controllers/progressView/ProgressViewCommandHandlers';
-import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
-import {
-  API_PROVIDERS,
-  hasUsableApiKey,
-  lookupApiKey,
-} from '@model/apiProviders';
-import {
-  computeModelOptionsData,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
-import { platform } from '@platform/platform';
-import {
-  COMMON_COMMANDS,
-  MAIN_VIEW_COMMANDS,
-  PROGRESS_VIEW_COMMANDS,
-} from '@shared/ipc';
+import { effectRuntime } from '@platform/processRuntime';
 import type {
-  ExecutionId,
-  FileOpResult,
   MainViewExecuteMessage,
-  MainViewPersistedState,
   RequestOpenFilePayload,
-  SettingsTabPanelName,
   StreamTabId,
 } from '@shared/schemas';
-import { cloneRoundIndexed } from '@shared/schemas';
-import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
-import {
-  formatActiveStreamRetention,
-  formatStreamDeletionRetention,
-} from '@shared/copy/executionHistory';
-import {
-  ALL_STREAMS_DELETED_CAUSE,
-  SESSION_DISPOSED_CAUSE,
-} from '@shared/copy/interactionCancellation';
-import { cleanupUnscopedApprovals } from '@tools/approval';
-import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
-import type { RunMetadata } from '@transcript/StreamSnapshotStore';
-import {
-  findTranscriptSpillFile,
-  spillArtifactOpenFailedMessage,
-  SPILL_ARTIFACT_DELETED_MESSAGE,
-} from '@transcript/spillArtifacts';
-import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 
-import {
-  postDesktopSettingsView,
-  vsCodeOnlyGettingStartedMessage,
-} from '../shared/desktopCommandSurface.js';
-import { buildDesktopOnboardingSetStateMessage } from '../shared/desktopOnboardingMessages.js';
-import { DESKTOP_SHELL_COMMANDS } from '../shared/desktopShellMessages.js';
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
-import { listDesktopWorkspaceFiles } from './desktopFileSelection.js';
 import { toLogData } from './desktopLogUtils.js';
-import {
-  DesktopProgressFileActions,
-  type DesktopLatexdiffRunContext,
-  type DesktopLatexdiffWorkspaceScan,
-} from './desktopProgressFileActions.js';
 import {
   launchDesktopAgent,
   type DesktopAgentLaunchOptions as DesktopRunExecutionOptions,
 } from './desktopAgentLaunch.js';
-import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
-function operationLabel(operation: WorkflowFileOperation): {
-  verb: string;
-  gerund: string;
-} {
-  return operation === 'pack'
-    ? { verb: 'pack', gerund: 'packing' }
-    : { verb: 'clean', gerund: 'cleaning' };
-}
-
-/**
- * Outcome of revealing a stream, mirroring the extension's progress navigation
- * so a settings-panel jump to a deleted run reports the same thing on both
- * hosts instead of silently doing nothing.
- */
-export type DesktopStreamRevealResult = 'revealed' | 'missing';
-
 export interface DesktopAgentExecutionOptions {
-  postToRenderer(message: unknown): boolean | void;
   host: DesktopAgentExecutionHost;
   session: SessionHandle;
-  sessionStores: SessionStores;
-  /** Packaged app resources root (`…/resources`), for export templates. */
-  resourcesPath: string;
-  /** Aborts construction and detaches presentation when its window closes. */
-  presentationSignal?: AbortSignal;
-}
-
-export interface DesktopProgressBridgeOptions {
-  session: SessionHandle;
-  sessionStores: SessionStores;
+  /** A run loaded an agent from the custom directory: the New-task
+   *  state's agent-config banner (`HostSnapshot.banners`). */
+  showAgentConfigBanner(data: { agentName: string }): void;
   logger?: AgentTrace;
-  host: DesktopAgentExecutionHost;
-  /** Packaged app resources root (`…/resources`), for export templates. */
-  resourcesPath: string;
 }
 
-export class DesktopProgressBridge {
-  private readonly logger: AgentTrace;
-  private readonly backend: ProgressBackend;
-  private readonly state: ProgressBackend['state'];
+export interface DesktopAgentExecution {
+  /** Launch from the launcher's selections; every failure is a dialog. */
+  handleExecute(message: MainViewExecuteMessage): Promise<void>;
+  /** Launch a request another host action built (a merge, a compile fix). */
+  runExecutionRequest(
+    request: ExecutionRequest,
+    options?: DesktopRunExecutionOptions,
+  ): Promise<void>;
+  runValidated(
+    request: ValidatedExecutionRequest,
+    options?: DesktopRunExecutionOptions,
+  ): Promise<void>;
+  /** The stream a launch from this window resolved to, if one is pending. */
+  onLaunched(listener: (streamId: StreamTabId) => void): () => void;
+  /** A tool-edit prompt's non-terminal verbs over its staged preview. */
+  previewToolEdit(
+    requestId: string,
+    action: 'openDiff' | 'previewProposed' | 'showLatexdiff',
+  ): void;
+  dispose(): void;
+}
+
+export function createDesktopAgentExecution(
+  options: DesktopAgentExecutionOptions,
+): DesktopAgentExecution {
+  const { session, host } = options;
+  const logger = options.logger ?? createChannelTrace('DesktopAgentExecution');
+  const launchListeners = new Set<(streamId: StreamTabId) => void>();
+  let disposed = false;
 
   /**
-   * One adapter over the snapshot store for every progress-view port that
-   * wants one. The store cannot be passed raw -- `preload` takes a list and
-   * the workspace-only path read has a different name -- and each controller
-   * asks for a different subset, so this is the superset. Passed by reference,
-   * excess-property checking does not apply and each port's type still narrows
-   * it to the members that port declares.
-   *
-   * `getRunMetadata` is deliberately this class's override, not the store's:
-   * it falls back to the summary mirror for the execution id.
-   */
-  private readonly snapshotPort = {
-    getActiveStream: () => this.backend.presentation.activeStream,
-    getRunMetadata: (stream: StreamTabId) => this.getRunMetadata(stream),
-    getOutputFiles: (stream: StreamTabId) =>
-      this.state.snapshots.getOutputFiles(stream),
-    getCompileFailures: (stream: StreamTabId) =>
-      this.state.snapshots.getCompileFailures(stream),
-    getKnownWorkspaceOutputPaths: (stream: StreamTabId) =>
-      this.state.snapshots.getKnownFilePaths(stream, { workspaceOnly: true }),
-    preload: (stream: StreamTabId) => this.state.snapshots.preload([stream]),
-  };
-  private readonly streamLogs: ProgressBackend['state']['streamLogs'];
-  private agentProposalController!: ProgressAgentProposalController;
-  private workflowFileActions!: ProgressWorkflowFileActionsController;
-  private commandHandlers!: ReturnType<
-    typeof createProgressViewCommandHandlers
-  >;
-  /**
-   * Stream-toolbar diff/pack/clean. The controller is host-neutral: it resolves
-   * each run's agent/model/input/output configuration from the shared snapshot
-   * store and calls back into the two host-supplied operations below.
-   */
-  private workflowRunActions!: ProgressWorkflowRunActionsController;
-  /** Plans compile-fix runs for a finished stream. */
-  private followUpController!: ProgressFollowUpController;
-  /** Rewrites follow-up text with the helper model ("Polish" in the follow-up box). */
-  private readonly followUpPolishController: ProgressFollowUpPolishController;
-  /** Switches a credit/limit-exhausted run onto the user's own API key. */
-  private apiKeyRetryController!: ProgressApiKeyRetryController;
-  /** Detaches the run-completion subscription that refreshes onboarding. */
-  private detachCompletedResult: () => void = () => undefined;
-  private toolEditApprovals: ToolEditApprovalController | undefined;
-  private hostInteractions!: ProgressHostInteractions;
-  private fileActions!: DesktopProgressFileActions;
-  /**
-   * One handler per `RuntimePresentationEvent`, dispatched via
-   * `dispatchPresentationEvent` from `handlePresentationEvent` below. Built
-   * once in the constructor (rather than per-call) since every handler body
-   * only closes over `this`, which is stable for the bridge's lifetime.
-   */
-  private readonly presentationEventHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads>;
-  private readonly initialization: Promise<void>;
-  private disposed = false;
-  private presentationReady = false;
-  private chatExportControllerLoad: Promise<ChatExportController> | undefined;
-
-  progressViewInboundHandlers!: DesktopProgressInboundHandlerRegistry;
-
-  private readonly session: SessionHandle;
-  /** Detaches this window's presentation from process-owned interactions. */
-  private detachHostInteractions: () => void = () => undefined;
-
-  constructor(
-    private readonly postToRenderer: (message: unknown) => boolean | void,
-    private readonly options: DesktopProgressBridgeOptions,
-  ) {
-    this.logger = options.logger ?? createChannelTrace('DesktopProgressBridge');
-    this.followUpPolishController = new ProgressFollowUpPolishController({
-      polishText: (text, fileContext) =>
-        polishTextWithAI(text, fileContext, options.session),
-    });
-    this.presentationEventHandlers = {
-      // The desktop task shell keeps the conversation canvas permanently on
-      // screen, so there is no separate progress surface to reveal.
-      requestEnsureProgressView: () => undefined,
-      requestShowError: ({ message }) =>
-        this.settleHostDialog(
-          this.options.host.showErrorMessage(message),
-          'Failed to present the error dialog',
-        ),
-      requestShowInstruction: (instruction) =>
-        // An instruction is actionable guidance, not a failure, so it uses
-        // the info-style dialog. `showInstructionDialog` renders each action
-        // token as a real button; `showSuppress` still has no affordance to
-        // attach to (a native dialog has no persistent "never remind again"
-        // control).
-        this.settleHostDialog(
-          this.options.host.showInstructionDialog(
-            instruction.message,
-            instruction.actions,
-          ),
-          'Failed to present the instruction dialog',
-        ),
-      showAgentConfigBanner: ({ agentName }) =>
-        this.postToRenderer({
-          command: MAIN_VIEW_COMMANDS.SET_BANNER,
-          banner: 'agentConfig',
-          visible: true,
-          data: { agentName, customDirSet: true },
-        }) !== false,
-      requestOpenFile: (data: RequestOpenFilePayload) =>
-        // Desktop has no editor integration to preview through, so the
-        // resolved path goes to the preview-with-fallback host directly.
-        this.settleHostDialog(
-          this.options.host.openPath(data.location.absolutePath),
-          'Failed to open requested file on desktop',
-        ),
-    };
-    const presentationHost: Pick<SessionHostInteractions, 'emit'> = {
-      emit: (event, payload) => this.handlePresentationEvent(event, payload),
-    };
-    this.session = options.session;
-    this.backend = new ProgressBackend({
-      session: this.session,
-      storage: this.session.roots.workspaceState,
-      stores: options.sessionStores,
-      sendMessage: (message) => this.postToRenderer(message) !== false,
-      hasTarget: () => true,
-      getStreamControls: (stream) =>
-        getProgressStreamControls(stream, this.session),
-      getUnsupportedCommands: () =>
-        unsupportedCommands(this.progressViewInboundHandlers),
-      reportTranscriptLoadError: (error, stream) =>
-        this.reportTranscriptLoadError(error, stream),
-      approvals: {
-        // The desktop renderer is always attached (no sidebar/editor re-target).
-        canSend: () => true,
-        logger: this.logger,
-      },
-      lifecycle: {
-        cleanupDeletedStream: (stream) => {
-          this.releaseApprovalsForStream(stream);
-          this.workflowFileActions.clearStreamBackups(stream);
-        },
-        cleanupDeletedStreams: ({ allDeleted }) => {
-          if (!allDeleted) return;
-          cleanupUnscopedApprovals(this.session);
-          this.session.interactions.cancel({
-            cause: ALL_STREAMS_DELETED_CAUSE,
-          });
-          this.clearDesktopPresentationState();
-          this.workflowFileActions.clearAllBackups();
-        },
-        rebuildRenderedStreams: ({ syncActiveStream }) => {
-          return this.syncRenderedStreams(syncActiveStream);
-        },
-        notifyDeletionRetained: (activeCount, failedCount) =>
-          this.options.host.showInfoMessage(
-            failedCount === 0
-              ? formatActiveStreamRetention(activeCount)
-              : formatStreamDeletionRetention(activeCount, failedCount),
-          ),
-      },
-    });
-    this.state = this.backend.state;
-    this.streamLogs = this.state.streamLogs;
-    this.detachCompletedResult = this.session.onResult((event) => {
-      if (event.outcome === 'completed') this.options.host.onRunCompleted();
-    });
-    this.initialization = this.initializeCanonicalState(presentationHost);
-  }
-
-  /** Wait until canonical presentation state is ready for use. */
-  waitUntilReady(): Promise<void> {
-    return this.initialization;
-  }
-
-  private async initializeCanonicalState(
-    presentationHost: Pick<SessionHostInteractions, 'emit'>,
-  ): Promise<void> {
-    await this.backend.load();
-    if (this.disposed) return;
-
-    this.toolEditApprovals = new ToolEditApprovalController({
-      host: new DesktopToolEditApprovalHost({ ui: this.options.host }),
-      showToolEditPermission: (payload) =>
-        this.backend.approvalHandlers.toolEdit.show(payload),
-      resolveToolEditPermission: (requestId) =>
-        this.backend.approvalHandlers.toolEdit.dismiss(requestId),
-      detachCause: SESSION_DISPOSED_CAUSE,
-    });
-    // The shared progress-view host port. Every notice the runtime raises now
-    // reaches this window through `presentationHost`'s presentation-event
-    // map, so there is no second, optional channel a host can leave
-    // unimplemented.
-    this.hostInteractions = createProgressHostInteractions({
-      interactions: presentationHost,
-      getApprovalHandlers: () => this.backend.approvalHandlers,
-      getToolEditApprovals: () => this.toolEditApprovals!,
-      setApprovalBypassState: this.backend.setApprovalBypassState,
-    });
-    this.fileActions = new DesktopProgressFileActions(this.options.host, {
-      startExecution: (request) => {
-        const logger = this.logger;
-        let executionId: string | undefined;
-        const terminalResult = trackTerminalResultPresentation(
-          this.session,
-          (event) => event.executionId === executionId,
-        );
-        void this.runExecution(request, {
-          suppressErrorNotification: true,
-          onRun: (handle) => {
-            executionId = handle.executionId;
-          },
-        })
-          .catch((error: unknown) => {
-            logger.error('Desktop merge execution failed', {
-              data: toLogData(error),
-            });
-            terminalResult.reportUnhandled(() =>
-              this.session.interactions.emit('requestShowError', {
-                message: `Merge failed: ${toErrorMessage(error)}`,
-              }),
-            );
-          })
-          .finally(terminalResult.dispose);
-      },
-      listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
-    });
-    this.workflowFileActions = this.createWorkflowFileActionsController();
-    this.agentProposalController = this.createAgentProposalController();
-    this.commandHandlers = this.createSharedCommandHandlers();
-    this.workflowRunActions = this.createWorkflowRunActionsController();
-    this.followUpController = this.createFollowUpController();
-    this.apiKeyRetryController = this.createApiKeyRetryController();
-    this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
-    this.backend.setupEventListeners();
-    if (this.disposed) return;
-    // Canonical state is complete before any window-owned adapter can
-    // receive a replay. Subscribe first because attachment
-    // synchronously redispatches pending approvals and their visibility facts.
-    const detachHostInteractions = this.session.interactions.use(
-      this.hostInteractions,
-    );
-    // Attachment synchronously replays pending requests. That replay can close
-    // the window before interactions.use returns its disposer.
-    if (this.disposed) {
-      detachHostInteractions();
-      return;
-    }
-    this.detachHostInteractions = detachHostInteractions;
-    // A removal can begin after the pre-load drain but before these
-    // subscriptions exist. Drain the one shared deletion owner again now;
-    // subsequent events are observed live, and no await remains before the
-    // first render can be enabled.
-    await this.options.sessionStores.waitForPendingStreamDeletions();
-    if (this.disposed) return;
-    // No metadata refresh loop: `getStreamMetadata` overlays the
-    // always-resident summary mirror at read time, so canonical state is
-    // already visible (#9947). The live child rosters are seeded by the
-    // backend's `setupEventListeners`, after every live subscription.
-    for (const streamId of this.streamLogs.keys()) {
-      const category = this.state.getStreamMetadata(streamId).agentCategory;
-      if (category) {
-        this.state.getOrCreateStreamState(streamId, category);
-      }
-    }
-    this.presentationReady = true;
-  }
-
-  /**
-   * Mirrors the extension's `createWorkflowRunActionsController`
-   * (`progressView/ProgressViewMessageHandler.ts`). The controller itself is
-   * host-neutral; it reads each run's configuration from the same
-   * `StreamSnapshotStore` both hosts share, so only the two terminal operations
-   * differ per host. The extension routes them through `texra.runLatexdiff` /
-   * `texra.pack` / `texra.clean` commands; the desktop calls the same
-   * host-agnostic cores directly.
-   */
-  private createWorkflowRunActionsController(): ProgressWorkflowRunActionsController {
-    return new ProgressWorkflowRunActionsController({
-      state: this.snapshotPort,
-      runDiff: (request) => this.runWorkflowDiff(request),
-      runFileOperation: (operation, request) =>
-        this.runWorkflowFileOperation(operation, request),
-    });
-  }
-
-  /**
-   * Mirrors the extension's `createApiKeyRetryController`. Every credential and
-   * routing rule stays in the host-neutral controller; only the "ask the user
-   * for a key" step is host-specific, and on the desktop that means opening the
-   * Models tab rather than a modal prompt. The controller re-reads the secret
-   * store after this returns, so a key entered there is picked up.
-   */
-  private createApiKeyRetryController(): ProgressApiKeyRetryController {
-    return new ProgressApiKeyRetryController({
-      providers: API_PROVIDERS,
-      readKey: (provider) => lookupApiKey(platform().secrets, provider),
-      hasUsableKey: (provider) => hasUsableApiKey(platform().secrets, provider),
-      promptForApiKey: async () => {
-        this.showSettings('models');
-        await this.options.host.showInfoMessage(
-          'Add a provider API key in Models, then use "Retry" on the request.',
-        );
-      },
-      invalidateModelOptionsCache,
-      isRetryPending: (stream, requestId) =>
-        this.hostInteractions.isRetryPending(stream, requestId),
-      triggerRetry: (stream, requestId) =>
-        this.hostInteractions.submitRetryWithPersonalCredentials(
-          stream,
-          requestId,
-        ),
-    });
-  }
-
-  /**
-   * Mirrors the extension's `createFollowUpController`. The controller decides
-   * what a compile-fix run should be; the desktop only supplies the catalog
-   * lookups and the same snapshot-store reads.
-   */
-  private createFollowUpController(): ProgressFollowUpController {
-    return new ProgressFollowUpController({
-      loadModelOptions: () => computeModelOptionsData(),
-      state: this.snapshotPort,
-      workspace: WorkspaceFS,
-    });
-  }
-
-  private postRecordingStatus(
-    status:
-      { status: 'started' | 'stopped' } | { status: 'error'; error: string },
-  ): void {
-    this.postToRenderer({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,
-      ...status,
-    });
-  }
-
-  /** Surface a dictation failure both to the renderer's mic button and the user. */
-  private async reportRecordingError(message: string): Promise<void> {
-    this.logger.error(`Recording failed: ${message}`);
-    this.postRecordingStatus({ status: 'error', error: message });
-    await this.options.host.showErrorMessage(message);
-  }
-
-  /** This host's bindings for the shared follow-up plan/polish interpreters. */
-  private readonly followUpPorts: FollowUpApplyPorts = {
-    showInfo: (message) => this.options.host.showInfoMessage(message),
-    showWarning: (message) => this.options.host.showWarningMessage(message),
-    showError: (message) => this.options.host.showErrorMessage(message),
-    logError: (message, error) => {
-      this.logger.error(message, {
-        data: error ? toLogData(error) : undefined,
-      });
-    },
-    post: (message) => {
-      this.postToRenderer(message);
-    },
-    runCompileFixer: async (request) => {
-      await this.runValidatedExecutionRequest(request, {
-        preferHelperModel: true,
-      });
-    },
-  };
-
-  /** Stream-toolbar diff: delegate to the shared round-aware latexdiff core. */
-  private async runWorkflowDiff(request: WorkflowDiffRequest): Promise<void> {
-    if (!request.agent || !request.model || !request.inputFile) {
-      await this.options.host.showErrorMessage(
-        'Missing required configuration parameters for the diff.',
-      );
-      return;
-    }
-
-    await this.fileActions.diffStreamToolbarAction({
-      outputsByRound: request.outputsByRound ?? {},
-      ...(request.runId && { executionId: request.runId }),
-      workspaceScan: {
-        agent: request.agent,
-        model: request.model,
-        inputFile: request.inputFile,
-        outputFiles: request.outputFiles,
-      },
-    });
-  }
-
-  /**
-   * Stream-toolbar pack/clean for artifacts in the current execution directory.
-   */
-  private async runWorkflowFileOperation(
-    operation: WorkflowFileOperation,
-    request: WorkflowFileOperationRequest,
-  ): Promise<void> {
-    const { verb, gerund } = operationLabel(operation);
-    const { agent, model, inputFile, executionId } = request;
-    if (!agent || !model || !inputFile) {
-      await this.options.host.showErrorMessage(
-        `Select an input file before ${gerund}.`,
-      );
-      return;
-    }
-
-    if (!executionId) {
-      await this.options.host.showErrorMessage(
-        `Missing execution identity for ${verb}.`,
-      );
-      return;
-    }
-
-    let result: FileOpResult;
-    try {
-      result =
-        operation === 'pack'
-          ? await runPackRunDir(
-              executionId as ExecutionId,
-              agent,
-              model,
-              inputFile,
-            )
-          : await runCleanRunDir(executionId as ExecutionId);
-    } catch (error) {
-      this.logger.error(`Desktop ${operation} operation failed`, {
-        data: toLogData(error),
-      });
-      await this.options.host.showErrorMessage(
-        `Error during ${operation}: ${toErrorMessage(error)}`,
-      );
-      return;
-    }
-
-    await this.reportFileOperationResult(operation, result, inputFile);
-  }
-
-  private async reportFileOperationResult(
-    operation: WorkflowFileOperation,
-    result: FileOpResult,
-    inputFile: string,
-  ): Promise<void> {
-    const { verb } = operationLabel(operation);
-    switch (result.status) {
-      case 'success': {
-        const folder = result.outputFolder;
-        const packedMessage = folder
-          ? `Files packed into ${folder}`
-          : 'Files packed.';
-        await this.options.host.showInfoMessage(
-          operation === 'pack' ? packedMessage : 'Output files cleaned.',
-        );
-        return;
-      }
-      case 'noFiles':
-        await this.options.host.showInfoMessage(
-          `No files found to ${verb} for ${inputFile}`,
-        );
-        return;
-      case 'error':
-        await this.options.host.showErrorMessage(
-          `Error during ${verb}: ${result.error}`,
-        );
-        return;
-    }
-  }
-
-  private createWorkflowFileActionsController(): ProgressWorkflowFileActionsController {
-    return new ProgressWorkflowFileActionsController({
-      state: this.snapshotPort,
-      host: {
-        compareFiles: (baseFile, editedFile) =>
-          this.fileActions.compareFiles(baseFile, editedFile),
-        acceptEditedFile: (baseFile, editedFile) =>
-          this.fileActions.acceptEditedFile(baseFile, editedFile),
-        mergeFile: (baseFile, editedFile) =>
-          this.fileActions.runMergeFile(baseFile, editedFile),
-        latexdiffFile: (baseFile, editedFile) =>
-          this.runLatexdiffFile(baseFile, editedFile),
-        openDirectory: (directory) => this.options.host.openPath(directory),
-        openLabel: (label) => this.fileActions.findAndOpenLabel(label),
-        readFile: (file) => readFile(file, 'utf8'),
-        showInfo: async (message) => {
-          await this.options.host.showInfoMessage(message);
-        },
-        showError: async (message) => {
-          await this.options.host.showErrorMessage(message);
-        },
-        logError: (message, error) =>
-          this.logger.error(message, {
-            data: toLogData(error),
-          }),
-      },
-      sendFollowUp: async (stream, text) => {
-        await submitProgressFollowUp({
-          session: this.session,
-          streamId: stream,
-          input: { text },
-          acknowledge: () => {},
-          showInfo: (message) => this.options.host.showInfoMessage(message),
-        });
-      },
-    });
-  }
-
-  private createAgentProposalController(): ProgressAgentProposalController {
-    return createProgressAgentProposalController({
-      getPendingProposal: (requestId) =>
-        this.backend.approvalHandlers.proposal.get(requestId),
-      restoreRunConfig: async (config) => this.restoreRunConfig(config),
-      openFile: (file) => this.options.host.openPath(file),
-      submitProposalDecision: (requestId, result) =>
-        this.hostInteractions.submitProposalDecision(requestId, result),
-      log: this.logger,
-    });
-  }
-
-  private createSharedCommandHandlers(): ReturnType<
-    typeof createProgressViewCommandHandlers
-  > {
-    return createProgressViewCommandHandlers({
-      run: {
-        state: this.snapshotPort,
-        runExecutionRequest: (request) =>
-          this.runValidatedExecutionRequest(request),
-      },
-      workflowFileActions: this.workflowFileActions,
-      agentProposal: this.agentProposalController,
-      lifecycle: {
-        setActiveStream: (stream, requestId) =>
-          this.setActiveStream(stream, requestId),
-        deleteStream: (stream) => this.backend.deleteStream(stream),
-        deleteAllStreams: () => this.backend.deleteAllStreams(),
-        stopStream: (stream) => this.backend.stopStream(stream),
-      },
-      followUp: {
-        session: this.session,
-        captureAdmissionReporter: () => (stream, accepted) => {
-          this.postToRenderer({
-            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
-            stream,
-            accepted,
-          });
-        },
-        reportImageSaveError: (image, error) =>
-          this.logger.warn(
-            `Failed to save pasted follow-up image ${image.fileName}`,
-            { data: toLogData(error) },
-          ),
-      },
-      bypass: {
-        session: this.session,
-        showInfo: (message) => this.options.host.showInfoMessage(message),
-      },
-      file: {
-        openFile: (file, line) => this.options.host.openPath(file, line),
-        openSpillArtifact: async (spillPath) => {
-          let file: string | undefined;
-          try {
-            await this.session.flushArtifacts();
-            file = await findTranscriptSpillFile(spillPath);
-          } catch (error) {
-            await this.options.host.showErrorMessage(
-              spillArtifactOpenFailedMessage(toErrorMessage(error)),
-            );
-            return;
-          }
-          if (!file) {
-            await this.options.host.showErrorMessage(
-              SPILL_ARTIFACT_DELETED_MESSAGE,
-            );
-            return;
-          }
-          try {
-            await this.options.host.openPath(file);
-          } catch (error) {
-            // The desktop preview host already surfaced its own "Failed to
-            // open file …" dialog before rethrowing (desktopPreviewHost's
-            // fail() shows-then-throws), so reporting here would stack a
-            // second toast on the same failure (#10848). Log only.
-            this.logger.warn('Failed to open the full output artifact', {
-              data: toLogData(error),
-            });
-          }
-        },
-      },
-      approval: {
-        approvePendingDelegatedWork: (stream, initiatingProposalId) =>
-          this.hostInteractions.approvePendingDelegatedWork(
-            stream,
-            initiatingProposalId,
-          ),
-        handleToolEditApprovalAction: (message) =>
-          this.toolEditApprovals!.handleAction(message),
-        handleBashApprovalAction: (message) =>
-          void this.hostInteractions.submitBashDecision(
-            message.requestId,
-            message.action === 'approve'
-              ? { action: 'approve' }
-              : { action: 'reject', feedback: message.feedback },
-          ),
-        handlePlanApprovalAction: (message) => {
-          this.hostInteractions.submitPlanDecision(
-            message.requestId,
-            message.action === 'reject'
-              ? { action: 'reject', feedback: message.feedback }
-              : { action: message.action },
-          );
-        },
-        handleUserQuestionAction: (message) => {
-          this.hostInteractions.submitUserQuestionDecision(
-            message.requestId,
-            message.action === 'submit'
-              ? { action: 'submit', answers: message.answers }
-              : { action: message.action, feedback: message.feedback },
-          );
-          return undefined;
-        },
-      },
-      externalInquiry: {
-        session: this.session,
-        dismiss: (threadId) =>
-          this.hostInteractions.dismissExternalInquiry(threadId),
-      },
-    });
-  }
-
-  private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
-    const secondTierActions: ProgressViewSecondTierActions = {
-      getRunMetadata: this.snapshotPort.getRunMetadata,
-      preload: this.snapshotPort.preload,
-      workflowRunActions: this.workflowRunActions,
-      apiKeyRetry: this.apiKeyRetryController,
-      followUp: this.followUpController,
-      followUpPolish: this.followUpPolishController,
-      host: {
-        showInfo: (message) => this.options.host.showInfoMessage(message),
-      },
-      session: this.session,
-      restoreRunConfig: async (config) => {
-        const restored = this.restoreRunConfig(config);
-        if (!restored) {
-          await this.options.host.showErrorMessage('Failed to restore state');
-        }
-      },
-      applyFollowUpPlan: (plan) => applyFollowUpPlan(plan, this.followUpPorts),
-      capturePolishReporter: () => ({
-        applyResult: (result) =>
-          applyFollowUpPolishResult(result, this.followUpPorts),
-        reportError: async (stream, error) => {
-          const message = toErrorMessage(error);
-          this.postToRenderer({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-            stream,
-            kind: 'polishError',
-            text: null,
-            error: message,
-          });
-          this.logger.error(`Error polishing follow-up: ${message}`, {
-            data: toLogData(error),
-          });
-          await this.options.host.showErrorMessage(
-            `Error polishing follow-up: ${message}`,
-          );
-        },
-      }),
-      restoreProposalConfig: async (proposal) => {
-        await this.agentProposalController.restoreProposalConfig(proposal);
-      },
-      retry: {
-        submit: (stream, requestId, feedback) =>
-          this.hostInteractions.submitRetryDecision(stream, requestId, {
-            action: 'retry',
-            feedback,
-          }),
-        cancel: (stream, requestId) => {
-          this.hostInteractions.submitRetryDecision(stream, requestId, {
-            action: 'cancel',
-          });
-        },
-      },
-      transcriptExport: {
-        pickFormat: () => this.options.host.pickTranscriptExportFormat(),
-        openPath: (filePath) => this.options.host.openPath(filePath),
-        showInfo: (message) => this.options.host.showInfoMessage(message),
-        showWarning: (message) => this.options.host.showWarningMessage(message),
-        showError: (message) => this.options.host.showErrorMessage(message),
-        reportDetail: (message) => this.logger.error(message),
-        getController: () => this.getChatExportController(),
-        getTraceViewerTemplate: () =>
-          path.join(this.options.resourcesPath, 'traceViewer', 'index.html'),
-      },
-    };
-
-    return {
-      // First-tier shared progress command groups
-      ...this.commandHandlers,
-
-      // Second-tier shared progress command groups
-      ...createProgressViewSecondTierHandlers(secondTierActions),
-
-      // Host-specific handlers below
-      // Getting-started actions from the progress empty-state. openWalkthrough
-      // has a desktop equivalent; the remaining four actions are VS Code-only.
-      [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (data) => {
-        if (data.action === 'openWalkthrough') {
-          this.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
-          return;
-        }
-        await this.options.host.showInfoMessage(
-          vsCodeOnlyGettingStartedMessage(data.action),
-        );
-      },
-      // Recording: the desktop calls standalone functions and posts status
-      // manually; the extension wraps it in a webview-bound RecordingManager.
-      startRecording: async () => {
-        try {
-          const result = await startRecording();
-          if (result.success) {
-            this.postRecordingStatus({ status: 'started' });
-          } else if (result.error) {
-            await this.reportRecordingError(result.error);
-          }
-        } catch (error) {
-          await this.reportRecordingError(toErrorMessage(error));
-        }
-      },
-      stopRecording: async () => {
-        try {
-          const transcription = stopRecordingAndTranscribe();
-          this.postRecordingStatus({ status: 'stopped' });
-          const result = await transcription;
-          if (result.success) {
-            this.postToRenderer({
-              command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-              kind: 'transcribed',
-              text: result.text,
-            });
-          } else if (result.error) {
-            await this.reportRecordingError(result.error);
-          }
-        } catch (error) {
-          await this.reportRecordingError(toErrorMessage(error));
-          this.postRecordingStatus({ status: 'stopped' });
-        }
-      },
-      // Pop-out-to-editor is a VS Code editor-tab concept; the desktop app is
-      // a single window.
-      popOut: unsupported('Pop-out to editor is a VS Code-only feature.'),
-      popBack: unsupported('Pop-out to editor is a VS Code-only feature.'),
-    };
-  }
-
-  dispose(): void {
-    if (this.disposed) return;
-    // Make this presentation sink inert before detaching resources owned by
-    // the closing BrowserWindow.
-    this.disposed = true;
-    this.detachCompletedResult();
-    // Detaching first advances the session's attachment generation. Any
-    // cancellation produced while the old presenters are disposed is stale;
-    // the process-owned request remains pending for the next window.
-    this.detachHostInteractions();
-    this.toolEditApprovals?.dispose();
-    this.clearDesktopPresentationState();
-    this.backend.dispose();
-    this.workflowFileActions?.clearAllBackups();
-  }
-
-  private clearDesktopPresentationState(): void {
-    // Settle only this detached presenter's promises and clear its request IDs.
-    // SessionHostInteractions ignores those stale settlements and keeps each
-    // process-owned request pending for the next attached presentation.
-    if (!this.presentationReady) return;
-    for (const handler of Object.values(this.backend.approvalHandlers)) {
-      handler.clear();
-    }
-  }
-
-  private getRunMetadata(streamId: StreamTabId): RunMetadata {
-    // The sidecar-backed record is the execution authority; fall back to the
-    // summary mirror only when the sidecar has no FK. The summary
-    // intentionally does not carry the full config/identity fields.
-    const metadata = this.state.snapshots.getRunMetadata(streamId);
-    const summary = this.state.getStreamMetadata(streamId);
-    return {
-      ...metadata,
-      executionId: metadata.executionId ?? summary.executionId,
-    };
-  }
-
-  /**
-   * Open the settings overlay, optionally on a specific tab, through the same
-   * owner the rail and menu commands use, so a stream-initiated navigation
-   * lands identically.
-   */
-  private showSettings(tab?: SettingsTabPanelName): void {
-    postDesktopSettingsView((message) => this.postToRenderer(message), tab);
-  }
-
-  /**
-   * Settle a host dialog promise and report whether it was actually presented.
-   * The desktop dialog await rejects when its window is torn down beneath it;
+   * Settle a host dialog promise and report whether it was presented. The
+   * desktop dialog await rejects when its window is torn down beneath it;
    * voiding the promise would leave that rejection unhandled, and reporting
    * nothing would read as not-delivered even when the dialog did render.
    */
-  private async settleHostDialog(
+  async function settleHostDialog(
     dialog: Promise<unknown> | void,
     logMessage: string,
   ): Promise<boolean> {
@@ -971,320 +97,143 @@ export class DesktopProgressBridge {
       await dialog;
       return true;
     } catch (error) {
-      this.logger.warn(logMessage, { data: toLogData(error) });
+      logger.warn(logMessage, { data: toLogData(error) });
       return false;
     }
   }
 
-  private handlePresentationEvent<K extends RuntimePresentationEvent>(
+  const presentationEventHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
+    {
+      // The desktop task shell keeps the conversation canvas permanently on
+      // screen, so there is no separate progress surface to reveal.
+      requestEnsureProgressView: () => undefined,
+      requestShowError: ({ message }) =>
+        settleHostDialog(
+          host.showErrorMessage(message),
+          'Failed to present the error dialog',
+        ),
+      requestShowInstruction: (instruction) =>
+        // An instruction is actionable guidance, not a failure, so it uses
+        // the info-style dialog with each action token as a real button.
+        settleHostDialog(
+          host.showInstructionDialog(instruction.message, instruction.actions),
+          'Failed to present the instruction dialog',
+        ),
+      showAgentConfigBanner: ({ agentName }) => {
+        options.showAgentConfigBanner({ agentName });
+        return true;
+      },
+      requestOpenFile: (data: RequestOpenFilePayload) =>
+        // Desktop has no editor integration to preview through, so the
+        // resolved path goes to the preview-with-fallback host directly.
+        settleHostDialog(
+          host.openPath(data.location.absolutePath),
+          'Failed to open requested file on desktop',
+        ),
+    };
+
+  function handlePresentationEvent<K extends RuntimePresentationEvent>(
     event: K,
     payload: RuntimePresentationEventPayloads[K],
   ): PresentationDelivery {
-    if (this.disposed) return false;
-
+    if (disposed) return false;
     return toPresentationDelivery(
-      dispatchPresentationEvent(this.presentationEventHandlers, event, payload),
+      dispatchPresentationEvent(presentationEventHandlers, event, payload),
     );
   }
 
-  private syncFullView(): void {
-    void this.syncRenderedStreams(true);
-  }
+  // The tool-edit preview: staged copies of the original and proposed
+  // content the review pane diffs. The request itself is the session's
+  // (`approval.requested` folds into the view), and a surface's decision
+  // settles it there; the staged preview is discarded when the request
+  // resolves, whichever way.
+  const toolEditApprovals = new ToolEditApprovalController({
+    host: new DesktopToolEditApprovalHost({ ui: host }),
+    showToolEditPermission: () => undefined,
+    resolveToolEditPermission: () => undefined,
+    detachCause: SESSION_DISPOSED_CAUSE,
+  });
+  const resolvedApprovals = effectRuntime().runFork(
+    Stream.runForEach(session.events.all(session.now()), (event) =>
+      Effect.sync(() => {
+        if (event.type !== 'approval.resolved') return;
+        toolEditApprovals.handleAction({
+          requestId: event.requestId,
+          action: 'reject',
+        });
+      }),
+    ),
+  );
+  // Attached for the window's life: the runtime parks a request until a
+  // host is attached, so the presentation must be there before the first
+  // run of this window asks anything.
+  const detachHostInteractions = session.interactions.use({
+    emit: handlePresentationEvent,
+    requestToolEditApproval: (request) =>
+      toolEditApprovals.requestApproval(request),
+    cancel: (selector) => toolEditApprovals.cancel(selector),
+  });
 
-  private async syncRenderedStreams(syncActiveStream: boolean): Promise<void> {
-    await this.backend.syncRenderedStreams({ syncActiveStream });
-  }
-
-  /** Send canonical state and replay pending prompts after attachment. */
-  async completeWebviewReady(): Promise<void> {
-    this.syncFullView();
-    await replayApprovalRequestHandlers(this.backend.approvalHandlers);
-  }
-
-  private async setActiveStream(
-    streamId: StreamTabId | '',
-    requestId?: string,
-  ): Promise<void> {
-    await this.backend.activateStream(streamId, requestId);
-  }
-
-  /**
-   * Display label for a stream, the desktop counterpart of the extension's
-   * `getProgressStreamLabel`.
-   */
-  getStreamLabel(streamId: StreamTabId): string | undefined {
-    return buildStreamInfo(
-      this.state,
-      streamId,
-      this.backend.presentation.activeStream,
-    ).label;
-  }
-
-  /**
-   * Select the given stream as this window's active stream.
-   * Mirrors the extension's `revealProgressStream`, so jumping from a settings
-   * entry to its owning run works the same way on both hosts.
-   */
-  async revealStream(
-    streamId: StreamTabId,
-  ): Promise<DesktopStreamRevealResult> {
-    if (!this.streamLogs.has(streamId)) {
-      return 'missing';
-    }
-    await this.setActiveStream(streamId);
-    return 'revealed';
-  }
-
-  private reportTranscriptLoadError(
-    error: unknown,
-    streamId?: StreamTabId | '',
-  ): void {
-    this.logger.error(
-      `Failed to load desktop transcript${streamId ? ` ${streamId}` : ''}`,
-      {
-        data: toLogData(error),
-      },
-    );
-    void this.options.host.showErrorMessage(
-      `Transcript load failed: ${toErrorMessage(error)}`,
-    );
-  }
-
-  private async runLatexdiffFile(
-    baseFile: string,
-    editedFile: string,
-  ): Promise<void> {
-    const context = await this.getActiveLatexdiffRunContext(editedFile);
-    if (!context) {
-      await this.fileActions.runLatexdiffFile(baseFile, editedFile);
-      return;
-    }
-
-    await this.fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
-  }
-
-  private async getActiveLatexdiffRunContext(
-    editedFile: string,
-  ): Promise<DesktopLatexdiffRunContext | undefined> {
-    const stream = this.backend.presentation.activeStream;
-    if (!stream) return undefined;
-    await this.state.snapshots.preload([stream]);
-
-    // Round keys are non-negative integers BY CONSTRUCTION: every write path
-    // into StreamSnapshotStore's outputFiles accumulator (both the live
-    // addOutputFiles patch path and the persisted-sidecar read path) coerces
-    // and rejects round keys through the shared RoundKeySchema
-    // (`@shared/schemas/roundIndexed.ts`), so a malformed key can never reach
-    // this accumulator. That structural guarantee is what makes the ES2015+
-    // spec's ascending-numeric-enumeration-order rule for non-negative
-    // integer keys apply here — round and between-round diffs are produced
-    // (and opened) in order, matching the VS Code command, with no separate
-    // sort needed. A defensive re-sort would only mask a schema regression,
-    // not add safety.
-    // Frozen here, not read here. `getOutputFiles` returns the store's live
-    // record (#11402), and this context is carried across several more awaits
-    // -- runLatexdiffFile -> diffAcceptedFilePair -> runSharedLatexdiff ->
-    // runLatexdiffForExecution -- before anything enumerates it. A workflow
-    // still producing output would otherwise change the diff scope after the
-    // user began the action. Mirrors ProgressWorkflowRunActionsController.diffStream.
-    const outputsByRound = cloneRoundIndexed(
-      this.state.snapshots.getOutputFiles(stream),
-    );
-    const { config, executionId } = this.getRunMetadata(stream);
-    const workspaceScan = config
-      ? this.getLatexdiffWorkspaceScan(config, editedFile)
-      : undefined;
-    if (Object.keys(outputsByRound).length === 0 && !workspaceScan) {
-      return undefined;
-    }
-
-    return {
-      outputsByRound,
-      ...(executionId && { executionId }),
-      ...(workspaceScan && { workspaceScan }),
-    };
-  }
-
-  private getLatexdiffWorkspaceScan(
-    config: AgentConfig,
-    editedFile: string,
-  ): DesktopLatexdiffWorkspaceScan {
-    const { agent, model, inputFiles, outputFiles } = config;
-    const inputFile = inputFiles.at(0) ?? editedFile;
-    // Thread the run's output files so multi-document runs resolved via the
-    // run-dir / workspace scan diff every output, not just the primary input.
-    return {
-      agent,
-      model,
-      inputFile,
-      ...(outputFiles?.length ? { outputFiles } : {}),
-    };
-  }
-
-  /**
-   * Restore a run's setup into the main view: builds the host-neutral
-   * persisted-state snapshot and shows it in the launcher. Shared by the
-   * in-session "restore this proposal" flow (`agentProposal.restoreRunConfig`
-   * above) and desktop history's "Setup" action (settings IPC), which mirrors
-   * the extension's `texra.restoreState` command.
-   */
-  restoreRunConfig(config: AgentConfig): boolean {
-    let state: MainViewPersistedState;
-    try {
-      state = buildMainViewState(config);
-    } catch (error) {
-      this.logger.error('Failed to build main-view state for restore', {
-        data: toLogData(error),
-      });
-      return false;
-    }
-    this.postToRenderer({
-      command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
-    });
-    this.postToRenderer({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state,
-    });
-    return true;
-  }
-
-  /**
-   * Select a stream this window launched, from the launch's own stream
-   * callback. The window's selection, never a fact.
-   */
-  presentLaunchedStream(streamId: StreamTabId): void {
-    this.backend.presentLaunchedStream(streamId);
-  }
-
-  /** Internal launch path; every launch entry point funnels through it. */
-  private runExecution(
+  function runValidated(
     request: ValidatedExecutionRequest,
-    options: DesktopRunExecutionOptions = {},
+    runOptions: DesktopRunExecutionOptions = {},
   ): Promise<void> {
     return launchDesktopAgent(
       { kind: 'fresh', ...request },
+      { session },
       {
-        session: this.session,
-      },
-      {
-        onStreamResolved: (streamId) => this.presentLaunchedStream(streamId),
-        ...options,
+        onStreamResolved: (streamId) => {
+          for (const listener of [...launchListeners]) listener(streamId);
+        },
+        ...runOptions,
       },
     );
   }
 
-  private async runValidatedExecutionRequest(
-    request: ExecutionRequest,
-    options?: DesktopRunExecutionOptions,
-  ): Promise<void> {
-    const validated = validateExecutionRequest(request);
-    if (!validated.valid) {
-      this.logger.error('Invalid desktop execution request', {
-        data: validated.issue,
-      });
-      await this.options.host.showErrorMessage(validated.message);
-      return;
-    }
-    await this.runExecution(validated.request, options);
-  }
-
-  async handleExecute(message: MainViewExecuteMessage): Promise<void> {
-    const launch = await prepareMainViewExecutionLaunch(
-      message,
-      this.options.host,
-    );
-    if (launch.status === 'cancelled') return;
-    if (launch.status === 'error') {
-      void this.options.host.showErrorMessage(launch.message);
-      return;
-    }
-    if (launch.infoMessage) {
-      void this.settleHostDialog(
-        this.options.host.showInfoMessage(launch.infoMessage),
-        'Failed to present the launch information dialog',
-      );
-    }
-    return this.runExecution(launch.request);
-  }
-
-  /**
-   * Absolute paths of workspace input + context files, used by label search.
-   * Empty when no workspace is open so the caller resolves no matches.
-   */
-  private async listWorkspaceCandidateFiles(): Promise<string[]> {
-    const workspacePath = this.session.roots.workspace;
-    if (!workspacePath) return [];
-
-    const files = [
-      ...(await listDesktopWorkspaceFiles('input', workspacePath)),
-      ...(await listDesktopWorkspaceFiles('context', workspacePath)),
-    ];
-    return files.map((file) => path.resolve(workspacePath, file));
-  }
-
-  private getChatExportController(): Promise<ChatExportController> {
-    this.chatExportControllerLoad ??=
-      import('@controllers/progressView/ChatExportController')
-        .then(async ({ ChatExportController: Controller }) => {
-          const latexPreamble = await readFile(
-            path.join(
-              this.options.resourcesPath,
-              'templates',
-              'chatExport.tex',
-            ),
-            'utf8',
-          );
-          return new Controller({ latexPreamble });
-        })
-        .catch((error: unknown) => {
-          this.chatExportControllerLoad = undefined;
-          throw error;
+  return {
+    async handleExecute(message) {
+      const launch = await prepareMainViewExecutionLaunch(message, host);
+      if (launch.status === 'cancelled') return;
+      if (launch.status === 'error') {
+        void host.showErrorMessage(launch.message);
+        return;
+      }
+      if (launch.infoMessage) {
+        void settleHostDialog(
+          host.showInfoMessage(launch.infoMessage),
+          'Failed to present the launch information dialog',
+        );
+      }
+      return runValidated(launch.request);
+    },
+    async runExecutionRequest(request, runOptions) {
+      const validated = validateExecutionRequest(request);
+      if (!validated.valid) {
+        logger.error('Invalid desktop execution request', {
+          data: validated.issue,
         });
-    return this.chatExportControllerLoad;
-  }
-
-  /**
-   * Drop every pending approval (incl. proposal payloads) tied to a deleted
-   * stream from the pending guard. The process store owner settles underlying
-   * approvals; this only clears prompts that never receive a
-   * resolve event (e.g. durable external inquiries), keeping the guard from
-   * blocking switches on a stream that no longer exists.
-   */
-  private releaseApprovalsForStream(streamId: StreamTabId): void {
-    for (const handler of Object.values(this.backend.approvalHandlers)) {
-      handler.releaseForStream(streamId);
-    }
-  }
-}
-
-export async function createDesktopAgentExecution(
-  options: DesktopAgentExecutionOptions,
-): Promise<DesktopProgressBridge> {
-  options.presentationSignal?.throwIfAborted();
-  const progress = new DesktopProgressBridge(options.postToRenderer, {
-    session: options.session,
-    sessionStores: options.sessionStores,
-    host: options.host,
-    resourcesPath: options.resourcesPath,
-  });
-  const disposeAbortedPresentation = (): void => progress.dispose();
-  options.presentationSignal?.addEventListener(
-    'abort',
-    disposeAbortedPresentation,
-    { once: true },
-  );
-  try {
-    await progress.waitUntilReady();
-    options.presentationSignal?.throwIfAborted();
-  } catch (error) {
-    progress.dispose();
-    throw error;
-  } finally {
-    options.presentationSignal?.removeEventListener(
-      'abort',
-      disposeAbortedPresentation,
-    );
-  }
-
-  return progress;
+        await host.showErrorMessage(validated.message);
+        return;
+      }
+      await runValidated(validated.request, runOptions);
+    },
+    runValidated,
+    onLaunched(listener) {
+      launchListeners.add(listener);
+      return () => {
+        launchListeners.delete(listener);
+      };
+    },
+    previewToolEdit(requestId, action) {
+      toolEditApprovals.handleAction({ requestId, action });
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      detachHostInteractions();
+      effectRuntime().runFork(Fiber.interrupt(resolvedApprovals));
+      toolEditApprovals.dispose();
+      launchListeners.clear();
+    },
+  };
 }
