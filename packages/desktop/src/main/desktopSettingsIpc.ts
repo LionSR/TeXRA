@@ -9,7 +9,6 @@ import {
 } from '@controllers/settingsView/githubSubscriptions';
 import { appSignals } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
@@ -188,9 +187,6 @@ export function createDesktopSettingsIpc(
   }
 
   async function postInitialSettingsData(): Promise<void> {
-    // Model availability can change without a session event (a server-side
-    // tier or subscription flip), so the panel must not paint a stale list.
-    invalidateModelOptionsCache();
     postSettingsSnapshot('git-author');
     options.toolingSettingsController.postLatexConfigValues();
     const goalListPosted = postGoalList();
@@ -275,7 +271,6 @@ export function createDesktopSettingsIpc(
     const invalidatesModelOptions =
       result.entry.onWrite?.invalidatesModelOptions === true;
     if (invalidatesModelOptions) {
-      invalidateModelOptionsCache();
       await options.credentialSettingsController.refreshAfterProviderSettingChange(
         key,
       );

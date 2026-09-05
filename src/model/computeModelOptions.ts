@@ -1,4 +1,3 @@
-import { LRUCache } from 'lru-cache';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
@@ -7,7 +6,6 @@ import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import {
@@ -19,7 +17,6 @@ import {
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { coalesceAsync } from '@utils/core';
 import {
   getPreferKimiCode,
   getUseOpenRouter,
@@ -360,35 +357,28 @@ async function resolveModelAvailability(
   return availabilityStatus('missing-key');
 }
 
-const pendingAvailabilityKeyChecks = new Map<ApiProvider, Promise<boolean>>();
-
-function hasUsableApiKeyForAvailability(
-  provider: ApiProvider,
-): Promise<boolean> {
-  const pending = pendingAvailabilityKeyChecks.get(provider);
-  if (pending) return pending;
-
-  const check = hasUsableApiKey(platform().secrets, provider).catch(
-    (error: unknown) => {
-      warnModelAvailability(
-        `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-        error,
-      );
-      return false;
-    },
-  );
-  pendingAvailabilityKeyChecks.set(provider, check);
-  void check.then(() => {
-    if (pendingAvailabilityKeyChecks.get(provider) === check) {
-      pendingAvailabilityKeyChecks.delete(provider);
-    }
-  });
-  return check;
-}
-
 async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
   const useOpenRouter = getUseOpenRouter();
-  const hasApiKey = hasUsableApiKeyForAvailability;
+  // One key check per provider per context: `apiProviders` coalesces the
+  // secret read, but a rejection reaches every awaiting model, and the picker
+  // warns once per provider, not once per model (#11508).
+  const keyChecks = new Map<ApiProvider, Promise<boolean>>();
+  const hasApiKey = (provider: ApiProvider): Promise<boolean> => {
+    let check = keyChecks.get(provider);
+    if (!check) {
+      check = hasUsableApiKey(platform().secrets, provider).catch(
+        (error: unknown) => {
+          warnModelAvailability(
+            `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
+            error,
+          );
+          return false;
+        },
+      );
+      keyChecks.set(provider, check);
+    }
+    return check;
+  };
   const [hasOpenRouter, codexSignedIn, xaiSignedIn, kimiCodeKeySet] =
     await Promise.all([
       hasApiKey('openRouter'),
@@ -431,8 +421,7 @@ export function getEnabledModels(
 }
 
 /**
- * Enable or disable one model, and invalidate the options cache derived from
- * the list. The only writer of `GlobalStateKey.ENABLED_MODELS` outside the
+ * Enable or disable one model. The only writer of `GlobalStateKey.ENABLED_MODELS` outside the
  * startup reconciliation in `modelListRefresh.ts`.
  *
  * Two invariants, previously enforced only on the CLI path:
@@ -480,7 +469,6 @@ export async function setModelEnabled(input: {
     await state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL);
   }
 
-  invalidateModelOptionsCache();
   return next;
 }
 
@@ -560,74 +548,28 @@ async function buildModelOptionData(
   );
 }
 
-const MODEL_OPTIONS_CACHE_TTL_MS = 5_000;
-const MODEL_OPTIONS_CACHE_MAX_ENTRIES = 50;
-const VISIBLE_MODELS_CACHE_KEY = 'visible';
-const EXPLICIT_MODELS_CACHE_PREFIX = 'models:';
-
-/**
- * TTL-based cache for computeModelOptionsData.
- * Avoids redundant async work (SecretManager + server-side key checks)
- * when multiple callers request model options in quick succession.
- *
- * State is split into resolved data vs in-flight promise to avoid
- * sentinel values (like `data: []`) that could leak to callers.
- */
-const resolvedModelOptions = new LRUCache<string, ModelOptionData[]>({
-  max: MODEL_OPTIONS_CACHE_MAX_ENTRIES,
-  ttl: MODEL_OPTIONS_CACHE_TTL_MS,
-});
-const pendingModelOptions = new Map<string, Promise<ModelOptionData[]>>();
-
-/** Invalidate the shared model options cache (e.g. after key or model-list changes). */
-export function invalidateModelOptionsCache(): void {
-  resolvedModelOptions.clear();
-  pendingModelOptions.clear();
-  pendingAvailabilityKeyChecks.clear();
-}
-
 /**
  * Compute typed model options data for Lit-native rendering.
  *
  * When `models` is provided, the caller's view of the visible-models list is
- * honored verbatim. Explicit lists are cached by their exact ordered contents,
- * so alternate global-state views stay isolated while repeated settings/CLI
- * refreshes do not redo secret and server-side key checks. The key also names
- * the calling session's workspace: the subscription preferences the
- * availability context reads are workspace config, so one paper's verdict
- * must not be served to another.
- *
- * Callers that own access-state freshness invalidate the shared caches
- * ({@link invalidateModelOptionsCache}, `invalidateApiKeyCache`) instead of
- * passing their own dependency snapshot.
+ * honored verbatim. Every call recomputes from the live inputs: the secret
+ * reads behind `hasUsableApiKey` are cached and invalidated in `apiProviders`
+ * (`invalidateApiKeyCache`), the Copilot route catalogue in
+ * `runtimeModelRegistry` (`invalidateRuntimeModelRegistry`), and the rest are
+ * synchronous config and state reads plus the probe-backed sign-in status
+ * (`isCodexSignedIn`, `isXaiSignedIn`, live by design), so there is no second
+ * cache to keep fresh here.
  */
 export async function computeModelOptionsData(
   models?: readonly string[],
 ): Promise<ModelOptionData[]> {
-  const cacheKey = `${workspaceRoots().workspace ?? ''}|${
-    models == null
-      ? VISIBLE_MODELS_CACHE_KEY
-      : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`
-  }`;
-  return coalesceAsync<string, ModelOptionData[]>(
-    resolvedModelOptions,
-    pendingModelOptions,
-    cacheKey,
-    () => computeModelOptionsDataUncached(models),
-  );
-}
-
-async function computeModelOptionsDataUncached(
-  modelsOverride: readonly string[] | undefined,
-): Promise<ModelOptionData[]> {
   await discoveredCopilotRoutes();
   const availabilityCtx = await buildAvailabilityContext();
-  const models =
-    modelsOverride ??
-    visibleModelsForAccess(getEnabledModels(), availabilityCtx);
+  const visible =
+    models ?? visibleModelsForAccess(getEnabledModels(), availabilityCtx);
 
   return Promise.all(
-    models.map((model) => buildModelOptionData(model, availabilityCtx)),
+    visible.map((model) => buildModelOptionData(model, availabilityCtx)),
   );
 }
 

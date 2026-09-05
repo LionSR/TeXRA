@@ -34,7 +34,6 @@ import {
   apiKeySecretName,
   type ApiProvider,
 } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import {
@@ -363,7 +362,6 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
           void (async () => {
             try {
               await saveProviderApiKey(keyProvider, key);
-              invalidateModelOptionsCache();
               finish({
                 configured: true,
                 declined: false,
@@ -500,7 +498,6 @@ function ChatGptProgressStep(
         }
         return;
       }
-      invalidateModelOptionsCache();
       if (!isCancelled()) props.onSuccess(account);
     } catch (loginError: unknown) {
       if (!isCancelled()) props.onError(toErrorMessage(loginError));

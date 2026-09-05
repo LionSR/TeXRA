@@ -50,7 +50,6 @@ import {
   requestRuntimeModelAccess,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -433,9 +432,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       commands: unsupportedCommands(this.handlerRegistry),
     });
 
-    // Auth/session changes affect model availability and must not reuse a
-    // pre-login/pre-logout availability snapshot.
-    invalidateModelOptionsCache();
     await this.sendProfileAndModelSelectionData(webview);
 
     await Promise.all([
@@ -571,7 +567,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.postStateSettingSnapshot(result.entry.surfaces.settingsView);
     if (result.kind !== 'applied') return;
     if (result.entry.onWrite?.invalidatesModelOptions) {
-      invalidateModelOptionsCache();
       await this.withActiveWebview((w) => this.sendModelSelectionData(w));
       await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
     }
@@ -609,7 +604,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   /**
    * The shared refresh tail for a credential change (API key or subscription
-   * auth): invalidate caches, re-run the host refresh commands, and push
+   * auth): drop the cached usage, re-run the host refresh commands, and push
    * fresh profile/model/usage data to the active webview. Model selection
    * availability depends on key state, so the key status command is awaited
    * before any model/profile data is sent. `refreshProfileData` selects which
@@ -620,8 +615,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     usageProvider?: SubscriptionUsageProvider;
     refreshProfileData: (webview: vscode.Webview) => Promise<void>;
   }): Promise<void> {
-    // Invalidate caches so downstream refreshes see fresh credential state.
-    invalidateModelOptionsCache();
     if (options.usageProvider) {
       this.subscriptionUsage.invalidate(options.usageProvider);
     }
@@ -708,7 +701,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       }
     } finally {
       invalidateRuntimeModelRegistry();
-      invalidateModelOptionsCache();
       await Promise.all([
         safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
         this.withActiveWebview((webview) =>
@@ -722,7 +714,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * canonical model to direct-provider routing. */
   private async handleClearCopilotRoute(modelName: string): Promise<void> {
     await setCopilotRoutePreference(modelName, false);
-    invalidateModelOptionsCache();
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((webview) => this.sendModelSelectionData(webview)),

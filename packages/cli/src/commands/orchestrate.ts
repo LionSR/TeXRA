@@ -9,7 +9,6 @@ import {
 } from '@common/teams/TeamPlan';
 import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { createLog } from '@logger/logUtils';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import { AgentCategory, byCategory } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
@@ -351,7 +350,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
           } else {
             await runLoginCommand(context, loginInitFromArgs({}));
           }
-          invalidateModelOptionsCache();
         } catch (error: unknown) {
           writeErrorStderr(error);
         }

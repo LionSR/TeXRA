@@ -67,7 +67,6 @@ import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog, setOutputChannelFactory } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
@@ -491,7 +490,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   installTexraAccountProbes();
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
-    invalidateModelOptionsCache();
     appSignals.emit('languageModelsChanged', undefined);
   };
   context.subscriptions.push(

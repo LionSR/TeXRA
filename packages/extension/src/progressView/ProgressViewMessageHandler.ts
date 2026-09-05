@@ -41,7 +41,6 @@ import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { PromptHost } from '@hosts/uiHosts';
 import { apiKeySecretName } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
 import latexPreamble from '@resources/templates/chatExport.tex';
@@ -634,7 +633,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       promptForApiKey: async (provider) => {
         await this.runViewCommand(EXTENSION_COMMANDS.SET_API_KEY, [provider]);
       },
-      invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
         this.interactions.isRetryPending(stream, requestId),
       triggerRetry: (stream, requestId) =>

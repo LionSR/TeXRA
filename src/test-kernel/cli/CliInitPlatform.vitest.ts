@@ -81,7 +81,6 @@ const mocks = vi.hoisted(() => ({
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   openTexraConfigStores: vi.fn(),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
-  invalidateModelOptionsCache: vi.fn(),
   tryPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
@@ -110,10 +109,6 @@ vi.mock('@logger/logUtils', () => ({
   info: vi.fn(),
   setOutputChannelFactory: vi.fn(),
   warn: vi.fn(),
-}));
-
-vi.mock('@model/computeModelOptions', () => ({
-  invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -370,7 +365,6 @@ describe('CLI platform init', () => {
         cliContext({ quietLogs: false, installSignalHandlers: false }),
       );
 
-      expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
       expect(mocks.cliGlobalState.update).toHaveBeenCalledWith(
         GlobalStateKey.COPILOT_ROUTE_MODELS,
         ['gemini31p'],
@@ -410,7 +404,6 @@ describe('CLI platform init', () => {
     try {
       await initCliPlatform(cliContext({ installSignalHandlers: false }));
 
-      expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
       expect(stderrWrite).toHaveBeenCalledOnce();
       expect(stderrWrite).toHaveBeenCalledWith(
         expect.stringContaining(

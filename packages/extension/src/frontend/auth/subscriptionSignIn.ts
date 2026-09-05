@@ -10,7 +10,6 @@ import {
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
@@ -107,10 +106,6 @@ export async function signInWithSubscription(
   let update: { effective: boolean };
   try {
     update = await provider.setPreferSubscription(true);
-    // The sign-in operation owns its model-availability postcondition. Every
-    // caller may now refresh a picker without inheriting a stale pre-login
-    // snapshot, including paths that do not pass through Settings.
-    invalidateModelOptionsCache();
   } catch (error) {
     await showLoggedErrorMessage(
       channel,

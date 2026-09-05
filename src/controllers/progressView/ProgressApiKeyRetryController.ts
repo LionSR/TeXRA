@@ -61,7 +61,6 @@ export interface ProgressApiKeyRetryControllerDeps {
   /** Quota-fallback routes (ChatGPT, Grok, GLM, Kimi). Defaults to the
    *  shared runtime catalog. Tests inject a local table. */
   quotaFallbackRuntimes?: readonly QuotaFallbackRuntime[];
-  invalidateModelOptionsCache(): void;
   isRetryPending(stream: StreamTabId, requestId: string): boolean;
   triggerRetry(
     stream: StreamTabId,
@@ -283,7 +282,6 @@ export class ProgressApiKeyRetryController {
         ) {
           disabledQuotaRoutes.push(runtime.descriptor.exhaustionReason);
           await runtime.setEnabled(false);
-          this.deps.invalidateModelOptionsCache();
         }
       }
 
@@ -347,17 +345,6 @@ export class ProgressApiKeyRetryController {
     for (const restore of restores) {
       try {
         await restore();
-      } catch (error) {
-        firstFailure ??= error;
-      }
-    }
-    // Invalidate whenever a rollback was scheduled, even after a restore
-    // failure: a setter that mutated in memory before rejecting leaves the
-    // cached options describing the wrong routing. A failed invalidation
-    // must not replace the restore failure the caller can act on.
-    if (restores.length > 0) {
-      try {
-        this.deps.invalidateModelOptionsCache();
       } catch (error) {
         firstFailure ??= error;
       }
