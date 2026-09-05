@@ -8,7 +8,7 @@ import type { ToolDashboardItem } from '@shared/schemas';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
-import { FakeStateStore } from '@test/support/FakePlatform';
+import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
 import { commandOf } from './desktopSettingsTestSupport';
@@ -79,6 +79,7 @@ function createFixture(overrides: FixtureOverrides = {}) {
   };
   const controller = new DefaultDesktopToolingSettingsController({
     onError: (error) => reportedErrors.push(error),
+    config: new FakeConfigProvider(),
     globalState,
     workspaceState,
     renderer: {

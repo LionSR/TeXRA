@@ -90,6 +90,7 @@ function realCredentialController(): DefaultDesktopCredentialSettingsController 
 function realToolingController(): DefaultDesktopToolingSettingsController {
   return new DefaultDesktopToolingSettingsController({
     ...statePorts(),
+    config: new FakeConfigProvider(),
     onError: () => undefined,
     renderer: { postToRenderer: () => undefined },
     dashboard: {
