@@ -780,8 +780,24 @@ export class StreamSnapshotStore {
             fact.payload.parentStreamId,
           );
           return;
-        default:
+        // Liveness/status and the goal, inquiry, follow-up, active-stream,
+        // hold, and removal facts carry nothing this store persists (see the
+        // liveness note above) — listed explicitly so a newly added
+        // SessionFact fails the `never` check below instead of silently
+        // no-op'ing.
+        case 'status':
+        case 'goalStateChanged':
+        case 'inquiryThreadUpdated':
+        case 'updateQueuedFollowUps':
+        case 'followUpSent':
+        case 'setActiveStream':
+        case 'streamHoldChanged':
+        case 'removeStream':
           return;
+        default: {
+          const unhandled: never = fact;
+          return unhandled;
+        }
       }
     });
 
