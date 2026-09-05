@@ -889,6 +889,11 @@ describe('sessionFold', () => {
         ),
       ),
     ];
+    // The run.start alone states resume eligibility: a plain tool-use agent
+    // can be resumed natively; a workflow root and a process child cannot.
+    expect(stream(settled, CHILD).resumeEligible).toBe(true);
+    expect(stream(settled, ROOT).resumeEligible).toBe(false);
+    expect(stream(settled, PROCESS).resumeEligible).toBe(false);
     // A fact for a stream with no run.start changes nothing but the cursor;
     // a parent edge to one leaves the child top-level with no dangling edge.
     const ignored = fold(settled, facts[0]);

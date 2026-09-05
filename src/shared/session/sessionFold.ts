@@ -368,6 +368,9 @@ function createStream(event: RunStartEvent): StreamView {
     conversationProgress: { toolCallCount: 0 },
     stage: null,
     followUpSupport: event.userFollowUpSupport,
+    resumeEligible:
+      event.category === AgentCategory.ToolUse &&
+      isPlainAgentIdentity(identity),
     context: null,
     parentId: event.parentStreamId ?? null,
     ancestors: [],

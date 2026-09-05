@@ -138,6 +138,9 @@ const StreamViewCommonSchema = z.object({
   conversationProgress: ConversationProgressSchema,
   stage: StreamStageSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
+  /** A native tool-use resume can target this run: a plain agent identity in
+   *  the tool-use category. The rule lives here so no host restates it. */
+  resumeEligible: z.boolean(),
   /** Latest `context.state`. */
   context: ContextStateDataSchema.nullable(),
   parentId: StreamTabIdSchema.nullable(),
