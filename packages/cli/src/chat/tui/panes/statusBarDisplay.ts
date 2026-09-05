@@ -196,6 +196,7 @@ interface StatusBarChildListInput {
   /** True while the persistent child list, rather than the input, owns keys. */
   readonly focused?: boolean;
   readonly selectionKillable?: boolean;
+  readonly selectionResumable?: boolean;
 }
 
 interface StatusBarShortcutsInput {
@@ -770,12 +771,19 @@ function foregroundBindingsText(
 }
 
 function childListBindingsText(
-  { selectionKillable = false }: StatusBarChildListInput,
+  {
+    selectionKillable = false,
+    selectionResumable = false,
+  }: StatusBarChildListInput,
   ctrlCAction: CtrlCAction,
   maxColumns: number | undefined,
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
-  const enterBinding = keyHintText({ key: 'Enter', action: 'focus' });
+  const enterBinding = keyHintText({
+    key: 'Enter',
+    action: selectionResumable ? 'resume' : 'focus',
+  });
+  const expandBinding = keyHintText({ key: '←/→', action: 'collapse/expand' });
   const killBinding = selectionKillable
     ? keyHintText({ key: 'k', action: 'kill' })
     : undefined;
@@ -787,6 +795,7 @@ function childListBindingsText(
       statusBarBindingRow([
         selectBinding,
         enterBinding,
+        expandBinding,
         killBinding,
         tabBinding,
         escBinding,

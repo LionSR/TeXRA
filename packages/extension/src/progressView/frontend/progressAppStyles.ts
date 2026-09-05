@@ -12,6 +12,18 @@ import { buttonStyles } from '@shared/styles/controlStyles';
  * placement; below it the tab behaves like the sidebar (the drawer).
  */
 export const progressAppStyles = css`
+  .request-notice {
+    margin: var(--wa-space-s);
+  }
+
+  .request-notice-content {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: var(--wa-space-s);
+    overflow-wrap: anywhere;
+  }
+
   :host {
     display: flex;
     flex: 1;

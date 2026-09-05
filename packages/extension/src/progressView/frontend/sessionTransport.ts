@@ -170,7 +170,11 @@ export function installWebviewTransport(): WebviewTransport {
           SubscriptionRef.changes(graph.view.ref),
           SubscriptionRef.getUnsafe(graph.view.ref),
         ),
-        host$: toSignal(runtime, graph.host.changes, null),
+        host$: toSignal(
+          runtime,
+          SubscriptionRef.changes(graph.frames.host),
+          null,
+        ),
         generation: 0,
       };
       sessions.set(key, session);

@@ -15,23 +15,42 @@ import { z } from 'zod';
 
 import {
   InquiryDraftSchema,
-  MainViewPersistedStateSchema,
+  LaunchTargetSchema,
+  SessionTypeSchema,
+  ToolConfigFieldsSchema,
+  UIFileFieldsSchema,
   StreamTabIdSchema,
   type InquiryDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import type { HostSnapshot } from './hostSnapshot';
+import type { RequestErrorWire } from './sessionFrames';
 import type { SessionView } from './sessionView';
 
-/**
- * The new-task composer's selections: `MainViewPersistedState` minus the
- * host-derived fields. `openedFiles` and the LaTeXDiffs visibility are the
- * host's (`openedFiles`) or the Tools sheet's (`toolsSheetOpen` below), so
- * a per-view copy would answer a question the host snapshot already owns.
- */
-export const LaunchSurfaceSchema = MainViewPersistedStateSchema.omit({
-  openedFiles: true,
-  latexdiffsVisible: true,
+/** The new-task composer's selections, separate from host-derived state. */
+export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
+  ToolConfigFieldsSchema,
+).extend({
+  sessionType: SessionTypeSchema.prefault('toolUse'),
+  launchTarget: LaunchTargetSchema.prefault('agent'),
+  selectedTeamId: z.string().prefault(''),
+  workingDirectory: z.string().prefault(''),
+  agent: z
+    .object({
+      workflow: z.string().prefault('correct'),
+      toolUse: z.string().prefault('orchestrator'),
+    })
+    .prefault({}),
+  model: z.string().prefault(DEFAULT_AGENT_MODEL),
+  commit: z.string().prefault('HEAD'),
+  instruction: z
+    .object({
+      workflow: z.string().prefault(''),
+      toolUse: z.string().prefault(''),
+    })
+    .prefault({}),
+  baseFile: z.string().prefault(''),
 });
 type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
 
@@ -78,6 +97,11 @@ type WorkbenchLayout = Readonly<Record<string, unknown>>;
 export interface Surface {
   /** Which paper this surface is for; the layer key. Never persisted. */
   readonly session: string;
+  /** The last failed request from this surface. Never persisted. */
+  readonly requestError: Exclude<
+    RequestErrorWire,
+    { _tag: 'Cancelled' }
+  > | null;
   /**
    * A preference, not a pointer: read it through `resolveSelected`. `null`
    * is the New-task state and resolves to itself.
@@ -146,6 +170,7 @@ export function loadSurface(
 ): Surface {
   return {
     session,
+    requestError: null,
     selected: persisted.selected,
     drafts: new Map(
       persisted.drafts.map(([id, text]) => [id, { ...EMPTY_DRAFT, text }]),
@@ -292,6 +317,7 @@ export function resolvePhase(
 export type SurfaceAction =
   | { readonly kind: 'select'; readonly streamId: StreamTabId | null }
   | { readonly kind: 'selectNew' }
+  | { readonly kind: 'dismissRequestError' }
   | { readonly kind: 'toggleDrawer' }
   | { readonly kind: 'drawer'; readonly open: boolean }
   | { readonly kind: 'toolsSheet'; readonly open: boolean }
@@ -344,6 +370,8 @@ export function applySurfaceAction(
   action: SurfaceAction,
 ): Surface {
   switch (action.kind) {
+    case 'dismissRequestError':
+      return { ...surface, requestError: null };
     case 'select':
       return { ...surface, selected: action.streamId, drawerOpen: false };
     case 'selectNew':

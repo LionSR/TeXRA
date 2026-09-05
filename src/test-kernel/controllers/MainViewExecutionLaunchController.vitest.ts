@@ -36,6 +36,7 @@ const { prepareMainViewExecutionLaunch } =
 
 function createHost() {
   return {
+    showInfoMessage: vi.fn(),
     chooseTeamAvailability: vi.fn(async () => 'continue' as const),
     signInForRemoteAgentCatalog: vi.fn(async () => true),
   };
@@ -66,16 +67,16 @@ describe('main-view execution launch controller', () => {
 
     await expect(
       prepareMainViewExecutionLaunch(message, createHost()),
-    ).resolves.toEqual({ status: 'prepared', request });
+    ).resolves.toEqual(request);
     expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
   });
 
   it('rejects a team launch without a selected team', async () => {
     const host = createHost();
 
-    await expect(launchTeam(host, '')).resolves.toEqual({
-      status: 'error',
-      message: 'Select a team',
+    await expect(launchTeam(host, '')).rejects.toMatchObject({
+      _tag: 'Rejected',
+      reason: 'Select a team',
     });
     expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
   });
@@ -102,9 +103,9 @@ describe('main-view execution launch controller', () => {
       const host = createHost();
       mocks.resolveTeamLaunch.mockResolvedValue(resolution);
 
-      await expect(launchTeam(host)).resolves.toEqual({
-        status: 'error',
-        message: expected,
+      await expect(launchTeam(host)).rejects.toMatchObject({
+        _tag: 'Rejected',
+        reason: expected,
       });
       expect(mocks.prepareMainViewTeamExecutionRequest).not.toHaveBeenCalled();
     },
@@ -114,7 +115,7 @@ describe('main-view execution launch controller', () => {
     const host = createHost();
     mocks.resolveTeamLaunch.mockResolvedValue({ status: 'cancelled' });
 
-    await expect(launchTeam(host)).resolves.toEqual({ status: 'cancelled' });
+    await expect(launchTeam(host)).rejects.toMatchObject({ _tag: 'Cancelled' });
   });
 
   it('returns partial membership and prepares the resolved team fields', async () => {
@@ -142,11 +143,8 @@ describe('main-view execution launch controller', () => {
 
     await expect(
       prepareMainViewExecutionLaunch(message, host),
-    ).resolves.toEqual({
-      status: 'prepared',
-      request,
-      infoMessage: 'Partial: writer',
-    });
+    ).resolves.toEqual(request);
+    expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
     expect(mocks.prepareMainViewTeamExecutionRequest).toHaveBeenCalledWith(
       message,
       fields,
@@ -170,9 +168,9 @@ describe('main-view execution launch controller', () => {
     const host = createHost();
     mocks.resolveTeamLaunch.mockRejectedValue(new Error('catalog unavailable'));
 
-    await expect(launchTeam(host)).resolves.toEqual({
-      status: 'error',
-      message: 'Team launch failed: catalog unavailable',
+    await expect(launchTeam(host)).rejects.toMatchObject({
+      _tag: 'Rejected',
+      reason: 'Team launch failed: catalog unavailable',
     });
   });
 });

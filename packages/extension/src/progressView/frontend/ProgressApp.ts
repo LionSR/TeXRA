@@ -22,6 +22,7 @@ import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
@@ -191,6 +192,9 @@ export class ProgressApp extends LitElement {
         <div class="shell-body">
           ${docked ? this.renderDockedList(view, surface) : nothing}
           <main class="reading">
+            <div role="status" aria-live="polite">
+              ${this.renderRequestError()}
+            </div>
             ${
               stream
                 ? html`<stream-conversation
@@ -224,6 +228,54 @@ export class ProgressApp extends LitElement {
         }
       </div>
     `;
+  }
+
+  private renderRequestError(): TemplateResult | typeof nothing {
+    const error = this.surface?.requestError;
+    if (!error) return nothing;
+    let message: string;
+    switch (error._tag) {
+      case 'Rejected':
+      case 'Unavailable':
+      case 'Invalid':
+        message = error.reason;
+        break;
+      case 'NotOwner':
+        message = 'This run is controlled by another TeXRA window.';
+        break;
+      case 'Internal':
+        message = 'The request failed. See the TeXRA log for details.';
+        break;
+    }
+    return html`<wa-callout class="request-notice" variant="danger">
+      ${waIcon('circle-exclamation', { slot: 'icon' })}
+      <div class="request-notice-content">
+        <div>
+          ${message}
+          ${
+            error._tag === 'Rejected' && error.docsCommand
+              ? html`<a
+                  href=${`https://texra.ai/guide/${error.docsCommand}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Read the file management guide</a
+                >`
+              : nothing
+          }
+        </div>
+        ${renderIconActionButton({
+          id: 'dismiss-request-notice',
+          icon: 'xmark',
+          label: 'Dismiss message',
+          tooltip: 'Dismiss message',
+          onClick: () => {
+            this.dispatchEvent(
+              SessionUiEvents.surface({ kind: 'dismissRequestError' }),
+            );
+          },
+        })}
+      </div>
+    </wa-callout>`;
   }
 
   private renderHeader(

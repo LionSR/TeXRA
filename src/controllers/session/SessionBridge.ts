@@ -30,6 +30,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
+  Cancelled,
   Internal,
   Rejected,
   Unavailable,
@@ -59,7 +60,8 @@ export interface SessionBridgeOptions {
   readonly session: SessionHandle;
   readonly onPortClosed: (port: string) => void;
   /** The host's capabilities (8.3), performed on the surface's behalf. A
-   *  handler refuses with `Unavailable` or `Rejected`; anything else it
+   *  handler cancels with `Cancelled` or refuses with `Unavailable` or
+   *  `Rejected`; anything else it
    *  throws is a defect, logged here and answered `Internal`. */
   readonly handleHostRequest: (
     request: HostRequest,
@@ -92,8 +94,14 @@ function wireError(error: RequestError): RequestErrorWire {
         streamId: error.streamId,
         reason: error.reason,
       };
+    case 'Cancelled':
+      return { _tag: 'Cancelled' };
     case 'Rejected':
-      return { _tag: 'Rejected', reason: error.reason };
+      return {
+        _tag: 'Rejected',
+        reason: error.reason,
+        ...(error.docsCommand && { docsCommand: error.docsCommand }),
+      };
     case 'Internal':
       return { _tag: 'Internal', ref: error.ref };
   }
@@ -274,7 +282,11 @@ export class SessionBridge {
         void this.handleHostRequest(up.request, port.id).then(
           (outcome) => this.respond(port, up.requestId, { ok: true, outcome }),
           (error: unknown) => {
-            if (error instanceof Unavailable || error instanceof Rejected) {
+            if (
+              error instanceof Cancelled ||
+              error instanceof Unavailable ||
+              error instanceof Rejected
+            ) {
               this.respond(port, up.requestId, {
                 ok: false,
                 error: wireError(error),

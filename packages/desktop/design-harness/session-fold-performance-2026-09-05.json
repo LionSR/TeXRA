@@ -1,0 +1,245 @@
+{
+  "date": "2026-09-05T19:32:17.550Z",
+  "revision": "48c5cca091bd324981160fc23a2386dcc2491637",
+  "foldSha256": "31ba63af4165b6d58654fbb5d88ab8938b10eeaf85b948a600f72f4785c35fc0",
+  "node": "v26.7.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpu": "Apple M1 Ultra",
+  "logicalCpus": 20,
+  "memoryGiB": 64,
+  "options": {
+    "streams": 2048,
+    "rows": 24,
+    "longRows": 50000,
+    "frames": 600
+  },
+  "verified": {
+    "retainedPublications": 40,
+    "parity": true,
+    "immutable": true,
+    "untouchedStreamIdentity": true
+  },
+  "results": [
+    {
+      "variant": "in-place",
+      "workload": "fanout-32",
+      "finalViewSha256": "c76d52fc428f841e60afdf763c3a961ee008a3186e8ae28452c8343ac97fb7e0",
+      "streams": 2048,
+      "transcriptRows": 101176,
+      "coldInputs": 105274,
+      "chunksPerFrame": 32,
+      "frames": 600,
+      "nominalSeconds": 9.6,
+      "coldReplayMs": {
+        "p50": 305.6087090000001,
+        "p95": 326.9882919999999,
+        "p99": 326.9882919999999,
+        "max": 326.9882919999999,
+        "above16ms": 3
+      },
+      "frameFoldMs": {
+        "p50": 0.5777499999994689,
+        "p95": 1.0411670000012236,
+        "p99": 1.695625000000291,
+        "max": 5.251457999999957,
+        "above16ms": 0
+      },
+      "frameStartLatenessMs": {
+        "p50": 1.3683750000000146,
+        "p95": 2.198957999999948,
+        "p99": 2.395958000000064,
+        "max": 3.745375000000422,
+        "above16ms": 0
+      },
+      "streamingHeapMiB": 98.83051300048828,
+      "sampledAllocatedMiB": 202.7906723022461,
+      "samplingIntervalBytes": 32768,
+      "retention": [
+        {
+          "versions": 1,
+          "distinctStreamMaps": 1,
+          "distinctHotRowArrays": 32,
+          "additionalRetainedMiB": 0.00113677978515625
+        },
+        {
+          "versions": 60,
+          "distinctStreamMaps": 1,
+          "distinctHotRowArrays": 32,
+          "additionalRetainedMiB": 0.0128936767578125
+        },
+        {
+          "versions": 600,
+          "distinctStreamMaps": 1,
+          "distinctHotRowArrays": 32,
+          "additionalRetainedMiB": 0.0994415283203125
+        }
+      ]
+    },
+    {
+      "variant": "in-place",
+      "workload": "long-transcript",
+      "finalViewSha256": "0fc43a413c03496d1d3d574cc6d5bae4e78ab1dadcd364725592a817fdc18279",
+      "streams": 2048,
+      "transcriptRows": 101176,
+      "coldInputs": 105274,
+      "chunksPerFrame": 1,
+      "frames": 600,
+      "nominalSeconds": 9.6,
+      "coldReplayMs": {
+        "p50": 302.561416,
+        "p95": 322.213083,
+        "p99": 322.213083,
+        "max": 322.213083,
+        "above16ms": 3
+      },
+      "frameFoldMs": {
+        "p50": 0.09070900000006077,
+        "p95": 0.23099999999976717,
+        "p99": 0.3907500000004802,
+        "max": 4.978500000000167,
+        "above16ms": 0
+      },
+      "frameStartLatenessMs": {
+        "p50": 1.3649999999997817,
+        "p95": 2.16675000000032,
+        "p99": 2.447707999999693,
+        "max": 3.3189579999998386,
+        "above16ms": 0
+      },
+      "streamingHeapMiB": 92.29408264160156,
+      "sampledAllocatedMiB": 6.75958251953125,
+      "samplingIntervalBytes": 32768,
+      "retention": [
+        {
+          "versions": 1,
+          "distinctStreamMaps": 1,
+          "distinctHotRowArrays": 1,
+          "additionalRetainedMiB": -0.01038360595703125
+        },
+        {
+          "versions": 60,
+          "distinctStreamMaps": 1,
+          "distinctHotRowArrays": 1,
+          "additionalRetainedMiB": 0.0074615478515625
+        },
+        {
+          "versions": 600,
+          "distinctStreamMaps": 1,
+          "distinctHotRowArrays": 1,
+          "additionalRetainedMiB": 0.10059356689453125
+        }
+      ]
+    },
+    {
+      "variant": "copy-on-touch",
+      "workload": "fanout-32",
+      "finalViewSha256": "c76d52fc428f841e60afdf763c3a961ee008a3186e8ae28452c8343ac97fb7e0",
+      "streams": 2048,
+      "transcriptRows": 101176,
+      "coldInputs": 105274,
+      "chunksPerFrame": 32,
+      "frames": 600,
+      "nominalSeconds": 9.6,
+      "coldReplayMs": {
+        "p50": 324.2667919999999,
+        "p95": 336.2337500000001,
+        "p99": 336.2337500000001,
+        "max": 336.2337500000001,
+        "above16ms": 3
+      },
+      "frameFoldMs": {
+        "p50": 0.7286660000008851,
+        "p95": 2.6966660000007323,
+        "p99": 4.0523750000011205,
+        "max": 7.695459000000483,
+        "above16ms": 0
+      },
+      "frameStartLatenessMs": {
+        "p50": 1.455667000000176,
+        "p95": 2.1049580000008064,
+        "p99": 2.2601250000006985,
+        "max": 6.892042000001311,
+        "above16ms": 0
+      },
+      "streamingHeapMiB": 98.87734985351562,
+      "sampledAllocatedMiB": 584.733268737793,
+      "samplingIntervalBytes": 32768,
+      "retention": [
+        {
+          "versions": 1,
+          "distinctStreamMaps": 1,
+          "distinctHotRowArrays": 32,
+          "additionalRetainedMiB": 0.00113677978515625
+        },
+        {
+          "versions": 60,
+          "distinctStreamMaps": 60,
+          "distinctHotRowArrays": 1920,
+          "additionalRetainedMiB": 40.74517822265625
+        },
+        {
+          "versions": 600,
+          "distinctStreamMaps": 600,
+          "distinctHotRowArrays": 19200,
+          "additionalRetainedMiB": 261.0851135253906
+        }
+      ]
+    },
+    {
+      "variant": "copy-on-touch",
+      "workload": "long-transcript",
+      "finalViewSha256": "0fc43a413c03496d1d3d574cc6d5bae4e78ab1dadcd364725592a817fdc18279",
+      "streams": 2048,
+      "transcriptRows": 101176,
+      "coldInputs": 105274,
+      "chunksPerFrame": 1,
+      "frames": 600,
+      "nominalSeconds": 9.6,
+      "coldReplayMs": {
+        "p50": 326.2074160000002,
+        "p95": 342.5621249999999,
+        "p99": 342.5621249999999,
+        "max": 342.5621249999999,
+        "above16ms": 3
+      },
+      "frameFoldMs": {
+        "p50": 1.5112089999984164,
+        "p95": 2.09179099999983,
+        "p99": 2.458792000000358,
+        "max": 5.3998750000000655,
+        "above16ms": 0
+      },
+      "frameStartLatenessMs": {
+        "p50": 1.3755409999998847,
+        "p95": 2.1260000000002037,
+        "p99": 2.2856660000015836,
+        "max": 3.122790999999779,
+        "above16ms": 0
+      },
+      "streamingHeapMiB": 92.32795715332031,
+      "sampledAllocatedMiB": 611.6735916137695,
+      "samplingIntervalBytes": 32768,
+      "retention": [
+        {
+          "versions": 1,
+          "distinctStreamMaps": 1,
+          "distinctHotRowArrays": 1,
+          "additionalRetainedMiB": 0.00113677978515625
+        },
+        {
+          "versions": 60,
+          "distinctStreamMaps": 60,
+          "distinctHotRowArrays": 60,
+          "additionalRetainedMiB": 30.03601837158203
+        },
+        {
+          "versions": 600,
+          "distinctStreamMaps": 600,
+          "distinctHotRowArrays": 600,
+          "additionalRetainedMiB": 300.1779327392578
+        }
+      ]
+    }
+  ]
+}
