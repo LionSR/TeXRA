@@ -126,8 +126,8 @@ The arrows show ownership or data/control flow, not new modules to implement.
 
 Move acquisition of the complete session resources into the existing `Sessions` resource
 map. Do not add an SDK map alongside it. Today [SessionKey][session-key] includes a supplied
-store but compares only roots; [SDK construction][sdk-construction] creates one store per
-invocation. The target makes independent store injection at this shared boundary impossible.
+store but compares only the storage root; [SDK construction][sdk-construction] creates one
+store per invocation. The target makes independent store injection at this shared boundary impossible.
 
 Opening the same session twice returns access to the same owner. It must not reconstruct
 stores or silently accept conflicting root/storage configuration. The application retains
