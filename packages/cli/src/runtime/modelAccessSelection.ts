@@ -3,7 +3,6 @@ import {
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { hasUsableApiKey } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,
@@ -98,7 +97,6 @@ async function updateSubscriptionCliModelAccess(
   const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
     const update = await provider.setPreferSubscription(false);
-    invalidateModelOptionsCache();
     return {
       message: update.effective
         ? `${displayName} subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
@@ -122,7 +120,6 @@ async function updateSubscriptionCliModelAccess(
 
   const update = await provider.setPreferSubscription(true);
   await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-  invalidateModelOptionsCache();
   return {
     message: update.effective
       ? `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`
@@ -138,7 +135,6 @@ async function updateKeyedCliModelAccess(
   const plan = runtime.descriptor;
   if (selection.state === 'off') {
     await runtime.setEnabled(false);
-    invalidateModelOptionsCache();
     return {
       message: `${plan.preferenceLabel} disabled for ${plan.modelFamily}.`,
     };
@@ -152,7 +148,6 @@ async function updateKeyedCliModelAccess(
     };
   }
   await runtime.setEnabled(true);
-  invalidateModelOptionsCache();
   return {
     message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${formatCliModelAccessRouteInline('personal')}.`,
   };

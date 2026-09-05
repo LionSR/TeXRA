@@ -1,6 +1,5 @@
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import { invalidateModelOptionsCache } from './computeModelOptions';
 import {
   DEFAULT_MODELS,
   isDeprecatedModel,
@@ -207,18 +206,15 @@ export async function refreshModelListAndLog(
   const { added, removed, reordered, routePreferencesCleared } = result;
   const changed = added.length > 0 || removed.length > 0 || reordered;
   const messages: string[] = [];
-  if (changed || routePreferencesCleared.length > 0) {
-    invalidateModelOptionsCache();
-    if (changed) {
-      messages.push(
-        `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-      );
-    }
-    if (routePreferencesCleared.length > 0) {
-      messages.push(
-        `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
-      );
-    }
+  if (changed) {
+    messages.push(
+      `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
+    );
+  }
+  if (routePreferencesCleared.length > 0) {
+    messages.push(
+      `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
+    );
   }
   return { ...result, messages };
 }

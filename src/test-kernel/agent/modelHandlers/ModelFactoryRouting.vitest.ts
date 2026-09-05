@@ -36,10 +36,7 @@ import {
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
-import {
-  computeModelOptionsData,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import {
   invalidateRuntimeModelRegistry,
@@ -352,7 +349,6 @@ describe('GLM custom endpoint routing', () => {
   afterEach(() => {
     delete MODEL_CONFIGS.glm52.baseUrl;
     invalidateApiKeyCache();
-    invalidateModelOptionsCache();
   });
 
   it('keeps dispatch, availability, and credentials on the model custom route when OpenRouter is enabled', async () => {
@@ -365,7 +361,6 @@ describe('GLM custom endpoint routing', () => {
       },
     });
     invalidateApiKeyCache();
-    invalidateModelOptionsCache();
 
     const [access] = await computeModelOptionsData(['glm52']);
     const handler = await createModelHandler(MODEL_CONFIGS.glm52);
@@ -396,7 +391,6 @@ describe('GLM custom endpoint routing', () => {
       },
     });
     invalidateApiKeyCache();
-    invalidateModelOptionsCache();
 
     const [customAccess] = await computeModelOptionsData(['glm52']);
     const handler = await createModelHandler(MODEL_CONFIGS.glm52);
@@ -411,7 +405,6 @@ describe('GLM custom endpoint routing', () => {
     }
 
     delete MODEL_CONFIGS.glm52.baseUrl;
-    invalidateModelOptionsCache();
 
     const [openRouterAccess] = await computeModelOptionsData(['glm52']);
     expect(openRouterAccess).toMatchObject({

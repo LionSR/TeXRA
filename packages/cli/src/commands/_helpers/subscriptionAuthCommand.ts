@@ -14,7 +14,6 @@ import {
   type SubscriptionAccount,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
 import { withCliAuthError } from './cliAuthError';
@@ -86,7 +85,6 @@ export function defineSubscriptionAuthCommand(
         ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
         : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
     });
-    invalidateModelOptionsCache();
     return CliExitCode.Success;
   }
 
@@ -128,7 +126,6 @@ export function defineSubscriptionAuthCommand(
       );
       if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
       const update = signOutResult.value;
-      invalidateModelOptionsCache();
       const payload = {
         authenticated: false,
         preferSubscription: update.preferenceUpdate?.effective ?? null,

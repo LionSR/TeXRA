@@ -23,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   setPreferCodexSubscription: vi.fn(),
   isPreferXaiSubscription: vi.fn(),
   setPreferXaiSubscription: vi.fn(),
-  invalidateModelOptionsCache: vi.fn(),
   shouldUseSubscriptionDeviceCode: vi.fn(),
   signInCliSubscription: vi.fn(),
   updateGlobalState: vi.fn(),
@@ -98,10 +97,6 @@ vi.mock('@utils/config/providerConfig', () => ({
 
 vi.mock('@utils/config/platformSettings', () => ({
   writePlatformSetting: mocks.writePlatformSetting,
-}));
-
-vi.mock('@model/computeModelOptions', () => ({
-  invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
 }));
 
 vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {
@@ -331,7 +326,6 @@ describe('CLI model access routes', () => {
       GlobalStateKey.KIMI_CODE_PREFER,
       true,
     );
-    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
       message:
         'Prefer Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
@@ -383,7 +377,6 @@ describe('CLI model access routes', () => {
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
     expect(mocks.updateGlobalState).not.toHaveBeenCalled();
-    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
       message:
         'Prefer GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
@@ -413,7 +406,6 @@ describe('CLI model access routes', () => {
     expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(false);
     expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
       message: 'Prefer GLM Coding Plan disabled for GLM models.',
     });
@@ -448,7 +440,6 @@ describe('CLI model access routes', () => {
       'texra.useOpenRouter',
       false,
     );
-    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result.message).toBe(
       'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
     );
@@ -474,7 +465,6 @@ describe('CLI model access routes', () => {
     expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
     expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
-    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(result).toEqual({
       message: 'Prefer ChatGPT subscription disabled for Codex models.',
     });

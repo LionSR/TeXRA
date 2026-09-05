@@ -2,7 +2,6 @@ import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
 import type { CodingPlanSubscriptionId } from '@shared/codingPlanSubscriptions';
@@ -11,12 +10,11 @@ import { bumpCodexPreferenceVersion } from './cliState';
 
 /**
  * Single source of truth for reacting to a subscription change (ChatGPT, Grok,
- * …) inside the running TUI: drop the cached model options and bump the
- * preference version so dependent views (model picker, status bar) re-render.
+ * …) inside the running TUI: bump the preference version so dependent views
+ * (model picker, status bar) re-render.
  * Call after any sign-in/out or preference flip.
  */
 export function refreshSubscriptionPreferenceViews(): void {
-  invalidateModelOptionsCache();
   bumpCodexPreferenceVersion();
 }
 

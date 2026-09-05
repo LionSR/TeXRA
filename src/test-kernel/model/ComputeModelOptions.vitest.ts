@@ -8,7 +8,6 @@ import * as logger from '@logger/logUtils';
 import {
   computeModelOptionsData,
   getModelUnavailableReason,
-  invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import {
   resolveDirectModelApiKeyProvider,
@@ -22,7 +21,6 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { ModelOptionData } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
@@ -51,7 +49,6 @@ async function installAccessPlatform(
     secrets: options.secrets ?? OPENAI_KEY_SECRETS,
   });
   invalidateApiKeyCache();
-  invalidateModelOptionsCache();
 }
 
 function codexSessionSecrets(): Record<string, string> {
@@ -91,7 +88,6 @@ describe('computeModelOptionsData availability', () => {
 
   beforeEach(() => {
     invalidateApiKeyCache();
-    invalidateModelOptionsCache();
     resetCodexCoordinator();
     // The picker reads the app's account plane through the model layer's
     // seam; install the same probes the three hosts install.
@@ -138,7 +134,7 @@ describe('computeModelOptionsData availability', () => {
     expect(model.availability).toBe('missing-key');
   });
 
-  it('warns once per provider when concurrent option contexts cannot read credentials', async () => {
+  it('warns once per provider when the picker cannot read credentials', async () => {
     const readError = new Error('credential store unavailable');
     const secrets = new FakeSecrets();
     vi.spyOn(secrets, 'get').mockRejectedValue(readError);
@@ -149,13 +145,9 @@ describe('computeModelOptionsData availability', () => {
       { secrets },
     );
     invalidateApiKeyCache();
-    invalidateModelOptionsCache();
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
-    const [[gpt55], [gpt56]] = await Promise.all([
-      computeModelOptionsData(['gpt55']),
-      computeModelOptionsData(['gpt56']),
-    ]);
+    const [gpt55, gpt56] = await computeModelOptionsData(['gpt55', 'gpt56']);
 
     expect(gpt55.availability).toBe('missing-key');
     expect(gpt56.availability).toBe('missing-key');
@@ -354,62 +346,11 @@ describe('computeModelOptionsData availability', () => {
 
     expect(model.availability).toBe('subscription-access');
   });
-
-  it('does not let invalidated picker checks repopulate caches with stale key state', async () => {
-    const staleRead = createDeferred<string | undefined>();
-    const readStarted = createDeferred();
-    const secrets = new FakeSecrets();
-    let openaiReads = 0;
-    vi.spyOn(secrets, 'get').mockImplementation(async (key) => {
-      if (key !== apiKeySecretName('openai')) {
-        return undefined;
-      }
-      openaiReads += 1;
-      if (openaiReads === 1) {
-        readStarted.resolve();
-        return staleRead.promise;
-      }
-      return secrets.getStored(key);
-    });
-    await installPlatform(
-      {
-        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-      },
-      { secrets },
-    );
-    invalidateApiKeyCache();
-    invalidateModelOptionsCache();
-
-    const staleOptions = computeModelOptionsData(['gpt55']);
-    await readStarted.promise;
-    await secrets.set(apiKeySecretName('openai'), 'sk-fresh');
-    invalidateApiKeyCache();
-    invalidateModelOptionsCache();
-
-    const freshOptions = await computeModelOptionsData(['gpt55']);
-    expect(freshOptions[0].availability).toBe('provider-key');
-
-    staleRead.resolve(undefined);
-    const staleResult = await staleOptions;
-    expect(staleResult[0].availability).toBe('missing-key');
-
-    const subsequentOptions = await computeModelOptionsData(['gpt55']);
-    expect(subsequentOptions).toBe(freshOptions);
-    expect(subsequentOptions[0].availability).toBe('provider-key');
-  });
-
-  it('caches explicit model-list availability', async () => {
-    const first = await computeModelOptionsData(['gpt55']);
-    const second = await computeModelOptionsData(['gpt55']);
-
-    expect(second).toBe(first);
-  });
 });
 
 describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () => {
   beforeEach(() => {
     invalidateApiKeyCache();
-    invalidateModelOptionsCache();
   });
 
   async function kimi3Option(

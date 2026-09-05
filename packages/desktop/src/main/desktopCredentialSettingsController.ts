@@ -15,7 +15,6 @@ import type { ExternalOpener, MessageHost, PromptHost } from '@hosts/uiHosts';
 import {
   computeModelOptionsData,
   getEnabledModels,
-  invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import {
   API_PROVIDERS,
@@ -264,7 +263,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   async refreshAuthDependentData(): Promise<void> {
-    invalidateModelOptionsCache();
     await this.postModelSelectionData();
     await this.postMainModelOptionsData();
     await this.postProfileData();
@@ -393,7 +391,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   private async refreshAfterProviderKeyChange(provider: string): Promise<void> {
     invalidateApiKeyCache();
-    invalidateModelOptionsCache();
     const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
     if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await this.postProfileData();
@@ -407,7 +404,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     providerId: SubscriptionProviderId,
   ): Promise<void> {
     const { usageProvider } = SUBSCRIPTION_STATUS_ROWS[providerId];
-    invalidateModelOptionsCache();
     if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await Promise.all([
       this.postAuthStatus(providerId),

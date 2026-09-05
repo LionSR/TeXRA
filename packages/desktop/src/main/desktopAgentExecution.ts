@@ -66,10 +66,7 @@ import {
   hasUsableApiKey,
   lookupApiKey,
 } from '@model/apiProviders';
-import {
-  computeModelOptionsData,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import {
   COMMON_COMMANDS,
@@ -465,7 +462,6 @@ export class DesktopProgressBridge {
           'Add a provider API key in Models, then use "Retry" on the request.',
         );
       },
-      invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
         this.hostInteractions.isRetryPending(stream, requestId),
       triggerRetry: (stream, requestId) =>

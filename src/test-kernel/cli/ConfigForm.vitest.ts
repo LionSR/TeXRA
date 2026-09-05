@@ -67,7 +67,6 @@ import {
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
 
-const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
 const providerApiKeyRuntime = vi.hoisted(() => ({
   load: vi.fn(),
   save: vi.fn(),
@@ -78,9 +77,6 @@ const githubTokenRuntime = vi.hoisted(() => ({
   remove: vi.fn(),
 }));
 
-vi.mock('@model/computeModelOptions', () => ({
-  invalidateModelOptionsCache,
-}));
 vi.mock('@cli/runtime/providerApiKey', () => ({
   loadProviderApiKeyStatuses: providerApiKeyRuntime.load,
   saveProviderApiKey: providerApiKeyRuntime.save,
@@ -103,7 +99,6 @@ function apiKeyStatuses(
 }
 
 beforeEach(() => {
-  invalidateModelOptionsCache.mockClear();
   providerApiKeyRuntime.load.mockReset();
   providerApiKeyRuntime.load.mockResolvedValue(apiKeyStatuses());
   providerApiKeyRuntime.save.mockReset();
@@ -776,18 +771,6 @@ describe('/config slash command wiring', () => {
     expect(props.readValue?.(authorName)).toBe(DEFAULT_GIT_AUTHOR_NAME);
   });
 
-  it('invalidates model options when OpenRouter routing is disabled or reset', async () => {
-    const { stores } = makeFakeSettingsStores();
-    const props = openConfigFormProps(stores);
-    const openRouter = entryByKey(GlobalStateKey.USE_OPENROUTER);
-
-    await props.writeValue?.(openRouter, false);
-    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
-
-    await props.resetValue?.(openRouter);
-    expect(invalidateModelOptionsCache).toHaveBeenCalledTimes(2);
-  });
-
   it('turns OpenRouter off when Prefer Kimi Code is enabled', async () => {
     const { stores, globalState } = makeFakeSettingsStores();
     await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
@@ -799,7 +782,6 @@ describe('/config slash command wiring', () => {
     expect(props.readValue?.(entryByKey(GlobalStateKey.USE_OPENROUTER))).toBe(
       false,
     );
-    expect(invalidateModelOptionsCache).toHaveBeenCalled();
 
     // Disabling the preference leaves the OpenRouter toggle untouched.
     await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
