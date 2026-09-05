@@ -8,7 +8,10 @@ import { createPlatformAgentDirectories } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import {
+  disposeProcessRuntime,
+  installProcessRuntime,
+} from '@controllers/session/sessionLayer';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
@@ -304,9 +307,7 @@ export async function initCliPlatform(
     // The one Effect runtime of this process (PRD 7.7): the session graph
     // and every Promise-facing fiber run on it. Disposed after the default
     // session has released its graph.
-    const runtime = installProcessRuntime(
-      await platform().processes.selfIdentity(),
-    );
+    installProcessRuntime(await platform().processes.selfIdentity());
     initProcessSettingHost('cli');
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
@@ -360,7 +361,7 @@ export async function initCliPlatform(
       afterFlushArtifacts: [() => UsageLogService.dispose()],
       afterExecutionSettlement: [
         () => teardownDefaultSession(),
-        () => runtime.dispose(),
+        () => disposeProcessRuntime(),
       ],
     });
 

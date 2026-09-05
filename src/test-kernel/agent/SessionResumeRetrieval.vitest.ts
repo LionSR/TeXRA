@@ -45,7 +45,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import { createProcessSession } from '@test/support/sessionTestUtils';
 
 import { testModelCell } from './modelCellTestUtils';
 import { reflectionFlowShared } from './progressTestUtils';
@@ -307,7 +307,7 @@ async function runPersistedFlow(
   options: PersistedFlowRunOptions = {},
 ) {
   const { attachment } = options;
-  const session = options.session ?? createTestSession();
+  const session = options.session ?? createProcessSession();
   const config = options.config ?? resume?.agentConfig ?? CONFIG;
   const userVarChannels = resume?.shared.stateSlices.userChannels ?? {
     MODEL: config.model,
@@ -1093,7 +1093,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = `chat@gpt54#abc-flow-read-failure-fresh` as StreamTabId;
     const snapshot = undefined;
     const store = getExecutionStore(executionId);
-    const session = createTestSession();
+    const session = createProcessSession();
     const readFailure = new Error('flow storage unavailable');
     const readSpy = vi.spyOn(store, 'read').mockRejectedValueOnce(readFailure);
     const deleteSpy = vi.spyOn(store, 'delete');
@@ -1176,7 +1176,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     await writeFlowRecord(executionId, failedShared, {
       cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
     });
-    const session = createTestSession();
+    const session = createProcessSession();
     const teardownFailure = new Error('flow detachment failed');
     const releaseSpy = vi.spyOn(session.followUps, 'release');
     const errorLogSpy = vi
@@ -1214,7 +1214,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-flow-teardown-failure' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-teardown-failure' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
-    const session = createTestSession();
+    const session = createProcessSession();
     const teardownFailure = new Error('flow detachment failed');
     const releaseSpy = vi.spyOn(session.followUps, 'release');
 
@@ -1250,7 +1250,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     await writeFlowRecord(executionId, snapshot.shared, {
       cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
     });
-    const session = createTestSession();
+    const session = createProcessSession();
     const teardownFailure = new Error('flow detachment failed');
 
     await expect(
@@ -1368,7 +1368,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       await writeFlowRecord(executionId, storedShared);
       const store = getExecutionStore(executionId);
       const deleteSpy = vi.spyOn(store, 'delete');
-      const session = createTestSession();
+      const session = createProcessSession();
       const releaseSpy = vi.spyOn(session.followUps, 'release');
       const realRead = store.read.bind(store);
       let flowContext: ToolUseSetupContext | undefined;
@@ -1429,7 +1429,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const streamId = 'chat@gpt54#abc-reused-cancel-attachment' as StreamTabId;
       const storedShared = activeHandlerShared();
       await writeFlowRecord(executionId, storedShared);
-      const session = createTestSession();
+      const session = createProcessSession();
       const releaseSpy = vi.spyOn(session.followUps, 'release');
       const dispositions: Array<'preserve' | 'delete'> = [];
 
@@ -1477,7 +1477,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
       const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
       const store = getExecutionStore(executionId);
-      const session = createTestSession();
+      const session = createProcessSession();
       let flowContext: ToolUseSetupContext | undefined;
       const readSpy = vi.spyOn(store, 'read').mockImplementation(async () => {
         flowContext?.interrupt();
@@ -1541,7 +1541,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           flowContext = context;
         },
       },
-      session: createTestSession(),
+      session: createProcessSession(),
       isSubagent: false,
       onIdle: () => flowContext?.interrupt(),
     });
@@ -1608,7 +1608,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-cancel-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-followup' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
-    const session = createTestSession();
+    const session = createProcessSession();
 
     try {
       const result = await runPersistedFlow(executionId, streamId, snapshot, {
@@ -1638,7 +1638,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   it('preserves late input when an orphaned host-resumed subagent is cancelled mid-turn', async () => {
     const executionId = 'abc-cancel-active-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
-    const session = createTestSession();
+    const session = createProcessSession();
     const storedShared = activeHandlerShared();
     const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, storedShared);
@@ -1695,7 +1695,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // own wait, but dropping the owner's queued items is not its call to make.
     const executionId = 'abc-cancel-child-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-child-followup' as StreamTabId;
-    const session = createTestSession();
+    const session = createProcessSession();
     const storedShared = activeHandlerShared();
     const snapshot = buildToolUseResumeData(executionId, streamId);
     await writeFlowRecord(executionId, storedShared);

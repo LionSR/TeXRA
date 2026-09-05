@@ -27,6 +27,10 @@ export {
   tryDefaultSession,
 } from './SessionHandle';
 
+// sessionGraph: the process's session owner, as the hosts and the SDK open
+// and close sessions through it (one session per workspace storage root).
+export { closeSession, openSession, openSessionAsync } from './sessionGraph';
+
 // RunContext: the session scope a host enters around every touch of a
 // session's storage when it holds several sessions in one process.
 export { runInSession } from './RunContext';

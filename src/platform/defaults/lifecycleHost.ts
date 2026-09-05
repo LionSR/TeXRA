@@ -23,9 +23,11 @@ interface Registration {
  * CLI SIGTERM indefinitely: at the deadline every handler's abort signal
  * fires, and the drain advances past a handler only after aborting it
  * (abort-then-advance), so a late BEFORE handler cannot race the ON phase's
- * disposals without having been told to stop first.
+ * disposals without having been told to stop first. The same budget bounds
+ * an explicit session close (`Sessions.close`): one settlement deadline for
+ * the process, not one per caller.
  */
-const SHUTDOWN_PHASE_DEADLINE_MS = 5_000;
+export const SHUTDOWN_PHASE_DEADLINE_MS = 5_000;
 
 interface CreateLifecycleHostOptions {
   onError?: (phase: ShutdownPhase, error: unknown) => void;

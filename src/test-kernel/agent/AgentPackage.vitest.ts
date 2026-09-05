@@ -27,12 +27,14 @@ type FakeSessionView = Omit<RuntimeSessionView, 'streams'> & {
 const mocks = vi.hoisted(() => ({
   activePlatform: null as object | null,
   agentCategory: 'toolUse',
+  /** The runtime owner's close, as the package reaches it: by storage root. */
+  closeSession: vi.fn(async (_root: string) => ({
+    settled: true,
+    abandoned: [] as string[],
+  })),
   detachEvents: vi.fn(),
-  detachInteractions: vi.fn(),
   disposeRuntime: vi.fn(),
-  disposeSession: vi.fn(),
   executionId: 'execution-1',
-  flushArtifacts: vi.fn(async () => {}),
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
   eventListener: undefined as ((event: unknown) => void) | undefined,
@@ -41,8 +43,9 @@ const mocks = vi.hoisted(() => ({
   initProcessWorkspaceRoots: vi.fn(),
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
-  /** Every package session construction, with what it was built over. */
-  sessionInits: [] as unknown[],
+  /** Every session the owner built for the package, with what it was
+   *  built over: one per storage root. */
+  sessionInits: [] as { readonly roots: { readonly storage: string } }[],
   /** The current package session's view, advanced independently of execution. */
   sessionView: undefined as unknown,
   setTranscriptSubscriptions: vi.fn(),
@@ -57,7 +60,8 @@ const mocks = vi.hoisted(() => ({
     mocks.eventListener = listener;
     return mocks.detachEvents;
   }),
-  useInteractions: vi.fn(() => mocks.detachInteractions),
+  /** The host a session was born with, per construction. */
+  useInteractions: vi.fn(),
 }));
 
 vi.mock('@agent/core/definition/AgentConfig', () => ({
@@ -77,50 +81,69 @@ vi.mock('@agent/index', () => ({
 
 // The package reaches the runtime through the curated `@agent/runtime` barrel,
 // so the suite mocks that one door instead of each runtime module by path.
+// The owner behind `openSession` is stood in for by a map keyed by storage
+// root, as the runtime's `Sessions` map keys its entries: the package must
+// resolve every run through it and never build a session of its own.
 vi.mock('@agent/runtime', async () => {
   const { Deferred, Effect, Stream, SubscriptionRef } = await import('effect');
   const { emptySessionView } = await import('@shared/session/sessionView');
-  return {
-    SessionHandle: class {
-      readonly interactions = { use: mocks.useInteractions };
-      /** The session's view level: the pre-launch session, no stream yet. */
-      readonly view = Effect.runSync(
-        SubscriptionRef.make<FakeSessionView>({
-          ...emptySessionView('package'),
-          streams: new Map(),
-        }),
-      );
+  class FakeSession {
+    /** The session's view level: the pre-launch session, no stream yet. */
+    readonly view = Effect.runSync(
+      SubscriptionRef.make<FakeSessionView>({
+        ...emptySessionView('package'),
+        streams: new Map(),
+      }),
+    );
 
-      /** The level stream, ending as the fold does (`SessionViewService`);
-       *  the fold's fate is the test's. */
-      readonly viewChanges = Stream.unwrap(
-        Effect.sync(() =>
-          Stream.merge(
-            SubscriptionRef.changes(this.view),
-            Stream.fromEffect(
-              Deferred.await(
-                mocks.foldDeath as Deferred.Deferred<never, Error>,
-              ),
-            ),
+    /** The level stream, ending as the fold does (`SessionViewService`);
+     *  the fold's fate is the test's. */
+    readonly viewChanges = Stream.unwrap(
+      Effect.sync(() =>
+        Stream.merge(
+          SubscriptionRef.changes(this.view),
+          Stream.fromEffect(
+            Deferred.await(mocks.foldDeath as Deferred.Deferred<never, Error>),
           ),
         ),
-      );
+      ),
+    );
 
-      readonly setTranscriptSubscriptions = mocks.setTranscriptSubscriptions;
-      readonly flushArtifacts = mocks.flushArtifacts;
-      dispose = mocks.disposeSession;
+    readonly setTranscriptSubscriptions = mocks.setTranscriptSubscriptions;
 
-      constructor(init: unknown) {
-        mocks.sessionInits.push(init);
-        mocks.sessionView = this.view;
+    constructor(
+      init: (typeof mocks.sessionInits)[number] & {
+        readonly interactions?: unknown;
+      },
+    ) {
+      mocks.sessionInits.push(init);
+      mocks.sessionView = this.view;
+      if (init.interactions) mocks.useInteractions(init.interactions);
+    }
+  }
+  const sessions = new Map<string, FakeSession>();
+  return {
+    openSessionAsync: async (
+      init: ConstructorParameters<typeof FakeSession>[0],
+    ) => {
+      let session = sessions.get(init.roots.storage);
+      if (!session) {
+        session = new FakeSession(init);
+        sessions.set(init.roots.storage, session);
       }
+      return session;
+    },
+    closeSession: async (root: string) => {
+      sessions.delete(root);
+      return mocks.closeSession(root);
     },
     runAgent: mocks.runValidatedAgent,
   };
 });
 
 vi.mock('@controllers/session/sessionLayer', () => ({
-  installProcessRuntime: () => ({ dispose: mocks.disposeRuntime }),
+  disposeProcessRuntime: mocks.disposeRuntime,
+  installProcessRuntime: vi.fn(),
 }));
 
 vi.mock('@platform/processRuntime', async () => {
@@ -234,8 +257,9 @@ async function driveRun(options: RunAgentOptions): Promise<typeof RESULT> {
 
 describe('agent package run lifecycle', () => {
   beforeEach(async () => {
-    // The package's sessions go with its runtime on the embedder's shutdown
-    // path, as the package registered it: each test starts with none.
+    // The package's session and runtime go on the embedder's shutdown path,
+    // as the package registered it: each test starts with neither.
+    await mocks.shutdownHooks?.flushArtifacts();
     for (const handler of mocks.shutdownHooks?.afterExecutionSettlement ?? []) {
       await handler();
     }
@@ -352,34 +376,39 @@ describe('agent package run lifecycle', () => {
     });
   });
 
-  it('shares one session per storage root across runs and disposes it before the runtime on shutdown', async () => {
-    await runAgent(INPUT).result;
+  it('resolves every run through the runtime session owner: two runs on one root share one session, closed through the owner before the runtime goes', async () => {
+    const first = runAgent(INPUT);
+    // The launch is the owner's before `runAgent` returns: a close or a
+    // shutdown issued now finds this session, not an unopened root.
+    expect(mocks.sessionInits).toHaveLength(1);
+    await first.result;
     await runAgent(INPUT).result;
 
-    // Both runs folded into the one session over the platform's roots, the
-    // first run's: the graph `Sessions` keys by storage root and the
-    // transcript store it bridges are then the same for every run on that
-    // root.
+    // Both runs resolved the platform's root through the owner, which built
+    // the session once, over the package's roots, born with the package's
+    // one headless host; the second run found it open.
     expect(mocks.sessionInits).toHaveLength(1);
     expect(mocks.sessionInits[0]).toMatchObject({ roots: PLATFORM.roots });
-    expect(mocks.disposeSession).not.toHaveBeenCalled();
+    expect(mocks.useInteractions).toHaveBeenCalledOnce();
+    expect(mocks.closeSession).not.toHaveBeenCalled();
 
     const hooks = mocks.shutdownHooks;
     expect(hooks).toBeDefined();
     await hooks?.flushArtifacts();
-    expect(mocks.flushArtifacts).toHaveBeenCalledOnce();
+    expect(mocks.closeSession).toHaveBeenCalledExactlyOnceWith(
+      PLATFORM.roots.storage,
+    );
     for (const handler of hooks?.afterExecutionSettlement ?? []) {
       await handler();
     }
-    expect(mocks.disposeSession).toHaveBeenCalledOnce();
     expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
-    const [disposeOrder] = mocks.disposeSession.mock.invocationCallOrder;
+    const [closeOrder] = mocks.closeSession.mock.invocationCallOrder;
     const [runtimeOrder] = mocks.disposeRuntime.mock.invocationCallOrder;
-    expect(disposeOrder).toBeLessThan(runtimeOrder);
+    expect(closeOrder).toBeLessThan(runtimeOrder);
 
-    // Shutdown took the package's sessions down with their owner: a later
-    // call finds none and builds the package state anew. Whether such a run
-    // works is out of contract (the README scopes the session to the
+    // Shutdown closed the session through its owner: a later run finds none
+    // open on the root and the owner builds it anew. Whether such a run
+    // works is out of contract (the README scopes the package state to the
     // process); only the reset owner is observed here.
     await runAgent(INPUT).result;
     expect(mocks.sessionInits).toHaveLength(2);
