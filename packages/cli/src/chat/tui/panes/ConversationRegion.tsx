@@ -55,7 +55,6 @@ interface ConversationRegionSnapshot {
   /** The child-list rows: the list root, then its descendants newest first. */
   readonly sessions: readonly StreamTabId[];
   readonly subagentExecutionLabels: ExecutionLabels;
-  readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
   readonly listRootStreamId: StreamTabId | undefined;
   readonly pendingApprovals: ReadonlyMap<
     string,
@@ -253,7 +252,6 @@ export function ConversationRegion({
               listRootStreamId={snapshot.listRootStreamId}
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessions}
-              activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
             />
             <TodosPlanPanel
               maxRows={todosPlanRows}
