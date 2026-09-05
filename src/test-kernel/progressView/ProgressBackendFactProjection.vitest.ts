@@ -188,11 +188,13 @@ describe('ProgressBackend', () => {
       ).toBe(true),
     );
     expect(backend.presentation.activeStream).toBe('root');
-    expect(messages).toContainEqual(
-      expect.objectContaining({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-        streamInfo: expect.objectContaining({ name: 'hidden-approval' }),
-      }),
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+          streamInfo: expect.objectContaining({ name: 'hidden-approval' }),
+        }),
+      ),
     );
   });
 
@@ -573,9 +575,11 @@ describe('ProgressBackend', () => {
     };
 
     await backend.state.snapshots.load([]);
+    // A tool-use stream: todos and a plan are tool-use arms, and the fold
+    // refuses them on a workflow stream.
     emitRunStart(target, {
       streamId,
-      agentCategory: AgentCategory.Workflow,
+      agentCategory: AgentCategory.ToolUse,
     });
     backend.presentLaunchedStream(streamId);
     await vi.waitFor(() =>
@@ -622,6 +626,16 @@ describe('ProgressBackend', () => {
       streamId,
     });
 
+    // The reader is ordered after the fold: the facts land in commit order,
+    // so the usage push arriving means every earlier fact has been applied.
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
+        stream: streamId,
+        runId: storageKey,
+        usage: expectedUsage,
+      }),
+    );
     expect(
       messages.filter(
         (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
@@ -655,14 +669,6 @@ describe('ProgressBackend', () => {
       stream: streamId,
       plan,
     });
-    await vi.waitFor(() =>
-      expect(messages).toContainEqual({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
-        stream: streamId,
-        runId: storageKey,
-        usage: expectedUsage,
-      }),
-    );
     expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
       1: [outputFile],
     });
@@ -827,10 +833,12 @@ describe('ProgressBackend', () => {
       },
     ]);
 
-    expect(backend.state.getStreamState(parentStreamId)).toMatchObject({
-      stage: { kind: 'round', index: 2, total: 4 },
-      subagents: [child],
-    });
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamState(parentStreamId)).toMatchObject({
+        stage: { kind: 'round', index: 2, total: 4 },
+        subagents: [child],
+      }),
+    );
     expect(
       messages.some(
         (message) =>

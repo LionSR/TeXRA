@@ -904,6 +904,14 @@ function applyEntry(
     applyCompactionActivityEntries(indexes.compactionState, [entry]),
   );
   const key = inflightKey(stream.id, entry.id);
+  // One holder of a row's live text, `view.inflight`, whichever arrives
+  // first: chunks extend it, and an entry that folds before any chunk seeds
+  // it with the text it carried, so the chunk re-delivering that text from
+  // offset zero (the bridge seeds one for every running row it publishes)
+  // ends within the length held and is dropped (5.2, "In-flight text").
+  if (isStreamingEntry(entry) && entry.text && !view.inflight.has(key)) {
+    view.inflight.set(key, entry.text);
+  }
   const live = isStreamingEntry(entry) ? view.inflight.get(key) : undefined;
   projectRow(
     next,
@@ -919,7 +927,7 @@ function applyEntry(
     }
   }
   if (isStreamingEntry(entry)) {
-    const text = live ?? entry.text ?? '';
+    const text = live ?? '';
     indexes.streaming.set(entry.id, {
       entry,
       // The projected row already measured the text; a blank entry has none.
@@ -1460,7 +1468,9 @@ function foldDurable(
   event: SessionEvent,
   deferred: DeferredRunModels,
 ): boolean {
-  if (event.type === 'transcript.entry') return foldTranscriptRow(view, event);
+  if (event.type === 'transcript.entry') {
+    return foldTranscriptRow(view, event, deferred);
+  }
   // Listing facts are ordered by commit per (aggregate, listing type),
   // whichever read delivered them (5.2, "Duplicates").
   const listingKey = `${event.aggregateId}/${listingTypeOf(event)}`;
@@ -1525,10 +1535,16 @@ function foldDurable(
     view,
     runInputsMoved ? runModelAt(view, aggregated, deferred) : aggregated,
   );
+  // A board's inputs from a child: the child being under it (created, or
+  // moved there by `relink` above) and the child's progress.
   walkUp(
     view,
     next.parentId,
-    created || childProgressChanged(before, next) ? next.parentId : null,
+    created ||
+      next.parentId !== before.parentId ||
+      childProgressChanged(before, next)
+      ? next.parentId
+      : null,
     deferred,
   );
   return true;
@@ -1542,6 +1558,7 @@ function foldDurable(
 function foldTranscriptRow(
   view: SessionView,
   event: TranscriptEntryEvent,
+  deferred: DeferredRunModels,
 ): boolean {
   const retained = view.folded.get(event.aggregateId);
   if (retained === undefined || event.seq <= retained) return false;
@@ -1558,7 +1575,7 @@ function foldTranscriptRow(
   const next = withTranscriptFacts(withEntry);
   setStream(view, next);
   if (entryAffectsRunModel(event.entry)) {
-    setStream(view, runModelAt(view, next, null));
+    setStream(view, runModelAt(view, next, deferred));
   }
   return true;
 }

@@ -242,8 +242,10 @@ describe('retained finished children', () => {
       STREAM_PHASE.FAILED,
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
     );
-    expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
-      STREAM_PHASE.FAILED,
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
+        STREAM_PHASE.FAILED,
+      ),
     );
     messages.length = 0;
 
@@ -369,8 +371,10 @@ describe('retained finished children', () => {
       STREAM_PHASE.FAILED,
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
     );
-    expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
-      STREAM_PHASE.FAILED,
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
+        STREAM_PHASE.FAILED,
+      ),
     );
 
     applyRoster(backend, PARENT, rosterStampedWhileRunning);

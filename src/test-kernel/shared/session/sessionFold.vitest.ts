@@ -748,6 +748,20 @@ describe('sessionFold', () => {
     const view = fold(streaming, response('response-2', '', 'running'));
     const second = stream(view, CHILD).transcript.rows[1];
     expect(second.kind === 'assistant' && second.text.full).toBe('Ear');
+    // An entry that folds carrying buffered text seeds the held text, so the
+    // bridge's re-delivery of that text from offset zero is a no-op and a
+    // later chunk extends it.
+    const buffered = foldAll(
+      [
+        response('response-3', 'Buf', 'running'),
+        chunk('response-3', 0, 3, 'Buf'),
+        chunk('response-3', 3, 6, 'fer'),
+      ],
+      view,
+    );
+    const third = stream(buffered, CHILD).transcript.rows[2];
+    expect(third.kind === 'assistant' && third.text.full).toBe('Buffer');
+    expect(buffered.inflight.get(`${CHILD}/response-3`)).toBe('Buffer');
 
     // Durable text wins: the finalizing row drops its entry and a late chunk
     // cannot reopen it; a replacement chunk truncates at `from`.

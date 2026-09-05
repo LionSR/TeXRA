@@ -167,6 +167,12 @@ export class SessionEventLog extends Context.Service<
       aggregateId: AggregateId,
       fromSeq: number,
     ) => Stream.Stream<SessionEvent>;
+    /** Whether the aggregate's sequence row exists and is not closed (C2,
+     *  C9): a stream exists from the publish of its `run.start` until its
+     *  tombstone. Synchronous at publish: `appendAll` crosses no
+     *  asynchronous boundary, so the fork `SessionHandle.publish` makes has
+     *  minted its rows before that call returns, ahead of every fold. */
+    readonly exists: (aggregateId: AggregateId) => Effect.Effect<boolean>;
   }
 >()('@texra/session/SessionEventLog') {
   static memoryLayer(
@@ -180,13 +186,26 @@ export class SessionEventLog extends Context.Service<
         const level = yield* SubscriptionRef.make<CommitOrdinal>(0);
         const gate = yield* Semaphore.make(1);
         const rows: LogRow[] = [];
+        // The sequence table (C1, C2): one seq counter per aggregate for
+        // every row it holds, and the aggregates a tombstone closed. The
+        // transcript rows already in the store when an aggregate's first
+        // row lands are not on this log, so its counter is seeded once from
+        // the store's head and never read beside it: every store append
+        // reaches the log as a row, so the counter stays at or above the
+        // head, a tail row's seq is above the store `seqNo` a history read
+        // stamps on the same entry, both order under one `view.folded`
+        // threshold, and an entry that reaches a reader by both is applied
+        // once more by id, never as a second row.
         const seqs = new Map<AggregateId, number>();
-        // The transcript tier's seq per stream: always above every row the
-        // store holds for it, so a history read (the store's own `seqNo`)
-        // and the tail (this counter) order under one `view.folded`
-        // threshold, and a row that reaches a reader by both is applied
-        // once more by entry id, never as a second row.
-        const transcriptSeqs = new Map<StreamTabId, number>();
+        const closed = new Set<AggregateId>();
+        const nextSeq = (aggregateId: AggregateId): number => {
+          const seq =
+            (seqs.get(aggregateId) ??
+              transcripts.get(aggregateId as StreamTabId)?.head ??
+              0) + 1;
+          seqs.set(aggregateId, seq);
+          return seq;
+        };
         const materialize = (row: LogRow): SessionEvent | null => {
           if (row.type !== 'transcript.ref') return row;
           const entry = transcripts.get(row.aggregateId)?.getById(row.entryId);
@@ -219,17 +238,11 @@ export class SessionEventLog extends Context.Service<
                 Effect.gen(function* () {
                   for (const draft of drafts) {
                     const commit = rows.length + 1;
+                    const seq = nextSeq(draft.aggregateId);
                     if (draft.type === 'transcript.entry') {
-                      const streamId = draft.aggregateId as StreamTabId;
-                      const seq =
-                        Math.max(
-                          transcriptSeqs.get(streamId) ?? 0,
-                          transcripts.get(streamId)?.head ?? 0,
-                        ) + 1;
-                      transcriptSeqs.set(streamId, seq);
                       rows.push({
                         type: 'transcript.ref',
-                        aggregateId: streamId,
+                        aggregateId: draft.aggregateId as StreamTabId,
                         entryId: draft.entry.id,
                         seq,
                         commit,
@@ -237,8 +250,9 @@ export class SessionEventLog extends Context.Service<
                       });
                       continue;
                     }
-                    const seq = (seqs.get(draft.aggregateId) ?? 0) + 1;
-                    seqs.set(draft.aggregateId, seq);
+                    if (draft.type === 'stream.removed') {
+                      closed.add(draft.aggregateId);
+                    }
                     rows.push({
                       ...draft,
                       seq,
@@ -272,8 +286,10 @@ export class SessionEventLog extends Context.Service<
             ),
           // The transcript tier is the store's: its rows for the stream
           // above `fromSeq`, read once without adding residency, stamped
-          // with the level they were read at. The stream's listing facts
-          // reach a reader through `listing()` and the tail.
+          // with the store's own `seqNo` (below the log's seq for the same
+          // entry, see `nextSeq`) and the level they were read at. The
+          // stream's listing facts reach a reader through `listing()` and
+          // the tail.
           readAggregate: (aggregateId, fromSeq) =>
             Stream.unwrap(
               Effect.gen(function* () {
@@ -298,10 +314,61 @@ export class SessionEventLog extends Context.Service<
                 );
               }),
             ),
+          exists: (aggregateId) =>
+            Effect.sync(
+              () => seqs.has(aggregateId) && !closed.has(aggregateId),
+            ),
         };
       }),
     );
   }
+}
+
+/**
+ * THE tail drain (C7): `read` forward from the caller's position, once per
+ * value of `level` above what this drain delivered, never past the value
+ * that woke it. A level says "there is more", not "there is one more", so a
+ * burst of commits during a read collapses into one further read. A read
+ * delivers up to the level it started at whether or not every row in
+ * between materialized, so a row the read could not deliver is not read
+ * again on every later wake. The plane's tail wakes on the log's level; the
+ * view's tail (`SessionViewService.all`) wakes on the view's cursor, so its
+ * reader sees each row only once the fold has.
+ */
+export function tailFrom(
+  read: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>,
+  level: {
+    readonly get: Effect.Effect<CommitOrdinal>;
+    readonly changes: Stream.Stream<CommitOrdinal>;
+  },
+  fromCommit: SessionCursor,
+): Stream.Stream<SessionEvent> {
+  return Stream.unwrap(
+    Effect.gen(function* () {
+      const at = yield* Ref.make(fromCommit);
+      const forward = Stream.unwrap(
+        Effect.gen(function* () {
+          const cursor = yield* Ref.get(at);
+          const upTo = yield* level.get;
+          return Stream.concat(
+            read(cursor).pipe(
+              Stream.takeWhile((event) => event.commit <= upTo),
+              Stream.tap((event) => Ref.set(at, event.commit)),
+            ),
+            Stream.fromEffect(
+              Ref.update(at, (delivered) => Math.max(delivered, upTo)),
+            ).pipe(Stream.drain),
+          );
+        }),
+      );
+      return level.changes.pipe(
+        Stream.filterEffect((value) =>
+          Ref.get(at).pipe(Effect.map((delivered) => value > delivered)),
+        ),
+        Stream.flatMap(() => forward, { concurrency: 1 }),
+      );
+    }),
+  );
 }
 
 export class SessionEvents extends Context.Service<
@@ -344,38 +411,15 @@ export class SessionEvents extends Context.Service<
       // The tail anchor: read once, here, before any cold read this layer
       // serves.
       const anchor = yield* SubscriptionRef.get(log.level);
-      // THE tail (C7), and the only drain: the log read forward from the
-      // caller's position, once per level above what this drain delivered.
-      // A level says "there is more", not "there is one more", so a burst of
-      // commits during a read collapses into one further read. A read
-      // delivers up to the level it started at whether or not every row in
-      // between materialized, so a row the read could not deliver is not
-      // read again on every later wake.
+      // THE tail (C7): the drain woken by the log's level.
       const all = (fromCommit: SessionCursor): Stream.Stream<SessionEvent> =>
-        Stream.unwrap(
-          Effect.gen(function* () {
-            const at = yield* Ref.make(fromCommit);
-            const forward = Stream.unwrap(
-              Effect.gen(function* () {
-                const cursor = yield* Ref.get(at);
-                const upTo = yield* SubscriptionRef.get(log.level);
-                return Stream.concat(
-                  log
-                    .readAll(cursor)
-                    .pipe(Stream.tap((event) => Ref.set(at, event.commit))),
-                  Stream.fromEffect(
-                    Ref.update(at, (delivered) => Math.max(delivered, upTo)),
-                  ).pipe(Stream.drain),
-                );
-              }),
-            );
-            return SubscriptionRef.changes(log.level).pipe(
-              Stream.filterEffect((level) =>
-                Ref.get(at).pipe(Effect.map((delivered) => level > delivered)),
-              ),
-              Stream.flatMap(() => forward, { concurrency: 1 }),
-            );
-          }),
+        tailFrom(
+          log.readAll,
+          {
+            get: SubscriptionRef.get(log.level),
+            changes: SubscriptionRef.changes(log.level),
+          },
+          fromCommit,
         );
       return {
         publish,

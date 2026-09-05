@@ -432,8 +432,12 @@ function sessionGraphOpener(
     );
     const { publish, ...reads } = Context.get(context, SessionEvents);
     const eventLog = Context.get(context, SessionEventLog);
+    const view = Context.get(context, SessionViewService);
+    // The request handler admits on the log's sequence table: built under
+    // the root graph's context, which holds the log.
     const requests = runtime.runSync(
       Layer.build(SessionRequests.layer(session)).pipe(
+        Effect.provide(context),
         Effect.provideService(Scope.Scope, scope),
         Effect.map((built) => Context.get(built, SessionRequests)),
       ),
@@ -441,7 +445,8 @@ function sessionGraphOpener(
     const graph: SessionGraph = {
       events: reads,
       publish,
-      view: Context.get(context, SessionViewService).ref,
+      view: view.ref,
+      folded: view.all,
       local: Context.get(context, LocalRuntimeSource).ref,
       subscriptions: Context.get(context, TranscriptSubscriptions),
       requests,

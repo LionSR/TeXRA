@@ -298,6 +298,8 @@ export class SessionFactApplier {
       // The lifecycle's last word is when the view's `durableOutcome` settles
       // for a run this process owns (a user stop published its terminal phase
       // earlier), and the wire's `statusDurablyFinal` travels with metadata.
+      // The reader is ordered after the fold (`SessionHandle.folded`), so
+      // the view read by this push has folded this very result.
       case 'result':
         return this.pushStreamMetadata(streamId);
       case 'updateTodos':

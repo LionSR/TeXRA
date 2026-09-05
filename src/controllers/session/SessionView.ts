@@ -13,10 +13,22 @@
  * fold's seq threshold order-safe, `switchMap` closes the previous set's
  * reads, and nothing is published before the marker, so a surface mounting
  * onto an existing session never renders the intermediate states of a replay.
+ *
+ * `all` is the plane's tail as this view has folded it: the same rows
+ * `SessionEvents.all` delivers, woken by the view's cursor instead of the
+ * log's level, so a reader that reads the view beside each row (the
+ * canonical-store applier, until lane 4 retires it) never sees a row the
+ * fold has not.
  */
 import { Context, Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
-import { SessionEvents } from '@agent/runtime/SessionEvents';
+import {
+  SessionEventLog,
+  SessionEvents,
+  tailFrom,
+  type SessionCursor,
+} from '@agent/runtime/SessionEvents';
+import { createLog } from '@logger/logUtils';
 import type { FoldInput, SessionEvent } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -30,13 +42,21 @@ import {
 } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
+const logger = createLog('sessionView');
+
 export class SessionViewService extends Context.Service<
   SessionViewService,
-  { readonly ref: SubscriptionRef.SubscriptionRef<SessionView> }
+  {
+    readonly ref: SubscriptionRef.SubscriptionRef<SessionView>;
+    /** Every tail row above `fromCommit` in commit order, released once
+     *  `ref` holds the state that folded it. */
+    readonly all: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>;
+  }
 >()('@texra/session/SessionView') {
   static readonly layer = Layer.effect(
     SessionViewService,
     Effect.gen(function* () {
+      const log = yield* SessionEventLog;
       const events = yield* SessionEvents;
       const liveness = yield* LocalRuntimeSource;
       const chunks = yield* TextChunkSource;
@@ -112,9 +132,30 @@ export class SessionViewService extends Context.Service<
           ),
           Stream.dropWhile(({ input }) => input._tag !== 'replay.complete'),
           Stream.runForEach(({ view }) => SubscriptionRef.set(ref, view)),
+          // A fold defect ends the view here: every renderer of the session
+          // and every reader of `all` stop at this cursor, so the cause is
+          // named once at the boundary instead of leaving with the fiber.
+          Effect.tapDefect((defect) =>
+            Effect.sync(() => {
+              logger.error('Session fold died; the view no longer advances', {
+                data: defect,
+              });
+            }),
+          ),
         ),
       );
-      return { ref };
+      const all = (fromCommit: SessionCursor): Stream.Stream<SessionEvent> =>
+        tailFrom(
+          log.readAll,
+          {
+            get: SubscriptionRef.get(ref).pipe(Effect.map((v) => v.cursor)),
+            changes: SubscriptionRef.changes(ref).pipe(
+              Stream.map((v) => v.cursor),
+            ),
+          },
+          fromCommit,
+        );
+      return { ref, all };
     }),
   );
 }

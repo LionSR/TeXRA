@@ -867,7 +867,10 @@ export class ProgressBackend {
   /**
    * Attach this backend's reader of the session's event plane, from now on
    * (PRD one-fold-three-renderers, 7.1): every event in commit order, applied
-   * to canonical state and the renderer. {@link dispose} interrupts it, so an
+   * to canonical state and the renderer. The reader is ordered after the
+   * fold (`session.folded`): the applier and the renderer read the view
+   * beside each event, and a row reaches them only once the view holds the
+   * state it produced. {@link dispose} interrupts it, so an
    * event published afterwards reaches no handler and callers need no
    * subscription handle of their own. Attaching after disposal is a no-op:
    * a host can close its window while its presentation is still being built.
@@ -876,7 +879,7 @@ export class ProgressBackend {
     if (this.disposed) return;
     const { session } = this;
     const reader = effectRuntime().runFork(
-      Stream.runForEach(session.events.all(session.now()), (event) =>
+      Stream.runForEach(session.folded(session.now()), (event) =>
         Effect.sync(() => {
           this.factApplier.apply(event);
         }),

@@ -133,6 +133,12 @@ export class SessionHandle {
    */
   readonly events: Omit<SessionEventsShape, 'publish'>;
   /**
+   * The tail as the view has folded it (PRD 7.2): what a reader that reads
+   * {@link view} beside each row reads, from `now()`, so no row reaches it
+   * before the fold has landed the state that row produced.
+   */
+  readonly folded: SessionGraph['folded'];
+  /**
    * The one handler of every request a surface issues to this session (PRD
    * 7.6, 8.2): an in-process surface runs it on the process runtime
    * (`effectRuntime()`) and reads the Effect's own result as the response.
@@ -207,6 +213,7 @@ export class SessionHandle {
     this.graph = graph;
     this.events = graph.events;
     this.view = graph.view;
+    this.folded = graph.folded;
     this.requests = graph.requests;
     const status = new StreamStatusMachine(
       (event) => this.publishStatus(event),

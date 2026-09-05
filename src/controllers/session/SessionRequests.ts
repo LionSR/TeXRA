@@ -2,11 +2,14 @@
  * `SessionRequests`: one handler for every request a surface issues to its
  * session's runtime (PRD one-fold-three-renderers, 7.6 and 8.2). A request
  * is answered exactly once: an `Outcome` the host renders, or one of the
- * request errors. Ownership is read from the session's view before any arm
- * runs: a stream the view does not hold is `Unavailable`, never a defect
+ * request errors. Existence is read from the log's sequence table before
+ * any arm runs (contract C2: a stream exists iff its sequence row exists
+ * and is not closed, minted synchronously by the publish of its `run.start`
+ * and ahead of every fold), so a stop issued the moment a launch exposes its
+ * stream is admitted; a stream with no row is `Unavailable`, never a defect
  * (a second surface can act from a view that has not yet folded a
- * `stream.removed`), and a stream another live process holds (`readOnly`)
- * is `NotOwner`. In process (the TUI, headless) the Effect's own result is
+ * `stream.removed`). Ownership is read from the view: a stream another live
+ * process holds (`readOnly`) is `NotOwner`. In process (the TUI, headless) the Effect's own result is
  * the response; a bridge posts it as the `Response` of 8.4.
  *
  * Built per `SessionHandle` by `sessionLayer.ts`'s opener, under the
@@ -20,6 +23,7 @@ import type {
   PlanApprovalResult,
   ProposalResult,
 } from '@agent/runtime/HostInteractions';
+import { SessionEventLog } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import {
@@ -41,17 +45,20 @@ export class SessionRequests extends Context.Service<
     ) => Effect.Effect<Outcome, RequestError>;
   }
 >()('@texra/session/SessionRequests') {
-  static layer(session: SessionHandle): Layer.Layer<SessionRequests> {
+  static layer(
+    session: SessionHandle,
+  ): Layer.Layer<SessionRequests, never, SessionEventLog> {
     return Layer.effect(
       SessionRequests,
-      Effect.sync(() => {
+      Effect.gen(function* () {
+        const log = yield* SessionEventLog;
         // The store lifecycle owner, built on the first request that
         // deletes: it holds the deletion queues, which only those need.
         let stores: SessionStores | undefined;
         const request = Effect.fn('SessionRequests.request')(function* (
           req: RuntimeRequest,
         ) {
-          yield* admit(session, req);
+          yield* admit(session, log, req);
           return yield* handle(
             session,
             () => (stores ??= createSessionStores(session)),
@@ -76,25 +83,38 @@ function targetStream(req: RuntimeRequest): StreamTabId | null {
   }
 }
 
-/** Ownership, from the view: absent is `Unavailable`, held elsewhere is
- *  `NotOwner`. A deletion is admitted for a held stream: it acts on storage
- *  the lease protocol guards, not on the run. */
+/** Existence from the log's sequence table, ownership from the view: no
+ *  row is `Unavailable`, held elsewhere is `NotOwner`. A stream the view
+ *  has not folded yet is held by nobody this process knows of. A deletion
+ *  is admitted for a held stream: it acts on storage the lease protocol
+ *  guards, not on the run. */
 function admit(
   session: SessionHandle,
+  log: Pick<Context.Service.Shape<typeof SessionEventLog>, 'exists'>,
   req: RuntimeRequest,
 ): Effect.Effect<void, RequestError> {
   const streamId = targetStream(req);
   if (streamId === null) return Effect.void;
-  const stream = SubscriptionRef.getUnsafe(session.view).streams.get(streamId);
-  if (!stream) {
-    return Effect.fail(
-      new Unavailable({ streamId, reason: 'The stream is no longer open.' }),
-    );
-  }
-  if (stream.readOnly && req.kind !== 'stream.delete') {
-    return Effect.fail(new NotOwner({ streamId }));
-  }
-  return Effect.void;
+  return Effect.flatMap(
+    log.exists(streamId),
+    (exists): Effect.Effect<void, RequestError> => {
+      if (!exists) {
+        return Effect.fail(
+          new Unavailable({
+            streamId,
+            reason: 'The stream is no longer open.',
+          }),
+        );
+      }
+      const stream = SubscriptionRef.getUnsafe(session.view).streams.get(
+        streamId,
+      );
+      if (stream?.readOnly && req.kind !== 'stream.delete') {
+        return Effect.fail(new NotOwner({ streamId }));
+      }
+      return Effect.void;
+    },
+  );
 }
 
 /** A decision for a request no longer pending: settled already, or never made. */
