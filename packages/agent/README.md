@@ -82,7 +82,7 @@ stay resident for the life of the process.
 Runs share one session per workspace storage root. The runtime's session
 owner holds it, the same owner every TeXRA host opens its sessions through, so
 opening a root twice (two runs, or a run beside a host in the same process)
-resolves the one session already open there; a second root gets its own. A
+resolves the one session already open there; a second root gets its own. When the session was opened by a host (the extension, the desktop, or the CLI in the same process), that host's decision delivery applies to every run on it: retries and approvals prompt in the host's UI and the run waits there, as PR #11893 section 8 rules; the package's inline retry denial applies only to sessions the package opened itself. A
 session ends only through `closeSession(roots)`: it refuses new runs on the
 root, interrupts the runs it owns and waits for them to settle within the
 runtime's shutdown budget (or the `signal` you pass, when the close runs under

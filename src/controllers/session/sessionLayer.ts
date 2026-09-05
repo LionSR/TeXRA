@@ -37,6 +37,7 @@ import {
   RcMap,
   Stream,
   SubscriptionRef,
+  Fiber,
 } from 'effect';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
@@ -476,10 +477,12 @@ const closeSession = (root: string, signal?: AbortSignal) =>
           untilSettled(executions, interrupt),
         ) as Promise<void>,
     );
-    yield* Effect.race(
-      settled,
+    // One budget for the whole close: the caller's signal, else the phase
+    // deadline, forked once so the flush below shares what settlement left.
+    const budget = yield* Effect.forkChild(
       signal ? aborted(signal) : Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
     );
+    yield* Effect.race(settled, Fiber.join(budget));
     const abandoned = executions.getActiveIds();
     const release =
       abandoned.length === 0
@@ -501,9 +504,22 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // The release is the flush's finalizer: the entry goes, or its release
     // is armed on the settlement, whatever the flush's exit, and a flush
     // that fails still fails this close.
-    yield* Effect.promise(
-      () =>
-        runInSession(session, () => session.flushArtifacts()) as Promise<void>,
+    yield* Effect.race(
+      Effect.promise(
+        () =>
+          runInSession(session, () =>
+            session.flushArtifacts(),
+          ) as Promise<void>,
+      ),
+      Fiber.join(budget).pipe(
+        Effect.andThen(
+          Effect.sync(() =>
+            log.warn(
+              `Session ${root}: the artifact flush ran past the close budget and was left to the process teardown`,
+            ),
+          ),
+        ),
+      ),
     ).pipe(Effect.ensuring(release));
     const report: SessionCloseReport = {
       settled: abandoned.length === 0,
