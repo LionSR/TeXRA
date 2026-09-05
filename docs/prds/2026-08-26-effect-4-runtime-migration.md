@@ -10,7 +10,10 @@ Effect to Effect's best practice, and PocketFlow is not retained. That ruling
 amends R4, 8.4, Phase 2, and alternative 13.C below, in the form
 `docs/proposals/2026-09-04-agent-runtime-on-effect.md` §6 specifies, and
 closes open decisions 6 and 7 of section 15. The remaining items of section
-15 stay open; the governing rules R1 to R3 and R5 to R10 are unchanged.
+15 stay open; the governing rules R1 to R3 and R5 to R10 are unchanged. That
+proposal is in flight as pull request #11843 and merges before this
+amendment; until it lands, every section reference to it below resolves in
+that pull request's branch.
 
 **Decision in one sentence:** TeXRA will adopt Effect 4 RC as the execution
 model for host-neutral asynchronous backend work, with the two agent flow
@@ -1306,10 +1309,13 @@ can run on the old engine while the other runs on the new service, no window
 in which two runtimes or two checkpoint formats exist on the branch. Rollback
 is the cutover branch's rollback. The phase is complete when no production
 file imports `src/agent/node`, no `setServices()` call remains, and
-`config/ratchets/` carries no PocketFlow row. It also absorbs the original
-Phase 3's "convert `runReflectionFlow` and `runToolUseFlow` interiors" item
-and Phase 4's "one durable child-call operation" item, since both are the
-loops and PR 4 above.
+`config/ratchets/` carries no PocketFlow row. Two items of later phases move
+here and are struck there: the flow interiors (`runReflectionFlow`,
+`runToolUseFlow`) that Stage 3a listed are the two loops of step 2, and the
+workflow-script half of Phase 4's child-call operation (the script journal
+into the event table) is step 4. The `executeAgent` and `AgentRunLifecycle`
+interiors stay in Stage 3a, and the native-delegation, in-band, and
+child-run-loop launch paths stay in Phase 4.
 
 Three of the proposal's §7 decisions remain with the owner and do not block
 step 1: the C9 retention window for byte-exact conversation rows; whether the
@@ -1332,8 +1338,9 @@ it.
 
 Stage 3a — lifecycle and carriers, no durable format change:
 
-- Convert `runReflectionFlow`, `runToolUseFlow`, `executeAgent`, and
-  `AgentRunLifecycle` interiors.
+- Convert ~~`runReflectionFlow`, `runToolUseFlow`,~~ `executeAgent` and
+  `AgentRunLifecycle` interiors (amended 2026-09-06: the two flow interiors
+  are Phase 2 step 2's loops, not this stage's work).
 - Replace the mirrored `AgentLaunchContext` / ambient `RunContext` /
   `AgentCore` / flow-service dependency path with plain launch inputs and one
   scoped `AgentRun` service.
@@ -1380,8 +1387,10 @@ one opaque durability interval inside an outer persisted node.
 ### Phase 4 — durable child calls and workflow scripts
 
 - Extract one durable child-call operation from stable subagent attempts,
-  in-band execution, the child-run loop, native delegation, and workflow-script
-  `agent()` dispatch.
+  in-band execution, the child-run loop, and native delegation ~~and
+  workflow-script `agent()` dispatch~~ (amended 2026-09-06: the
+  workflow-script side, the journal into the event table, is Phase 2 step 4;
+  this phase unifies the remaining launch paths onto that protocol).
 - Preserve separate foreground, detached-delivery, and workflow-script
   presentation policies above that operation.
 - Convert the workflow-script runner's bounded fan-out, timeout, child
