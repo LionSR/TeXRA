@@ -2,10 +2,13 @@
  * The pre-cutover listing tier: every historical stream of a root, derived
  * from the transcript store's always-resident summary tier when a reader
  * subscribes (`SessionEventLog.memoryLayer`, `readListing`), never appended
- * to the log and never walked at graph open. The rows carry commit 0 and
- * seq 0: below every log row, so a live `run.start`, a tombstone, or any
- * later fact for the same stream outranks them under the fold's per-key
- * commit order, and a second replay of the same rows folds nothing.
+ * to the log and never walked at graph open. The rows occupy the commit
+ * space the log reserves below its first row, `HISTORICAL_COMMITS_PER_STREAM`
+ * per historical stream in parents-first, older-first order, so `createdAt`
+ * keeps the transcript's creation order, every log row outranks them under
+ * the fold's per-key commit order, and a second replay of the same rows
+ * folds nothing. Their seq is the row's 1-based position within its stream:
+ * listing facts dedupe by commit, and no listing row moves `view.folded`.
  *
  * Historical means "existed when the graph opened": the membership is the
  * summary tier's key set taken once at the log's build, and a stream born
@@ -40,26 +43,41 @@ export function isHistoricalStream(
   return meta?.executionId !== undefined && meta.agentCategory !== undefined;
 }
 
+/** The commits the log reserves per historical stream: one per listing
+ *  fact a summary can carry (`run.start`, `run.config`, description). */
+export const HISTORICAL_COMMITS_PER_STREAM = 3;
+
 /**
  * The listing rows of every historical stream, parents before children and
  * older before newer, each stamped at its stream's own last write. Plain
  * code over the resident summary tier: no permit, no log row, no fiber step
- * per stream.
+ * per stream. Derived once per log, on the first read: the rows of a stream
+ * the store no longer holds are dropped then, and a stream deleted later
+ * leaves through its tombstone, which outranks its listing rows.
  */
 export function historicalListing(
   transcripts: StreamLogStore,
   historical: ReadonlySet<StreamTabId>,
   ownerId: OwnerId,
 ): SessionEvent[] {
-  return streamsParentsFirst(transcripts, historical).flatMap((streamId) => {
-    const drafts = historicalStream(transcripts, streamId);
-    if (drafts === null) return [];
-    const at = transcripts.getTimestampRange(streamId).last ?? Date.now();
-    return drafts.map(
-      (draft): SessionEvent =>
-        ({ ...draft, seq: 0, commit: 0, ownerId, at }) as SessionEvent,
-    );
-  });
+  return streamsParentsFirst(transcripts, historical).flatMap(
+    (streamId, index) => {
+      const drafts = historicalStream(transcripts, streamId);
+      if (drafts === null) return [];
+      const at = transcripts.getTimestampRange(streamId).last ?? Date.now();
+      const base = index * HISTORICAL_COMMITS_PER_STREAM;
+      return drafts.map(
+        (draft, position): SessionEvent =>
+          ({
+            ...draft,
+            seq: position + 1,
+            commit: base + position + 1,
+            ownerId,
+            at,
+          }) as SessionEvent,
+      );
+    },
+  );
 }
 
 /** The summary tier's streams, parents before children and older before

@@ -55,12 +55,7 @@ import {
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import type { WorkspaceRoots as HostWorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  USER_FOLLOW_UP_SUPPORT,
-  type OwnerId,
-  type SessionEventDraft,
-  type StreamTabId,
-} from '@shared/schemas';
+import { type OwnerId, type StreamTabId } from '@shared/schemas';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
