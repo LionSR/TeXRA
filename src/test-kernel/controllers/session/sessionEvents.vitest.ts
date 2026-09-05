@@ -43,6 +43,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
+import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -52,6 +53,24 @@ const SELF = '4242:self-start';
 const OTHER = '4343:other-start';
 const STREAM = 'stream:framing' as StreamTabId;
 const EXECUTION = 'ab12cd' as ExecutionId;
+const OLDER = 'stream:older' as StreamTabId;
+const NEWER = 'stream:newer' as StreamTabId;
+
+/** A store holding two finished streams' summaries, as a reopened
+ *  workspace does before any graph is built over it. */
+function storeWithHistory(): StreamLogStore {
+  const store = StreamLogStore.ephemeral('session events history');
+  store.recordSummaryMeta(OLDER, {
+    executionId: 'a1b2c3' as ExecutionId,
+    agentCategory: AgentCategory.ToolUse,
+  });
+  store.recordSummaryMeta(NEWER, {
+    executionId: 'b2c3d4' as ExecutionId,
+    agentCategory: AgentCategory.Workflow,
+    description: 'the newer run',
+  });
+  return store;
+}
 
 /** Wait on the fold's level until it holds a view `ready` accepts: the ref
  *  replays its current value on subscribe, so a view already there ends the
@@ -98,7 +117,10 @@ const requested: SessionEventDraft = {
  *  bits: the log seeded with `history` before the plane reads its anchor
  *  (the pre-cutover importer's position), the plane, the fold, and the
  *  three local sources. */
-const graph = (history: readonly SessionEventDraft[]) => {
+const graph = (
+  history: readonly SessionEventDraft[],
+  transcripts = StreamLogStore.ephemeral('session events test'),
+) => {
   const roots = createFakeWorkspaceRoots({ storagePath: '/workspace/framing' });
   const seeded = Layer.effectDiscard(
     Effect.gen(function* () {
@@ -112,12 +134,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
       sessionEventsLayer.pipe(
         Layer.provideMerge(
           seeded.pipe(
-            Layer.provideMerge(
-              SessionEventLog.memoryLayer(
-                StreamLogStore.ephemeral('session events test'),
-                roots,
-              ),
-            ),
+            Layer.provideMerge(SessionEventLog.memoryLayer(transcripts, roots)),
           ),
         ),
       ),
@@ -246,6 +263,56 @@ describe('session events and view', () => {
         expect(held.streams.get(STREAM)?.group).toBe('waiting');
         expect(held.streams.get(STREAM)?.readOnly).toBe(true);
       }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
+  );
+  it.effect(
+    'lists the streams the store held at build below the log, in order and on the wire',
+    () =>
+      Effect.gen(function* () {
+        const events = yield* SessionEvents;
+        const log = yield* SessionEventLog;
+        const view = yield* SessionViewService;
+        yield* settle(view.ref, (v) => v.streams.size === 2);
+        const listed = yield* SubscriptionRef.get(view.ref);
+        const older = listed.streams.get(OLDER);
+        const newer = listed.streams.get(NEWER);
+        // Distinct commits in the store's order, so the roster keeps the
+        // transcript's creation order rather than falling back to the id.
+        expect(older?.createdAt).toBeGreaterThanOrEqual(1);
+        expect(newer?.createdAt).toBeGreaterThan(older?.createdAt ?? 0);
+        expect(newer?.description).toBe('the newer run');
+        // Every listing row is a wire-valid event: the webview parses the
+        // replay frame whole and drops it on one bad seq.
+        const rows = yield* Stream.runCollect(log.readListing());
+        const frame = DownMessageSchema.safeParse({
+          kind: 'events',
+          session: 'k',
+          generation: 0,
+          cursor: 0,
+          events: rows.map((event) => ({
+            _tag: 'event',
+            read: 'listing',
+            event,
+          })),
+          chunks: [],
+          local: null,
+          host: null,
+          replayComplete: true,
+        });
+        expect(
+          frame.success,
+          frame.success ? '' : JSON.stringify(frame.error.issues, null, 1),
+        ).toBe(true);
+        // A stream born after the build enters through its own row alone,
+        // above the reserved space, so a renderer attached at open sees it
+        // as new.
+        yield* events.publish([{ ...runStart, aggregateId: STREAM }]);
+        yield* settle(view.ref, (v) => v.streams.has(STREAM));
+        const live = yield* SubscriptionRef.get(view.ref);
+        expect(live.streams.get(STREAM)?.createdAt).toBeGreaterThan(
+          newer?.createdAt ?? 0,
+        );
+        expect(live.streams.size).toBe(3);
+      }).pipe(Effect.provide(graph([], storeWithHistory()))),
   );
 });
 
