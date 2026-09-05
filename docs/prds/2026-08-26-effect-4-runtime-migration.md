@@ -412,7 +412,11 @@ Effect is not an answer to every difficult part of the runtime.
 
 - It does not decide who owns a session, stream, checkpoint, or transcript.
 - It does not make an incorrect persistence transition correct.
-- It does not replace PocketFlow's persisted cursor or graph semantics.
+- ~~It does not replace PocketFlow's persisted cursor or graph semantics.~~
+  _Amended 2026-09-06:_ there is no cursor or graph to preserve (R4 as
+  amended); what Effect still does not decide is the row vocabulary and the
+  resume rules, which belong to the runtime proposal and the substrate
+  contract.
 - It does not determine approval policy or which tool operations are safe to
   retry.
 - It does not replace `AgentEvent`, session facts, Zod wire schemas, or host
@@ -429,8 +433,10 @@ is the execution substrate beneath those rulings.
 
 1. Establish one typed execution model for dependencies, expected failures,
    cancellation, concurrency, time, and resource lifetime.
-2. Eliminate `setServices()` and service-object spreading from PocketFlow
-   nodes while preserving PocketFlow's durable state-machine role.
+2. Eliminate `setServices()` and service-object spreading ~~from PocketFlow
+   nodes while preserving PocketFlow's durable state-machine role~~ by
+   deleting the node classes and the engine that carried them (amended
+   2026-09-06; R4 as amended).
 3. Retire the global `platform()` reader from host-neutral production code.
 4. Make every ordinary child task structurally owned; require an explicit API
    and name for the few detached tasks.
@@ -453,10 +459,16 @@ is the execution substrate beneath those rulings.
 3. No migration from Zod to Effect Schema in this program.
 4. No adoption of `effect/unstable/*` modules in the foundation phases.
 5. No replacement of PocketFlow with Effect's experimental workflow module.
-6. No change to wire protocols, agent YAML, or public result schemas. Durable
-   flow formats remain unchanged through Phase 2 and Stage 3a; Stage 3b may
-   introduce one explicit versioned representation for finer checkpoints
-   under the rollout section's reader-outlives-writer rule.
+   _Amended 2026-09-06:_ still true of the unstable module; PocketFlow is
+   replaced by plain Effect loops over the event table (R4 as amended).
+6. No change to wire protocols, agent YAML, or public result schemas.
+   ~~Durable flow formats remain unchanged through Phase 2 and Stage 3a;
+   Stage 3b may introduce one explicit versioned representation for finer
+   checkpoints under the rollout section's reader-outlives-writer rule.~~
+   _Amended 2026-09-06:_ the `flow_<id>.json` record is retired in Phase 2
+   as amended, imported once into the execution aggregate's first
+   `flow.snapshot` row; the substrate contract (C1) owns versioning from
+   then on.
 7. No public `Effect` return types from `@texra-ai/agent` in the first release.
 8. No automatic retry expansion. Existing idempotency and retry ownership
    decisions remain binding.
@@ -1001,22 +1013,22 @@ contract not already covered.
 The following is the intended net architecture, not merely a list of possible
 library substitutions:
 
-| Present mechanisms                                                                                                          | Target                                                         | Required deletion or absorption                                                                                 |
-| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `Platform` global reader plus copied flow services                                                                          | Process services and one run service                           | `platform()` access in migrated zones, `setServices()`, and service spreading                                   |
-| `AgentLaunchContext`, `RunScope`, `RunContext`, `AgentCore`, `BaseFlowContextInit`                                          | Plain launch inputs plus `AgentRun`                            | Mirrored fields, ALS projection helpers, and the `bare` production fallback path                                |
-| `prep`, `exec`, `execFallback`, `post`                                                                                      | One `FlowNode.run` Effect                                      | Generic phase dispatcher and untyped intermediate transport                                                     |
-| `Flow` and `PersistedFlow` orchestration loops                                                                              | One transition kernel with a commit policy                     | Duplicate graph walking and specialized subclasses with no domain semantics                                     |
-| `RoundPersistedFlow`, response finalization callbacks, and cursor rewind                                                    | Durable round transition plus scoped stage                     | Third interpreter subclass and duplicate round-finalization fallback                                            |
-| Stable-subagent, in-band, child-loop, and workflow `agent()` launch paths                                                   | One durable child-call operation                               | Parallel reservation, launch, interruption, result, and commit choreography                                     |
-| Workflow queue, timeout, abort map, pending-call drain, and first-fault ledger                                              | One scoped workflow-run Effect                                 | Generic Promise runtime inside the deterministic script engine                                                  |
-| Abort-controller trees, timeout wrappers, and sticky cancellation flags                                                     | Root fiber interruption with SDK-edge signals                  | Internal abort choreography and cancellation normalization layers                                               |
-| `DisposableStore`, manual `finally` blocks, teardown ledgers                                                                | Effect scopes and one terminal `Exit` fold                     | Duplicate resource ownership and cleanup aggregation code                                                       |
-| `p-retry`, `p-timeout`, delay callbacks, fake-time seams                                                                    | `Schedule`, timeout combinators, and one clock                 | Package-specific error wrappers and injected clock plumbing                                                     |
-| Deferred promises, listener cleanup, and wait abort controllers                                                             | Scoped `Deferred`/`Queue` programs                             | Hand-built settlement and unsubscribe protocols                                                                 |
-| ALS run context plus separately propagated trace fields                                                                     | `AgentRun` and fiber-local trace annotations                   | Duplicate context projection and accessor families                                                              |
-| Boundary translation, cleanup, sentinel, aggregation, and logging catch clauses                                             | Typed adapters, recovery, scopes, and `Exit`                   | Raw catch sites whose meaning is supplied only by local control flow                                            |
-| Status reservations with rollback, escalation ladders, terminal claim gates, and the interaction-ownership generation index | One owner fiber per run plus a single-writer status projection | Phase-arbitration guards, synthetic transitions, claim flags, and observer-reconstructed reference counts (P13) |
+| Present mechanisms                                                                                                          | Target                                                                                                                              | Required deletion or absorption                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `Platform` global reader plus copied flow services                                                                          | Process services and one run service                                                                                                | `platform()` access in migrated zones, `setServices()`, and service spreading                                   |
+| `AgentLaunchContext`, `RunScope`, `RunContext`, `AgentCore`, `BaseFlowContextInit`                                          | Plain launch inputs plus `AgentRun`                                                                                                 | Mirrored fields, ALS projection helpers, and the `bare` production fallback path                                |
+| `prep`, `exec`, `execFallback`, `post`                                                                                      | Plain functions inside `runToolUse` / `runReflection` (amended 2026-09-06; was one `FlowNode.run` Effect)                           | The node classes, the generic phase dispatcher, and untyped intermediate transport                              |
+| `Flow` and `PersistedFlow` orchestration loops                                                                              | `RunLedger.append` plus `foldRunState` (amended 2026-09-06; was one transition kernel with a commit policy)                         | `src/agent/node/`, both interpreters, the graph, the cursor, and the flow record                                |
+| `RoundPersistedFlow`, response finalization callbacks, and cursor rewind                                                    | The reflection loop's round coordinate under `Effect.scoped` (amended 2026-09-06; was a durable round transition plus scoped stage) | Third interpreter subclass and duplicate round-finalization fallback                                            |
+| Stable-subagent, in-band, child-loop, and workflow `agent()` launch paths                                                   | One durable child-call operation                                                                                                    | Parallel reservation, launch, interruption, result, and commit choreography                                     |
+| Workflow queue, timeout, abort map, pending-call drain, and first-fault ledger                                              | One scoped workflow-run Effect                                                                                                      | Generic Promise runtime inside the deterministic script engine                                                  |
+| Abort-controller trees, timeout wrappers, and sticky cancellation flags                                                     | Root fiber interruption with SDK-edge signals                                                                                       | Internal abort choreography and cancellation normalization layers                                               |
+| `DisposableStore`, manual `finally` blocks, teardown ledgers                                                                | Effect scopes and one terminal `Exit` fold                                                                                          | Duplicate resource ownership and cleanup aggregation code                                                       |
+| `p-retry`, `p-timeout`, delay callbacks, fake-time seams                                                                    | `Schedule`, timeout combinators, and one clock                                                                                      | Package-specific error wrappers and injected clock plumbing                                                     |
+| Deferred promises, listener cleanup, and wait abort controllers                                                             | Scoped `Deferred`/`Queue` programs                                                                                                  | Hand-built settlement and unsubscribe protocols                                                                 |
+| ALS run context plus separately propagated trace fields                                                                     | `AgentRun` and fiber-local trace annotations                                                                                        | Duplicate context projection and accessor families                                                              |
+| Boundary translation, cleanup, sentinel, aggregation, and logging catch clauses                                             | Typed adapters, recovery, scopes, and `Exit`                                                                                        | Raw catch sites whose meaning is supplied only by local control flow                                            |
+| Status reservations with rollback, escalation ladders, terminal claim gates, and the interaction-ownership generation index | One owner fiber per run plus a single-writer status projection                                                                      | Phase-arbitration guards, synthetic transitions, claim flags, and observer-reconstructed reference counts (P13) |
 
 Queues and mutexes are not collapsed merely because Effect supplies similarly
 named primitives. A queue representing a real domain protocol remains a domain
@@ -1342,16 +1354,24 @@ Stage 3a — lifecycle and carriers, no durable format change:
 
 Stage 3b — durable rounds and finer checkpoints:
 
-- Ratify the nested-flow persistence amendment: stable activity identities,
-  hierarchical cursor or activity-ledger representation, recovery behavior for
-  an unknown external outcome, and version-retirement policy.
+_Amended 2026-09-06:_ Phase 2 as amended delivers this stage's substance
+(per-call `tool.intent` / `tool.result` rows, `flow.step` round coordinates,
+`flow.snapshot`), so the bullets below are read as requirements already met
+there, not as a second implementation.
+
+- ~~Ratify the nested-flow persistence amendment: stable activity identities,
+  hierarchical cursor or activity-ledger representation,~~ recovery behavior
+  for an unknown external outcome, and version-retirement policy (the row
+  ledger is the representation; §15 item 6).
 - Checkpoint completed model responses before tool dispatch and completed
-  side-effecting tool calls before the next side-effecting call.
-- Replace `RoundPersistedFlow` with the common durable transition kernel plus a
-  reflection-round transition; preserve the configured bound and the single
-  persisted compile-repair grant.
-- Collapse response-cycle finalization to one canonical round-state commit and
-  watermark-tracked derived projections.
+  side-effecting tool calls before the next side-effecting call (the
+  `model.message` and `tool.result` rows).
+- ~~Replace `RoundPersistedFlow` with the common durable transition kernel plus
+  a reflection-round transition;~~ `RoundPersistedFlow` is deleted in Phase 2
+  as amended; preserve the configured bound and the single persisted
+  compile-repair grant on `flow.snapshot`.
+- Collapse response-cycle finalization to one canonical round-state commit
+  (`flow.step round.end`) and watermark-tracked derived projections.
 
 The Promise-returning `runAgent` and SDK entry points remain adapters around the
 Effect program. Phase 3 cannot complete while the inner tool-use cycle remains
@@ -1461,14 +1481,19 @@ custom runtime machinery.
 ### Architectural completion
 
 - Zero production `setServices()` calls after Phase 2.
-- Zero generic `prep` / `execFallback` / `post` dispatch in the graph kernel
-  after Phase 2; nodes expose one typed transition.
-- One graph-transition loop serves ephemeral and persisted flows after Phase 2.
+- ~~Zero generic `prep` / `execFallback` / `post` dispatch in the graph kernel
+  after Phase 2; nodes expose one typed transition.~~ _Amended 2026-09-06:_
+  zero node classes and no `src/agent/node/` directory after Phase 2.
+- ~~One graph-transition loop serves ephemeral and persisted flows after Phase 2.~~ _Amended 2026-09-06:_ two `Effect.fn` loops (`runToolUse`,
+  `runReflection`) over one `RunLedger` after Phase 2; run state is
+  `foldRunState` over rows and is never persisted.
 - One run dependency carrier serves migrated execution code after Phase 3;
   launch inputs are not copied into an ambient context and then into flow
   services.
-- Zero `RoundPersistedFlow` subclass after Phase 3; reflection rounds use the
-  common durable transition kernel.
+- ~~Zero `RoundPersistedFlow` subclass after Phase 3; reflection rounds use the
+  common durable transition kernel.~~ _Amended 2026-09-06:_ zero
+  `RoundPersistedFlow`, `ResponseCycleFlow`, and `ToolUseRoundFlow` after
+  Phase 2; reflection rounds are `flow.step` coordinates.
 - One durable child-call operation serves native delegation and workflow-script
   dispatch after Phase 4.
 - Zero `PQueue`, `p-timeout`, or internal `AbortController` use in the
