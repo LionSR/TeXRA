@@ -177,7 +177,6 @@ export function createDesktopHostRequests(
   const { getRunMetadata } = runActions;
 
   const snapshotPort = {
-    getActiveStream: () => '' as const,
     getRunMetadata,
     getOutputFiles: (streamId: StreamTabId) =>
       snapshots.getOutputFiles(streamId),
@@ -500,7 +499,11 @@ export function createDesktopHostRequests(
     const base = request.base ?? undefined;
     switch (request.action) {
       case 'compareOriginal':
-        await workflowFileActions.compareOriginal(request.file, base);
+        await workflowFileActions.compareOriginal(
+          request.file,
+          base,
+          request.streamId,
+        );
         return;
       case 'comparePrevious':
         await workflowFileActions.comparePrevious(
@@ -509,7 +512,11 @@ export function createDesktopHostRequests(
         );
         return;
       case 'accept':
-        await workflowFileActions.acceptFile(request.file, base);
+        await workflowFileActions.acceptFile(
+          request.file,
+          base,
+          request.streamId,
+        );
         return;
       case 'merge':
         await workflowFileActions.mergeFile(request.file, base);
