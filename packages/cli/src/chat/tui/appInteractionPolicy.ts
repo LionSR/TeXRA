@@ -112,16 +112,32 @@ export function foregroundSurfaceKind({
   return undefined;
 }
 
-export function approvalVisibleForActiveStream({
-  activeStreamId,
+/**
+ * Whether the pending request shows on the selected stream: a stream-less
+ * request everywhere, a stream's own request on that stream and on every
+ * ancestor. A descendant's decision is taken from the parent the user is on,
+ * so presenting one never moves the selection (the fold's
+ * `approval: 'descendant'`, PRD 5.2); a request outside the selected subtree
+ * waits behind the status bar's count and the session list's marker until
+ * the user goes to it.
+ */
+export function approvalVisibleForSelection({
   pending,
+  selectedStreamId,
+  view,
 }: {
-  readonly activeStreamId: StreamTabId | undefined;
   readonly pending: PendingApproval | undefined;
+  readonly selectedStreamId: StreamTabId | undefined;
+  readonly view: SessionView;
 }): boolean {
   if (!pending) return false;
   const streamId = approvalPayloadStreamId(pending.payload);
-  return streamId === undefined || streamId === activeStreamId;
+  if (streamId === undefined || streamId === selectedStreamId) return true;
+  const asking = view.streams.get(streamId);
+  return (
+    asking?.ancestors.some((ancestor) => ancestor.id === selectedStreamId) ??
+    false
+  );
 }
 
 export function foregroundEscapeAction({

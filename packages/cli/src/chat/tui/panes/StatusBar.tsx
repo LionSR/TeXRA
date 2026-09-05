@@ -21,7 +21,7 @@ import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
-  activeStreamId as activeStreamIdSignal,
+  selectedStreamId as selectedStreamIdSignal,
   rootRunPending as rootRunPendingSignal,
   rootRunStreamId as rootRunStreamIdSignal,
   sessionMeta as sessionMetaSignal,
@@ -67,7 +67,7 @@ interface StatusBarProps {
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsage = useMemo(() => new SubscriptionUsageService(), []);
   const { write: writeStderr } = useStderr();
-  const activeStreamId = useSignal(activeStreamIdSignal);
+  const activeStreamId = useSignal(selectedStreamIdSignal);
   const view = useSignal(sessionView());
   const rootStreamId = useSignal(rootStreamIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);

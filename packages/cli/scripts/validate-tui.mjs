@@ -186,11 +186,11 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_WORKFLOW_RUNNING: '1',
     },
-    // Tab to the session list, down to the workflow row, Enter opens the
-    // popup over main. The direct child's queued approval must then surface
-    // over that foreground reader instead of waiting invisibly.
-    bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, '\r'],
+    // The workflow's agent asks while main is selected. Its decision shows
+    // over main right away (the asking stream is a descendant of the
+    // selection) and the selection stays on main: no child focus, so no
+    // "Esc parent".
+    bootExpect: 'Run command?',
     expect: [
       'Run command?',
       '$ npm run compile:safe',
@@ -208,9 +208,9 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '0',
       HARNESS_PROCESS_CHILD: '1',
     },
-    bootExpect: 'Esc back',
+    bootExpect: 'Esc parent',
     keys: ['must not reach bash', '\r'],
-    expect: ['1 active', 'Esc back'],
+    expect: ['1 active', 'Esc parent'],
     unexpect: [
       'must not reach bash',
       'Harness received: must not reach bash',

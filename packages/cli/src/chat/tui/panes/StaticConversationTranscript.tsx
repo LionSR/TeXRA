@@ -25,6 +25,7 @@ import {
 import {
   ancestorPhaseLabel,
   sessionView,
+  streamLabelOf,
   streamPhaseOf,
   streamViewOf,
 } from '../state/sessionView';
@@ -136,7 +137,9 @@ interface StaticScrollbackSource {
   readonly entries: readonly TranscriptRow[] | undefined;
   readonly settledRows: number;
   readonly status: StreamPhase | undefined;
-  /** A child whose model the fold has not folded yet: the header waits. */
+  /** A child agent whose model the fold has not folded yet: the header
+   *  waits. Only an agent identity carries a model (the fold's `run.config`
+   *  rule), so a process or workflow child paints at once. */
   readonly waitingForChildIdentity: boolean;
   /** The child header; undefined paints the session (root) header. */
   readonly child: ChildHeader | undefined;
@@ -159,8 +162,7 @@ function childHeaderFor(
         ? 'workflow script'
         : 'subagent',
     phaseText: ancestorPhaseLabel(view, stream.id),
-    parentLabel:
-      parent === undefined || parent.parentId === null ? 'main' : parent.label,
+    parentLabel: parent === undefined ? 'main' : streamLabelOf(parent),
   };
 }
 
@@ -1114,6 +1116,7 @@ export function StaticConversationTranscript({
       waitingForChildIdentity:
         stream !== undefined &&
         stream.parentId !== null &&
+        stream.identity?.kind === 'agent' &&
         stream.model === null,
       child: childHeaderFor(view, scrollbackStreamId),
       hardReset:

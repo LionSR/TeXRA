@@ -81,9 +81,6 @@ import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
-import { foregroundReader } from './cliState';
-import { isWorkflowScriptStream, presentStream } from './childControls';
-import { currentView, streamViewOf } from './sessionView';
 import {
   refreshSubscriptionPreferenceViews,
   setCliCodingPlanSubscription,
@@ -455,33 +452,22 @@ async function requestRetryInteraction(
 }
 
 /**
- * Focus the asking stream and ring the terminal when a request first
- * becomes the foreground modal. One subscription per TUI session; a
- * re-presentation after a promotion never re-fires it.
+ * Ring the terminal when a request first becomes the foreground modal. One
+ * subscription per TUI session; a re-presentation after a promotion never
+ * re-fires it. The selection stays where it is: a descendant's request shows
+ * over the selected stream (`approvalVisibleForSelection`), and any other
+ * waits behind the status bar's count and the session list's marker until
+ * the user goes to it.
  */
 export function announceForegroundApprovals(): () => void {
   const announced = new Set<string>();
-  const announce = (payload: ApprovalPayload): void => {
-    const streamId = approvalPayloadStreamId(payload);
-    const reader = foregroundReader.get();
-    const view = currentView();
-    const workflowOwnsApproval =
-      streamId !== undefined &&
-      reader !== undefined &&
-      isWorkflowScriptStream(view, reader.streamId) &&
-      (streamViewOf(view, reader.streamId)?.childIds.includes(streamId) ??
-        false);
-    // Focus is this surface's own selection, never a fact.
-    if (streamId && !workflowOwnsApproval) presentStream(streamId);
-    notify('approvalNeeded');
-  };
   const check = (): void => {
     const pending = currentApproval.get();
     if (!pending) return;
     const id = pending.payload.data.requestId;
     if (announced.has(id)) return;
     announced.add(id);
-    announce(pending.payload);
+    notify('approvalNeeded');
   };
   check();
   return subscribeToSignalChanges([currentApproval], check);

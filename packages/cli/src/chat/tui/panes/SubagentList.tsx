@@ -15,6 +15,7 @@ import { childElapsed } from '../state/childControls';
 import {
   cumulativeUsageOf,
   sessionView,
+  streamLabelOf,
   streamPhaseOf,
   streamViewOf,
 } from '../state/sessionView';
@@ -77,11 +78,6 @@ export function ApprovalSegments({
   );
 }
 
-/** The list label of a stream: `main` for the root, the fold's label below. */
-function sessionRowLabel(stream: StreamView): string {
-  return stream.parentId === null ? 'main' : stream.label;
-}
-
 function SessionRow({
   active,
   focused,
@@ -138,7 +134,7 @@ function SessionRow({
         {CHILD_STATUS_MARKER}
       </Text>
       <RowSegment bold={active} flexShrink={1}>
-        {sessionRowLabel(stream)}
+        {streamLabelOf(stream)}
         {statusLabel ? ` ${statusLabel}` : ''}
         {stageLabel ? ` · ${stageLabel}` : ''}
         {modelLabel ? ` · ${modelLabel}` : ''}
@@ -207,7 +203,7 @@ export function SubagentList(
     const nextItems: SelectItem<StreamTabId>[] = [];
     const byValue = new Map<StreamTabId, StreamView>();
     for (const stream of streams) {
-      nextItems.push({ label: sessionRowLabel(stream), value: stream.id });
+      nextItems.push({ label: streamLabelOf(stream), value: stream.id });
       byValue.set(stream.id, stream);
     }
     return { items: nextItems, streamsByValue: byValue };

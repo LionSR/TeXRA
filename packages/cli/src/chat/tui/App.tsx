@@ -32,7 +32,7 @@ import type { SessionView, StreamView } from '@shared/session/sessionView';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import {
   appDraftDiscardActive,
-  approvalVisibleForActiveStream,
+  approvalVisibleForSelection,
   digitFromMetaShortcut,
   ESC_META_CHORD_INTERRUPT_DELAY_MS,
   foregroundEscapeAction,
@@ -52,7 +52,6 @@ import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
 import {
-  approvalPayloadStreamId,
   currentApproval,
   promoteApprovalsForStream,
 } from './state/approvalQueue';
@@ -67,7 +66,7 @@ import {
   resolveChildListTarget,
 } from './state/childControls';
 import {
-  activeStreamId as activeStreamIdSignal,
+  selectedStreamId as selectedStreamIdSignal,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
   closeInfoPane,
@@ -93,10 +92,10 @@ import {
   focusTreeOf,
   sessionView,
   streamPhaseOf,
+  streamLabelOf,
   streamViewOf,
   focusedChildAcceptsFollowUps,
   runningChildCount,
-  selectedStreamId,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
@@ -184,23 +183,15 @@ export interface AppProps {
 export function App(props: AppProps): React.JSX.Element {
   const view = useSignal(sessionView());
   const pending = useSignal(currentApproval);
-  // The Surface's selection and reader, resolved against the view at read
-  // (PRD 9): a stream that left the view falls back to the first root, and a
-  // reader whose stream left is closed.
-  const activeStreamId = selectedStreamId(
-    view,
-    useSignal(activeStreamIdSignal),
-  );
+  // The selection and the reader arrive already resolved against the view
+  // (their signals own that rule), so render derives from settled values.
+  const activeStreamId = useSignal(selectedStreamIdSignal);
   const rootStreamId = useSignal(rootStreamIdSignal);
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
   const goalAutoApproveAll = useSignal(goalAutoApproveAllSignal);
   const infoPane = useSignal(infoPaneSignal);
-  const selectedReader = useSignal(foregroundReaderSignal);
-  const foregroundReader =
-    selectedReader !== undefined && view.streams.has(selectedReader.streamId)
-      ? selectedReader
-      : undefined;
+  const foregroundReader = useSignal(foregroundReaderSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const formBusy = formProgress?.status === 'running';
@@ -219,26 +210,10 @@ export function App(props: AppProps): React.JSX.Element {
     () => executionLabelsOf(view),
     [view],
   );
-  const foregroundWorkflowStreamId =
-    foregroundReader !== undefined &&
-    isWorkflowScriptStream(view, foregroundReader.streamId)
-      ? foregroundReader.streamId
-      : undefined;
-  const foregroundWorkflowChildStreamIds =
-    foregroundWorkflowStreamId === undefined
-      ? undefined
-      : streamViewOf(view, foregroundWorkflowStreamId)?.childIds;
-  const pendingApprovalStreamId = pending
-    ? approvalPayloadStreamId(pending.payload)
-    : undefined;
-  const foregroundApprovalStreamId =
-    pendingApprovalStreamId !== undefined &&
-    foregroundWorkflowChildStreamIds?.includes(pendingApprovalStreamId) === true
-      ? pendingApprovalStreamId
-      : foregroundWorkflowStreamId;
-  const activeApprovalVisible = approvalVisibleForActiveStream({
-    activeStreamId: foregroundApprovalStreamId ?? activeStreamId,
+  const activeApprovalVisible = approvalVisibleForSelection({
     pending,
+    selectedStreamId: activeStreamId,
+    view,
   });
   const childListTarget = resolveChildListTarget(view, activeStreamId);
   const stdin = useStdin();
@@ -416,9 +391,10 @@ export function App(props: AppProps): React.JSX.Element {
         ) : null;
       case 'transcriptReader': {
         if (foregroundReader?.kind !== 'transcript') return null;
-        const label =
-          streamViewOf(view, foregroundReader.streamId)?.label ??
-          foregroundReader.streamId;
+        const stream = streamViewOf(view, foregroundReader.streamId);
+        const label = stream
+          ? streamLabelOf(stream)
+          : foregroundReader.streamId;
         return (
           <TranscriptReader
             availableRows={availableRows}
@@ -466,9 +442,10 @@ export function App(props: AppProps): React.JSX.Element {
       }
       case 'workPlanReader': {
         if (foregroundReader?.kind !== 'workPlan') return null;
-        const label =
-          streamViewOf(view, foregroundReader.streamId)?.label ??
-          foregroundReader.streamId;
+        const stream = streamViewOf(view, foregroundReader.streamId);
+        const label = stream
+          ? streamLabelOf(stream)
+          : foregroundReader.streamId;
         return (
           <WorkPlanReader
             availableRows={availableRows}
@@ -540,7 +517,7 @@ export function App(props: AppProps): React.JSX.Element {
 
   const handleBareEscape = (streamId: StreamTabId): boolean => {
     if (
-      activeStreamIdSignal.get() !== streamId ||
+      selectedStreamIdSignal.get() !== streamId ||
       !bareEscapeActive(streamId)
     ) {
       return false;
@@ -600,12 +577,12 @@ export function App(props: AppProps): React.JSX.Element {
     if (pendingEscape !== undefined) {
       clearPendingEscapeInterrupt();
       if (isEscapeInput(input, key)) {
-        const previousStreamId = activeStreamIdSignal.get();
+        const previousStreamId = selectedStreamIdSignal.get();
         const handledPendingEscape = handlePendingBareEscape(
           pendingEscape.streamId,
           pendingEscape.parentStreamId,
         );
-        const currentStreamId = activeStreamIdSignal.get();
+        const currentStreamId = selectedStreamIdSignal.get();
         if (
           currentStreamId === undefined ||
           (handledPendingEscape && currentStreamId === previousStreamId) ||

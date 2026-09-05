@@ -21,6 +21,7 @@ import {
   type SessionView,
   type StreamView,
 } from '@shared/session/sessionView';
+import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
@@ -135,8 +136,9 @@ export function makeStreamView(over: StreamViewOverrides): StreamView {
 /**
  * A view over the given streams: `order` lists the roots in the order
  * given, each parent's `childIds` are completed from the children's
- * `parentId` when the caller did not state them, and every stream's
- * `rollup` counts its descendants the way the fold does.
+ * `parentId` when the caller did not state them (in the fold's
+ * `streamOrdering`: newest `createdAt` first, ties by id), and every
+ * stream's `rollup` counts its descendants the way the fold does.
  */
 export function viewWith(
   streams: readonly StreamView[],
@@ -144,15 +146,31 @@ export function viewWith(
 ): SessionView {
   const byId = new Map<StreamTabId, StreamView>();
   for (const stream of streams) byId.set(stream.id, stream);
+  const completed = new Set<StreamTabId>();
   for (const stream of streams) {
     if (stream.parentId === null) continue;
     const parent = byId.get(stream.parentId);
     if (parent && !parent.childIds.includes(stream.id)) {
+      completed.add(parent.id);
       byId.set(parent.id, {
         ...parent,
         childIds: [...parent.childIds, stream.id],
       });
     }
+  }
+  const orderingKey = (id: StreamTabId) => ({
+    name: id,
+    creationTimestamp: byId.get(id)?.createdAt ?? 0,
+  });
+  for (const parentId of completed) {
+    const parent = byId.get(parentId);
+    if (!parent) continue;
+    byId.set(parentId, {
+      ...parent,
+      childIds: [...parent.childIds].sort((a, b) =>
+        compareByNewestCreationTime(orderingKey(a), orderingKey(b)),
+      ),
+    });
   }
   const rollupOf = (
     stream: StreamView,

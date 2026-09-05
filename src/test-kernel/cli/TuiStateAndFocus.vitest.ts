@@ -70,28 +70,32 @@ const child1 = 'child-1' as StreamTabId;
 const child2 = 'child-2' as StreamTabId;
 const grandchild = 'grandchild-1' as StreamTabId;
 
-/** A root with two children, the second of which has one child. */
+/** A root with two children created in name order, the second of which has
+ *  one child. */
 function familyView(
   over: Partial<Record<StreamTabId, Partial<StreamView>>> = {},
 ) {
   const ancestorsOf = (...ids: StreamTabId[]) =>
     ids.map((id) => ({ id, label: id }));
   return viewWith([
-    makeStreamView({ id: root, ...over[root] }),
+    makeStreamView({ id: root, createdAt: 1, ...over[root] }),
     makeStreamView({
       id: child1,
+      createdAt: 2,
       parentId: root,
       ancestors: ancestorsOf(root),
       ...over[child1],
     }),
     makeStreamView({
       id: child2,
+      createdAt: 3,
       parentId: root,
       ancestors: ancestorsOf(root),
       ...over[child2],
     }),
     makeStreamView({
       id: grandchild,
+      createdAt: 4,
       parentId: child2,
       ancestors: ancestorsOf(root, child2),
       ...over[grandchild],

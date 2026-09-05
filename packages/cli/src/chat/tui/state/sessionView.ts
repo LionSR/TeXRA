@@ -95,21 +95,6 @@ export function streamViewOf(
   return streamId === undefined ? undefined : view.streams.get(streamId);
 }
 
-/**
- * The Surface's selection resolved against the view at read (PRD 9): the
- * selected stream while the view holds it; the first top-level stream once
- * it has left; the selection itself while the view holds no stream at all
- * (the pre-run local conversation is a Surface-only id). No effect watches
- * the view to clear a stale selection.
- */
-export function selectedStreamId(
-  view: SessionView,
-  selected: StreamTabId | undefined,
-): StreamTabId | undefined {
-  if (selected === undefined || view.streams.has(selected)) return selected;
-  return view.streams.size === 0 ? selected : view.order.at(0);
-}
-
 /** Whether a focused child stream takes the composer's follow-ups (PRD 10.1). */
 export function focusedChildAcceptsFollowUps(stream: StreamView): boolean {
   return (
@@ -120,8 +105,15 @@ export function focusedChildAcceptsFollowUps(stream: StreamView): boolean {
   );
 }
 
+/** The name a stream goes by on this surface: `main` for a root, the
+ *  fold's label below it. */
+export function streamLabelOf(stream: StreamView): string {
+  return stream.parentId === null ? 'main' : stream.label;
+}
+
 /**
- * The focus tree of one root: the root, then its children newest first, so
+ * The focus tree of one root: the root, then its children in the fold's
+ * `childIds` order (newest creation first, PRD 5.2 `streamOrdering`), so
  * Alt+1 names the newest child (the Surface's Alt-index rule, PRD 9). A
  * grandchild is reached through its own parent's list.
  */
@@ -131,7 +123,7 @@ export function focusTreeOf(
 ): readonly StreamTabId[] {
   const root = streamViewOf(view, rootStreamId);
   if (!root) return [];
-  return [root.id, ...root.childIds.toReversed()];
+  return [root.id, ...root.childIds];
 }
 
 /** The stream's phase: undefined before the first `status` folds. */

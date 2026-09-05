@@ -12,6 +12,7 @@ import type { AgentDelegationScope, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
 import type { WorkPlanProvenance } from '@transcript';
+import { sessionView } from './sessionView';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------
@@ -88,8 +89,26 @@ function defaultSessionMeta(): SessionMeta {
 // stream-lifecycle side effects that touch these signals alongside others
 // (e.g. `removeStream`) live in the `removeStream` section below.
 
-/** The stream currently focused in the transcript / status bar. */
+/** The Surface's selection as written by `focusStream`; renders read
+ *  `selectedStreamId`, which resolves it against the view. */
 export const activeStreamId = signal<StreamTabId | undefined>(undefined);
+
+/**
+ * The stream the transcript and status bar show: the Surface's selection
+ * resolved against the view (PRD 9). The selected stream while the view
+ * holds it; the first top-level stream once it has left; the selection
+ * itself while the view holds no stream at all (the pre-run local
+ * conversation is a Surface-only id). A computed rather than an effect that
+ * clears a stale selection, and a signal rather than a per-render derivation
+ * so every component reads one answer.
+ */
+export const selectedStreamId: Signal.Computed<StreamTabId | undefined> =
+  computed(() => {
+    const selected = activeStreamId.get();
+    const view = sessionView().get();
+    if (selected === undefined || view.streams.has(selected)) return selected;
+    return view.streams.size === 0 ? selected : view.order.at(0);
+  });
 
 /**
  * Move transcript/status focus onto a stream. Sole focus writer: a stream
@@ -203,9 +222,17 @@ type ForegroundReaderTarget =
 
 const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
 let WORK_PLAN_REQUEST_REVISION = 0;
+/** The open reader, resolved against the view like the selection: a reader
+ *  whose stream has left the view is closed. */
 export const foregroundReader: Signal.Computed<
   ForegroundReaderTarget | undefined
-> = computed(() => FOREGROUND_READER.get());
+> = computed(() => {
+  const reader = FOREGROUND_READER.get();
+  return reader !== undefined &&
+    sessionView().get().streams.has(reader.streamId)
+    ? reader
+    : undefined;
+});
 
 export function openTranscriptReader(streamId: StreamTabId): void {
   FOREGROUND_READER.set({ kind: 'transcript', streamId });

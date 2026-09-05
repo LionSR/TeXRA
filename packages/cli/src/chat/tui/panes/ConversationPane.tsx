@@ -4,7 +4,7 @@ import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
-import { activeStreamId as activeStreamIdSignal } from '../state/cliState';
+import { selectedStreamId as selectedStreamIdSignal } from '../state/cliState';
 import { sessionView, streamPhaseOf, streamViewOf } from '../state/sessionView';
 import {
   mergeLocalNotices,
@@ -117,7 +117,7 @@ function renderConversationPaneEntry({
 export function ConversationPane(
   props: ConversationPaneProps = {},
 ): React.JSX.Element {
-  const activeStreamId = useSignal(activeStreamIdSignal);
+  const activeStreamId = useSignal(selectedStreamIdSignal);
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
   const stream = streamViewOf(view, activeStreamId);

@@ -156,6 +156,7 @@ import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const STREAM_ID = 'harness-stream-1';
+const HARNESS_MODEL = 'harness-model';
 const RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID =
   'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
@@ -442,7 +443,7 @@ const HARNESS_ORCHESTRATION_HISTORY: readonly CliHistoryEntry[] =
           id: 'cccccccccccc' as ExecutionId,
           timestamp: '2026-06-06T00:02:00Z',
           agent: 'orchestrator',
-          model: 'harness-model',
+          model: HARNESS_MODEL,
           status: HISTORY_RUN_STATUS.RESUMABLE,
           resumable: true,
           inputBasename: '-',
@@ -642,7 +643,9 @@ HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
 const harnessStreams = new Set<StreamTabId>();
 
-/** Mint a stream: its `run.start` existence fact (PRD 6, item 2). */
+/** Mint a stream: its `run.start` existence fact (PRD 6, item 2), then the
+ *  `run.config` launch fact a real run publishes next, which names the model
+ *  an agent runs on (a child's scrollback header waits for it). */
 function seedStream(
   streamId: StreamTabId,
   options: {
@@ -660,14 +663,16 @@ function seedStream(
 ): void {
   if (harnessStreams.has(streamId)) return;
   harnessStreams.add(streamId);
+  const executionId = (options.executionId ?? nanoid(12)) as ExecutionId;
+  const identity = options.identity ?? {
+    kind: 'agent' as const,
+    agent: streamId.split('#')[0] ?? streamId,
+  };
   publish({
     type: 'run.start',
     aggregateId: streamId,
-    executionId: (options.executionId ?? nanoid(12)) as ExecutionId,
-    identity: options.identity ?? {
-      kind: 'agent',
-      agent: streamId.split('#')[0] ?? streamId,
-    },
+    executionId,
+    identity,
     category: options.category ?? AgentCategory.ToolUse,
     isRemote: false,
     userFollowUpSupport:
@@ -676,6 +681,14 @@ function seedStream(
       ? {}
       : { parentStreamId: options.parentStreamId }),
   });
+  if (identity.kind === 'agent') {
+    publish({
+      type: 'run.config',
+      aggregateId: streamId,
+      executionId,
+      config: { model: HARNESS_MODEL },
+    });
+  }
 }
 
 /** Place a stream in a phase: the status fact every renderer folds. */
@@ -1037,7 +1050,7 @@ function makeRetryApprovalPayload(): RetryPermission {
     requestId: `harness-retry-${nanoid()}`,
     streamId: STREAM_ID,
     operation: 'Model request',
-    model: 'harness-model',
+    model: HARNESS_MODEL,
     errorMessage: RETRY_APPROVAL_CHATGPT
       ? 'ChatGPT subscription usage limit reached. Resets in 2h.'
       : 'HTTP 429 Too Many Requests',
@@ -1225,7 +1238,7 @@ function harnessInitialEntries(): StreamLogAppendInput[] {
 sessionMeta.set({
   agent: 'chat',
   category: AgentCategory.ToolUse,
-  model: 'harness-model',
+  model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
@@ -1509,11 +1522,16 @@ if (SHOW_EDIT_APPROVAL) {
   }
 }
 
+// The running workflow exists before its agent asks below: a request names
+// a stream the fold already holds, the way a real run's does.
+if (SHOW_WORKFLOW_RUNNING) {
+  seedRunningWorkflow();
+}
+
 if (SHOW_BASH_APPROVAL) {
   const showApproval = (index = 1) => {
     const permission = makeBashApprovalPayload(index);
     const streamId = permission.streamId as StreamTabId;
-    seedStream(streamId);
     return session().interactions.requestBashApproval({
       streamId,
       command: permission.command,
@@ -1956,10 +1974,6 @@ if (SHOW_TERMINAL_RESUME_REPAINT) {
     );
     void exitHarness(1);
   });
-}
-
-if (SHOW_WORKFLOW_RUNNING) {
-  seedRunningWorkflow();
 }
 
 if (SHOW_PROCESS_CHILD) {

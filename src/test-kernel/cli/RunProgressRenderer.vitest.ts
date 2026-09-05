@@ -632,9 +632,11 @@ describe('CLI run progress renderer', () => {
       }),
     ]);
 
+    // The newest child leads the summary: `childIds` is the fold's
+    // `streamOrdering` (newest creation first).
     expect(output.text).toBe(
       'coordinator main.tex · 0s\n' +
-        'coordinator main.tex · subagents: reviewer — reviewing chapter.tex +2 · 0s\n',
+        'coordinator main.tex · subagents: proofreader +2 · 0s\n',
     );
   });
 
