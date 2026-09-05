@@ -15,7 +15,6 @@
 import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
   InquiryThreadIdSchema,
   StreamTabIdSchema,
@@ -41,9 +40,6 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     detachActiveChildren: z.boolean().nullish(),
   }),
   z.object({ kind: z.literal('stream.delete'), ...streamScoped }),
-  /** A session operation: it names no stream, so it works from the New-task
-   *  state and survives one stream being removed concurrently. */
-  z.object({ kind: z.literal('stream.deleteAll') }),
   z.object({ kind: z.literal('stream.compact'), ...streamScoped }),
   z.object({
     kind: z.literal('followUp.send'),
@@ -134,18 +130,12 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
    *  publishes the resulting `approval.policy` (PRD 6, item 2). */
   z.object({
     kind: z.literal('policy.set'),
-    change: z.discriminatedUnion('field', [
-      z.object({
-        field: z.literal('policy'),
-        policy: TexraApprovalPolicySchema,
-      }),
-      z.object({
-        field: z.literal('bypass'),
-        ...streamScoped,
-        bypass: z.enum(APPROVAL_BYPASS_KINDS),
-        enabled: z.boolean(),
-      }),
-    ]),
+    change: z.object({
+      field: z.literal('bypass'),
+      ...streamScoped,
+      bypass: z.enum(APPROVAL_BYPASS_KINDS),
+      enabled: z.boolean(),
+    }),
   }),
   /** A workflow-script run's grandchild `agent()` call, by the execution id
    *  the child list, focus, and kill already share. */
@@ -170,12 +160,6 @@ export const OutcomeSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('deleted'),
     result: z.enum(['deleted', 'active', 'failed', 'superseded']),
-  }),
-  z.object({
-    kind: z.literal('deletedAll'),
-    deleted: z.int().nonnegative(),
-    active: z.int().nonnegative(),
-    failed: z.int().nonnegative(),
   }),
 ]);
 export type Outcome = z.infer<typeof OutcomeSchema>;

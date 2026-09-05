@@ -826,13 +826,14 @@ is C3's view from the fold's side. Emission for everything is `SessionHandle.eve
 
 Agreed additions and changes (substrate owner, 2026-09-03):
 
-1. **`approval.requested` and `approval.resolved`**, run-scoped
-   `AgentEvent`s; resolved carries the request id. Payload is what the UI
+1. **`approval.requested` and `approval.resolved`**, run-scoped session
+   facts `SessionHostInteractions` publishes directly as drafts (they are
+   not trace `AgentEvent`s); resolved carries the request id. Payload is what the UI
    shows (diff, command, question), never host handles. Today these travel
    only on the `HostInteractions` port, so a pending approval does not
    survive a restart.
 2. **`approval.policy`**, run-scoped, carrying the full policy snapshot
-   after a change, emitted by the single policy authority
+   after a change, published directly as a draft by the single policy authority
    (`src/shared/approvalPolicy.ts`, pinned by
    `approvalPolicyAuthorityRatchet.vitest.ts`). The **initial** snapshot is a
    field on the `run.start` payload rather than a separate event at the

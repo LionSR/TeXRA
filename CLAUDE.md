@@ -114,9 +114,11 @@ Also: `src/shared/` is for wire contracts and UI-shared message types — don't
 add new `@agent/*` imports there; host-neutral orchestration goes in
 `src/controllers/`.
 
-**Event channels.** New run-scoped facts extend `AgentEvent` (trace);
-session-scoped facts extend the `SessionEvent` schema
-(`src/shared/schemas/sessionEvent.ts`). Don't add a new `bus.emit` from a
+**Event channels.** New facts a run's trace emits extend `AgentEvent`
+(trace) and reach the plane through `runEventDraft`; facts the session itself
+authors (lifecycle, status, approvals) extend the `SessionEvent` schema
+(`src/shared/schemas/sessionEvent.ts`) and are published as drafts through
+`SessionHandle.publish`. Don't add a new `bus.emit` from a
 VS Code-free zone and don't add a new subscribe surface. (Ruled in
 `docs/proposals/2026-06-10-error-pipeline-and-ownership.md`. The `src/tools`
 emit sites this once grandfathered have since migrated to session-owned

@@ -334,10 +334,13 @@ export class SessionHandle {
    * section 6, item 2), for a change after the run's `run.start`.
    */
   private publishApprovalPolicy(streamId: StreamTabId): void {
-    this.publishRunEvent(streamId, {
-      type: 'approval.policy',
-      snapshot: this.approvalPolicySnapshotFor(streamId),
-    });
+    this.publish([
+      {
+        type: 'approval.policy',
+        aggregateId: streamId,
+        snapshot: this.approvalPolicySnapshotFor(streamId),
+      },
+    ]);
   }
 
   /** Drain one execution's pending trace, or every trace during shutdown. */

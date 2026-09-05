@@ -16,11 +16,9 @@ import type {
   RawAcceptedSkill,
   AddOutputFilesPayload,
   AgentCategory,
-  ApprovalPolicySnapshot,
   ConversationProgress,
   GoalPausedPayload,
   ExecutionId,
-  PermissionPayload,
   RetryErrorInfo,
   RunIdentity,
   RunOutcome,
@@ -87,36 +85,6 @@ export interface StageStartEvent extends StageStamp {
   readonly kind?: 'run' | 'round' | 'phase' | 'session';
   readonly index?: number;
   readonly total?: number;
-}
-
-/**
- * A response-bearing host interaction (approval, plan, proposal, retry, user
- * question) was requested for the run. Payload is what the UI shows, never a
- * host handle, so a pending approval survives a restart as a fact. Emitted by
- * `SessionHostInteractions` through the session hub; `approval.resolved`
- * carries the same `requestId` however the request settled.
- */
-interface ApprovalRequestedEvent extends StageStamp {
-  readonly type: 'approval.requested';
-  readonly requestId: string;
-  readonly payload: PermissionPayload;
-}
-
-/** The request settled, cancelled, or was rejected by the host. */
-interface ApprovalResolvedEvent extends StageStamp {
-  readonly type: 'approval.resolved';
-  readonly requestId: string;
-}
-
-/**
- * The run's full approval-policy snapshot after a change, emitted only by
- * the session's approval authority (`SessionHandle.setApprovalPolicy` and
- * the bypass values `streamApprovalQueue.ts` owns): never a toggle delta, so
- * the fold keeps latest-of-type per run.
- */
-interface ApprovalPolicyEvent extends StageStamp {
-  readonly type: 'approval.policy';
-  readonly snapshot: ApprovalPolicySnapshot;
 }
 
 /** Mutable persisted run config changed after run.start, e.g. model switch. */
@@ -398,9 +366,6 @@ export interface ResultEvent extends StageStamp {
 export type AgentEvent =
   | LogEvent
   | RunConfigEvent
-  | ApprovalRequestedEvent
-  | ApprovalResolvedEvent
-  | ApprovalPolicyEvent
   | StageStartEvent
   | StageEndEvent
   | ToolStartEvent

@@ -14,7 +14,6 @@ import {
   defaultSession,
   initializeBundledPrompts,
   initializeDefaultSession,
-  processOwnerId,
   teardownDefaultSession,
 } from '@agent/runtime';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
@@ -137,7 +136,7 @@ let processRuntime: ProcessRuntime | undefined;
  */
 async function installRuntime(): Promise<void> {
   processRuntime = installProcessRuntime(
-    processOwnerId(await platform().processes.selfIdentity()),
+    await platform().processes.selfIdentity(),
   );
 }
 

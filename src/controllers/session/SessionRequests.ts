@@ -12,10 +12,10 @@
  * process holds (`readOnly`) is `NotOwner`. In process (the TUI, headless) the Effect's own result is
  * the response; a bridge posts it as the `Response` of 8.4.
  *
- * Built per `SessionHandle` by `sessionLayer.ts`'s opener, under the
- * handle's scope: it acts on exactly the session it was built for.
+ * Built per `SessionHandle` by `sessionLayer.ts`'s opener: it acts on
+ * exactly the session it was built for.
  */
-import { Context, Effect, Layer, SubscriptionRef } from 'effect';
+import { Effect, SubscriptionRef, type Context } from 'effect';
 
 import type { SessionStores } from '@agent/storage';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -23,7 +23,8 @@ import type {
   PlanApprovalResult,
   ProposalResult,
 } from '@agent/runtime/HostInteractions';
-import { SessionEventLog } from '@agent/runtime/SessionEvents';
+import type { SessionEventLog } from '@agent/runtime/SessionEvents';
+import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import {
@@ -38,50 +39,30 @@ import { createSessionStores } from './createSessionStores';
 
 const done: Outcome = { kind: 'done' };
 
-export class SessionRequests extends Context.Service<
-  SessionRequests,
-  {
-    readonly request: (
-      req: RuntimeRequest,
-    ) => Effect.Effect<Outcome, RequestError>;
-  }
->()('@texra/session/SessionRequests') {
-  static layer(
-    session: SessionHandle,
-  ): Layer.Layer<SessionRequests, never, SessionEventLog> {
-    return Layer.effect(
-      SessionRequests,
-      Effect.gen(function* () {
-        const log = yield* SessionEventLog;
-        // The store lifecycle owner, built on the first request that
-        // deletes: it holds the deletion queues, which only those need.
-        let stores: SessionStores | undefined;
-        const request = Effect.fn('SessionRequests.request')(function* (
-          req: RuntimeRequest,
-        ) {
-          yield* admit(session, log, req);
-          return yield* handle(
-            session,
-            () => (stores ??= createSessionStores(session)),
-            req,
-          );
-        });
-        return { request };
-      }),
+/** The session's request handler, admitting on the log's sequence table. */
+export function sessionRequests(
+  session: SessionHandle,
+  log: Pick<Context.Service.Shape<typeof SessionEventLog>, 'exists'>,
+): SessionGraph['requests'] {
+  // The store lifecycle owner, built on the first request that deletes: it
+  // holds the deletion queues, which only those need.
+  let stores: SessionStores | undefined;
+  const request = Effect.fn('SessionRequests.request')(function* (
+    req: RuntimeRequest,
+  ) {
+    yield* admit(session, log, req);
+    return yield* handle(
+      session,
+      () => (stores ??= createSessionStores(session)),
+      req,
     );
-  }
+  });
+  return { request };
 }
 
-/** The stream a request acts on, or null for a session operation. */
-function targetStream(req: RuntimeRequest): StreamTabId | null {
-  switch (req.kind) {
-    case 'stream.deleteAll':
-      return null;
-    case 'policy.set':
-      return req.change.field === 'bypass' ? req.change.streamId : null;
-    default:
-      return req.streamId;
-  }
+/** The stream a request acts on. */
+function targetStream(req: RuntimeRequest): StreamTabId {
+  return req.kind === 'policy.set' ? req.change.streamId : req.streamId;
 }
 
 /** Existence from the log's sequence table, ownership from the view: no
@@ -95,7 +76,6 @@ function admit(
   req: RuntimeRequest,
 ): Effect.Effect<void, RequestError> {
   const streamId = targetStream(req);
-  if (streamId === null) return Effect.void;
   return Effect.flatMap(
     log.exists(streamId),
     (exists): Effect.Effect<void, RequestError> => {
@@ -175,15 +155,6 @@ function handle(
     case 'stream.delete':
       return Effect.promise(() => stores().deleteStream(req.streamId)).pipe(
         Effect.map((result): Outcome => ({ kind: 'deleted', result })),
-      );
-    case 'stream.deleteAll':
-      return Effect.promise(() => stores().deleteAll()).pipe(
-        Effect.map((result): Outcome => ({
-          kind: 'deletedAll',
-          deleted: result.deleted.size,
-          active: result.active.size,
-          failed: result.failed.size,
-        })),
       );
     case 'stream.compact':
       return Effect.suspend((): Effect.Effect<Outcome, RequestError> => {
@@ -348,10 +319,6 @@ function handle(
     case 'policy.set':
       return Effect.sync(() => {
         const { change } = req;
-        if (change.field === 'policy') {
-          session.setApprovalPolicy(change.policy);
-          return done;
-        }
         switch (change.bypass) {
           case 'bash':
             session.approvals.bash.bypass.setBypass(

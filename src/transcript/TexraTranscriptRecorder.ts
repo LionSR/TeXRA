@@ -802,11 +802,8 @@ export function attachTranscriptRecorder(
           return;
 
         case 'run.config':
-        case 'approval.requested':
-        case 'approval.resolved':
-        case 'approval.policy':
-          // Run identity/config and approval facts drive host state through
-          // the session plane. They are not transcript rows.
+          // Run identity/config drives host state through the session
+          // plane. It is not a transcript row.
           return;
 
         case 'child.activity':

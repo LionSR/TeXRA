@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { app } from 'electron';
-import { initializeBundledPrompts, processOwnerId } from '@agent/runtime';
+import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
@@ -132,7 +132,7 @@ export async function initializeElectronPlatform(
   // The one Effect runtime of this process (PRD 7.7): every paper's session
   // graph and every Promise-facing fiber run on it.
   const runtime = installProcessRuntime(
-    processOwnerId(await platform().processes.selfIdentity()),
+    await platform().processes.selfIdentity(),
   );
   initProcessSettingHost('desktop');
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
