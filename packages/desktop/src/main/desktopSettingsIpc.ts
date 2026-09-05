@@ -10,7 +10,7 @@ import {
 import { appSignals } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import type { ConfigProvider } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
@@ -28,7 +28,6 @@ import {
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
@@ -86,14 +85,15 @@ export interface DesktopSettingsIpcOptions {
   agentSettingsController: DesktopAgentSettingsController;
   credentialSettingsController: DesktopCredentialSettingsController;
   toolingSettingsController: DesktopToolingSettingsController;
-  state: SettingsStatePorts;
-  config: ConfigProvider;
+  /** Main-process global store, threaded in by the caller (see mainViewIpc). */
+  globalState: StateStore;
   ui: DesktopSettingsUiHost;
   /**
-   * The session of the paper this settings surface serves. Goal mutations are
-   * emitted on it, so the Goals tab follows a run without a manual refresh,
-   * and app-signal listeners re-read the paper's state inside its scope. The
-   * desktop has no process-default session, so it must be passed.
+   * The session of the paper this settings surface serves. Its roots supply
+   * the paper's workspace state and config; goal mutations are emitted on it,
+   * so the Goals tab follows a run without a manual refresh, and app-signal
+   * listeners re-read the paper's state inside its scope. The desktop has no
+   * process-default session, so it must be passed.
    */
   session: SessionHandle;
 }
@@ -116,7 +116,8 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): DesktopSettingsIpc {
-  const { globalState, workspaceState } = options.state;
+  const { globalState } = options;
+  const { workspaceState, config } = options.session.roots;
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
   const onError = createDesktopErrorReporter(options.ui.onError, (error) => {
@@ -141,7 +142,7 @@ export function createDesktopSettingsIpc(
   });
 
   const settingsStores: SettingsStores = {
-    config: options.config,
+    config,
     workspaceState,
     globalState,
   };

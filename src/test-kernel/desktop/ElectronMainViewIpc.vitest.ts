@@ -59,6 +59,8 @@ interface MainViewIpcModule {
       settings: { handleMessage(message: { command: string }): boolean };
       progress: { handleMessage(message: { command: string }): boolean };
       onboarding: { handleMessage(message: { command: string }): boolean };
+      papers: { handleMessage(message: { command: string }): boolean };
+      inActiveSession(dispatch: () => void): void;
       shellActions: TestDesktopShellActions;
       getAuthStatus?: () => Promise<{ authenticated: boolean }>;
       loadStartupOptions?: () => Promise<{
@@ -194,6 +196,8 @@ function createMainViewCommandCapabilities() {
     settings: createUnhandledCapability(),
     progress: createUnhandledCapability(),
     onboarding: createUnhandledCapability(),
+    papers: createUnhandledCapability(),
+    inActiveSession: (dispatch: () => void) => dispatch(),
     globalState: new FakeStateStore(),
     logs: {
       readLog: () => ({ path: undefined, text: '', truncated: false }),

@@ -119,7 +119,6 @@ jobs:
               body: '⏳ Claude ran into a quota or rate limit. Will retry on the next interaction.\n\n(See [action logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details)'
             });
 
-
       - name: Auto-create PR for completed issue work
         if: |
           !cancelled() &&

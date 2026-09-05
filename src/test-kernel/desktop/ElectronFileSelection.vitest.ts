@@ -79,7 +79,13 @@ describe('desktop file selection', () => {
     const messages: unknown[] = [];
     const files = createDesktopFileSelection({
       postToRenderer: (message) => messages.push(message),
-      getWorkspacePath: () => workspacePath,
+      workspacePath,
+      showOpenFileDialog: async () => undefined,
+      // A listing failure the test did not ask for surfaces as an unhandled
+      // rejection instead of vanishing.
+      onError: (error) => {
+        throw error;
+      },
       ...overrides,
     });
     return { files, messages };
@@ -175,7 +181,7 @@ describe('desktop file selection', () => {
   it.each([
     {
       name: 'without a workspace',
-      overrides: { getWorkspacePath: () => undefined },
+      overrides: { workspacePath: undefined },
       request: { fileType: 'input' },
     },
     {
@@ -226,7 +232,7 @@ describe('desktop file selection', () => {
   it('reports asynchronous file-listing errors without rejecting from handleMessage', async () => {
     const onError = vi.fn();
     const { files } = await createFileSelection({
-      getWorkspacePath: () => join(workspacePath, 'missing'),
+      workspacePath: join(workspacePath, 'missing'),
       onError,
     });
 

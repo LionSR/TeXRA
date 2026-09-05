@@ -12,107 +12,106 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { toLogData } from './desktopLogUtils.js';
 
-interface DesktopResumeContext {
-  readonly session: SessionHandle;
-  readonly logger: AgentTrace;
-  readonly isCancellationRequested: () => boolean;
-}
-
 /**
  * Process-lifetime owner of desktop stream resumption. One process holds a
  * session per open paper; a stream resumes in the session whose transcripts
- * hold it, inside that session's scope.
+ * hold it, inside that session's scope. The open-session set is read from
+ * the paper registry, so a closing paper stops being a resume target the
+ * moment the registry drops it.
  */
 export class DesktopProcessResumeOwner {
-  private readonly contexts = new Set<DesktopResumeContext>();
+  private readonly logger: AgentTrace =
+    createChannelTrace('DesktopAgentResume');
+  private shuttingDown = false;
 
-  /** Attach one paper's session once it is ready. */
-  attach(options: { session: SessionHandle }): () => void {
-    let cancelled = false;
-    const context: DesktopResumeContext = {
-      ...options,
-      logger: createChannelTrace('DesktopAgentResume'),
-      isCancellationRequested: () => cancelled,
-    };
-    this.contexts.add(context);
-    return () => {
-      cancelled = true;
-      this.contexts.delete(context);
-    };
+  constructor(
+    private readonly options: {
+      /** The sessions open right now: every paper's and the no-workspace one. */
+      readonly sessions: () => Iterable<SessionHandle>;
+    },
+  ) {}
+
+  /** Shutdown: no resume launches from here on, and in-flight ones cancel. */
+  disable(): void {
+    this.shuttingDown = true;
   }
 
   tryResumeStream(
     streamId: StreamTabId,
     recovery?: RecoveryContinuation,
   ): Promise<boolean> {
-    for (const context of this.contexts) {
-      if (!context.session.transcripts.has(streamId)) continue;
+    for (const session of this.options.sessions()) {
+      if (!session.transcripts.has(streamId)) continue;
       return Promise.resolve(
-        runInSession(context.session, () =>
-          resumeDesktopStream(streamId, context, recovery),
+        runInSession(session, () =>
+          this.resumeDesktopStream(streamId, session, recovery),
         ),
       );
     }
     return Promise.resolve(false);
   }
-}
 
-async function resumeDesktopStream(
-  streamId: StreamTabId,
-  context: DesktopResumeContext,
-  recovery: RecoveryContinuation | undefined,
-): Promise<boolean> {
-  const { session } = context;
-  if (!session.transcripts.has(streamId)) return false;
-  let transcriptMissing = false;
-  const isCancellationRequested = (): boolean => {
-    if (!transcriptMissing && !session.transcripts.has(streamId)) {
-      transcriptMissing = true;
-    }
-    return context.isCancellationRequested() || transcriptMissing;
-  };
-  // The resident transcript index is a cache of this process; the stream may
-  // have been deleted from the durable transcript store by another process
-  // since it was loaded. Read the store before resuming: neither the lease
-  // (a deleted stream holds none) nor the execution lane (in-process only)
-  // sees that fact.
-  if (!(await session.transcripts.hasAuthoritativeStream(streamId))) {
+  private isOpen(session: SessionHandle): boolean {
+    for (const open of this.options.sessions())
+      if (open === session) return true;
     return false;
   }
-  if (isCancellationRequested()) return false;
-  const terminalResult = trackTerminalResultPresentation(
-    session,
-    (event) => event.streamId === streamId,
-  );
-  try {
-    return await resumeStreamWithRefusalNotice(streamId, {
-      session,
-      recovery,
-      runtimeUnavailableTools: (
-        await import('@tools/registry')
-      ).getDefaultUnavailableToolNames('desktop'),
-      isCancellationRequested,
-      executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
-        launchDesktopAgent(
-          { kind: 'resume', config, executionId: id },
-          { session },
-          { modelHandlerCompatibilityKey, suppressErrorNotification: true },
-        ),
-    });
-  } catch (error) {
+
+  private async resumeDesktopStream(
+    streamId: StreamTabId,
+    session: SessionHandle,
+    recovery: RecoveryContinuation | undefined,
+  ): Promise<boolean> {
+    let transcriptMissing = false;
+    const isCancellationRequested = (): boolean => {
+      if (!transcriptMissing && !session.transcripts.has(streamId)) {
+        transcriptMissing = true;
+      }
+      return this.shuttingDown || transcriptMissing || !this.isOpen(session);
+    };
+    // The resident transcript index is a cache of this process; the stream may
+    // have been deleted from the durable transcript store by another process
+    // since it was loaded. Read the store before resuming: neither the lease
+    // (a deleted stream holds none) nor the execution lane (in-process only)
+    // sees that fact.
+    if (!(await session.transcripts.hasAuthoritativeStream(streamId))) {
+      return false;
+    }
     if (isCancellationRequested()) return false;
-    context.logger.error(`Failed to resume desktop stream ${streamId}`, {
-      data: toLogData(error),
-    });
-    terminalResult.reportUnhandled(() =>
-      session.interactions.emit(
-        'requestShowError',
-        { message: `Resume failed: ${toErrorMessage(error)}` },
-        { replayWhenAttached: true },
-      ),
+    const terminalResult = trackTerminalResultPresentation(
+      session,
+      (event) => event.streamId === streamId,
     );
-    return false;
-  } finally {
-    terminalResult.dispose();
+    try {
+      return await resumeStreamWithRefusalNotice(streamId, {
+        session,
+        recovery,
+        runtimeUnavailableTools: (
+          await import('@tools/registry')
+        ).getDefaultUnavailableToolNames('desktop'),
+        isCancellationRequested,
+        executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
+          launchDesktopAgent(
+            { kind: 'resume', config, executionId: id },
+            { session },
+            { modelHandlerCompatibilityKey, suppressErrorNotification: true },
+          ),
+      });
+    } catch (error) {
+      if (isCancellationRequested()) return false;
+      this.logger.error(`Failed to resume desktop stream ${streamId}`, {
+        data: toLogData(error),
+      });
+      terminalResult.reportUnhandled(() =>
+        session.interactions.emit(
+          'requestShowError',
+          { message: `Resume failed: ${toErrorMessage(error)}` },
+          { replayWhenAttached: true },
+        ),
+      );
+      return false;
+    } finally {
+      terminalResult.dispose();
+    }
   }
 }

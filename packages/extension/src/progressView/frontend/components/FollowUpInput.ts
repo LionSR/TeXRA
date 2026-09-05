@@ -47,7 +47,6 @@ import './QueuedFollowUps';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 /** True when any shadow host or light ancestor has `data-desktop-view`. */
 function hostHasDesktopViewAttribute(start: Element): boolean {
@@ -108,7 +107,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
   @state() private statusAnnouncement = '';
 
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
-  declare private textAreaEl: HTMLElement | null;
+  declare private textAreaEl: HTMLTextAreaElement | null;
 
   @query('wa-details')
   declare private detailsEl: (HTMLElement & { open: boolean }) | null;
@@ -298,26 +297,27 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
         }
 
         <div class="composer-surface">
-          <wa-textarea
+          <label for=${ELEMENT_IDS.FOLLOW_UP_INPUT} class="visually-hidden"
+            >Follow-up message</label
+          >
+          <textarea
             id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
             name="follow-up-message"
             placeholder="Message TeXRA…"
             rows="2"
-            resize="vertical"
             autocomplete="off"
             spellcheck="true"
+            aria-describedby=${ELEMENT_IDS.FOLLOW_UP_HINT}
             ?disabled=${this.sending}
             .value=${live(this.value)}
             @input=${this.handleInput}
             @keydown=${this.handleKeydown}
             @paste=${this.handlePaste}
-          >
-            <span slot="label" class="visually-hidden">Follow-up message</span>
-            <span slot="hint" class="visually-hidden">
-              Press Enter to send or Shift+Enter for a new line. Paste images to
-              attach them.
-            </span>
-          </wa-textarea>
+          ></textarea>
+          <div id=${ELEMENT_IDS.FOLLOW_UP_HINT} class="visually-hidden">
+            Press Enter to send or Shift+Enter for a new line. Paste images to
+            attach them.
+          </div>
 
           <div class="follow-up-actions">
             ${

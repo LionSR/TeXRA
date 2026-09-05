@@ -358,7 +358,8 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     snapshots: ProgressSnapshotStore,
   ): SessionHandle;
   createProgressSnapshotStore(): ProgressSnapshotStore;
-  processResumeOwner: import('@desktop/main/desktopAgentResume').DesktopProcessResumeOwner;
+  /** The sessions the process resume owner reads; a test adds its own. */
+  resumeSessions: Set<SessionHandle>;
   progressSnapshotStore: ProgressSnapshotStore;
 }> {
   vi.resetModules();
@@ -450,8 +451,10 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   );
   const { DesktopProcessResumeOwner } =
     await import('@desktop/main/desktopAgentResume');
-  const processResumeOwner = new DesktopProcessResumeOwner();
-  resumeDelegate = processResumeOwner;
+  const resumeSessions = new Set<SessionHandle>();
+  resumeDelegate = new DesktopProcessResumeOwner({
+    sessions: () => resumeSessions,
+  });
   const { initializeDefaultSession, SessionHandle } =
     await import('@agent/runtime/SessionHandle');
   initializeDefaultSession({
@@ -463,7 +466,7 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
       new SessionHandle({ transcripts, snapshots }),
     createProgressSnapshotStore,
     openTranscripts: () => StreamLogStore.open(),
-    processResumeOwner,
+    resumeSessions,
     progressSnapshotStore,
   };
 }
@@ -476,7 +479,7 @@ async function createBridge(
     bridgeModule,
     createSession,
     openTranscripts,
-    processResumeOwner,
+    resumeSessions,
     progressSnapshotStore,
   } = await loadBridgeModule(options);
   const transcripts = await openTranscripts();
@@ -512,7 +515,7 @@ async function createBridge(
       releaseStreamResources(stream, session);
     },
   });
-  const disposeResumeHandler = processResumeOwner.attach({ session });
+  resumeSessions.add(session);
   if (options.gateCanonicalLoad) {
     const gate = options.gateCanonicalLoad;
     const drain =
@@ -564,7 +567,7 @@ async function createBridge(
   disposeAfterTest({
     dispose: () => {
       bridge.dispose();
-      disposeResumeHandler();
+      resumeSessions.delete(session);
       detachTerminalResultToast();
       session.dispose();
     },
@@ -576,7 +579,7 @@ async function createBridge(
 /**
  * Resume moved off the bridge: desktop stream resumption is owned by the
  * process resume owner reached through `platform().agentResume`, which the
- * harness attaches to the same session the bridge runs on.
+ * harness lists the same session the bridge runs on.
  */
 async function tryResumeStream(streamId: string): Promise<boolean> {
   const { platform } = await import('@platform/platform');
@@ -2668,7 +2671,7 @@ describe('DesktopProgressBridge', () => {
         createProgressSnapshotStore,
         createSession,
         openTranscripts,
-        processResumeOwner,
+        resumeSessions,
       } = await loadBridgeModule({});
       const { AgentExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
@@ -2690,9 +2693,7 @@ describe('DesktopProgressBridge', () => {
       const processStores =
         await initializeDesktopProcessStores(processSession);
       const { stores: sessionStores } = processStores;
-      const disposeResumeHandler = processResumeOwner.attach({
-        session: processSession,
-      });
+      resumeSessions.add(processSession);
       snapshotFacts(progressSnapshotStore).setRunConfig(
         streamId,
         AgentConfigSchema.parse({
@@ -2811,7 +2812,7 @@ describe('DesktopProgressBridge', () => {
       disposeAfterTest({
         dispose: () => {
           for (const bridge of presentationBridges) bridge.dispose();
-          disposeResumeHandler();
+          resumeSessions.delete(processSession);
           detachTerminalResultToast();
           processStores.dispose();
           processSession.dispose();
@@ -3536,10 +3537,10 @@ describe('DesktopProgressBridge', () => {
       const leaseReleased = createDeferred();
       const executionListing = await import('@agent/storage/executionListing');
       const waitForRelease = vi
-        .spyOn(executionListing, 'readExecutionStreamIndex')
+        .spyOn(executionListing, 'listExecutionStreamReferences')
         .mockImplementation(async () => {
           await leaseReleased.promise;
-          return { byStream: new Map(), unreadable: new Map() };
+          return { references: [], unreadable: new Map() };
         });
 
       try {
@@ -3605,7 +3606,7 @@ describe('DesktopProgressBridge', () => {
       const executionListing = await import('@agent/storage/executionListing');
       vi.spyOn(
         executionListing,
-        'readExecutionStreamIndex',
+        'listExecutionStreamReferences',
       ).mockImplementationOnce(async () => {
         deletionStarted.resolve();
         await deletionGate.promise;

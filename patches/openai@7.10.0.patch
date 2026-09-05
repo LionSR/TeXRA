@@ -1,0 +1,233 @@
+diff --git a/src/lib/responses/ResponseAccumulator.ts b/src/lib/responses/ResponseAccumulator.ts
+--- a/src/lib/responses/ResponseAccumulator.ts
++++ b/src/lib/responses/ResponseAccumulator.ts
+@@ -3,6 +3,12 @@
+   accumulateResponseWithContext,
+   createResponseContext,
+ } from '../../internal/responses/response-accumulator';
++
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
+ 
+ /** A transport keepalive event that leaves the accumulated response unchanged. */
+ type ResponseKeepAliveEvent = {
+@@ -20,7 +26,7 @@
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+ export function accumulateResponse(
+-  event: ResponseStreamEvent | ResponseKeepAliveEvent,
++  event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent,
+   snapshot?: Response,
+ ): Response {
+   return accumulateResponseWithContext(event, snapshot, createResponseContext());
+diff --git a/lib/responses/ResponseAccumulator.d.ts b/lib/responses/ResponseAccumulator.d.ts
+--- a/lib/responses/ResponseAccumulator.d.ts
++++ b/lib/responses/ResponseAccumulator.d.ts
+@@ -1,4 +1,10 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.js";
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
++
+ /** A transport keepalive event that leaves the accumulated response unchanged. */
+ type ResponseKeepAliveEvent = {
+     /** Identifies a non-content keepalive event emitted by the response transport. */
+@@ -13,6 +19,6 @@
+  * in place, while response lifecycle events return a detached replacement. Event
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+-export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent, snapshot?: Response): Response;
++export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent, snapshot?: Response): Response;
+ export {};
+ //# sourceMappingURL=ResponseAccumulator.d.ts.map
+\ No newline at end of file
+diff --git a/lib/responses/ResponseAccumulator.d.mts b/lib/responses/ResponseAccumulator.d.mts
+--- a/lib/responses/ResponseAccumulator.d.mts
++++ b/lib/responses/ResponseAccumulator.d.mts
+@@ -1,4 +1,10 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.mjs";
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
++
+ /** A transport keepalive event that leaves the accumulated response unchanged. */
+ type ResponseKeepAliveEvent = {
+     /** Identifies a non-content keepalive event emitted by the response transport. */
+@@ -13,6 +19,6 @@
+  * in place, while response lifecycle events return a detached replacement. Event
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+-export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent, snapshot?: Response): Response;
++export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent, snapshot?: Response): Response;
+ export {};
+ //# sourceMappingURL=ResponseAccumulator.d.mts.map
+\ No newline at end of file
+diff --git a/src/internal/responses/response-accumulator.ts b/src/internal/responses/response-accumulator.ts
+--- a/src/internal/responses/response-accumulator.ts
++++ b/src/internal/responses/response-accumulator.ts
+@@ -11,12 +11,18 @@
+   updateOutputText,
+ } from './canonical-output-text';
+ 
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
++
+ interface ResponseKeepAliveEvent {
+   type: 'keepalive';
+   sequence_number: number;
+ }
+ 
+-type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent;
++type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent;
+ type ResponseItemScopedEvent = Extract<ResponseAccumulatorEvent, { item_id: string; output_index: number }>;
+ type ResponseOutputItemEvent = Extract<
+   ResponseAccumulatorEvent,
+@@ -132,6 +138,7 @@
+       | 'response.mcp_list_tools.in_progress'
+       | 'response.mcp_list_tools.completed'
+       | 'response.mcp_list_tools.failed'
++      | 'response.metadata'
+       | 'keepalive'
+       | 'error';
+   }
+@@ -517,6 +524,7 @@
+   'response.mcp_list_tools.in_progress',
+   'response.mcp_list_tools.completed',
+   'response.mcp_list_tools.failed',
++  'response.metadata',
+   'keepalive',
+   'error',
+ ] as const);
+@@ -1154,6 +1162,7 @@
+     case 'response.mcp_list_tools.in_progress':
+     case 'response.mcp_list_tools.completed':
+     case 'response.mcp_list_tools.failed':
++    case 'response.metadata':
+     case 'keepalive':
+     case 'error': {
+       return true;
+@@ -1176,7 +1185,7 @@
+   onSanitizedEvent?: (event: ResponseStreamEvent) => void,
+ ): Response {
+   const dispatchEvent = sanitizeResponseEvent(event);
+-  if (onSanitizedEvent && dispatchEvent.type !== 'keepalive') {
++  if (onSanitizedEvent && dispatchEvent.type !== 'keepalive' && dispatchEvent.type !== 'response.metadata') {
+     onSanitizedEvent(dispatchEvent);
+   }
+ 
+diff --git a/internal/responses/response-accumulator.d.ts b/internal/responses/response-accumulator.d.ts
+--- a/internal/responses/response-accumulator.d.ts
++++ b/internal/responses/response-accumulator.d.ts
+@@ -1,10 +1,16 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.js";
+ import type { ResponseAccumulatorContext } from "./canonical-output-text.js";
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
++
+ interface ResponseKeepAliveEvent {
+     type: 'keepalive';
+     sequence_number: number;
+ }
+-type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent;
++type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent;
+ export declare function createResponseContext(): ResponseAccumulatorContext;
+ export declare function accumulateResponseWithContext(event: ResponseAccumulatorEvent, snapshot: Response | undefined, context: ResponseAccumulatorContext, rejectInvalidShellTargets?: boolean, onSanitizedEvent?: (event: ResponseStreamEvent) => void): Response;
+ export {};
+diff --git a/internal/responses/response-accumulator.d.mts b/internal/responses/response-accumulator.d.mts
+--- a/internal/responses/response-accumulator.d.mts
++++ b/internal/responses/response-accumulator.d.mts
+@@ -1,10 +1,16 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.mjs";
+ import type { ResponseAccumulatorContext } from "./canonical-output-text.mjs";
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
++
+ interface ResponseKeepAliveEvent {
+     type: 'keepalive';
+     sequence_number: number;
+ }
+-type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent;
++type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent;
+ export declare function createResponseContext(): ResponseAccumulatorContext;
+ export declare function accumulateResponseWithContext(event: ResponseAccumulatorEvent, snapshot: Response | undefined, context: ResponseAccumulatorContext, rejectInvalidShellTargets?: boolean, onSanitizedEvent?: (event: ResponseStreamEvent) => void): Response;
+ export {};
+diff --git a/internal/responses/response-accumulator.js b/internal/responses/response-accumulator.js
+--- a/internal/responses/response-accumulator.js
++++ b/internal/responses/response-accumulator.js
+@@ -292,7 +292,8 @@
+     'response.mcp_list_tools.in_progress',
+     'response.mcp_list_tools.completed',
+     'response.mcp_list_tools.failed',
+-    'keepalive',
++    'response.metadata',
++  'keepalive',
+     'error',
+ ]);
+ function assertNever(_value) {
+@@ -860,7 +861,8 @@
+         case 'response.mcp_list_tools.in_progress':
+         case 'response.mcp_list_tools.completed':
+         case 'response.mcp_list_tools.failed':
+-        case 'keepalive':
++        case 'response.metadata':
++    case 'keepalive':
+         case 'error': {
+             return true;
+         }
+@@ -874,7 +876,7 @@
+ }
+ function accumulateResponseWithContext(event, snapshot, context, rejectInvalidShellTargets = false, onSanitizedEvent) {
+     const dispatchEvent = sanitizeResponseEvent(event);
+-    if (onSanitizedEvent && dispatchEvent.type !== 'keepalive') {
++    if (onSanitizedEvent && dispatchEvent.type !== 'keepalive' && dispatchEvent.type !== 'response.metadata') {
+         onSanitizedEvent(dispatchEvent);
+     }
+     if (!snapshot) {
+diff --git a/internal/responses/response-accumulator.mjs b/internal/responses/response-accumulator.mjs
+--- a/internal/responses/response-accumulator.mjs
++++ b/internal/responses/response-accumulator.mjs
+@@ -288,7 +288,8 @@
+     'response.mcp_list_tools.in_progress',
+     'response.mcp_list_tools.completed',
+     'response.mcp_list_tools.failed',
+-    'keepalive',
++    'response.metadata',
++  'keepalive',
+     'error',
+ ]);
+ function assertNever(_value) {
+@@ -856,7 +857,8 @@
+         case 'response.mcp_list_tools.in_progress':
+         case 'response.mcp_list_tools.completed':
+         case 'response.mcp_list_tools.failed':
+-        case 'keepalive':
++        case 'response.metadata':
++    case 'keepalive':
+         case 'error': {
+             return true;
+         }
+@@ -870,7 +872,7 @@
+ }
+ export function accumulateResponseWithContext(event, snapshot, context, rejectInvalidShellTargets = false, onSanitizedEvent) {
+     const dispatchEvent = sanitizeResponseEvent(event);
+-    if (onSanitizedEvent && dispatchEvent.type !== 'keepalive') {
++    if (onSanitizedEvent && dispatchEvent.type !== 'keepalive' && dispatchEvent.type !== 'response.metadata') {
+         onSanitizedEvent(dispatchEvent);
+     }
+     if (!snapshot) {

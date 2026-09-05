@@ -86,7 +86,7 @@ export class MultiAgentTab extends LitElement {
 
       .preset-card.active {
         background-color: var(--wa-color-brand-fill-quiet);
-        color: var(--wa-color-list-active-fg);
+        color: var(--wa-color-brand-on-quiet);
         border-color: var(--wa-color-focus);
       }
 

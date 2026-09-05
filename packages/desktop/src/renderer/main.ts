@@ -31,7 +31,6 @@ import {
   handleToolbarCommand,
   runCompileFixer,
   requestStreamDeselection,
-  requestStreamSwitch,
 } from '@progressView/frontend/eventHandlers';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import {
@@ -50,7 +49,6 @@ import { COMMON_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
-import type { StreamTabId } from '@shared/schemas';
 
 import { Signal, subscribeToSignalChanges } from '@shared/signals';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
@@ -922,7 +920,6 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   showLauncher: returnToLauncher,
   openWorkbench: workbench.openKind,
   showSettings: openSettingsTab,
-  showStream: switchToStream,
   openDesktopDocs: () => {
     postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
   },
@@ -960,7 +957,6 @@ const shortcutBootstrap = createDesktopShortcutBootstrap({
     createDesktopCommandPalette({
       document,
       actions: desktopRendererCommandActions,
-      getStreams: () => topLevelStreams$.get(),
       getShortcuts: () => registry.entries(),
     }),
   appendPalette: (element) => document.body.append(element),
@@ -975,11 +971,6 @@ const shortcutBootstrap = createDesktopShortcutBootstrap({
 
 function openCommandPalette(): void {
   shortcutBootstrap.open();
-}
-
-function switchToStream(streamId: StreamTabId): void {
-  if (!appState.get().streamById.has(streamId)) return;
-  requestStreamSwitch(streamId);
 }
 
 // Clear the active stream so the center pane swaps back to <main-app>.

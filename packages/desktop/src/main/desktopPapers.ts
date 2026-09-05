@@ -16,7 +16,7 @@ import {
 import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { DisposableStore } from '@platform/disposable';
-import type { ConfigProvider, StateStore } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import {
   runWithWorkspaceRoots,
   type WorkspaceRoots,
@@ -33,22 +33,12 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { COMMON_COMMANDS } from '@shared/ipc';
 import { StreamLogStore } from '@transcript';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  DESKTOP_PAPER_COMMANDS,
-  DesktopClosePaperMessageSchema,
-  DesktopSelectPaperMessageSchema,
-  type DesktopPapersMessage,
-} from '../shared/desktopPaperMessages.js';
 import { initializeDesktopProcessStores } from './desktopProcessStores.js';
-import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
-} from './desktopIpcTypes.js';
+import type { DesktopPapersMessage } from '../shared/desktopPaperMessages.js';
 
 export interface DesktopPaper {
   /** Canonical folder path, or undefined for the no-workspace session. */
@@ -78,11 +68,6 @@ interface DesktopPaperRegistryOptions {
    */
   readonly globalConfigStore: ConfigStore;
   readonly globalState: StateStore;
-  /**
-   * Process-lifetime attachment each session needs (stream resumption).
-   * Returns the detach, which closing the paper runs before its session goes.
-   */
-  attachSession(session: SessionHandle): () => void;
   warn(message: string): void;
 }
 
@@ -93,6 +78,8 @@ export interface DesktopPaperRegistry {
   list(): readonly DesktopPaper[];
   /** The paper the window shows: the active folder, else the no-workspace session. */
   active(): DesktopPaper;
+  /** The no-workspace session's paper; open for the process lifetime, never in `list()`. */
+  fallback(): DesktopPaper;
   /** Make an open paper the one the window shows, and remember it as such. */
   activate(root: string | undefined): void;
   /**
@@ -102,22 +89,9 @@ export interface DesktopPaperRegistry {
    * other papers' runs are untouched.
    */
   close(root: string): Promise<void>;
-  /** Workspace state of whichever paper is active at call time. */
-  readonly activeWorkspaceState: StateStore;
-  /** Config of whichever paper is active at call time. */
-  readonly activeConfig: ConfigProvider;
   summary(): Omit<DesktopPapersMessage, 'command'>;
   /** Fires after a paper opens or closes, or the active paper changes. */
   onChange(listener: () => void): () => void;
-  /**
-   * Renderer traffic about papers: `SELECT_PAPER` requests, and the main
-   * view's ready signal, after which the renderer needs the papers list.
-   */
-  ipc(handlers: {
-    select(root: string): void;
-    close(root: string): void;
-    postPapers(): void;
-  }): DesktopMessageHandler;
   flushArtifacts(): Promise<void>;
   /** Dispose every session, the most recently opened first. */
   dispose(): void;
@@ -233,7 +207,6 @@ async function stopPaperExecutions(session: SessionHandle): Promise<void> {
 async function openPaperSession(
   root: string | undefined,
   roots: WorkspaceRoots,
-  options: Pick<DesktopPaperRegistryOptions, 'attachSession'>,
 ): Promise<DesktopPaper> {
   const resources = new DisposableStore();
   try {
@@ -263,7 +236,6 @@ async function openPaperSession(
           TEXRA_APPROVAL_POLICY_CONFIG_KEY,
         ),
       );
-      resources.add(options.attachSession(session));
       // Off the open path: the leftover-stream sweep reads this paper's
       // whole storage root, so it starts on a timer nothing awaits. It is
       // scheduled inside the session scope, which the timer inherits, so the
@@ -302,11 +274,7 @@ export async function openDesktopPaperRegistry(
   const closing = new Map<string, Promise<void>>();
   const listeners = new Set<() => void>();
   let activeRoot: string | undefined;
-  const fallback = await openPaperSession(
-    undefined,
-    options.processRoots,
-    options,
-  );
+  const fallback = await openPaperSession(undefined, options.processRoots);
 
   const notify = () => {
     for (const listener of [...listeners]) listener();
@@ -314,7 +282,6 @@ export async function openDesktopPaperRegistry(
   const openPapers = () => [...papers.values()];
   const active = (): DesktopPaper =>
     (activeRoot === undefined ? undefined : papers.get(activeRoot)) ?? fallback;
-  const activeRoots = () => active().roots;
 
   async function openPaper(root: string): Promise<DesktopPaper> {
     // Remembered before anything is built: a list that cannot be written is
@@ -337,7 +304,7 @@ export async function openDesktopPaperRegistry(
       config: { workspace: workspaceConfig, global: options.globalConfigStore },
       workspaceState,
     });
-    const paper = await openPaperSession(root, roots, options);
+    const paper = await openPaperSession(root, roots);
     papers.set(root, paper);
     notify();
     return paper;
@@ -384,6 +351,7 @@ export async function openDesktopPaperRegistry(
     },
     list: openPapers,
     active,
+    fallback: () => fallback,
     activate,
     close(root) {
       const inProgress = closing.get(root);
@@ -422,19 +390,6 @@ export async function openDesktopPaperRegistry(
       closing.set(root, closed);
       return closed;
     },
-    activeWorkspaceState: {
-      get: <T>(key: string, defaultValue?: T) =>
-        activeRoots().workspaceState.get<T>(key, defaultValue),
-      update: (key, value) => activeRoots().workspaceState.update(key, value),
-    },
-    activeConfig: {
-      get: <T>(key: string, defaultValue?: T) =>
-        activeRoots().config.get<T>(key, defaultValue),
-      update: (key, value, target) =>
-        activeRoots().config.update(key, value, target),
-      inspect: (key) => activeRoots().config.inspect(key),
-      isExplicitlySet: (key) => activeRoots().config.isExplicitlySet(key),
-    },
     summary: () => ({
       papers: openPapers().map(({ root = '' }) => ({
         root,
@@ -448,31 +403,6 @@ export async function openDesktopPaperRegistry(
         listeners.delete(listener);
       };
     },
-    ipc: (handlers) => ({
-      handleMessage(message: DesktopCommandMessage): boolean {
-        if (message.command === COMMON_COMMANDS.WEBVIEW_READY) {
-          // A pass-through like the progress ready signal: the main view's
-          // ready message still reaches the startup handler.
-          if ((message as { view?: unknown }).view === 'main') {
-            handlers.postPapers();
-          }
-          return false;
-        }
-        if (message.command === DESKTOP_PAPER_COMMANDS.CLOSE_PAPER) {
-          const parsed = DesktopClosePaperMessageSchema.safeParse(message);
-          if (!parsed.success) return false;
-          handlers.close(parsed.data.root);
-          return true;
-        }
-        if (message.command !== DESKTOP_PAPER_COMMANDS.SELECT_PAPER) {
-          return false;
-        }
-        const parsed = DesktopSelectPaperMessageSchema.safeParse(message);
-        if (!parsed.success) return false;
-        handlers.select(parsed.data.root);
-        return true;
-      },
-    }),
     async flushArtifacts() {
       const failures: string[] = [];
       for (const paper of [fallback, ...papers.values()]) {
