@@ -68,11 +68,6 @@ interface DesktopPaperRegistryOptions {
    */
   readonly globalConfigStore: ConfigStore;
   readonly globalState: StateStore;
-  /**
-   * Process-lifetime attachment each session needs (stream resumption).
-   * Returns the detach, which closing the paper runs before its session goes.
-   */
-  attachSession(session: SessionHandle): () => void;
   warn(message: string): void;
 }
 
@@ -83,6 +78,8 @@ export interface DesktopPaperRegistry {
   list(): readonly DesktopPaper[];
   /** The paper the window shows: the active folder, else the no-workspace session. */
   active(): DesktopPaper;
+  /** The no-workspace session's paper; open for the process lifetime, never in `list()`. */
+  fallback(): DesktopPaper;
   /** Make an open paper the one the window shows, and remember it as such. */
   activate(root: string | undefined): void;
   /**
@@ -210,7 +207,6 @@ async function stopPaperExecutions(session: SessionHandle): Promise<void> {
 async function openPaperSession(
   root: string | undefined,
   roots: WorkspaceRoots,
-  options: Pick<DesktopPaperRegistryOptions, 'attachSession'>,
 ): Promise<DesktopPaper> {
   const resources = new DisposableStore();
   try {
@@ -240,7 +236,6 @@ async function openPaperSession(
           TEXRA_APPROVAL_POLICY_CONFIG_KEY,
         ),
       );
-      resources.add(options.attachSession(session));
       // Off the open path: the leftover-stream sweep reads this paper's
       // whole storage root, so it starts on a timer nothing awaits. It is
       // scheduled inside the session scope, which the timer inherits, so the
@@ -279,11 +274,7 @@ export async function openDesktopPaperRegistry(
   const closing = new Map<string, Promise<void>>();
   const listeners = new Set<() => void>();
   let activeRoot: string | undefined;
-  const fallback = await openPaperSession(
-    undefined,
-    options.processRoots,
-    options,
-  );
+  const fallback = await openPaperSession(undefined, options.processRoots);
 
   const notify = () => {
     for (const listener of [...listeners]) listener();
@@ -313,7 +304,7 @@ export async function openDesktopPaperRegistry(
       config: { workspace: workspaceConfig, global: options.globalConfigStore },
       workspaceState,
     });
-    const paper = await openPaperSession(root, roots, options);
+    const paper = await openPaperSession(root, roots);
     papers.set(root, paper);
     notify();
     return paper;
@@ -360,6 +351,7 @@ export async function openDesktopPaperRegistry(
     },
     list: openPapers,
     active,
+    fallback: () => fallback,
     activate,
     close(root) {
       const inProgress = closing.get(root);

@@ -95,7 +95,7 @@ describe('desktop composition root and launch environment', () => {
 
     expectOrderedAfter(source, 'registerRuntimeShutdownHandlers(lifecycle', [
       'beforeAgentShutdown:',
-      'agentResumeHandler.dispose()',
+      'processResumeOwner.disable()',
       'afterAgentShutdown:',
       'killActiveRecording()',
       'flushArtifacts:',

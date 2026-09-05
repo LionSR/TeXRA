@@ -147,8 +147,7 @@ function createResumeHarness(): {
   snapshotFacts(snapshots).setRunConfig(stream, config, executionId);
   const session = createTestSession({ snapshots });
   session.transcripts.ensureStream(stream);
-  const owner = new DesktopProcessResumeOwner();
-  const detach = owner.attach({ session });
+  const owner = new DesktopProcessResumeOwner({ sessions: () => [session] });
   const detachTerminalResultToast = attachTerminalResultToast(
     session,
     session.interactions,
@@ -158,7 +157,7 @@ function createResumeHarness(): {
   const dispose = (): void => {
     if (disposed) return;
     disposed = true;
-    detach();
+    owner.disable();
     detachTerminalResultToast();
     session.dispose();
   };
