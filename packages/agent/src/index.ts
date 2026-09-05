@@ -137,8 +137,9 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
    *
    * A run that fails before it enters the session has no view: the
    * iteration ends empty and `result` carries the failure. If the session's
-   * fold dies, every iteration fails with the fold's defect, and so does
-   * `result`.
+   * fold dies, every iteration fails with the fold's defect; `result` fails
+   * with that defect only when the run itself completed, otherwise the run's
+   * own error wins.
    */
   readonly view: AsyncIterable<SessionView>;
   interrupt(): void;
