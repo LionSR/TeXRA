@@ -53,10 +53,16 @@ function textOf(step: Step): string {
  */
 class MediaProbeHandler extends ModelHandlerGoogleInteractions {
   private stubbedMedia: Interactions.Content[] = [];
+  private stubbedEntries?: MediaEntry[];
 
   /** Canned media the loader override returns, so no platform/fs is touched. */
   setMediaContent(content: Interactions.Content[]): void {
     this.stubbedMedia = content;
+  }
+
+  /** Run loaded entries through the real upload pipeline. */
+  setMediaEntries(entries: MediaEntry[]): void {
+    this.stubbedEntries = entries;
   }
 
   /** Replace the client factory with a canned client (e.g. files.upload stub). */
@@ -72,7 +78,9 @@ class MediaProbeHandler extends ModelHandlerGoogleInteractions {
   protected override async createMediaMessage(): Promise<
     CreatedMedia<Interactions.Content>
   > {
-    return { media: this.stubbedMedia, entries: [] };
+    return this.stubbedEntries
+      ? this.uploadMediaEntries(this.stubbedEntries)
+      : { media: this.stubbedMedia, entries: [] };
   }
 }
 
@@ -244,14 +252,6 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
         source_path: '/x/big.png',
         bytes_match_source: true,
       },
-      {
-        file_name: 'failed.png',
-        media_type: 'image/png',
-        media_category: 'image',
-        data: Buffer.from('also too big').toString('base64'),
-        source_path: '/x/failed.png',
-        bytes_match_source: true,
-      },
     ];
 
     const content = await handler.uploadEntries(entries);
@@ -270,9 +270,46 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(uploaded.uri).toBe('files/abc');
     expect(uploaded.data).toBeUndefined();
     expect(uploaded.resolution).toBe('high');
-    expect(textOf({ type: 'user_input', content })).not.toContain('failed.png');
-    expect(uploadCalls).toBe(2);
+    expect(uploadCalls).toBe(1);
   });
+
+  it.each(['missing source', 'missing URI', 'upload rejection'])(
+    'rejects an initial request when its attachment has a %s',
+    async (failure) => {
+      const handler = createMediaProbe();
+      handler.setClient({
+        files: {
+          upload: async () => {
+            if (failure === 'upload rejection') {
+              throw new Error('Upload service unavailable');
+            }
+            return { mimeType: 'image/png' };
+          },
+        },
+      } as unknown as GoogleGenAI);
+      handler.setMediaEntries([
+        {
+          file_name: 'failed.png',
+          data: '',
+          media_type: 'image/png',
+          media_category: 'image',
+          source_path:
+            failure === 'missing source' ? undefined : '/x/failed.png',
+        },
+      ]);
+
+      await expect(
+        handler.initializeMessages('PREFIX', 'Explain the attached figure', [
+          { absolutePath: '/x/failed.png' } as never,
+        ]),
+      ).rejects.toThrow(
+        failure === 'upload rejection'
+          ? 'Upload service unavailable'
+          : 'failed.png',
+      );
+      expect(handler.consumeInsertedAttachmentKinds('initial')).toEqual([]);
+    },
+  );
 
   it('builds typed Interactions media content for audio, video, and documents', async () => {
     const handler = createMediaProbe();
