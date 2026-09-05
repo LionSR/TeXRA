@@ -10,8 +10,10 @@
  * by a boot pass. It composes {@link ExecutionRegistry},
  * {@link SessionHostInteractions}, and the other session-scoped owners.
  *
- * A session is one per host context: extension activation (per VS Code window),
- * CLI process, or desktop Electron process. The default instance is installed
+ * A session is one per workspace storage root, built and held by the
+ * process's session owner (the `Sessions` map behind `openSession`): the
+ * extension and the CLI open one over the process roots, the desktop one
+ * per paper, the SDK one per platform. The default instance is installed
  * explicitly through {@link initializeDefaultSession}; {@link defaultSession}
  * only retrieves that process-wide owner. There is no other way to reach
  * these owners: the invariant is "no session-scoped mutable module export"
@@ -50,10 +52,7 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
-import {
-  processWorkspaceRoots,
-  type WorkspaceRoots,
-} from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
@@ -80,9 +79,12 @@ import {
 } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
 import { StreamStatusMachine } from './StreamStatusService';
-import { SessionHostInteractions } from './HostInteractions';
+import {
+  SessionHostInteractions,
+  type HostInteractions,
+} from './HostInteractions';
 import { runEventDraft, statusDraft } from './SessionEvents';
-import { openSessionGraph, type SessionGraph } from './sessionGraph';
+import { openSession, type SessionGraph } from './sessionGraph';
 import { ModelRetryGate } from './ModelRetryGate';
 import {
   createSessionApprovals,
@@ -94,18 +96,21 @@ import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 const logger = createLog('sessionHandle');
 
 /**
- * A valid transcript store is required; other owners may be injected.
+ * What opening a session supplies (`openSession`): a valid transcript store
+ * is required; other owners may be injected. `interactions` is the host the
+ * session is born with, attached for its whole life, for an opener with no
+ * later attach step of its own (the SDK's headless host).
  *
  * `status` and `events` are deliberately absent: the machine publishes
  * canonical `status` through the session, and the event plane is the
- * session's graph (`openSessionGraph`), resolved by workspace root, so a
+ * session's graph, built by the session owner per workspace root, so a
  * separately-injected machine or plane could not silently drop every fact
  * of a session onto a plane nobody reads. The session co-constructs them.
  */
 export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
   Partial<
     Pick<SessionHandle, 'snapshots' | 'responseTextProcessing' | 'roots'>
-  >;
+  > & { readonly interactions?: HostInteractions };
 
 export class SessionHandle {
   /**
@@ -201,7 +206,18 @@ export class SessionHandle {
   readonly workflowControls: WorkflowControlRegistry;
   /** LIFO owner for the session's constructor-registered teardown. */
   private readonly teardown = new DisposableStore();
-  constructor(init: SessionHandleInit) {
+  /**
+   * Built by the session owner alone (`sessionLayer.ts`), inside the root's
+   * graph, with that graph handed over as a function of the session: the
+   * request handler admits on the session, so the graph is bound to the
+   * handle it serves. Every other caller opens through `openSession`.
+   */
+  constructor(
+    init: SessionHandleInit & {
+      readonly roots: WorkspaceRoots;
+      readonly graph: (session: SessionHandle) => SessionGraph;
+    },
+  ) {
     if (init.transcripts.mode.kind === 'read-only') {
       throw new Error(
         'SessionHandle requires a writable transcript store; read-only stores are reserved for call-scoped readers.',
@@ -211,13 +227,8 @@ export class SessionHandle {
     // member fall back to a neighboring module singleton (silent-state-split).
     const transcripts = init.transcripts;
     this.transcripts = transcripts;
-    // Process roots unless the host names a folder: the extension, the CLI,
-    // and the SDK build exactly one session over the process roots; the
-    // desktop opens one session per paper and passes that paper's roots.
-    this.roots = init.roots ?? processWorkspaceRoots();
-    // The graph is keyed by the roots above and reads the transcript store
-    // at build (the pre-cutover hydration), so both are set before it opens.
-    const graph = openSessionGraph(this);
+    this.roots = init.roots;
+    const graph = init.graph(this);
     this.graph = graph;
     this.events = graph.events;
     this.view = graph.view;
@@ -271,6 +282,7 @@ export class SessionHandle {
     // Every session owns exactly one trace-flusher map. There is no
     // process-wide registry: a host drains the session it is shutting down.
     this.flushers = new Map<string, RunTraceFlushEntry>();
+    if (init.interactions) this.interactions.use(init.interactions);
     liveSessions.add(this);
     // Register teardown in reverse LIFO order so `teardown.dispose()` runs the
     // session's shutdown sequence top-to-bottom: drain traces, then unwind
@@ -278,12 +290,12 @@ export class SessionHandle {
     this.teardown.add(() => {
       liveSessions.delete(this);
     });
-    // The graph outlives every publisher above it: a late fact still lands
-    // in the log until the last owner has unwound.
+    // The graph outlives every publisher above it: the owner releases it
+    // after this store has run, so a late fact still lands in the log until
+    // the last owner has unwound.
     this.teardown.add(() => {
       this.disposed = true;
       this.statusPorts.clear();
-      this.graph.close();
     });
     this.teardown.add(() => this.resultListeners.clear());
     this.teardown.add(() => this.artifactFlushers.clear());
@@ -621,11 +633,31 @@ export class SessionHandle {
   }
 
   /**
-   * Tear down everything this session owns through the constructor-registered
-   * LIFO store. The store aggregates each disposer's failure and still runs
-   * the remaining disposers, including the final `liveSessions` removal.
+   * Unwind this session ({@link unwind}) and release it from its owner,
+   * which frees the root's graph after it. A teardown failure surfaces to
+   * the caller and still releases the session. Settles nothing: a host that
+   * needs the session's live executions ended first closes through
+   * `closeSession`, which ends here. Idempotent, so a handle released once
+   * never reaches the session its owner built over the same root later.
    */
   dispose(): void {
+    if (this.disposed) return;
+    try {
+      this.unwind();
+    } finally {
+      this.graph.close();
+    }
+  }
+
+  /**
+   * Tear down everything this session owns through the constructor-registered
+   * LIFO store, once: the store aggregates each disposer's failure and still
+   * runs the remaining disposers, including the final `liveSessions`
+   * removal. The session owner calls this as it releases the session (a
+   * `closeSession`, the runtime's disposal); {@link dispose} calls it first
+   * and then asks for that release.
+   */
+  unwind(): void {
     this.teardown.dispose();
   }
 }
@@ -775,7 +807,7 @@ export function initializeDefaultSession(
   if (cachedDefaultSession) {
     throw new Error('The default session has already been initialized.');
   }
-  cachedDefaultSession = new SessionHandle(init);
+  cachedDefaultSession = openSession(init);
   return cachedDefaultSession;
 }
 

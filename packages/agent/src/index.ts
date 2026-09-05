@@ -11,9 +11,11 @@ import { Effect, Fiber, Stream } from 'effect';
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { loadAgents, resolveAgent } from '@agent/index';
 import {
+  closeSession as closeRuntimeSession,
+  openSession,
   runAgent as runValidatedAgent,
-  SessionHandle as RuntimeSessionHandle,
   type AgentRunHandle as RuntimeAgentRunHandle,
+  type SessionHandle as RuntimeSessionHandle,
 } from '@agent/runtime';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 
@@ -36,7 +38,11 @@ import {
 } from '@platform/workspaceRoots';
 import { effectRuntime } from '@platform/processRuntime';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type SessionCloseReport,
+  type StreamTabId,
+} from '@shared/schemas';
 import type {
   SessionView as RuntimeSessionView,
   StreamView as RuntimeStreamView,
@@ -46,6 +52,7 @@ import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 export type { AgentEvent } from '@agent/trace';
+export type { SessionCloseReport } from '@shared/schemas';
 export type {
   ITool,
   IToolRegistry,
@@ -153,26 +160,22 @@ interface EnteredRun {
 
 /**
  * The package's one process-wide state, made on the first run and torn down
- * on the embedder's shutdown path: the node runtime features, the Effect
- * runtime the package sessions' graphs run on, and the sessions themselves,
- * one per storage root (PRD 7.3, 11). `Sessions` keys a root's graph by its
- * storage root and bridges the transcript store the root's first handle
- * opened, so every run on a root shares one handle, or a later run's rows
- * would land in a store no graph reads. The shutdown path resets this owner,
- * so the sessions have no life of their own past it.
+ * on the embedder's shutdown path: the node runtime features and the Effect
+ * runtime the sessions run on (PRD 7.7, 11). The sessions themselves have
+ * no package-side owner: the runtime's `Sessions` map holds one per storage
+ * root, the same owner every TeXRA host opens through, so a run resolves
+ * its session by the platform's roots and the map hands back the one
+ * already open there or builds it. The shutdown path resets this, so the
+ * package has no life of its own past it.
  */
-let packageSessions: Promise<Map<string, RuntimeSessionHandle>> | undefined;
+let packageRuntime: Promise<void> | undefined;
 
-function sessionFor(
-  sessions: Map<string, RuntimeSessionHandle>,
-  platform: AgentPlatform,
-): RuntimeSessionHandle {
-  let session = sessions.get(platform.roots.storage);
-  if (!session) {
-    session = new RuntimeSessionHandle({
-      roots: platform.roots,
-      transcripts: StreamLogStore.ephemeral('npm package consumer'),
-    });
+/** The session of the platform's storage root, as the runtime's owner
+ *  holds it: built on the first open, over what the package supplies then. */
+function sessionFor(platform: AgentPlatform): RuntimeSessionHandle {
+  return openSession({
+    roots: platform.roots,
+    transcripts: StreamLogStore.ephemeral('npm package consumer'),
     // The session's one host, for its whole life, like every TeXRA host
     // attaches one per session: the interaction hub keeps a single active
     // host and tells runs apart by the stream its requests and cancellations
@@ -180,16 +183,14 @@ function sessionFor(
     // previous run's host. The package has no interactive prompts, so there
     // is nothing for a cancellation to settle; a retry prompt is denied so
     // that it never parks the run waiting for a host.
-    session.interactions.use({
+    interactions: {
       cancel: () => {},
       requestRetry: async () => ({
         action: 'deny',
         reason: 'Interactive retries are unavailable in the agent package.',
       }),
-    });
-    sessions.set(platform.roots.storage, session);
-  }
-  return session;
+    },
+  });
 }
 
 /** The run's stream and every descendant the view holds. */
@@ -400,6 +401,23 @@ class AgentRunStream implements AgentRun {
 }
 
 /**
+ * Close the session of a workspace's storage root: refuse new runs on it,
+ * interrupt the ones it owns and wait for them to settle within the
+ * runtime's shutdown budget, flush its artifacts, and release it. The report
+ * says whether every run settled; the runs it names as `abandoned` were
+ * still live when the budget ran out, and the session stays open, refusing
+ * new runs, until they end. A root with no open session reports `settled`.
+ * The embedder's shutdown path (`lifecycle.runShutdown()`) closes the
+ * platform's session this way; call it directly to close a root before
+ * that, or to close one of several roots one platform opened.
+ */
+export function closeSession(
+  roots: WorkspaceRoots,
+): Promise<SessionCloseReport> {
+  return closeRuntimeSession(roots.storage);
+}
+
+/**
  * Start one agent run and expose its trace as an asynchronous event stream.
  *
  * The platform and agent registry are process-wide. Applications should create
@@ -427,35 +445,33 @@ export function runAgent(input: RunAgentInput): AgentRun {
       initPlatform(input.platform);
       initProcessWorkspaceRoots(input.platform.roots);
     }
-    packageSessions ??= (async () => {
+    packageRuntime ??= (async () => {
       initNodeAgentRuntime(input.platform.lifecycle);
-      // The one Effect runtime of the embedding process (PRD 7.7), for the
-      // package sessions' graphs.
+      // The one Effect runtime of the embedding process (PRD 7.7), holding
+      // the sessions' owner.
       const runtime = installProcessRuntime(
         await input.platform.processes.selfIdentity(),
       );
-      const sessions = new Map<string, RuntimeSessionHandle>();
       // The hosts' shutdown order, on the embedder's shutdown path: the
-      // sessions' agent-spawned children and agent-CLI sessions are stopped
-      // and their live executions settled, then each session goes with the
-      // owner that held it, then the runtime its graph ran on.
+      // session's agent-spawned children and agent-CLI sessions are stopped,
+      // then the platform's session is closed through its owner (its runs
+      // stopped and settled, its artifacts flushed, the session released:
+      // the headless shape, as the CLI's headless run stops and awaits its
+      // run in this phase), then the runtime that held it goes.
       registerRuntimeShutdownHandlers(input.platform.lifecycle, {
         flushArtifacts: async () => {
-          for (const session of sessions.values()) {
-            await session.flushArtifacts();
-          }
+          await closeSession(input.platform.roots);
         },
         afterExecutionSettlement: [
           () => {
-            for (const session of sessions.values()) session.dispose();
-            packageSessions = undefined;
+            packageRuntime = undefined;
           },
           () => runtime.dispose(),
         ],
       });
-      return sessions;
     })();
-    const session = sessionFor(await packageSessions, input.platform);
+    await packageRuntime;
+    const session = sessionFor(input.platform);
     await loadAgents({ includeRemote: false });
     const resolved = resolveAgent(input.agent);
     if (!resolved) {

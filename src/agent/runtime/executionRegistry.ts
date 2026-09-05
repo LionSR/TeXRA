@@ -132,6 +132,8 @@ export class ExecutionRegistry {
   readonly interactionOwnership = new ExecutionInteractionOwnership(this);
   private readonly handles = new Map<string, AgentExecutionHandle>();
   private disposed = false;
+  /** Set by {@link closeAdmissions}: the session is closing. */
+  private closing = false;
   private readonly streamStatus: StreamStatusMachine;
   private readonly publish: (events: readonly SessionEventDraft[]) => void;
   private readonly childActivityListeners = new Set<
@@ -319,9 +321,24 @@ export class ExecutionRegistry {
     this.track(handle);
   }
 
+  /**
+   * Refuse every execution registered from here on: the session is closing
+   * (`Sessions.close`). The executions already tracked keep their handles,
+   * waiters, and status until they settle, which is what the close waits
+   * for; only new admissions are turned away.
+   */
+  closeAdmissions(): void {
+    this.closing = true;
+  }
+
   private assertActive(): void {
     if (this.disposed) {
       throw new Error('Cannot register execution work after session disposal.');
+    }
+    if (this.closing) {
+      throw new Error(
+        'Cannot register execution work while the session is closing.',
+      );
     }
   }
 

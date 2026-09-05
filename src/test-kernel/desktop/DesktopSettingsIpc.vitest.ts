@@ -87,7 +87,12 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     overrides.session ??
     disposeAfterTest(
       createTestSession({
-        roots: { ...workspaceRoots(), config, workspaceState },
+        roots: {
+          ...workspaceRoots(),
+          storage: '/workspace/settings-ipc/storage',
+          config,
+          workspaceState,
+        },
       }),
     );
   const settings = createDesktopSettingsIpc({

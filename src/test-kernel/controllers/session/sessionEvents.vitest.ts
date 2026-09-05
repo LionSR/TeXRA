@@ -11,14 +11,21 @@
  * process holds (`self`) or whose owner is alive (`heldBy`) folds to
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
+import '@test/support/sessionGraphTestSetup';
+
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
-import { describe, expect } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import {
   SessionEventLog,
   sessionEventsLayer,
 } from '@agent/runtime/SessionEvents';
+import {
+  forEachLiveSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { closeSession, openSession } from '@agent/runtime/sessionGraph';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -27,6 +34,7 @@ import {
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   AgentCategory,
   STREAM_PHASE,
@@ -36,6 +44,7 @@ import {
 } from '@shared/schemas';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
@@ -238,4 +247,106 @@ describe('session events and view', () => {
         expect(held.streams.get(STREAM)?.readOnly).toBe(true);
       }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );
+});
+
+/**
+ * The session owner (PRD 7.3; proposal 2026-09-05, sections 3 and 9): the
+ * `Sessions` map behind `openSession` holds one session per storage root,
+ * and `closeSession` is how a session ends.
+ */
+describe('Sessions owner', () => {
+  const open = (storagePath: string) =>
+    openSession({
+      roots: createFakeWorkspaceRoots({ storagePath }),
+      transcripts: StreamLogStore.ephemeral('sessions owner test'),
+    });
+  const live = (): SessionHandle[] => {
+    const sessions: SessionHandle[] = [];
+    forEachLiveSession((session) => sessions.push(session));
+    return sessions;
+  };
+
+  it('opens one session per storage root: a root opened twice is one session, a second root its own', async () => {
+    const first = open('/workspace/owner/a');
+    const again = open('/workspace/owner/a');
+    const other = open('/workspace/owner/b');
+    try {
+      expect(again).toBe(first);
+      expect(first.roots.storage).toBe('/workspace/owner/a');
+      expect(other).not.toBe(first);
+      expect(other.executions).not.toBe(first.executions);
+    } finally {
+      await closeSession('/workspace/owner/a');
+      await closeSession('/workspace/owner/b');
+    }
+    expect(live()).not.toContain(first);
+    expect(live()).not.toContain(other);
+  });
+
+  it('close reports settled once the run ended, and releases the session', async () => {
+    const session = open('/workspace/owner/settled');
+    session.executions.track(
+      testExecutionHandle({
+        executionId: 'exec:settled',
+        parentStreamId: 'stream:settled' as StreamTabId,
+        agent: 'chat',
+      }),
+    );
+    // The run completes: its driver untracks it as it unwinds.
+    session.executions.untrack('exec:settled');
+
+    await expect(closeSession('/workspace/owner/settled')).resolves.toEqual({
+      settled: true,
+      abandoned: [],
+    });
+    expect(live()).not.toContain(session);
+    // The root is free: the next open builds a new session, and a root
+    // with nothing open has nothing to close.
+    const next = open('/workspace/owner/settled');
+    expect(next).not.toBe(session);
+    await closeSession('/workspace/owner/settled');
+    await expect(closeSession('/workspace/owner/settled')).resolves.toEqual({
+      settled: true,
+      abandoned: [],
+    });
+  });
+
+  it('close reports abandoned when a run is still live past the budget, refuses new work, and releases at the actual settlement', async () => {
+    const session = open('/workspace/owner/abandoned');
+    // A run that ignores its interrupt: no handler, no driver to unwind it.
+    session.executions.track(
+      testExecutionHandle({
+        executionId: 'exec:slow',
+        parentStreamId: 'stream:slow' as StreamTabId,
+        agent: 'chat',
+      }),
+    );
+    vi.useFakeTimers();
+    try {
+      const closing = closeSession('/workspace/owner/abandoned');
+      await vi.advanceTimersByTimeAsync(SHUTDOWN_PHASE_DEADLINE_MS);
+      await expect(closing).resolves.toEqual({
+        settled: false,
+        abandoned: ['exec:slow'],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    // Still the root's session, gated: a reopen finds it, new work is refused.
+    expect(live()).toContain(session);
+    expect(open('/workspace/owner/abandoned')).toBe(session);
+    expect(() =>
+      session.executions.track(
+        testExecutionHandle({
+          executionId: 'exec:late',
+          parentStreamId: 'stream:late' as StreamTabId,
+          agent: 'chat',
+        }),
+      ),
+    ).toThrow('while the session is closing');
+
+    // The run settles at last: the owner releases the session then.
+    session.executions.untrack('exec:slow');
+    await vi.waitFor(() => expect(live()).not.toContain(session));
+  });
 });

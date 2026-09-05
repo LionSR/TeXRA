@@ -75,7 +75,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import {
   appendTranscriptEntry,
@@ -427,7 +427,7 @@ describe('completedRunArchive facade', () => {
       cursor: { nextNodeId: 'start' },
     });
 
-    const session = createTestSession({ transcripts: logs });
+    const session = createProcessSession({ transcripts: logs });
     const loadAndAcquireWriter = logs.loadAndAcquireWriter.bind(logs);
     const resumedWriter = vi
       .spyOn(logs, 'loadAndAcquireWriter')

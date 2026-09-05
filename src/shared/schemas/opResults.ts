@@ -27,6 +27,22 @@ const ExecResultSchema = z.strictObject({
 
 export type ExecResult = z.infer<typeof ExecResultSchema>;
 
+/**
+ * What closing a session settled, and what it did not: the answer of the
+ * session owner's close (`Sessions.close`, the SDK's `closeSession`). New
+ * executions were refused and the owned live ones interrupted; `settled`
+ * says every one of them ended inside the close budget. Otherwise
+ * `abandoned` names the executions still live when the budget ran out: the
+ * session stays open, refusing new work, until they actually end, and the
+ * caller must not treat the close as complete disposal.
+ */
+const SessionCloseReportSchema = z.strictObject({
+  settled: z.boolean(),
+  abandoned: z.array(z.string()),
+});
+
+export type SessionCloseReport = z.infer<typeof SessionCloseReportSchema>;
+
 const FileOpResultSchema = z.discriminatedUnion('status', [
   z.strictObject({
     status: z.literal('success'),
