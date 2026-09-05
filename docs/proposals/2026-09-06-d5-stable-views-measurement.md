@@ -7,8 +7,9 @@
 > [PR #11893](https://github.com/LionSR/TeXRA/pull/11893) ask whether the
 > session fold can publish immutable views with structural sharing within
 > budget, instead of today's in-place level. This document is the answer.
-> No production code changes; the benchmark lives beside the fold's tests
-> and is skipped unless asked for.
+> No production code changes, and no benchmark script is checked in: the
+> script mirrors the fold's private spelling, so section 4 points at the
+> commit that carried it instead.
 
 ## 1. Question and gate
 
@@ -40,7 +41,7 @@ the last five roots stream, one 40-character append each per 16 ms frame.
 | Metric                                   | current   | copy-on-touch | bucketed  |
 | ---------------------------------------- | --------- | ------------- | --------- |
 | Cold replay, frames of 512 (median of 5) | 186.48 ms | 292.76 ms     | 316.40 ms |
-| Cold replay, slowest frame               | 4.58 ms   | 5.29 ms       | 6.88 ms   |
+| Cold replay, slowest frame, median of 5  | 4.58 ms   | 5.29 ms       | 6.88 ms   |
 | Cold replay, one batch (median of 5)     | 170.61 ms | 167.71 ms     | 223.45 ms |
 | Streaming fold per frame p50             | 0.12 ms   | 1.19 ms       | 0.29 ms   |
 | Streaming fold per frame p95             | 0.28 ms   | 2.19 ms       | 0.61 ms   |
@@ -60,7 +61,7 @@ reply; the same 40-character append per frame.
 | Metric                                   | current   | copy-on-touch | bucketed  |
 | ---------------------------------------- | --------- | ------------- | --------- |
 | Cold replay, frames of 512 (median of 5) | 111.23 ms | 113.70 ms     | 136.21 ms |
-| Cold replay, slowest frame               | 3.49 ms   | 3.87 ms       | 4.11 ms   |
+| Cold replay, slowest frame, median of 5  | 3.49 ms   | 3.87 ms       | 4.11 ms   |
 | Cold replay, one batch (median of 5)     | 109.40 ms | 108.43 ms     | 131.50 ms |
 | Streaming fold per frame p50             | 0.07 ms   | 0.18 ms       | 0.18 ms   |
 | Streaming fold per frame p95             | 0.20 ms   | 0.96 ms       | 0.91 ms   |
@@ -74,7 +75,12 @@ reply; the same 40-character append per frame.
 
 The `current` column's retained numbers are near zero because its levels
 share one set of mutable containers: holding ten `current` levels does not
-preserve ten states, as the "older level unchanged" row shows.
+preserve ten states, as the "older level unchanged" row shows. The two
+retained rows are the heap the 9 (respectively 99) older levels beyond the
+latest hold, since the latest level is held in both measurements (section 4,
+"Metrics"). "Slowest frame, median of 5" is the median over the five cold
+replays of each replay's slowest 512-input frame, not the slowest frame seen
+across all five.
 
 ## 3. Reading
 
@@ -102,26 +108,38 @@ same copy repeated 122 times for `streams`, `folded`, and `latest` (about
 three entries per stream) as they grow, and it vanishes when the replay is
 one batch. In the long transcript the 40,001-row `rows.slice()` is what a
 frame pays: about 0.1 ms and 0.3 MiB per level (325 KiB allocated per frame,
-2.9 MiB for ten retained levels). Time is not the issue there; memory is, and
-only when a reader retains levels. A chunked transcript array would remove
-that copy, but at 40,000 rows the copy is already inside the budget by two
-orders of magnitude, so this measurement does not justify changing the
+2.9 MiB retained by nine older levels). Time is not the issue there; memory
+is, and only when a reader retains levels. A chunked transcript array would
+remove that copy, but at 40,000 rows the copy is already inside the budget by
+two orders of magnitude, so this measurement does not justify changing the
 published `rows` shape.
 
 ## 4. Method
 
-The benchmark is
-[`src/test-kernel/shared/session/foldPublication.bench.vitest.ts`](../../src/test-kernel/shared/session/foldPublication.bench.vitest.ts).
-It is a Vitest file gated on `TEXRA_FOLD_BENCH=1`, so `npm test` and CI skip
-it. Reproduce from the repository root with other builds paused:
+The measurement script is intentionally not checked in. It bundles a
+source-transformed copy of `sessionFold.ts` and counts the fold's in-place
+mutation sites by their spelling, so any behavior-preserving edit to the fold
+would break it without saying anything about the fold; a script like that
+belongs to the measurement, not to the test kernel. The exact script that
+produced the tables above was carried by commit `32da0de1f7` on the PR branch
+as `src/test-kernel/shared/session/foldPublication.bench.vitest.ts`, a Vitest
+file gated on `TEXRA_FOLD_BENCH=1`. To reproduce, check out `main` at
+`a816322f10` (or any commit where `sessionFold.ts` still matches the SHA-256
+above), restore the script from that commit, and run it from the repository
+root with other builds paused:
 
 ```sh
+git show 32da0de1f7:src/test-kernel/shared/session/foldPublication.bench.vitest.ts \
+  > src/test-kernel/shared/session/foldPublication.bench.vitest.ts
 TEXRA_FOLD_BENCH=1 npx vitest run --config vitest.config.mjs \
   src/test-kernel/shared/session/foldPublication.bench.vitest.ts
 ```
 
 `TEXRA_FOLD_BENCH_OUT=/path/report.json` also writes the raw numbers. The run
-takes about one minute.
+takes about one minute. Delete the restored file afterwards. Open
+[PR #11911](https://github.com/LionSR/TeXRA/pull/11911) carries a second
+measurement script (section 5); if D5 is adopted, the adoption PR should
+measure with the real fold rather than a transformed copy of it.
 
 **Variants.** All three columns run the production
 [`sessionFold.ts`](../../src/shared/session/sessionFold.ts), bundled with
@@ -158,7 +176,8 @@ commit order, then a `local` snapshot naming this process as owner.
 
 **Metrics.** Cold replay folds the replay in frames of 512 inputs from an
 empty view; one warm-up pass, then the median of five, with an explicit GC
-before each. "One batch" folds the same inputs in one `fold` call. Streaming
+before each; "slowest frame" is the median over those five runs of each run's
+slowest frame. "One batch" folds the same inputs in one `fold` call. Streaming
 runs 400 frames scheduled 16 ms apart with `setTimeout`, each frame one
 40-character chunk per streaming stream (2,000 chunks in the session
 workload); only the `fold` call is timed, and p50, p95, and max are
@@ -168,7 +187,9 @@ interval, collected objects included), total sampled bytes divided by 400; it
 is an estimate. Retained memory holds the last 10 (and 100) published levels
 in an array during an unpaced 400-frame pass, forces GC, reads `heapUsed`,
 releases every level but the latest, forces GC again, and reports the
-difference.
+difference. Because the latest level is held on both sides, the difference is
+what the 9 (and 99) older levels retain beyond the latest, so a per-level
+cost is the row divided by 9 or 99, not by 10 or 100.
 
 ## 5. Relation to the measurement in #11911
 
@@ -181,23 +202,26 @@ transcripts. This document agrees with it on direction and adds what the D5
 gate asked for: the seed shape named on the SDK page, p50 and p95 per frame,
 cold replay in frames of 512 beside one-batch replay, retention of the last
 10 levels rather than 600, and a second shape that isolates what dominates.
-Two benchmarks for one question should not both survive; whichever PR lands
-second should delete the other's script, and this file is the smaller
-(one Vitest file, no design-harness dependency). Note that #11911's
-transform copies a `transcript.compaction` array that does not exist on
-`main`, so it will not apply to the current fold without adjustment.
+This PR checks in no script (section 4), so #11911's is the only one
+proposed for the tree. Neither transform needs to outlive the decision: if D5
+is adopted, the adoption PR should measure with the real fold, and the
+transformed copies lose their reason to exist. Note that #11911's transform
+copies a `transcript.compaction` array that does not exist on `main`, so it
+will not apply to the current fold without adjustment.
 
 ## 6. Recommendation
 
 **Adopt.** Publish immutable levels by copying touched containers once per
 `fold` call, exactly the transform above, without changing the published
 `rows` shape. The cost on the workload D5 named is 1 ms per frame and about
-0.16 MiB per retained level at 3,000 streams, and nothing on one-batch
-replay. Do not adopt the chunked transcript: the array copy is inside the
-frame budget by two orders of magnitude at 40,000 rows, and a change to the
-`rows` shape would touch every renderer for a memory saving that only matters
-to a reader retaining many levels of a very long transcript, which the
-residency rule (PRD 5.2) already bounds.
+0.18 MiB per retained level at 3,000 streams (1.63 MiB across the 9 older
+levels the 10-level measurement holds beyond the latest; 17.84 MiB across 99
+gives the same 0.18 MiB), and nothing on one-batch replay. Do not adopt the
+chunked transcript: the array copy is inside the frame budget by two orders
+of magnitude at 40,000 rows, and a change to the `rows` shape would touch
+every renderer for a memory saving that only matters to a reader retaining
+many levels of a very long transcript, which the residency rule (PRD 5.2)
+already bounds.
 
 Keep the bucketed map as the identified next step, not part of this
 adoption: it removes most of the per-frame cost and half the retained memory
@@ -237,7 +261,7 @@ older level stays unsupported, which is what every consumer does today.
 The production change itself is about 30 lines in `sessionFold.ts` (the
 ownership set, `writableMap`, `writableArray`, re-keying `SESSION_INDEXES`
 to the copied `streams` map, and the `fold` wrapper), which is the transform
-the benchmark applies and checks for parity.
+the measurement script applied and checked for parity.
 
 ## 8. Limitations
 
