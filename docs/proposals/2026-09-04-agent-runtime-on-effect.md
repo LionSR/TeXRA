@@ -47,13 +47,13 @@ Nine of ten refutations completed; D's durability refutation did not run,
 and its concerns are covered below by the B and E durability findings, which
 attack the same row shape.
 
-| Design | Shape | Fatal refutations | Verdict |
-|---|---|---|---|
-| A. Ratified kernel + one event | Typed node transitions over the existing cursor record | Private working copy discards mid-step `switchModel` commit (silent wrong-model resume). No replay from trace by construction. | Rejected. Does not meet the ruling; would be a stepping stone, which is the dual system. |
-| B. Journaled activities, replayed program | Deterministic program re-executed against journaled activity results by logical key | Tool-mutated run/workspace state never journaled; model payload has no Zod schema (raw SDK response); post-compaction injection uses `Date.now()` so every resume across a compaction faults; sequencing re-migrates the checkpoint twice | Rejected as written. Its keys and intent rows are grafted. |
-| C. Effect `unstable/workflow` with a custom engine | Workflow bodies + Activities memoized in our table | Requires Effect Schema (binding ruling 6); `Schema.Unknown` removes the Zod boundary on memo hits; memoized failures replay as failures so resume-after-failure is impossible; `DurableDeferred` completes once so batched follow-ups drop | Rejected. The module is not the way to the ledger model. |
-| D. Ledger loop | Two `Effect.fn` loops over appended conversation rows + run_state projection | Sequencing kept a blob writer beside the new rows across three PRs; no intent rows (R4.2/R4.3 unmet); assistant text durable twice; layers placed at process scope instead of per session root | Selected, with the fixes below applied. |
-| E. The flow is a fold | Pure reducer over Zod state emitting commands; generic interpreter | None fatal. Two-exit interpreter cannot halt on cancel; tools activity breaks the one-outcome shape; Stage 5 carve-out is the lazy import §9 forbids. (Its refuter's "raw output file written before commit" finding was itself wrong: the per-continuation file is the mid-cycle checkpoint and stays.) | Runner-up. Its fold rule and checkpoint policy are grafted; its reducer and command machinery are not. |
+| Design                                             | Shape                                                                               | Fatal refutations                                                                                                                                                                                                                                                                                        | Verdict                                                                                                |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| A. Ratified kernel + one event                     | Typed node transitions over the existing cursor record                              | Private working copy discards mid-step `switchModel` commit (silent wrong-model resume). No replay from trace by construction.                                                                                                                                                                           | Rejected. Does not meet the ruling; would be a stepping stone, which is the dual system.               |
+| B. Journaled activities, replayed program          | Deterministic program re-executed against journaled activity results by logical key | Tool-mutated run/workspace state never journaled; model payload has no Zod schema (raw SDK response); post-compaction injection uses `Date.now()` so every resume across a compaction faults; sequencing re-migrates the checkpoint twice                                                                | Rejected as written. Its keys and intent rows are grafted.                                             |
+| C. Effect `unstable/workflow` with a custom engine | Workflow bodies + Activities memoized in our table                                  | Requires Effect Schema (binding ruling 6); `Schema.Unknown` removes the Zod boundary on memo hits; memoized failures replay as failures so resume-after-failure is impossible; `DurableDeferred` completes once so batched follow-ups drop                                                               | Rejected. The module is not the way to the ledger model.                                               |
+| D. Ledger loop                                     | Two `Effect.fn` loops over appended conversation rows + run_state projection        | Sequencing kept a blob writer beside the new rows across three PRs; no intent rows (R4.2/R4.3 unmet); assistant text durable twice; layers placed at process scope instead of per session root                                                                                                           | Selected, with the fixes below applied.                                                                |
+| E. The flow is a fold                              | Pure reducer over Zod state emitting commands; generic interpreter                  | None fatal. Two-exit interpreter cannot halt on cancel; tools activity breaks the one-outcome shape; Stage 5 carve-out is the lazy import §9 forbids. (Its refuter's "raw output file written before commit" finding was itself wrong: the per-continuation file is the mid-cycle checkpoint and stays.) | Runner-up. Its fold rule and checkpoint policy are grafted; its reducer and command machinery are not. |
 
 Findings all refuters agreed on, regardless of design:
 
@@ -119,14 +119,14 @@ files, made explicit:
 Flow row types, all Zod-validated at the boundary, all carried as
 `AgentEvent` arms so the existing trace plumbing, fold, and viewer see them:
 
-| Row | Written when | Payload |
-|---|---|---|
-| `flow.step` (stream aggregate) | round begin/end (reflection), turn begin/end, `waiting`, `halted`, terminal outcome | `{ family, step, round?, turn?, outcome? }`; small. The listing tier reads the latest one through the `(aggregate_id, type, seq)` index |
-| `model.message` | every provider-native message appended: round prompt, assistant response, user follow-up, synthetic continuation | handler-built `ProviderMessage[]` delta (z.custom), plus the extracted `toolCalls: { callId, name, input }[]` for assistant rows |
-| `model.compaction` | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens | the full replacement array; later loads start here |
-| `tool.intent` | unconditionally at the barrier dispatch site, before any barrier (non parallel-safe) call starts (`ToolUseDispatchNode._exec` today). Not from an approval hook: `onExecutionReady` exists for three tools only (`bash`, `codex`, `wolfram`), while about 38 of 50 tools are barriers | `{ callIds }` |
-| `tool.result` | after each tool call settles, one row per call including duplicates (`duplicateOf`) | provider tool-result message + attachment references, byte-exact. The display result is the existing `tool.end` row on the stream aggregate, scrubbed at publish as today |
-| `flow.snapshot` | at `turn.end` / `round.end`, before WAITING, and whenever bytes appended since the last snapshot exceed its size | the family's full Zod state (`ToolUseRunSharedSchema`, `ReflectionFlowStateSchema`), messages included: `structured`, `lastError`, `userCancelledRetry`, `shouldSkipCycle`, `systemPrompt`, `continuationGenerationId`, `stateSlices`, `modelId`, `modelHandlerCompatibilityKey`; `outputLocation`, `roundOutputs`, `continueRounds`, `endTurn`, `context`, compile-repair state, round counters |
+| Row                            | Written when                                                                                                                                                                                                                                                                          | Payload                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flow.step` (stream aggregate) | round begin/end (reflection), turn begin/end, `waiting`, `halted`, terminal outcome                                                                                                                                                                                                   | `{ family, step, round?, turn?, outcome? }`; small. The listing tier reads the latest one through the `(aggregate_id, type, seq)` index                                                                                                                                                                                                                                                          |
+| `model.message`                | every provider-native message appended: round prompt, assistant response, user follow-up, synthetic continuation                                                                                                                                                                      | handler-built `ProviderMessage[]` delta (z.custom), plus the extracted `toolCalls: { callId, name, input }[]` for assistant rows                                                                                                                                                                                                                                                                 |
+| `model.compaction`             | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens                                                                                                                                                                                       | the full replacement array; later loads start here                                                                                                                                                                                                                                                                                                                                               |
+| `tool.intent`                  | unconditionally at the barrier dispatch site, before any barrier (non parallel-safe) call starts (`ToolUseDispatchNode._exec` today). Not from an approval hook: `onExecutionReady` exists for three tools only (`bash`, `codex`, `wolfram`), while about 38 of 50 tools are barriers | `{ callIds }`                                                                                                                                                                                                                                                                                                                                                                                    |
+| `tool.result`                  | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | provider tool-result message + attachment references, byte-exact. The display result is the existing `tool.end` row on the stream aggregate, scrubbed at publish as today                                                                                                                                                                                                                        |
+| `flow.snapshot`                | at `turn.end` / `round.end`, before WAITING, and whenever bytes appended since the last snapshot exceed its size                                                                                                                                                                      | the family's full Zod state (`ToolUseRunSharedSchema`, `ReflectionFlowStateSchema`), messages included: `structured`, `lastError`, `userCancelledRetry`, `shouldSkipCycle`, `systemPrompt`, `continuationGenerationId`, `stateSlices`, `modelId`, `modelHandlerCompatibilityKey`; `outputLocation`, `roundOutputs`, `continueRounds`, `endTurn`, `context`, compile-repair state, round counters |
 
 The snapshot is a real base point: resume folds the latest snapshot plus
 the rows since it, which is at most one turn or one round. The price is one
@@ -200,18 +200,23 @@ version, nothing downstream branching on version.
 
 ```ts
 // src/agent/runtime/loop/toolUse.ts (replaces runToolUseFlow.ts and the six tool-use nodes)
-export const runToolUse = Effect.fn('toolUse.run')(function* (start: ToolUseStart) {
-  const ledger = yield* RunLedger;     // append(row) -> Effect<RunState>; load(executionId)
-  const run = yield* RunContext;       // executionId, streamId, modelCell, setting, logger, session
-  const followUps = yield* FollowUps;  // ToolUseSessionLifecycle behind Effect.callback
-  const model = yield* ModelInvoker;   // ModelInvocationNode's ladder as a service
-  let s = yield* ledger.load(run.executionId);          // fold of rows, or null on a fresh run
-  if (s === null) s = yield* prepareSession(start);     // was ToolUsePrepareNode
+export const runToolUse = Effect.fn('toolUse.run')(function* (
+  start: ToolUseStart,
+) {
+  const ledger = yield* RunLedger; // append(row) -> Effect<RunState>; load(executionId)
+  const run = yield* RunContext; // executionId, streamId, modelCell, setting, logger, session
+  const followUps = yield* FollowUps; // ToolUseSessionLifecycle behind Effect.callback
+  const model = yield* ModelInvoker; // ModelInvocationNode's ladder as a service
+  let s = yield* ledger.load(run.executionId); // fold of rows, or null on a fresh run
+  if (s === null) s = yield* prepareSession(start); // was ToolUsePrepareNode
   for (;;) {
-    s = yield* runTurn(s);                              // was RoundPrep -> Invoke -> Process -> Dispatch
-    if (s.halt) return s.halt;                          // 'cancelled' | 'failed'
-    if (run.isSubagent) { yield* ledger.append(step('waiting')); return 'waiting'; }
-    const batch = yield* followUps.wait;                // Effect.callback, onInterrupt cancels the wait
+    s = yield* runTurn(s); // was RoundPrep -> Invoke -> Process -> Dispatch
+    if (s.halt) return s.halt; // 'cancelled' | 'failed'
+    if (run.isSubagent) {
+      yield* ledger.append(step('waiting'));
+      return 'waiting';
+    }
+    const batch = yield* followUps.wait; // Effect.callback, onInterrupt cancels the wait
     if (batch === null) return 'cancelled';
     s = yield* ledger.append(userMessages(batch));
   }
@@ -435,22 +440,22 @@ docs PR (this document and the Stage 5 rewrite), and nothing under
 
 Deleted (with the replacement in the same PR, R10):
 
-| Path | LoC | Replaced by |
-|---|---|---|
-| `src/agent/node/index.ts` | 158 | nothing |
-| `src/agent/node/persistedFlow.ts` | 531 | `RunLedger` + `foldRunState` |
-| `reflection/RoundPersistedFlow.ts` | 270 | round loop + `shouldContinue` |
-| `reflection/ResponseCycleFlow.ts` (nodes and graph) | 593 | continuation loop |
-| `reflection/nodes/*` as classes | 751 | functions; bodies move |
-| `reflection/ReflectionFlowState.ts` latches | 68 | `flow.snapshot` |
-| `tooluse/ToolUseRoundFlow.ts`, `nodes/*`, `toolUseRound/*` as classes | ~1,650 | `runToolUse`, dispatch functions; bodies move |
-| `tooluse/runToolUseFlow.ts` graph rebuild, disposition ladder, attachment and startup-window code | ~500 of 719 | loop + scope finalizers |
-| `core/flows/ModelInvocationNode.ts` | 846 | `ModelInvoker` (~500; the retry, gate, and credential logic does not shrink) |
-| `core/flows/{FlowTransitions,CycleServices,BaseFlowServices}.ts` | 122 | Context services |
-| `src/agent/storage/resumability.ts` full-checkpoint parse | 120 | latest-of-type index read (`flow.snapshot` present) plus the C5 liveness probe |
-| `SessionResumeRetrieval.ts` checkpoint read | ~170 of 234 | fold; model id from the latest `flow.snapshot` |
-| `runtime/persistedCompileRejection.ts` | 46 | snapshot field |
-| Tests: `PocketFlowNode`, `PersistedFlow`, `ReflectionFlowStateRecovery` suites; 13 record-format pins reduced to importer fixtures | ~900 | fold test, ledger test, repair-policy test (~400) |
+| Path                                                                                                                               | LoC         | Replaced by                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------ |
+| `src/agent/node/index.ts`                                                                                                          | 158         | nothing                                                                        |
+| `src/agent/node/persistedFlow.ts`                                                                                                  | 531         | `RunLedger` + `foldRunState`                                                   |
+| `reflection/RoundPersistedFlow.ts`                                                                                                 | 270         | round loop + `shouldContinue`                                                  |
+| `reflection/ResponseCycleFlow.ts` (nodes and graph)                                                                                | 593         | continuation loop                                                              |
+| `reflection/nodes/*` as classes                                                                                                    | 751         | functions; bodies move                                                         |
+| `reflection/ReflectionFlowState.ts` latches                                                                                        | 68          | `flow.snapshot`                                                                |
+| `tooluse/ToolUseRoundFlow.ts`, `nodes/*`, `toolUseRound/*` as classes                                                              | ~1,650      | `runToolUse`, dispatch functions; bodies move                                  |
+| `tooluse/runToolUseFlow.ts` graph rebuild, disposition ladder, attachment and startup-window code                                  | ~500 of 719 | loop + scope finalizers                                                        |
+| `core/flows/ModelInvocationNode.ts`                                                                                                | 846         | `ModelInvoker` (~500; the retry, gate, and credential logic does not shrink)   |
+| `core/flows/{FlowTransitions,CycleServices,BaseFlowServices}.ts`                                                                   | 122         | Context services                                                               |
+| `src/agent/storage/resumability.ts` full-checkpoint parse                                                                          | 120         | latest-of-type index read (`flow.snapshot` present) plus the C5 liveness probe |
+| `SessionResumeRetrieval.ts` checkpoint read                                                                                        | ~170 of 234 | fold; model id from the latest `flow.snapshot`                                 |
+| `runtime/persistedCompileRejection.ts`                                                                                             | 46          | snapshot field                                                                 |
+| Tests: `PocketFlowNode`, `PersistedFlow`, `ReflectionFlowStateRecovery` suites; 13 record-format pins reduced to importer fixtures | ~900        | fold test, ledger test, repair-policy test (~400)                              |
 
 Rewired, not deleted (the refuters' missing list): `AgentLaunchContext.ts`
 (compat key from snapshot row), `executionLifecycle.ts`,
@@ -553,7 +558,7 @@ branch.
   continuable, and after the fold collapse these rows are the only
   conversation. Exposure is the C9 retention window.
 - One-fold PRD line 102: reversed by the owner's ruling; its `fold(view,
-  event)` gains the `flow.step` arm and its §6 durable set gains six rows.
+event)` gains the `flow.step` arm and its §6 durable set gains six rows.
 - Single-owner §6: its single door at admission stays for the stream
   aggregate; for the execution aggregate the door is the transport framer
   and the export (C3, third owner); its "checkpoint content" list is false
