@@ -270,6 +270,11 @@ describe('formatResumeHint', () => {
       cost: 0.5,
       expected: '$0.500 via your own API keys',
     },
+    {
+      usageRoute: undefined,
+      cost: 0.3,
+      expected: '$0.300',
+    },
   ])(
     'includes the $usageRoute session cost in the full hint',
     ({ usageRoute, cost, expected }) => {
