@@ -77,6 +77,7 @@ async function persistExternalInquiryAction(
   if (payload.action === 'submit') {
     const manifest = await recordAnswerForOpenTurn({
       threadId: payload.threadId,
+      turnIndex: payload.turnIndex,
       answer: payload.answer,
       sessionLinks: payload.sessionLinks ?? undefined,
     });
@@ -107,7 +108,10 @@ async function persistExternalInquiryAction(
       data: payload.cause,
     });
   }
-  const droppedManifest = await markDropped({ threadId: payload.threadId });
+  const droppedManifest = await markDropped({
+    threadId: payload.threadId,
+    turnIndex: payload.turnIndex,
+  });
   if (droppedManifest) {
     return {
       kind: 'dropped',
@@ -153,7 +157,8 @@ async function continueExternalInquiryAction(
 export async function handleExternalInquiryAction(
   payload: ExternalInquiryAction,
   options: { session?: SessionHandle } = {},
-): Promise<void> {
+): Promise<boolean> {
   const transition = await persistExternalInquiryAction(payload);
   await continueExternalInquiryAction(transition, options);
+  return transition.kind !== 'stale';
 }

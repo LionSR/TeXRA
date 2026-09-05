@@ -68,9 +68,6 @@ export function paperDisplayOf(
 
 export const HostSnapshotSchema = z.object({
   paper: PaperDisplaySchema,
-  /** Which view instance this is: the sidebar webview, the editor tab, or
-   *  the desktop renderer. The sidebar alone reports `setActiveView`. */
-  placement: z.enum(['sidebar', 'editor', 'desktop']),
   agentOptions: z.record(AgentCategorySchema, z.array(AgentOptionDataSchema)),
   modelOptions: z.array(ModelOptionDataSchema),
   teamOptions: z.array(TeamOptionDataSchema),
@@ -94,13 +91,9 @@ export const HostSnapshotSchema = z.object({
 });
 export type HostSnapshot = z.infer<typeof HostSnapshotSchema>;
 
-export function emptyHostSnapshot(
-  paper: PaperDisplay,
-  placement: HostSnapshot['placement'] = 'sidebar',
-): HostSnapshot {
+export function emptyHostSnapshot(paper: PaperDisplay): HostSnapshot {
   return {
     paper,
-    placement,
     agentOptions: { toolUse: [], workflow: [] },
     modelOptions: [],
     teamOptions: [],

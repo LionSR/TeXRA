@@ -15,6 +15,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 import { z } from 'zod';
 import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
@@ -56,9 +57,7 @@ import {
   DESKTOP_COMMAND_PALETTE_ID,
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
-import { createEditorPane } from './editorPane';
 import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
-import { createTerminalPane } from './terminalPane';
 import './taskShell.css';
 import {
   conversationDockTemplate,
@@ -74,7 +73,6 @@ import {
   renameWorkbenchTab,
   setBottomPanelHeight,
   setSidebarWidth,
-  setWorkbenchTabDirty,
   setWorkbenchWidth,
   toggleFiles,
   togglePapersLayout,
@@ -83,23 +81,17 @@ import {
   workspaceName,
   type DesktopTaskShellState,
   type WorkbenchTab,
+  type WorkbenchPlacement,
 } from '../shared/desktopTaskShell';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import { DESKTOP_PAPER_COMMANDS } from '../shared/desktopPaperMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
-import { createPdfPane } from './pdfPane';
-import { createReviewPane } from './reviewPane';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
 import { createEnvironmentPopover } from './environmentPopover';
-import { createWorkbenchController } from './workbenchController';
-import {
-  disposePendingFileRequests,
-  requestFileRead,
-  requestFileWrite,
-  requestFiles,
-} from './fileRequests';
+import { disposePendingFileRequests } from './fileRequests';
+import { createPaperWorkbench } from './paperWorkbench';
 import { createMessageRoutes } from './messageRoutes';
 
 const appRoot = document.querySelector<HTMLElement>('#app')!;
@@ -122,7 +114,7 @@ function currentTheme() {
 function applyTheme(): void {
   const theme = currentTheme();
   applyHostBodyTheme(theme);
-  reviewPane.setTheme(theme);
+  for (const paper of paperWorkbenches.values()) paper.setTheme(theme);
 }
 darkScheme.addEventListener('change', applyTheme);
 forcedColors.addEventListener('change', applyTheme);
@@ -188,6 +180,7 @@ let shell: Shell = {
   search: '',
 };
 let papersKnown = false;
+let applyingPaperList = false;
 // The folder of every open paper, by session key; the no-workspace session
 // is never among them. How a paper is named is its host snapshot's.
 let paperRoots: ReadonlyMap<string, string> = new Map();
@@ -272,43 +265,62 @@ function commandTitle(
 // The task canvas is permanent. Workbench tabs can live in independently
 // resizable Right and Bottom panes without replacing the conversation.
 
-let shellState: DesktopTaskShellState = initialDesktopTaskShellState();
+const paperWorkbenches = new Map<
+  string,
+  ReturnType<typeof createPaperWorkbench>
+>();
+
+function currentWorkbench() {
+  const paper = paperWorkbenches.get(shell.active);
+  if (!paper) throw new Error(`No workbench for paper ${shell.active}.`);
+  return paper;
+}
+
+function shellState(): DesktopTaskShellState {
+  return (
+    paperWorkbenches.get(shell.active)?.getState() ??
+    initialDesktopTaskShellState()
+  );
+}
 
 function updateShell(next: DesktopTaskShellState): void {
-  if (next === shellState) return;
-  const previousActiveTabIds = shellState.activeWorkbenchTabIds;
-  const previousBottomPanelHeight = shellState.bottomPanelHeight;
-  const previousSidebarWidth = shellState.sidebarWidth;
-  const previousWorkbenchWidth = shellState.workbenchWidth;
-  shellState = next;
+  currentWorkbench().updateState(next);
+}
+
+function layoutChanged(
+  session: string,
+  previous: DesktopTaskShellState,
+  next: DesktopTaskShellState,
+): void {
+  if (session !== shell.active || applyingPaperList) return;
   rerenderShell();
-  workbench.syncBrowserViewBounds();
+  currentWorkbench().workbench.syncBrowserViewBounds();
   const activeTabChanged =
-    previousActiveTabIds.right !== next.activeWorkbenchTabIds.right ||
-    previousActiveTabIds.bottom !== next.activeWorkbenchTabIds.bottom;
+    previous.activeWorkbenchTabIds.right !== next.activeWorkbenchTabIds.right ||
+    previous.activeWorkbenchTabIds.bottom !== next.activeWorkbenchTabIds.bottom;
   if (
     activeTabChanged ||
-    previousBottomPanelHeight !== next.bottomPanelHeight ||
-    previousSidebarWidth !== next.sidebarWidth ||
-    previousWorkbenchWidth !== next.workbenchWidth
+    previous.bottomPanelHeight !== next.bottomPanelHeight ||
+    previous.sidebarWidth !== next.sidebarWidth ||
+    previous.workbenchWidth !== next.workbenchWidth
   ) {
-    // A new active tab is explicit user activation, so its surface may take
-    // focus; a size-only change is a layout pass and must not move focus.
-    workbench.layoutVisibleSurfaces({ focus: activeTabChanged });
+    currentWorkbench().workbench.layoutVisibleSurfaces({
+      focus: activeTabChanged,
+    });
   }
 }
 
 function toggleBottomBarVisibility(): void {
-  workbench.togglePlacementVisibility('bottom', 'terminal');
+  currentWorkbench().workbench.togglePlacementVisibility('bottom', 'terminal');
 }
 
 function toggleSidePanelVisibility(): void {
-  workbench.togglePlacementVisibility('right', 'settings');
+  currentWorkbench().workbench.togglePlacementVisibility('right', 'settings');
 }
 
 function toggleSummaryBarVisibility(): void {
   environmentPopover.close();
-  updateShell(toggleSummaryBar(shellState));
+  updateShell(toggleSummaryBar(shellState()));
 }
 
 // `<settings-app>` and `<progress-app>` are instantiated once and slotted into
@@ -356,6 +368,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 // launcher, its conversation branch the selected stream. `rerenderShell`
 // hands it the active paper's session.
 const conversationView = document.createElement('progress-app') as ProgressApp;
+conversationView.placement = 'desktop';
 conversationView.setAttribute('data-desktop-view', 'progress');
 
 const settingsView: HTMLElement = document.createElement('settings-app');
@@ -365,91 +378,17 @@ settingsView.setAttribute('data-desktop-view', 'settings');
 const logsController = createLogsPane();
 const logsPane = logsController.element;
 
-// Editor + terminal panes. Both are created eagerly but load their heavy
-// dependencies (Monaco, xterm) lazily on first activation, so an app that never
-// opens either pays nothing.
-const editorPane = createEditorPane({
-  listFiles: (directory) => requestFiles(directory),
-  readFile: (path) => requestFileRead(path),
-  writeFile: (path, contents) => requestFileWrite(path, contents),
-  onRequestOpen: (path) => {
-    updateShell(openWorkbenchTab(shellState, { kind: 'editor', target: path }));
-  },
-  onDirtyChange: (path, dirty) => {
-    updateShell(
-      setWorkbenchTabDirty(shellState, `workbench:editor:${path}`, dirty),
-    );
-  },
-  onError: (error) => console.error('TeXRA editor pane', error),
-});
-
-const terminalPane = createTerminalPane({
-  start: (sessionId, cols, rows) => {
-    // Reads the workbench controller declared below lazily: start() only fires
-    // once a terminal session opens, well after module evaluation.
-    const initialCommand = workbench.takePendingTerminalCommand(sessionId);
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START, {
-      sessionId,
-      cols,
-      rows,
-      ...(initialCommand ? { initialCommand } : {}),
-    });
-  },
-  sendInput: (sessionId, data) =>
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT, { sessionId, data }),
-  resize: (sessionId, cols, rows) =>
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE, {
-      sessionId,
-      cols,
-      rows,
-    }),
-  close: (sessionId) =>
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE, { sessionId }),
-});
-
-const reviewPane = createReviewPane();
-applyTheme();
-const pdfPane = createPdfPane();
 const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
   hostBridge.postMessage(message),
 );
-
-// =============================================================================
-// Editor / terminal / browser request plumbing
-// The renderer is sandboxed, so file I/O runs in the main process. The
-// promise-correlated request bridge for editor reads/writes/lists lives in
-// ./fileRequests.ts; workbench tab lifecycle, surface layout, and browser-view
-// bounds live in ./workbenchController.ts.
-
-const workbench = createWorkbenchController({
-  editorPane,
-  terminalPane,
-  reviewPane,
-  pdfPane,
-  subagentsTemplate: () => {
-    const papers = railPapers();
-    const active = activeRailPaper(papers);
-    return active
-      ? subagentsPaneTemplate({
-          view: active.view,
-          surface: active.surface,
-          selected: active.surface.selected,
-        })
-      : nothing;
-  },
-  settingsView,
-  logsPane,
-  getState: () => shellState,
-  getWorkspacePath: activePaperRoot,
-  updateShell,
-  postMessage,
-});
+applyTheme();
 
 const environmentPopover = createEnvironmentPopover({
-  getWorkbenchTabs: () => shellState.workbenchTabs,
+  getWorkbenchTabs: () => shellState().workbenchTabs,
   getChildStreamCount: () =>
     activeStreams().reduce((total, stream) => total + stream.rollup.total, 0),
-  postMessage,
+  postMessage: (command, payload) =>
+    postMessage(command, { ...payload, session: shell.active }),
 });
 
 function taskConversationTemplate(): TemplateResult {
@@ -463,8 +402,8 @@ function taskConversationTemplate(): TemplateResult {
   // Surface the same signal on the toggle that reopens the rail.
   const hasPendingApproval = (activePaper?.view.rollup.waiting ?? 0) > 0;
   const sidebarCollapsedWithPendingApproval =
-    shellState.sidebarCollapsed && hasPendingApproval;
-  let sidebarToggleLabel = shellState.sidebarCollapsed
+    shellState().sidebarCollapsed && hasPendingApproval;
+  let sidebarToggleLabel = shellState().sidebarCollapsed
     ? 'Show sidebar'
     : 'Hide sidebar';
   if (sidebarCollapsedWithPendingApproval) {
@@ -486,10 +425,10 @@ function taskConversationTemplate(): TemplateResult {
             size="s"
             aria-label=${sidebarToggleLabel}
             title=${sidebarToggleLabel}
-            @click=${() => updateShell(toggleSidebar(shellState))}
+            @click=${() => updateShell(toggleSidebar(shellState()))}
           >
             ${waIcon(
-              shellState.sidebarCollapsed ? 'chevron-right' : 'chevron-left',
+              shellState().sidebarCollapsed ? 'chevron-right' : 'chevron-left',
             )}
           </wa-button>
           ${
@@ -503,13 +442,13 @@ function taskConversationTemplate(): TemplateResult {
         </span>
         ${
           // In the focus layout the rail's switcher is the paper's one home.
-          shellState.papersLayout === 'sections' && papers.length > 0
+          shellState().papersLayout === 'sections' && papers.length > 0
             ? paperChipTemplate(papers, activePaper, selectPaper)
             : nothing
         }
         <span class="task-header-spacer"></span>
         ${
-          shellState.summaryBarVisible
+          shellState().summaryBarVisible
             ? html`
                 <wa-button
                   id="taskEnvironmentButton"
@@ -550,7 +489,7 @@ function taskConversationTemplate(): TemplateResult {
             tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR),
             className: 'task-layout-toggle',
             size: 'l',
-            pressed: shellState.summaryBarVisible,
+            pressed: shellState().summaryBarVisible,
             onClick: toggleSummaryBarVisibility,
           })}
           ${renderIconActionButton({
@@ -560,7 +499,7 @@ function taskConversationTemplate(): TemplateResult {
             tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
             className: 'task-layout-toggle',
             size: 'l',
-            pressed: activeWorkbenchTab(shellState, 'bottom') != null,
+            pressed: activeWorkbenchTab(shellState(), 'bottom') != null,
             onClick: toggleBottomBarVisibility,
           })}
           ${renderIconActionButton({
@@ -570,12 +509,12 @@ function taskConversationTemplate(): TemplateResult {
             tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
             className: 'task-layout-toggle',
             size: 'l',
-            pressed: activeWorkbenchTab(shellState, 'right') != null,
+            pressed: activeWorkbenchTab(shellState(), 'right') != null,
             onClick: toggleSidePanelVisibility,
           })}
         </div>
         ${
-          shellState.summaryBarVisible
+          shellState().summaryBarVisible
             ? environmentPopover.template(workspacePath)
             : nothing
         }
@@ -607,40 +546,59 @@ interface SplitPanelElement extends HTMLElement {
 }
 
 /**
- * Record a size the user just dragged a split handle to. Deliberately not
- * `updateShell`: the panel has already moved itself and the surface
- * ResizeObserver relays the new bounds, so re-rendering here would only fight
- * the drag. The value is kept so the next render starts from it.
+ * Store the split handle's measured size on this paper's surface.
  */
 function recordLayoutMeasurement(next: DesktopTaskShellState): void {
-  shellState = next;
+  if (applyingPaperList) return;
+  paperWorkbenches.get(shell.active)?.updateState(next);
 }
 
 function rememberSidebarWidth(event: Event): void {
+  if (shellState().sidebarCollapsed) return;
   const width = (event.currentTarget as SplitPanelElement).positionInPixels;
-  recordLayoutMeasurement(setSidebarWidth(shellState, width));
+  recordLayoutMeasurement(setSidebarWidth(shellState(), width));
 }
 
 function rememberBottomPanelHeight(event: Event): void {
+  if (!activeWorkbenchTab(shellState(), 'bottom')) return;
   const height = (event.currentTarget as SplitPanelElement).positionInPixels;
-  recordLayoutMeasurement(setBottomPanelHeight(shellState, height));
+  recordLayoutMeasurement(setBottomPanelHeight(shellState(), height));
 }
 
 function rememberWorkbenchWidth(event: Event): void {
+  if (!activeWorkbenchTab(shellState(), 'right')) return;
   const width = (event.currentTarget as SplitPanelElement).positionInPixels;
-  recordLayoutMeasurement(setWorkbenchWidth(shellState, width));
+  recordLayoutMeasurement(setWorkbenchWidth(shellState(), width));
+}
+
+function paperWorkbenchesTemplate(
+  placement: WorkbenchPlacement,
+): TemplateResult {
+  return html`${repeat(
+    paperWorkbenches.values(),
+    (paper) => paper.session,
+    (paper) =>
+      html` <div
+        class="task-paper-workbench"
+        data-workbench-session=${paper.session}
+        ?hidden=${paper.session !== shell.active || !activeWorkbenchTab(paper.getState(), placement)}
+      >
+        ${paper.workbench.template(placement)}
+      </div>`,
+  )} `;
 }
 
 function taskRightLayoutTemplate(
   rightTab: WorkbenchTab | undefined,
 ): TemplateResult {
-  if (!rightTab) return taskConversationTemplate();
   return html`
     <wa-split-panel
       class="task-main-split"
       orientation="horizontal"
       primary="end"
-      position-in-pixels=${shellState.workbenchWidth}
+      position-in-pixels=${rightTab ? shellState().workbenchWidth : 0}
+      ?disabled=${!rightTab}
+      style=${rightTab ? nothing : '--divider-width: 0px'}
       @wa-reposition=${rememberWorkbenchWidth}
     >
       <span slot="divider" class="task-split-handle">
@@ -650,7 +608,7 @@ function taskRightLayoutTemplate(
         ${taskConversationTemplate()}
       </div>
       <div slot="end" class="task-workbench-panel">
-        ${workbench.template(rightTab, 'right')}
+        ${paperWorkbenchesTemplate('right')}
       </div>
     </wa-split-panel>
   `;
@@ -661,13 +619,14 @@ function taskMainTemplate(
   bottomTab: WorkbenchTab | undefined,
 ): TemplateResult {
   const rightLayout = taskRightLayoutTemplate(rightTab);
-  if (!bottomTab) return rightLayout;
   return html`
     <wa-split-panel
       class="task-bottom-split"
       orientation="vertical"
       primary="end"
-      position-in-pixels=${shellState.bottomPanelHeight}
+      position-in-pixels=${bottomTab ? shellState().bottomPanelHeight : 0}
+      ?disabled=${!bottomTab}
+      style=${bottomTab ? nothing : '--divider-width: 0px'}
       @wa-reposition=${rememberBottomPanelHeight}
     >
       <span slot="divider" class="task-bottom-split-handle">
@@ -675,7 +634,7 @@ function taskMainTemplate(
       </span>
       <div slot="start" class="task-main-panel">${rightLayout}</div>
       <div slot="end" class="task-bottom-workbench-panel">
-        ${workbench.template(bottomTab, 'bottom')}
+        ${paperWorkbenchesTemplate('bottom')}
       </div>
     </wa-split-panel>
   `;
@@ -686,30 +645,19 @@ function selectPaper(key: string): void {
 }
 
 function shellTemplate(): TemplateResult {
-  const rightTab = activeWorkbenchTab(shellState, 'right');
-  const bottomTab = activeWorkbenchTab(shellState, 'bottom');
+  const rightTab = activeWorkbenchTab(shellState(), 'right');
+  const bottomTab = activeWorkbenchTab(shellState(), 'bottom');
   const main = taskMainTemplate(rightTab, bottomTab);
   const workbenchOpen = rightTab != null || bottomTab != null;
 
-  if (shellState.sidebarCollapsed) {
-    return html`
-      <div
-        class="task-shell task-shell-collapsed"
-        data-workbench-open=${String(workbenchOpen)}
-        data-right-panel-open=${String(rightTab != null)}
-        data-bottom-panel-open=${String(bottomTab != null)}
-      >
-        ${main}
-      </div>
-    `;
-  }
-
   return html`
     <wa-split-panel
-      class="task-shell"
+      class="task-shell ${shellState().sidebarCollapsed ? 'task-shell-collapsed' : ''}"
       orientation="horizontal"
       primary="start"
-      .positionInPixels=${shellState.sidebarWidth}
+      .positionInPixels=${shellState().sidebarCollapsed ? 0 : shellState().sidebarWidth}
+      ?disabled=${shellState().sidebarCollapsed}
+      style=${shellState().sidebarCollapsed ? '--divider-width: 0px' : nothing}
       data-workbench-open=${String(workbenchOpen)}
       data-right-panel-open=${String(rightTab != null)}
       data-bottom-panel-open=${String(bottomTab != null)}
@@ -718,15 +666,19 @@ function shellTemplate(): TemplateResult {
       <span slot="divider" class="task-split-handle">
         ${waIcon('ellipsis')}
       </span>
-      <div slot="start" class="task-sidebar-slot">
+      <div
+        slot="start"
+        class="task-sidebar-slot"
+        ?hidden=${shellState().sidebarCollapsed}
+      >
         ${taskSidebarTemplate(
           {
-            files: editorPane.treeElement,
-            filesExpanded: shellState.filesExpanded,
+            files: currentWorkbench().editorPane.treeElement,
+            filesExpanded: shellState().filesExpanded,
             papers: railPapers(),
             shell,
-            papersLayout: shellState.papersLayout,
-            subagentsOpen: shellState.workbenchTabs.some(
+            papersLayout: shellState().papersLayout,
+            subagentsOpen: shellState().workbenchTabs.some(
               (tab) => tab.kind === 'subagents',
             ),
             commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
@@ -735,15 +687,21 @@ function shellTemplate(): TemplateResult {
             onNewTask: returnToLauncher,
             onSearch: openCommandPalette,
             onToggleFiles: () => {
-              const next = toggleFiles(shellState);
+              const next = toggleFiles(shellState());
               updateShell(next);
-              if (next.filesExpanded) void editorPane.refresh();
+              if (next.filesExpanded)
+                void currentWorkbench().editorPane.refresh();
             },
             onOpenFolder: () =>
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
             onSelectPaper: selectPaper,
             onClosePaper: (key) =>
-              postMessage(DESKTOP_PAPER_COMMANDS.CLOSE_PAPER, { key }),
+              postMessage(DESKTOP_PAPER_COMMANDS.CLOSE_PAPER, {
+                key,
+                hasUnsavedChanges:
+                  paperWorkbenches.get(key)?.editorPane.hasUnsavedChanges() ??
+                  false,
+              }),
             onTogglePaperCollapsed: (key) =>
               setShell(
                 applyShellAction(shell, {
@@ -753,11 +711,14 @@ function shellTemplate(): TemplateResult {
                 }),
               ),
             onTogglePapersLayout: () =>
-              updateShell(togglePapersLayout(shellState)),
-            onOpenTerminal: () => workbench.openKind('terminal'),
-            onOpenBrowser: () => workbench.openKind('browser'),
-            onOpenSettings: () => workbench.openKind('settings'),
-            onOpenLogs: () => workbench.openKind('logs'),
+              updateShell(togglePapersLayout(shellState())),
+            onOpenTerminal: () =>
+              currentWorkbench().workbench.openKind('terminal'),
+            onOpenBrowser: () =>
+              currentWorkbench().workbench.openKind('browser'),
+            onOpenSettings: () =>
+              currentWorkbench().workbench.openKind('settings'),
+            onOpenLogs: () => currentWorkbench().workbench.openKind('logs'),
           },
         )}
       </div>
@@ -770,9 +731,11 @@ let surfaceResizeObserver: ResizeObserver | undefined;
 
 function observeSurfaceResizes(): void {
   surfaceResizeObserver ??= new ResizeObserver(() => {
-    editorPane.layout();
-    terminalPane.layout();
-    workbench.syncBrowserViewBounds();
+    const paper = paperWorkbenches.get(shell.active);
+    if (!paper || applyingPaperList) return;
+    paper.editorPane.layout();
+    paper.terminalPane.layout();
+    paper.workbench.syncBrowserViewBounds();
   });
   surfaceResizeObserver.disconnect();
   for (const element of document.querySelectorAll(
@@ -796,9 +759,7 @@ let sidebarRevealedForApprovalIds = new Set<string>();
  * request card lives on the pending stream's own view (one home for the
  * decision), so a collapsed, non-viewed rail leaves nothing to click
  * (#11511 — per-call workflow review cards land on a child stream, not the
- * one the user is watching). Mutates `shellState` directly rather than going
- * through `updateShell` so this can run from inside `rerenderShell` without
- * recursing into another render pass.
+ * one the user is watching). The preference belongs to the paper's surface.
  */
 function revealSidebarForOffScreenApproval(): void {
   const active = activeRailPaper(railPapers());
@@ -813,13 +774,16 @@ function revealSidebarForOffScreenApproval(): void {
     (id) => !sidebarRevealedForApprovalIds.has(id),
   );
   sidebarRevealedForApprovalIds = new Set(offScreen);
-  if (isNewApproval && shellState.sidebarCollapsed) {
-    shellState = toggleSidebar(shellState);
+  if (isNewApproval && shellState().sidebarCollapsed) {
+    paperSessions.act(shell.active, {
+      kind: 'workbench',
+      layout: toggleSidebar(shellState()),
+    });
   }
 }
 
 function rerenderShell(): void {
-  if (bootstrapFailed) return;
+  if (bootstrapFailed || applyingPaperList) return;
   revealSidebarForOffScreenApproval();
   const active = activeRailPaper(railPapers());
   const session = active ? paperSessions.get(active.display.key) : undefined;
@@ -828,12 +792,17 @@ function rerenderShell(): void {
   conversationView.surface = active?.surface ?? null;
   conversationView.host = session?.host$.get() ?? null;
   conversationView.nowMs = Date.now();
-  render(shellTemplate(), appRoot);
-  logsController.setActive(
-    activeWorkbenchTab(shellState, 'right')?.kind === 'logs' ||
-      activeWorkbenchTab(shellState, 'bottom')?.kind === 'logs',
+  render(
+    paperWorkbenches.has(shell.active)
+      ? shellTemplate()
+      : noWorkspacePlaceholder,
+    appRoot,
   );
-  observeSurfaceResizes();
+  logsController.setActive(
+    activeWorkbenchTab(shellState(), 'right')?.kind === 'logs' ||
+      activeWorkbenchTab(shellState(), 'bottom')?.kind === 'logs',
+  );
+  if (paperWorkbenches.has(shell.active)) observeSurfaceResizes();
 }
 
 function renderBootstrapFallback(error: unknown): void {
@@ -931,7 +900,7 @@ function openSettingsTab(
   tab?: ShowSettingsArgs[0],
   agentSubTab?: ShowSettingsArgs[1],
 ): void {
-  workbench.openKind('settings');
+  currentWorkbench().workbench.openKind('settings');
   if (tab == null) return;
   window.postMessage(
     buildDesktopSettingsTabMessage(tab, agentSubTab),
@@ -945,7 +914,7 @@ function openSettingsTab(
 
 const desktopRendererCommandActions: DesktopCommandActions = {
   showLauncher: returnToLauncher,
-  openWorkbench: workbench.openKind,
+  openWorkbench: (kind) => currentWorkbench().workbench.openKind(kind),
   showSettings: openSettingsTab,
   openDesktopDocs: () => {
     postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
@@ -957,7 +926,7 @@ const desktopRendererCommandActions: DesktopCommandActions = {
     postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
   },
   saveFile: () => {
-    void editorPane.save();
+    void currentWorkbench().editorPane.save();
   },
   showFirstRunWalkthrough: () => {
     startupTeamPanel.show();
@@ -1016,30 +985,40 @@ const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
 
 const MESSAGE_ROUTES = createMessageRoutes({
   saveAllFiles: () => {
-    void editorPane.save();
+    void paperWorkbenches.get(shell.active)?.editorPane.save();
   },
   // `refresh()` re-lists from the root and drops the expansion state, which is
   // the same reset the Files rail already performs each time it is opened —
   // so this stays consistent with how the pane behaves everywhere else rather
   // than introducing a second, subtler kind of refresh.
-  reloadWorkspaceFiles: () => {
-    void editorPane.refresh();
+  reloadWorkspaceFiles: (session) => {
+    void paperWorkbenches.get(session)?.editorPane.refresh();
   },
   isBootstrapFailed: () => bootstrapFailed,
   returnToLauncher,
   resetLauncher,
-  openKind: workbench.openKind,
-  toggleLayoutPanel: (panel) => LAYOUT_PANEL_TOGGLES[panel](),
+  openKind: (kind) =>
+    paperWorkbenches.get(shell.active)?.workbench.openKind(kind),
+  toggleLayoutPanel: (panel) => {
+    if (paperWorkbenches.has(shell.active)) LAYOUT_PANEL_TOGGLES[panel]();
+  },
   onboarding: {
     show: () => startupTeamPanel.show(),
     hide: () => startupTeamPanel.hide(),
   },
   logs: { applySnapshot: (message) => logsController.applySnapshot(message) },
   review: {
-    open: (message) => reviewPane.open(message),
-    clear: () => reviewPane.clear(),
+    open: (message) => {
+      const paper = paperWorkbenches.get(message.session);
+      paper?.reviewPane.open(message);
+      paper?.workbench.openKind('review');
+    },
+    clear: (session) => paperWorkbenches.get(session)?.reviewPane.clear(),
   },
-  disposeReviewTab: () => workbench.disposeWorkbenchTab('workbench:review'),
+  disposeReviewTab: (session) =>
+    paperWorkbenches
+      .get(session)
+      ?.workbench.disposeWorkbenchTab('workbench:review'),
   pdf: {
     open: (message) => {
       // The schema parsed the shape; the path is still checked once here,
@@ -1049,51 +1028,105 @@ const MESSAGE_ROUTES = createMessageRoutes({
         console.error('[desktop] rejected unsafe PDF path', message.pdfPath);
         return;
       }
-      updateShell(
-        openWorkbenchTab(shellState, {
+      const paper = paperWorkbenches.get(message.session);
+      if (!paper) return;
+      paper.updateState(
+        openWorkbenchTab(paper.getState(), {
           kind: 'pdf',
           target: message.pdfPath,
           title: message.title,
         }),
       );
     },
-    close: () => {
-      for (const tab of shellState.workbenchTabs) {
-        if (tab.kind === 'pdf') workbench.disposeWorkbenchTab(tab.id);
+    close: (session) => {
+      const paper = paperWorkbenches.get(session);
+      if (!paper) return;
+      for (const tab of paper.getState().workbenchTabs) {
+        if (tab.kind === 'pdf') paper.workbench.disposeWorkbenchTab(tab.id);
       }
     },
   },
   prompt: { open: (message) => promptOverlay.open(message) },
   terminal: {
-    write: (sessionId, data) => terminalPane.write(sessionId, data),
-    reportExit: (sessionId, exitCode) =>
-      terminalPane.reportExit(sessionId, exitCode),
-    reportError: (sessionId, message) =>
-      terminalPane.reportError(sessionId, message),
+    write: (session, sessionId, data) =>
+      paperWorkbenches.get(session)?.terminalPane.write(sessionId, data),
+    reportExit: (session, sessionId, exitCode) =>
+      paperWorkbenches
+        .get(session)
+        ?.terminalPane.reportExit(sessionId, exitCode),
+    reportError: (session, sessionId, message) =>
+      paperWorkbenches
+        .get(session)
+        ?.terminalPane.reportError(sessionId, message),
   },
-  openTerminalCommand: workbench.openTerminalCommand,
-  renameBrowserTab: (tabId, title) =>
-    updateShell(renameWorkbenchTab(shellState, tabId, title)),
+  openTerminalCommand: (session, command) =>
+    paperWorkbenches.get(session)?.workbench.openTerminalCommand(command),
+  renameBrowserTab: (session, tabId, title) => {
+    const paper = paperWorkbenches.get(session);
+    if (paper)
+      paper.updateState(renameWorkbenchTab(paper.getState(), tabId, title));
+  },
   papers: (message) => {
-    const previousRoot = activePaperRoot();
-    paperRoots = new Map(
-      message.papers.map((paper) => [paper.key, paper.root] as const),
-    );
-    papersKnown = true;
-    const open = message.papers.map((paper) => paper.key);
-    paperSessions.sync(open);
-    setShell({
-      ...shell,
-      active: message.activeKey,
-      open,
-      collapsed: shell.collapsed.filter((key) => open.includes(key)),
-    });
-    const root = activePaperRoot();
-    if (root !== undefined && root !== previousRoot) {
-      void editorPane.refresh();
+    const previousKey = shell.active;
+    // The list changes resource ownership and selection together. Keep signal
+    // notifications from painting an intermediate owner during this adoption.
+    applyingPaperList = true;
+    try {
+      paperRoots = new Map(
+        message.papers.map((paper) => [paper.key, paper.root] as const),
+      );
+      papersKnown = true;
+      const open = message.papers.map((paper) => paper.key);
+      const sessions = [...new Set([...open, message.activeKey])];
+      for (const [key, paper] of paperWorkbenches) {
+        if (sessions.includes(key)) continue;
+        paper.dispose();
+        paperWorkbenches.delete(key);
+      }
+      paperSessions.sync(sessions);
+      for (const key of sessions) {
+        if (paperWorkbenches.has(key)) continue;
+        const paper = createPaperWorkbench({
+          session: key,
+          root: paperRoots.get(key),
+          surfaces: paperSessions,
+          settingsView,
+          logsPane,
+          isActive: () => shell.active === key,
+          subagentsTemplate: () => {
+            const session = paperSessions.get(key);
+            return session
+              ? subagentsPaneTemplate({
+                  view: session.view$.get(),
+                  surface: session.surface$.get(),
+                  selected: session.surface$.get().selected,
+                })
+              : nothing;
+          },
+          onLayoutChanged: layoutChanged,
+        });
+        paperWorkbenches.set(key, paper);
+        paper.setTheme(currentTheme());
+        if (paperRoots.has(key)) void paper.editorPane.refresh();
+      }
+      setShell({
+        ...shell,
+        active: message.activeKey,
+        open,
+        collapsed: shell.collapsed.filter((key) => open.includes(key)),
+      });
+    } finally {
+      applyingPaperList = false;
+    }
+    rerenderShell();
+    if (previousKey !== message.activeKey) {
+      environmentPopover.close();
+      currentWorkbench().workbench.layoutVisibleSurfaces({ focus: false });
+      currentWorkbench().workbench.syncBrowserViewBounds();
     }
   },
-  environment: (summary) => {
+  environment: (session, summary) => {
+    if (session !== shell.active) return;
     environmentPopover.set(summary);
     rerenderShell();
   },
@@ -1112,9 +1145,11 @@ window.addEventListener('message', (event) => {
 // Keep the embedded browser aligned when the window resizes: its view is
 // positioned in absolute window coordinates, not renderer layout.
 window.addEventListener('resize', () => {
-  workbench.syncBrowserViewBounds();
-  editorPane.layout();
-  terminalPane.layout();
+  const paper = paperWorkbenches.get(shell.active);
+  if (!paper || applyingPaperList) return;
+  paper.workbench.syncBrowserViewBounds();
+  paper.editorPane.layout();
+  paper.terminalPane.layout();
 });
 
 // =============================================================================
@@ -1185,7 +1220,12 @@ if (!bootstrapFailed) {
 
 // Sole owner of "the workspace has unsaved editor changes": the main process
 // keeps no copy and learns of it only when this veto raises will-prevent-unload.
-installDesktopUnsavedCloseWiring(window, editorPane);
+installDesktopUnsavedCloseWiring(window, {
+  hasUnsavedChanges: () =>
+    [...paperWorkbenches.values()].some((paper) =>
+      paper.editorPane.hasUnsavedChanges(),
+    ),
+});
 
 window.addEventListener(
   'unload',
@@ -1193,8 +1233,8 @@ window.addEventListener(
     surfaceResizeObserver?.disconnect();
     shortcutBootstrap.dispose();
     disposePendingFileRequests();
-    editorPane.dispose();
-    terminalPane.disposeAll();
+    for (const paper of paperWorkbenches.values()) paper.dispose();
+    paperWorkbenches.clear();
     paperSessions.dispose();
   },
   { once: true },

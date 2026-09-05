@@ -226,6 +226,8 @@ export function describeRequestError(error: RequestError): string {
     case 'Unavailable':
     case 'Rejected':
       return error.reason;
+    case 'Internal':
+      return `The request failed inside TeXRA (ref ${error.ref}); see the log.`;
   }
 }
 

@@ -771,7 +771,8 @@ function handleExternalInquiry(
   const threadId = payload.threadId;
   if (!threadId) return;
 
-  if (denyExternalInquiryIfNoHumanInput(threadId, context)) return;
+  const turnIndex = payload.transcript?.at(-1)?.turnIndex ?? 1;
+  if (denyExternalInquiryIfNoHumanInput(threadId, turnIndex, context)) return;
   const reservation = reserveHostRequest(
     { kind: 'externalInquiry', data: payload },
     { owner, presentable: true },
@@ -782,13 +783,28 @@ function handleExternalInquiry(
     // modal-cancel all drop the durable inquiry thread.
     let action: Parameters<typeof handleExternalInquiryAction>[0];
     if (decision.accepted && decision.userMessage) {
-      action = { action: 'submit', threadId, answer: decision.userMessage };
+      action = {
+        action: 'submit',
+        threadId,
+        turnIndex,
+        answer: decision.userMessage,
+      };
     } else if (decision.rejectionCause !== undefined) {
-      action = { action: 'drop', threadId, cause: decision.rejectionCause };
+      action = {
+        action: 'drop',
+        threadId,
+        turnIndex,
+        cause: decision.rejectionCause,
+      };
     } else if (decision.userMessage) {
-      action = { action: 'drop', threadId, feedback: decision.userMessage };
+      action = {
+        action: 'drop',
+        threadId,
+        turnIndex,
+        feedback: decision.userMessage,
+      };
     } else {
-      action = { action: 'drop', threadId };
+      action = { action: 'drop', threadId, turnIndex };
     }
     // Persisting the action writes the inquiry thread; nothing else owns
     // this promise, so its rejection is logged here instead of surfacing as

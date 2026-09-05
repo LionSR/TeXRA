@@ -11,11 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
 
-import {
-  AgentConfigSchema,
-  polishTextWithAI,
-  type SessionHandle,
-} from '@agent/runtime';
+import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
@@ -44,6 +40,7 @@ import {
   createHostRunActions,
   launchPatchOf,
 } from '@controllers/session/hostRunActions';
+import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -75,7 +72,6 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import {
   findTranscriptSpillFile,
   spillArtifactOpenFailedMessage,
@@ -85,7 +81,6 @@ import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
-import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   checkCoreDependencies,
@@ -98,10 +93,10 @@ const log = createLog(CHANNEL);
 
 export interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
-  readonly sessionKey: string;
   readonly extensionPath: string;
   readonly globalState: vscode.Memento;
   readonly snapshot: HostSnapshotSource;
+  readonly draftRequests: HostDraftRequests;
   readonly toolEditApprovals: ToolEditApprovalController;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
@@ -115,6 +110,7 @@ export interface ExtensionHostRequestsOptions {
 
 export interface ExtensionHostRequests {
   handle(request: HostRequest, port: string): Promise<HostOutcome>;
+  closePort(port: string): void;
   /** Stops a recording this host owns; the take is discarded. */
   dispose(): void;
 }
@@ -150,6 +146,9 @@ export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
   const { session, snapshot, toolEditApprovals } = options;
+  const stopObservingRecording = options.draftRequests.subscribe((recording) =>
+    options.snapshot.setRecording(recording),
+  );
 
   /** Validate an agent request and run it through the one launch command. */
   async function runExecutionRequest(
@@ -349,41 +348,6 @@ export function createExtensionHostRequests(
     options.surfaceAction({ kind: 'launch', patch: launchPatchOf(config) });
     options.surfaceAction({ kind: 'selectNew' });
     await options.showInSidebar();
-  }
-
-  // The one recorder per process; this host owns a take while `owned`.
-  let owned = false;
-  async function record(
-    action: Extract<HostRequest, { kind: 'record' }>['action'],
-  ): Promise<HostOutcome> {
-    if (action.kind === 'start') {
-      const result = await startRecording();
-      if (!result.success) {
-        throw new Rejected({
-          reason: result.error ?? 'Recording could not start.',
-        });
-      }
-      owned = true;
-      snapshot.setRecording({
-        session: options.sessionKey,
-        target: action.target,
-      });
-      return done;
-    }
-    owned = false;
-    snapshot.setRecording(null);
-    const result = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Transcribing',
-        cancellable: false,
-      },
-      () => stopRecordingAndTranscribe(),
-    );
-    if (!result.success) {
-      throw new Rejected({ reason: result.error ?? 'Transcription failed.' });
-    }
-    return { kind: 'text', text: result.text };
   }
 
   /** The Tools sheet's verbs over the launcher's base and edited files. */
@@ -830,7 +794,9 @@ export function createExtensionHostRequests(
         await latexdiffs(request);
         return done;
       case 'record':
-        return record(request.action);
+      case 'polish':
+      case 'savePastedImage':
+        return options.draftRequests.handle(session, request, port);
       case 'popOut':
         await options.popOutToEditor();
         return done;
@@ -888,20 +854,6 @@ export function createExtensionHostRequests(
       case 'launch':
         await launch(request);
         return done;
-      case 'polish': {
-        const result = await polishTextWithAI(request.text, undefined, session);
-        if (!result.success) {
-          throw new Rejected({ reason: result.error ?? 'Polishing failed.' });
-        }
-        return { kind: 'text', text: result.text };
-      }
-      case 'savePastedImage': {
-        const fileName = await savePastedImageBase64(
-          request.base64,
-          request.fileName,
-        );
-        return { kind: 'savedImage', fileName };
-      }
       case 'compileInputPdf':
         throw notOnExtension('Compiling the input PDF');
       case 'extractFigures':
@@ -994,15 +946,10 @@ export function createExtensionHostRequests(
 
   return {
     handle,
+    closePort: (port) => options.draftRequests.cancel(session, port),
     dispose() {
-      if (!owned) return;
-      owned = false;
-      void stopRecordingAndTranscribe().catch((error: unknown) =>
-        log.warn(
-          `Failed to stop the recording on dispose: ${toErrorMessage(error)}`,
-        ),
-      );
-      snapshot.setRecording(null);
+      stopObservingRecording();
+      options.draftRequests.cancel(session);
     },
   };
 }

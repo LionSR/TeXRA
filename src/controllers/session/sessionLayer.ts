@@ -63,6 +63,7 @@ import {
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { SessionInputs } from '@shared/session/sessionInputs';
 import {
   isRunningStreamingTextEntry,
   type StreamLogDelta,
@@ -75,6 +76,7 @@ import {
   TranscriptSubscriptions,
 } from './sessionSources';
 import { SessionViewService } from './SessionView';
+import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 const log = createLog('sessionLayer');
@@ -364,6 +366,7 @@ const sessionLayer = (key: SessionKey) =>
   Layer.fresh(
     Layer.mergeAll(ownerLiveness, transcriptBridge(key.transcripts)).pipe(
       Layer.provideMerge(SessionViewService.layer),
+      Layer.provideMerge(sessionInputsLayer),
       Layer.provideMerge(
         sessionEventsLayer.pipe(
           Layer.provideMerge(
@@ -447,7 +450,7 @@ function sessionGraphOpener(
       publish,
       view: view.ref,
       local: Context.get(context, LocalRuntimeSource).ref,
-      chunks: Context.get(context, TextChunkSource).changes,
+      inputs: Context.get(context, SessionInputs).read,
       subscriptions: Context.get(context, TranscriptSubscriptions),
       requests,
       now: () => SubscriptionRef.getUnsafe(eventLog.level),

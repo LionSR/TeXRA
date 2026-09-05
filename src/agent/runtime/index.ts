@@ -35,10 +35,6 @@ export { runInSession } from './RunContext';
 // (`installProcessRuntime`), from the host's own start identity.
 export { processOwnerId } from './SessionEvents';
 
-// StreamStatusMachine — the per-stream lifecycle record hosts render from
-// (`SessionState.streamStatus.getStreamState`). Type only: the machine itself
-// is reached through the session, never constructed by a host.
-
 // HostInteractions
 export {
   SessionHostInteractions,
@@ -100,7 +96,6 @@ export type {
 } from './runtimePresentationEvents';
 
 // textEnhancement
-export { polishTextWithAI } from './textEnhancement';
 
 // selectAutoOpenFinalOutput
 export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';

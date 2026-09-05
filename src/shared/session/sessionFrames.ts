@@ -10,11 +10,10 @@
  * under its id, and a `SurfaceAction` is the host acting on state the
  * surface owns. Up: `Subscribe`, `runtime.request`, and `host.request`.
  *
- * `SessionFrames` is what `SessionEvents.transportLayer` reads: the decoder
- * feeds each frame's rows to the queue of its read, ends the listing and
- * aggregate queues at the frame that carries `replayComplete`, and drops a
- * frame whose generation is not the current one. The fold fiber over these
- * queues is the unchanged `SessionViewService`.
+ * `SessionFrames` supplies one ordered queue for the current generation.
+ * It collects a replay through its completion marker before releasing it
+ * to the fold, then delivers each frame's events before its text chunks.
+ * A new generation discards the superseded queue and incomplete replay.
  */
 import {
   Cause,
@@ -31,14 +30,11 @@ import {
   CommitOrdinalSchema,
   FoldEventSchema,
   LocalRuntimeStateSchema,
-  SessionEventSchema,
   StreamTabIdSchema,
   TextChunkSchema,
   TranscriptSubscriptionSchema,
-  type AggregateId,
-  type LocalRuntimeState,
-  type SessionEvent,
-  type TextChunk,
+  type FoldInput,
+  type TranscriptSubscription,
 } from '@shared/schemas';
 import { HostRequestSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
@@ -166,154 +162,86 @@ export const DownMessageSchema = z.discriminatedUnion('kind', [
 ]);
 export type DownMessage = z.infer<typeof DownMessageSchema>;
 
-/** `${streamId}/${rowId}`: the in-flight text of one streaming row. */
-type InflightText = ReadonlyMap<string, string>;
-
-type EventQueue = Queue.Queue<SessionEvent, Cause.Done>;
-
-/** One `Subscribe`'s replay queues: the listing and one per aggregate,
- *  ended together at the `replayComplete` frame. */
-interface Replay {
+/** One generation's ordered frames; replay is collected before publication. */
+interface FrameRead {
   readonly generation: number;
-  readonly listing: EventQueue;
-  readonly aggregates: Map<AggregateId, EventQueue>;
-  ended: boolean;
-}
-
-/** The row's text after a chunk (PRD 5.2): truncate at `from`, append. */
-function applyChunk(held: string, chunk: TextChunk): string {
-  return held.slice(0, chunk.from) + chunk.text;
+  readonly queue: Queue.Queue<EventsFrame, Cause.Done>;
 }
 
 export class SessionFrames extends Context.Service<
   SessionFrames,
   {
-    /** The current `Subscribe`'s listing rows; ends at `replayComplete`. */
-    readonly listing: () => Stream.Stream<SessionEvent>;
-    /** The tail: every `all` row of a current-generation frame. */
-    readonly events: () => Stream.Stream<SessionEvent>;
-    /** One aggregate's history rows of the current `Subscribe`; ends at
-     *  `replayComplete`. `fromSeq` is the runtime's to honor: it read the
-     *  history the `Subscribe` named. */
-    readonly aggregate: (
-      aggregateId: AggregateId,
-      fromSeq: number,
-    ) => Stream.Stream<SessionEvent>;
-    /** The runtime's local snapshot, as the last frame carried it. */
-    readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
-    /** The host snapshot (8.1), as the last frame carried it; null until
-     *  one has. */
+    readonly inputs: (
+      aggregates: readonly TranscriptSubscription[],
+    ) => Stream.Stream<readonly FoldInput[]>;
     readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
-    /** Every chunk of a current-generation frame, in frame order. */
-    readonly chunks: Stream.Stream<TextChunk>;
-    /** The in-flight text level the chunks build, keyed `${streamId}/${rowId}`. */
-    readonly inflight: SubscriptionRef.SubscriptionRef<InflightText>;
-    /** A new `Subscribe` was issued under `generation`: fresh replay queues
-     *  replace the current ones; frames of any other generation are dropped
-     *  from here on. */
     readonly begin: (generation: number) => Effect.Effect<void>;
-    /** Route one frame's rows, chunks, and the two snapshots it carries;
-     *  synchronous, so a decoder feeds frames in arrival order with
-     *  `runSync` and no two frames ever interleave. */
+    /** Feed a frame synchronously, preserving arrival order. */
     readonly feed: (frame: EventsFrame) => Effect.Effect<void>;
   }
 >()('@texra/session/SessionFrames') {
   static readonly layer = Layer.effect(
     SessionFrames,
     Effect.gen(function* () {
-      const tail = yield* Queue.unbounded<SessionEvent, Cause.Done>();
-      const chunks = yield* Queue.unbounded<TextChunk, Cause.Done>();
-      const local = yield* SubscriptionRef.make<LocalRuntimeState>({
-        self: [],
-        heldBy: [],
-        unreadable: [],
-      });
       const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
-      const inflight = yield* SubscriptionRef.make<InflightText>(new Map());
-      const newQueue = Queue.unbounded<SessionEvent, Cause.Done>();
-      const newReplay = (generation: number): Effect.Effect<Replay> =>
-        Effect.map(newQueue, (listing) => ({
-          generation,
-          listing,
-          aggregates: new Map(),
-          ended: false,
-        }));
-      // A frames service always has a current generation: the fold opens
-      // its reads at build, before the shell's first `Subscribe`, on
-      // generation 0, whose queues end when a frame of it says so and are
-      // otherwise superseded by the first `begin`.
-      let replay = yield* newReplay(0);
-      const aggregateQueue = (
-        current: Replay,
-        aggregateId: AggregateId,
-      ): Effect.Effect<EventQueue> =>
-        Effect.gen(function* () {
-          const held = current.aggregates.get(aggregateId);
-          if (held) return held;
-          const queue = yield* newQueue;
-          current.aggregates.set(aggregateId, queue);
-          // Asked for after the replay ended: an aggregate the runtime had
-          // no rows for; its history is empty and complete.
-          if (current.ended) yield* Queue.end(queue);
-          return queue;
-        });
+      let current: FrameRead = {
+        generation: 0,
+        queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
+      };
       return {
-        listing: () => Stream.suspend(() => Stream.fromQueue(replay.listing)),
-        events: () => Stream.fromQueue(tail),
-        aggregate: (aggregateId) =>
-          Stream.unwrap(
-            Effect.suspend(() => aggregateQueue(replay, aggregateId)).pipe(
-              Effect.map((queue) => Stream.fromQueue(queue)),
+        host,
+        inputs: (aggregates) =>
+          Stream.suspend(() =>
+            Stream.fromQueue(current.queue).pipe(
+              Stream.mapAccum(
+                () => ({
+                  replay: [
+                    { _tag: 'subscriptions', set: [...aggregates] },
+                  ] as FoldInput[],
+                  complete: false,
+                }),
+                (state, frame) => {
+                  const history = frame.events.filter(
+                    (row) => row.read !== 'all',
+                  );
+                  const tail = frame.events.filter((row) => row.read === 'all');
+                  const local: FoldInput[] = frame.local
+                    ? [{ _tag: 'local', local: frame.local }]
+                    : [];
+                  const live: FoldInput[] = [
+                    ...tail,
+                    ...frame.chunks,
+                    ...local,
+                    { _tag: 'drained', cursor: frame.cursor },
+                  ];
+                  if (state.complete) return [state, [live]] as const;
+                  state.replay.push(...history, ...local);
+                  if (!frame.replayComplete) return [state, []] as const;
+                  const batch: FoldInput[] = [
+                    ...state.replay,
+                    { _tag: 'replay.complete' },
+                    ...live,
+                  ];
+                  return [
+                    { replay: [] as FoldInput[], complete: true },
+                    [batch],
+                  ] as const;
+                },
+              ),
             ),
           ),
-        local,
-        host,
-        chunks: Stream.fromQueue(chunks),
-        inflight,
         begin: (generation) =>
           Effect.gen(function* () {
-            replay = yield* newReplay(generation);
+            current = {
+              generation,
+              queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
+            };
           }),
         feed: (frame) =>
           Effect.gen(function* () {
-            const current = replay;
-            if (current.generation !== frame.generation) return;
-            for (const row of frame.events) {
-              switch (row.read) {
-                case 'listing':
-                  yield* Queue.offer(current.listing, row.event);
-                  break;
-                case 'aggregate':
-                  yield* Queue.offer(
-                    yield* aggregateQueue(current, row.event.aggregateId),
-                    row.event,
-                  );
-                  break;
-                case 'all':
-                  yield* Queue.offer(tail, row.event);
-                  break;
-              }
-            }
-            if (frame.chunks.length > 0) {
-              yield* SubscriptionRef.update(inflight, (held) => {
-                const next = new Map(held);
-                for (const chunk of frame.chunks) {
-                  const key = `${chunk.streamId}/${chunk.rowId}`;
-                  next.set(key, applyChunk(next.get(key) ?? '', chunk));
-                }
-                return next;
-              });
-              yield* Queue.offerAll(chunks, frame.chunks);
-            }
-            if (frame.local) yield* SubscriptionRef.set(local, frame.local);
+            if (frame.generation !== current.generation) return;
+            yield* Queue.offer(current.queue, frame);
             if (frame.host) yield* SubscriptionRef.set(host, frame.host);
-            if (frame.replayComplete && !current.ended) {
-              current.ended = true;
-              yield* Queue.end(current.listing);
-              for (const queue of current.aggregates.values()) {
-                yield* Queue.end(queue);
-              }
-            }
           }),
       };
     }),

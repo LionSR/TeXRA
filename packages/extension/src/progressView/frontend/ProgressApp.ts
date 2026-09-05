@@ -105,6 +105,8 @@ export class ProgressApp extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
+  /** Fixed by the document hosting this surface. */
+  @property() placement: 'sidebar' | 'editor' | 'desktop' = 'sidebar';
   /** The host's clock, for elapsed readings (G4). */
   @property({ type: Number }) nowMs: number | null = null;
 
@@ -175,7 +177,7 @@ export class ProgressApp extends LitElement {
     const selected = resolveSelected(view, surface);
     const stream =
       selected === null ? null : (view.streams.get(selected) ?? null);
-    const docked = host.placement === 'editor';
+    const docked = this.placement === 'editor';
 
     return html`
       <div
@@ -208,6 +210,7 @@ export class ProgressApp extends LitElement {
                 .view=${view}
                 .surface=${surface}
                 .host=${host}
+                .placement=${this.placement}
               ></session-drawer>`
             : nothing
         }
@@ -302,7 +305,7 @@ export class ProgressApp extends LitElement {
     stream: StreamView,
     host: HostSnapshot,
   ): TemplateResult {
-    const inEditor = host.placement === 'editor';
+    const inEditor = this.placement === 'editor';
     const attachTexCount = this.surface?.launch.attachTeXCount === true;
     return html`
       <wa-dropdown

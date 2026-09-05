@@ -189,10 +189,14 @@ function foldWith(
     case 'subscriptions':
       foldSubscriptions(next, input.set, deferred);
       return next;
+    case 'drained':
+      return input.cursor > view.cursor
+        ? { ...view, cursor: input.cursor }
+        : view;
     case 'replay.complete': {
-      // The marker carries no fact (PRD 5.2); the publish gate reads it from
-      // the input beside the view. What it closes is the listing ahead of
-      // it (7.2): a stream no listing row of this sequence named is gone,
+      // The input reader releases the completed replay as one batch (7.2).
+      // Its marker closes the listing ahead of it: a stream no listing row
+      // of this sequence named is gone,
       // tombstone and all, because retention pruned it while this surface
       // was away and no later read can deliver the deletion.
       const { listed } = sessionIndexesOf(next);

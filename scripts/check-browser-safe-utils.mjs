@@ -525,7 +525,7 @@ function documentedFacts() {
   );
   const agentsList = documentedList(
     agents,
-    /exactly \w+ modules are reachable from[\s\S]*?—\s*([\s\S]*?)\.\s*Those \w+/,
+    /exactly \w+ modules are reachable from[\s\S]*?[—:]\s*([\s\S]*?)\.\s*Those \w+/,
   );
 
   if (

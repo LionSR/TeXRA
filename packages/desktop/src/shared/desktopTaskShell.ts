@@ -8,6 +8,8 @@
 // This reducer is intentionally host-neutral. Electron resources are created
 // and disposed by the renderer; this module only describes what is visible.
 
+import { z } from 'zod';
+
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { clamp, getBasename } from '@utils/core';
 
@@ -82,14 +84,16 @@ export const WORKBENCH_KIND_META = {
 
 export type WorkbenchKind = keyof typeof WORKBENCH_KIND_META;
 
-export interface WorkbenchTab {
-  readonly id: string;
-  readonly kind: WorkbenchKind;
-  readonly placement: WorkbenchPlacement;
-  readonly title: string;
-  readonly target?: string;
-  readonly dirty?: boolean;
-}
+const WorkbenchTabSchema = z.object({
+  id: z.string(),
+  kind: z.enum(Object.keys(WORKBENCH_KIND_META) as WorkbenchKind[]),
+  placement: z.enum(WORKBENCH_PLACEMENTS),
+  title: z.string(),
+  target: z.string().optional(),
+  dirty: z.boolean().optional(),
+});
+
+export type WorkbenchTab = z.infer<typeof WorkbenchTabSchema>;
 
 /**
  * How the rail lists the open papers: every paper as its own section with
@@ -99,20 +103,24 @@ export interface WorkbenchTab {
 const PAPERS_LAYOUTS = ['sections', 'focus'] as const;
 export type PapersLayout = (typeof PAPERS_LAYOUTS)[number];
 
-export interface DesktopTaskShellState {
-  readonly activeWorkbenchTabIds: Readonly<
-    Partial<Record<WorkbenchPlacement, string>>
-  >;
-  readonly bottomPanelHeight: number;
-  readonly sidebarCollapsed: boolean;
-  readonly sidebarWidth: number;
-  readonly filesExpanded: boolean;
-  readonly papersLayout: PapersLayout;
-  readonly summaryBarVisible: boolean;
-  readonly workbenchWidth: number;
-  readonly workbenchTabs: readonly WorkbenchTab[];
-  readonly nextTerminalSerial: number;
-}
+/** Persisted per paper in Surface.workbench. */
+export const DesktopTaskShellStateSchema = z.object({
+  activeWorkbenchTabIds: z.partialRecord(
+    z.enum(WORKBENCH_PLACEMENTS),
+    z.string().optional(),
+  ),
+  bottomPanelHeight: z.number(),
+  sidebarCollapsed: z.boolean(),
+  sidebarWidth: z.number(),
+  filesExpanded: z.boolean(),
+  papersLayout: z.enum(PAPERS_LAYOUTS),
+  summaryBarVisible: z.boolean(),
+  workbenchWidth: z.number(),
+  workbenchTabs: z.array(WorkbenchTabSchema),
+  nextTerminalSerial: z.int().positive(),
+});
+
+export type DesktopTaskShellState = z.infer<typeof DesktopTaskShellStateSchema>;
 
 const BOTTOM_PANEL_MIN_HEIGHT = 180;
 const BOTTOM_PANEL_MAX_HEIGHT = 560;

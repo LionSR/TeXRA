@@ -291,6 +291,7 @@ describe('desktop Electron host bridge', () => {
       const { bridge, sends } = await createBridge();
       const message = {
         command: 'desktop:showPdf',
+        session: '/tmp/paper',
         title: 't',
         pdfPath: '/tmp/paper.pdf',
       };

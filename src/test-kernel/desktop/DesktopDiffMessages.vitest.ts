@@ -10,6 +10,7 @@ let DesktopShowDiffMessageSchema!: DesktopDiffMessagesModule['DesktopShowDiffMes
 describe('DesktopShowDiffMessageSchema', () => {
   const basePayload = {
     command: 'desktop:showDiff',
+    session: '/paper',
     title: 'Compare',
     originalText: 'a',
     proposedText: 'b',

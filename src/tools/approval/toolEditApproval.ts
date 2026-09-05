@@ -70,18 +70,6 @@ export type ToolEditApprovalResult =
 
 export const REVEAL_TIMEOUT_MS = 1500;
 
-export function setToolEditApprovalSessionBypass(
-  streamId: StreamTabId,
-  enabled: boolean,
-  options?: { silent?: boolean; session?: SessionHandle },
-): void {
-  (options?.session ?? currentSession()).approvals.toolEdit.bypass.setBypass(
-    streamId,
-    enabled,
-    options,
-  );
-}
-
 /**
  * Build the tool-edit permission payload every host publishes to its approval
  * surface, the tool-edit counterpart of `prepareBashApprovalPrompt`.

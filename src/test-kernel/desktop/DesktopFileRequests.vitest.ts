@@ -21,8 +21,8 @@ describe('desktop file requests', () => {
   });
 
   it('rejects every pending request when its renderer is disposed', async () => {
-    const read = requestFileRead('main.tex');
-    const list = requestFiles('.');
+    const read = requestFileRead('paper-a', 'main.tex');
+    const list = requestFiles('paper-a', '.');
 
     disposePendingFileRequests();
 
@@ -41,13 +41,15 @@ describe('desktop file requests', () => {
         throw new Error('desktop bridge unavailable');
       });
 
-      const read = requestFileRead('main.tex');
+      const read = requestFileRead('paper-a', 'main.tex');
       const request = mocks.postMessage.mock.calls[0]?.[1] as
         { requestId: string } | undefined;
       if (!request) throw new Error('Expected a desktop file request');
 
       await expect(read).rejects.toThrow('desktop bridge unavailable');
-      expect(takePendingFileRequest(request.requestId)).toBeUndefined();
+      expect(
+        takePendingFileRequest('paper-a', request.requestId),
+      ).toBeUndefined();
       expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
@@ -57,11 +59,11 @@ describe('desktop file requests', () => {
   it('clears the timeout when a read response resolves', async () => {
     vi.useFakeTimers();
     try {
-      const read = requestFileRead('main.tex');
+      const read = requestFileRead('paper-a', 'main.tex');
       const request = mocks.postMessage.mock.calls[0]?.[1] as
         { requestId: string } | undefined;
       if (!request) throw new Error('Expected a desktop file request');
-      const pending = takePendingFileRequest(request.requestId);
+      const pending = takePendingFileRequest('paper-a', request.requestId);
       if (pending?.kind !== 'read') {
         throw new Error('Expected a pending desktop file read');
       }
@@ -78,7 +80,7 @@ describe('desktop file requests', () => {
   it('times out reads after 60 seconds and ignores a late response', async () => {
     vi.useFakeTimers();
     try {
-      const read = requestFileRead('main.tex');
+      const read = requestFileRead('paper-a', 'main.tex');
       const request = mocks.postMessage.mock.calls[0]?.[1] as
         { requestId: string } | undefined;
       if (!request) throw new Error('Expected a desktop file request');
@@ -89,7 +91,9 @@ describe('desktop file requests', () => {
       await vi.advanceTimersByTimeAsync(60_000);
 
       await rejection;
-      expect(takePendingFileRequest(request.requestId)).toBeUndefined();
+      expect(
+        takePendingFileRequest('paper-a', request.requestId),
+      ).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
@@ -98,7 +102,7 @@ describe('desktop file requests', () => {
   it('keeps waiting for writes that may still complete in the main process', async () => {
     vi.useFakeTimers();
     try {
-      const write = requestFileWrite('main.tex', 'revised');
+      const write = requestFileWrite('paper-a', 'main.tex', 'revised');
       const settled = vi.fn();
       void write.then(settled, settled);
 

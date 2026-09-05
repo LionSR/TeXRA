@@ -12,6 +12,7 @@
 import { signal, type Signal } from '@lit-labs/signals';
 
 import type { StateStore } from '@platform/interfaces';
+import type { SessionType, StreamTabId } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -21,6 +22,7 @@ import type { Response } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   applySurfaceAction,
+  EMPTY_DRAFT,
   loadSurface,
   persistSurface,
   PersistedSurfaceSchema,
@@ -136,6 +138,9 @@ export function createSessionSurfaces(options: {
       PersistedSurfaceSchema,
     );
     const surface$ = signal<Surface>(loadSurface(key, persisted.getState()));
+    // The ref's initial value precedes listing replay. Only subsequent
+    // publications have complete membership and can authorize pruning.
+    const beforeReplay = session.view$.get();
     const entry: Held = {
       key,
       view$: session.view$,
@@ -151,10 +156,10 @@ export function createSessionSurfaces(options: {
     entry.unsubscribe = subscribeToSignalChanges(
       [session.view$, surface$, session.host$],
       () => {
-        setSurface(
-          entry,
-          pruneSurface(entry.surface$.get(), session.view$.get()),
-        );
+        const view = session.view$.get();
+        if (view !== beforeReplay) {
+          setSurface(entry, pruneSurface(entry.surface$.get(), view));
+        }
         subscribeTranscript(entry);
         notify();
       },
@@ -164,46 +169,30 @@ export function createSessionSurfaces(options: {
     return entry;
   }
 
-  /** The response of a `runtime.request`, folded onto the surface. */
-  function settleRuntime(
-    entry: Held,
-    request: RuntimeRequest,
-    result: Response['result'],
-  ): void {
-    if (result.ok || request.kind !== 'followUp.send') return;
-    // A rejected follow-up keeps its draft (8.4): the composer cleared it
-    // optimistically on send.
-    act(entry, {
-      kind: 'draft',
-      streamId: request.streamId,
-      patch: { text: request.text },
-    });
+  /** An asynchronous operation keeps the draft that started it, even if
+   *  selection or the launcher's mode changes before its response. */
+  interface DraftOrigin {
+    readonly streamId: StreamTabId | null;
+    readonly sessionType: SessionType;
   }
 
-  /** A polished or transcribed text lands on the selected stream's draft,
-   *  or on the launcher's instruction in the New-task state. */
-  function setDraftText(
-    entry: Held,
-    variant: 'polished' | 'transcribed',
-    text: string,
-  ): void {
+  function draftText(entry: Held, origin: DraftOrigin): string {
     const surface = entry.surface$.get();
-    const streamId = resolveSelected(entry.view$.get(), surface);
-    if (streamId !== null) {
-      act(entry, { kind: 'draft', streamId, patch: { [variant]: text } });
+    return origin.streamId === null
+      ? surface.launch.instruction[origin.sessionType]
+      : (surface.drafts.get(origin.streamId)?.text ?? '');
+  }
+
+  function setDraftText(entry: Held, origin: DraftOrigin, text: string): void {
+    if (origin.streamId !== null) {
+      // A completed operation cannot recreate a deleted conversation.
+      if (!entry.view$.get().streams.has(origin.streamId)) return;
+      act(entry, { kind: 'draft', streamId: origin.streamId, patch: { text } });
       return;
-    }
-    const { launch } = surface;
-    const current = launch.instruction[launch.sessionType];
-    let next = text;
-    if (variant === 'transcribed' && current) {
-      next = `${current.replace(/\s+$/, '')} ${text}`;
     }
     act(entry, {
       kind: 'launch',
-      patch: {
-        instruction: { ...launch.instruction, [launch.sessionType]: next },
-      },
+      patch: { instruction: { [origin.sessionType]: text } },
     });
   }
 
@@ -211,16 +200,10 @@ export function createSessionSurfaces(options: {
   function settleHost(
     entry: Held,
     request: HostRequest,
+    origin: DraftOrigin,
     result: Response['result'],
   ): void {
-    if (!result.ok) {
-      // The composer clears its polishing state when a polished variant
-      // lands; a failed polish lands the text itself.
-      if (request.kind === 'polish') {
-        setDraftText(entry, 'polished', request.text);
-      }
-      return;
-    }
+    if (!result.ok) return;
     const { outcome } = result;
     const { launch } = entry.surface$.get();
     switch (request.kind) {
@@ -240,39 +223,76 @@ export function createSessionSurfaces(options: {
         return;
       }
       case 'polish':
-        if (outcome.kind === 'text') {
-          setDraftText(entry, 'polished', outcome.text);
+        // A reply to an earlier text cannot replace edits made while it ran.
+        if (
+          outcome.kind === 'text' &&
+          draftText(entry, origin).trim() === request.text
+        ) {
+          setDraftText(entry, origin, outcome.text);
         }
         return;
       case 'record':
-        if (outcome.kind === 'text') {
-          setDraftText(entry, 'transcribed', outcome.text);
+        if (request.action.kind === 'start' && outcome.kind === 'text') {
+          const current = draftText(entry, origin).trimEnd();
+          setDraftText(
+            entry,
+            origin,
+            current ? `${current} ${outcome.text}` : outcome.text,
+          );
         }
         return;
       case 'launch':
-        // The host reveals the stream it started through `surface.action`;
-        // the instruction draft is spent.
-        act(entry, {
-          kind: 'launch',
-          patch: {
-            instruction: { ...launch.instruction, [launch.sessionType]: '' },
-          },
-        });
+        if (
+          launch.instruction[request.launch.sessionType] ===
+          request.launch.instruction[request.launch.sessionType]
+        ) {
+          act(entry, {
+            kind: 'launch',
+            patch: { instruction: { [request.launch.sessionType]: '' } },
+          });
+        }
         return;
       default:
         return;
     }
   }
 
-  function hostRequestFor(entry: Held, hostRequest: HostRequest): void {
+  function hostRequestFor(entry: Held, request: HostRequest): void {
+    const surface = entry.surface$.get();
+    let streamId = resolveSelected(entry.view$.get(), surface);
+    if (request.kind === 'record' && request.action.kind === 'start') {
+      streamId =
+        request.action.target === 'launch' ? null : request.action.target;
+    }
+    const origin: DraftOrigin = {
+      streamId,
+      sessionType: surface.launch.sessionType,
+    };
+    const target = origin.streamId ?? `launch:${origin.sessionType}`;
+    if (request.kind === 'polish') {
+      if (surface.polishing.has(target)) return;
+      setSurface(entry, {
+        ...surface,
+        polishing: new Set([...surface.polishing, target]),
+      });
+    }
     void transport
       .request({
         kind: 'host.request',
         session: entry.key,
         requestId: requestId(),
-        request: hostRequest,
+        request,
       })
-      .then((result) => settleHost(entry, hostRequest, result));
+      .then((result) => {
+        if (held.get(entry.key) !== entry) return;
+        if (request.kind === 'polish') {
+          const current = entry.surface$.get();
+          const polishing = new Set(current.polishing);
+          polishing.delete(target);
+          setSurface(entry, { ...current, polishing });
+        }
+        settleHost(entry, request, origin, result);
+      });
   }
 
   transport.onSurfaceAction((key, action) => {
@@ -315,6 +335,20 @@ export function createSessionSurfaces(options: {
     runtimeRequest(key, request) {
       const entry = held.get(key);
       if (!entry) return;
+      if (request.kind === 'followUp.send') {
+        const current = entry.surface$.get();
+        if (current.sending.has(request.streamId)) return;
+        setSurface(entry, {
+          ...current,
+          sending: new Set([...current.sending, request.streamId]),
+        });
+      }
+      // Keep text and images until admission succeeds. A rejection needs
+      // no restoration, and a later edit remains independent of this send.
+      const submitted =
+        request.kind === 'followUp.send'
+          ? entry.surface$.get().drafts.get(request.streamId)
+          : undefined;
       void transport
         .request({
           kind: 'runtime.request',
@@ -322,7 +356,25 @@ export function createSessionSurfaces(options: {
           requestId: requestId(),
           request,
         })
-        .then((result) => settleRuntime(entry, request, result));
+        .then((result) => {
+          if (held.get(key) !== entry || request.kind !== 'followUp.send')
+            return;
+          const current = entry.surface$.get();
+          const sending = new Set(current.sending);
+          sending.delete(request.streamId);
+          setSurface(entry, { ...current, sending });
+          if (!result.ok) return;
+          if (
+            submitted !== undefined &&
+            entry.surface$.get().drafts.get(request.streamId) === submitted
+          ) {
+            act(entry, {
+              kind: 'draft',
+              streamId: request.streamId,
+              patch: EMPTY_DRAFT,
+            });
+          }
+        });
     },
     hostRequest(key, hostRequest) {
       const entry = held.get(key);

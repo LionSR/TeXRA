@@ -212,10 +212,7 @@ export const WorktreeInfoSchema = z.object({
 export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
 
 /**
- * The identity/pointer fields every per-stream metadata surface carries —
- * declared once so the wire tab shape ({@link StreamTabInfoSchema}) and the
- * session-side metadata record (`SessionStreamMetadata`,
- * `@controllers/session/SessionState`) cannot drift apart field-by-field.
+ * The identity and storage pointers carried by each stream tab.
  */
 const StreamIdentityFieldsSchema = z.object({
   /** The run's identity, verbatim from `run.start` or the durable store. */
@@ -232,27 +229,6 @@ const StreamIdentityFieldsSchema = z.object({
   /** AI-generated summary of what this session aims to accomplish. */
   description: z.string().optional(),
 });
-export type StreamIdentityFields = z.infer<typeof StreamIdentityFieldsSchema>;
-
-const STREAM_IDENTITY_FIELD_KEYS = Object.keys(
-  StreamIdentityFieldsSchema.shape,
-) as readonly (keyof StreamIdentityFields)[];
-
-/**
- * Project a wider session record onto the canonical identity/pointer shape.
- * Seed every declared key so optional `undefined` fields retain the stable wire
- * shape that existing host patches expose, while Zod strips undeclared fields.
- */
-export function projectStreamIdentityFields(
-  source: StreamIdentityFields,
-): StreamIdentityFields {
-  return StreamIdentityFieldsSchema.parse(
-    Object.fromEntries(
-      STREAM_IDENTITY_FIELD_KEYS.map((key) => [key, source[key]]),
-    ),
-  );
-}
-
 /**
  * One flat wire shape per stream tab. The parsed {@link RunIdentitySchema}
  * struct travels verbatim — renderers key on `identity.kind` instead of

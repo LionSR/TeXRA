@@ -329,12 +329,14 @@ export async function recordOpenQuestion(params: {
  */
 export async function recordAnswerForOpenTurn(params: {
   threadId: InquiryThreadId;
+  turnIndex: number;
   answer: string;
   sessionLinks?: string[] | null;
 }): Promise<ExternalInquiryThreadManifest | null> {
   return withOpenTurnUpdate(
     params.threadId,
     (existing, lastTurn, timestamp) => {
+      if (lastTurn.turnIndex !== params.turnIndex) return null;
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
       // `draft` is open-turn-only state and must not survive the transition.
@@ -372,11 +374,13 @@ export async function recordAnswerForOpenTurn(params: {
  */
 export async function markDropped(params: {
   threadId: InquiryThreadId;
+  turnIndex: number;
 }): Promise<ExternalInquiryThreadManifest | null> {
   return threadMutex.runExclusive(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing) return null;
     if (existing.status !== 'open') return null;
+    if (existing.turns.at(-1)?.turnIndex !== params.turnIndex) return null;
 
     const timestamp = new Date().toISOString();
     const nextManifest: ExternalInquiryThreadManifest = {

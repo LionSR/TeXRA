@@ -18,7 +18,6 @@ const HYDRATION_SITE_ALLOWLIST = new Set([
   'packages/cli/src/chat/tui/state/subscribeStreamLog.ts',
   'src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts',
   'src/agent/runtime/executeAgent.ts',
-  'src/controllers/session/SessionFactApplier.ts',
   'src/transcript/StreamLogStore.ts',
 ]);
 

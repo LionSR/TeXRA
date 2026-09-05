@@ -12,14 +12,7 @@
  * polish, dictation, pickers, and pasted images, a `RuntimeRequest` for a
  * follow-up. It holds no draft of its own.
  */
-import {
-  LitElement,
-  css,
-  html,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
@@ -264,7 +257,6 @@ export class SessionComposer extends LitElement {
   @property({ attribute: false }) stream: StreamView | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
 
-  @state() private polishing = false;
   @state() private announcement = '';
 
   @query('wa-textarea') private textArea?: HTMLElement;
@@ -297,22 +289,6 @@ export class SessionComposer extends LitElement {
       recording.session === this.surface?.session &&
       recording.target === this.recordingTarget
     );
-  }
-
-  protected override willUpdate(changed: PropertyValues): void {
-    if (!changed.has('surface') || !this.stream) return;
-    // A polished or transcribed variant arrives on the draft; the text is
-    // what the user edits, so fold it in once and clear the variant.
-    const draft = this.draft;
-    if (draft.polished !== null) {
-      this.polishing = false;
-      this.setText(draft.polished, { polished: null });
-    } else if (draft.transcribed !== null) {
-      const text = draft.text
-        ? `${draft.text.replace(/\s+$/, '')} ${draft.transcribed}`
-        : draft.transcribed;
-      this.setText(text, { transcribed: null });
-    }
   }
 
   private setText(text: string, patch: Partial<Draft> = {}): void {
@@ -366,13 +342,6 @@ export class SessionComposer extends LitElement {
               : null,
         }),
       );
-      this.dispatchEvent(
-        SessionUiEvents.surface({
-          kind: 'draft',
-          streamId: stream.id,
-          patch: EMPTY_DRAFT,
-        }),
-      );
       return;
     }
     if (text === '' || !this.surface) return;
@@ -388,7 +357,6 @@ export class SessionComposer extends LitElement {
   private polish = (): void => {
     const text = this.text.trim();
     if (text === '') return;
-    this.polishing = true;
     this.dispatchEvent(SessionUiEvents.host({ kind: 'polish', text }));
   };
 
@@ -813,7 +781,9 @@ export class SessionComposer extends LitElement {
               icon: 'wand-magic-sparkles',
               label: 'Polish',
               tooltip: 'Polish with AI',
-              busy: this.polishing,
+              busy: this.surface?.polishing.has(
+                this.stream?.id ?? `launch:${this.surface.launch.sessionType}`,
+              ),
               disabled: readOnly || text.trim() === '',
               onClick: this.polish,
             })}
@@ -843,7 +813,13 @@ export class SessionComposer extends LitElement {
               appearance: 'filled',
               variant: 'brand',
               size: compact ? 'm' : 'l',
-              disabled: !canSend,
+              busy:
+                this.stream !== null &&
+                this.surface?.sending.has(this.stream.id),
+              disabled:
+                !canSend ||
+                (this.stream !== null &&
+                  (this.surface?.sending.has(this.stream.id) ?? false)),
               onClick: this.send,
             })}</span
           >

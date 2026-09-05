@@ -35,6 +35,7 @@ import {
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
+import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
 import {
@@ -141,7 +142,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const roots = workspaceRoots();
     this.snapshot = createHostSnapshotSource({
       paper: paperDisplayOf(session.roots.storage, roots.workspace),
-      placement: 'sidebar',
       globalState: platform().globalState,
       fileOptions: () => workspaceFileOptions(roots.workspace),
       readRecentCommits: async () => {
@@ -219,10 +219,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
     const hostRequests = createExtensionHostRequests({
       session,
-      sessionKey: session.roots.storage,
       extensionPath: context.extensionPath,
       globalState: context.globalState,
       snapshot: this.snapshot,
+      draftRequests: new HostDraftRequests(),
       toolEditApprovals: this.toolEditApprovals,
       surfaceAction: (action) => this.surfaceAction(action),
       popOutToEditor: () => this.popOutToEditor(),
@@ -233,6 +233,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.bridge = new SessionBridge({
       session,
       handleHostRequest: (request, port) => hostRequests.handle(request, port),
+      onPortClosed: hostRequests.closePort,
     });
 
     // Attached for the window's life: the runtime parks a request until a
@@ -453,6 +454,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   ): Port {
     view.webview.html = this.contentProvider.getHtmlContent(view.webview, {
       sessionKey: this.bridge.key,
+      placement: id,
     });
     const attached = this.bridge.attach({
       id,

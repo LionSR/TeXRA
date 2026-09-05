@@ -80,9 +80,6 @@ function generatedFile(
   };
 }
 
-// Agent category is shared-substrate metadata now: `ConversationPane` reads it
-// via `streamMetadataFor` from the bound `SessionState`, whose authority is
-// the durable summary mirror.
 beforeAll(bindTestSessionView);
 afterEach(() => {
   resetCliState();

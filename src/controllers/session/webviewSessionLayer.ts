@@ -1,17 +1,14 @@
 /**
  * The webview's Effect graphs (PRD one-fold-three-renderers, 7.3, 7.7):
  * one per session key, in a `LayerMap`, built on the one `ManagedRuntime`
- * a webview entry makes with `installWebviewRuntime`. A webview graph is
- * the runtime graph with the plane and the two live sources swapped for
- * their transport layers over `SessionFrames`, plus `HostState`, the host
- * snapshot level of 8.1; the fold (`SessionViewService`) is the unchanged
- * class, so the sidebar, the editor tab, and the Electron renderer fold the
- * same frames to the same view the runtime holds.
+ * a webview entry makes with `installWebviewRuntime`. SessionInputs is fed
+ * directly by the ordered frames; the same SessionViewService folds them
+ * in the sidebar, editor tab, and Electron renderer. HostState carries the
+ * host snapshot separately from the fold.
  *
  * The shell opens a session with `WebviewSessions.open(key)`, begins a
  * generation on its frames right before it posts the `Subscribe` up, and
- * feeds every frame the bridge delivers to `frames.feed`, which routes rows
- * by read, chunks, the local snapshot, and the host snapshot. The transport
+ * feeds every frame the bridge delivers to `frames.feed` in arrival order. The transport
  * that installed the runtime disposes it, once, on the shutdown path its
  * entry drives.
  */
@@ -25,14 +22,10 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { SessionEvents } from '@shared/session/sessionEvents';
+import { SessionInputs } from '@shared/session/sessionInputs';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { SessionFrames } from '@shared/session/sessionFrames';
-import {
-  LocalRuntimeSource,
-  TextChunkSource,
-  TranscriptSubscriptions,
-} from './sessionSources';
+import { TranscriptSubscriptions } from './sessionSources';
 import { SessionViewService } from './SessionView';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -64,9 +57,12 @@ const webviewSessionLayer = (key: string) =>
     SessionViewService.layer.pipe(
       Layer.provideMerge(
         Layer.mergeAll(
-          SessionEvents.transportLayer,
-          LocalRuntimeSource.transportLayer,
-          TextChunkSource.transportLayer,
+          Layer.effect(
+            SessionInputs,
+            Effect.map(SessionFrames, (frames) => ({
+              read: (aggregates) => frames.inputs(aggregates),
+            })),
+          ),
           TranscriptSubscriptions.layer,
           HostState.layer,
         ),

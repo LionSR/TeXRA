@@ -604,13 +604,16 @@ interface WorkbenchTabsCallbacks {
 }
 
 /** DOM id of one tab's activate button; the tabpanel references it via aria-labelledby. */
-export function workbenchTabDomId(tabId: string): string {
-  return `task-workbench-tab-${tabId}`;
+export function workbenchTabDomId(tabId: string, session = ''): string {
+  return `task-workbench-tab-${session}-${tabId}`;
 }
 
 /** DOM id of the single pane a placement's tab strip switches. */
-export function workbenchPanelDomId(placement: WorkbenchPlacement): string {
-  return `task-workbench-panel-${placement}`;
+export function workbenchPanelDomId(
+  placement: WorkbenchPlacement,
+  session = '',
+): string {
+  return `task-workbench-panel-${session}-${placement}`;
 }
 
 /** Moves focus to a tab's activate button within its tab strip. */
@@ -716,6 +719,7 @@ export function workbenchTabsTemplate(
   activeTabId: string | undefined,
   placement: WorkbenchPlacement,
   callbacks: WorkbenchTabsCallbacks,
+  session = '',
 ): TemplateResult {
   const hideDirection =
     placement === 'right' ? 'chevron-right' : 'chevron-down';
@@ -744,9 +748,9 @@ export function workbenchTabsTemplate(
                 appearance="plain"
                 size="s"
                 role="tab"
-                id=${workbenchTabDomId(tab.id)}
+                id=${workbenchTabDomId(tab.id, session)}
                 aria-selected=${active ? 'true' : 'false'}
-                aria-controls=${workbenchPanelDomId(placement)}
+                aria-controls=${workbenchPanelDomId(placement, session)}
                 tabindex=${active ? '0' : '-1'}
                 title=${tab.target ?? tab.title}
                 @click=${() => callbacks.onActivate(tab.id)}

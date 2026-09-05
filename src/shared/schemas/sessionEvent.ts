@@ -149,7 +149,7 @@ const RunStartEventSchema = durable('run.start', {
  * facts with the payload flattened. `stream.removed` is the tombstone: the
  * last row of its aggregate, final (PRD 5.2, "Existence").
  */
-export const SessionEventSchema = z.discriminatedUnion('type', [
+const SessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema,
   /**
    * Every activation of a run, the first launch and each resume (PRD 6,
@@ -358,5 +358,7 @@ const FoldInputSchema = z.discriminatedUnion('_tag', [
   /** The one marker of PRD 7.2: the sequenced cold reads have ended. It
    *  carries no fact and the fold does not fold it. */
   z.object({ _tag: z.literal('replay.complete') }),
+  /** A finite tail read has completed, including rows no longer materialized. */
+  z.object({ _tag: z.literal('drained'), cursor: CommitOrdinalSchema }),
 ]);
 export type FoldInput = z.infer<typeof FoldInputSchema>;

@@ -25,6 +25,7 @@ import {
   TranscriptSubscriptions,
 } from '@controllers/session/sessionSources';
 import { SessionViewService } from '@controllers/session/SessionView';
+import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
   AgentCategory,
@@ -97,6 +98,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
     }),
   );
   return SessionViewService.layer.pipe(
+    Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(
       sessionEventsLayer.pipe(
         Layer.provideMerge(

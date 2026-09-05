@@ -26,6 +26,7 @@ import {
   TranscriptSubscriptions,
 } from '@controllers/session/sessionSources';
 import { SessionViewService } from '@controllers/session/SessionView';
+import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
@@ -35,6 +36,7 @@ import {
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
@@ -83,6 +85,7 @@ const runtimeGraph = (history: readonly SessionEventDraft[]) => {
     }),
   );
   return SessionViewService.layer.pipe(
+    Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(
       sessionEventsLayer.pipe(
         Layer.provideMerge(
@@ -146,17 +149,13 @@ const subscribe: Subscribe = {
 
 /** A framer source over the runtime graph in context. */
 const framerSource = Effect.gen(function* () {
-  const events = yield* SessionEvents;
+  const inputs = yield* SessionInputs;
   const view = yield* SessionViewService;
-  const local = yield* LocalRuntimeSource;
-  const chunks = yield* TextChunkSource;
   const subscriptions = yield* TranscriptSubscriptions;
   const source: FramerSource = {
     key: KEY,
     view: view.ref,
-    events,
-    local: local.ref,
-    chunks: chunks.changes,
+    inputs: inputs.read,
     setTranscriptSubscriptions: (port, set) => subscriptions.set(port, set),
   };
   return source;
@@ -242,6 +241,11 @@ describe('session framer', () => {
         const source = yield* framerSource;
         const events = yield* SessionEvents;
         const runtimeView = yield* SessionViewService;
+        const chunks = yield* TextChunkSource;
+        yield* SubscriptionRef.set(
+          chunks.ref,
+          new Map([[`${STREAM}/row-1`, 'Hello']]),
+        );
         const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
         const webview = yield* WebviewSessions.open(KEY);
         const { frames, view } = webview;
@@ -283,15 +287,28 @@ describe('session framer', () => {
           replayComplete: false,
         });
         const ticker = yield* Effect.forkScoped(ticking);
-        yield* settle(view.ref, (v) => v.streams.has(STREAM));
+        yield* settle(
+          view.ref,
+          (v) => v.inflight.get(`${STREAM}/row-1`) === 'Hello',
+        );
+        yield* settle(
+          runtimeView.ref,
+          (v) => v.inflight.get(`${STREAM}/row-1`) === 'Hello',
+        );
         expect(drawn(yield* SubscriptionRef.get(view.ref))).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
         // A tail commit reaches both folds.
         yield* events.publish([running]);
+        yield* SubscriptionRef.set(
+          chunks.ref,
+          new Map([[`${STREAM}/row-1`, 'Hello again']]),
+        );
         yield* settle(
           view.ref,
-          (v) => v.streams.get(STREAM)?.status === STREAM_PHASE.RUNNING,
+          (v) =>
+            v.streams.get(STREAM)?.status === STREAM_PHASE.RUNNING &&
+            v.inflight.get(`${STREAM}/row-1`) === 'Hello again',
         );
         yield* settle(
           runtimeView.ref,
@@ -302,8 +319,85 @@ describe('session framer', () => {
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
         expect(folded.cursor).toBe(3);
-        yield* Fiber.interrupt(ticker);
+
+        // A new stream and its first prefix can become ready in one turn.
+        const child = 'stream:second';
+        yield* events.publish([
+          { ...runStart, aggregateId: child, executionId: 'second' },
+        ]);
+        yield* SubscriptionRef.update(
+          chunks.ref,
+          (held) => new Map([...held, [`${child}/row-2`, 'First']]),
+        );
+        yield* settle(
+          view.ref,
+          (v) => v.inflight.get(`${child}/row-2`) === 'First',
+        );
+        yield* SubscriptionRef.update(
+          chunks.ref,
+          (held) => new Map([...held, [`${child}/row-2`, 'First suffix']]),
+        );
+        yield* settle(
+          view.ref,
+          (v) => v.inflight.get(`${child}/row-2`) === 'First suffix',
+        );
+        yield* settle(
+          runtimeView.ref,
+          (v) => v.inflight.get(`${child}/row-2`) === 'First suffix',
+        );
+
+        // Neither a partial replay nor its superseded generation may mutate
+        // the previously published view, whose indexes are shared by the fold.
         yield* Fiber.interrupt(decoder);
+        const beforeReplay = yield* SubscriptionRef.get(view.ref);
+        yield* frames.begin(2);
+        yield* shell.set('shell', subscribe.aggregates);
+        yield* frames.feed({
+          kind: 'events',
+          session: KEY,
+          generation: 2,
+          cursor: 4,
+          events: [
+            {
+              _tag: 'event',
+              read: 'listing',
+              event: {
+                ...waiting,
+                seq: 10,
+                commit: 10,
+                ownerId: SELF,
+                at: 0,
+              },
+            },
+          ],
+          chunks: [],
+          local: null,
+          host: null,
+          replayComplete: false,
+        });
+        yield* TestClock.adjust('16 millis');
+        expect(yield* SubscriptionRef.get(view.ref)).toBe(beforeReplay);
+        expect(beforeReplay.streams.get(STREAM)?.status).toBe(
+          STREAM_PHASE.RUNNING,
+        );
+        yield* frames.begin(3);
+        yield* shell.set('shell', subscribe.aggregates);
+        const resumed = yield* Effect.forkScoped(
+          Stream.runForEach(
+            frameSubscription(source, PORT, host, {
+              ...subscribe,
+              generation: 3,
+              cursor: beforeReplay.cursor,
+            }),
+            (frame) => frames.feed(frame),
+          ),
+        );
+        yield* settle(view.ref, (v) => v !== beforeReplay);
+        expect(
+          (yield* SubscriptionRef.get(view.ref)).streams.get(STREAM)?.status,
+        ).toBe(STREAM_PHASE.RUNNING);
+        yield* Fiber.interrupt(ticker);
+        yield* Fiber.interrupt(resumed);
       }).pipe(
         Effect.provide(
           Layer.merge(

@@ -11,7 +11,6 @@ import {
   configureDelegatedChildApprovals,
   proposalApprovals,
   releaseStreamResources,
-  setToolEditApprovalSessionBypass,
 } from '@tools/approval';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -49,7 +48,9 @@ describe('child subagent stream approval inheritance', () => {
 
   it('mirrors the parent tool-edit bypass onto the child stream', () => {
     const { parent, child } = streamPair('edit');
-    setToolEditApprovalSessionBypass(parent, true, { silent: true });
+    currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {
+      silent: true,
+    });
 
     configureDelegatedChildApprovals(child, parent);
 
@@ -125,14 +126,18 @@ describe('child subagent stream approval inheritance', () => {
       false,
     );
 
-    setToolEditApprovalSessionBypass(parent, true, { silent: true });
+    currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {
+      silent: true,
+    });
     expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
       true,
     );
 
     // And back off: the child follows the parent's current state, not a
     // snapshot taken at delegation time.
-    setToolEditApprovalSessionBypass(parent, false, { silent: true });
+    currentSession().approvals.toolEdit.bypass.setBypass(parent, false, {
+      silent: true,
+    });
     expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
       false,
     );
@@ -144,14 +149,18 @@ describe('child subagent stream approval inheritance', () => {
     const { parent, child } = streamPair('visible');
     const grandchild = 'stream:visible-grandchild' as StreamTabId;
     const pinnedChild = 'stream:pinned-child' as StreamTabId;
-    setToolEditApprovalSessionBypass(parent, true, { silent: true });
+    currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {
+      silent: true,
+    });
     configureDelegatedChildApprovals(child, parent);
     configureDelegatedChildApprovals(grandchild, child);
     configureDelegatedChildApprovals(pinnedChild, parent);
-    setToolEditApprovalSessionBypass(pinnedChild, true, { silent: true });
+    currentSession().approvals.toolEdit.bypass.setBypass(pinnedChild, true, {
+      silent: true,
+    });
 
     try {
-      setToolEditApprovalSessionBypass(parent, false);
+      currentSession().approvals.toolEdit.bypass.setBypass(parent, false);
 
       expect(
         events.filter(({ event }) => event === 'setApprovalBypassState'),
@@ -278,14 +287,18 @@ describe('child subagent stream approval inheritance', () => {
     // ancestry — otherwise the grant silently evaporates when the parent
     // later re-gates its own edits while the child's proposal/bash stay on.
     const { parent, child } = streamPair('pin');
-    setToolEditApprovalSessionBypass(parent, true, { silent: true });
+    currentSession().approvals.toolEdit.bypass.setBypass(parent, true, {
+      silent: true,
+    });
     configureDelegatedChildApprovals(child, parent);
     expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
       true,
     );
 
     currentSession().approvals.setDelegatedWorkBypasses(child, true);
-    setToolEditApprovalSessionBypass(parent, false, { silent: true });
+    currentSession().approvals.toolEdit.bypass.setBypass(parent, false, {
+      silent: true,
+    });
 
     expect(currentSession().approvals.toolEdit.bypass.isBypassed(child)).toBe(
       true,

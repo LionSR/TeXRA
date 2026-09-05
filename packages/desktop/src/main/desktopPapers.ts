@@ -36,8 +36,8 @@ import { StreamLogStore } from '@transcript';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { DesktopPapersMessage } from '../shared/desktopPaperMessages.js';
 import { initializeDesktopProcessStores } from './desktopProcessStores.js';
+import type { DesktopPapersMessage } from '../shared/desktopPaperMessages.js';
 
 export interface DesktopPaper {
   /** The session key: the storage root the fold's `SessionView.key`

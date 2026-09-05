@@ -60,7 +60,7 @@ interface DesktopMessageRouteHandlers {
   /** Persist all dirty editor buffers. */
   saveAllFiles(): void;
   /** Re-list the workspace after something outside the editor wrote to it. */
-  reloadWorkspaceFiles(): void;
+  reloadWorkspaceFiles(session: string): void;
   /** Live read of whether bootstrap failed (routes must not fire then). */
   isBootstrapFailed(): boolean;
   returnToLauncher(): void;
@@ -75,23 +75,23 @@ interface DesktopMessageRouteHandlers {
   logs: { applySnapshot(message: DesktopSetLogMessage): void };
   review: {
     open(message: DesktopShowDiffMessage): void;
-    clear(): void;
+    clear(session: string): void;
   };
-  disposeReviewTab(): void;
+  disposeReviewTab(session: string): void;
   pdf: {
     open(message: DesktopShowPdfMessage): void;
-    close(): void;
+    close(session: string): void;
   };
   prompt: { open(message: DesktopShowPromptMessage): void };
   terminal: {
-    write(sessionId: string, data: string): void;
-    reportExit(sessionId: string, exitCode: number): void;
-    reportError(sessionId: string, message: string): void;
+    write(session: string, sessionId: string, data: string): void;
+    reportExit(session: string, sessionId: string, exitCode: number): void;
+    reportError(session: string, sessionId: string, message: string): void;
   };
-  openTerminalCommand(initialCommand: string): void;
-  renameBrowserTab(tabId: string, title: string): void;
+  openTerminalCommand(session: string, initialCommand: string): void;
+  renameBrowserTab(session: string, tabId: string, title: string): void;
   /** Adopts a freshly reported environment summary and repaints the shell. */
-  environment(summary: DesktopEnvironmentSummary): void;
+  environment(session: string, summary: DesktopEnvironmentSummary): void;
   /** Adopts the open papers and which one this window shows. */
   papers(message: DesktopPapersMessage): void;
 }
@@ -144,65 +144,89 @@ export function createMessageRoutes(
     ),
     messageRoute(DesktopShowDiffMessageSchema, (message) => {
       handlers.review.open(message);
-      handlers.openKind('review');
     }),
-    messageRoute(DesktopCloseDiffMessageSchema, () => {
-      handlers.review.clear();
-      handlers.disposeReviewTab();
+    messageRoute(DesktopCloseDiffMessageSchema, (message) => {
+      handlers.review.clear(message.session);
+      handlers.disposeReviewTab(message.session);
     }),
     messageRoute(DesktopShowPdfMessageSchema, (message) =>
       handlers.pdf.open(message),
     ),
-    messageRoute(DesktopClosePdfMessageSchema, () => handlers.pdf.close()),
+    messageRoute(DesktopClosePdfMessageSchema, (message) =>
+      handlers.pdf.close(message.session),
+    ),
     messageRoute(DesktopShowPromptMessageSchema, (message) =>
       handlers.prompt.open(message),
     ),
     messageRoute(DesktopFilesListedMessageSchema, (message) => {
-      const pending = takePendingFileRequest(message.requestId);
+      const pending = takePendingFileRequest(
+        message.session,
+        message.requestId,
+      );
       if (pending?.kind === 'list') pending.resolve(message.files);
     }),
     messageRoute(DesktopFilesListErrorMessageSchema, (message) => {
-      const pending = takePendingFileRequest(message.requestId);
+      const pending = takePendingFileRequest(
+        message.session,
+        message.requestId,
+      );
       if (pending?.kind === 'list') pending.reject(new Error(message.message));
     }),
     messageRoute(DesktopFileReadMessageSchema, (message) => {
-      const pending = takePendingFileRequest(message.requestId);
+      const pending = takePendingFileRequest(
+        message.session,
+        message.requestId,
+      );
       if (pending?.kind === 'read') pending.resolve(message.contents);
     }),
     messageRoute(DesktopFileWrittenMessageSchema, (message) => {
-      const pending = takePendingFileRequest(message.requestId);
+      const pending = takePendingFileRequest(
+        message.session,
+        message.requestId,
+      );
       if (pending?.kind === 'write') pending.resolve();
     }),
-    messageRoute(DesktopWorkspaceFilesChangedMessageSchema, () => {
-      handlers.reloadWorkspaceFiles();
+    messageRoute(DesktopWorkspaceFilesChangedMessageSchema, (message) => {
+      handlers.reloadWorkspaceFiles(message.session);
     }),
     messageRoute(DesktopFileErrorMessageSchema, (message) => {
       // One request, one rejection: the requestId names the single pending read
       // or write, so there is no read/write queue pair to sweep.
-      const pending = takePendingFileRequest(message.requestId);
+      const pending = takePendingFileRequest(
+        message.session,
+        message.requestId,
+      );
       if (pending?.kind === 'read' || pending?.kind === 'write') {
         pending.reject(new Error(message.message));
       }
     }),
     messageRoute(DesktopTerminalDataMessageSchema, (message) =>
-      handlers.terminal.write(message.sessionId, message.data),
+      handlers.terminal.write(message.session, message.sessionId, message.data),
     ),
     messageRoute(DesktopTerminalOpenCommandMessageSchema, (message) =>
-      handlers.openTerminalCommand(message.initialCommand),
+      handlers.openTerminalCommand(message.session, message.initialCommand),
     ),
     messageRoute(DesktopTerminalExitMessageSchema, (message) =>
-      handlers.terminal.reportExit(message.sessionId, message.exitCode),
+      handlers.terminal.reportExit(
+        message.session,
+        message.sessionId,
+        message.exitCode,
+      ),
     ),
     messageRoute(DesktopTerminalErrorMessageSchema, (message) =>
-      handlers.terminal.reportError(message.sessionId, message.message),
+      handlers.terminal.reportError(
+        message.session,
+        message.sessionId,
+        message.message,
+      ),
     ),
     // Renames the document so a browser tab reads as its page rather than a
     // generic "Browser".
     messageRoute(DesktopBrowserStateMessageSchema, (message) =>
-      handlers.renameBrowserTab(message.tabId, message.title),
+      handlers.renameBrowserTab(message.session, message.tabId, message.title),
     ),
     messageRoute(DesktopEnvironmentStateMessageSchema, (message) =>
-      handlers.environment(message.environment),
+      handlers.environment(message.session, message.environment),
     ),
     messageRoute(DesktopPapersMessageSchema, (message) =>
       handlers.papers(message),

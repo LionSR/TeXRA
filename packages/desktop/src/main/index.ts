@@ -35,6 +35,7 @@ import {
   type AttachedPort,
 } from '@controllers/session/SessionBridge';
 import { createHostSnapshotSource } from '@controllers/session/hostSnapshotSource';
+import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
@@ -90,6 +91,7 @@ import {
 } from './desktopWindowLifecycle.js';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
+  DesktopWorkspaceInboundMessageSchema,
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
 } from '../shared/desktopWorkspaceMessages.js';
 import {
@@ -257,6 +259,9 @@ function installContentSecurityPolicy(): void {
 /** The one field every session message carries: which paper it names. */
 const SessionMessageEnvelopeSchema = z.object({ session: z.string() });
 
+// Recording has one process owner, shared by every paper and window.
+const hostDraftRequests = new HostDraftRequests();
+
 /** Warn once a window exists when a paper's transcripts could not persist. */
 function warnIfEphemeral(paper: DesktopPaper): void {
   const { mode } = paper.session.transcripts;
@@ -333,11 +338,6 @@ function createWindow(options: {
     if (paper) void runInSession(paper.session, () => paperResources.dispose());
     else paperResources.dispose();
   });
-  // The paper switch the renderer asked for (show another root, or close the
-  // shown one); lands once the renderer has reloaded (a dirty editor can veto
-  // the reload and clear it).
-  let pendingPaperActivation: string | undefined;
-  let pendingPaperClose: string | undefined;
   const ipcRef: {
     current?: { postToRenderer(message: unknown): void };
   } = {};
@@ -583,35 +583,33 @@ function createWindow(options: {
   const folderPickerDefaultPath = () =>
     activePaper().root ?? app.getPath('home');
 
-  /**
-   * Show another open paper. The renderer reloads into it: the
-   * will-prevent-unload handler below clears the request when the user keeps
-   * a dirty editor, and the reload's navigation commits it otherwise.
-   */
   const paperByKey = (key: string) =>
     options.papers.list().find((paper) => paper.key === key);
+  const showDiscardDialog = () =>
+    dialog.showMessageBoxSync(window, {
+      type: 'warning',
+      buttons: ['Keep Editing', 'Discard Changes'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Unsaved Changes',
+      message: 'There are unsaved editor changes.',
+      detail: 'Discard the changes and continue?',
+    });
+
+  /** Selection changes visibility; each paper retains its tabs and processes. */
   const selectPaper = (key: string) => {
     const paper = paperByKey(key);
     if (!paper || paper.root === undefined || paper === activePaper()) return;
-    pendingPaperActivation = paper.root;
-    window.webContents.reload();
+    options.papers.activate(paper.root);
   };
 
-  /**
-   * Close an open paper. A paper the window is not showing closes at once;
-   * the shown one closes through the same reload as a switch, so a dirty
-   * editor can keep it open, and the registry moves the window to the paper
-   * shown before it.
-   */
-  const closePaper = (key: string) => {
+  /** The renderer reports dirtiness for the addressed paper, including a
+   *  hidden one. Only explicit closure releases its resources. */
+  const closePaper = (key: string, hasUnsavedChanges: boolean) => {
     const paper = paperByKey(key);
     if (!paper || paper.root === undefined) return;
-    if (paper !== activePaper()) {
-      void options.papers.close(paper.root).catch(reportAsyncError);
-      return;
-    }
-    pendingPaperClose = paper.root;
-    window.webContents.reload();
+    if (hasUnsavedChanges && showDiscardDialog() !== 1) return;
+    void options.papers.close(paper.root).catch(reportAsyncError);
   };
 
   const openWorkspaceFolder = async () => {
@@ -722,17 +720,19 @@ function createWindow(options: {
     readonly port: AttachedPort;
     readonly snapshot: ReturnType<typeof createHostSnapshotSource>;
     readonly execution: ReturnType<typeof createDesktopAgentExecution>;
+    readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
+    readonly browserViews: ReturnType<typeof createDesktopBrowserViews>;
     dispose(): void;
   }
   const paperBindings = new Map<string, PaperBinding>();
   const bindPaper = (paper: DesktopPaper): PaperBinding => {
+    const { workspace, browserViews } = createPaperWorkspace(paper);
     const files = createDesktopFileSelection({
       workspacePath: paper.root,
       showOpenFileDialog: openFileDialog,
     });
     const snapshot = createHostSnapshotSource({
       paper: paperDisplayOf(paper.key, paper.root),
-      placement: 'desktop',
       globalState: platform().globalState,
       fileOptions: () => files.fileOptions(),
       readRecentCommits: () => recentCommitsOf(paper.root),
@@ -753,7 +753,7 @@ function createWindow(options: {
     });
     const hostRequests = createDesktopHostRequests({
       session: paper.session,
-      sessionKey: paper.key,
+      draftRequests: hostDraftRequests,
       host: agentExecutionHost,
       execution,
       files,
@@ -775,7 +775,9 @@ function createWindow(options: {
     // them (PRD 8.1).
     const bridge = new SessionBridge({
       session: paper.session,
-      handleHostRequest: (request) => hostRequests.handle(request),
+      handleHostRequest: (request, portId) =>
+        hostRequests.handle(request, portId),
+      onPortClosed: hostRequests.closePort,
     });
     const detachSnapshot = snapshot.onChange((next) => bridge.setHost(next));
     const port = bridge.attach({
@@ -796,7 +798,11 @@ function createWindow(options: {
       port,
       snapshot,
       execution,
+      workspace,
+      browserViews,
       dispose() {
+        workspace.disposeRendererResources();
+        workspace.dispose();
         detachLaunched();
         detachSnapshot();
         bridge.dispose();
@@ -807,7 +813,9 @@ function createWindow(options: {
   };
   const syncPaperBindings = () => {
     const open = new Map(
-      options.papers.list().map((paper) => [paper.key, paper] as const),
+      [options.papers.fallback(), ...options.papers.list()].map(
+        (paper) => [paper.key, paper] as const,
+      ),
     );
     for (const [key, binding] of paperBindings) {
       if (open.has(key)) continue;
@@ -834,9 +842,8 @@ function createWindow(options: {
     if (!onboarding) throw new Error('Desktop onboarding IPC is not attached.');
     return onboarding;
   };
-  // The launcher's agent is the surface's choice (PRD 9); a team that was
-  // just applied names its tool-use root, which the catalog change alone
-  // cannot select: the wire carries no launch patch (8.5).
+  // Catalog refresh leaves each Surface's selections intact. Applying an
+  // agent mode separately sends the chosen root to that paper's launcher.
   const refreshCatalogs = async () => {
     await Promise.all(
       [...paperBindings.values()].map((binding) =>
@@ -890,16 +897,22 @@ function createWindow(options: {
    * Bind the window to the paper it shows. The settings controllers read the
    * paper's workspace state and config, the settings surface subscribes to
    * the paper's session (goal facts, approval policy), the title follows its
-   * activity, the file lists scan its root, and the progress bridge is built
-   * lazily for it; all of them are released when the window switches papers.
+   * activity. These active settings bindings are replaced on selection;
+   * the session bridge and workbench remain with their paper.
    */
-  const attachActivePaper = () => {
+  const attachActivePaper = (documentChanged = false) => {
     const paper = activePaper();
-    if (paper === attachedPaper) return;
+    if (paper === attachedPaper && !documentChanged) return;
+    const documentBinding = paperBindings.get(paper.key);
     const previous = attachedPaper;
     const previousResources = paperResources;
     attachedPaper = paper;
     paperResources = new DisposableStore();
+    const owner = paperResources;
+    const postForActivePaper = (message: unknown) => {
+      if (paperResources !== owner) return false;
+      return postToRendererIfAlive(message);
+    };
     if (previous) {
       void runInSession(previous.session, () => previousResources.dispose());
     }
@@ -945,7 +958,7 @@ function createWindow(options: {
         revealPath: async (filePath) => shell.showItemInFolder(filePath),
       },
       renderer: {
-        postToRenderer: postToRendererIfAlive,
+        postToRenderer: postForActivePaper,
       },
       prompts: {
         promptText: (input) => promptController.request(input),
@@ -959,6 +972,16 @@ function createWindow(options: {
       },
       notifications: { showInfoMessage, showErrorMessage },
       resourcesPath: options.resourcesPath,
+      onCatalogChanged: async (selectedToolUseAgent) => {
+        await refreshCatalogs();
+        if (!selectedToolUseAgent) return;
+        const binding = paperBindings.get(paper.key);
+        if (!binding || binding !== documentBinding) return;
+        binding.bridge.surfaceAction({
+          kind: 'launch',
+          patch: { agent: { toolUse: selectedToolUseAgent } },
+        });
+      },
     });
     const credentialSettingsController =
       new DefaultDesktopCredentialSettingsController({
@@ -967,7 +990,7 @@ function createWindow(options: {
         config: paper.roots.config,
         secrets: platform().secrets,
         renderer: {
-          postToRenderer: postToRendererIfAlive,
+          postToRenderer: postForActivePaper,
         },
         prompt: {
           input: (input) =>
@@ -1040,6 +1063,7 @@ function createWindow(options: {
         onCredentialChanged: async () => {
           await onboardingIpcRef.current?.refreshOnboardingFunnel();
         },
+        onModelOptionsChanged: refreshCatalogs,
         // Credential operations already show their specific failure dialog. Keep
         // the shared callback log-only so one failure never opens a second,
         // generic desktop-operation dialog.
@@ -1052,7 +1076,7 @@ function createWindow(options: {
         globalState: platform().globalState,
         config: paper.roots.config,
         renderer: {
-          postToRenderer: postToRendererIfAlive,
+          postToRenderer: postForActivePaper,
         },
         dashboard: {
           buildItems: async (cachedResults) => {
@@ -1071,8 +1095,10 @@ function createWindow(options: {
         navigation: { openExternal: previewHost.openExternal },
         commands: {
           run: async (command: string) => {
+            if (paperBindings.get(paper.key) !== documentBinding) return;
             postToRendererIfAlive({
               command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
+              session: paper.key,
               initialCommand: command,
             });
           },
@@ -1093,7 +1119,7 @@ function createWindow(options: {
       });
     paperResources.add(() => toolingSettingsController.dispose());
     const settingsIpc = createDesktopSettingsIpc({
-      postToRenderer: postToRendererIfAlive,
+      postToRenderer: postForActivePaper,
       agentSettingsController,
       credentialSettingsController,
       toolingSettingsController,
@@ -1114,6 +1140,10 @@ function createWindow(options: {
   windowResources.add(
     options.papers.onChange(() => {
       syncPaperBindings();
+      if (activePaper() !== attachedPaper) {
+        for (const binding of paperBindings.values())
+          binding.browserViews.hideAll();
+      }
       attachActivePaper();
       postPapers();
     }),
@@ -1184,17 +1214,6 @@ function createWindow(options: {
       }
     }),
   );
-  const getEnvironmentSummary = async () => {
-    const workspacePath = activePaper().root;
-    if (!workspacePath) {
-      return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
-    }
-    return (
-      (await readGitEnvironmentSummary(workspacePath, {
-        onError: reportBackgroundError,
-      })) ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY
-    );
-  };
   const shellActions = createDesktopShellActions(
     { postToRenderer: postToRendererIfAlive },
     {
@@ -1208,102 +1227,114 @@ function createWindow(options: {
       onAsyncError: reportAsyncError,
     },
   );
-  // Interactive terminals and embedded browser tabs. Both stream to the
-  // renderer through the IPC bridge installed just below, so they post via
-  // `ipcRef.current` rather than capturing a bridge that doesn't exist yet.
-  const ptyHost = createDesktopPtyHost({
-    cwd: () => activePaper().root,
-    onData: (sessionId, data) =>
-      postToRendererIfAlive({
-        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,
-        sessionId,
-        data,
-      }),
-    onExit: (sessionId, exitCode) =>
-      postToRendererIfAlive({
-        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT,
-        sessionId,
-        exitCode,
-      }),
-    onError: reportBackgroundError,
-  });
-  const browserViews = createDesktopBrowserViews({
-    getWindow: () => (window.isDestroyed() ? undefined : window),
-    openExternalUrl: (url) => previewHost.openExternal(url),
-    onNavigated: (state) =>
-      postToRendererIfAlive({
-        command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE,
-        ...state,
-      }),
-    onError: reportAsyncError,
-    onBlockedExternalUrl: reportBackgroundError,
-    onExternalOpenError: reportBackgroundError,
-  });
-  const workspaceIpc = createDesktopWorkspaceIpc(
-    { postToRenderer: postToRendererIfAlive },
-    {
-      ptyHost,
-      browserViews,
-      // The renderer measures the browser slot in CSS pixels relative to its
-      // own viewport; a WebContentsView is positioned in the window's
-      // device-independent content space. These coincide at zoom factor 1, so
-      // scale by the renderer's zoom to keep the view aligned when the user
-      // has zoomed the UI.
-      toWindowBounds: (bounds) => {
-        const zoom = window.isDestroyed()
-          ? 1
-          : window.webContents.getZoomFactor();
-        return {
-          x: Math.round(bounds.x * zoom),
-          y: Math.round(bounds.y * zoom),
-          width: Math.round(bounds.width * zoom),
-          height: Math.round(bounds.height * zoom),
-        };
+  /** Each document/paper owns one auxiliary transport and its resources.
+   *  Callbacks capture the paper before any asynchronous file or PTY work. */
+  function createPaperWorkspace(paper: DesktopPaper) {
+    const post = (message: unknown) => {
+      if (paperBindings.get(paper.key)?.workspace !== workspace) return false;
+      return postToRendererIfAlive({
+        ...(message as Record<string, unknown>),
+        session: paper.key,
+      });
+    };
+    const ptyHost = createDesktopPtyHost({
+      cwd: () => paper.root,
+      onData: (sessionId, data) =>
+        post({
+          command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,
+          sessionId,
+          data,
+        }),
+      onExit: (sessionId, exitCode) =>
+        post({
+          command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT,
+          sessionId,
+          exitCode,
+        }),
+      onError: reportBackgroundError,
+    });
+    const browserViews = createDesktopBrowserViews({
+      getWindow: () => (window.isDestroyed() ? undefined : window),
+      openExternalUrl: (url) => previewHost.openExternal(url),
+      onNavigated: (state) =>
+        post({ command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE, ...state }),
+      onError: reportAsyncError,
+      onBlockedExternalUrl: reportBackgroundError,
+      onExternalOpenError: reportBackgroundError,
+    });
+    const workspace = createDesktopWorkspaceIpc(
+      { postToRenderer: post },
+      {
+        ptyHost,
+        browserViews,
+        toWindowBounds: (bounds) => {
+          const zoom = window.isDestroyed()
+            ? 1
+            : window.webContents.getZoomFactor();
+          return {
+            x: Math.round(bounds.x * zoom),
+            y: Math.round(bounds.y * zoom),
+            width: Math.round(bounds.width * zoom),
+            height: Math.round(bounds.height * zoom),
+          };
+        },
+        getWorkspacePath: () => paper.root,
+        getEnvironmentSummary: async () =>
+          paper.root
+            ? ((await readGitEnvironmentSummary(paper.root, {
+                onError: reportBackgroundError,
+              })) ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY)
+            : EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+        onAsyncError: reportAsyncError,
       },
-      getWorkspacePath: () => activePaper().root,
-      getEnvironmentSummary,
-      onAsyncError: reportAsyncError,
+    );
+    return { workspace, browserViews };
+  }
+  const workspaceIpc = {
+    handleMessage(
+      message: Parameters<DesktopMessageHandler['handleMessage']>[0],
+    ) {
+      const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
+      if (!parsed.success) return false;
+      const binding = paperBindings.get(parsed.data.session);
+      if (!binding) {
+        console.warn(
+          `Dropped a workspace request for closed paper ${parsed.data.session}`,
+        );
+        return true;
+      }
+      // Hidden papers retain their resources, but cannot cover the visible paper
+      // with a late browser-bounds notification.
+      if (
+        parsed.data.command === DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS &&
+        binding.paper !== activePaper()
+      )
+        return true;
+      runInSession(binding.paper.session, () =>
+        binding.workspace.handleMessage(message),
+      );
+      return true;
     },
-  );
-  // Shells keep running and web contents keep loading unless explicitly torn
-  // down — neither is reachable once the window is gone.
-  windowResources.add(() => workspaceIpc.disposeRendererResources());
-  // Separate from the renderer teardown above, which also runs on renderer
-  // reload: the app-signal subscription must survive a reload and die with the
-  // window, or macOS dock reactivation would stack one listener per reopen.
-  windowResources.add(() => workspaceIpc.dispose());
+    disposeRendererResources() {
+      // Navigation destroys the document, including its request correlations
+      // and recording ownership. Replace its ports while retaining sessions.
+      for (const binding of paperBindings.values()) {
+        runInSession(binding.paper.session, () => binding.dispose());
+      }
+      paperBindings.clear();
+      syncPaperBindings();
+      attachActivePaper(true);
+    },
+  };
   // The renderer owns editor dirtiness. This event is the main process's only
   // reading of it: Chromium emits it after the renderer's beforeunload handler
   // observes a dirty Monaco buffer and refuses the unload, so every close path
-  // (quit, workspace switch, window close) asks here and nowhere else.
+  // (quit, document reload, window close) asks here and nowhere else.
   bootstrapDesktopWindowLifecycle({
     webContents: window.webContents,
     workspaceIpc,
-    showDiscardDialog: () =>
-      dialog.showMessageBoxSync(window, {
-        type: 'warning',
-        buttons: ['Keep Editing', 'Discard Changes'],
-        defaultId: 0,
-        cancelId: 0,
-        title: 'Unsaved Changes',
-        message: 'This workspace has unsaved editor changes.',
-        detail: 'Discard the changes and continue?',
-      }),
+    showDiscardDialog,
     isFatalShutdownRequested: isFatalDesktopShutdownRequested,
-    clearPendingPaperActivation: () => {
-      pendingPaperActivation = undefined;
-      pendingPaperClose = undefined;
-    },
-    commitPendingPaperActivation: () => {
-      const root = pendingPaperActivation;
-      const closing = pendingPaperClose;
-      pendingPaperActivation = undefined;
-      pendingPaperClose = undefined;
-      if (root !== undefined) options.papers.activate(root);
-      if (closing !== undefined) {
-        void options.papers.close(closing).catch(reportAsyncError);
-      }
-    },
     clearContinueQuitAfterWindowClose: () => {
       continueQuitAfterWindowClose = undefined;
     },
@@ -1346,7 +1377,8 @@ function createWindow(options: {
         }
         case DESKTOP_PAPER_COMMANDS.CLOSE_PAPER: {
           const parsed = DesktopClosePaperMessageSchema.safeParse(message);
-          if (parsed.success) closePaper(parsed.data.key);
+          if (parsed.success)
+            closePaper(parsed.data.key, parsed.data.hasUnsavedChanges);
           return true;
         }
         default:
@@ -1396,6 +1428,7 @@ function createWindow(options: {
   });
   const mainViewIpc = { postToRenderer: hostBridge.postToRenderer };
   ipcRef.current = mainViewIpc;
+  syncPaperBindings();
   attachActivePaper();
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(buildDesktopMenuTemplate(shellActions)),

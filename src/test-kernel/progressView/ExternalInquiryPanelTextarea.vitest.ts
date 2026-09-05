@@ -126,6 +126,7 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
         kind: 'externalInquiry.submit',
         streamId: 'stream-1',
         threadId: 'ei_000000000000',
+        turnIndex: 1,
         answer: 'the answer',
         sessionLinks: ['https://chatgpt.com/c/abc'],
       },

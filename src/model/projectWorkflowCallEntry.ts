@@ -16,9 +16,7 @@ import { getModelLabel } from '@shared/model/modelLabel';
  * trace exporters so exported/archived traces show the same runtime label
  * as the live surface (see #10178).
  */
-export function projectWorkflowCallEntry(
-  entry: StreamLogEntry,
-): StreamLogEntry {
+function projectWorkflowCallEntry(entry: StreamLogEntry): StreamLogEntry {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
     entry.messageType !== MESSAGE_TYPES.WORKFLOW_TASK

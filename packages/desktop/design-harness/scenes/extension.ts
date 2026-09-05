@@ -34,9 +34,9 @@ const PAPER = {
   subtitle: '~/papers/ldt-lean',
 };
 
-function host(placement: HostSnapshot['placement']): HostSnapshot {
+function host(): HostSnapshot {
   return {
-    ...emptyHostSnapshot(PAPER, placement),
+    ...emptyHostSnapshot(PAPER),
     agentOptions: {
       toolUse: [
         { value: 'orchestrator', label: 'orchestrator' },
@@ -113,7 +113,7 @@ function surface(view: SessionView, ...actions: SurfaceAction[]): Surface {
 function sidebar(
   view: SessionView,
   surfaceRecord: Surface,
-  hostRecord = host('sidebar'),
+  hostRecord = host(),
 ): TemplateResult {
   return html`<div class="h-ext" id="frame">
     <div class="h-vscode-strip">
@@ -137,7 +137,8 @@ function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
     <progress-app
       .view=${view}
       .surface=${surfaceRecord}
-      .host=${host('editor')}
+      .host=${host()}
+      placement="editor"
       .nowMs=${BOARD_NOW}
     ></progress-app>
   </div>`;

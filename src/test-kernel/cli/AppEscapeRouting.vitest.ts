@@ -210,9 +210,7 @@ function runningChild(
   };
 }
 
-// Child rosters, parent edges, and tombstones live on the adapter-bound
-// `SessionState`; these helpers write through its public API and re-derive
-// the reactive snapshots the App renders from.
+// Seed the child rosters and parent edges through the session event fold.
 function seedChildRoster(
   parentStreamId: StreamTabId,
   rows: readonly ActiveChildInfo[],

@@ -13,10 +13,7 @@ import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteract
 import type { StreamTabId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { waitForRecordedEvent } from '@test/support/asyncTestUtils';
-import {
-  proposalApprovals,
-  setToolEditApprovalSessionBypass,
-} from '@tools/approval';
+import { proposalApprovals } from '@tools/approval';
 import { AskUserQuestionTool } from '@tools/userQuestion/UserQuestionTool';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import {
@@ -190,17 +187,14 @@ describe('human prompt progress events', () => {
     {
       label: 'tool-edit',
       kind: 'toolEdit',
-      setBypass: setToolEditApprovalSessionBypass,
+      setBypass: (streamId: StreamTabId, enabled: boolean) =>
+        currentSession().approvals.toolEdit.bypass.setBypass(streamId, enabled),
     },
     {
       label: 'bash',
       kind: 'bash',
-      setBypass: (streamId, enabled, options) =>
-        (options?.session ?? currentSession()).approvals.bash.bypass.setBypass(
-          streamId,
-          enabled,
-          { silent: options?.silent },
-        ),
+      setBypass: (streamId: StreamTabId, enabled: boolean) =>
+        currentSession().approvals.bash.bypass.setBypass(streamId, enabled),
     },
     {
       label: 'proposal',
@@ -235,7 +229,7 @@ describe('human prompt progress events', () => {
     const streamId = 'stream:bypass-independence' as StreamTabId;
 
     try {
-      setToolEditApprovalSessionBypass(streamId, true, {
+      currentSession().approvals.toolEdit.bypass.setBypass(streamId, true, {
         silent: true,
       });
 
@@ -270,7 +264,7 @@ describe('human prompt progress events', () => {
       expect(bypassed).toEqual({ action: 'approve' });
       expect(explicit.events).toEqual([]);
 
-      setToolEditApprovalSessionBypass(streamId, false, {
+      currentSession().approvals.toolEdit.bypass.setBypass(streamId, false, {
         silent: true,
       });
 

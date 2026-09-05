@@ -1,13 +1,10 @@
 /**
  * The transport framer (PRD one-fold-three-renderers, 7.4 and 8.1): one per
- * transport port, answering each `Subscribe` the port sends with the frames
- * of 8.1. Every `Subscribe` is answered the same way: the port's transcript
- * set is replaced by the one it names, then `listing()`, then
- * `aggregate(id, fromSeq)` per named aggregate in turn, then the
- * `replayComplete` marker, then `all(cursor)`, with the local and host
- * levels merged in from their current value on, where
- * the cursor is the runtime view's own cursor read before those reads on a
- * cold mount (cursor 0) and the `Subscribe`'s cursor on a resubscribe.
+ * transport port, answering each Subscribe with the same ordered input
+ * reader the runtime fold uses: listing, named histories, local state,
+ * completion marker, then durable events before live text. Host snapshots
+ * are merged beside those inputs. A cold mount starts from the runtime
+ * view's cursor; a resubscribe starts from the cursor it supplies.
  * Rows are tagged with their read, transcript rows of aggregates the
  * subscriber did not name are left out of the tail, and every frame
  * carries the commit the framer had drained when it cut it, left-out rows
@@ -31,16 +28,16 @@
  * redaction map here, in `cutFrame`, as the obligation it makes
  * load-bearing. Nothing is framed that is not already display-safe.
  */
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Effect, Stream, SubscriptionRef, type Context } from 'effect';
 
 import type {
   CommitOrdinal,
+  FoldInput,
   LocalRuntimeState,
-  SessionEvent,
   TextChunk,
   TranscriptSubscription,
 } from '@shared/schemas';
-import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type {
   EventsFrame,
@@ -56,16 +53,12 @@ const FRAME_WINDOW = '16 millis';
 /** Frames buffered ahead of the port before the framer suspends. */
 const FRAME_BUFFER = 64;
 
-/** What a framer reads of its session: the view level, the plane's reads,
- *  the local snapshot level, the chunk deltas, and the port's subscription
- *  set. A `SessionHandle` has every one of these. */
+/** The session view, ordered input reader, and per-port subscription setter. */
 export interface FramerSource {
   /** The session key on every frame. */
   readonly key: string;
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
-  readonly events: Pick<SessionEventsShape, 'listing' | 'all' | 'aggregate'>;
-  readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
-  readonly chunks: Stream.Stream<TextChunk>;
+  readonly inputs: Context.Service.Shape<typeof SessionInputs>['read'];
   readonly setTranscriptSubscriptions: (
     port: string,
     set: readonly TranscriptSubscription[],
@@ -77,12 +70,8 @@ type FrameItem =
   | TextChunk
   | { readonly _tag: 'local'; readonly local: LocalRuntimeState }
   | { readonly _tag: 'host'; readonly host: HostSnapshot }
-  | { readonly _tag: 'replay.complete' };
-
-const tagged =
-  (read: FoldEvent['read']) =>
-  (stream: Stream.Stream<SessionEvent>): Stream.Stream<FrameItem> =>
-    Stream.map(stream, (event): FrameItem => ({ _tag: 'event', read, event }));
+  | { readonly _tag: 'replay.complete' }
+  | { readonly _tag: 'drained'; readonly cursor: CommitOrdinal };
 
 /** One frame from the items of one window: chunks merged per row where
  *  adjacent, the last local and host snapshots, the marker, and the drained
@@ -136,6 +125,9 @@ function cutFrame(
       case 'replay.complete':
         replayComplete = true;
         break;
+      case 'drained':
+        drained = Math.max(drained, item.cursor);
+        break;
     }
   }
   return {
@@ -172,38 +164,25 @@ export function frameSubscription(
         subscribe.cursor === 0
           ? (yield* SubscriptionRef.get(source.view)).cursor
           : subscribe.cursor;
-      const localItem = (local: LocalRuntimeState): FrameItem => ({
-        _tag: 'local',
-        local,
-      });
-      const hostItem = (value: HostSnapshot | null): FrameItem | null =>
-        value === null ? null : { _tag: 'host', host: value };
-      const histories = subscribe.aggregates.reduce(
-        (history, s) =>
-          Stream.concat(
-            history,
-            source.events.aggregate(s.id, s.fromSeq).pipe(tagged('aggregate')),
+      const inputs = source
+        .inputs(subscribe.aggregates, tailFrom)
+        .pipe(
+          Stream.flatMap((batch) =>
+            Stream.fromIterable(batch).pipe(
+              Stream.filter(
+                (
+                  input,
+                ): input is Exclude<FoldInput, { _tag: 'subscriptions' }> =>
+                  input._tag !== 'subscriptions',
+              ),
+            ),
           ),
-        source.events.listing().pipe(tagged('listing')),
+        );
+      const hosts = SubscriptionRef.changes(host).pipe(
+        Stream.filter((value): value is HostSnapshot => value !== null),
+        Stream.map((value): FrameItem => ({ _tag: 'host', host: value })),
       );
-      const reads = Stream.concat(
-        histories,
-        Stream.concat(
-          Stream.make<[FrameItem]>({ _tag: 'replay.complete' }),
-          source.events.all(tailFrom).pipe(tagged('all')),
-        ),
-      );
-      // The two levels, each replaying its current value on subscribe, so
-      // the snapshots ride the first window with the history.
-      const levels = Stream.merge(
-        SubscriptionRef.changes(source.local).pipe(Stream.map(localItem)),
-        SubscriptionRef.changes(host).pipe(
-          Stream.map(hostItem),
-          Stream.filter((value): value is FrameItem => value !== null),
-        ),
-      );
-      const text = source.chunks.pipe(Stream.map((chunk): FrameItem => chunk));
-      return Stream.mergeAll([reads, levels, text], { concurrency: 3 }).pipe(
+      return Stream.merge(inputs, hosts).pipe(
         Stream.groupedWithin(FRAME_ROWS, FRAME_WINDOW),
         Stream.buffer({ capacity: FRAME_BUFFER, strategy: 'suspend' }),
         Stream.mapAccum(

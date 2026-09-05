@@ -116,6 +116,7 @@ export class SessionDrawer extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
+  @property() placement: 'sidebar' | 'editor' | 'desktop' = 'sidebar';
 
   private close = (): void => {
     this.dispatchEvent(
@@ -131,14 +132,14 @@ export class SessionDrawer extends LitElement {
   private openInEditor = (): void => {
     this.dispatchEvent(
       SessionUiEvents.host({
-        kind: this.host?.placement === 'editor' ? 'popBack' : 'popOut',
+        kind: this.placement === 'editor' ? 'popBack' : 'popOut',
       }),
     );
   };
 
   override render(): TemplateResult {
     const search = this.surface?.search ?? '';
-    const inEditor = this.host?.placement === 'editor';
+    const inEditor = this.placement === 'editor';
     return html`
       <div class="scrim" @click=${this.close}></div>
       <div class="panel" role="dialog" aria-label="Sessions">

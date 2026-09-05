@@ -45,4 +45,6 @@ export const DesktopSelectPaperMessageSchema = z.object({
 export const DesktopClosePaperMessageSchema = z.object({
   command: z.literal(DESKTOP_PAPER_COMMANDS.CLOSE_PAPER),
   key: z.string(),
+  /** Dirtiness belongs to the addressed paper's editor, including when hidden. */
+  hasUnsavedChanges: z.boolean(),
 });

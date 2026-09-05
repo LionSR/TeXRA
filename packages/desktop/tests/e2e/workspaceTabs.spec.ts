@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -105,7 +111,7 @@ test('opens with a permanent task conversation and no workbench', async () => {
       ),
     )
     .toBe(false);
-  await expect(page.locator('.task-workbench')).toHaveCount(0);
+  await expect(page.locator('.task-workbench:visible')).toHaveCount(0);
 });
 
 test('loads the project tree before an editor panel is opened', async () => {
@@ -388,7 +394,7 @@ test('opens settings beside the permanent conversation', async () => {
     'data-workbench-open',
     'false',
   );
-  await expect(page.locator('.task-workbench')).toHaveCount(0);
+  await expect(page.locator('.task-workbench:visible')).toHaveCount(0);
   await expect(page.locator('.task-conversation')).toBeVisible();
 });
 
@@ -435,7 +441,7 @@ test('toggles and restores the bottom, side, and summary bars', async () => {
   await expect(page.locator('.task-environment-button')).toBeVisible();
 
   await sideToggle.click();
-  await expect(page.locator('.task-workbench')).toHaveCount(0);
+  await expect(page.locator('.task-workbench:visible')).toHaveCount(0);
   await expect(sideToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(sideToggle).toBeVisible();
   await sideToggle.click();
@@ -750,6 +756,9 @@ test('runs host-requested setup commands in a new bottom terminal', async () => 
     window.postMessage(
       {
         command: 'desktop:terminal:openCommand',
+        session: document
+          .querySelector('.task-project-row.is-active')
+          ?.getAttribute('title'),
         initialCommand: 'printf "texra-integrated-command-ok\\n"',
       },
       '*',
@@ -797,4 +806,157 @@ test('closes a bottom tab and falls back within the same pane', async () => {
     ),
   ).toBeVisible();
   await expect(page.locator('.task-conversation')).toBeVisible();
+});
+
+test('keeps paper workbenches alive across selection and releases them on closure', async () => {
+  const { app, page } = launched;
+  const otherWorkspace = mkdtempSync(join(tmpdir(), 'texra-other-paper-'));
+  writeFileSync(join(otherWorkspace, 'sample.tex'), 'A different paper.\n');
+  const pidPath = join(workspacePath, 'paper-process.pid');
+  const hiddenPidPath = join(workspacePath, 'hidden-paper-process.pid');
+  try {
+    const paperA = await page
+      .locator('.task-project-row.is-active')
+      .getAttribute('title');
+    expect(paperA).toBeTruthy();
+    await page
+      .locator('.desktop-editor-tree-row[data-path="sample.tex"]')
+      .click();
+    const editor = page.locator(
+      '.desktop-editor-surface .monaco-editor:visible',
+    );
+    await expect(editor).toBeVisible({ timeout: 20_000 });
+    await expect(editor.locator('.view-lines')).toContainText('hello');
+    await editor.locator('.view-line').filter({ hasText: 'hello' }).click();
+    await page.keyboard.type('paper-a-unsaved');
+    await expect(editor.locator('.view-lines')).toContainText(
+      'paper-a-unsaved',
+    );
+    await openSidebarWorkbench('Terminal');
+    const terminal = page.locator(
+      '.task-paper-workbench:not([hidden]) .desktop-terminal-surface:not([hidden])',
+    );
+    await terminal.locator('.xterm').click();
+    await page.keyboard.type(`printf '%s' "$$" > ${JSON.stringify(pidPath)}`);
+    await page.keyboard.press('Enter');
+    await expect
+      .poll(
+        () => existsSync(pidPath) && readFileSync(pidPath, 'utf8').length > 0,
+      )
+      .toBe(true);
+    const pid = Number.parseInt(readFileSync(pidPath, 'utf8'), 10);
+    const originalTerminal = await terminal.elementHandle();
+    const originalEditor = await editor.elementHandle();
+    let navigations = 0;
+    const onNavigate = () => {
+      navigations += 1;
+    };
+    page.on('framenavigated', onNavigate);
+
+    await app.evaluate(({ dialog }, directory) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [directory],
+      });
+    }, otherWorkspace);
+    const platform = await app.evaluate(() => process.platform);
+    await page.keyboard.press(platform === 'darwin' ? 'Meta+o' : 'Control+o');
+    await expect(page.locator('.task-project-row')).toHaveCount(2);
+    const paperB = await page
+      .locator('.task-project-row.is-active')
+      .getAttribute('title');
+    expect(paperB).not.toBe(paperA);
+    expect(process.kill(pid, 0)).toBe(true);
+    expect(await originalTerminal?.evaluate((node) => node.isConnected)).toBe(
+      true,
+    );
+    await expect(
+      page.locator(
+        '.task-paper-workbench:not([hidden]) .task-workbench-tab[data-kind="terminal"]',
+      ),
+    ).toHaveCount(0);
+    await page
+      .locator('.desktop-editor-tree-row[data-path="sample.tex"]')
+      .click();
+    await expect(
+      page.locator('.desktop-editor-surface .view-lines:visible'),
+    ).toContainText('A different paper.');
+    await page.evaluate(
+      ({ session, initialCommand }) => {
+        window.postMessage(
+          { command: 'desktop:terminal:openCommand', session, initialCommand },
+          '*',
+        );
+      },
+      {
+        session: paperA,
+        initialCommand: `printf '%s' "$$" > ${JSON.stringify(hiddenPidPath)}`,
+      },
+    );
+    await expect
+      .poll(
+        () =>
+          existsSync(hiddenPidPath) &&
+          readFileSync(hiddenPidPath, 'utf8').length > 0,
+      )
+      .toBe(true);
+    const hiddenPid = Number.parseInt(readFileSync(hiddenPidPath, 'utf8'), 10);
+    await expect(page.locator('.task-project-row.is-active')).toHaveAttribute(
+      'title',
+      paperB!,
+    );
+
+    await page.locator(`.task-project-row[title="${paperA}"]`).click();
+    await expect(
+      page.locator('.desktop-editor-surface .view-lines:visible'),
+    ).toContainText('paper-a-unsaved');
+    expect(await originalEditor?.evaluate((node) => node.isConnected)).toBe(
+      true,
+    );
+    expect(process.kill(pid, 0)).toBe(true);
+    expect(navigations).toBe(0);
+    page.off('framenavigated', onNavigate);
+
+    await page
+      .locator(
+        '.task-paper-workbench:not([hidden]) .task-workbench-tab[data-kind="terminal"][data-active="true"] .task-workbench-tab-close',
+      )
+      .click();
+    await expect
+      .poll(() => {
+        try {
+          return process.kill(hiddenPid, 0);
+        } catch {
+          return false;
+        }
+      })
+      .toBe(false);
+    expect(process.kill(pid, 0)).toBe(true);
+    await page.locator(`.task-project-row[title="${paperB}"]`).click();
+    await app.evaluate(({ dialog }) => {
+      dialog.showMessageBoxSync = () => 1;
+    });
+    await page
+      .locator(
+        `.task-project-item:has(.task-project-row[title="${paperA}"]) .task-project-close`,
+      )
+      .click();
+    await expect(
+      page.locator(`.task-project-row[title="${paperA}"]`),
+    ).toHaveCount(0);
+    expect(await originalEditor?.evaluate((node) => node.isConnected)).toBe(
+      false,
+    );
+    await expect
+      .poll(() => {
+        try {
+          return process.kill(pid, 0);
+        } catch {
+          return false;
+        }
+      })
+      .toBe(false);
+  } finally {
+    cleanupDirectory(otherWorkspace);
+  }
 });

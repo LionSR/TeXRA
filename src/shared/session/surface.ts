@@ -51,16 +51,12 @@ type LaunchPatch = z.infer<typeof LaunchPatchSchema>;
 export interface Draft {
   readonly text: string;
   readonly images: readonly ExtractedClipboardImage[];
-  readonly polished: string | null;
-  readonly transcribed: string | null;
 }
 
-export const EMPTY_DRAFT: Draft = {
+export const EMPTY_DRAFT: Draft = Object.freeze({
   text: '',
-  images: [],
-  polished: null,
-  transcribed: null,
-};
+  images: Object.freeze([]),
+});
 
 const ExpansionOverrideSchema = z.enum(['expanded', 'collapsed']);
 type ExpansionOverride = z.infer<typeof ExpansionOverrideSchema>;
@@ -81,6 +77,10 @@ export interface Surface {
    */
   readonly selected: StreamTabId | null;
   readonly drafts: ReadonlyMap<StreamTabId, Draft>;
+  /** Foreground polish operations, keyed by stream id or `launch:<mode>`. Never persisted. */
+  readonly polishing: ReadonlySet<string>;
+  /** Streams awaiting follow-up admission. Never persisted. */
+  readonly sending: ReadonlySet<StreamTabId>;
   readonly launch: LaunchSurface;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
@@ -115,7 +115,7 @@ function entries<K extends z.ZodType, V extends z.ZodType>(key: K, value: V) {
 export const PersistedSurfaceSchema = z.object({
   selected: StreamTabIdSchema.nullable().prefault(null),
   launch: LaunchSurfaceSchema.prefault({}),
-  /** Text only; images and the polished and transcribed variants are not. */
+  /** Text only; image bytes are not persisted. */
   drafts: entries(StreamTabIdSchema, z.string()),
   inquiryDrafts: entries(z.string(), InquiryDraftSchema),
   expanded: entries(StreamTabIdSchema, ExpansionOverrideSchema),
@@ -143,6 +143,8 @@ export function loadSurface(
     drafts: new Map(
       persisted.drafts.map(([id, text]) => [id, { ...EMPTY_DRAFT, text }]),
     ),
+    polishing: new Set(),
+    sending: new Set(),
     launch: persisted.launch,
     inquiryDrafts: new Map(persisted.inquiryDrafts),
     expanded: new Map(persisted.expanded),

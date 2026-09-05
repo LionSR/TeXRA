@@ -25,7 +25,6 @@ type Banners = HostSnapshot['banners'];
 
 export interface HostSnapshotSourceOptions {
   paper: PaperDisplay;
-  placement: HostSnapshot['placement'];
   globalState: StateStore;
   /** The launcher's single-slot catalogs: base and edited candidates. */
   fileOptions(): Promise<FileOptions>;
@@ -106,7 +105,6 @@ export function createHostSnapshotSource(
   function publish(): void {
     snapshot = {
       paper: options.paper,
-      placement: options.placement,
       ...catalogs,
       workspaceRoots: options.workspaceRoots?.() ?? [],
       fileConfigs: [...FILE_SELECT_CONFIGS],

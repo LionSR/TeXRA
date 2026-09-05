@@ -71,6 +71,7 @@ export type InquiryThreadUpdatedEvent = z.infer<
 const InquirySubmitActionSchema = z.object({
   action: z.literal('submit'),
   threadId: InquiryThreadIdSchema,
+  turnIndex: z.int().positive(),
   answer: z.string().min(1),
   sessionLinks: InquirySessionLinksSchema.nullish(),
 });
@@ -78,6 +79,7 @@ const InquirySubmitActionSchema = z.object({
 const InquiryDropActionSchema = z.object({
   action: z.literal('drop'),
   threadId: InquiryThreadIdSchema,
+  turnIndex: z.int().positive(),
   feedback: z.string().optional(),
 });
 

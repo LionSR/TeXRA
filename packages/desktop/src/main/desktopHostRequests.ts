@@ -9,11 +9,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { SubscriptionRef } from 'effect';
-import {
-  AgentConfigSchema,
-  polishTextWithAI,
-  type SessionHandle,
-} from '@agent/runtime';
+import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
 import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportStreamTranscript } from '@controllers/progressView/exportTranscript';
@@ -28,6 +24,7 @@ import {
   createHostRunActions,
   launchPatchOf,
 } from '@controllers/session/hostRunActions';
+import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
@@ -45,13 +42,11 @@ import type {
   HostOutcome,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
-import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import {
   findTranscriptSpillFile,
   spillArtifactOpenFailedMessage,
   SPILL_ARTIFACT_DELETED_MESSAGE,
 } from '@transcript/spillArtifacts';
-import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -73,12 +68,11 @@ import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 interface DesktopHostRequestsOptions {
   session: SessionHandle;
-  /** The session key the surface addresses this paper by. */
-  sessionKey: string;
   host: DesktopAgentExecutionHost;
   execution: DesktopAgentExecution;
   files: DesktopFileSelection;
   snapshot: HostSnapshotSource;
+  draftRequests: HostDraftRequests;
   workspacePath: string | undefined;
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
@@ -107,7 +101,8 @@ interface DesktopHostRequestsOptions {
 }
 
 export interface DesktopHostRequests {
-  handle(request: HostRequest): Promise<HostOutcome>;
+  handle(request: HostRequest, port: string): Promise<HostOutcome>;
+  closePort(port: string): void;
   /** Stops a recording this window owns; the take is discarded. */
   dispose(): void;
 }
@@ -125,6 +120,9 @@ export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
   const { session, host, execution, logger } = options;
+  const stopObservingRecording = options.draftRequests.subscribe((recording) =>
+    options.snapshot.setRecording(recording),
+  );
   const snapshots = session.snapshots;
   const view = () => SubscriptionRef.getUnsafe(session.view);
 
@@ -460,37 +458,6 @@ export function createDesktopHostRequests(
     }
   }
 
-  // The one recorder per process; this window owns a take while `owned`.
-  let owned: { target: string } | null = null;
-  async function record(
-    action: Extract<HostRequest, { kind: 'record' }>['action'],
-  ): Promise<HostOutcome> {
-    if (action.kind === 'start') {
-      const result = await startRecording();
-      if (!result.success) {
-        throw new Rejected({
-          reason: result.error ?? 'Recording could not start.',
-        });
-      }
-      owned = { target: action.target };
-      options.snapshot.setRecording({
-        session: options.sessionKey,
-        target: action.target,
-      });
-      return { kind: 'done' };
-    }
-    const transcription = stopRecordingAndTranscribe();
-    owned = null;
-    options.snapshot.setRecording(null);
-    const result = await transcription;
-    if (!result.success) {
-      throw new Rejected({
-        reason: result.error ?? 'Transcription failed.',
-      });
-    }
-    return { kind: 'text', text: result.text };
-  }
-
   /** The Tools sheet's verbs over the launcher's base and edited files. */
   async function latexdiffs(
     request: Extract<HostRequest, { kind: 'latexdiffs' }>,
@@ -604,7 +571,10 @@ export function createDesktopHostRequests(
   const notOnDesktop = (what: string) =>
     new Rejected({ reason: `${what} is not available in the desktop app.` });
 
-  async function handle(request: HostRequest): Promise<HostOutcome> {
+  async function handle(
+    request: HostRequest,
+    port: string,
+  ): Promise<HostOutcome> {
     const done: HostOutcome = { kind: 'done' };
     switch (request.kind) {
       case 'openFile':
@@ -660,7 +630,9 @@ export function createDesktopHostRequests(
         await latexdiffs(request);
         return done;
       case 'record':
-        return record(request.action);
+      case 'polish':
+      case 'savePastedImage':
+        return options.draftRequests.handle(session, request, port);
       case 'popOut':
       case 'popBack':
         throw notOnDesktop('Pop-out to editor');
@@ -719,22 +691,6 @@ export function createDesktopHostRequests(
           }),
         );
         return done;
-      }
-      case 'polish': {
-        const result = await polishTextWithAI(request.text, undefined, session);
-        if (!result.success) {
-          throw new Rejected({
-            reason: result.error ?? 'Polishing failed.',
-          });
-        }
-        return { kind: 'text', text: result.text };
-      }
-      case 'savePastedImage': {
-        const fileName = await savePastedImageBase64(
-          request.base64,
-          request.fileName,
-        );
-        return { kind: 'savedImage', fileName };
       }
       case 'compileInputPdf':
         throw notOnDesktop('Compiling the input PDF');
@@ -814,15 +770,10 @@ export function createDesktopHostRequests(
 
   return {
     handle,
+    closePort: (port) => options.draftRequests.cancel(session, port),
     dispose() {
-      if (!owned) return;
-      owned = null;
-      void stopRecordingAndTranscribe().catch((error: unknown) =>
-        logger.warn('Failed to stop the recording on window close', {
-          data: toLogData(error),
-        }),
-      );
-      options.snapshot.setRecording(null);
+      stopObservingRecording();
+      options.draftRequests.cancel(session);
     },
   };
 }

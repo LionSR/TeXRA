@@ -50,7 +50,7 @@ export function mountProgressWebview(app: ProgressApp): void {
     app.surface = surface;
     app.host = host;
     app.nowMs = Date.now();
-    if (host?.placement !== 'sidebar') return;
+    if (app.placement !== 'sidebar') return;
     const shown = resolveSelected(view, surface) === null ? 'main' : 'progress';
     if (shown === reportedView) return;
     reportedView = shown;

@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import pDefer from 'p-defer';
 
 import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -170,6 +171,7 @@ export function createDesktopDiffHost(
         { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
         {
           command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
+          session: workspaceRoots().storage,
           title,
           displayPath: title.replace(/^Tool edit:\s*/, ''),
           originalText: originalContent,

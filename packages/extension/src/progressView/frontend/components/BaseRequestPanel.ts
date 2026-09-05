@@ -156,7 +156,7 @@ function decisionArms<K extends PermissionKind>(
     }
     case 'externalInquiry': {
       const d = decision as PermissionDecision<'externalInquiry'>;
-      const { threadId } = (
+      const { threadId, transcript } = (
         permission as Extract<PermissionPayload, { kind: 'externalInquiry' }>
       ).data;
       return [
@@ -167,6 +167,7 @@ function decisionArms<K extends PermissionKind>(
                   kind: 'externalInquiry.submit',
                   streamId,
                   threadId,
+                  turnIndex: transcript?.at(-1)?.turnIndex ?? 1,
                   answer: d.answer,
                   sessionLinks: d.sessionLinks ?? null,
                 }
@@ -174,6 +175,7 @@ function decisionArms<K extends PermissionKind>(
                   kind: 'externalInquiry.drop',
                   streamId,
                   threadId,
+                  turnIndex: transcript?.at(-1)?.turnIndex ?? 1,
                   feedback: d.feedback ?? null,
                 },
         },

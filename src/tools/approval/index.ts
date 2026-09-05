@@ -86,5 +86,3 @@ export function releaseStreamResources(
   session.approvals.forgetStreamAncestry(streamId);
   session.followUps.terminalize(streamId);
 }
-
-export { setToolEditApprovalSessionBypass } from './toolEditApproval';

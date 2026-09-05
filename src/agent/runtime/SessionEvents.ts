@@ -368,11 +368,9 @@ function tailFrom(
   );
 }
 
-
 /**
  * The plane over the in-memory log: the publisher and the three reads over
- * a `SessionEventLog`; whatever the log holds when this builds is history
- * under the anchor.
+ * a `SessionEventLog`. Each reader supplies its own starting position.
  */
 export const sessionEventsLayer = Layer.effect(
   SessionEvents,
@@ -383,9 +381,6 @@ export const sessionEventsLayer = Layer.effect(
     ) {
       yield* log.appendAll(events);
     });
-    // The tail anchor: read once, here, before any cold read this layer
-    // serves.
-    const anchor = yield* SubscriptionRef.get(log.level);
     // THE tail (C7): the drain woken by the log's level.
     const all = (
       fromCommit: SessionCursor,
@@ -406,7 +401,6 @@ export const sessionEventsLayer = Layer.effect(
       all,
       aggregate: (aggregateId, fromSeq) =>
         log.readAggregate(aggregateId, fromSeq),
-      anchor,
     };
   }),
 );

@@ -17,6 +17,7 @@ describe('desktop PDF messages', () => {
   it('round-trips a complete payload', () => {
     const parsed = DesktopShowPdfMessageSchema.parse({
       command: 'desktop:showPdf',
+      session: '/paper',
       title: 'paper.pdf',
       pdfPath: '/abs/path/to/paper.pdf',
     });
@@ -27,6 +28,7 @@ describe('desktop PDF messages', () => {
   it('rejects empty pdfPath', () => {
     const result = DesktopShowPdfMessageSchema.safeParse({
       command: 'desktop:showPdf',
+      session: '/paper',
       title: 'paper',
       pdfPath: '',
     });

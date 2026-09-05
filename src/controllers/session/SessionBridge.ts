@@ -57,6 +57,7 @@ const RequestEnvelopeSchema = z.object({
 
 export interface SessionBridgeOptions {
   readonly session: SessionHandle;
+  readonly onPortClosed: (port: string) => void;
   /** The host's capabilities (8.3), performed on the surface's behalf. A
    *  handler refuses with `Unavailable` or `Rejected`; anything else it
    *  throws is a defect, logged here and answered `Internal`. */
@@ -142,6 +143,7 @@ export class SessionBridge {
   readonly key: string;
   private readonly session: SessionHandle;
   private readonly handleHostRequest: SessionBridgeOptions['handleHostRequest'];
+  private readonly onPortClosed: SessionBridgeOptions['onPortClosed'];
   private readonly host = effectRuntime().runSync(
     SubscriptionRef.make<HostSnapshot | null>(null),
   );
@@ -154,6 +156,7 @@ export class SessionBridge {
   constructor(options: SessionBridgeOptions) {
     this.session = options.session;
     this.handleHostRequest = options.handleHostRequest;
+    this.onPortClosed = options.onPortClosed;
     this.key = options.session.roots.storage;
   }
 
@@ -180,14 +183,12 @@ export class SessionBridge {
     if (this.disposed) {
       throw new Error('SessionBridge is disposed; cannot attach a port');
     }
-    this.ports.get(port.id)?.framer.close();
+    this.closePort(port.id);
     const { session } = this;
     const source: FramerSource = {
       key: this.key,
       view: session.view,
-      events: session.events,
-      local: session.local,
-      chunks: session.chunks,
+      inputs: session.inputs,
       setTranscriptSubscriptions: (id, set) =>
         Effect.sync(() => session.setTranscriptSubscriptions(id, set)),
     };
@@ -197,8 +198,7 @@ export class SessionBridge {
       receive: (message) => this.receive(port, framer, message),
       close: () => {
         if (this.ports.get(port.id)?.framer !== framer) return;
-        this.ports.delete(port.id);
-        framer.close();
+        this.closePort(port.id);
       },
     };
   }
@@ -206,8 +206,15 @@ export class SessionBridge {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const { framer } of this.ports.values()) framer.close();
-    this.ports.clear();
+    for (const id of this.ports.keys()) this.closePort(id);
+  }
+
+  private closePort(id: string): void {
+    const held = this.ports.get(id);
+    if (!held) return;
+    this.ports.delete(id);
+    held.framer.close();
+    this.onPortClosed(id);
   }
 
   private receive(
@@ -215,7 +222,7 @@ export class SessionBridge {
     framer: PortFramer,
     message: unknown,
   ): void {
-    if (this.disposed) return;
+    if (this.disposed || this.portOf(port.id) !== port) return;
     const parsed = UpMessageSchema.safeParse(message);
     if (!parsed.success) {
       const envelope = RequestEnvelopeSchema.safeParse(message);
@@ -290,7 +297,7 @@ export class SessionBridge {
     requestId: string,
     result: Response['result'],
   ): void {
-    if (this.disposed || !this.ports.has(port.id)) return;
+    if (this.disposed || this.portOf(port.id) !== port) return;
     port.send({ kind: 'response', session: this.key, requestId, result });
   }
 

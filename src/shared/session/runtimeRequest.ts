@@ -119,6 +119,7 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('externalInquiry.submit'),
     ...streamScoped,
     threadId: InquiryThreadIdSchema,
+    turnIndex: z.int().positive(),
     answer: z.string(),
     sessionLinks: z.array(z.string()).nullish(),
   }),
@@ -126,6 +127,7 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('externalInquiry.drop'),
     ...streamScoped,
     threadId: InquiryThreadIdSchema,
+    turnIndex: z.int().positive(),
     feedback: z.string().nullish(),
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and

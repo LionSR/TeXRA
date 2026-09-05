@@ -1246,3 +1246,15 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
 }
+
+/* Paper and tab contents retain their DOM nodes while another owner is visible. */
+.task-paper-workbench,
+.task-workbench-retained-surface {
+  height: 100%;
+  min-height: 0;
+}
+
+.task-paper-workbench[hidden],
+.task-workbench-retained-surface[hidden] {
+  display: none;
+}

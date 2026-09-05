@@ -210,8 +210,8 @@ const SessionViewSchema = z.object({
   streams: z.map(StreamTabIdSchema, StreamViewSchema),
   /** Top-level ids, `streamOrdering` rule. */
   order: z.array(StreamTabIdSchema),
-  /** The tail position: the last commit folded from `all`; a listing or
-   *  history row never advances it. */
+  /** The drained tail position, including rows no longer materialized.
+   *  Listing and history rows never advance it. */
   cursor: CommitOrdinalSchema,
   /** One entry per subscribed aggregate: the highest seq the fold has
    *  retained for it (the subscription's `fromSeq` until a row folds).

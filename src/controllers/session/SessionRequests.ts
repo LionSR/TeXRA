@@ -319,6 +319,7 @@ function handle(
             ? {
                 action: 'submit',
                 threadId: req.threadId,
+                turnIndex: req.turnIndex,
                 answer: req.answer,
                 ...(req.sessionLinks == null
                   ? {}
@@ -327,11 +328,23 @@ function handle(
             : {
                 action: 'drop',
                 threadId: req.threadId,
+                turnIndex: req.turnIndex,
                 ...(req.feedback == null ? {} : { feedback: req.feedback }),
               },
           { session },
         ),
-      ).pipe(Effect.as(done));
+      ).pipe(
+        Effect.flatMap((accepted) =>
+          accepted
+            ? Effect.succeed(done)
+            : Effect.fail(
+                new Unavailable({
+                  streamId: req.streamId,
+                  reason: 'This inquiry turn is no longer open.',
+                }),
+              ),
+        ),
+      );
     case 'policy.set':
       return Effect.sync(() => {
         const { change } = req;

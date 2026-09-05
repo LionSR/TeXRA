@@ -11,6 +11,7 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
+import { SubscriptionRef } from 'effect';
 import { currentSession } from '@agent/runtime/SessionHandle';
 
 const mocks = vi.hoisted(() => ({
@@ -101,7 +102,6 @@ vi.mock('@platform/platform', async () => {
   };
 });
 
-import { SubscriptionRef } from 'effect';
 import type {
   HostInteractions,
   HostRetryInteractionOptions,
@@ -496,6 +496,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
         threadId: 'thread-interrupted',
+        turnIndex: 1,
         cause: 'Session interrupted.',
       }),
     );
@@ -523,6 +524,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
         threadId: 'thread-note-free',
+        turnIndex: 1,
       }),
     );
   });

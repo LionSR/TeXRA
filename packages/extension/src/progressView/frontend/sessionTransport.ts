@@ -154,7 +154,7 @@ export function installWebviewTransport(): WebviewTransport {
         scope,
         view$: toSignal(
           runtime,
-          graph.view.changes,
+          SubscriptionRef.changes(graph.view.ref),
           SubscriptionRef.getUnsafe(graph.view.ref),
         ),
         host$: toSignal(runtime, graph.host.changes, null),
