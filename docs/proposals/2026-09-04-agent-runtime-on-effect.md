@@ -9,20 +9,20 @@ row vocabulary: C1/C2 name the columns (`aggregate_id`, `commit`), C10
 forbids the `run_state` and transcript projections this draft had, C1
 forbids rewriting a row (so no null-on-complete), and C3 was rewritten the
 same day with three owners so that execution-aggregate rows stay byte-exact.
-The two-aggregate shape that makes this consistent is in §2.1; no
-contradiction between the two documents remains.
+The two-aggregate shape and its transaction boundaries are in §2.1.
 
 ## 0. Recommendation
 
 Move both flow families onto one shape: **each family is a plain Effect loop
-whose only durable act is appending rows to the session event table on the
-execution's own aggregate**. Provider messages, tool intents and results,
+whose durable state is recorded by appending rows to the session event table
+on the execution and stream aggregates**. Provider messages, tool intents and results,
 flow coordinates, and a periodic state snapshot are the rows; run state is a
 pure fold of those rows, computed by the same function on resume and in the
-trace viewer, and never persisted (substrate C10). There is no node, no
-graph, no action string, no cursor, and no flow record. Resume loads rows
+trace viewer, and never persisted as a separate projection (substrate C10).
+There is no graph interpreter or flow record. Durable phases are explicit
+row data rather than graph-node paths. Resume loads rows
 and continues the loop. Stepping a run in the trace viewer folds rows up to
-a chosen seq.
+a chosen commit.
 
 This is design D from the panel (the OpenCode, Codex, and Claude Code shape)
 hardened with three ideas the refuters forced from the other designs: intent
@@ -62,7 +62,8 @@ Findings all refuters agreed on, regardless of design:
   file interactions, user channels) is rewritten from live state at the end
   of every cycle (`ToolUseCycleNode.ts:200-204`, schema at
   `nodes/types.ts:26-30`). Tools mutate it through the session, not through
-  their results. Any row-based design must snapshot it per turn.
+  their results. The new result row must persist the state mutations that
+  settle with each call; a turn-end snapshot alone leaves a crash window.
 - Provider messages cannot get a native Zod schema; `ProviderMessage` is
   `z.custom` over external SDK unions by design (`ProviderMessage.ts:25-28`).
   Rows must carry the handler-built message delta, never the raw SDK
@@ -81,7 +82,7 @@ Findings all refuters agreed on, regardless of design:
   checkpoint import the substrate proposal §9 rejects, or a double migration
   of the same datum. The fix is the same in all four refutations: the cutover
   writes the row shape this program will keep.
-- Deletion lists were incomplete everywhere. Seven production modules outside
+- Deletion lists were incomplete everywhere. Ten production modules outside
   the flow directories import `persistedFlow.ts`; `deriveResumability` has
   callers in `src/tools`, `SessionHandle`, `runClassification`, and three CLI
   files. They are in the ledger below.
@@ -104,46 +105,61 @@ files, made explicit:
   transcript sidecar.
 - The **execution aggregate** holds what the model sees: `model.message`,
   `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`. Rows
-  are byte-exact and never scrubbed (C3, second owner). They are read by
-  `RunLedger.load` and by the in-process fold; the lease gates writes, not
-  reads. No row is ever rewritten and nothing is removed at completion:
+  are byte-exact and never scrubbed (C3, second owner). Raw reads belong to
+  `RunLedger`, including the input it supplies to the shared display fold;
+  the lease gates writes, not reads. No row is ever rewritten and nothing is removed at completion:
   single-owner D8 (#11304, "a checkpoint is deleted only by the user")
   keeps a completed run continuable, and once the view-state
   fold collapses these rows are the only copy of the conversation. The
   aggregate lives for the C9 retention window like every other row, which
   is shorter than today's "forever" for cancelled and failed checkpoints.
-  Every transport framer to a renderer process and every export applies
-  display redaction and truncation (C3, third owner), so nothing outside the
-  process receives a byte-exact row.
+  The shared display fold applies redaction before updating view state,
+  including the in-process CLI's `SessionViewService.ref`. Transport framers
+  and exports also enforce display redaction and truncation (C3, third
+  owner); no display surface receives a byte-exact row.
 
 Flow row types, all Zod-validated at the boundary, all carried as
 `AgentEvent` arms so the existing trace plumbing, fold, and viewer see them:
 
-| Row                            | Written when                                                                                                                                                                                                                                                                          | Payload                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `flow.step` (stream aggregate) | round begin/end (reflection), turn begin/end, `waiting`, `halted`, terminal outcome                                                                                                                                                                                                   | `{ family, step, round?, turn?, outcome? }`; small. The listing tier reads the latest one through the `(aggregate_id, type, seq)` index                                                                                                                                                                                                                                                          |
-| `model.message`                | every provider-native message appended: round prompt, assistant response, user follow-up, synthetic continuation                                                                                                                                                                      | handler-built `ProviderMessage[]` delta (z.custom), plus the extracted `toolCalls: { callId, name, input }[]` for assistant rows                                                                                                                                                                                                                                                                 |
-| `model.compaction`             | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens                                                                                                                                                                                       | the full replacement array; later loads start here                                                                                                                                                                                                                                                                                                                                               |
-| `tool.intent`                  | unconditionally at the barrier dispatch site, before any barrier (non parallel-safe) call starts (`ToolUseDispatchNode._exec` today). Not from an approval hook: `onExecutionReady` exists for three tools only (`bash`, `codex`, `wolfram`), while about 38 of 50 tools are barriers | `{ callIds }`                                                                                                                                                                                                                                                                                                                                                                                    |
-| `tool.result`                  | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | provider tool-result message + attachment references, byte-exact. The display result is the existing `tool.end` row on the stream aggregate, scrubbed at publish as today                                                                                                                                                                                                                        |
-| `flow.snapshot`                | at `turn.end` / `round.end`, before WAITING, and whenever bytes appended since the last snapshot exceed its size                                                                                                                                                                      | the family's full Zod state (`ToolUseRunSharedSchema`, `ReflectionFlowStateSchema`), messages included: `structured`, `lastError`, `userCancelledRetry`, `shouldSkipCycle`, `systemPrompt`, `continuationGenerationId`, `stateSlices`, `modelId`, `modelHandlerCompatibilityKey`; `outputLocation`, `roundOutputs`, `continueRounds`, `endTurn`, `context`, compile-repair state, round counters |
+| Row                            | Written when                                                                                                                                                                                                                                                                          | Payload                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow.step` (stream aggregate) | round begin/end (reflection), turn begin/end, response ready/processed, `waiting`, `halted`                                                                                                                                                                                           | `{ family, step, round?, turn?, continuation?, outcome? }`; replay coordinates. Listing status comes from the canonical `status` fact, including failures before the runtime starts                                                                                                                                                                                                   |
+| `model.message`                | every provider-native message appended: initial prompt, round prompt, assistant response, user follow-up, synthetic continuation                                                                                                                                                      | handler-built `ProviderMessage[]` delta (z.custom), plus extracted `toolCalls: { callId, name, input }[]` for assistant rows; normalized response metadata needed for continuation and output processing, never a raw SDK response                                                                                                                                                    |
+| `model.compaction`             | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens                                                                                                                                                                                       | the full replacement array; later loads start here                                                                                                                                                                                                                                                                                                                                    |
+| `tool.intent`                  | unconditionally at the barrier dispatch site, before any barrier (non parallel-safe) call starts (`ToolUseDispatchNode._exec` today). Not from an approval hook: `onExecutionReady` exists for three tools only (`bash`, `codex`, `wolfram`), while about 38 of 50 tools are barriers | `{ callIds, attempt }`; the attempt increases only after an explicit re-run decision                                                                                                                                                                                                                                                                                                  |
+| `tool.result`                  | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | provider tool-result message + attachment references and that call's settled `stateSlices` mutation, byte-exact and atomic in the same row. The display result is the existing `tool.end` row on the stream aggregate, scrubbed at publish as today                                                                                                                                   |
+| `flow.snapshot`                | initially before the first external activity; at `turn.end` / `round.end`, before WAITING, and whenever bytes appended since the last snapshot exceed its size                                                                                                                        | the family's non-message Zod state: `structured`, `lastError`, `userCancelledRetry`, `shouldSkipCycle`, `systemPrompt`, `continuationGenerationId`, `stateSlices`, `modelId`, `modelHandlerCompatibilityKey`; `outputLocation`, `roundOutputs`, `continueRounds`, `endTurn`, `context`, compile-repair state, round counters, durable phase, pending intents, and `messageBaseCommit` |
 
-The snapshot is a real base point: resume folds the latest snapshot plus
-the rows since it, which is at most one turn or one round. The price is one
-whole-state write per turn (today it is one per outer node step, two to
-three per turn, and none inside the inner round), so write amplification
-drops but does not vanish; the byte-amortized rule bounds it. Rows between
-snapshots are deltas. `toolCalls` entries on assistant rows carry
+Snapshots omit the accumulated provider message array. `messageBaseCommit`
+references the latest `model.compaction`, or the first `model.message` if
+there has been no compaction (null for an empty initial conversation).
+`RunLedger.load` reconstructs messages from that row, inclusive, through the
+snapshot's commit; it restores the snapshot's non-message state and then
+folds later rows. Thus mandatory turn-end snapshots do not repeatedly store
+the complete conversation. The non-message tail is at most one turn or
+round; reading the current conversation necessarily scales with its size.
+The additional size-triggered snapshots bound non-message replay work, not
+the cost of loading all provider messages. `toolCalls` entries on assistant rows carry
 `parallelSafe` stamped at append time so the fold and the resume rule stay
 data-only and need no registry.
+
+The dispatch service captures each call's state mutations in the same
+settlement boundary as its result. Parallel calls record only their own
+changes, with the existing field operations (set, delete, or accumulation)
+and deterministic settlement order; a whole-state copy taken while another
+call is mutating state is not a valid delta. Folding the result applies its
+mutation exactly once and removes its pending intent. A crash after the row
+commits therefore cannot retain the result while losing work-plan,
+file-interaction, or usage changes. Turn snapshots include the resulting
+state and all still-pending intents.
 
 Redaction: `redactSecrets` runs at publish on every stream-aggregate row
 (C3, unchanged from today's recorder), and never on execution-aggregate
 rows. There is no projection table (C10): the transcript surfaces and
 `readCompletedRunConversation` (executions tool, chat export, CLI history)
-fold the stream aggregate through `aggregate(aggregateId, fromSeq)` (C7;
-a transcript subscriber names the stream aggregate and, when it steps the
-run, the execution aggregate, each with its own `fromSeq`), and the
+read through C7's aggregate queries. After the conversation fold collapses,
+display also consumes the execution aggregate through `RunLedger` and the
+shared redaction boundary. Each aggregate has its own `fromSeq`, and the
 50 KB display bound is a fold and render decision, not a stored one. The
 first draft's transcript projector and `transcript_entries` table are
 withdrawn, as is its "null payloads on COMPLETED" rule, since C1 forbids
@@ -164,8 +180,9 @@ provider messages, and the execution aggregate never holds display rows.
 One residue, named in C3 as well: until the view-state PRD collapses the
 fold, message text is durable twice (redacted trace rows and
 `model.message`); the collapse deletes the trace copy, after which the
-execution aggregate is the only conversation and display is a fold of it
-with redaction at the transport framer. A secret in a payload is on disk
+execution aggregate is the only conversation and the shared display fold
+redacts it before any view state is exposed, including direct in-process
+subscribers. A secret in a payload is on disk
 for the C9 retention window, the owner's decision 6 in the substrate
 proposal.
 
@@ -178,9 +195,12 @@ Mid-run model switch: today `persistModelSwitch`
 (`runToolUseFlow.ts:254`, called at `:330`) is a two-phase write, record
 first and `config.json` second, and A's durability refuter showed it is a
 mid-step durable commit that a private working copy loses. In the row
-model a switch is one transaction that appends a `flow.snapshot` with the
+model a switch calls `RunLedger.appendBatch`, backed by substrate C6's
+`SessionEvents.publishBatch(events)`: all target ownership checks, sequence
+assignments, and inserts share one transaction. It appends the existing
+`run.config` event on the stream aggregate and a `flow.snapshot` with the
 new `modelId` and `modelHandlerCompatibilityKey` on the execution aggregate
-and the existing `run.config` event on the stream aggregate. Resume order
+as the final row. Neither event is visible unless both commit. Resume order
 is fixed by that: read the latest `flow.snapshot` for the model id and
 compat key, build the handler, then fold, which is what
 `SessionResumeRetrieval.ts:165-175` does today when it overrides
@@ -192,7 +212,7 @@ C1), and the six flow row types carry a version in their type string the
 same way. `foldRunState` reads rows through the house `z.union` pattern at
 the event boundary, with the legacy member `.transform()`ed into the
 current shape and never `.catch`, since these are persisted data.
-`flow.snapshot` is the family state schema and gets the treatment the
+`flow.snapshot` is the family's non-message state schema and gets the treatment the
 importer gives `flow_<id>.json` today: one boundary migration per schema
 version, nothing downstream branching on version.
 
@@ -203,89 +223,147 @@ version, nothing downstream branching on version.
 export const runToolUse = Effect.fn('toolUse.run')(function* (
   start: ToolUseStart,
 ) {
-  const ledger = yield* RunLedger; // append(row) -> Effect<RunState>; load(executionId)
+  const ledger = yield* RunLedger; // append/appendBatch -> Effect<RunState>; load(executionId)
   const run = yield* RunContext; // executionId, streamId, modelCell, setting, logger, session
   const followUps = yield* FollowUps; // ToolUseSessionLifecycle behind Effect.callback
-  const model = yield* ModelInvoker; // ModelInvocationNode's ladder as a service
   let s = yield* ledger.load(run.executionId); // fold of rows, or null on a fresh run
-  if (s === null) s = yield* prepareSession(start); // was ToolUsePrepareNode
+  if (s === null) {
+    const initial = yield* prepareSession(start); // no model or tool activity
+    s = yield* ledger.appendBatch([
+      initialMessages(initial),
+      snapshot(initial), // committed before runTurn can invoke an external activity
+    ]);
+  }
   for (;;) {
-    s = yield* runTurn(s); // was RoundPrep -> Invoke -> Process -> Dispatch
-    if (s.halt) return s.halt; // 'cancelled' | 'failed'
-    if (run.isSubagent) {
-      yield* ledger.append(step('waiting'));
-      return 'waiting';
+    if (s.phase === 'waiting') {
+      const receive = run.isSubagent ? followUps.drain : followUps.wait;
+      const batch = yield* receive;
+      if (batch === null) return run.isSubagent ? 'waiting' : 'cancelled';
+      s = yield* followUps.consume(batch); // atomic messages + queue removal + turn.ready
     }
-    const batch = yield* followUps.wait; // Effect.callback, onInterrupt cancels the wait
-    if (batch === null) return 'cancelled';
-    s = yield* ledger.append(userMessages(batch));
+    s = yield* runTurn(s); // resumes at the folded phase
+    if (s.halt) return s.halt; // 'cancelled' | 'failed'
+    s = yield* ledger.appendBatch([
+      snapshot({ ...s, phase: 'waiting' }),
+      step('waiting'),
+    ]);
+    if (run.isSubagent) return 'waiting'; // one child cycle per invocation
   }
 });
 ```
 
 `runTurn` re-yields the services it needs (they are in Context, not
 closures), drains queued follow-ups non-blockingly, calls `model.invoke`,
-appends the assistant row, partitions tool calls into parallel-safe runs and
-barriers as `ToolUseDispatchNode` does today, writes `tool.intent` for a
-barrier from the post-approval hook, runs a parallel-safe group with
+appends any replacement `model.compaction` before the assistant row in one
+batch, partitions tool calls into parallel-safe runs and barriers as
+`ToolUseDispatchNode` does today, writes `tool.intent` unconditionally at
+the dispatch site before invoking every barrier tool, runs a parallel-safe group with
 `Effect.forEach(..., { concurrency: MAX_PARALLEL_TOOL_CALLS })` and a typed
 `TurnEnded` failure for the `endsToolUseTurn` short-circuit, appends one
-`tool.result` per call, and ends with `flow.snapshot` + `flow.step turn.end`.
+`tool.result` with its state mutation per call, and ends with one batch
+containing the resulting `flow.snapshot` and `flow.step turn.end`. Like the
+reflection loop below, `runTurn` examines the folded phase and persisted
+assistant/tool rows before choosing its next activity; it does not restart
+a model invocation merely because the turn-end snapshot is absent.
 
 Follow-up batches are consumed under a lease, not on receipt. Today a batch
 is acknowledged only after every item has landed in `messages`; an append
 that fails (oversized or corrupt media in `addMediaToUserMessage`,
 `followUpMessages.ts:100-104`) leaves it unacknowledged, and
 `resumeQueuedToolUse` restores it to the queue on the next resume. The
-sketch's `ledger.append(userMessages(batch))` keeps that: `FollowUps.wait`
-and `drain` hand the batch to the loop under a lease that is released only
-after the `model.message` rows commit; on append failure the batch returns
-to the queue and `updateQueuedFollowUps` is re-emitted, and the same inject
-is never re-run on the next resume.
+sketch's `FollowUps.consume` keeps that: `wait` and `drain` reserve a batch
+without removing it durably. `consume` validates and builds its messages,
+then uses `RunLedger.appendBatch` to commit the `model.message` rows on the
+execution aggregate, `flow.step turn.ready`, and the post-consumption
+queued-follow-ups snapshot on the stream aggregate in the same C6
+transaction. The step makes the consumed batch ready for the next turn.
+Queue mutations, including
+new enqueues, are serialized through that transaction and remove only the
+reserved item ids from the current queue, so a concurrent enqueue is not
+overwritten. The consumer lease releases after commit. On failure neither
+side changes and the batch returns to the queue; after a crash either both
+the messages and removal exist or neither does. No intermediate queue
+acknowledgement is written.
 
 The reflection loop is the same shape with one outer coordinate:
 
 ```ts
 export const runReflection = Effect.fn('reflection.run')(function* (start) {
-  ...
-  for (let round = s.round; round < s.totalRounds; round++) {
-    yield* Effect.scoped(Effect.gen(function* () {
-      yield* Effect.acquireRelease(openStage(`r${round}`), (st, exit) => st.end(outcomeOf(exit)));
-      s = yield* ledger.append(step('round.begin', round));
-      s = yield* prepareContext(s);          // PrepareContext + TeXCount + MediaExtraction as functions
-      for (;;) {                             // ResponseCycleFlow's continuation loop, flattened
-        const r = yield* model.invoke(s);
-        s = yield* ledger.append(assistant(r));
-        const next = decideContinuation(s, r);   // 'end' | 'continue' | 'compact'
-        if (next === 'end') break;
-        if (next === 'compact') s = yield* ledger.append(compaction(r.updatedMessages));
-      }
-      const out = yield* produceOutput(s);   // OutputNode's body; output/ untouched
-      s = yield* ledger.append(snapshot(s), step('round.end', round, out));
-    }));
-    if (!shouldContinue(s, out)) break;      // RoundPersistedFlow's decision as a pure function
+  const ledger = yield* RunLedger;
+  const model = yield* ModelInvoker;
+  let s = yield* loadOrInitializeReflection(start); // initial messages + snapshot committed first
+  while (!s.done) {
+    s = yield* Effect.scoped(
+      Effect.gen(function* () {
+        yield* Effect.acquireRelease(openStage(`r${s.round}`), (st, exit) =>
+          st.end(outcomeOf(exit)),
+        );
+        if (s.phase === 'round.ready') s = yield* prepareRound(s);
+        while (s.phase === 'model.ready' || s.phase === 'response.ready') {
+          if (s.phase === 'model.ready') {
+            const r = yield* model.invoke(s);
+            // Replacement history precedes this completed response, even on the final continuation.
+            s = yield* ledger.appendBatch([
+              ...replacementRows(r),
+              assistant(r),
+              step('response.ready', s.round, s.continuation),
+            ]);
+          }
+          s = yield* processCommittedResponse(s); // uses the saved response; never calls the model
+        }
+        const out = yield* produceOutput(s); // phase is output.ready
+        const next = finishRound(s, out, shouldContinue(s, out));
+        return yield* ledger.appendBatch([
+          snapshot(next), // includes next round/phase, or done; never repeats a settled round
+          step('round.end', s.round, out),
+        ]);
+      }),
+    );
   }
+  return s;
 });
 ```
 
-The response-cycle `complete` fan-in, the only non-trivial branch in the
-repo, becomes `break`. Compile-repair state rides on `flow.snapshot`. The
-raw output file keeps today's per-continuation append
-(`ResponseCycleFlow.ts:321-337`): it is the mid-cycle checkpoint that
-`initializeOutputAndPrefill` reads back on resume, prefills, and uses to
-short-circuit the model call when the end tag is already present, and users
-watch it grow. E's "write it from folded state at cycle end" was wrong and is
-not adopted.
+These helpers have explicit durable boundaries. `prepareRound` commits the
+prepared context, round prompt/replacement, a snapshot with phase
+`model.ready`, and `round.begin` before invoking the model. Assistant rows carry
+the handler-normalized stop reason, usage, and output-processing metadata
+needed by `decideContinuation`, in addition to provider messages. The
+assistant and `response.ready` commit together. `processCommittedResponse`
+uses that saved data, records the output progress, and commits the next
+phase (`model.ready` or `output.ready`) and non-message state in one batch.
+An interrupted run therefore processes a committed response before it can
+issue another invocation. `replacementRows` emits a compaction only for a
+non-prefix replacement; the full replacement precedes the assistant so
+folding cannot discard the completed response.
+
+The raw output file still grows per continuation, as at
+`ResponseCycleFlow.ts:321-337`, and compile-repair state stays in the
+snapshot. Replaying a saved response must not append its text twice:
+response metadata records the target byte offset and the information needed
+to derive the exact output fragment from its provider message. Processing
+checks that interval, completes a matching partial write, or skips an
+already complete write before committing `flow.step response.processed`; conflicting
+file content is surfaced for repair. This preserves live output and the
+resume prefill used by `initializeOutputAndPrefill` without treating an
+unrecorded file append as evidence that another model call is needed.
 
 ### 2.3 Fold, resume, and the viewer
 
 `foldRunState(rows) -> RunState` is one pure, data-only function in
-`src/shared`: start from the latest `flow.snapshot`, apply later
-`model.compaction`, `model.message`, `tool.result`, and `flow.step` rows in
-order. It runs in `RunLedger.load` on resume and in the trace viewer's
+`src/shared`: restore the latest `flow.snapshot` and its referenced message
+history, then apply later `model.compaction`, `model.message`, `tool.intent`,
+`tool.result`, `flow.step`, and the existing approval rows in commit order.
+`RunState.pendingIntents` is keyed by call id and records its latest attempt;
+an explicitly approved new intent supersedes the previous attempt, and only
+a result for the current attempt removes the pending call. Snapshots retain
+this map, pending approval decisions, durable phase, and the reference to
+any response still awaiting processing. It runs in
+`RunLedger.load` on resume and in the trace viewer's
 stepper, and nowhere else: there is no `run_state` summary, no projection
 table, and no `executions` table (contract C10). The listing tier reads the
-latest `flow.step` outcome through the `(aggregate_id, type, seq)` index, and
+latest canonical `status` fact through the `(aggregate_id, type, seq)` index,
+including a reservation that fails before any `flow.step` exists, and
 "resumable" means a `flow.snapshot` exists and no live owner holds the
 lease (single-owner D8; the outcome does not enter into it). Because the
 same function produces the
@@ -293,33 +371,52 @@ state the loop saw when it appended step `k`, "state at step k" and "resume
 would continue after step k" are the same fact. This is the
 replay-along-the-flow property, obtained without re-executing anything.
 
-Ordering across aggregates: flow rows and trace rows live on different
-aggregates, so per-aggregate `seq` is not a total order between them. Every
+Ordering across aggregates: execution-aggregate flow rows and
+stream-aggregate rows have independent `seq` values. `flow.step` shares the
+stream aggregate and is ordered with trace rows by that stream's `seq`. Every
 row also carries the database-wide `commit` value, exported under the same
 name, and the scrubber keys on that. `StreamLogEntry.seqNo` is
 renumbered on merge and is explicitly not foldable, so it is not the key.
-What the viewer can show depends on what it reads: against the local
-database of a resumable run, full state at step `k`; for an exported
-document, coordinates, the tool-call graph, and display-redacted rows,
-because every export applies C3's display redaction and never carries a
-byte-exact row.
+`RunLedger.load` uses C7's indexed
+`aggregatesAfterCommit([executionId, streamId], snapshot.commit)` for the
+tail, so it neither confuses the two sequence spaces nor scans unrelated
+runs. A snapshot includes the preceding rows on both aggregates and its
+explicit non-message state; `appendBatch` resolves any reference to an
+earlier message in the same batch while assigning commits. When a step
+checkpoints new non-message state, its snapshot precedes the `flow.step`
+in that same transaction. The viewer's cut at the step's commit therefore
+includes those fields, and resume folds the step after the snapshot without
+repeating the associated activity. Referenced message history is read separately on
+the execution aggregate, through that snapshot boundary. The viewer sees
+coordinates, the tool-call graph, and display-redacted state at step `k`;
+the runtime alone receives byte-exact provider content. Both local display
+and exported documents pass through C3's display redaction.
 
 Resume: `runAgent({kind:'resume'})` acquires the lease first (as today at
 `runAgent.ts:168` and `executeAgent.ts:648`), then `RunLedger.load`. The
 resume rules live in the runtime, not the fold, and read only row data:
 a barrier `tool.intent` without a matching `tool.result` is an explicit
 outcome-unknown state, whether the tool ran, was mid-approval, or never
-started; the loop appends a synthetic result naming it and surfaces an
-`approval.requested` row (one-fold PRD §6 item 1) asking to re-run or skip,
+started; the loop surfaces an `approval.requested` row (one-fold PRD §6
+item 1), keyed by call id and attempt, asking to re-run or skip,
 never re-running a destructive call blindly and never fabricating CANCELLED
-for a tool that may have run. Parallel-safe calls without results re-run. A
+for a tool that may have run. No provider result is appended while the
+decision is pending. Skip atomically commits `approval.resolved` and the
+single synthetic `tool.result`; re-run atomically commits the resolution
+and a new attempt's `tool.intent`, then invokes the tool and appends its
+single settled result. A second crash before that result returns the new
+attempt to outcome-unknown; an earlier approval never authorizes another
+attempt implicitly. At most one provider result pairs with the original
+call id. Parallel-safe calls without results re-run. A
 `waiting` step re-enters the follow-up wait; a subagent's per-cycle WAITING
-resumes from the snapshot written just before it, so the fold is one
-snapshot plus a handful of rows, not the whole aggregate. A fresh launch
+resumes from the snapshot committed with that transition, drains any queued
+batch, and returns WAITING only if none is available. Its non-message fold
+is one snapshot plus a handful of rows; message restoration follows §2.1.
+A fresh launch
 onto a non-empty aggregate is refused (keeps #11313 semantics). The nine
 preservation reasons in `runToolUseFlow.ts:606-685` are enumerated against
-the row model in PR 2; the follow-up-queue versus record divergence
-(`persistenceRecoveryPending`) is a separate decision there.
+the row model in PR 2; follow-up consumption uses the atomic queue/message
+transaction in §2.2.
 
 Unpaired tool calls: an assistant row whose `tool_use` blocks have no
 paired `tool.result` rows is resolved per call on resume, so the model
@@ -402,11 +499,35 @@ The clean sequencing is that **this program is Stage 5 and lane D of the
 substrate cutover**. The cutover already has zero code, so nothing is
 re-done: lane D's deliverable is the two loops, the row vocabulary of §2.1,
 `RunLedger`, `foldRunState`, and the one importer, which converts each
-`flow_<id>.json` directly into the execution's first `flow.snapshot` event
-(whole `shared`, bytes unchanged, `modelHandlerCompatibilityKey` included)
-and never writes any other shape. `persistedFlow.ts`, `src/agent/node/`,
-and the three interpreters are deleted in the same branch, so no whole-state
-rewrite survives the cutover and the amplifier is fixed in the release that
+supported `flow_<id>.json` directly into canonical rows. It preserves the
+provider messages byte-exact in the initial message base and stores the
+remaining validated `shared` fields, including
+`modelHandlerCompatibilityKey`, in `flow.snapshot`. The import transaction
+also translates the authoritative `FlowRecord.cursor.nextNodeId` and
+`lastAction` into the new durable phase and any necessary `flow.step` or
+repair rows; copying `shared` alone is insufficient. The mapping is explicit
+for each supported family and cursor:
+
+- A cursor before invocation becomes `model.ready` only when no completed
+  response is present; a saved response awaiting processing becomes
+  `response.ready`, with all required normalized metadata present.
+- A cursor at tool dispatch uses the saved extracted calls and paired
+  results. Every unresolved barrier that might already have been dispatched
+  gets a `tool.intent` requiring outcome-unknown approval; absence of a
+  legacy intent is not evidence that the call never ran.
+- Round/output boundaries and terminal edges preserve the last action and
+  next round or waiting state, without replaying a settled round.
+
+Unknown cursor paths, missing response metadata, or a continuation whose
+next activity cannot be established safely stop the import for that run
+with an explicit unsupported-resume diagnostic. No resumable snapshot is
+committed for it, and its source files remain available for recovery;
+there is no guessed fresh-run fallback. Legacy owners must be stopped and
+the substrate §8 migration claim must be held throughout this conversion.
+The temporary input schemas and cursor mappings retire with that section's
+three-month compatibility window. `persistedFlow.ts`, `src/agent/node/`,
+and the three interpreters are deleted in the same branch, so no overwrite
+of a whole conversation checkpoint survives the cutover and the amplifier is fixed in the release that
 fixes the substrate. The substrate proposal's Stage 5 text (`messages` rows,
 checkpoint envelope) is replaced by this, and its §8 freeze on
 `src/agent/node` and the flow directories becomes the freeze on lane D's
@@ -460,6 +581,10 @@ Deleted (with the replacement in the same PR, R10):
 Rewired, not deleted (the refuters' missing list): `AgentLaunchContext.ts`
 (compat key from snapshot row), `executionLifecycle.ts`,
 `executionListing.ts`, `tools/executions/executionKvFiles.ts`,
+`tools/executions/executionLiveness.ts` and
+`controllers/session/SessionState.ts` (replace `flowKey` reads with ledger
+queries), `runtime/resumeRun.ts` (handle the ledger's persisted-state error
+instead of `PersistedFlowStateError`),
 `SessionHandle.ts`, `runClassification.ts`, `ExecutionsTool.ts`, and the
 CLI's `toolUseResumeData.ts`, `runExecution.ts`, `commands/workflow.ts`
 (all `deriveResumability` callers; the host-agent import ratchet must not
@@ -487,7 +612,9 @@ compresses when the phase ceremony goes. `output/` (3,482) and
    `FollowUps`, `RunContext`, `OutputPipeline`, `runToolUse`,
    `runReflection`; `executeAgent` and every resume arm call
    `runtime.runPromiseExit` with the fiber's signal; the importer's
-   `flow_<id>.json` to `flow.snapshot` arm. Deletes `src/agent/node/`,
+   `flow_<id>.json` to canonical rows/cursor mapping, and the existing
+   `approval.requested` / `approval.resolved` rows required for safe repair
+   and manual retry. Deletes `src/agent/node/`,
    `ModelInvocationNode`, `RoundPersistedFlow`, `ResponseCycleFlow`,
    `ToolUseRoundFlow`, all sixteen node classes, the disposition ladder,
    `linkAbortSignals`, `onAbort`, the startup window, `p-retry` in the
@@ -498,7 +625,7 @@ compresses when the phase ceremony goes. `output/` (3,482) and
    of the program; it is reviewed as one because splitting it is what
    creates the shim.
 3. Replay along the flow: `TraceDocument.steps` with `commit`, the viewer
-   scrubber over `foldRunState`, the `flow.transition` arm in the session
+   scrubber over `foldRunState`, the `flow.step` arm in the session
    fold so the CLI's waiting-on row and the progress board read
    `StreamView.flow`. Deletes the stage-row derivations those surfaces use
    today.
@@ -533,8 +660,9 @@ branch.
   still are not migrated and are called through `Effect.tryPromise`.
 - On projections: none. The first draft's transcript projector,
   `transcript_entries` table, and `run_state` summary are withdrawn under
-  C10; `flow.snapshot` is the one derived row, sanctioned by the contract
-  under the byte-amortized rule. `foldRunState` runs on load and in the
+  C10; `flow.snapshot` is the one checkpoint row, sanctioned by the contract
+  for non-message state and references to canonical conversation rows.
+  `foldRunState` runs on load and in the
   viewer only. This program adds no derived table and no layer whose
   purpose is to bridge two formats.
 - On secret redaction (contract C3): C3 scrubs provider error bodies and
@@ -552,7 +680,8 @@ branch.
   redacted (single-owner §6). Settled with the substrate owner on
   2026-09-04: C3 now has three owners (scrub at publish for stream rows,
   error and approval payloads; byte-exact execution-aggregate rows; display
-  redaction at every transport framer and export). This document's
+  redaction in the shared display fold before exposing view state, and at
+  every transport framer and export). This document's
   "null on COMPLETED" and "removed at completion" were withdrawn because
   C1 forbids rewriting a row, single-owner D8 keeps completed runs
   continuable, and after the fold collapse these rows are the only
@@ -560,8 +689,9 @@ branch.
 - One-fold PRD line 102: reversed by the owner's ruling; its `fold(view,
 event)` gains the `flow.step` arm and its §6 durable set gains six rows.
 - Single-owner §6: its single door at admission stays for the stream
-  aggregate; for the execution aggregate the door is the transport framer
-  and the export (C3, third owner); its "checkpoint content" list is false
+  aggregate; for the execution aggregate display redaction precedes every
+  view-state update, including in-process CLI views, as well as transport
+  and export (C3, third owner); its "checkpoint content" list is false
   of the table, by design. Single-owner D8 is upheld and extended: nothing
   deletes a completed run's rows, not even completion.
 
@@ -575,17 +705,19 @@ event)` gains the `flow.step` arm and its §6 durable set gains six rows.
    remains is the substrate's decision 6, the C9 retention default. A
    shorter window for these rows than for the rest is not available once
    they are the only copy of the conversation, so decision 6 is one window.
-3. Whether `approval.requested` / `approval.resolved` for outcome-unknown
-   barrier tools and for the manual retry prompt (§2.3) land in PR 2 or
-   wait for the one-fold PRD's approval events.
+3. Confirm that the existing `approval.requested` / `approval.resolved`
+   events land with PR 2. They are required for outcome-unknown barrier
+   tools and manual retry (§2.3); those resume paths cannot ship before the
+   events and their decision handling are available.
 4. Confirm that the child-protocol unification (PR 4) is in scope, since
    leaving the script journal as a second ledger would be an intermediate.
 
 ## 8. Risks
 
-- The `flow.snapshot` byte-amortized policy is the only bound on fold cost
-  at resume; a bug there is the CLI-startup slowness class again. A
-  load-time warning on rows-since-snapshot is required in PR 1.
+- Snapshots bound the non-message tail; restoring the current conversation
+  still reads its canonical message base and deltas. PR 1 measures both
+  costs separately and warns on an unexpectedly large non-message tail.
+  Mandatory snapshots must never regain an accumulated message array.
 - Anthropic image blocks and pasted attachments inline base64 in provider
   messages; one `model.message` row can be megabytes. Accept in N+1 (it is
   what the file holds today); route to the assets store later.
@@ -596,8 +728,8 @@ event)` gains the `flow.step` arm and its §6 durable set gains six rows.
   rename. All uses sit behind the five service classes.
 - Raw provider content lives in the database for the retention window (§7
   item 2). Any new reader of the `event` table that bypasses the fold is a
-  redaction leak. Preferred: the `Database` layer exposes the four
-  byte-exact row types only through `RunLedger`, so the raw query is
+  redaction leak. The `Database` layer exposes the five
+  execution-aggregate row types only through `RunLedger`, so the raw query is
   unconstructible elsewhere and no test is needed. Otherwise the
   architecture test that fails persistence writes outside the database
   (substrate Stage 1) needs a sibling that fails raw reads of those rows
@@ -607,8 +739,8 @@ event)` gains the `flow.step` arm and its §6 durable set gains six rows.
   the retention rule nulling display results, ten snapshot fields with no
   home, the reflection output file, fold cost without a message base point,
   cross-aggregate ordering in the viewer, the fold needing the registry, and
-  the mutable event row in release N). All eight are corrected above. A
-  second pass should run on the PR 2 design before it opens.
+  the mutable event row in release N). The revised contracts above address
+  these findings; PR 2 still needs verification at each crash boundary.
 
 ## 9. Verified
 
@@ -623,7 +755,7 @@ at `nodes/types.ts:26`, snapshot rewrite at `ToolUseCycleNode.ts:36-43`,
 `AgentRunLifecycle.ts:562`, Google `callId` synthesis at
 `modelHandlerGoogleInteractions.ts:1237`, `Date.now` in
 `postCompactionContext.ts:60`, `z.custom` rationale at
-`ProviderMessage.ts:25-28`, substrate Stage 3/5 rows and §9 text, the seven
+`ProviderMessage.ts:25-28`, substrate Stage 3/5 rows and §9 text, the ten
 non-flow importers of `persistedFlow.ts`, and the `deriveResumability`
 callers. From the 2026-09-04 refutation: `deferLogUntilApproval: true` in
 exactly three tool files and `parallelSafe: true` in twelve;

@@ -40,7 +40,9 @@ Every persisted artifact goes through `KVStore` (`src/common/storage/KVStore.ts`
 `encodeURIComponent(key).json`, read is `JSON.parse` of the whole file (:61),
 write is `StorageFS.writeAtomic` (:72) → `platform().fs.writeFileAtomic` →
 `write-file-atomic`. The `appendFile` port exists (`src/platform/interfaces.ts:123`)
-but its only production caller is desktop app logging. **There is no append
+and serves generated response output (`ResponseCycleFlow.ts:334`) and CLI
+input history (`inputHistory.ts:84`); desktop logging instead calls
+`node:fs.appendFileSync` (`desktopAppLog.ts:131`). **There is no append
 path and no event journal anywhere in the run/session persistence system.**
 `SessionEventHub` (`src/agent/runtime/SessionEventHub.ts`, 177 LoC) is an
 in-memory multicast; durability comes only from three projections of it.
@@ -183,8 +185,8 @@ The deepest divergence is not the engine. Codex and Claude Code persist the
 model-visible items and derive the UI at read time; OpenCode V2 persists
 lifecycle events and projects both; TeXRA persists a rendered log and,
 separately, the model messages. This proposal gives both a `seq` in one
-engine (§6 Stage 3, Stage 5) so a later merge is possible, and does not merge
-them now (§9).
+engine (§6 Stage 3, Stage 5); the view-state fold then removes the duplicate
+display copy (§9).
 
 ## 5. Verdict: the journal is a table, and the table is the only store
 
@@ -244,7 +246,7 @@ two permanent settings files (`state.json`, `config.json`).
 ```
 event
   commit        INTEGER PRIMARY KEY AUTOINCREMENT   -- database-wide total order, never reused
-  aggregate_id  TEXT NOT NULL                       -- a StreamTabId, or the session aggregate
+  aggregate_id  TEXT NOT NULL REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE
   seq           INTEGER NOT NULL                    -- per-aggregate, dense from 1
   type          TEXT NOT NULL                       -- versioned, e.g. "run.start.1"
   owner_id      TEXT NOT NULL                       -- pid + processStart of the writer, derived at insert
@@ -252,16 +254,23 @@ event
   data          TEXT NOT NULL                       -- Zod-validated JSON payload
   UNIQUE (aggregate_id, seq)
   INDEX (aggregate_id, type, seq)                   -- latest-of-type per stream
+  INDEX (aggregate_id, commit)                      -- bounded cross-aggregate resume reads
   INDEX (type, commit)                              -- listing tier across streams
 
 event_sequence
   aggregate_id  TEXT PRIMARY KEY
   seq           INTEGER NOT NULL                    -- last assigned
   owner_id      TEXT                                -- current sequence writer, NULL when none
-  parent_id     TEXT                                -- owning aggregate, set at creation (C9); NULL for roots
+  parent_id     TEXT REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE
   closed        INTEGER NOT NULL DEFAULT 0          -- 1 after the aggregate's tombstone (C9)
   INDEX (parent_id)
 ```
+
+Every connection enables and verifies `PRAGMA foreign_keys = ON` before any
+transaction. Parents are inserted before dependents and an aggregate's
+sequence row before its first event. The two foreign keys make deleting a
+root sequence row delete its dependent sequence rows and all their events.
+`parent_id` means owning aggregate (C9), and is NULL for independent roots.
 
 `commit` is the session-wide ordinal the PRD needs for its cursor; SQLite's
 `AUTOINCREMENT` gives it monotone and non-reusing for free. `seq` is the
@@ -277,14 +286,19 @@ snapshot); an execution id for what the model sees, the byte-exact flow rows
 of `2026-09-04-agent-runtime-on-effect.md` §2.1 (`model.message`,
 `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`); which of
 a run's two aggregates each flow row lives on is decided in that §2.1, which
-places `flow.step` on the stream aggregate so the listing tier reads a run's
-latest step through the stream's own index; an inquiry thread id for that thread's facts; one fixed session aggregate id for
+places `flow.step` on the stream aggregate as a replay coordinate. The listing
+tier reads the canonical `status` fact for outcome, including failures before
+the runtime starts. An inquiry thread id holds that thread's facts; one fixed session aggregate id holds
 **singleton** session facts only (the goal). A fact that can have more than
 one live instance never goes on the session aggregate, because after two
 deletions a latest-of-type read would see only the newer tombstone. The
 execution-to-stream edge is on `run.start`. A stream exists iff its
 `event_sequence` row exists; `run.start` is `seq` 1 and creates it in the same
 transaction.
+
+During the import window, one reserved migration aggregate holds the
+workspace migration claim and its progress facts (§8). It is excluded from
+session reads and retired with the importer; it is not a third table.
 
 **C3. Durable event set.** Durable: every run-scoped `AgentEvent` except text,
 thinking, and tool-input deltas; `approval.requested`,
@@ -313,11 +327,13 @@ Redaction has three owners and they are not interchangeable.
   under D8 to the retention window. These rows are not nulled on COMPLETED:
   D8 keeps completed runs resumable, and after the fold collapse they are the
   only copy of the conversation.
-- **Every transport framer to a renderer process, and every export, applies
-  display redaction and truncation** to what it forwards. The in-process hub
-  is trusted; nothing outside the process ever receives a byte-exact D4
-  payload. **Display truncation and bounding are otherwise the fold's**, and
-  only those.
+- **The shared display fold applies redaction before storing any view
+  state**, including `SessionViewService.ref`, which the CLI reads directly
+  in process. Raw execution rows are accessible only through `RunLedger`;
+  its display projection scrubs them before either an in-process consumer
+  or a transport receives them. Every export applies the same redaction.
+  Transport framers forward these display values, never raw D4 payloads.
+  **Display truncation and bounding are also the fold's**.
 
 One residue to name plainly. Until the view-state PRD collapses the fold
 (events straight to `TranscriptRow`), message text is durable twice: in the
@@ -335,20 +351,45 @@ rejects the PRD's `stream.text` offset checkpoints: they are a second writer
 for one datum with a render-time `max()` to reconcile.
 
 **C5. Owner id.** `owner_id` names a process: pid plus process start time. The
-`Database` layer derives it at insert; no caller passes it, so it cannot be
-forged or forgotten. It is stamped on `event_sequence` (who may append) and on
-every event row (who did). Liveness is `kill(pid, 0)` plus the start-time
-check, probed per distinct owner, never per run; there are a handful of owners
-in any workspace.
+`Database` layer derives it; callers cannot supply an arbitrary writer id.
+It is stamped on `event_sequence` (who may append) and on every event row
+(who did). Liveness is `kill(pid, 0)` plus the start-time check, probed per
+distinct owner, never per run; there are a handful of owners in a workspace.
+An inconclusive probe, including a permissions error, is not evidence of death.
 
-**C6. Write path.** `publish(event)`: if durable, under one `Semaphore.make(1)`
-per database, `BEGIN IMMEDIATE`, read `event_sequence`, assign `seq`, `INSERT`
-both rows, `COMMIT`; then `PubSub.publish` to the in-process hub. Live-only
-events skip the first step. The write is in the publish path, never in a
-subscriber. The hub is unbounded; no subscriber fiber ever awaits a remote;
-backpressure lives at each transport framer.
+Opening existing aggregates for write acquires them together under
+`BEGIN IMMEDIATE`: compare each stored owner with the owner whose liveness
+was probed, reject any changed, live, or unprovable foreign owner, and set
+the caller's owner only if all targets are unowned or their owners are proved
+dead. This is one atomic claim or takeover, not an unconditional upsert.
+New aggregates are claimed in their first-event transaction (C2).
+The process also admits only one local run holding a claim for an aggregate.
+Release clears only the caller's own claim. Every append verifies both the
+claim and `closed = 0` inside its transaction; a serialized non-owner write
+still fails. The legacy import additionally preserves the old claims until
+their owners are proved inactive (§8).
 
-**C7. Read path.** Three queries and one level, nothing else:
+**C6. Write path.** `SessionEvents.publishBatch(events)` appends an ordered
+batch of durable events, possibly on several aggregates. Under the local
+database semaphore and one `BEGIN IMMEDIATE`, it validates and redacts the
+whole batch, verifies the C5 claim and open state of every target, assigns
+each target's `seq` and the database-wide `commit` values in batch order,
+inserts every row, updates the sequence rows, and commits. Failure of any
+member rolls back all members and sequence changes. `RunLedger` folds the
+complete returned batch before exposing its resulting state. `publish(event)` delegates its durable
+case to this operation with one element. Model configuration plus its
+snapshot, follow-up messages plus the remaining queue, and tool results
+plus their resulting state all use this same transaction (§2 of the runtime
+proposal).
+
+After commit the publisher advances a process-local wake level. It never
+delivers durable payloads directly: every subscriber reads them from the
+ordered table tail in C7. Live-only deltas use the existing ephemeral
+channel and never advance a durable cursor; they are not batch members.
+The write remains in the publish path, never in a subscriber, and no
+publisher waits for a remote renderer.
+
+**C7. Read path.** Five queries and one wake level:
 
 - `all(fromCommit)`: every event with `commit > fromCommit` in commit order.
   The live tail for surfaces that watch a whole session, and the frozen
@@ -363,21 +404,39 @@ backpressure lives at each transport framer.
   `run.start` would recreate the stream. It never returns transcript rows.
   Explicit rather than an overload of `all(0)`.
 - `aggregate(aggregateId, fromSeq)`: one aggregate's events from `seq`. The
-  transcript tier, cold hydration, and resume. A transcript subscriber names
+  transcript tier and cold hydration. A transcript subscriber names
   aggregates, not streams: the stream aggregate plus its execution aggregate
   (via the `run.start` edge), each with its own `fromSeq`.
+- `aggregatesAfterCommit(aggregateIds, afterCommit)`: rows of only the named
+  aggregates with `commit > afterCommit`, returned in commit order through
+  `(aggregate_id, commit)`. Resume supplies the stream and execution ids and
+  the latest snapshot's commit. Execution `seq` is never reused as a stream
+  cursor, and a dormant run never scans unrelated session history. The
+  message-base read in runtime §2.3 uses the same execution index with an
+  inclusive base and an upper bound at the snapshot commit.
+- `existing(aggregateIds)`: the subset of resident aggregate ids whose
+  sequence rows still exist, using the primary key. Each tail drain reads
+  this set and the new events in one read transaction, then applies the
+  shared removal rule to any missing resident aggregate. This also re-roots
+  surviving child streams. Thus a retention tombstone inserted and physically
+  removed between two reads cannot leave a stale displayed run. Only the
+  listed or opened aggregate ids are checked; no transcript bodies are read.
 - `PRAGMA data_version`: changes when another connection commits. It is
   connection-local and does not move for the connection's own commits, so it
   is a wake trigger only, never a level in the `commit` number space.
-  Cross-process wake is a cheap poll of it followed by `all(cursor)`;
-  in-process wake is the hub. There is no other cross-process signal, and
-  none is needed.
+  One poll per database advances the same replaying process-local wake level
+  that local commits advance. Each subscriber drains its table queries, then
+  waits for a wake level above the one observed before that drain. Wakes
+  carry no rows and are never interpreted as commit values.
 
-Cold hydration opens the hub subscription first, then reads
-`aggregate(id, 0)` for each aggregate it names, then
-`Stream.concat(replay, live)` with duplicates dropped by `seq` per aggregate.
-A surface's cursor is a `commit` value; an aggregate's settled boundary is a
-`seq` value.
+Cold hydration captures a commit anchor before its listing and aggregate
+reads, then tails `all(anchor)`. The fold handles overlap by latest-of-type
+listing facts and by each aggregate's settled `seq`, as in the view-state
+PRD §7.4. The tail also reconciles `existing` on local and foreign wakes,
+including when there are no new events. A surface's cursor advances only
+over table rows delivered in `commit` order; an aggregate's settled boundary
+is a `seq` value. The reserved migration aggregate is excluded from these
+session queries.
 
 **C8. Two-tier residency.** Listing facts are latest-of-type lookups over the
 `(aggregate_id, type, seq)` index, or a `GROUP BY` over `(type, commit)` for
@@ -403,22 +462,36 @@ aggregate and, in the same transaction, sets `event_sequence.closed = 1` on
 that aggregate **and on every dependent reachable through `parent_id`**, one
 recursive `UPDATE`, so nothing the removed run owns stays writable and
 retention can never orphan a dependent.
-The publisher's fence checks only the target aggregate's own `closed` flag in
-the write transaction it already holds, so an append for a removed aggregate
-is refused in O(1). Physical removal is retention only: one
-`DELETE FROM event_sequence WHERE closed = 1 AND ...` cascades the rows of a
-closed stream together with its closed dependents. Retention is a setting
-with a default, not "until retention"; the value is owner decision 6.
+The publisher checks its ownership and the target aggregate's own `closed`
+flag in the write transaction it already holds, so an append for a removed
+aggregate is refused in O(1).
+
+Retention selects root streams whose latest canonical `status` is terminal
+and whose terminal timestamp is older than the configured window, or whose
+explicit removal timestamp has expired. Under one `BEGIN IMMEDIATE` it
+rechecks those facts, refuses any root or dependent with a live or unprovable
+owner, and acquires the remaining claims under C5. An expired terminal stream
+that is still open receives `stream.removed` and the recursive close update
+before collection; no user deletion is required. Deleting the selected root
+sequence rows then cascades through their closed dependents and events by C1.
+Publication of the wake occurs after commit even if every newly written
+tombstone was collected in that transaction. C7's indexed existence check
+removes those streams from resident views even when their tombstones were
+never observed. Retention is a setting with a default; its value is owner
+decision 6. Streams with no terminal or removal fact do not expire.
 
 **C10. Nothing derived is persisted, with one named exception.** No summary
 table, no projection table, no status column, no `run_state` summary on an
 executions row. The exception is the fold snapshot stored as an event:
-`flow.snapshot` on the execution aggregate, written at turn or round end,
-before WAITING, and whenever bytes appended since the last snapshot exceed its
-size (the runtime proposal's byte-amortized rule). It is a base point for the
-resume fold, in the same table with the same lifecycle as the rows it
-summarizes, rebuildable from them, and never queried by the listing tier.
-Codex's `Compacted.replacement_history` is the precedent. If any other query
+`flow.snapshot` on the execution aggregate, initially written before any
+external activity, then at turn or round end, before WAITING, and whenever
+bytes appended since the last snapshot exceed its size (the runtime proposal's
+byte-amortized rule). It contains the non-message family state, durable phase,
+pending intents, and a `messageBaseCommit` reference to the canonical
+conversation; it never copies the message array. It is a base point for the
+resume fold in the same table and lifecycle, and is never queried for listing
+status. Some non-message state is recorded at these boundaries rather than
+reconstructed from earlier messages. If any other query
 is measured too slow, add an index; if an index does not fix it, and only
 then, a derived row with a rebuild rule, recorded here as a contract change.
 
@@ -430,9 +503,12 @@ those names and decides each row's aggregate:
 thinking signatures and provider ids; `model.compaction` the full replacement
 array when a handler rewrites history; `tool.intent` and `tool.result` the
 barrier dispatch and each settled call; `flow.step` the round and turn
-boundaries; `flow.snapshot` the family's full Zod state under the C10 rule.
-Resume is `foldRunState`: the latest `flow.snapshot` plus the rows since it,
-at most one turn or one round. This is what makes the checkpoint a fold and
+boundaries; `flow.snapshot` the family's non-message Zod state under C10.
+Resume reconstructs the active conversation from its message base through
+the snapshot, then folds the stream and execution rows after the snapshot's
+commit using `aggregatesAfterCommit`. The state tail is bounded by a turn or
+round and the byte-amortized snapshot rule; reading the active conversation
+still costs its own size. This is what makes the checkpoint a fold and
 ends the double storage of run content. It is the one item in this contract
 the owner has not yet ratified.
 
@@ -440,16 +516,16 @@ the owner has not yet ratified.
 
 Stages are lanes on one branch and ship in one release (§8).
 
-| Stage | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Deletes in the same release                                                                                                                                                              | Companion step |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| 0     | Spike: `node:sqlite` on the CLI floor (raise `engines.node` to `>=22.13.0`, `packages/cli/package.json:37`), Electron 44 (`packages/desktop/package.json:33`), VS Code 1.125 extension host; WAL with two hosts on one bucket; kill -9 mid-transaction; `PRAGMA data_version` across processes. OpenCode's `packages/effect-sqlite-node` (MIT, ~200 LoC) is the starting client                                                                                                                              | nothing                                                                                                                                                                                  |                |
-| 1     | C1 schema and indexes; Effect `Database` layer parameterized by `WorkspaceRoots`; the C6 publisher behind `SessionEventHub`; the architecture test that fails any persistence write outside the database or the documents/export allowlist, and its sibling that fails a raw read of the four byte-exact row types outside `RunLedger` and the fold (or, better, a `Database` layer that only exposes those rows through `RunLedger`, so the query is unconstructible elsewhere and the test is unnecessary) | nothing                                                                                                                                                                                  |                |
-| 2     | Listing tier: launcher history, resume picker, sessions rail, and the executions tool answered by C7/C8 indexed queries                                                                                                                                                                                                                                                                                                                                                                                      | `streamLogSummaries/`, the mtime heuristic, `executionListing.ts` directory walks, `readExecutionStreamIndex`, `listExecutions` scans, the PR2 background hydration pass                 | S4, S5         |
-| 3     | C3 durable event set; transcript fold on hydrate reusing the recorder's live fold; `StreamLog` in-memory contract and `store-public-surface-baseline.json` unchanged                                                                                                                                                                                                                                                                                                                                         | the 300 ms whole-array rewrite, `writeStream`/`hydrateStream`/`parsePersistedEntries`, `preservedRawEntries`, `seqNo` renumbering, the 50 KiB truncation and `toolOutput/` spill         |                |
-| 4     | Stream-state fold on hydrate (usage per round, work plan, outputs, missing outputs, compile failures) from the same events `attachSessionEvents` folds live today                                                                                                                                                                                                                                                                                                                                            | six sidecar files, `SidecarWriteCoordinator`, `StagedDeletionCoordinator`, `streamData.deleting`, `streamSnapshotRead.ts`, `streamDataPaths.ts`, `DiskState`, `probeRunPhase`/`runFacts` |                |
-| 5     | D4, delivered by `2026-09-04-agent-runtime-on-effect.md` as lane D: the flow rows of C2, `RunLedger`, `foldRunState`; resume as a fold; `deriveResumability` becomes "a `flow.snapshot` exists and no live owner holds the lease, outcome-independent per single-owner D8"; the importer converts each `flow_<id>.json` into the execution's first `flow.snapshot`, bytes unchanged; both flow families and the workflow-script journal convert in one PR, no interim checkpoint column                      | per-node whole-record rewrite in `persistedFlow.ts:505-509`, `resumability.ts` full parse, `flow_<id>.json`, `src/agent/node/`, `completedRunArchive`'s conversation reconstruction      | S7             |
-| 6     | C5 and C9: owner id derived at insert, `INSERT` uniqueness as the claim, `stream.removed` tombstones, retention as one statement                                                                                                                                                                                                                                                                                                                                                                             | `executionLeases/`, the v2 shadow, `readClaims` readdir, orphan sweeps, `executionLocks` remnants, `child-*.json` edge files                                                             | S3, S6         |
-| 7     | Retire the importer, `*.pre-sqlite-backup` handling, and their fixture tests: no earlier than 90 days and two shipped releases after the cutover release                                                                                                                                                                                                                                                                                                                                                     | the importer                                                                                                                                                                             |                |
+| Stage | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Deletes in the same release                                                                                                                                                              | Companion step |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| 0     | Spike: `node:sqlite` on the CLI floor (raise `engines.node` to `>=22.13.0`, `packages/cli/package.json:37`), Electron 44 (`packages/desktop/package.json:33`), VS Code 1.125 extension host; WAL with two hosts on one bucket; kill -9 mid-transaction; `PRAGMA data_version` across processes. OpenCode's `packages/effect-sqlite-node` (MIT, ~200 LoC) is the starting client                                                                                                                    | nothing                                                                                                                                                                                  |                |
+| 1     | C1 schema and indexes; Effect `Database` layer parameterized by `WorkspaceRoots`; the C6 publisher behind `SessionEventHub`; the architecture test that fails any persistence write outside the database or the documents/export allowlist, and its sibling that fails a raw read of the execution row types outside `RunLedger` (or, better, a `Database` layer that only exposes those rows through `RunLedger`, so the query is unconstructible elsewhere and the test is unnecessary)          | nothing                                                                                                                                                                                  |                |
+| 2     | Listing tier: launcher history, resume picker, sessions rail, and the executions tool answered by C7/C8 indexed queries                                                                                                                                                                                                                                                                                                                                                                            | `streamLogSummaries/`, the mtime heuristic, `executionListing.ts` directory walks, `readExecutionStreamIndex`, `listExecutions` scans, the PR2 background hydration pass                 | S4, S5         |
+| 3     | C3 durable event set; transcript fold on hydrate reusing the recorder's live fold; `StreamLog` in-memory contract and `store-public-surface-baseline.json` unchanged                                                                                                                                                                                                                                                                                                                               | the 300 ms whole-array rewrite, `writeStream`/`hydrateStream`/`parsePersistedEntries`, `preservedRawEntries`, `seqNo` renumbering, the 50 KiB truncation and `toolOutput/` spill         |                |
+| 4     | Stream-state fold on hydrate (usage per round, work plan, outputs, missing outputs, compile failures) from the same events `attachSessionEvents` folds live today                                                                                                                                                                                                                                                                                                                                  | six sidecar files, `SidecarWriteCoordinator`, `StagedDeletionCoordinator`, `streamData.deleting`, `streamSnapshotRead.ts`, `streamDataPaths.ts`, `DiskState`, `probeRunPhase`/`runFacts` |                |
+| 5     | D4, delivered by `2026-09-04-agent-runtime-on-effect.md` as lane D: the flow rows of C2, `RunLedger`, `foldRunState`; resume as a fold; `deriveResumability` becomes "a `flow.snapshot` exists and no live owner holds the lease, outcome-independent per single-owner D8"; the importer converts each supported checkpoint's messages, non-message state, and cursor into canonical rows (§8); both flow families and the workflow-script journal convert in one PR, no interim checkpoint column | per-node whole-record rewrite in `persistedFlow.ts:505-509`, `resumability.ts` full parse, `flow_<id>.json`, `src/agent/node/`, `completedRunArchive`'s conversation reconstruction      | S7             |
+| 6     | C5 and C9: atomic claim/takeover and per-append ownership checks, `stream.removed` tombstones, terminal retention in one transaction                                                                                                                                                                                                                                                                                                                                                               | normal file-lease writes and scans, orphan sweeps, `executionLocks` remnants, `child-*.json` edge files; import-only lease validation remains until Stage 7                              | S3, S6         |
+| 7     | Retire the importer, its schemas and lease reader, migration facts, backup handling, and fixture tests in the first release at least three calendar months after the cutover ships (§8)                                                                                                                                                                                                                                                                                                            | the importer                                                                                                                                                                             |                |
 
 Rules restated because they are the parts migrations get wrong:
 
@@ -482,12 +558,12 @@ The owner's standing rule is cut before add. Sizes are `wc -l` at
 | `restartRepair.ts`, `runClassification.ts` (companion S1 to S3)                                                   | 451          | boot does no history work; phase is a fold                                                                     |
 | `resumability.ts` full-checkpoint parse                                                                           | 120          | a `flow.snapshot` exists and no live owner holds the lease, outcome-independent per single-owner D8 (D4)       |
 | `SessionStores.ts` orphan sweeps                                                                                  | ~500 of 1019 | orphans cannot exist under cascade                                                                             |
-| File leases: `executionLeases/`, v3 claims, v2 shadow, `readClaims`                                               | ~600 of 848  | `event_sequence.owner_id` + `INSERT` uniqueness (C5); the shadow dies now because hosts ship the same version  |
+| File leases: `executionLeases/`, v3 claims, v2 shadow, `readClaims`                                               | ~600 of 848  | C5 claims replace normal file leases; import-only validation of retained legacy claims retires in Stage 7      |
 | `child-<id>.json` edge files (6,664 in TNLean) + `childRunPersistence.ts`                                         | 19 + 48      | the parent edge is on `run.start`                                                                              |
 | 50 KiB entry truncation + `toolOutput/<entryId>.txt` spill (`runTrace.ts:68-98`, `spillArtifacts.ts`)             | ~110         | a row holds the payload                                                                                        |
 | Whole-record checkpoint rewrite, `flow_<id>.json`                                                                 | ~300 of 531  | `model.message` rows + byte-amortized `flow.snapshot` (D4)                                                     |
 | `completedRunArchive.streamLogEntriesToConversation`                                                              | ~100 of 343  | the conversation is `model.message`; read it                                                                   |
-| `ExecutionMeta` `schemaVersion` prefault arms, `meta.json` read-modify-write, `executionLifecycle` outcome writes | ~400         | outcome is a `run.end` event                                                                                   |
+| `ExecutionMeta` `schemaVersion` prefault arms, `meta.json` read-modify-write, `executionLifecycle` outcome writes | ~400         | outcome is the canonical `status` event                                                                        |
 | The 0.40.x continuation UUID compatibility writer (#11731)                                                        | small        | same-version hosts                                                                                             |
 | Five parent-edge copies per stream (stream-lifetime survey §2.D)                                                  | scattered    | one field on `run.start`                                                                                       |
 | Run content stored twice; seven transcript-like representations                                                   | n/a          | one durable set; folds: entries, `TranscriptRow`, stream state, resume conversation; `TraceDocument` as export |
@@ -501,7 +577,7 @@ The owner's standing rule is cut before add. Sizes are `wc -l` at
 | `TexraTranscriptRecorder`                          | 905   | ~450             | the one entries fold, run live and on hydrate                                                 |
 | `ExecutionKVStore` + `executionLifecycle`          | 761   | ~100             | typed accessors over C7 queries                                                               |
 | `executionLease.ts` + `leaseOwnerLiveness`         | 946   | ~120             | owner-id derivation and one liveness probe                                                    |
-| `SessionResumeRetrieval` + CLI `toolUseResumeData` | 293   | ~80              | one `stream()` read and the resume fold                                                       |
+| `SessionResumeRetrieval` + CLI `toolUseResumeData` | 293   | ~80              | indexed message-base and cross-aggregate tail reads, then the resume fold                     |
 | `KVStore` + `StorageFS`                            | 113   | 113              | kept for `state.json` and `config.json` only                                                  |
 
 **Kept, deliberately:** `StreamLog` and `StreamLogDelta` (594, the UI contract
@@ -552,22 +628,18 @@ Scope in this program:
   fold Layer in every process that shows a session, webview and Electron
   renderer included, because an Effect fold in Node beside a hand-rolled one
   in the browser would be the dual system this program removes.
-- Two touch points with that proposal: `SessionEventHub` becomes the PubSub
-  that the C6 publisher feeds, and the `Database` layer is parameterized by
+- Two touch points with that proposal: `SessionEventHub` uses the ordered
+  table tail and wake level in C6/C7, and the `Database` layer is parameterized by
   its `WorkspaceRoots` layer (one database per session root, never the
   process singleton).
-- **Publisher invariants.** The durable write is in the publish path, before
-  fan-out, never in a subscriber: `publish(event)` = if durable, assign `seq`
-  and `INSERT` under `BEGIN IMMEDIATE`, then `PubSub.publish`; seq assignment,
-  insert, and publish run under one `Semaphore.make(1)` so seq order and
-  insert order cannot diverge. The PubSub is unbounded: a bounded one parks
-  the publisher on the slowest subscriber and would stall the write path on a
-  stalled webview, and sliding or dropping loses durable events. No subscriber
-  fiber ever awaits a remote; backpressure lives at each transport framer
-  (`groupedWithin` then `Stream.buffer`; overflow tears the subscription down
-  and resubscribes through `events(streamId, fromSeq)`). Cold hydration opens
-  the live subscription before the replay read, then `Stream.concat(replay,
-live)`, or there is a gap.
+- **Publisher invariants are C5 to C7.** The local semaphore serializes
+  transactions within a process; conditional claims fence other processes.
+  `publishBatch` commits every member before advancing the wake level. The
+  durable payload source is always the table, in `commit` order. Each
+  transport owns its backpressure; overflow resubscribes from the retained
+  commit cursor and settled aggregate sequences. Cold hydration captures
+  its anchor before reading and then tails from that anchor. Physical
+  retention is observed through the same drain's existence reconciliation.
 - **Zod stays the only data schema; Effect Schema is not used at all.** Event
   payloads are Zod-validated at the boundary and stored as JSON `data`. Errors
   are `Data.TaggedError` (verified present in `effect@4.0.0-rc.112`): it gives
@@ -582,8 +654,10 @@ live)`, or there is a gap.
   `Layer.scoped` does not exist, `Layer.effect` strips `Scope`; and Effect
   code must never call the ALS-backed `currentSession()`, because the
   scheduler interleaves fibers; `WorkspaceRoots` is read from `Context`.
-- The agent runtime, model handlers, and flows are not migrated to Effect in
-  this release. Two cutovers at once is the long pain again.
+- The companion runtime proposal owns lane D, including the two flow
+  families and their ledger in Stage 5. Model-handler bodies remain behind
+  that proposal's invocation service; this does not prescribe a separate
+  rewrite of those handlers.
 
 The SQLite PRD §8 non-goal is reversed to this scoped form; the reversal is
 recorded there and in §10.
@@ -619,17 +693,53 @@ Concurrency cap is three worktrees; lane agents commit and report SHAs
 | D    | Stage 5 + Stage 6 behind `ExecutionKVStore`, `persistedFlow`, `executionLease`, `resumability`             | A          |
 | E    | The importer (one, covering every store), the deletion sweep of file machinery, `WORKSPACE_STORAGE_LAYOUT` | B, C, D    |
 
-**The importer.** One function, run when a bucket is opened and any legacy
-app-state file exists. It has one job: turn files into events. Per stream, in
-the order of the `streamLogs/` listing (the registration authority today,
-`StreamLogStore.has()` :485): a synthesized `run.start` from `meta.json` and
-the sidecar descriptor (identity nullish where none exists); one
-`legacy.entry` event per persisted `StreamLogEntry`, in file order; sidecar
-facts as their corresponding events stamped with file timestamps; the
-checkpoint as the execution's first `flow.snapshot` (whole `shared`, bytes
-unchanged, per the runtime proposal §3); the execution outcome as `run.end`.
-Leases are dropped: a lease older than the process that wrote it is dead by
-definition under single-owner.
+**The importer.** One function converts supported legacy files to events.
+Before inspecting those files, a current host atomically claims the reserved
+migration aggregate using C5. Every current host passes this gate before
+opening the bucket for normal reads, writes, or resume. The claim covers
+detection, import, moves, and verification. A live claimant makes another
+host wait; takeover requires proof that the recorded process is dead.
+Progress facts on that aggregate record the immutable input manifest, planned
+event ranges, completed batches, and moves. Each batch commits its rows and
+progress together. A successor uses those facts and checks source and backup
+hashes to resume after a crash, rather than starting a second import.
+
+All legacy hosts must be closed for the entire migration. The importer
+retains legacy lease files in place and probes each distinct recorded owner
+using the supported lease reader. A live or unprovable owner blocks import
+and resume; age alone never proves death. Absence of a live execution lease
+does not establish that an idle legacy host has stopped writing sidecars,
+so closing all legacy hosts is an explicit cutover precondition. Claims are
+moved only after their owners are proved dead and verification completes.
+
+With inputs quiescent, enumerate the registered streams from `streamLogs/`
+(`StreamLogStore.has()` :485), then sort by persisted creation timestamp,
+ascending, with stream id as the deterministic tie-breaker. If that timestamp
+is absent, use the earliest persisted entry timestamp; streams with neither
+sort first by stream id. Record this order in the manifest before assigning
+commits, so a crash restart preserves history order. For each stream:
+
+- Synthesize `run.start` from `meta.json` and the sidecar descriptor, with
+  nullish identity where none exists, followed by its normalized history.
+- Convert persisted `StreamLogEntry` values into recognized current
+  `AgentEvent` arms in file order, as specified by view-state PRD §6. There
+  is no `legacy.entry` arm. Read any `spillPath` and inline the full payload
+  before normalization, validation, and C3 redaction; a missing or unreadable
+  spill blocks that import instead of silently retaining a truncated copy.
+  The imported row never depends on the old `toolOutput/` path.
+- Map sidecar facts to current event arms with their persisted timestamps,
+  and the execution outcome to the canonical `status` fact, not `run.end`.
+- Map the supported checkpoint's provider messages to canonical conversation
+  rows without changing their bytes, and its non-message `shared` state and
+  `FlowRecord.cursor` to the initial snapshot and continuation rows defined
+  by runtime §3. Translate both the next node and previous action, including
+  any outcome-unknown tool intent. If continuation cannot be mapped safely,
+  reject the import and retain its files; do not manufacture a resumable
+  snapshot from `shared` alone.
+
+The manifest assigns deterministic per-aggregate event ranges. Replaying a
+committed batch verifies the existing rows against those ranges and skips
+only identical rows; a mismatch aborts rather than overwriting history.
 
 **The cutover is file-level, not a directory rename** (SQLite PRD Stage 5
 rules this). `executions/<id>/` holds user-facing generated artifacts beside
@@ -638,13 +748,16 @@ the app JSON (`output.xml`, workflow outputs that `listRunGeneratedFiles` and
 exactly where they are. The importer moves only the app-state files it has
 imported (`meta`, `config`, `report`, `result-meta`, `turn-state`,
 `child-*`, `todos`, `workspace-files`, `flow_<id>`, `toolOutput/`) into a
-mirror under `pre-sqlite-backup/`, then **re-runs the import over the moved
-files**: inserts are keyed and idempotent, so the second pass folds exactly
-the writes that landed between the first read and the move, which closes the
-read-then-move race without a mirror. `streamLogs/`, `streamData/`,
-`streamLogSummaries/`, and `executionLeases/` are app state throughout and
-move as whole directories. Progress is one line per thousand rows; the
-measured 7 s parse cost for 3,125 checkpoints (companion §1) bounds the worst
+mirror under `pre-sqlite-backup/`. It then verifies the moved files against
+the manifest and imported rows before releasing the claim and admitting
+normal access. For a crash between a move and its progress commit, the next
+claimant verifies the destination hash and records the completed move. A
+source change, conflicting destination, or unaccounted missing file aborts
+verification; rereading after a move is not a substitute for quiescent
+writers. `streamLogs/`, `streamData/`, and `streamLogSummaries/` are app state
+throughout and move as whole directories. Retained `executionLeases/` move
+only after the final owner checks above. Progress is one line per thousand
+rows; the measured 7 s parse cost for 3,125 checkpoints (companion §1) bounds the worst
 bucket at low minutes, once.
 
 Checkpoints are imported eagerly, not lazily. A lazy path would leave
@@ -652,17 +765,30 @@ Checkpoints are imported eagerly, not lazily. A lazy path would leave
 cost is one pass over 3.0 GB in the largest bucket; the payoff is that after
 the importer runs there is exactly one shape of resume data.
 
-**Version skew.** A hard cutover means all three hosts ship the same version.
-A user with the new CLI and an older extension on the same workspace has the
-extension writing files while the CLI reads rows. The importer handles this
-without a mirror: it runs on every open while any legacy app-state file exists,
-so a stale host's writes are folded the next time a current host opens the
-bucket. The changelog says older hosts on a migrated workspace will not see
-new runs until updated. This is the one honest cost of short pain and it is
-accepted.
+**Version skew and retirement.** Concurrent legacy writers are not supported
+during cutover. A new CLI must defer opening an unmigrated bucket while an
+older extension holds a live or unprovable claim; the user must close and
+update all legacy hosts before migration. After successful migration the
+database is authoritative. If a stale host recreates app-state files, the
+current host reports the unsupported older writer and blocks writes and
+resume until that conflict is resolved. It refuses to merge potentially
+divergent histories or repeatedly ingest those files over current rows.
+The release notes state this upgrade requirement.
+
+The importer protects released file-backed histories only during one
+compatibility window. Its introduction date is the actual cutover release
+date, recorded beside the importer and its schemas when that release ships;
+the proposal date is not that date. Remove the importer, legacy schemas,
+lease reader, progress facts, backup handling, and their fixture tests in
+the first release shipped at least three calendar months later. Publish the
+deadline with the cutover release. After retirement, older histories require
+the last importing release for an explicit conversion; current releases have
+no legacy read arm. Desktop state has no public-release compatibility claim
+and adds no migration branch solely for its historical formats.
 
 **Deletion is in the cutover, not after it.** The release that adds the
-database removes everything in the §6.3 "Gone" table, and
+database removes the normal read and write paths in the §6.3 "Gone" table;
+the named import-only readers retire at the date above. After import,
 `WORKSPACE_STORAGE_LAYOUT` shrinks to `{ texra.db, texra.db-wal, texra.db-shm,
 original, memories, state.json, config.json, _workspace.json, pasted,
 recordings }` plus the per-execution artifacts area, which is user documents,
@@ -674,7 +800,7 @@ was not short, it was deferred.
 - import completes once, in low minutes, and a second open imports nothing;
 - `texra chat` shows the prompt in under two seconds with 4,148 executions
   present;
-- kill -9 during streaming loses at most the current chunk window and the
+- kill -9 during streaming loses at most the in-flight message (C4) and the
   next open needs no repair pass;
 - deleting a stream is one transaction and no state holder observes a
   half-deleted stream;
@@ -705,8 +831,8 @@ with the parallel-agent workflow, judged against OpenCode's +5.8k/-0.9k over
   the cutover. It touches every renderer in three hosts; it is the view-state
   PRD's move after the merge, and by then it is a pure refactor of two
   functions with zero storage impact.
-- Migrating the agent runtime, flows, or model handlers to Effect in this
-  release, or moving schemas from Zod to Effect Schema (§7).
+- A separate rewrite of model-handler bodies beyond the runtime proposal's
+  invocation service, or moving schemas from Zod to Effect Schema (§7).
 - Any new lint rule beyond the one architecture test. The rule is one
   sentence: all app-owned durable state lives in the database.
 - Publishing this document. `proposals/**` is excluded by
@@ -726,10 +852,10 @@ with the parallel-agent workflow, judged against OpenCode's +5.8k/-0.9k over
    owned here (C10).
 3. Rule the sidecar-collapse contradiction (memory PRD :414-418 versus SQLite
    PRD §1): this proposal folds the six files on hydrate and carries the
-   version-skew risk through the re-run-on-open importer instead.
+   migration through the quiescent, time-limited importer in §8 instead.
 4. Confirm the process in §8: one cutover release, one importer, eager
    checkpoint import, deletions in the same release, same-version hosts.
-5. Confirm the Effect scope in §7: substrate and fold, renderer components
+5. Confirm the Effect scope in §7: substrate, fold, and the runtime lane, renderer components
    Effect-free, Zod the only data schema.
 6. Set the retention default (C9). Proposed: 90 days for streams with a
    terminal outcome, never for streams without one, as a setting.
