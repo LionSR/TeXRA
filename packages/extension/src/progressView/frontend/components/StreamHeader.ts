@@ -12,6 +12,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import {
+  isPlainAgentIdentity,
   STREAM_LIFECYCLE_UNAVAILABLE,
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -476,10 +477,15 @@ export class StreamHeader extends LitElement {
     const goal: GoalState =
       stream.category === 'toolUse' ? stream.goal : { active: false };
     const identity = stream.identity;
-    const isNativeAgentRun = identity === null || identity.kind === 'agent';
-    const toolbarButtons = isNativeAgentRun
-      ? TOOLBAR_BUTTONS[stream.category]
-      : NEUTRAL_TOOLBAR;
+    // An agent run takes its category's chrome; a legacy stream with no
+    // identity, a process, or a workflow container takes the neutral one.
+    const toolbarButtons =
+      identity?.kind === 'agent'
+        ? TOOLBAR_BUTTONS[stream.category]
+        : NEUTRAL_TOOLBAR;
+    // Resume, Run new, and Restore reach the host's `nativeAgentRun` gate,
+    // which admits a plain agent identity and nothing else.
+    const isNativeAgentRun = isPlainAgentIdentity(identity);
     const enabledButtons = enabledToolbarButtons(stream, displayKey);
     const runContext = this.runContextText(stream);
     const toolbarButtonViews = toolbarButtons.map((btn) => {

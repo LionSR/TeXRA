@@ -746,10 +746,11 @@ function observeSurfaceResizes(): void {
 }
 
 /**
- * Streams whose off-screen pending approval has already reopened the
- * sidebar once. A user who re-collapses it mid-run must not be fought on
- * every unrelated signal change — only a newly appearing off-screen
- * approval (one not in this set) reopens it again.
+ * The off-screen pending approvals (by request id) that have already
+ * reopened the sidebar once. A user who re-collapses it mid-run must not be
+ * fought on every unrelated signal change; only a newly appearing off-screen
+ * approval (one not in this set) reopens it again, including a new request
+ * on a stream whose earlier one was answered.
  */
 let sidebarRevealedForApprovalIds = new Set<string>();
 
@@ -764,8 +765,8 @@ let sidebarRevealedForApprovalIds = new Set<string>();
 function revealSidebarForOffScreenApproval(): void {
   const active = activeRailPaper(railPapers());
   const offScreen = (active?.view.approvals ?? [])
-    .map((approval) => approval.streamId)
-    .filter((id) => id !== active?.surface.selected);
+    .filter((approval) => approval.streamId !== active?.surface.selected)
+    .map((approval) => approval.requestId);
   if (offScreen.length === 0) {
     sidebarRevealedForApprovalIds = new Set();
     return;

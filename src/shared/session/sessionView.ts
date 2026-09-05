@@ -204,6 +204,7 @@ const ApprovalRequestSchema = z.object({
   requestId: z.string(),
   payload: PermissionPayloadSchema,
 });
+export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
 
 const SessionViewSchema = z.object({
   key: SessionKeySchema,

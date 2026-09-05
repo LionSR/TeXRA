@@ -294,11 +294,17 @@ export class SessionComposer extends LitElement {
   private setText(text: string, patch: Partial<Draft> = {}): void {
     const stream = this.stream;
     if (stream) {
+      // A draft's images are the `[name]` chips its text still carries: a
+      // chip the user deleted takes its image with it, so the send reads the
+      // draft as it stands.
+      const images = (patch.images ?? this.draft.images).filter((image) =>
+        text.includes(`[${image.fileName}]`),
+      );
       this.dispatchEvent(
         SessionUiEvents.surface({
           kind: 'draft',
           streamId: stream.id,
-          patch: { ...patch, text },
+          patch: { text, images },
         }),
       );
       return;

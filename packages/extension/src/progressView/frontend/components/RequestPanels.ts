@@ -241,14 +241,15 @@ export class RequestPanels extends LitElement {
    *
    * Single source of truth: `handleGlobalKeydown` resolves the DOM node from
    * this via `findPanelFor`, and the renderers mark that same permission
-   * `data-armed`. Deriving the two separately let them disagree — the newest
+   * `data-armed`. Deriving the two separately let them disagree: the newest
    * permission is not the target while the external-inquiry carousel is
-   * active, so an indicator keyed off `permissions[0]` would ring a panel the
-   * carousel does not even render, while the keypress landed on the visible
-   * one.
+   * active, so an indicator keyed off the newest alone would ring a panel
+   * the carousel does not even render, while the keypress landed on the
+   * visible one. `permissions` is the fold's order, oldest first, so the
+   * newest is the last.
    */
   private get armedPermission(): PermissionPayload | null {
-    const newest = this.permissions[0];
+    const newest = this.permissions.at(-1);
     if (!newest) return null;
     return (
       (this.externalInquiryCarouselActive
@@ -470,7 +471,7 @@ export class RequestPanels extends LitElement {
   /** True when the newest permission is one of several pending inquiries. */
   private get externalInquiryCarouselActive(): boolean {
     return (
-      this.permissions[0]?.kind === PERMISSION_KIND.EXTERNAL_INQUIRY &&
+      this.permissions.at(-1)?.kind === PERMISSION_KIND.EXTERNAL_INQUIRY &&
       this.externalInquiries.length > 1
     );
   }
@@ -499,7 +500,7 @@ export class RequestPanels extends LitElement {
   /**
    * Handle keyboard shortcuts for permission actions.
    * Only active when permissions are visible and no text input is focused.
-   * Delegates to the panel matching the newest permission (permissions[0]),
+   * Delegates to the panel matching the newest permission (the last one),
    * or the currently visible carousel panel for external inquiries.
    *
    * Left/right arrow keys navigate the external inquiry carousel.

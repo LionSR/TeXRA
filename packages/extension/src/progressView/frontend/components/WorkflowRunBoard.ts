@@ -4,8 +4,8 @@
  * controls a run without a chat offers instead of a composer.
  *
  * Reads `stream.transcript.run` (the fold's `workflowRunModel`), the child
- * streams the model joins by row, and the surface's phase, groups, search,
- * and focus. Dispatches `workflow.control` and `stream.stop` runtime
+ * streams the model joins by row, and the surface's phase, groups, and
+ * focus. Dispatches `workflow.control` and `stream.stop` runtime
  * requests and `phase`, `group`, `select`, and `focusRow` surface actions;
  * it holds no state of its own. The host passes its clock as `nowMs` (G4).
  */
@@ -25,7 +25,11 @@ import type {
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import type { WorkflowTaskRow } from '@shared/transcript';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type {
+  ApprovalRequest,
+  SessionView,
+  StreamView,
+} from '@shared/session/sessionView';
 import { resolvePhase, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { formatWorkflowTally } from '@shared/copy/workflowCall';
@@ -149,19 +153,30 @@ export class WorkflowRunBoard extends LitElement {
     return childId === undefined ? undefined : this.view.streams.get(childId);
   }
 
-  /** The card's child run needs the user: its own approval, or one of
-   *  its descendants'. */
-  private waiting(rowId: string): boolean {
-    const approval = this.childOf(rowId)?.approval;
-    return approval !== undefined && approval !== 'none';
+  /** The stream under `stream` that is asking: itself on `own`, else the
+   *  first descendant the fold marked, following `descendant` down. */
+  private askingStream(stream: StreamView): StreamView | undefined {
+    if (stream.approval === 'own') return stream;
+    if (stream.approval !== 'descendant') return undefined;
+    for (const childId of stream.childIds) {
+      const child = this.view.streams.get(childId);
+      const asking = child === undefined ? undefined : this.askingStream(child);
+      if (asking) return asking;
+    }
+    return undefined;
   }
 
-  /** The approval a card's child is waiting on, if any. */
-  private approvalOf(rowId: string): PermissionPayload | undefined {
+  /** The approval a card's child run is waiting on, its own or a
+   *  descendant's: the one fact the buckets, the badge, and the row read. */
+  private approvalOf(rowId: string): ApprovalRequest | undefined {
     const child = this.childOf(rowId);
-    if (!child || child.approval === 'none') return undefined;
-    return this.view.approvals.find((entry) => entry.streamId === child.id)
-      ?.payload;
+    const asking = child === undefined ? undefined : this.askingStream(child);
+    if (!asking) return undefined;
+    return this.view.approvals.find((entry) => entry.streamId === asking.id);
+  }
+
+  private waiting(rowId: string): boolean {
+    return this.approvalOf(rowId) !== undefined;
   }
 
   private bucketOf(row: WorkflowTaskRow): Bucket | undefined {
@@ -188,7 +203,6 @@ export class WorkflowRunBoard extends LitElement {
     );
     return workflowPhaseRows(phase, {
       expanded: this.expandedGroups(phase.key),
-      filter: this.surface.search,
       waiting,
     });
   }
@@ -398,20 +412,21 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
-  /** A waiting card opens its child; a failed one retries or skips. */
+  /** A waiting card opens the stream that is asking; a failed one retries
+   *  or skips. */
   private renderActions(
     row: WorkflowTaskRow,
     child: StreamView | undefined,
-    waiting: boolean,
+    asking: StreamTabId | undefined,
   ): TemplateResult | typeof nothing {
-    if (waiting && child) {
+    if (asking !== undefined) {
       return html`<span class="row-actions"
         ><wa-button
           size="s"
           variant="brand"
           @click=${(event: Event) => {
             event.stopPropagation();
-            this.select(child.id);
+            this.select(asking);
           }}
           >Review (y/n)</wa-button
         ></span
@@ -468,11 +483,14 @@ export class WorkflowRunBoard extends LitElement {
     const child = this.childOf(row.id);
     const approval = this.approvalOf(row.id);
     const waiting = approval !== undefined;
+    // A card opens its child; a waiting card opens the stream asking, which
+    // is the child or one of its descendants.
+    const target = approval?.streamId ?? child?.id;
     const meta = this.rowMeta(row);
     const last = waiting
-      ? approvalLine(approval)
+      ? approvalLine(approval.payload)
       : (row.detail?.text ?? child?.latestLine ?? child?.statusLabel ?? '');
-    const actions = this.renderActions(row, child, waiting);
+    const actions = this.renderActions(row, child, approval?.streamId);
     return html`<div
       class=${classMap({
         row: true,
@@ -483,16 +501,16 @@ export class WorkflowRunBoard extends LitElement {
       })}
       role="listitem"
       data-row-id=${row.id}
-      tabindex=${child ? '0' : nothing}
-      @click=${child ? () => this.select(child.id) : nothing}
+      tabindex=${target === undefined ? nothing : '0'}
+      @click=${target === undefined ? nothing : () => this.select(target)}
       @keydown=${
-        child
-          ? (event: KeyboardEvent) => {
+        target === undefined
+          ? nothing
+          : (event: KeyboardEvent) => {
               if (event.key !== 'Enter' && event.key !== ' ') return;
               event.preventDefault();
-              this.select(child.id);
+              this.select(target);
             }
-          : nothing
       }
     >
       <span class="row-icon"

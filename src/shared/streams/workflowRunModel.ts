@@ -698,23 +698,23 @@ function matchesFilter(
 }
 
 /**
- * One phase's rows. With a filter every matching card is one flat row;
- * without one, cards needing attention lead (the ones whose child run is
- * waiting on the user: `waiting`, by row id, read off the child streams by
- * the host that holds them), then failed, then running, transcript order
- * within, and the volume collapses into counted groups that open in place:
- * `finished` for every settled card, `queued` and `declared` for the ones
- * that have not started.
+ * One phase's rows. With a filter (the terminal popup's own; the board has
+ * none) every matching card is one flat row; without one, cards needing
+ * attention lead (the ones whose child run is waiting on the user:
+ * `waiting`, by row id, read off the child streams by the host that holds
+ * them), then failed, then running, transcript order within, and the volume
+ * collapses into counted groups that open in place: `finished` for every
+ * settled card, `queued` and `declared` for the ones that have not started.
  */
 export function workflowPhaseRows(
   phase: WorkflowPhaseModel,
   view: {
     readonly expanded: ReadonlySet<WorkflowRowGroup>;
-    readonly filter: string;
+    readonly filter?: string;
     readonly waiting?: ReadonlySet<string>;
   },
 ): readonly WorkflowPhaseRow[] {
-  const filter = view.filter.trim().toLowerCase();
+  const filter = view.filter?.trim().toLowerCase() ?? '';
   if (filter.length > 0) {
     return [
       ...phase.tasks

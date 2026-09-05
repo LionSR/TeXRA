@@ -23,7 +23,8 @@ export abstract class BaseStreamContent extends LitElement {
   /** The host's clock, for elapsed readings (G4). */
   @property({ type: Number }) nowMs: number | null = null;
 
-  /** The pending approvals asked by this stream, in request order. */
+  /** The pending approvals asked by this stream, in the fold's request
+   *  order: oldest first, the newest last. */
   protected get streamPermissions(): PermissionPayload[] {
     const stream = this.stream;
     if (!stream || !this.view) return [];
