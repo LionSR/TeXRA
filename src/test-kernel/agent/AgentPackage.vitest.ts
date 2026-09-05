@@ -2,8 +2,10 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate } from 'node:timers/promises';
 
 // Third-party imports
+import { Effect, SubscriptionRef } from 'effect';
 import {
   beforeEach,
   describe,
@@ -17,6 +19,9 @@ import {
 interface RunAgentOptions {
   readonly onRun?: (handle: unknown) => void | Promise<void>;
   readonly onStreamResolved?: (streamId: string, trace: unknown) => void;
+  readonly session: {
+    readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
+  };
 }
 
 const mocks = vi.hoisted(() => ({
@@ -35,6 +40,8 @@ const mocks = vi.hoisted(() => ({
   initProcessWorkspaceRoots: vi.fn(),
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
+  /** The current package session's view, advanced independently of execution. */
+  sessionView: undefined as unknown,
   subscribe: vi.fn((listener: (event: unknown) => void) => {
     mocks.eventListener = listener;
     return mocks.detachEvents;
@@ -87,11 +94,23 @@ vi.mock('@agent/runtime', async () => {
       readonly view = Effect.runSync(
         SubscriptionRef.make({
           ...emptySessionView('package'),
-          streams: new Map([['stream-1', { executionId: mocks.executionId }]]),
+          streams: new Map([
+            [
+              'stream-1',
+              {
+                executionId: mocks.executionId,
+                durableOutcome: null as 'completed' | null,
+              },
+            ],
+          ]),
         }),
       );
 
       dispose = mocks.disposeSession;
+
+      constructor() {
+        mocks.sessionView = this.view;
+      }
     },
     runAgent: mocks.runValidatedAgent,
     processOwnerId: (processStart: string) => `${process.pid}:${processStart}`,
@@ -152,6 +171,23 @@ const INPUT = {
   platform: PLATFORM,
 };
 
+/** Publish the final folded view separately from the execution result. */
+function completeRunView(
+  sessionView = mocks.sessionView as SubscriptionRef.SubscriptionRef<SessionView>,
+): Promise<void> {
+  return Effect.runPromise(
+    SubscriptionRef.update(sessionView, (current) => ({
+      ...current,
+      streams: new Map(
+        [...current.streams].map(([id, stream]) => [
+          id,
+          { ...stream, durableOutcome: 'completed' as const },
+        ]),
+      ),
+    })),
+  );
+}
+
 describe('agent package run lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -166,6 +202,7 @@ describe('agent package run lifecycle', () => {
       async (_input: unknown, options: RunAgentOptions) => {
         options.onStreamResolved?.('stream-1', TRACE);
         await options.onRun?.(HANDLE);
+        await completeRunView(options.session.view);
         return RESULT;
       },
     );
@@ -195,6 +232,7 @@ describe('agent package run lifecycle', () => {
         // here, before `onRun`.
         mocks.eventListener?.(EVENT);
         await options.onRun?.(HANDLE);
+        await completeRunView(options.session.view);
         return RESULT;
       },
     );
@@ -213,6 +251,7 @@ describe('agent package run lifecycle', () => {
         options.onStreamResolved?.('stream-1', TRACE);
         await options.onRun?.(HANDLE);
         mocks.eventListener?.(EVENT);
+        await completeRunView(options.session.view);
         return RESULT;
       },
     );
@@ -243,6 +282,10 @@ describe('agent package run lifecycle', () => {
       'The agent package cannot run approval-requiring tools: dangerous_tool',
     );
     expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
+    await expect(run.view[Symbol.asyncIterator]().next()).resolves.toEqual({
+      done: true,
+      value: undefined,
+    });
   });
 
   it('rejects custom tools for workflow agents', async () => {
@@ -261,6 +304,10 @@ describe('agent package run lifecycle', () => {
       'Custom tools are supported only for tool-use agents; "assistant" is a workflow agent.',
     );
     expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
+    await expect(run.view[Symbol.asyncIterator]().next()).resolves.toEqual({
+      done: true,
+      value: undefined,
+    });
   });
 
   it('stops the run session background children before disposing it', async () => {
@@ -347,11 +394,17 @@ describe('agent package run lifecycle', () => {
     await iterator.return?.();
     expect(mocks.detachEvents).toHaveBeenCalledOnce();
 
+    const views = run.view[Symbol.asyncIterator]();
+    await views.next();
+    await views.return?.();
+    expect(HANDLE.interrupt).not.toHaveBeenCalled();
+
+    await completeRunView();
     finishRun?.(RESULT);
     await expect(run.result).resolves.toBe(RESULT);
   });
 
-  it('reads the session view: `view` replays the level holding the run, then ends when the run settles', async () => {
+  it('reads the session view: `view` replays the level holding the run, then ends with the view holding its durable outcome', async () => {
     let finishRun: ((result: typeof RESULT) => void) | undefined;
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
@@ -370,12 +423,32 @@ describe('agent package run lifecycle', () => {
       [...view.streams.values()].map((stream) => stream.executionId),
     ).toContain(HANDLE.executionId);
 
+    // Execution can finish before the final view folds. Disposal must not
+    // interrupt that fold, even while the consumer is between reads.
     finishRun?.(RESULT);
+    await setImmediate();
+    expect(mocks.disposeSession).not.toHaveBeenCalled();
+
+    await completeRunView();
+    const last = (await views.next()).value as SessionView;
+    expect(last.streams.get('stream-1')?.durableOutcome).toBe('completed');
     await expect(views.next()).resolves.toEqual({
       done: true,
       value: undefined,
     });
     await expect(run.result).resolves.toBe(RESULT);
+    expect(mocks.disposeSession).toHaveBeenCalledOnce();
+
+    // A reader attaching after settlement receives the final state once.
+    const lateViews = run.view[Symbol.asyncIterator]();
+    await expect(lateViews.next()).resolves.toEqual({
+      done: false,
+      value: last,
+    });
+    await expect(lateViews.next()).resolves.toEqual({
+      done: true,
+      value: undefined,
+    });
   });
 });
 

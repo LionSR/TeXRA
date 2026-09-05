@@ -59,9 +59,13 @@ while the run itself continues.
 `view` is the folded session state every TeXRA host renders, so stream
 status, transcript rows, and pending approvals are read from it rather than
 re-folded from the trace. Each `for await` over it yields the current view
-first, then every later change, and ends when the run settles or the loop
-breaks. The `SessionView`, `StreamView`, and `TranscriptView` types are
-exported beside it.
+first, then subsequent changes through the first view containing the run's
+durable outcome. That final view is included even when iteration starts after
+`result` settles. Session disposal waits for the final view to fold, independently
+of whether the caller reads it. Breaking the loop stops that reader while the
+run continues. If launch fails before the run enters the session, `view` ends
+without a value and `result` carries the failure. The `SessionView`, `StreamView`,
+and `TranscriptView` types are exported beside it.
 
 ## Run results
 
