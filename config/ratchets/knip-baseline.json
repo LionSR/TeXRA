@@ -1472,12 +1472,6 @@
       "name": "resolveStateSettingWrite"
     },
     {
-      "file": "src/shared/streams/streamStatusDisplay.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StreamStatusLabelStyle"
-    },
-    {
       "file": "src/shared/subagentFollowup.ts",
       "category": "production-dead",
       "kind": "exports",
