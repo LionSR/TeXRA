@@ -131,8 +131,11 @@ export const progressAppStyles = css`
     .shell.is-editor .dock {
       display: flex;
     }
+    /* The dock cell carries the paper name and the one New task control;
+       the main cell keeps only the stream's actions. */
     .shell.is-editor .sessions-button,
     .shell.is-editor .header-main-title,
+    .shell.is-editor #shell-new-task,
     .shell.is-editor session-drawer {
       display: none;
     }
@@ -248,9 +251,16 @@ export const progressAppStyles = css`
     min-height: 0;
   }
 
-  .launch-composer {
+  /* The five banners sit directly above the composer (PRD 12.1); the free
+     space is above them. */
+  .launch-banners {
     flex: 0 0 auto;
     margin-top: auto;
+    padding: 0 var(--wa-space-xs);
+  }
+
+  .launch-composer {
+    flex: 0 0 auto;
     padding: var(--wa-space-3xs) var(--wa-space-xs) var(--wa-space-xs);
   }
 

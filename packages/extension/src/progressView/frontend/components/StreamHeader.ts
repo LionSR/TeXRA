@@ -285,10 +285,11 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      /* The ancestors path, root first. Segments are laid out in reverse DOM
-         order so that when the path cannot fit, the root end is what the
-         overflow clips: the nearest ancestor always survives (per-segment
-         eviction). The title beside it takes the remaining width. */
+      /* The ancestors path, root first, capped at 40 percent of the header
+         (PRD 12.1). Segments are laid out in reverse DOM order so that when
+         the path cannot fit, the root end is what the overflow clips: the
+         nearest ancestor always survives (per-segment eviction). The title
+         beside it takes the remaining width. */
       .ancestors {
         display: flex;
         flex-direction: row-reverse;
@@ -296,6 +297,7 @@ export class StreamHeader extends LitElement {
         align-items: center;
         gap: var(--wa-space-3xs);
         flex: 0 1 auto;
+        max-width: 40%;
         min-width: 0;
         overflow: hidden;
         white-space: nowrap;

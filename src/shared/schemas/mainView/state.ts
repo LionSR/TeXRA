@@ -373,13 +373,6 @@ const InstallGuideDetailSchema = z.object({
 });
 export type InstallGuideDetail = z.infer<typeof InstallGuideDetailSchema>;
 
-const LatexDiffsToggleDetailSchema = z.object({
-  visible: z.boolean(),
-});
-export type LatexDiffsToggleDetail = z.infer<
-  typeof LatexDiffsToggleDetailSchema
->;
-
 const LatexDiffsActionDetailSchema = z.object({
   action: z.enum([
     'latexdiff',

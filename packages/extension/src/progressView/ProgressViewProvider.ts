@@ -66,12 +66,16 @@ import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKeyOf,
   AgentCategory,
+  STREAM_PHASE,
   type OnboardingFunnelState,
   type StreamTabId,
 } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { paperDisplayOf } from '@shared/session/hostSnapshot';
-import type { SurfaceActionMessage } from '@shared/session/sessionFrames';
+import type {
+  DownMessage,
+  SurfaceActionMessage,
+} from '@shared/session/sessionFrames';
 import {
   readOnboardingFlags,
   setOnboardingDeclined,
@@ -93,6 +97,8 @@ export type ProgressStreamRevealResult = 'revealed' | 'missing';
 interface Port {
   readonly attached: AttachedPort;
   readonly disposables: vscode.Disposable[];
+  /** A frame for this port alone (`surfaceActionOnce`). */
+  readonly send: (message: DownMessage) => void;
 }
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
@@ -206,9 +212,33 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         }),
       ),
     );
+    // The completion chime: one per process, decided here from the view's
+    // status transitions and sent to one port (PRD 12.4), never a renderer
+    // transition hook that every subscriber would replay.
+    let statuses = new Map<StreamTabId, string>();
+    const chimes = effectRuntime().runFork(
+      Stream.runForEach(SubscriptionRef.changes(session.view), (view) =>
+        Effect.sync(() => {
+          const next = new Map<StreamTabId, string>();
+          let chime = false;
+          for (const stream of view.streams.values()) {
+            next.set(stream.id, stream.status);
+            chime ||=
+              stream.category === 'workflow' &&
+              statuses.get(stream.id) === STREAM_PHASE.RUNNING &&
+              (stream.status === STREAM_PHASE.COMPLETED ||
+                stream.status === STREAM_PHASE.CANCELLED);
+          }
+          statuses = next;
+          if (chime) this.surfaceActionOnce({ kind: 'chime' });
+        }),
+      ),
+    );
     this.disposables.push({
-      dispose: () =>
-        effectRuntime().runFork(Fiber.interrupt(resolvedApprovals)),
+      dispose: () => {
+        effectRuntime().runFork(Fiber.interrupt(resolvedApprovals));
+        effectRuntime().runFork(Fiber.interrupt(chimes));
+      },
     });
 
     const hostRequests = createExtensionHostRequests({
@@ -458,27 +488,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       sessionKey: this.bridge.key,
       placement: id,
     });
-    const attached = this.bridge.attach({
-      id,
-      send: (message) => {
-        void Promise.resolve(view.webview.postMessage(message)).then(
-          (delivered) => {
-            if (!delivered) {
-              log.warn(`A ${message.kind} message was not delivered to ${id}`);
-            }
-          },
-          (error: unknown) => {
-            log.warn(
-              `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
-            );
-          },
-        );
-      },
-    });
+    const send = (message: DownMessage): void => {
+      void Promise.resolve(view.webview.postMessage(message)).then(
+        (delivered) => {
+          if (!delivered) {
+            log.warn(`A ${message.kind} message was not delivered to ${id}`);
+          }
+        },
+        (error: unknown) => {
+          log.warn(
+            `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
+          );
+        },
+      );
+    };
+    const attached = this.bridge.attach({ id, send });
     const disposables: vscode.Disposable[] = [
       view.webview.onDidReceiveMessage((message) => attached.receive(message)),
     ];
-    return { attached, disposables };
+    return { attached, disposables, send };
   }
 
   private closePort(port: Port | undefined): void {
@@ -497,6 +525,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.bridge.surfaceAction(action);
   }
 
+  /** An action for one surface, not every port: the sidebar's when it is
+   *  attached, else the editor tab's. A chime plays once per process, a
+   *  keybinding launches once, and the drawer toggles where the keybinding
+   *  is bound (the sidebar). */
+  private surfaceActionOnce(action: SurfaceActionMessage['action']): void {
+    const port = this.sidebarPort ?? this.editorPort;
+    port?.send({ kind: 'surface.action', session: this.bridge.key, action });
+  }
+
+  /** `texra.execute` with no configuration: send the launcher's instruction
+   *  as the composer's Run would (Cmd+Alt+E). */
+  public submitLaunch(): void {
+    this.surfaceActionOnce({ kind: 'submitLaunch' });
+  }
+
+  /** `texra.toggleView`: the Sessions drawer of the sidebar. */
+  public async toggleDrawer(): Promise<void> {
+    await this.showInSidebar();
+    this.surfaceActionOnce({ kind: 'toggleDrawer' });
+  }
+
   public isViewVisible(): boolean {
     return (
       this.sidebarView?.visible === true || this.editorPanel?.visible === true
@@ -504,7 +553,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Whether the sidebar shows a conversation or the New-task state. */
-  public sidebarShowsProgress(): boolean {
+  private sidebarShowsProgress(): boolean {
     return getActiveSidebarView() === SIDEBAR_VIEWS.PROGRESS;
   }
 

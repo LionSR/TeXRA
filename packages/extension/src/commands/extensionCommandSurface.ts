@@ -50,7 +50,6 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping/clean';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import { emptySurface } from '@shared/session/surface';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 
 // Local file imports
@@ -71,15 +70,9 @@ export function createExtensionCommandActions(
     showSettings(tab, agentSubTab) {
       return settingsViewProvider.showSettingsView(tab, agentSubTab);
     },
-    async resetMainView() {
-      // The launcher's selections back to their defaults, and the New-task
-      // state into view.
-      progressViewProvider.surfaceAction({
-        kind: 'launch',
-        patch: emptySurface(progressViewProvider.bridge.key).launch,
-      });
-      await progressViewProvider.showLauncher();
-    },
+    // New Session is the header's "+" (PRD 12.4): the New-task state into
+    // view with the launcher's selections as they are.
+    resetMainView: () => progressViewProvider.showLauncher(),
     cleanBuild: runCleanBuild,
     cleanOutput: runCleanOutput,
     pack: fileHandlePack,
@@ -116,18 +109,18 @@ export function createExtensionCommandActions(
     cloneOverleafProject: gitCloneOverleafProject,
     removeApiKey: () => apiRemoveApiKey(refreshAfterProviderKeyChange),
     showImportOptions: sysShowImportOptions,
-    async toggleView() {
-      const target = progressViewProvider.sidebarShowsProgress()
-        ? 'texra.showMainView'
-        : 'texra.showProgressView';
-      await vscode.commands.executeCommand(target);
-    },
+    toggleView: () => progressViewProvider.toggleDrawer(),
     showProgressView: progressShowProgressView,
     setApiKey: (provider) =>
       apiSetApiKey(refreshAfterProviderKeyChange, provider),
     createAgentWithAI: (category) =>
       agentHandleCreateAgentWithAI(context, category),
-    execute: agentRunExecuteCommand,
+    // Without a configuration the command is the composer's accelerator
+    // (Cmd+Alt+E): the launcher's instruction runs as its Send would.
+    execute: (input) =>
+      input === undefined
+        ? Promise.resolve(progressViewProvider.submitLaunch())
+        : agentRunExecuteCommand(input),
   };
 }
 

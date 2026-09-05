@@ -34,6 +34,7 @@ import {
 } from '@shared/session/surface';
 import { PersistedState } from '@shared/state/PersistedState';
 
+import { playCompletionSound } from './audioNotification';
 import {
   installWebviewTransport,
   transcriptAggregates,
@@ -337,6 +338,11 @@ export function createSessionSurfaces(options: {
   transport.onSurfaceAction((key, action) => {
     const entry = held.get(key);
     if (!entry) return;
+    if (action.kind === 'chime') {
+      // The host already decided the transition and chose this port.
+      playCompletionSound();
+      return;
+    }
     if (action.kind === 'submitLaunch') {
       // The run accelerator: send the launcher's instruction as the
       // composer would.

@@ -397,7 +397,7 @@
       },
       {
         "command": "texra.toggleView",
-        "title": "Toggle Launcher/Progress View",
+        "title": "Toggle Sessions Drawer",
         "category": "TeXRA",
         "icon": "$(split-horizontal)"
       },

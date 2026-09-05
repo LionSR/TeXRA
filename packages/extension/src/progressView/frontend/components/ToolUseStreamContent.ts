@@ -8,6 +8,7 @@ import './StreamHeader';
 import './TodoList';
 import './PlanView';
 import './BackgroundTasksPanel';
+import './SessionBanners';
 import './SessionComposer';
 
 const RUN_ENDED_MESSAGE = 'This run has ended.';
@@ -57,6 +58,10 @@ export class ToolUseStreamContent extends BaseStreamContent {
       </div>
       <div class="conversation-composer-dock">
         <div class="conversation-column">
+          <session-banners
+            .host=${this.host}
+            .sessionType=${stream.category}
+          ></session-banners>
           <div
             class=${
               showComposer

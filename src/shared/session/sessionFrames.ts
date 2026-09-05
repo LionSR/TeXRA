@@ -126,6 +126,10 @@ const SurfaceActionMessageSchema = z.object({
     z.object({ kind: z.literal('select'), streamId: StreamTabIdSchema }),
     z.object({ kind: z.literal('toggleDrawer') }),
     z.object({ kind: z.literal('submitLaunch') }),
+    /** A workflow run of this session left running for finished or
+     *  cancelled: the host decides the transition once and sends it to one
+     *  port, which plays the completion chime (PRD 12.4). */
+    z.object({ kind: z.literal('chime') }),
     /** A run's setup restored into the launcher (`restoreIntoLauncher`,
      *  `restoreProposalConfig`), or the setup agent selected by the
      *  onboarding funnel. */

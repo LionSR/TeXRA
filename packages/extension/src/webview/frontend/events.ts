@@ -20,7 +20,6 @@ import type {
   InstallGuideDetail,
   InstructionChangeDetail,
   LatexDiffsActionDetail,
-  LatexDiffsToggleDetail,
   LaunchTargetChangeDetail,
   ModelChangeDetail,
   MultipleFilesActionDetail,
@@ -110,12 +109,7 @@ export const MainViewEvents = {
   gettingStartedAction: (detail: GettingStartedActionDetail) =>
     createEvent('getting-started-action', detail),
 
-  dismissSessionHint: () => createEvent('dismiss-session-hint', undefined),
-
   // LaTeXDiffs events
-  latexDiffsToggle: (detail: LatexDiffsToggleDetail) =>
-    createEvent('latexdiffs-toggle', detail),
-
   latexDiffsAction: (detail: LatexDiffsActionDetail) =>
     createEvent('latexdiffs-action', detail),
 
