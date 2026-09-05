@@ -8,7 +8,6 @@
  * `vi.mock`, and a graph built there would hold the real modules for the
  * rest of the file.
  */
-import { processOwnerId } from '@agent/runtime';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 
 let installed = false;
@@ -23,7 +22,7 @@ let installed = false;
 export function installTestSessionGraphs(): void {
   if (installed) return;
   installed = true;
-  installProcessRuntime(processOwnerId('vitest'));
+  installProcessRuntime('vitest');
 }
 
 installTestSessionGraphs();

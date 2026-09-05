@@ -487,25 +487,6 @@ export function runEventDraft(
       } as SessionEventDraft;
     case 'goalPaused':
       return { type: event.type, aggregateId: streamId };
-    case 'approval.requested':
-      return {
-        type: event.type,
-        aggregateId: streamId,
-        requestId: event.requestId,
-        payload: event.payload,
-      };
-    case 'approval.resolved':
-      return {
-        type: event.type,
-        aggregateId: streamId,
-        requestId: event.requestId,
-      };
-    case 'approval.policy':
-      return {
-        type: event.type,
-        aggregateId: streamId,
-        snapshot: event.snapshot,
-      };
     case 'child.activity':
     case 'log':
     case 'stage.end':

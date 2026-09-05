@@ -1,7 +1,6 @@
 // Local imports
 import {
   initializeBundledPrompts,
-  processOwnerId,
   teardownDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime';
@@ -306,7 +305,7 @@ export async function initCliPlatform(
     // and every Promise-facing fiber run on it. Disposed after the default
     // session has released its graph.
     const runtime = installProcessRuntime(
-      processOwnerId(await platform().processes.selfIdentity()),
+      await platform().processes.selfIdentity(),
     );
     initProcessSettingHost('cli');
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without

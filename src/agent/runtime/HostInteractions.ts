@@ -480,7 +480,8 @@ export class SessionHostInteractions implements HostInteractions {
   /**
    * @param session The owning session: the run-scoped fact rail every
    *   response-bearing request publishes `approval.requested` and
-   *   `approval.resolved` on, through `session.publishRunEvent`, never a bus.
+   *   `approval.resolved` on, as drafts through `session.publish`, never a
+   *   bus.
    *   `SessionHandle` constructs this surface with itself.
    */
   constructor(private readonly session: SessionHandle) {}
@@ -845,11 +846,14 @@ export class SessionHostInteractions implements HostInteractions {
   ): PendingSessionInteraction['fact'] {
     if (!streamId) return undefined;
     const requestId = payload.data.requestId;
-    this.session.publishRunEvent(streamId, {
-      type: 'approval.requested',
-      requestId,
-      payload: redactedForFact(payload),
-    });
+    this.session.publish([
+      {
+        type: 'approval.requested',
+        aggregateId: streamId,
+        requestId,
+        payload: redactedForFact(payload),
+      },
+    ]);
     return { streamId, requestId };
   }
 
@@ -977,10 +981,13 @@ export class SessionHostInteractions implements HostInteractions {
   private deletePending(pending: PendingSessionInteraction): boolean {
     if (!this.pending.delete(pending)) return false;
     if (pending.fact) {
-      this.session.publishRunEvent(pending.fact.streamId, {
-        type: 'approval.resolved',
-        requestId: pending.fact.requestId,
-      });
+      this.session.publish([
+        {
+          type: 'approval.resolved',
+          aggregateId: pending.fact.streamId,
+          requestId: pending.fact.requestId,
+        },
+      ]);
     }
     if (this.pending.size === 0) this.notifyPendingCountChange();
     return true;

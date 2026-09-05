@@ -116,7 +116,6 @@ vi.mock('@agent/runtime', async () => {
       }
     },
     runAgent: mocks.runValidatedAgent,
-    processOwnerId: (processStart: string) => `${process.pid}:${processStart}`,
   };
 });
 

@@ -31,10 +31,6 @@ export {
 // session's storage when it holds several sessions in one process.
 export { runInSession } from './RunContext';
 
-// The process identity a composition root resolves for its Effect runtime
-// (`installProcessRuntime`), from the host's own start identity.
-export { processOwnerId } from './SessionEvents';
-
 // HostInteractions
 export {
   SessionHostInteractions,

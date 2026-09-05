@@ -40,6 +40,7 @@ import {
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import {
   ownerProcessStart,
+  processOwnerId,
   SessionEventLog,
   sessionEventsLayer,
   tailFrom,
@@ -70,7 +71,7 @@ import {
   type StreamLogDelta,
 } from '@transcript/StreamLog';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
-import { SessionRequests } from './SessionRequests';
+import { sessionRequests } from './SessionRequests';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -411,8 +412,12 @@ const processLayer = (ownerId: OwnerId) =>
  * which disposes the returned runtime on its shutdown path after the last
  * session has released its graph.
  */
-export function installProcessRuntime(ownerId: OwnerId): ProcessRuntime {
-  const runtime = ManagedRuntime.make(processLayer(ownerId));
+export function installProcessRuntime(
+  processStart: string | undefined,
+): ProcessRuntime {
+  const runtime = ManagedRuntime.make(
+    processLayer(processOwnerId(processStart)),
+  );
   initProcessRuntime(runtime);
   initSessionGraphs(sessionGraphOpener(runtime));
   return runtime;
@@ -437,15 +442,6 @@ function sessionGraphOpener(
     const { publish, ...reads } = Context.get(context, SessionEvents);
     const eventLog = Context.get(context, SessionEventLog);
     const view = Context.get(context, SessionViewService);
-    // The request handler admits on the log's sequence table: built under
-    // the root graph's context, which holds the log.
-    const requests = runtime.runSync(
-      Layer.build(SessionRequests.layer(session)).pipe(
-        Effect.provide(context),
-        Effect.provideService(Scope.Scope, scope),
-        Effect.map((built) => Context.get(built, SessionRequests)),
-      ),
-    );
     const graph: SessionGraph = {
       events: reads,
       publish,
@@ -470,7 +466,8 @@ function sessionGraphOpener(
       local: Context.get(context, LocalRuntimeSource).ref,
       inputs: Context.get(context, SessionInputs).read,
       subscriptions: Context.get(context, TranscriptSubscriptions),
-      requests,
+      // The request handler admits on the root graph's log.
+      requests: sessionRequests(session, eventLog),
       now: () => SubscriptionRef.getUnsafe(eventLog.level),
       close: () => {
         runtime.runFork(Scope.close(scope, Exit.void));

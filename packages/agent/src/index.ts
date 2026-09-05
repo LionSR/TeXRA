@@ -11,7 +11,6 @@ import { Effect, Fiber, Stream } from 'effect';
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { loadAgents, resolveAgent } from '@agent/index';
 import {
-  processOwnerId,
   runAgent as runValidatedAgent,
   SessionHandle as RuntimeSessionHandle,
   type AgentRunHandle as RuntimeAgentRunHandle,
@@ -433,7 +432,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
       // The one Effect runtime of the embedding process (PRD 7.7), for the
       // package sessions' graphs.
       const runtime = installProcessRuntime(
-        processOwnerId(await input.platform.processes.selfIdentity()),
+        await input.platform.processes.selfIdentity(),
       );
       const sessions = new Map<string, RuntimeSessionHandle>();
       // The hosts' shutdown order, on the embedder's shutdown path: the
