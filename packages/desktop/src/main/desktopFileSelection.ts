@@ -1,16 +1,23 @@
+import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   getFileListConfig,
   loadFileListSettings,
   type ListableFileType,
 } from '@common/files/fileListingRules';
+import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import {
+  attachedDroppedPaths,
+  planMainViewDroppedFileAttachments,
+} from '@controllers/mainView/MainViewDroppedFilesController';
 import {
   listWorkspaceFilesOfType,
   workspaceFileOptions,
 } from '@controllers/session/workspaceFileOptions';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
-import type { FileOptions } from '@shared/schemas';
+import type { DocumentFileType, FileOptions } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 
 interface DesktopFileSelectionDialogOptions {
@@ -48,8 +55,15 @@ export interface DesktopFileSelection {
     fileType: ListableFileType,
     currentFile?: string | null,
   ): Promise<string[] | null>;
-  /** Paths dropped onto the launcher, made workspace-relative. */
-  relativize(paths: readonly string[]): string[];
+  /**
+   * Paths dropped onto the launcher: the regular files inside the paper
+   * whose extension the target category admits, workspace-relative. The
+   * same plan the extension applies; a drop that attaches nothing rejects.
+   */
+  attachDroppedFiles(
+    paths: readonly string[],
+    category: DocumentFileType,
+  ): Promise<string[]>;
 }
 
 const DIALOG_TITLE_BY_FILE_TYPE: Record<ListableFileType, string> = {
@@ -108,9 +122,30 @@ export function createDesktopFileSelection(
         toWorkspaceRelative(workspacePath, file),
       );
     },
-    relativize(paths) {
-      if (!workspacePath) return paths.map((file) => normalizeFilePath(file));
-      return paths.map((file) => toWorkspaceRelative(workspacePath, file));
+    async attachDroppedFiles(paths, category) {
+      const resolved = await Promise.all(
+        paths.map(async (raw): Promise<string | null> => {
+          if (!workspacePath) return null;
+          const dropped = raw.startsWith('file:') ? fileURLToPath(raw) : raw;
+          const relative = relativeToRoot(workspacePath, dropped);
+          if (relative === undefined) return null;
+          const info = await stat(resolve(workspacePath, relative)).catch(
+            () => null,
+          );
+          return info?.isFile() ? relative : null;
+        }),
+      );
+      return attachedDroppedPaths(
+        planMainViewDroppedFileAttachments({
+          paths: resolved,
+          allowedExtensions: {
+            input: getIncludedExtensions('input'),
+            context: getIncludedExtensions('context'),
+            media: getIncludedExtensions('media'),
+          },
+          target: category,
+        }),
+      );
     },
   };
 }

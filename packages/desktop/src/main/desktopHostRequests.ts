@@ -673,7 +673,10 @@ export function createDesktopHostRequests(
       case 'attachDroppedFiles':
         return {
           kind: 'files',
-          paths: options.files.relativize(request.paths),
+          paths: await options.files.attachDroppedFiles(
+            request.paths,
+            request.category,
+          ),
         };
       case 'launch': {
         const { launch: form } = request;

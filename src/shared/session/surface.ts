@@ -20,7 +20,7 @@ import {
   type InquiryDraft,
   type StreamTabId,
 } from '@shared/schemas';
-import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
+import type { HostSnapshot } from './hostSnapshot';
 import type { SessionView } from './sessionView';
 
 /**
@@ -47,10 +47,17 @@ export const LaunchPatchSchema = LaunchSurfaceSchema.partial().extend({
 });
 type LaunchPatch = z.infer<typeof LaunchPatchSchema>;
 
+/** An image of a follow-up: the `[fileName]` chip its text carries and
+ *  the stored file the send names, once the host has saved it. */
+interface DraftImage {
+  readonly fileName: string;
+  readonly path: string | null;
+}
+
 /** A follow-up in progress for one stream. Only `text` persists. */
 export interface Draft {
   readonly text: string;
-  readonly images: readonly ExtractedClipboardImage[];
+  readonly images: readonly DraftImage[];
 }
 
 export const EMPTY_DRAFT: Draft = Object.freeze({
@@ -215,6 +222,35 @@ export function pruneSurface(surface: Surface, view: SessionView): Surface {
 }
 
 /**
+ * The launcher's selections against the host's catalogs: a model the
+ * catalog no longer enables moves to the first enabled one (the current
+ * one when none is), and a working directory that is no longer an open
+ * root clears to the default. Returns the same record when both hold.
+ */
+export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
+  const { launch } = surface;
+  const patch: Partial<LaunchSurface> = {};
+  const current = host.modelOptions.find(
+    (option) => option.value === launch.model,
+  );
+  if (host.modelOptions.length > 0 && !(current && !current.disabled)) {
+    const next =
+      host.modelOptions.find((option) => !option.disabled) ??
+      current ??
+      host.modelOptions[0];
+    if (next.value !== launch.model) patch.model = next.value;
+  }
+  if (
+    launch.workingDirectory !== '' &&
+    !host.workspaceRoots.some((root) => root.value === launch.workingDirectory)
+  ) {
+    patch.workingDirectory = '';
+  }
+  if (Object.keys(patch).length === 0) return surface;
+  return { ...surface, launch: { ...launch, ...patch } };
+}
+
+/**
  * What a surface shows: `selected` if the view still has that stream, else
  * the first top-level stream, else `null`. The fallback applies only to a
  * non-null id that has disappeared; an explicit `null` is the New-task
@@ -332,14 +368,20 @@ export function applySurfaceAction(
       };
     case 'launch': {
       const { agent, instruction, ...rest } = action.patch;
+      const launch = {
+        ...surface.launch,
+        ...rest,
+        agent: { ...surface.launch.agent, ...agent },
+        instruction: { ...surface.launch.instruction, ...instruction },
+      };
+      // A team is a tool-use launch target: leaving that mode launches the
+      // mode's agent, whatever target the tool-use mode had chosen.
       return {
         ...surface,
-        launch: {
-          ...surface.launch,
-          ...rest,
-          agent: { ...surface.launch.agent, ...agent },
-          instruction: { ...surface.launch.instruction, ...instruction },
-        },
+        launch:
+          launch.sessionType === 'toolUse'
+            ? launch
+            : { ...launch, launchTarget: 'agent' },
       };
     }
     case 'inquiryDraft':

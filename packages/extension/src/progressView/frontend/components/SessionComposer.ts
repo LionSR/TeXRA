@@ -331,21 +331,27 @@ export class SessionComposer extends LitElement {
     this.send();
   };
 
+  /** A follow-up sends once the host has stored every pasted image. */
+  private get imagesPending(): boolean {
+    return this.draft.images.some((image) => image.path === null);
+  }
+
   private send = (): void => {
     const text = this.text.trim();
     const stream = this.stream;
     if (stream) {
       const draft = this.draft;
       if (text === '' && draft.images.length === 0) return;
+      if (this.imagesPending) return;
+      const mediaFiles = draft.images.flatMap((image) =>
+        image.path === null ? [] : [image.path],
+      );
       this.dispatchEvent(
         SessionUiEvents.runtime({
           kind: 'followUp.send',
           streamId: stream.id,
           text: text === '' ? '(image)' : text,
-          mediaFiles:
-            draft.images.length > 0
-              ? draft.images.map((image) => image.fileName)
-              : null,
+          mediaFiles: mediaFiles.length > 0 ? mediaFiles : null,
         }),
       );
       return;
@@ -413,14 +419,17 @@ export class SessionComposer extends LitElement {
         pastedText,
         added.map(({ fileName }) => fileName),
       );
+      // The draft holds each chip's name now and its stored path once the
+      // host answers (`sessionSurfaces.settleHost`).
+      const pending = added.map(({ fileName }) => ({ fileName, path: null }));
       if (target && this.isConnected) {
         insertTextAtCursor(target, insert);
         this.setText(getTextareaValue(target), {
-          images: [...this.draft.images, ...added],
+          images: [...this.draft.images, ...pending],
         });
       } else {
         this.setText(`${this.text}${insert}`, {
-          images: [...this.draft.images, ...added],
+          images: [...this.draft.images, ...pending],
         });
       }
       this.announcement =
@@ -731,7 +740,9 @@ export class SessionComposer extends LitElement {
       : [];
     const text = this.text;
     const canSend =
-      !readOnly && (text.trim() !== '' || this.draft.images.length > 0);
+      !readOnly &&
+      !this.imagesPending &&
+      (text.trim() !== '' || this.draft.images.length > 0);
     const sendLabel = compact ? 'Send follow-up' : 'Run';
 
     return html`
@@ -802,14 +813,20 @@ export class SessionComposer extends LitElement {
               disabled: readOnly,
               onClick: this.toggleRecording,
             })}
-            ${renderIconActionButton({
-              id: 'composer-attach',
-              icon: 'file-circle-plus',
-              label: 'Attach',
-              tooltip: 'Attach media files',
-              disabled: readOnly,
-              onClick: this.attach,
-            })}
+            ${
+              // The picker fills the launcher's media list; a follow-up
+              // attaches by pasting, which the host stores for it.
+              compact
+                ? nothing
+                : renderIconActionButton({
+                    id: 'composer-attach',
+                    icon: 'file-circle-plus',
+                    label: 'Attach',
+                    tooltip: 'Attach media files',
+                    disabled: readOnly,
+                    onClick: this.attach,
+                  })
+            }
             ${renderIconActionButton({
               id: 'composer-send',
               icon: 'arrow-up',

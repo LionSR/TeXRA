@@ -135,13 +135,24 @@ export function createHostSnapshotSource(
     for (const listener of [...listeners]) listener(snapshot);
   }
 
-  async function loadCatalogs(): Promise<void> {
-    const [agentOptions, teamOptions, modelOptions] = await Promise.all([
-      computeAgentOptionsData(),
-      loadTeamOptions(createTeamCatalogPorts()),
-      computeModelOptionsData(getEnabledModels(options.globalState)),
-    ]);
-    catalogs = { agentOptions, teamOptions, modelOptions };
+  async function loadAgents(): Promise<void> {
+    catalogs = { ...catalogs, agentOptions: await computeAgentOptionsData() };
+  }
+
+  async function loadTeams(): Promise<void> {
+    catalogs = {
+      ...catalogs,
+      teamOptions: await loadTeamOptions(createTeamCatalogPorts()),
+    };
+  }
+
+  async function loadModels(): Promise<void> {
+    catalogs = {
+      ...catalogs,
+      modelOptions: await computeModelOptionsData(
+        getEnabledModels(options.globalState),
+      ),
+    };
   }
 
   async function loadFiles(): Promise<void> {
@@ -166,28 +177,31 @@ export function createHostSnapshotSource(
     if (tools) dependency = tools;
   }
 
-  const guarded = (load: () => Promise<void>) => async (): Promise<void> => {
-    try {
-      await load();
-    } catch (error) {
-      options.onError(error);
-      return;
-    }
-    publish();
-  };
+  /** Each producer settles on its own: one that fails is reported and keeps
+   *  its last value, and the snapshot still publishes what the others read,
+   *  so a single unavailable source never leaves the shell blank. */
+  const guarded =
+    (...loads: (() => Promise<void>)[]) =>
+    async (): Promise<void> => {
+      const settled = await Promise.allSettled(loads.map((load) => load()));
+      for (const result of settled) {
+        if (result.status === 'rejected') options.onError(result.reason);
+      }
+      publish();
+    };
+
+  const catalogLoads = [loadAgents, loadTeams, loadModels];
 
   return {
     current: () => snapshot,
-    refresh: guarded(async () => {
-      await Promise.all([
-        loadCatalogs(),
-        loadFiles(),
-        loadCommits(),
-        loadAuth(),
-        loadHostBanners(),
-      ]);
-    }),
-    refreshCatalogs: guarded(loadCatalogs),
+    refresh: guarded(
+      ...catalogLoads,
+      loadFiles,
+      loadCommits,
+      loadAuth,
+      loadHostBanners,
+    ),
+    refreshCatalogs: guarded(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshAuth: guarded(loadAuth),

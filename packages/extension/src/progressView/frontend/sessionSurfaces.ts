@@ -27,6 +27,7 @@ import {
   persistSurface,
   PersistedSurfaceSchema,
   pruneSurface,
+  reconcileLaunch,
   resolveSelected,
   type Surface,
   type SurfaceAction,
@@ -157,15 +158,18 @@ export function createSessionSurfaces(options: {
       subscribedTranscript: '',
       unsubscribe: () => undefined,
     };
-    // The per-stream maps drop what the view no longer holds (PRD 9), and
-    // the transcript subscription follows the selection.
+    // The per-stream maps drop what the view no longer holds (PRD 9), the
+    // launcher's selections follow the host's catalogs, and the transcript
+    // subscription follows the selection.
     entry.unsubscribe = subscribeToSignalChanges(
       [session.view$, surface$, session.host$],
       () => {
         const view = session.view$.get();
-        if (view !== beforeReplay) {
-          setSurface(entry, pruneSurface(entry.surface$.get(), view));
-        }
+        const host = session.host$.get();
+        let next = entry.surface$.get();
+        if (view !== beforeReplay) next = pruneSurface(next, view);
+        if (host) next = reconcileLaunch(next, host);
+        setSurface(entry, next);
         if (transcriptTier(entry).transcript !== entry.subscribedTranscript) {
           subscribeTranscript(entry);
         }
@@ -230,17 +234,33 @@ export function createSessionSurfaces(options: {
         });
         return;
       }
-      case 'savePastedImage':
-        // A follow-up draft keeps its images itself; the launcher has no
-        // image draft, so the saved name joins its media list as a picker's
-        // paths would.
-        if (origin.streamId === null && outcome.kind === 'savedImage') {
+      case 'savePastedImage': {
+        if (outcome.kind !== 'savedImage') return;
+        // The launcher has no image draft, so the stored file joins its
+        // media list as a picker's paths would; a follow-up draft holds the
+        // chip under the pasted name and the send carries the stored file.
+        if (origin.streamId === null) {
           act(entry, {
             kind: 'launch',
             patch: withPickedPaths(launch, 'media', [outcome.fileName]),
           });
+          return;
         }
+        const draft = entry.surface$.get().drafts.get(origin.streamId);
+        if (!draft) return;
+        act(entry, {
+          kind: 'draft',
+          streamId: origin.streamId,
+          patch: {
+            images: draft.images.map((image) =>
+              image.fileName === request.fileName
+                ? { ...image, path: outcome.fileName }
+                : image,
+            ),
+          },
+        });
         return;
+      }
       case 'polish':
         // A reply to an earlier text cannot replace edits made while it ran.
         if (

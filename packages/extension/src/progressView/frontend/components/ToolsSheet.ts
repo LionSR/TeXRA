@@ -20,6 +20,7 @@ import type {
   LatexDiffsActionDetail,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { matchesEditedFile } from '@shared/launcher/editedFileMatch';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -109,6 +110,14 @@ export class ToolsSheet extends LitElement {
     const launch = this.surface?.launch;
     const host = this.host;
     if (!launch || !host) return nothing;
+    // The edited candidates follow the base: the catalog is base-neutral,
+    // and a selection of another base is not one for this base.
+    const editedFileOptions = host.fileOptions.editedFile.filter((file) =>
+      matchesEditedFile(file, launch.baseFile),
+    );
+    const editedFile = editedFileOptions.includes(launch.editedFile ?? '')
+      ? (launch.editedFile ?? '')
+      : '';
     return html`
       <div class="scrim" @click=${this.close}></div>
       <div class="sheet" role="dialog" aria-label="LaTeXDiffs">
@@ -126,8 +135,8 @@ export class ToolsSheet extends LitElement {
           .visible=${true}
           .baseFile=${launch.baseFile}
           .baseFileOptions=${[...host.fileOptions.baseFile]}
-          .editedFile=${launch.editedFile ?? ''}
-          .editedFileOptions=${[...host.fileOptions.editedFile]}
+          .editedFile=${editedFile}
+          .editedFileOptions=${editedFileOptions}
           .commit=${launch.commit}
           .commitOptions=${[...host.fileOptions.commit]}
           .isGitRepo=${host.isGitRepo}
@@ -139,7 +148,7 @@ export class ToolsSheet extends LitElement {
                 kind: 'latexdiffs',
                 action: detail.action,
                 baseFile: launch.baseFile,
-                editedFile: launch.editedFile ?? null,
+                editedFile: editedFile || null,
                 commit: launch.commit,
               }),
             )}

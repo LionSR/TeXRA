@@ -17,6 +17,10 @@ import {
   type SessionEventDraft,
   type StreamPhase,
 } from '@shared/schemas';
+import {
+  emptyHostSnapshot,
+  type HostSnapshot,
+} from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import type { TraceDocument } from '@transcript';
@@ -266,9 +270,26 @@ function traceEvents(trace: TraceDocument): {
 }
 
 /**
+ * The host snapshot of an exported trace (PRD 8.1): the run's display name
+ * as the paper, no catalogs (a trace launches nothing), no banners. The
+ * shell renders nothing until a host snapshot arrives, and a trace's one
+ * frame is the only one it ever gets.
+ */
+function traceHost(trace: TraceDocument): HostSnapshot {
+  const name = traceDisplayName(trace);
+  return emptyHostSnapshot({
+    key: trace.streamId,
+    name,
+    initials: name.slice(0, 2).toUpperCase(),
+    subtitle: 'Exported trace',
+  });
+}
+
+/**
  * The one frame that answers a `Subscribe` over an exported trace: the
  * listing, the transcript rows of the stream when the subscriber named it,
- * the marker, and an empty local snapshot. A trace has no tail.
+ * the marker, an empty local snapshot, and the trace's host snapshot. A
+ * trace has no tail.
  */
 export function traceFrame(
   trace: TraceDocument,
@@ -300,7 +321,7 @@ export function traceFrame(
     ],
     chunks: [],
     local: { self: [], heldBy: [], unreadable: [] },
-    host: null,
+    host: traceHost(trace),
     replayComplete: true,
   };
 }

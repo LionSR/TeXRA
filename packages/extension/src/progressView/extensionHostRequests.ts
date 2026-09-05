@@ -23,7 +23,7 @@ import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import {
-  MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES,
+  attachedDroppedPaths,
   normalizeMainViewFileExtension,
   planMainViewDroppedFileAttachments,
 } from '@controllers/mainView/MainViewDroppedFilesController';
@@ -569,20 +569,13 @@ export function createExtensionHostRequests(
       },
       target: request.category,
     });
-    const attached = MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES.flatMap(
-      (fileType) => plan.filesByCategory[fileType],
-    );
+    const attached = attachedDroppedPaths(plan);
     if (plan.attachedCount > 0 && plan.rejectedCount > 0) {
       void showInfo(
         `Attached ${formatResultCount(plan.attachedCount, 'dropped file')}; skipped ${formatResultCount(plan.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
       );
-    } else if (plan.attachedCount === 0 && plan.rejectedCount > 0) {
-      throw new Rejected({
-        reason:
-          'No dropped files were attached. Use regular files inside this workspace with supported TeXRA extensions.',
-      });
     }
-    return { kind: 'files', paths: [...attached] };
+    return { kind: 'files', paths: attached };
   }
 
   /** The editor's current file into a launcher field. */

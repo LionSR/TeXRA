@@ -120,13 +120,23 @@ describe('desktop file selection', () => {
     );
   });
 
-  it('reports a cancelled picker as null and relativizes dropped paths', async () => {
+  it('reports a cancelled picker as null and attaches only the admitted dropped files', async () => {
     const files = await createFileSelection();
 
     expect(await files.pickFiles('context')).toBeNull();
     expect(
-      files.relativize([join(workspacePath, 'notes.md'), '/elsewhere/x.tex']),
-    ).toEqual(['notes.md', '/elsewhere/x.tex']);
+      await files.attachDroppedFiles(
+        [
+          join(workspacePath, 'notes.md'),
+          join(workspacePath, 'sections'),
+          '/elsewhere/x.tex',
+        ],
+        'context',
+      ),
+    ).toEqual(['notes.md']);
+    await expect(
+      files.attachDroppedFiles([join(workspacePath, 'sections')], 'input'),
+    ).rejects.toMatchObject({ _tag: 'Rejected' });
   });
 
   it('rejects a listing of a missing workspace loudly', async () => {

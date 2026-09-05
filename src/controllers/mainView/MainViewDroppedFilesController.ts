@@ -3,8 +3,9 @@ import * as path from 'node:path';
 
 // Local imports - shared schemas
 import type { MultipleDocumentFileType } from '@shared/schemas';
+import { Rejected } from '@shared/session/requestErrors';
 
-export const MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES = [
+const MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES = [
   'input',
   'context',
   'media',
@@ -72,6 +73,22 @@ export function planMainViewDroppedFileAttachments(
     ),
     rejectedCount,
   };
+}
+
+/** The paths a plan attaches, in category order. A drop that attached
+ *  nothing but rejected something is the user's to hear about. */
+export function attachedDroppedPaths(
+  plan: MainViewDroppedFileAttachmentPlan,
+): string[] {
+  if (plan.attachedCount === 0 && plan.rejectedCount > 0) {
+    throw new Rejected({
+      reason:
+        'No dropped files were attached. Use regular files inside this workspace with supported TeXRA extensions.',
+    });
+  }
+  return MAIN_VIEW_ATTACHABLE_DROP_CATEGORIES.flatMap(
+    (category) => plan.filesByCategory[category],
+  );
 }
 
 export function normalizeMainViewFileExtension(filePath: string): string {
