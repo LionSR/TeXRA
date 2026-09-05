@@ -276,24 +276,30 @@ function historicalStream(
 }
 
 /**
- * The history import (above): the first layer of a root's graph, one
- * ordered append per stream under the log's permit, parents before
- * children, stamped at the stream's own time, and complete before
+ * The history import (above): the first layer of a root's graph, the whole
+ * history in ONE append under the log's permit, parents before children,
+ * each row stamped at its stream's own time, and complete before
  * `sessionEventsLayer` reads its anchor, so the listing hydrate sees every
  * historical stream and the tail starts after them.
+ *
+ * One call, not one per stream: the graph is built by a synchronous run
+ * (`sessionGraphOpener`), and a fiber yields to the scheduler every
+ * `Scheduler.MaxOpsBeforeYield` steps, so an import that took the permit
+ * and moved the level once per stream crossed that budget on a few
+ * thousand streams and the open read as asynchronous. Building the drafts
+ * is plain code; the log sees one permit, one array walk, one level move.
  */
 const historyImport = (transcripts: StreamLogStore) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const log = yield* SessionEventLog;
-      for (const streamId of streamsParentsFirst(transcripts)) {
-        const drafts = historicalStream(transcripts, streamId);
-        if (drafts === null) continue;
-        yield* log.appendAll(
-          drafts,
-          transcripts.getTimestampRange(streamId).last ?? Date.now(),
-        );
-      }
+      const drafts = streamsParentsFirst(transcripts).flatMap((streamId) => {
+        const stream = historicalStream(transcripts, streamId);
+        if (stream === null) return [];
+        const at = transcripts.getTimestampRange(streamId).last ?? Date.now();
+        return stream.map((draft) => ({ ...draft, at }));
+      });
+      if (drafts.length > 0) yield* log.appendAll(drafts);
     }),
   );
 
@@ -428,6 +434,12 @@ function sessionGraphOpener(
   runtime: ManagedRuntime.ManagedRuntime<Sessions, never>,
 ): SessionGraphOpener {
   return (session) => {
+    // The build runs under `runSync`, so everything a root's graph does at
+    // build time, the history import included, must complete inside the
+    // scheduler's yield budget (`Scheduler.MaxOpsBeforeYield` steps per
+    // yield) or the open reads as asynchronous and throws. The import
+    // appends the whole history in one call for that reason; moving it to
+    // row open (#11865) is what removes the history pass from here.
     const scope = runtime.runSync(Scope.make());
     const context = runtime.runSync(
       Sessions.contextEffect(
