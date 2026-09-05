@@ -8,11 +8,12 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import { designTokens } from '@shared/styles';
-import type {
-  CheckboxValues,
-  DocumentFileType,
-  FileSelectConfig,
-  SessionType,
+import {
+  MainViewPersistedStateSchema,
+  type CheckboxValues,
+  type DocumentFileType,
+  type FileSelectConfig,
+  type SessionType,
 } from '@shared/schemas';
 import { dropCueStyles } from '@shared/styles/commonViewStyles';
 import { SortableController } from '@shared/litControllers/SortableController';
@@ -26,7 +27,6 @@ import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { SESSION_TYPES } from '../constants';
 import { SESSION_DEFAULTS } from '../sessionDefaults';
 import { fileSelectStyles } from '../fileSelectStyles';
-import { DEFAULT_CHECKBOX_VALUES } from '../store';
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
@@ -66,7 +66,7 @@ export class FileSelectGroup extends LitElement {
 
   /** The tool and auto-extract toggles (`Surface.launch`). */
   @property({ attribute: false }) checkboxValues: CheckboxValues =
-    DEFAULT_CHECKBOX_VALUES;
+    MainViewPersistedStateSchema.parse({});
 
   /** The launch mode: a tool-use session takes no input files. */
   @property() sessionType: SessionType = SESSION_TYPES.WORKFLOW;
@@ -75,7 +75,7 @@ export class FileSelectGroup extends LitElement {
   private fileListElement?: HTMLElement;
 
   private fileDrop = new FileDropController(this, (paths) =>
-    postDroppedFiles(paths, this.config.type),
+    postDroppedFiles(this, paths, this.config.type),
   );
 
   private sortableController = new SortableController(

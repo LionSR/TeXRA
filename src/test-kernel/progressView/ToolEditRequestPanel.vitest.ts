@@ -157,17 +157,21 @@ describe('tool-edit-request-panel', () => {
     selectDiffMenuItem(element, 'previewProposed');
     selectDiffMenuItem(element, 'showLatexdiff');
 
-    expect(actions).toStrictEqual([
-      { action: 'openDiff' },
-      { action: 'previewProposed' },
-      { action: 'showLatexdiff' },
+    expect(actions.map((request) => request.kind)).toStrictEqual([
+      'toolEditPreview',
+      'toolEditPreview',
+      'toolEditPreview',
     ]);
+    expect(
+      actions.map((request) =>
+        request.kind === 'toolEditPreview' ? request.action : null,
+      ),
+    ).toStrictEqual(['openDiff', 'previewProposed', 'showLatexdiff']);
   });
 
   it('keeps archived diff controls plain and disabled', async () => {
     const element = await mountPanel(createPermission({ isLatex: true }));
-    (element as unknown as { archived: boolean }).archived = true;
-    element.requestUpdate();
+    element.readOnly = true;
     await element.updateComplete;
 
     const button = element.shadowRoot?.querySelector(
@@ -228,7 +232,10 @@ describe('tool-edit-request-panel', () => {
     expect(element.handleKeyboardShortcut('d')).toBe(true);
     await element.updateComplete;
 
-    expect(actions).toEqual([{ action: 'openDiff' }, { action: 'openDiff' }]);
+    expect(actions).toEqual([
+      { kind: 'toolEditPreview', requestId: 'request-1', action: 'openDiff' },
+      { kind: 'toolEditPreview', requestId: 'request-1', action: 'openDiff' },
+    ]);
     expect(element.shadowRoot?.querySelector('texra-diff-view')).toBeNull();
   });
 
@@ -265,7 +272,10 @@ describe('tool-edit-request-panel', () => {
     expect(split?.canBypass).toBe(true);
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);
-    expect(actions).toEqual([{ action: 'approveSession' }]);
+    expect(actions.map((request) => request.kind)).toEqual([
+      'policy.set',
+      'decision.toolEdit',
+    ]);
   });
 
   it('ignores "a" while the rejection feedback box is open', async () => {

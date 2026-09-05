@@ -43,6 +43,7 @@ import { SessionUiEvents } from '@shared/session/uiEvents';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
+import { compareBySeqNo } from '@shared/streams/streamOrdering';
 import { formatDuration } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -60,11 +61,9 @@ import { formatLogEntry } from '../formatters';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 
 // Local imports - sibling helpers
-import { TranscriptIndex, type GroupTree } from './messageIndex';
 // Side-effect import: registers <terminal-output>, which the terminal-stream
 // render path below instantiates.
 import './TerminalOutput';
-import { ProgressEvents } from '../events';
 import type { TerminalOutput } from './TerminalOutput';
 
 const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
@@ -84,6 +83,83 @@ const taskGroupListStyles = css`
     font-variant-numeric: tabular-nums;
   }
 `;
+
+interface GroupTree {
+  group: TaskGroup;
+  children: GroupTree[];
+  rows: TranscriptRow[];
+}
+
+type TimelineEntry =
+  | { key: string; time: number; row: TranscriptRow }
+  | { key: string; time: number; tree: GroupTree };
+
+/** Wire append sequence when both rows carry one, wall-clock otherwise. */
+function compareRows(a: TranscriptRow, b: TranscriptRow): number {
+  return compareBySeqNo(
+    a,
+    b,
+    (row) => row.seqNo,
+    (row) => row.timestamp,
+  );
+}
+
+function compareGroups(a: TaskGroup, b: TaskGroup): number {
+  return compareBySeqNo(
+    a,
+    b,
+    () => undefined,
+    (group) => group.startTime,
+  );
+}
+
+/**
+ * The transcript as the list renders it: ungrouped rows (the user's
+ * inputs, follow-ups, errors) interleaved chronologically with the group
+ * trees. Rows are classified by `groupId` alone; a group whose parent is
+ * absent is a root.
+ */
+function transcriptTimeline(
+  groups: readonly TaskGroup[],
+  rows: readonly TranscriptRow[],
+): TimelineEntry[] {
+  const groupIds = new Set(groups.map((group) => group.id));
+  const children = new Map<string, TaskGroup[]>();
+  for (const group of groups) {
+    if (!group.parentGroupId || !groupIds.has(group.parentGroupId)) continue;
+    const siblings = children.get(group.parentGroupId) ?? [];
+    siblings.push(group);
+    children.set(group.parentGroupId, siblings);
+  }
+  const rowsByGroup = new Map<string, TranscriptRow[]>();
+  const ungrouped: TranscriptRow[] = [];
+  for (const row of rows.toSorted(compareRows)) {
+    if (row.groupId && groupIds.has(row.groupId)) {
+      const bucket = rowsByGroup.get(row.groupId) ?? [];
+      bucket.push(row);
+      rowsByGroup.set(row.groupId, bucket);
+    } else {
+      ungrouped.push(row);
+    }
+  }
+  const node = (group: TaskGroup): GroupTree => ({
+    group,
+    children: (children.get(group.id) ?? []).sort(compareGroups).map(node),
+    rows: rowsByGroup.get(group.id) ?? [],
+  });
+  const roots = groups
+    .filter((g) => !g.parentGroupId || !groupIds.has(g.parentGroupId))
+    .sort(compareGroups)
+    .map(node);
+  return [
+    ...ungrouped.map((row) => ({ key: row.id, time: row.timestamp, row })),
+    ...roots.map((tree) => ({
+      key: tree.group.id,
+      time: tree.group.startTime,
+      tree,
+    })),
+  ].sort((a, b) => a.time - b.time);
+}
 
 @customElement('task-group-list')
 export class TaskGroupList extends LitElement {
@@ -139,7 +215,10 @@ export class TaskGroupList extends LitElement {
   /** Track previous group statuses to detect completion (not rendered — no @state needed) */
   private previousStatuses = new Map<string, string>();
 
-  private readonly index = new TranscriptIndex();
+  /** The transcript partitioned for render: rebuilt when `groups` or
+   *  `rows` change; the rows arrive in wire order and the groups keyed, so
+   *  the partition is one pass (PRD 10.2). */
+  private timeline: TimelineEntry[] = [];
 
   /** Number of recent top-level timeline entries currently rendered. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
@@ -215,19 +294,16 @@ export class TaskGroupList extends LitElement {
     ) {
       this.checkForCompletedRuns();
     }
-    const renderWindowsStale = this.index.apply({
-      terminal: this.terminal,
-      wasTerminal: changedProperties.get('terminal') === true,
-      groups: this.groups,
-      previousGroups: changedProperties.get('groups') as
-        TaskGroup[] | undefined,
-      groupsChanged,
-      rows: this.rows,
-      previousRows: changedProperties.get('rows') as
-        TranscriptRow[] | undefined,
-      rowsChanged,
-    });
-    if (renderWindowsStale) {
+    if (this.terminal || !(groupsChanged || rowsChanged)) return;
+    this.timeline = transcriptTimeline(this.groups, this.rows);
+    // The windows count from the tail; a transcript that shrank (a
+    // replaced history) or a fresh mount no longer lines up with them.
+    const previousRows = changedProperties.get('rows') as
+      TranscriptRow[] | undefined;
+    if (
+      changedProperties.get('terminal') === true ||
+      (previousRows !== undefined && this.rows.length < previousRows.length)
+    ) {
       this.resetRenderWindows();
     }
   }
@@ -346,8 +422,8 @@ export class TaskGroupList extends LitElement {
     }
   }
 
-  private visibleTimelineEntries(): typeof this.index.timeline {
-    const timeline = this.index.timeline;
+  private visibleTimelineEntries(): TimelineEntry[] {
+    const timeline = this.timeline;
     return timeline.length <= this.timelineItemWindow
       ? timeline
       : timeline.slice(-this.timelineItemWindow);
@@ -461,7 +537,7 @@ export class TaskGroupList extends LitElement {
     // Tree roots: simple container (no collapsible), always render content.
     // Keyed on tree position (isRoot), NOT group.parentGroupId, so a re-rooted
     // orphan — a group whose parent is absent, promoted to a root by
-    // messageIndex (R2) — gets the root layout instead of nested/collapsible
+    // `transcriptTimeline` — gets the root layout instead of nested/collapsible
     // even though it retains its dangling parentGroupId.
     if (isRoot) {
       return html`
@@ -513,7 +589,9 @@ export class TaskGroupList extends LitElement {
   }
 
   private handleGettingStartedAction(action: GettingStartedAction): void {
-    this.dispatchEvent(ProgressEvents.gettingStartedAction({ action }));
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'gettingStarted', action }),
+    );
   }
 
   override render(): TemplateResult {
@@ -570,8 +648,7 @@ export class TaskGroupList extends LitElement {
     // streams render a recent window first; older timeline entries remain in
     // memory and can be revealed from the top control.
     const visibleTimeline = this.visibleTimelineEntries();
-    const hiddenTimelineCount =
-      this.index.timeline.length - visibleTimeline.length;
+    const hiddenTimelineCount = this.timeline.length - visibleTimeline.length;
 
     return html`
       ${

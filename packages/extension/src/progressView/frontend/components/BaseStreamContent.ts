@@ -10,7 +10,7 @@ import type { PermissionPayload } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
-import { totalRunUsage } from '../stateUtils';
+import { totalRunUsage } from '../usageTotals';
 import './RequestPanels';
 import './LogList';
 import './UsagePanel';
@@ -40,6 +40,7 @@ export abstract class BaseStreamContent extends LitElement {
         <request-panels
           .permissions=${permissions}
           .view=${this.view}
+          .surface=${this.surface}
           .readOnly=${this.stream?.readOnly === true}
         ></request-panels>
       </div>

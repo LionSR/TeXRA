@@ -185,19 +185,6 @@ const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
   runUsage: RunUsageMapSchema.prefault({}),
 });
 
-// Tool-Use UI State (frontend-only, preserved during backend updates)
-
-const ToolUseUIStateSchema = z.object({
-  followUpText: z.string().prefault(''),
-  /** A send is awaiting its admission ack; the draft stays until it lands. */
-  followUpSending: z.boolean().prefault(false),
-  polishedText: z.string().nullable().prefault(null),
-  polishRevision: z.int().prefault(0),
-  transcribedText: z.string().nullable().prefault(null),
-  recording: z.boolean().prefault(false),
-  shouldFocusFollowUp: z.boolean().prefault(false),
-});
-
 // Tool-Use Stream State
 
 /** Which approval kinds a run bypasses; one definition for the persisted
@@ -219,8 +206,6 @@ const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
     superYolo: false,
   }),
   goal: GoalStateSchema.prefault({ active: false }),
-  // Frontend-owned (nested under ui)
-  ui: ToolUseUIStateSchema.prefault({}),
 });
 
 export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;

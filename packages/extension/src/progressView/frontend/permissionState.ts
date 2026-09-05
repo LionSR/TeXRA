@@ -16,7 +16,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
  * kind not *keyed* by it — retry is keyed by `streamId` instead (one pending
  * retry per stream, a new request replaces the old one).
  */
-export function permissionId(permission: PermissionPayload): string {
+function permissionId(permission: PermissionPayload): string {
   return permission.kind === PERMISSION_KIND.RETRY
     ? permission.data.streamId
     : permission.data.requestId;

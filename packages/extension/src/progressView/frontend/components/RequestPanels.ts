@@ -41,6 +41,7 @@ import {
 // Local imports - shared schemas
 import type { PermissionPayload, StreamTabId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
+import type { Surface } from '@shared/session/surface';
 
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -186,6 +187,9 @@ export class RequestPanels extends LitElement {
 
   /** The selected stream's `readOnly`; every panel's actions no-op. */
   @property({ type: Boolean }) readOnly = false;
+
+  /** For the inquiry panels' drafts (`Surface.inquiryDrafts`). */
+  @property({ attribute: false }) surface: Surface | null = null;
 
   /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
   private permissionsByKind: ReadonlyMap<
@@ -351,6 +355,7 @@ export class RequestPanels extends LitElement {
       ?data-armed=${armed}
       .permission=${permission}
       .readOnly=${this.readOnly}
+      .surface=${this.surface}
     ></${config.tag}>`;
     if (!this.multiRunPending) return panel;
     const streamId = permission.data.streamId;

@@ -15,7 +15,7 @@ import type { SessionView, StreamView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 
 // Local imports - progress view
-import { totalRunUsage } from '../stateUtils';
+import { totalRunUsage } from '../usageTotals';
 import { conversationContentStyles } from './ConversationContent.styles';
 
 // Side-effect imports - register the elements rendered below
@@ -91,6 +91,7 @@ export class WorkflowStreamContent extends LitElement {
 
         <div class="conversation-column conversation-epilogue">
           <file-list
+            .streamId=${stream.id}
             .filesByRound=${stream.files}
             .failuresByRound=${stream.compileFailures}
           ></file-list>

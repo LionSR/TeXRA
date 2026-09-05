@@ -47,7 +47,7 @@ import {
 
 // Local imports - progress view
 import { workflowCallStatusIcon } from '../formatters/logFormatters/workflowCallFormatter';
-import { totalRunUsage } from '../stateUtils';
+import { totalRunUsage } from '../usageTotals';
 import { workflowRunBoardStyles } from './WorkflowRunBoard.styles';
 
 // Side-effect imports - register Web Awesome components

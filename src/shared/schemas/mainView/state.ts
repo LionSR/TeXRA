@@ -249,37 +249,6 @@ export type MultiFiles = z.infer<typeof MultiFilesSchema>;
 // valid `keyof MultiFiles` values instead of an unconstrained `z.string()`.
 const MultiFilesKeySchema = MultiFilesSchema.keyof();
 
-const FileStateContextSchema = z.object({
-  sessionType: SessionTypeSchema,
-  checkboxValues: ToolConfigFieldsSchema,
-  singleFiles: SingleFilesSchema,
-  fileOptions: FileOptionsSchema,
-  multiFiles: MultiFilesSchema,
-});
-export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
-
-const SessionContextSchema = z.object({
-  sessionType: SessionTypeSchema,
-  launchTarget: LaunchTargetSchema,
-  selectedTeamId: z.string(),
-  instruction: z.string(),
-  placeholder: z.string(),
-  agent: z.record(AgentCategorySchema, z.string()),
-  model: z.string(),
-  agentOptions: z.record(AgentCategorySchema, z.array(AgentOptionDataSchema)),
-  modelOptions: z.array(ModelOptionDataSchema),
-  teamOptions: z.array(TeamOptionDataSchema),
-  workspaceRootOptions: z.array(WorkspaceRootOptionDataSchema),
-  workingDirectory: z.string(),
-  isRecording: z.boolean(),
-  isPolishing: z.boolean(),
-  debugMode: z.boolean(),
-  isOrchestratorSelected: z.boolean(),
-  /** Last status line pushed to the panel's aria-live region. */
-  statusAnnouncement: z.string(),
-});
-export type SessionContextValue = z.infer<typeof SessionContextSchema>;
-
 const StringValueDetailSchema = z.object({
   value: z.string(),
 });

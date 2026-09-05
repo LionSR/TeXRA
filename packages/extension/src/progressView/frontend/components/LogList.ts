@@ -47,13 +47,11 @@ export class LogList extends LitElement {
     super.connectedCallback();
     this.addEventListener('click', this.handleClickEvent);
     this.addEventListener('keydown', this.handleKeyEvent);
-    this.addEventListener('file-click', this.handleFileClickEvent);
   }
 
   override disconnectedCallback(): void {
     this.removeEventListener('click', this.handleClickEvent);
     this.removeEventListener('keydown', this.handleKeyEvent);
-    this.removeEventListener('file-click', this.handleFileClickEvent);
     super.disconnectedCallback();
   }
 
@@ -192,20 +190,6 @@ export class LogList extends LitElement {
       );
     }
   }
-
-  private handleFileClickEvent = (event: Event): void => {
-    const { file, line } = (
-      event as CustomEvent<{ file: string; line?: number }>
-    ).detail;
-    if (!file) return;
-    this.dispatchEvent(
-      SessionUiEvents.host({
-        kind: 'openFile',
-        path: file,
-        line: line ?? null,
-      }),
-    );
-  };
 }
 
 declare global {

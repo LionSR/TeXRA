@@ -16,7 +16,6 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   commonViewStyles,
   designTokens,
@@ -31,7 +30,7 @@ import type {
   WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
-import { postMessage } from '@shared/hostBridge';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
@@ -433,10 +432,14 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
 
   private handleFileClick = (event: MouseEvent): void => {
     const file = (event.target as HTMLElement).dataset.file;
-    if (file) {
-      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file });
-    }
+    if (file) this.openFile(file);
   };
+
+  private openFile(path: string): void {
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'openFile', path, line: null }),
+    );
+  }
 
   // Keyboard activation parity for the clickable file-name spans (Enter/Space),
   // mirroring FileList.ts's handleFileKey delegate for the same job.
@@ -449,9 +452,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     if (!fileEl) return;
     event.preventDefault();
     const file = fileEl.dataset.file;
-    if (file) {
-      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file });
-    }
+    if (file) this.openFile(file);
   };
 
   private handleSelectChange = (event: Event): void => {

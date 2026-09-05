@@ -3,9 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { ExternalInquiryPanel } from '@progressView/frontend/components/ExternalInquiryPanel';
-import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExternalInquiryPermission } from '@shared/schemas';
+import type { SurfaceAction } from '@shared/session/surface';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
@@ -14,23 +13,8 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-interface PostedMessage {
-  command: string;
-  action?: string;
-  threadId?: string;
-  draft?: unknown;
-}
-
-let posted: PostedMessage[] = [];
-
-// hostBridge resolves this global when the panel module is first imported.
-(globalThis as Record<string, unknown>)[HOST_BRIDGE_API_KEY] = {
-  postMessage: (message: unknown) => {
-    posted.push(message as PostedMessage);
-  },
-  getState: () => undefined,
-  setState: () => undefined,
-};
+/** The surface actions a panel dispatched: its draft writes (PRD 9). */
+let posted: SurfaceAction[] = [];
 
 function createPermission(
   overrides: Partial<ExternalInquiryPermission> = {},
@@ -48,12 +32,17 @@ function createPermission(
   };
 }
 
-function mountPanel(
+async function mountPanel(
   permission: ExternalInquiryPanel['permission'] = createPermission(),
 ): Promise<ExternalInquiryPanel> {
-  return mountComponent<ExternalInquiryPanel>('external-inquiry-panel', {
-    permission,
+  const element = await mountComponent<ExternalInquiryPanel>(
+    'external-inquiry-panel',
+    { permission },
+  );
+  element.addEventListener('surface-action', (event) => {
+    posted.push(event.detail);
   });
+  return element;
 }
 
 function setTextareaValue(textarea: HTMLElement, value: string): void {
@@ -69,12 +58,7 @@ function answerInputOf(element: ExternalInquiryPanel): HTMLElement {
 
 function expectDraftPosted(threadId: string, draft: unknown): void {
   expect(posted).toEqual([
-    {
-      command: PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION,
-      action: 'draft',
-      threadId,
-      draft,
-    },
+    { kind: 'inquiryDraft', key: `${threadId}#0`, draft },
   ]);
 }
 
@@ -139,7 +123,9 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
 
     expect(actions).toEqual([
       {
-        action: 'submit',
+        kind: 'externalInquiry.submit',
+        streamId: 'stream-1',
+        threadId: 'ei_000000000000',
         answer: 'the answer',
         sessionLinks: ['https://chatgpt.com/c/abc'],
       },

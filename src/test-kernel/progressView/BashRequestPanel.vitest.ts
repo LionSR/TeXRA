@@ -80,6 +80,22 @@ describe('bash-request-panel', () => {
     expect(split?.canBypass).toBe(true);
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);
-    expect(actions).toEqual([{ action: 'approveSession' }]);
+    expect(actions).toEqual([
+      {
+        kind: 'policy.set',
+        change: {
+          field: 'bypass',
+          streamId: 'stream-1',
+          bypass: 'bash',
+          enabled: true,
+        },
+      },
+      {
+        kind: 'decision.bash',
+        streamId: 'stream-1',
+        approvalId: 'bash-request-1',
+        decision: { action: 'approve' },
+      },
+    ]);
   });
 });

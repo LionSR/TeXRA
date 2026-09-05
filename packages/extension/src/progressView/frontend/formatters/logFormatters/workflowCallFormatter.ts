@@ -2,13 +2,13 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - progress view
-import { ProgressEvents } from '@progressView/frontend/events';
 
 // Local imports - shared contracts
 import { type StreamTabId, type WorkflowCallProgress } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { assertNever } from '@utils/core';
 
 /** One icon per call status, for a card and for a board row alike. */
@@ -67,7 +67,7 @@ export function formatWorkflowCallTemplate(
   const openChildStream = (event: Event): void => {
     if (childStreamId === undefined) return;
     event.currentTarget?.dispatchEvent(
-      ProgressEvents.streamSwitch({ streamId: childStreamId }),
+      SessionUiEvents.surface({ kind: 'select', streamId: childStreamId }),
     );
   };
   const handleKeydown = (event: KeyboardEvent): void => {

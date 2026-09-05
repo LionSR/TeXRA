@@ -15,7 +15,7 @@
  */
 
 // Third-party imports
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
@@ -31,10 +31,21 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
-import { signalWatcherWebviewAppBase } from '@shared/BaseWebviewApp';
 import '@shared/wa/spinner';
-import type { ProgressViewOutboundMessage } from '@shared/schemas';
+import type {
+  AgentConfigBannerActionDetail,
+  ApiKeyBannerActionDetail,
+  CheckboxChangeDetail,
+  GettingStartedActionDetail,
+  InstallGuideDetail,
+  MultipleFilesActionDetail,
+  MultipleFilesTypeActionDetail,
+  RemoveFileDetail,
+  ReorderFilesDetail,
+} from '@shared/schemas';
 import { designTokens } from '@shared/styles';
+import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
+import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { resolveSelected, type Surface } from '@shared/session/surface';
@@ -46,27 +57,29 @@ import { getBasename } from '@utils/core';
 
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
-import { dispatchMessage } from './messageDispatcher';
-import { resetProgressState } from './progressState';
 import './components/StreamTabs';
 import './components/StreamConversation';
 import './components/SessionComposer';
 import './components/SessionDrawer';
 import './components/ToolsSheet';
+import '@webview/frontend/components/AgentConfigBanner';
+import '@webview/frontend/components/ApiKeyBanner';
+import '@webview/frontend/components/DependencyBanner';
 import '@webview/frontend/components/FileSelectGroup';
+import '@webview/frontend/components/GettingStartedBanner';
+import '@webview/frontend/components/LoginBanner';
+import '@webview/frontend/components/OnboardingSetupCard';
+import '@webview/frontend/components/OnboardingWelcomeCard';
 
 registerTeXRAWebAwesomeIcons();
 
-const ProgressAppBase =
-  signalWatcherWebviewAppBase<ProgressViewOutboundMessage>();
-
-/** The launcher's multi-file lists, keyed the way `Surface.launch` holds them. */
-const LAUNCH_FILE_LISTS = {
-  input: 'inputFiles',
-  context: 'contextFiles',
-  media: 'mediaFiles',
-  output: 'outputFiles',
-} as const;
+/** A file list's `type`, from the `Surface.launch` field it edits. */
+const FILE_TYPE_BY_LIST = Object.fromEntries(
+  Object.entries(LAUNCH_FILE_LISTS).map(([type, list]) => [list, type]),
+) as Record<
+  (typeof LAUNCH_FILE_LISTS)[keyof typeof LAUNCH_FILE_LISTS],
+  keyof typeof LAUNCH_FILE_LISTS
+>;
 
 type OverflowItem =
   | 'popOut'
@@ -86,9 +99,8 @@ function menuValue(event: Event): string {
 }
 
 @customElement('progress-app')
-export class ProgressApp extends ProgressAppBase {
-  // Static 'styles' override lost through mixin type erasure; still works at runtime.
-  static styles = [designTokens, progressAppStyles];
+export class ProgressApp extends LitElement {
+  static override styles = [designTokens, progressAppStyles];
 
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
@@ -96,17 +108,9 @@ export class ProgressApp extends ProgressAppBase {
   /** The host's clock, for elapsed readings (G4). */
   @property({ type: Number }) nowMs: number | null = null;
 
-  constructor() {
-    super();
-    // The message sink is module-scoped; a fresh app starts it from a
-    // clean slate (a remount in the same JS context: tests, hot reload).
-    resetProgressState();
-  }
-
-  protected override handleMessage(raw: unknown): void {
-    dispatchMessage(raw, (error) => {
-      this.logMessageSchemaError('[ProgressApp]', raw, error);
-    });
+  override connectedCallback(): void {
+    super.connectedCallback();
+    installToolbarTooltips();
   }
 
   private selectNew = (): void => {
@@ -361,6 +365,10 @@ export class ProgressApp extends ProgressAppBase {
     `;
   }
 
+  private patchLaunch(patch: Partial<Surface['launch']>): void {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
+  }
+
   private handleSearchInput = (event: Event): void => {
     const value = (event.target as HTMLInputElement).value;
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'search', value }));
@@ -390,11 +398,103 @@ export class ProgressApp extends ProgressAppBase {
     `;
   }
 
+  /** The five banners and the setup card, host-owned state (8.1); each
+   *  action leaves as the `host.request` arm it names. */
+  private renderBanners(host: HostSnapshot, surface: Surface): TemplateResult {
+    const { banners } = host;
+    const hostRequest = (request: Parameters<typeof SessionUiEvents.host>[0]) =>
+      this.dispatchEvent(SessionUiEvents.host(request));
+    return html`
+      ${
+        host.onboarding === 'setup'
+          ? html`<onboarding-setup-card
+              @onboarding-run-setup=${() =>
+                hostRequest({ kind: 'onboarding', action: 'runSetup' })}
+              @onboarding-open-getting-started=${() =>
+                hostRequest({
+                  kind: 'onboarding',
+                  action: 'openGettingStarted',
+                })}
+              @onboarding-skip-setup=${() =>
+                hostRequest({ kind: 'onboarding', action: 'skipSetup' })}
+            ></onboarding-setup-card>`
+          : nothing
+      }
+      <div
+        class="banners"
+        @api-key-action=${({ detail }: CustomEvent<ApiKeyBannerActionDetail>) =>
+          hostRequest({
+            kind: 'apiKeyBanner',
+            action: detail.action,
+            provider: banners.apiKey.provider,
+          })}
+        @agent-config-action=${({
+          detail,
+        }: CustomEvent<AgentConfigBannerActionDetail>) =>
+          hostRequest({
+            kind: 'agentConfigBanner',
+            action: detail.action,
+            sessionType: surface.launch.sessionType,
+            customDirSet: banners.agentConfig.customDirSet,
+          })}
+        @dependency-dismiss=${() =>
+          hostRequest({ kind: 'dismissBanner', banner: 'dependency' })}
+        @recheck-dependencies=${() =>
+          hostRequest({ kind: 'recheckDependencies' })}
+        @open-install-guide=${({ detail }: CustomEvent<InstallGuideDetail>) =>
+          hostRequest({ kind: 'openInstallGuide', tool: detail.tool })}
+        @sign-in=${() => hostRequest({ kind: 'signIn' })}
+        @dismiss-login=${() =>
+          hostRequest({ kind: 'dismissBanner', banner: 'login' })}
+        @dismiss-getting-started=${() =>
+          hostRequest({ kind: 'dismissBanner', banner: 'gettingStarted' })}
+        @getting-started-action=${({
+          detail,
+        }: CustomEvent<GettingStartedActionDetail>) =>
+          hostRequest({ kind: 'gettingStarted', action: detail.action })}
+      >
+        <api-key-banner .state=${banners.apiKey}></api-key-banner>
+        <agent-config-banner
+          .state=${banners.agentConfig}
+        ></agent-config-banner>
+        <dependency-banner .state=${banners.dependency}></dependency-banner>
+        <getting-started-banner
+          .visible=${banners.gettingStarted}
+        ></getting-started-banner>
+        <login-banner .visible=${banners.login}></login-banner>
+      </div>
+    `;
+  }
+
   private renderEmptyState(
     view: SessionView,
     surface: Surface,
     host: HostSnapshot,
   ): TemplateResult {
+    if (host.onboarding === 'needs-credential') {
+      // Without a credential the pickers and files are meaningless: the
+      // welcome card replaces the whole New-task state.
+      const onboarding = (
+        action: Extract<
+          Parameters<typeof SessionUiEvents.host>[0],
+          { kind: 'onboarding' }
+        >['action'],
+      ) =>
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: 'onboarding', action }),
+        );
+      return html`
+        <div class="empty">
+          <onboarding-welcome-card
+            @welcome-chatgpt=${() => onboarding('signInChatGpt')}
+            @welcome-api-key=${() => onboarding('setApiKey')}
+            @welcome-skip=${() => onboarding('skip')}
+            @onboarding-open-getting-started=${() =>
+              onboarding('openGettingStarted')}
+          ></onboarding-welcome-card>
+        </div>
+      `;
+    }
     const { launch } = surface;
     const selectedFiles = host.fileConfigs.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
@@ -414,6 +514,7 @@ export class ProgressApp extends ProgressAppBase {
               review, a literature pass, a proof check.
             </p>
           </section>
+          ${this.renderBanners(host, surface)}
           <wa-details class="context">
             <span slot="summary" class="context-summary"
               >${waIcon('file-circle-plus')} Context and attachments
@@ -425,7 +526,47 @@ export class ProgressApp extends ProgressAppBase {
                 }</span
               ></span
             >
-            <div class="context-body">
+            <div
+              class="context-body"
+              @add-opened-files=${({
+                detail,
+              }: CustomEvent<MultipleFilesTypeActionDetail>) => {
+                if (detail.type === 'output') return;
+                this.dispatchEvent(
+                  SessionUiEvents.host({
+                    kind: 'addOpenedFiles',
+                    fileType: detail.type,
+                  }),
+                );
+              }}
+              @select-multiple-files=${({
+                detail,
+              }: CustomEvent<MultipleFilesActionDetail>) => {
+                const fileType = FILE_TYPE_BY_LIST[detail.listId];
+                if (fileType === 'output') return;
+                this.dispatchEvent(
+                  SessionUiEvents.host({ kind: 'pickFiles', fileType }),
+                );
+              }}
+              @empty-files=${({
+                detail,
+              }: CustomEvent<MultipleFilesTypeActionDetail>) =>
+                this.patchLaunch({ [LAUNCH_FILE_LISTS[detail.type]]: [] })}
+              @remove-file=${({ detail }: CustomEvent<RemoveFileDetail>) =>
+                this.patchLaunch({
+                  [detail.listId]: launch[detail.listId].filter(
+                    (file) => file !== detail.file,
+                  ),
+                })}
+              @files-reordered=${({
+                detail,
+              }: CustomEvent<ReorderFilesDetail>) =>
+                this.patchLaunch({ [detail.listId]: detail.files })}
+              @checkbox-change=${({
+                detail,
+              }: CustomEvent<CheckboxChangeDetail>) =>
+                this.patchLaunch({ [detail.id]: detail.checked })}
+            >
               ${repeat(
                 host.fileConfigs,
                 (config) => config.type,

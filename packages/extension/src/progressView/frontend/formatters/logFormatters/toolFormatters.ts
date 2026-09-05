@@ -18,8 +18,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 // Local imports - shared utilities
 import type { ToolRow } from '@shared/transcript';
 import { parseDelegationToolInput, TOOL_USE_STATUS } from '@shared/schemas';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOL_CATEGORY,
@@ -165,7 +164,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
   // itself, so nothing has to survive a round trip through a DOM attribute.
   // prettier-ignore
   const setupButton = proposal
-    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" @click=${(event: Event) => { event.preventDefault(); postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, { proposal }); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Restore setup</button>`
+    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" @click=${(event: Event) => { event.preventDefault(); event.currentTarget?.dispatchEvent(SessionUiEvents.host({ kind: 'restoreProposalConfig', proposal })); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Restore setup</button>`
     : nothing;
   // prettier-ignore
   const extraContent = html`${timerTemplate ?? nothing}${row.spillPath ? buildSpillArtifactButton(row.spillPath) : nothing}${setupButton}`;

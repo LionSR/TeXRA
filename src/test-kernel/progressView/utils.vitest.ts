@@ -1,7 +1,6 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { getComposedPathElement } from '@progressView/frontend/utils';
-import { updateRounds } from '@progressView/frontend/stateUtils';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
 type RoundItems = Record<string, string[]>;
@@ -57,31 +56,6 @@ describe('getComposedPathElement', () => {
         null,
       );
     });
-  });
-});
-
-describe('updateRounds', () => {
-  it.each<UpdateRoundsCase>([
-    {
-      title: 'replaces all rounds on reset',
-      current: { round1: ['a'], round2: ['b'] },
-      update: { reset: true, rounds: { round3: ['c'] } },
-      expected: { round3: ['c'] },
-    },
-    {
-      title: 'clears all rounds on reset without rounds',
-      current: { round1: ['a'], round2: ['b'] },
-      update: { reset: true },
-      expected: {},
-    },
-    {
-      title: 'merges new rounds into existing ones',
-      current: { round1: ['a'] },
-      update: { rounds: { round2: ['b'] } },
-      expected: { round1: ['a'], round2: ['b'] },
-    },
-  ])('$title', ({ current, update, expected }) => {
-    expect(updateRounds(current, update)).toEqual(expected);
   });
 });
 

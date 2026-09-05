@@ -15,7 +15,7 @@
  */
 
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -25,8 +25,6 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { postMessage } from '@shared/hostBridge';
 import type {
   ExternalInquiryPermission,
   InquiryDraft,
@@ -43,14 +41,10 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { createFlushableDebounce, tryParseUrl } from '@utils/core';
 
-import {
-  clearInquiryDraft,
-  getInquiryDraft,
-  isInquiryDraftResolved,
-  setInquiryDraft,
-} from '../slices/inquiryDraftState';
+import type { Surface } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
+import { createFlushableDebounce, tryParseUrl } from '@utils/core';
 import {
   BaseFeedbackPanel,
   REDIRECT_FEEDBACK_PROMPT,
@@ -67,13 +61,11 @@ type ExternalInquiryPermissionState = Extract<
 const DRAFT_SAVE_DELAY_MS = 400;
 const INQUIRY_SUBMIT_ACTION = 'submit';
 
-interface InquiryPermissionIds {
-  requestId: string;
-  threadId: string;
-}
-
-interface PendingDraftSave extends InquiryPermissionIds {
-  draft: InquiryDraft | null;
+/** `Surface.inquiryDrafts` is keyed by inquiry turn, never by stream
+ *  (PRD 9): the thread and the number of turns already answered. */
+function draftKey(permission: ExternalInquiryPermissionState): string {
+  const { threadId, transcript } = permission.data;
+  return `${threadId}#${transcript?.length ?? 0}`;
 }
 
 interface ValidatableTextarea extends HTMLElement {
@@ -86,10 +78,6 @@ function safeHttpUrl(link: string): string | undefined {
   return url && (url.protocol === 'http:' || url.protocol === 'https:')
     ? url.href
     : undefined;
-}
-
-function idsEqual(a: InquiryPermissionIds, b: InquiryPermissionIds): boolean {
-  return a.requestId === b.requestId && a.threadId === b.threadId;
 }
 
 // ── Component ──
@@ -106,39 +94,45 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   @state() private answerText = '';
   @state() private sessionLinksText = '';
 
+  /** The surface whose `inquiryDrafts` holds this inquiry's answer in progress. */
+  @property({ attribute: false }) surface: Surface | null = null;
+
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
-  private pendingDraftSave: PendingDraftSave | undefined;
+  /** The key the pending debounced write belongs to. */
+  private pendingDraftKey: string | null = null;
   private readonly draftSaveDebounce = createFlushableDebounce(() => {
-    const pending = this.pendingDraftSave;
-    this.pendingDraftSave = undefined;
-    if (!pending) return;
-    if (!idsEqual(this.getPermissionIds(), pending)) return;
-    this.writeDraft(pending, pending.draft, { persist: true });
+    const key = this.pendingDraftKey;
+    this.pendingDraftKey = null;
+    if (key === null) return;
+    this.writeDraft(key, this.currentDraft());
   }, DRAFT_SAVE_DELAY_MS);
 
   // ── Lifecycle ──
 
   override disconnectedCallback(): void {
-    this.flushDraft();
+    this.draftSaveDebounce.flush();
     super.disconnectedCallback();
   }
 
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
     if (changed.has('permission')) {
-      const previousPermission = changed.get('permission') as
-        ExternalInquiryPermissionState | undefined;
-      if (previousPermission) this.flushDraft(previousPermission);
+      // The text still belongs to the previous inquiry here: a pending
+      // write lands on its key before the fields reset for the new one.
+      this.draftSaveDebounce.flush();
       this.answerText = '';
       this.sessionLinksText = '';
       this.draftRestored = false;
     }
-    // Restore draft once on first update (avoids the extra render from connectedCallback).
+    // Restore the draft once on first update (avoids the extra render from
+    // connectedCallback): the surface's entry, else the hydrated one.
     if (!this.draftRestored) {
       this.draftRestored = true;
       const data = this.permission.data;
-      const draft = getInquiryDraft(data.requestId) ?? data.draft;
+      const draft =
+        this.surface?.inquiryDrafts.get(draftKey(this.permission)) ??
+        data.draft;
       if (draft) {
         this.answerText = draft.answer;
         this.sessionLinksText = draft.sessionLinks;
@@ -154,61 +148,28 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     };
   }
 
-  private getPermissionIds(
-    permission: ExternalInquiryPermissionState = this.permission,
-  ): InquiryPermissionIds {
-    const { data } = permission;
-    return {
-      requestId: data.requestId,
-      threadId: data.threadId ?? data.requestId,
-    };
-  }
-
-  private writeDraft(
-    ids: InquiryPermissionIds,
-    draft: InquiryDraft | null,
-    options: { persist: boolean },
-  ): void {
-    if (isInquiryDraftResolved(ids.requestId)) return;
-    setInquiryDraft(ids.requestId, draft);
-    if (options.persist) {
-      postMessage(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION, {
-        action: 'draft',
-        threadId: ids.threadId,
-        draft,
-      });
-    }
+  private writeDraft(key: string, draft: InquiryDraft | null): void {
+    this.dispatchEvent(
+      SessionUiEvents.surface({ kind: 'inquiryDraft', key, draft }),
+    );
   }
 
   private scheduleDraftSave(): void {
-    // Read-only trace-viewer export: no live backend for a draft to reach.
+    // Read-only trace-viewer export: nothing owns a draft.
     if (this.readOnly) return;
-    const ids = this.getPermissionIds();
-    const draft = this.currentDraft();
-    this.writeDraft(ids, draft, { persist: false });
-    this.pendingDraftSave = { ...ids, draft };
+    this.pendingDraftKey = draftKey(this.permission);
     this.draftSaveDebounce.schedule();
   }
 
-  private flushDraft(
-    permission: ExternalInquiryPermissionState = this.permission,
+  /** A decision resolves the inquiry: its draft goes with it. */
+  protected override emitAction(
+    decision: Parameters<BaseFeedbackPanel<'externalInquiry'>['emitAction']>[0],
   ): void {
-    const ids = this.getPermissionIds(permission);
-    const pending = this.pendingDraftSave;
-    if (pending && idsEqual(pending, ids)) {
-      if (idsEqual(this.getPermissionIds(), ids)) {
-        this.draftSaveDebounce.flush();
-        return;
-      }
-
-      // During a permission replacement, Lit has already assigned the new
-      // permission. Cancel the timer and persist the saved old draft directly.
-      this.draftSaveDebounce.cancel();
-      this.pendingDraftSave = undefined;
-      this.writeDraft(ids, pending.draft, { persist: true });
-      return;
-    }
-    this.writeDraft(ids, this.currentDraft(), { persist: true });
+    if (this.readOnly) return;
+    this.draftSaveDebounce.cancel();
+    this.pendingDraftKey = null;
+    this.writeDraft(draftKey(this.permission), null);
+    super.emitAction(decision);
   }
 
   // ── Render ──
@@ -586,8 +547,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     }
 
     const answer = this.answerText.trim();
-
-    clearInquiryDraft(this.permission.data.requestId);
 
     this.emitAction({
       action: INQUIRY_SUBMIT_ACTION,

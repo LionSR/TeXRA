@@ -98,7 +98,7 @@ function entries<K extends z.ZodType, V extends z.ZodType>(key: K, value: V) {
  * a surface saved by an older build is still a valid surface; a corrupt
  * field fails the parse loudly rather than becoming a silent default.
  */
-const PersistedSurfaceSchema = z.object({
+export const PersistedSurfaceSchema = z.object({
   selected: StreamTabIdSchema.nullable().prefault(null),
   launch: LaunchSurfaceSchema.prefault({}),
   /** Text only; images and the polished and transcribed variants are not. */
@@ -111,13 +111,14 @@ const PersistedSurfaceSchema = z.object({
   drawerOpen: z.boolean().prefault(false),
   workbench: z.record(z.string(), z.unknown()).nullable().prefault(null),
 });
-type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
+export type PersistedSurface = z.infer<typeof PersistedSurfaceSchema>;
 
 export function emptySurface(session: string): Surface {
-  return surfaceFromPersisted(session, PersistedSurfaceSchema.parse({}));
+  return loadSurface(session, PersistedSurfaceSchema.parse({}));
 }
 
-function surfaceFromPersisted(
+/** The signal record from its persisted form: entry arrays back into Maps. */
+export function loadSurface(
   session: string,
   persisted: PersistedSurface,
 ): Surface {
@@ -141,6 +142,57 @@ function surfaceFromPersisted(
     search: '',
     workbench: persisted.workbench,
   };
+}
+
+/** The persisted form of a surface: interaction state only, Maps as entries. */
+export function persistSurface(surface: Surface): PersistedSurface {
+  return {
+    selected: surface.selected,
+    launch: surface.launch,
+    drafts: [...surface.drafts]
+      .filter(([, draft]) => draft.text.length > 0)
+      .map(([id, draft]) => [id, draft.text]),
+    inquiryDrafts: [...surface.inquiryDrafts],
+    expanded: [...surface.expanded],
+    groups: [...surface.groups].map(([id, groups]) => [id, [...groups]]),
+    phase: [...surface.phase],
+    scroll: [...surface.scroll],
+    drawerOpen: surface.drawerOpen,
+    workbench: surface.workbench,
+  };
+}
+
+function retain<V>(
+  map: ReadonlyMap<StreamTabId, V>,
+  view: SessionView,
+): ReadonlyMap<StreamTabId, V> {
+  if ([...map.keys()].every((id) => view.streams.has(id))) return map;
+  return new Map([...map].filter(([id]) => view.streams.has(id)));
+}
+
+/**
+ * Every per-stream map drops its entry when that stream leaves the view
+ * (PRD 9): an id is never reused, so the entry can never become valid
+ * again, and without the prune the maps and the persisted form grow without
+ * bound and keep a deleted conversation's draft. Returns the same record
+ * when nothing left.
+ */
+export function pruneSurface(surface: Surface, view: SessionView): Surface {
+  const drafts = retain(surface.drafts, view);
+  const expanded = retain(surface.expanded, view);
+  const groups = retain(surface.groups, view);
+  const phase = retain(surface.phase, view);
+  const scroll = retain(surface.scroll, view);
+  if (
+    drafts === surface.drafts &&
+    expanded === surface.expanded &&
+    groups === surface.groups &&
+    phase === surface.phase &&
+    scroll === surface.scroll
+  ) {
+    return surface;
+  }
+  return { ...surface, drafts, expanded, groups, phase, scroll };
 }
 
 /**
