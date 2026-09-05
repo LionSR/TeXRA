@@ -103,8 +103,9 @@ export const conversationContentStyles: CSSResult = css`
     );
   }
 
-  .conversation-composer-dock follow-up-input {
+  .conversation-composer-dock session-banners {
     display: block;
+    padding: 0 var(--wa-space-3xs);
   }
 
   .conversation-composer-banner {

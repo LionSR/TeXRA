@@ -34,6 +34,7 @@ import {
 } from '@shared/session/surface';
 import { PersistedState } from '@shared/state/PersistedState';
 
+import { playCompletionSound } from './audioNotification';
 import {
   installWebviewTransport,
   transcriptAggregates,
@@ -59,6 +60,10 @@ export interface SessionSurfaces {
   act(key: string, action: SurfaceAction): void;
   runtimeRequest(key: string, request: RuntimeRequest): void;
   hostRequest(key: string, request: HostRequest): void;
+  /** The composer's Send for the resolved selection: a follow-up to the
+   *  selected stream, else a launch from the launcher's instruction. The
+   *  button and the run accelerator both land here. */
+  submit(key: string): void;
   /** Fires after any session's view, surface, or host changed. */
   onChange(listener: () => void): () => void;
   dispose(): void;
@@ -334,17 +339,86 @@ export function createSessionSurfaces(options: {
       });
   }
 
+  function runtimeRequestFor(entry: Held, request: RuntimeRequest): void {
+    const { key } = entry;
+    if (request.kind === 'followUp.send') {
+      const current = entry.surface$.get();
+      if (current.sending.has(request.streamId)) return;
+      setSurface(entry, {
+        ...current,
+        sending: new Set([...current.sending, request.streamId]),
+      });
+    }
+    // Keep text and images until admission succeeds. A rejection needs
+    // no restoration, and a later edit remains independent of this send.
+    const submitted =
+      request.kind === 'followUp.send'
+        ? entry.surface$.get().drafts.get(request.streamId)
+        : undefined;
+    void transport
+      .request({
+        kind: 'runtime.request',
+        session: key,
+        requestId: requestId(),
+        request,
+      })
+      .then((result) => {
+        if (held.get(key) !== entry || request.kind !== 'followUp.send') return;
+        const current = entry.surface$.get();
+        const sending = new Set(current.sending);
+        sending.delete(request.streamId);
+        setSurface(entry, { ...current, sending });
+        if (!result.ok) return;
+        if (
+          submitted !== undefined &&
+          entry.surface$.get().drafts.get(request.streamId) === submitted
+        ) {
+          act(entry, {
+            kind: 'draft',
+            streamId: request.streamId,
+            patch: EMPTY_DRAFT,
+          });
+        }
+      });
+  }
+
+  /** A follow-up sends once the host has stored every pasted image; an
+   *  empty draft, like an empty launcher instruction, sends nothing. */
+  function submit(entry: Held): void {
+    const surface = entry.surface$.get();
+    const streamId = resolveSelected(entry.view$.get(), surface);
+    if (streamId !== null) {
+      const draft = surface.drafts.get(streamId) ?? EMPTY_DRAFT;
+      const text = draft.text.trim();
+      if (text === '' && draft.images.length === 0) return;
+      if (draft.images.some((image) => image.path === null)) return;
+      const mediaFiles = draft.images.flatMap((image) =>
+        image.path === null ? [] : [image.path],
+      );
+      runtimeRequestFor(entry, {
+        kind: 'followUp.send',
+        streamId,
+        text: text === '' ? '(image)' : text,
+        mediaFiles: mediaFiles.length > 0 ? mediaFiles : null,
+      });
+      return;
+    }
+    const { launch } = surface;
+    const instruction = launch.instruction[launch.sessionType].trim();
+    if (instruction === '') return;
+    hostRequestFor(entry, { kind: 'launch', launch, instruction });
+  }
+
   transport.onSurfaceAction((key, action) => {
     const entry = held.get(key);
     if (!entry) return;
-    if (action.kind === 'submitLaunch') {
-      // The run accelerator: send the launcher's instruction as the
-      // composer would.
-      const { launch } = entry.surface$.get();
-      const instruction = launch.instruction[launch.sessionType].trim();
-      if (instruction !== '') {
-        hostRequestFor(entry, { kind: 'launch', launch, instruction });
-      }
+    if (action.kind === 'chime') {
+      // The host already decided the transition and chose this port.
+      playCompletionSound();
+      return;
+    }
+    if (action.kind === 'submit') {
+      submit(entry);
       return;
     }
     act(entry, action);
@@ -374,51 +448,15 @@ export function createSessionSurfaces(options: {
     },
     runtimeRequest(key, request) {
       const entry = held.get(key);
-      if (!entry) return;
-      if (request.kind === 'followUp.send') {
-        const current = entry.surface$.get();
-        if (current.sending.has(request.streamId)) return;
-        setSurface(entry, {
-          ...current,
-          sending: new Set([...current.sending, request.streamId]),
-        });
-      }
-      // Keep text and images until admission succeeds. A rejection needs
-      // no restoration, and a later edit remains independent of this send.
-      const submitted =
-        request.kind === 'followUp.send'
-          ? entry.surface$.get().drafts.get(request.streamId)
-          : undefined;
-      void transport
-        .request({
-          kind: 'runtime.request',
-          session: key,
-          requestId: requestId(),
-          request,
-        })
-        .then((result) => {
-          if (held.get(key) !== entry || request.kind !== 'followUp.send')
-            return;
-          const current = entry.surface$.get();
-          const sending = new Set(current.sending);
-          sending.delete(request.streamId);
-          setSurface(entry, { ...current, sending });
-          if (!result.ok) return;
-          if (
-            submitted !== undefined &&
-            entry.surface$.get().drafts.get(request.streamId) === submitted
-          ) {
-            act(entry, {
-              kind: 'draft',
-              streamId: request.streamId,
-              patch: EMPTY_DRAFT,
-            });
-          }
-        });
+      if (entry) runtimeRequestFor(entry, request);
     },
     hostRequest(key, hostRequest) {
       const entry = held.get(key);
       if (entry) hostRequestFor(entry, hostRequest);
+    },
+    submit(key) {
+      const entry = held.get(key);
+      if (entry) submit(entry);
     },
     onChange(listener) {
       listeners.add(listener);

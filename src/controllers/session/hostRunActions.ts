@@ -354,6 +354,6 @@ export function createHostRunActions(
 /** The launcher's form of a run configuration (PRD 8.5, `launch`). */
 export function launchPatchOf(config: AgentConfig) {
   const state = buildMainViewState(config);
-  const { openedFiles: _opened, latexdiffsVisible: _diffs, ...launch } = state;
+  const { openedFiles: _opened, ...launch } = state;
   return launch;
 }
