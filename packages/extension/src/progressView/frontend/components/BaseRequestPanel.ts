@@ -2,7 +2,6 @@
 
 // Third-party imports
 import { LitElement } from 'lit';
-import { consume } from '@lit/context';
 import { property } from 'lit/decorators.js';
 
 // Local imports - shared schemas
@@ -15,9 +14,6 @@ import {
   type PermissionKind,
 } from '../events';
 
-// Local imports - progress view contexts
-import { archivedContext } from '../streamContexts';
-
 export abstract class BaseRequestPanel<
   K extends PermissionKind = PermissionKind,
 > extends LitElement {
@@ -27,20 +23,19 @@ export abstract class BaseRequestPanel<
   >;
 
   /**
-   * True in the read-only trace-viewer export, where there is no live
-   * backend for a permission action to reach. The single chokepoint every
-   * subclass's buttons/keyboard shortcuts ultimately call through
-   * (`emitAction`) no-ops here, so no subclass has to remember to check this
-   * itself.
+   * The stream's `readOnly` (PRD 5.2): another live owner holds it, it is
+   * unreadable, or the surface is an archived export with no backend for a
+   * decision to reach. The single chokepoint every subclass's buttons and
+   * keyboard shortcuts call through (`emitAction`) no-ops here, so no
+   * subclass has to remember to check this itself.
    */
-  @consume({ context: archivedContext, subscribe: true })
-  protected archived = false;
+  @property({ type: Boolean }) readOnly = false;
 
   /** Handle keyboard shortcut from container. Returns true if handled. */
   abstract handleKeyboardShortcut(key: string): boolean;
 
   protected emitAction(decision: PermissionDecision<K>): void {
-    if (this.archived) return;
+    if (this.readOnly) return;
     this.dispatchEvent(
       ProgressEvents.permissionAction(this.permission, decision),
     );

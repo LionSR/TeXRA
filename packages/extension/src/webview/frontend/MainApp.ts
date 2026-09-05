@@ -87,6 +87,7 @@ import {
   sessionContext$,
   sessionHintDismissed$,
   sessionType$,
+  checkboxValues$,
   singleFiles$,
 } from './mainViewState';
 import {
@@ -495,6 +496,9 @@ export class MainApp extends MainAppBase {
           (config) => html`
             <file-select-group
               .config=${config}
+              .files=${files[MULTI_FILE_LISTS[config.type].key]}
+              .checkboxValues=${checkboxValues$.get()}
+              .sessionType=${sessionType$.get()}
               @add-opened-files=${({
                 detail,
               }: CustomEvent<MultipleFilesTypeActionDetail>) => {

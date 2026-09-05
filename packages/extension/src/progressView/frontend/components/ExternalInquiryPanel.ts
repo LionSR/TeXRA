@@ -182,7 +182,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
 
   private scheduleDraftSave(): void {
     // Read-only trace-viewer export: no live backend for a draft to reach.
-    if (this.archived) return;
+    if (this.readOnly) return;
     const ids = this.getPermissionIds();
     const draft = this.currentDraft();
     this.writeDraft(ids, draft, { persist: false });
@@ -521,7 +521,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           title: 'Submit the answer from the external model',
           action: INQUIRY_SUBMIT_ACTION,
           kind: 'primary',
-          disabled: this.archived,
+          disabled: this.readOnly,
           onClick: this.handleSubmit,
         })}
         ${this.renderRejectButton('Reject this external inquiry (n)')}
@@ -553,7 +553,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   }
 
   private handleSubmit(): void {
-    if (this.archived) return;
+    if (this.readOnly) return;
     const answerInput = this.renderRoot.querySelector<ValidatableTextarea>(
       '.external-inquiry-request__answer-input',
     );

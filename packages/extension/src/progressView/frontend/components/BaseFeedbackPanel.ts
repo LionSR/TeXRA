@@ -38,7 +38,7 @@ export abstract class BaseFeedbackPanel<
   override handleKeyboardShortcut(key: string): boolean {
     // Read-only trace-viewer export: no action can reach a live backend, so
     // none of the accelerators should appear to do anything either.
-    if (this.archived) return false;
+    if (this.readOnly) return false;
     switch (key) {
       case 'n':
         this.handleRejectAction();
@@ -105,7 +105,7 @@ export abstract class BaseFeedbackPanel<
       text: this.showFeedback ? 'Send rejection' : 'Reject',
       title: this.showFeedback ? 'Send rejection (n)' : rejectTitle,
       action: 'reject',
-      disabled: this.archived,
+      disabled: this.readOnly,
       onClick: () => this.handleRejectAction(),
     });
   }
@@ -130,7 +130,7 @@ export abstract class BaseFeedbackPanel<
           resize="vertical"
           autocomplete="off"
           spellcheck="true"
-          ?disabled=${this.archived}
+          ?disabled=${this.readOnly}
           data-feedback-input
           @keydown=${this.handleFeedbackKeydown}
         ></wa-textarea>

@@ -1,29 +1,17 @@
 /**
- * Collapsible panel for displaying background tasks (subagents and inquiries).
- *
- * Uses `<wa-details>` for the outer panel, and — only when both the Subagents
- * and Inquiries sections are populated — a nested `.collapsible-quiet`
- * `<wa-details>` per section; a lone section renders its rows directly under
- * the outer panel. Every roster row owns a stream tab, so every row — live
- * process (background bash) rows included — navigates to it.
- *
- * Rows are live children followed by the finished children the backend retains
- * (`ActiveChildInfo.finishedAt`); finished process rows are ephemeral, their
- * tabs are gone, and they are filtered out here rather than rendered as dead
- * links. This panel never counts what it cannot list.
+ * The dispatch card (board E2): what a stream has fanned out, inline in its
+ * transcript. A `<wa-details>` headed "Dispatched N subagents" with the
+ * parent's `rollup` as badges, one row per child stream (nested children
+ * indented under theirs), and the inquiry threads the stream opened. Every
+ * row is a child of the fold: label, status, tone, latest line, and clock
+ * facts come from `view.streams`; the host paints the glyph and the time.
+ * Selecting a row is the navigation.
  */
 
 // Third-party imports
-import {
-  LitElement,
-  html,
-  css,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
-import { consume } from '@lit/context';
-import { customElement, property, state } from 'lit/decorators.js';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA components used by this template
@@ -34,41 +22,26 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import {
-  STREAM_PHASE,
-  runIdentityDisplayName,
-  type ActiveChildInfo,
-  type InquiryThreadUpdatedEvent,
-  type StreamTabId,
-} from '@shared/schemas';
+import type { InquiryThreadUpdatedEvent, StreamTabId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { childElapsedMs } from '@shared/streams/childElapsed';
-import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
-import {
-  formatPhaseStageLabel,
-  formatStreamStatusLabel,
-} from '@shared/streams/streamStatusDisplay';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { formatDuration } from '@utils/core';
-import { ProgressEvents } from '../events';
+import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Side-effect import to register <tool-timer> custom element
 import '@progressView/frontend/components/ToolTimer';
 
-// Local imports - contexts
-import {
-  childProgressContext,
-  EMPTY_CHILD_PROGRESS,
-  EMPTY_INQUIRY_THREADS,
-  EMPTY_PHASE_STAGE_MAP,
-  EMPTY_STREAM_BY_ID,
-  inquiryThreadsContext,
-  phaseStagesContext,
-  streamByIdContext,
-  type PhaseStageMap,
-  type StreamByIdMap,
-} from '../streamContexts';
+/** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
+const TONE_ICONS: Record<StreamView['tone'], TeXRAIconName> = {
+  running: 'circle',
+  success: 'circle-check',
+  danger: 'circle-xmark',
+  warning: 'circle-dot',
+  neutral: 'circle',
+};
 
 @customElement('background-tasks-panel')
 export class BackgroundTasksPanel extends LitElement {
@@ -80,116 +53,142 @@ export class BackgroundTasksPanel extends LitElement {
         display: block;
       }
 
+      wa-details.dispatch::part(base) {
+        border-radius: var(--wa-border-radius-l);
+      }
+      wa-details.dispatch::part(header) {
+        padding: var(--wa-space-xs) var(--wa-space-s);
+      }
+      wa-details.dispatch::part(content) {
+        padding: 0 var(--wa-space-2xs) var(--wa-space-2xs);
+      }
+
+      .dispatch-summary {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+        min-width: 0;
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
+      }
+      .dispatch-summary wa-icon {
+        color: var(--wa-color-brand-on-quiet);
+      }
+      .dispatch-summary wa-badge::part(base) {
+        font-size: 10px;
+        line-height: 1;
+        padding: 2px 6px;
+      }
+
       .task-list {
         display: flex;
         flex-direction: column;
       }
 
-      /* The shared panel header already supplies the section boundary and
-         lowered surface. Strip Web Awesome's surrounding card so expanding
-         Background tasks does not introduce a second white, rounded panel
-         around the quiet child sections. */
-      wa-details.panel-collapsible::part(base) {
-        background: transparent;
-        border: none;
-        border-radius: 0;
-      }
-
-      .section-content {
-        max-height: clamp(12rem, 42vh, 24rem);
-        overflow-y: auto;
-        scrollbar-gutter: stable;
-      }
-
-      .task-header {
+      .section-label {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
-        min-height: 1.5rem;
-        padding: 1px 0;
+        padding: var(--wa-space-2xs) var(--wa-space-xs) var(--wa-space-3xs);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-semibold);
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: var(--letter-spacing-caps);
+      }
+
+      /* One row per child: the tone glyph, the label, the latest line, the
+         clock, the chevron. Selecting the row opens the child. */
+      .task-row {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+        width: 100%;
+        min-height: 1.75rem;
+        padding: var(--wa-space-3xs) var(--wa-space-xs);
+        border: 0;
+        border-radius: var(--border-radius-small);
+        background: transparent;
+        font: inherit;
         font-size: var(--font-size-sm);
-        line-height: var(--line-height-tight);
+        color: var(--wa-color-text-normal);
+        text-align: start;
+        cursor: pointer;
+      }
+      .task-row:hover {
+        background: var(--wa-color-neutral-fill-quiet);
+      }
+      .task-row:focus-visible {
+        outline: var(--focus-ring-width) solid var(--wa-color-focus);
+        outline-offset: calc(-1 * var(--focus-ring-offset));
       }
 
       .task-icon {
         flex-shrink: 0;
         font-size: var(--font-size-sm);
       }
-
-      .task-icon--process {
+      .tone-running .task-icon {
+        color: var(--color-success);
+      }
+      .tone-success .task-icon {
+        color: var(--color-success);
+      }
+      .tone-danger .task-icon {
+        color: var(--color-error);
+      }
+      .tone-warning .task-icon {
         color: var(--color-warning);
       }
-
-      .task-icon--subagent {
-        color: var(--color-info);
-      }
-
-      .task-icon--inquiry {
-        color: var(--wa-color-brand-fill-loud);
+      .tone-neutral .task-icon {
+        color: var(--color-text-muted);
       }
 
       .task-name {
-        display: block;
+        flex: 0 1 auto;
         min-width: 0;
+        max-width: min(14rem, 45%);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        color: var(--wa-color-text-normal);
+        font-weight: var(--font-weight-medium);
       }
 
-      .task-name--clickable {
-        appearance: none;
-        flex: 0 1 auto;
-        min-width: 0;
-        max-width: min(14rem, 40%);
-        padding: 0;
-        border: 0;
-        background: transparent;
-        font: inherit;
-        text-align: start;
-        cursor: pointer;
-        color: var(--color-text-link);
-        text-decoration: underline;
-        text-decoration-color: transparent;
-        transition: text-decoration-color var(--transition-fast);
-      }
-
-      .task-name--clickable:hover {
-        text-decoration-color: currentColor;
-      }
-
-      .task-name--clickable .task-name {
-        color: inherit;
-      }
-
-      /* Sits between the name and the description: a run's phase identifies
-         where it is, so it shrinks only to an ellipsis floor and never wraps
-         the row. */
-      .task-phase {
-        flex: 0 1 auto;
-        min-width: 6ch;
-        max-width: 10rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
-      }
-
-      .task-description {
+      .task-latest {
         flex: 1 1 8rem;
         min-width: 0;
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
-        white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
       }
 
       .task-elapsed {
         flex-shrink: 0;
+        margin-inline-start: auto;
         font-size: var(--font-size-xs);
         font-variant-numeric: tabular-nums;
+        color: var(--color-text-secondary);
+      }
+      .task-elapsed.is-approval {
+        color: var(--color-warning);
+      }
+
+      .task-chevron {
+        flex-shrink: 0;
+        font-size: var(--font-size-xs);
+        color: var(--color-text-muted);
+      }
+      :dir(rtl) .task-chevron {
+        transform: scaleX(-1);
+      }
+
+      .task-wait {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-xs) 0;
+        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
       }
 
@@ -201,156 +200,147 @@ export class BackgroundTasksPanel extends LitElement {
         color: var(--color-text-secondary);
       }
 
-      /* Status uses a native wa-badge (filled), matching the app-wide badge
-         idiom (GoalTab / WorktreeChip / StreamHeader goal chip) rather than a
-         wa-tag — tags are for removable/category chips, badges for status. */
       wa-badge.task-status {
         flex: 0 0 auto;
         margin-inline-start: auto;
       }
-
       wa-badge.task-status::part(base) {
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-medium);
       }
-
-      /* Nested sections use Web Awesome <wa-details class="collapsible-quiet">
-         in place of a hand-rolled <details>; the section label lives in the
-         summary slot and keeps the uppercase small-caps look. wa-details
-         supplies the disclosure chevron, so no hand-rolled toggle icon. */
-      wa-details.collapsible-quiet::part(header) {
-        padding-inline: 0;
-      }
-
-      .section-label {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-semibold);
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: var(--letter-spacing-caps);
-      }
-
-      .section-label:hover {
-        color: var(--wa-color-text-normal);
-      }
-
-      .section-label wa-icon {
-        font-size: var(--font-size-xs);
-      }
     `,
   ];
 
-  /** Live children plus the finished ones retained for display (`finishedAt`). */
-  @property({ attribute: false }) subagents: ActiveChildInfo[] = [];
+  /** The dispatching stream: its `childIds` are the rows. */
+  @property({ attribute: false }) stream: StreamView | null = null;
+  @property({ attribute: false }) view: SessionView | null = null;
 
-  /** Select the complete background view or the inquiry-only workflow view. */
+  /** The complete card, or only the inquiry threads (the workflow body,
+   *  whose run board already lists every call). */
   @property() scope: 'all' | 'inquiries' = 'all';
 
-  /** Open state — auto-expands when active tasks appear, auto-collapses when all finish. */
-  @state() open = false;
+  private childrenOf(stream: StreamView): StreamView[] {
+    const view = this.view;
+    if (!view) return [];
+    return stream.childIds
+      .map((id) => view.streams.get(id))
+      .filter((child): child is StreamView => child !== undefined);
+  }
 
-  @consume({ context: streamByIdContext, subscribe: true })
-  @state()
-  private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
-
-  @consume({ context: inquiryThreadsContext, subscribe: true })
-  @state()
-  private inquiries: InquiryThreadUpdatedEvent[] = EMPTY_INQUIRY_THREADS;
-
-  @consume({ context: childProgressContext, subscribe: true })
-  @state()
-  private childProgress: ReadonlyMap<StreamTabId, ChildRunProgress> =
-    EMPTY_CHILD_PROGRESS;
-
-  /** Current phase per stream — a workflow-script run's row is otherwise
-   *  indistinguishable at minute 2 and minute 38 of the same run. */
-  @consume({ context: phaseStagesContext, subscribe: true })
-  @state()
-  private phaseStages: PhaseStageMap = EMPTY_PHASE_STAGE_MAP;
-
-  /** Track previous active count to detect transitions. */
-  private prevActiveCount = 0;
-
-  protected override willUpdate(changed: PropertyValues): void {
-    super.willUpdate(changed);
-    const active =
-      (this.scope === 'all'
-        ? this.subagents.filter((child) => child.finishedAt === undefined)
-            .length
-        : 0) +
-      this.inquiries.filter((thread) => thread.status === 'open').length;
-    // Auto-open when tasks appear (0 → N), auto-close when all finish (N → 0)
-    if (this.prevActiveCount === 0 && active > 0) {
-      this.open = true;
-    } else if (this.prevActiveCount > 0 && active === 0) {
-      this.open = false;
-    }
-    this.prevActiveCount = active;
+  private inquiriesOf(stream: StreamView): InquiryThreadUpdatedEvent[] {
+    return (this.view?.inquiries ?? []).filter(
+      (thread) => thread.parentStreamId === stream.id,
+    );
   }
 
   override render(): TemplateResult | typeof nothing {
-    // Finished process children (background bash) are ephemeral — hide them
-    // even if a retained roster row still arrives from an older snapshot.
-    const visibleSubagents =
-      this.scope === 'all'
-        ? this.subagents.filter(
-            (child) =>
-              !(
-                child.identity.kind === 'process' &&
-                child.finishedAt !== undefined
-              ),
-          )
-        : [];
-    if (visibleSubagents.length + this.inquiries.length === 0) {
-      return nothing;
-    }
+    const stream = this.stream;
+    if (!stream) return nothing;
+    const children = this.scope === 'all' ? this.childrenOf(stream) : [];
+    const inquiries = this.inquiriesOf(stream);
+    if (children.length === 0 && inquiries.length === 0) return nothing;
 
-    // With a single populated section, the inner disclosure header is pure
-    // chrome — render the list directly under the outer panel instead.
-    const withSectionHeaders =
-      visibleSubagents.length > 0 && this.inquiries.length > 0;
+    const { rollup } = stream;
+    const summary =
+      this.scope === 'inquiries'
+        ? html`${waIcon('comments')} Inquiries
+            <wa-badge variant="neutral" appearance="outlined" pill
+              >${inquiries.length}</wa-badge
+            >`
+        : html`${waIcon('diagram-project')} Dispatched
+            ${formatResultCount(rollup.total, BACKGROUND_TASK.countNoun)}
+            <wa-badge variant="neutral" appearance="outlined" pill
+              >${rollup.total}</wa-badge
+            >${
+              rollup.running > 0
+                ? html`<wa-badge variant="success" pill
+                    >${rollup.running}</wa-badge
+                  >`
+                : nothing
+            }${
+              stream.approval === 'descendant'
+                ? html`<wa-badge variant="warning" pill
+                    >${waIcon('triangle-exclamation')}</wa-badge
+                  >`
+                : nothing
+            }`;
 
     return html`
-      <wa-details
-        class="panel-collapsible"
-        summary=${this.scope === 'inquiries' ? 'Inquiries' : 'Background tasks'}
-        ?open=${this.open}
-        @wa-show=${this.handleOpenToggle}
-        @wa-hide=${this.handleOpenToggle}
-      >
-        <div class="task-list">
-          ${this.renderSection(visibleSubagents, withSectionHeaders)}
-          ${this.renderInquirySection(withSectionHeaders)}
+      <wa-details class="dispatch" open>
+        <span slot="summary" class="dispatch-summary">${summary}</span>
+        <div class="task-list" role="list">
+          ${this.renderChildren(children, 0, new Set([stream.id]))}
+          ${
+            children.length > 0 && inquiries.length > 0
+              ? html`<div class="section-label">
+                  ${waIcon('comments')} Inquiries
+                </div>`
+              : nothing
+          }
+          ${repeat(
+            inquiries,
+            (thread) => thread.threadId,
+            (thread, index) => this.renderInquiryItem(thread, index),
+          )}
         </div>
+        ${
+          this.scope === 'all' && rollup.running > 0
+            ? html`<div class="task-wait">
+                ${waIcon('clock')} Waiting on
+                ${formatResultCount(rollup.running, BACKGROUND_TASK.countNoun)}
+              </div>`
+            : nothing
+        }
       </wa-details>
     `;
   }
 
-  private renderInquirySection(
-    withHeader: boolean,
-  ): TemplateResult | typeof nothing {
-    return this.renderSectionRows(
-      this.inquiries,
-      (thread) => thread.threadId,
-      (thread, index) => this.renderInquiryItem(thread, index),
-      withHeader,
-      {
-        icon: 'comments',
-        label: 'Inquiries',
-        counts: (['open', 'answered', 'dropped'] as const)
-          .map((status) => ({
-            status,
-            count: this.inquiries.filter((t) => t.status === status).length,
-          }))
-          .filter(({ count }) => count > 0)
-          .map(({ status, count }) => `${count} ${status}`),
-        open: true,
+  private renderChildren(
+    children: readonly StreamView[],
+    depth: number,
+    visited: ReadonlySet<StreamTabId>,
+  ): TemplateResult {
+    return html`${repeat(
+      children,
+      (child) => child.id,
+      (child) => {
+        const nested = visited.has(child.id)
+          ? []
+          : this.childrenOf(child).filter((grand) => !visited.has(grand.id));
+        return html`${this.renderChildRow(child, depth)}${this.renderChildren(
+          nested,
+          depth + 1,
+          new Set(visited).add(child.id),
+        )}`;
       },
-    );
+    )}`;
+  }
+
+  private renderChildRow(child: StreamView, depth: number): TemplateResult {
+    const pendingApproval = child.approval === 'own';
+    const glyph = pendingApproval ? 'circle-dot' : TONE_ICONS[child.tone];
+    const latest = child.latestLine ?? child.description ?? '';
+    const label = `Open ${child.label}: ${child.statusLabel}`;
+    return html`
+      <button
+        type="button"
+        role="listitem"
+        class=${classMap({
+          'task-row': true,
+          [`tone-${pendingApproval ? 'warning' : child.tone}`]: true,
+        })}
+        style=${`padding-inline-start: calc(var(--wa-space-xs) + ${depth} * var(--wa-space-m))`}
+        aria-label=${label}
+        @click=${() => this.navigateToStream(child.id)}
+      >
+        ${waIcon(glyph, { className: 'task-icon' })}
+        <span class="task-name">${child.label}</span>
+        ${latest ? html`<span class="task-latest">${latest}</span>` : nothing}
+        ${renderClock(child, pendingApproval)}
+        ${waIcon('chevron-right', { className: 'task-chevron' })}
+      </button>
+    `;
   }
 
   private renderInquiryItem(
@@ -360,12 +350,10 @@ export class BackgroundTasksPanel extends LitElement {
     const preview = thread.lastQuestionPreview || '(empty question)';
     const idPrefix = `background-inquiry-${index}`;
     return html`
-      <div class="task-header" role="listitem">
-        ${waIcon('circle-question', { className: 'task-icon task-icon--inquiry' })}
+      <div class="task-row" role="listitem">
+        ${waIcon('circle-question', { className: 'task-icon' })}
         <span class="inquiry-id">${thread.threadId}</span>
-        <span id="${idPrefix}-description" class="task-description"
-          >${preview}</span
-        >
+        <span id="${idPrefix}-description" class="task-latest">${preview}</span>
         <wa-tooltip for="${idPrefix}-description">${preview}</wa-tooltip>
         <wa-relative-time
           id="${idPrefix}-elapsed"
@@ -387,258 +375,37 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private renderSection(
-    children: ActiveChildInfo[],
-    withHeader: boolean,
-  ): TemplateResult | typeof nothing {
-    const activeCount = children.filter(
-      (child) => child.finishedAt === undefined,
-    ).length;
-    const finishedCount = children.length - activeCount;
-
-    return this.renderSectionRows(
-      children,
-      (c) => c.executionId,
-      (c, index) => this.renderTaskItem(c, index),
-      withHeader,
-      {
-        icon: 'server',
-        label: 'Subagents',
-        counts: [
-          ...(activeCount ? [`${activeCount} active`] : []),
-          ...(finishedCount ? [`${finishedCount} done`] : []),
-        ],
-        open: false,
-      },
-    );
-  }
-
-  /**
-   * Shared section shape: guard against an empty list, build the
-   * `.section-content` rows, and either return them bare (single populated
-   * section under the outer panel) or wrap them in a counted nested quiet
-   * disclosure (`<wa-details class="collapsible-quiet">`) with the section
-   * label in the summary slot.
-   */
-  private renderSectionRows<T>(
-    items: readonly T[],
-    key: (item: T) => unknown,
-    renderItem: (item: T, index: number) => TemplateResult,
-    withHeader: boolean,
-    section: {
-      icon: TeXRAIconName;
-      label: string;
-      counts: readonly string[];
-      open: boolean;
-    },
-  ): TemplateResult | typeof nothing {
-    if (items.length === 0) return nothing;
-
-    const content = html`
-      <div class="section-content" role="list">
-        ${repeat(items, key, renderItem)}
-      </div>
-    `;
-    if (!withHeader) return content;
-
-    return html`
-      <wa-details class="collapsible-quiet" ?open=${section.open}>
-        <div slot="summary" class="section-label">
-          ${waIcon(section.icon)}
-          <span
-            >${section.label}${section.counts.map(
-              (count) => html` &middot; ${count}`,
-            )}</span
-          >
-        </div>
-        ${content}
-      </wa-details>
-    `;
-  }
-
-  private renderTaskItem(
-    child: ActiveChildInfo,
-    index: number,
-  ): TemplateResult {
-    const icon = getTaskIcon(child);
-    // Every roster row owns a stream tab, so every row is navigable.
-    const childStreamId = child.childStreamId;
-    const description = this.streamById.get(childStreamId)?.description;
-    const phaseLabel = formatPhaseStageLabel(
-      this.phaseStages.get(childStreamId),
-    );
-    const badge = taskStatusBadge(child);
-    const idPrefix = `background-subagent-${index}`;
-    const displayName = runIdentityDisplayName(child.identity);
-
-    return html`
-      <div class="task-header" role="listitem">
-        ${waIcon(icon, {
-          className: `task-icon ${child.identity.kind === 'process' ? 'task-icon--process' : 'task-icon--subagent'}`,
-        })}
-        <button
-          id="${idPrefix}-name"
-          class="task-name--clickable"
-          type="button"
-          aria-label="Open ${displayName} stream"
-          @click=${() => this.navigateToStream(childStreamId)}
-        >
-          <span class="task-name">${displayName}</span>
-        </button>
-        <wa-tooltip for="${idPrefix}-name"
-          >Open ${displayName} stream</wa-tooltip
-        >
-        ${
-          phaseLabel
-            ? html`<span id="${idPrefix}-phase" class="task-phase"
-                  >${phaseLabel}</span
-                ><wa-tooltip for="${idPrefix}-phase">${phaseLabel}</wa-tooltip>`
-            : nothing
-        }
-        ${
-          description
-            ? html`<span id="${idPrefix}-description" class="task-description"
-                  >(${description})</span
-                ><wa-tooltip for="${idPrefix}-description"
-                  >${description}</wa-tooltip
-                >`
-            : nothing
-        }
-        ${renderChildElapsed(
-          child,
-          this.childProgress.get(childStreamId)?.runStartedAt,
-        )}
-        <wa-badge
-          class="task-status"
-          variant=${badge.variant}
-          appearance="filled"
-          >${badge.text}</wa-badge
-        >
-      </div>
-    `;
-  }
-
-  private handleOpenToggle(e: Event): void {
-    if (e.target !== e.currentTarget) return;
-    this.open = e.type === 'wa-show';
-  }
-
-  private navigateToStream(streamId: string): void {
-    this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
+  private navigateToStream(streamId: StreamTabId): void {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', streamId }));
   }
 }
 
 /**
- * Elapsed reading for one roster row. A live row uses the child's current
- * active-phase start from the status plane and hands it to `<tool-timer>`,
- * which owns the tick. A retained row uses the roster's handle-generation
- * window, closed by `finishedAt`, so its reading is fixed.
+ * The row's clock: "approval" while the child waits on the user, the live
+ * elapsed while it runs (the host ticks), else when it was last active.
  */
-function renderChildElapsed(
-  child: ActiveChildInfo,
-  runStartedAt: number | undefined,
+function renderClock(
+  child: StreamView,
+  pendingApproval: boolean,
 ): TemplateResult | typeof nothing {
-  if (child.finishedAt === undefined) {
-    if (child.status !== STREAM_PHASE.RUNNING || runStartedAt === undefined) {
-      return nothing;
-    }
+  if (pendingApproval) {
+    return html`<span class="task-elapsed is-approval">approval</span>`;
+  }
+  const running = child.group === 'running' || child.group === 'waiting';
+  if (running && child.runStartedAt !== null) {
     return html`<span class="task-elapsed"
-      >(<tool-timer .startTime=${runStartedAt}></tool-timer>)</span
-    >`;
+      ><tool-timer .startTime=${child.runStartedAt}></tool-timer
+    ></span>`;
   }
-  if (child.startedAt === undefined) return nothing;
-  const elapsedMs = childElapsedMs(child, child.finishedAt);
-  return elapsedMs === undefined
-    ? nothing
-    : html`<span class="task-elapsed">(${formatDuration(elapsedMs)})</span>`;
-}
-
-/** Pick the appropriate wa-icon name for a background task item. */
-function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
-  switch (child.identity.kind) {
-    case 'process':
-      return 'terminal';
-    case 'agent':
-      // AI agent rows — native and external-CLI-driven alike.
-      return 'robot';
-    case 'multiAgentWorkflow':
-      // Workflow containers get the neutral agent icon.
-      return 'server';
+  if (child.lastTimestamp !== null) {
+    return html`<wa-relative-time
+      class="task-elapsed"
+      .date=${new Date(child.lastTimestamp)}
+      format="narrow"
+      sync
+    ></wa-relative-time>`;
   }
-}
-
-/**
- * Badge fill for a stream lifecycle phase. Matches the stream-tab rail/icon
- * palette: green while active, brand/blue while idle, red on failure, and
- * neutral for user stops (and unknown finished rows that must not claim
- * success).
- */
-function streamStatusBadgeVariant(
-  status: ActiveChildInfo['status'],
-): 'neutral' | 'brand' | 'success' | 'danger' {
-  switch (status) {
-    case STREAM_PHASE.RUNNING:
-    case STREAM_PHASE.COMPLETED:
-      return 'success';
-    case STREAM_PHASE.WAITING:
-      return 'brand';
-    case STREAM_PHASE.FAILED:
-      return 'danger';
-    case STREAM_PHASE.CANCELLED:
-    default:
-      return 'neutral';
-  }
-}
-
-/**
- * Status badge for a background-task row. Wording and color come from the
- * same stream-lifecycle vocabulary as stream tabs / the progress header
- * (`formatStreamStatusLabel` · `progressHeader`), so "Running / Idle /
- * Completed / Stopped / Error" never diverge between the two surfaces.
- *
- * A retained subagent can briefly keep its last in-flight phase while the
- * terminal status catches up; show that phase rather than falsely reporting
- * success. Processes have no child status source, so their retained rows use
- * the terminal fallback below.
- */
-function taskStatusBadge(child: ActiveChildInfo): {
-  readonly text: string;
-  readonly variant: 'neutral' | 'brand' | 'success' | 'danger';
-} {
-  // Membership is decided by `finishedAt` presence alone (see the schema
-  // doc); the lagging display `status` may only soften HOW a retained
-  // subagent row renders, and processes have no child status source at all.
-  const subagentStatusStillInFlight =
-    child.identity.kind !== 'process' &&
-    (child.status === STREAM_PHASE.RUNNING ||
-      child.status === STREAM_PHASE.WAITING);
-  if (child.finishedAt === undefined || subagentStatusStillInFlight) {
-    const status =
-      child.status === STREAM_PHASE.WAITING
-        ? STREAM_PHASE.WAITING
-        : STREAM_PHASE.RUNNING;
-    return {
-      text: formatStreamStatusLabel(status),
-      variant: streamStatusBadgeVariant(status),
-    };
-  }
-  switch (child.status) {
-    case STREAM_PHASE.FAILED:
-    case STREAM_PHASE.CANCELLED:
-    case STREAM_PHASE.COMPLETED:
-      return {
-        text: formatStreamStatusLabel(child.status),
-        variant: streamStatusBadgeVariant(child.status),
-      };
-    default:
-      // Left the roster without a terminal status ever arriving. It did
-      // finish, but claiming success would render a failed command green;
-      // say only what is known — use the completed word with a neutral fill.
-      return {
-        text: formatStreamStatusLabel(STREAM_PHASE.COMPLETED),
-        variant: 'neutral',
-      };
-  }
+  return nothing;
 }
 
 function inquiryStatusVariant(

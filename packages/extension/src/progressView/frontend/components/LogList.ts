@@ -16,10 +16,10 @@ import './TaskGroupList';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@shared/wa/spinner';
 import type { StreamTabId } from '@shared/schemas';
+import { designTokens } from '@shared/styles';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { designTokens } from '@shared/styles';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { getComposedPathElement } from '../utils';
 import { logStyles } from '../styles/logStyles';
@@ -214,7 +214,10 @@ export class LogList extends LitElement {
     const latexRef = getComposedPathElement<HTMLElement>(event, '.latex-ref');
     if (latexRef?.dataset.label) {
       this.dispatchEvent(
-        SessionUiEvents.host({ kind: 'openLabel', label: latexRef.dataset.label }),
+        SessionUiEvents.host({
+          kind: 'openLabel',
+          label: latexRef.dataset.label,
+        }),
       );
     }
   }
@@ -225,7 +228,11 @@ export class LogList extends LitElement {
     ).detail;
     if (!file) return;
     this.dispatchEvent(
-      SessionUiEvents.host({ kind: 'openFile', path: file, line: line ?? null }),
+      SessionUiEvents.host({
+        kind: 'openFile',
+        path: file,
+        line: line ?? null,
+      }),
     );
   };
 }

@@ -193,11 +193,13 @@ export const streamTabStyles = css`
    * (.last-active, .model) and codicon glyphs to inherit the selection
    * color even when intermediate elements define their own.
    */
+  /* The selected row's background and foreground are one pair: a host that
+     overrides the foreground (the desktop's white-on-accent) overrides the
+     background with it, so light text never lands on the quiet brand fill. */
   .tab-container.is-active {
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-brand-fill-quiet) 85%,
-      transparent
+    background-color: var(
+      --wa-color-list-active-bg,
+      color-mix(in srgb, var(--wa-color-brand-fill-quiet) 85%, transparent)
     );
     /* brand-on-quiet is the foreground paired with the quiet fill above in
        both hosts. list-active-fg is not: it is authored to sit on the loud

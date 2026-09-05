@@ -1,5 +1,4 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { consume } from '@lit/context';
 import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -13,6 +12,7 @@ import type {
   CheckboxValues,
   DocumentFileType,
   FileSelectConfig,
+  SessionType,
 } from '@shared/schemas';
 import { dropCueStyles } from '@shared/styles/commonViewStyles';
 import { SortableController } from '@shared/litControllers/SortableController';
@@ -25,10 +25,6 @@ import { MainViewEvents } from '../events';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { SESSION_TYPES } from '../constants';
 import { SESSION_DEFAULTS } from '../sessionDefaults';
-import {
-  fileStateContext,
-  type FileStateContextValue,
-} from '../mainViewContexts';
 import { fileSelectStyles } from '../fileSelectStyles';
 import { DEFAULT_CHECKBOX_VALUES } from '../store';
 
@@ -65,8 +61,15 @@ export class FileSelectGroup extends LitElement {
   /** File type configuration */
   @property({ attribute: false }) config!: FileSelectConfig;
 
-  @consume({ context: fileStateContext, subscribe: true })
-  private fileState?: FileStateContextValue;
+  /** The group's selected files, in order (`Surface.launch`). */
+  @property({ attribute: false }) files: readonly string[] = [];
+
+  /** The tool and auto-extract toggles (`Surface.launch`). */
+  @property({ attribute: false }) checkboxValues: CheckboxValues =
+    DEFAULT_CHECKBOX_VALUES;
+
+  /** The launch mode: a tool-use session takes no input files. */
+  @property() sessionType: SessionType = SESSION_TYPES.WORKFLOW;
 
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
@@ -78,7 +81,7 @@ export class FileSelectGroup extends LitElement {
   private sortableController = new SortableController(
     this,
     () => this.fileListElement,
-    () => this.currentFiles,
+    () => [...this.currentFiles],
     (result) =>
       this.dispatchEvent(
         MainViewEvents.filesReordered({
@@ -153,16 +156,15 @@ export class FileSelectGroup extends LitElement {
   }
 
   private get currentCheckboxValues(): CheckboxValues {
-    return this.fileState?.checkboxValues ?? DEFAULT_CHECKBOX_VALUES;
+    return this.checkboxValues;
   }
 
-  private get currentFiles(): string[] {
-    return this.fileState?.multiFiles[this.listId] ?? [];
+  private get currentFiles(): readonly string[] {
+    return this.files;
   }
 
   private get isFileInputDisabled(): boolean {
-    const sessionType = this.fileState?.sessionType ?? SESSION_TYPES.WORKFLOW;
-    return !SESSION_DEFAULTS[sessionType].fileInputEnabled;
+    return !SESSION_DEFAULTS[this.sessionType].fileInputEnabled;
   }
 
   /**

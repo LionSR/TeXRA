@@ -1,269 +1,97 @@
-// Third-party imports
-import { html, type TemplateResult } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
+/**
+ * `<progress-app>`: the one conversation shell of the extension (PRD 12.1).
+ * It is the root, the only element that holds the three records, and it
+ * renders exactly one of two states from `resolveSelected`: the New task
+ * empty state (hero, the context disclosure, the Active now strip, the
+ * expanded composer) or the selected stream's conversation. The Sessions
+ * drawer, the docked list of the wide editor tab, the Tools sheet, and the
+ * header overflow hang off the same element.
+ *
+ * `view`, `surface`, and `host` are properties: the design harness assigns
+ * fixtures to them, and the live host assigns its signals to the same
+ * names. Every send leaves as a `runtime-request`, `host-request`, or
+ * `surface-action` event with the arm as its detail; the root's owner
+ * installs one listener per event.
+ */
 
-import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
+// Third-party imports
+import { html, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
+import { repeat } from 'lit/directives/repeat.js';
+
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
+import '@awesome.me/webawesome/dist/components/divider/divider.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
-import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import '@shared/wa/spinner';
 import { signalWatcherWebviewAppBase } from '@shared/BaseWebviewApp';
-import { postMessage } from '@shared/hostBridge';
-
-// Local imports - shared schemas
-import type {
-  ProgressViewOutboundMessage,
-  StreamLifecycleStatus,
-  StreamTabId,
-} from '@shared/schemas';
-import { subscribeToSignalChanges } from '@shared/signals';
-import {
-  designTokens,
-  viewTabStyles,
-  viewHeaderLayoutStyles,
-} from '@shared/styles';
+import '@shared/wa/spinner';
+import type { ProgressViewOutboundMessage } from '@shared/schemas';
+import { designTokens } from '@shared/styles';
+import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import { resolveSelected, type Surface } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
-import { renderEmptyState } from '@shared/wa/emptyState';
-import { renderViewHeader } from '@shared/wa/viewHeader';
-import '@shared/wa/tabs';
-import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { getBasename } from '@utils/core';
 
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
-import {
-  displayedActiveStreamId$,
-  childStreamsByParent$,
-  diffStatusAnnouncement,
-  hasAnyStreams$,
-  narrowLayout,
-  pendingApprovalIds$,
-  permissions$,
-  placement,
-  resetProgressState,
-  streamById$,
-  streamStates$,
-  topLevelStreams$,
-} from './progressState';
-
-// Local imports - event handlers
-import {
-  handleFileAction,
-  handleFollowUpChange,
-  handleFollowUpFocusComplete,
-  handleFollowUpPolish,
-  handleFollowUpSend,
-  handleGettingStartedAction,
-  handlePermissionAction,
-  handleStreamDelete,
-  handleStreamSwitch,
-  handleToolbarCommand,
-  runCompileFixer,
-} from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
-// Local imports - progress view components
 import './components/StreamTabs';
 import './components/StreamConversation';
+import './components/SessionComposer';
+import './components/SessionDrawer';
+import './components/ToolsSheet';
+import '@webview/frontend/components/FileSelectGroup';
 
 registerTeXRAWebAwesomeIcons();
 
 const ProgressAppBase =
   signalWatcherWebviewAppBase<ProgressViewOutboundMessage>();
 
+/** The launcher's multi-file lists, keyed the way `Surface.launch` holds them. */
+const LAUNCH_FILE_LISTS = {
+  input: 'inputFiles',
+  context: 'contextFiles',
+  media: 'mediaFiles',
+  output: 'outputFiles',
+} as const;
+
+type OverflowItem =
+  | 'popOut'
+  | 'popBack'
+  | 'openDashboard'
+  | 'latexdiffs'
+  | 'figures'
+  | 'compileInputPdf'
+  | 'attachTexCount'
+  | 'pack'
+  | 'clean';
+
+function menuValue(event: Event): string {
+  const item = (event as CustomEvent<{ item?: { value?: unknown } }>).detail
+    ?.item;
+  return typeof item?.value === 'string' ? item.value : '';
+}
+
 @customElement('progress-app')
 export class ProgressApp extends ProgressAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
-  static styles = [
-    designTokens,
-    viewTabStyles,
-    viewHeaderLayoutStyles,
-    progressAppStyles,
-  ];
+  static styles = [designTokens, progressAppStyles];
 
-  // --- Signal-based state ---
-  // State lives at module scope in `progressState.ts` (PRD: docs/prds/2026-05-08-electron-shell-layout.md § 7.A)
-  // so the rail and the conversation can mount independently in different DOM
-  // trees. Identity is preserved — selectors here are simple imports.
-  private hasHandledInitialProgressTabShow = false;
-  private suppressNextResetProgressTabShow = false;
-
-  // --- Status announcements (shell role="status" region) ---
-  // The diff is event detection, not a pure projection, so it runs in an
-  // explicit watcher effect with the memos here on the instance — never
-  // inside a Signal.Computed, whose lazy, consumer-count-dependent
-  // evaluation would make "what was already announced" ill-defined.
-  @state() private statusAnnouncement = '';
-  private announcedPermissionKeys: ReadonlySet<string> = new Set();
-  private announcedStreamStatuses: ReadonlyMap<
-    StreamTabId,
-    StreamLifecycleStatus
-  > = new Map();
-
-  /**
-   * Diff runs on a microtask (via `subscribeToSignalChanges`), which also
-   * coalesces a burst of `.set()` calls from one handler into one
-   * announcement pass. Same pattern as webview/frontend/persistence.ts.
-   */
-  private unwatchAnnouncements: (() => void) | undefined;
-
-  private readonly resizeObserver = new ResizeObserver((entries) => {
-    const width = entries[0]?.contentRect.width ?? this.clientWidth;
-    narrowLayout.set(width < 500);
-  });
-
-  constructor() {
-    super();
-    resetProgressState();
-  }
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    this.resizeObserver.observe(this);
-    this.unwatchAnnouncements = subscribeToSignalChanges(
-      [permissions$, streamStates$, streamById$],
-      () => this.updateStatusAnnouncement(),
-    );
-    // Baseline pass: announce anything already pending at mount (the old
-    // computed did so on first read) and seed the status memos so
-    // already-finished runs never announce.
-    this.updateStatusAnnouncement();
-  }
-
-  override disconnectedCallback(): void {
-    this.unwatchAnnouncements?.();
-    this.resizeObserver.disconnect();
-    super.disconnectedCallback();
-  }
-
-  override render(): TemplateResult {
-    const isEditorMode = placement.get() === 'editor';
-    const desktopView = this.getAttribute('data-desktop-view');
-    const isDesktopMode = desktopView !== null;
-    const compactTabs = narrowLayout.get() && !isEditorMode;
-    const hasAnyStreams = hasAnyStreams$.get();
-    const splitPosition = desktopView === 'progress' ? 68 : 80;
-
-    return html`
-      <div
-        class=${classMap({
-          'main-container': true,
-          narrow: compactTabs,
-          desktop: isDesktopMode,
-        })}
-      >
-        ${renderViewHeader({
-          active: 'progress',
-          dashboardButtonId: 'progressOpenDashboardButton',
-          launcherTab: {
-            focusSidebar: isEditorMode,
-            title: isEditorMode ? 'Focus New sidebar' : undefined,
-            onClick: this.onFocusLauncherTab,
-          },
-          onOpenDashboard: this.onOpenDashboard,
-          onTabShow: this.onViewTabShow,
-          secondaryAction: {
-            id: 'progressPopOutButton',
-            label: isEditorMode ? 'Back to sidebar' : 'Open in editor',
-            icon: isEditorMode ? 'backward-step' : 'picture-in-picture',
-            onClick: isEditorMode ? this.onPopBack : this.onPopOut,
-          },
-        })}
-        ${
-          hasAnyStreams
-            ? html`
-                <div class="split-container">
-                  <wa-split-panel .position=${splitPosition}>
-                    <stream-conversation
-                      slot="start"
-                      @stream-switch=${handleStreamSwitch}
-                      @toolbar-command=${handleToolbarCommand}
-                      @permission-action=${handlePermissionAction}
-                      @file-action=${handleFileAction}
-                      @compile-fixer-run=${runCompileFixer}
-                      @getting-started-action=${handleGettingStartedAction}
-                      @followup-change=${handleFollowUpChange}
-                      @followup-send=${handleFollowUpSend}
-                      @followup-polish=${handleFollowUpPolish}
-                      @followup-focus-complete=${handleFollowUpFocusComplete}
-                    ></stream-conversation>
-
-                    <stream-tabs
-                      slot="end"
-                      .compact=${compactTabs}
-                      .streams=${topLevelStreams$.get()}
-                      .activeStreamId=${displayedActiveStreamId$.get()}
-                      .streamStates=${streamStates$.get()}
-                      .pendingApprovalStreamIds=${pendingApprovalIds$.get()}
-                      .childStreamsByParent=${childStreamsByParent$.get()}
-                      @stream-switch=${handleStreamSwitch}
-                      @stream-delete=${handleStreamDelete}
-                    ></stream-tabs>
-                  </wa-split-panel>
-                </div>
-              `
-            : this.renderEmptyState()
-        }
-        ${
-          /*
-          One stable, visually-hidden polite region for the whole shell:
-          new approval requests and terminal run outcomes land here (see
-          updateStatusAnnouncement). Stability matters — a region that is
-          always mounted re-announces reliably on every text change, unlike
-          a dynamically inserted alert. */
-          html`<div class="visually-hidden" role="status">
-            ${this.statusAnnouncement}
-          </div>`
-        }
-      </div>
-    `;
-  }
-
-  private updateStatusAnnouncement(): void {
-    const next = diffStatusAnnouncement(
-      this.announcedPermissionKeys,
-      this.announcedStreamStatuses,
-      permissions$.get(),
-      streamStates$.get(),
-      streamById$.get(),
-    );
-    this.announcedPermissionKeys = next.permissionKeys;
-    this.announcedStreamStatuses = next.streamStatuses;
-    if (next.text !== this.statusAnnouncement) {
-      this.statusAnnouncement = next.text;
-    }
-  }
-
-  private renderEmptyState(): TemplateResult {
-    return html`
-      <div class="progress-empty-state">
-        <div class="progress-empty-panel">
-          ${renderEmptyState({
-            icon: 'robot',
-            kicker: 'Sessions',
-            title: 'No runs yet',
-            headingTag: 'h1',
-            body: 'Start an agent from the New tab or Commands. Runs, streamed logs, approvals, and follow-up controls will appear here.',
-            actions: [
-              {
-                label: 'Open the New tab',
-                icon: 'play',
-                appearance: 'filled',
-                variant: 'brand',
-                onClick: this.onOpenLauncher,
-              },
-              {
-                label: 'Open dashboard',
-                icon: 'gear',
-                appearance: 'outlined',
-                variant: 'neutral',
-                onClick: this.onOpenDashboard,
-              },
-            ],
-          })}
-        </div>
-      </div>
-    `;
-  }
+  @property({ attribute: false }) view: SessionView | null = null;
+  @property({ attribute: false }) surface: Surface | null = null;
+  @property({ attribute: false }) host: HostSnapshot | null = null;
+  /** The host's clock, for elapsed readings (G4). */
+  @property({ type: Number }) nowMs: number | null = null;
 
   protected override handleMessage(raw: unknown): void {
     dispatchMessage(raw, (error) => {
@@ -271,64 +99,347 @@ export class ProgressApp extends ProgressAppBase {
     });
   }
 
-  private onViewTabShow = (event: WaTabShowEvent): void => {
-    if (event.detail.name === 'progress') {
-      if (this.suppressNextResetProgressTabShow) {
-        this.suppressNextResetProgressTabShow = false;
-        this.hasHandledInitialProgressTabShow = true;
-        return;
-      }
-      if (!this.hasHandledInitialProgressTabShow) {
-        this.hasHandledInitialProgressTabShow = true;
-        return;
-      }
-    }
-    const view = event.detail.name === 'launcher' ? 'main' : 'progress';
-    const tabs = event.currentTarget as MutableWaTabGroup;
-    if (view === 'main') {
-      this.focusLauncherSidebar(tabs);
-      return;
-    }
-    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
+  private selectNew = (): void => {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'selectNew' }));
   };
 
-  private onFocusLauncherTab = (event: Event): void => {
-    if (placement.get() !== 'editor') return;
-    event.preventDefault();
-    event.stopPropagation();
-    const tabs = (event.currentTarget as HTMLElement).closest(
-      'wa-tab-group',
-    ) as MutableWaTabGroup | null;
-    this.focusLauncherSidebar(tabs ?? undefined);
+  private toggleDrawer = (): void => {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'toggleDrawer' }));
   };
 
-  private onOpenLauncher = (): void => {
-    this.focusLauncherSidebar();
+  private openDashboard = (): void => {
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'openDashboard' }));
   };
 
-  private focusLauncherSidebar(tabs?: MutableWaTabGroup): void {
-    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'main' });
-    if (!tabs) return;
-    this.resetProgressTab(tabs);
+  private stopStream(stream: StreamView): void {
+    this.dispatchEvent(
+      SessionUiEvents.runtime({ kind: 'stream.stop', streamId: stream.id }),
+    );
   }
 
-  private resetProgressTab(tabs: MutableWaTabGroup): void {
-    requestAnimationFrame(() => {
-      if (tabs.active === 'progress') return;
-      this.suppressNextResetProgressTabShow = true;
-      tabs.active = 'progress';
-    });
+  private handleOverflow(value: string, stream: StreamView | null): void {
+    const item = value as OverflowItem;
+    switch (item) {
+      case 'popOut':
+      case 'popBack':
+      case 'openDashboard':
+      case 'compileInputPdf':
+        this.dispatchEvent(SessionUiEvents.host({ kind: item }));
+        return;
+      case 'figures':
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'extractFigures' }));
+        return;
+      case 'latexdiffs':
+        this.dispatchEvent(
+          SessionUiEvents.surface({ kind: 'toolsSheet', open: true }),
+        );
+        return;
+      case 'attachTexCount': {
+        const launch = this.surface?.launch;
+        if (!launch) return;
+        this.dispatchEvent(
+          SessionUiEvents.surface({
+            kind: 'launch',
+            patch: { attachTeXCount: !launch.attachTeXCount },
+          }),
+        );
+        return;
+      }
+      case 'pack':
+      case 'clean':
+        if (!stream) return;
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: item, streamId: stream.id }),
+        );
+        return;
+    }
   }
 
-  private onOpenDashboard = (): void => {
-    postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'dashboard' });
-  };
+  override render(): TemplateResult | typeof nothing {
+    const { view, surface, host } = this;
+    if (!view || !surface || !host) return nothing;
+    const selected = resolveSelected(view, surface);
+    const stream =
+      selected === null ? null : (view.streams.get(selected) ?? null);
+    const docked = host.placement === 'editor';
 
-  private onPopOut = (): void => {
-    postMessage(PROGRESS_VIEW_COMMANDS.POP_OUT);
-  };
+    return html`
+      <div
+        class=${classMap({
+          shell: true,
+          'is-editor': docked,
+          'has-stream': stream !== null,
+        })}
+      >
+        ${this.renderHeader(stream, host, surface)}
+        <div class="shell-body">
+          ${docked ? this.renderDockedList(view, surface, host) : nothing}
+          <main class="reading">
+            ${
+              stream
+                ? html`<stream-conversation
+                    .stream=${stream}
+                    .view=${view}
+                    .surface=${surface}
+                    .host=${host}
+                    .nowMs=${this.nowMs}
+                  ></stream-conversation>`
+                : this.renderEmptyState(view, surface, host)
+            }
+          </main>
+        </div>
+        ${
+          surface.drawerOpen
+            ? html`<session-drawer
+                .view=${view}
+                .surface=${surface}
+                .host=${host}
+              ></session-drawer>`
+            : nothing
+        }
+        ${
+          surface.toolsSheetOpen
+            ? html`<tools-sheet
+                .surface=${surface}
+                .host=${host}
+              ></tools-sheet>`
+            : nothing
+        }
+      </div>
+    `;
+  }
 
-  private onPopBack = (): void => {
-    postMessage(PROGRESS_VIEW_COMMANDS.POP_BACK);
-  };
+  private renderHeader(
+    stream: StreamView | null,
+    host: HostSnapshot,
+    surface: Surface,
+  ): TemplateResult {
+    const canStop =
+      stream !== null &&
+      !stream.readOnly &&
+      (stream.group === 'running' || stream.group === 'waiting');
+    return html`
+      <header class="shell-header">
+        ${renderIconActionButton({
+          id: 'shell-sessions',
+          icon: 'list-ul',
+          label: 'Sessions',
+          tooltip: 'Sessions',
+          className: 'sessions-button',
+          pressed: surface.drawerOpen,
+          onClick: this.toggleDrawer,
+        })}
+        <span class="shell-title"
+          >${stream ? host.paper.name : 'New task'}</span
+        >
+        <span class="spacer"></span>
+        ${
+          canStop
+            ? renderIconActionButton({
+                id: 'shell-stop',
+                icon: 'circle-stop',
+                label: 'Stop',
+                tooltip: 'Stop',
+                className: 'stop-button',
+                onClick: () => this.stopStream(stream),
+              })
+            : nothing
+        }
+        ${renderIconActionButton({
+          id: 'shell-new-task',
+          icon: 'plus',
+          label: 'New task',
+          tooltip: 'New task',
+          onClick: this.selectNew,
+        })}
+        ${
+          stream
+            ? this.renderOverflow(stream, host)
+            : renderIconActionButton({
+                id: 'shell-dashboard',
+                icon: 'gear',
+                label: 'Open dashboard',
+                tooltip: 'Open dashboard',
+                onClick: this.openDashboard,
+              })
+        }
+      </header>
+    `;
+  }
+
+  private renderOverflow(
+    stream: StreamView,
+    host: HostSnapshot,
+  ): TemplateResult {
+    const inEditor = host.placement === 'editor';
+    const attachTexCount = this.surface?.launch.attachTeXCount === true;
+    return html`
+      <wa-dropdown
+        placement="bottom-end"
+        @wa-select=${(event: Event) =>
+          this.handleOverflow(menuValue(event), stream)}
+      >
+        <wa-button
+          slot="trigger"
+          id="shell-more"
+          class="action-icon-button"
+          appearance="plain"
+          variant="neutral"
+          size="s"
+          type="button"
+          aria-label="More"
+          >${waIcon('ellipsis')}</wa-button
+        >
+        <wa-dropdown-item value=${inEditor ? 'popBack' : 'popOut'}
+          >${waIcon(inEditor ? 'backward-step' : 'picture-in-picture', {
+            slot: 'icon',
+          })}${inEditor ? 'Back to sidebar' : 'Open sessions in editor'}</wa-dropdown-item
+        >
+        <wa-dropdown-item value="openDashboard"
+          >${waIcon('gear', { slot: 'icon' })}Open dashboard</wa-dropdown-item
+        >
+        <wa-divider></wa-divider>
+        <wa-dropdown-item value="latexdiffs"
+          >${waIcon('code-compare', { slot: 'icon' })}LaTeXDiffs…</wa-dropdown-item
+        >
+        <wa-dropdown-item value="figures"
+          >${waIcon('image', { slot: 'icon' })}Figures…</wa-dropdown-item
+        >
+        <wa-dropdown-item value="compileInputPdf"
+          >${waIcon('file-pdf', { slot: 'icon' })}Compile input
+          PDF</wa-dropdown-item
+        >
+        <wa-dropdown-item
+          value="attachTexCount"
+          type="checkbox"
+          ?checked=${attachTexCount}
+          >${waIcon('list-check', { slot: 'icon' })}Attach TeX
+          Count</wa-dropdown-item
+        >
+        ${
+          host.debugMode
+            ? html`<wa-divider></wa-divider>
+                <wa-dropdown-item value="pack"
+                  >${waIcon('box-archive', { slot: 'icon' })}Pack output to
+                  History</wa-dropdown-item
+                >
+                <wa-dropdown-item value="clean"
+                  >${waIcon('trash', { slot: 'icon' })}Delete output
+                  files</wa-dropdown-item
+                >`
+            : nothing
+        }
+      </wa-dropdown>
+      <wa-tooltip for="shell-more">More</wa-tooltip>
+    `;
+  }
+
+  /** The wide editor tab's left column: the drawer body, docked. */
+  private renderDockedList(
+    view: SessionView,
+    surface: Surface,
+    host: HostSnapshot,
+  ): TemplateResult {
+    return html`
+      <aside class="dock" aria-label="Sessions">
+        <div class="dock-header">
+          <span class="dock-title">${host.paper.name}</span>
+          ${renderIconActionButton({
+            id: 'dock-search',
+            icon: 'magnifying-glass',
+            label: 'Search sessions',
+            tooltip: 'Search sessions',
+            pressed: surface.search !== '',
+            onClick: () =>
+              this.dispatchEvent(
+                SessionUiEvents.surface({ kind: 'search', value: '' }),
+              ),
+          })}
+          ${renderIconActionButton({
+            id: 'dock-new-task',
+            icon: 'plus',
+            label: 'New task',
+            tooltip: 'New task',
+            onClick: this.selectNew,
+          })}
+        </div>
+        <stream-tabs sections .view=${view} .surface=${surface}></stream-tabs>
+      </aside>
+    `;
+  }
+
+  private renderEmptyState(
+    view: SessionView,
+    surface: Surface,
+    host: HostSnapshot,
+  ): TemplateResult {
+    const { launch } = surface;
+    const selectedFiles = host.fileConfigs.flatMap(
+      (config) => launch[LAUNCH_FILE_LISTS[config.type]],
+    );
+    const activeNow = view.order.some(
+      (id) => view.streams.get(id)?.group !== 'recent',
+    );
+    return html`
+      <div class="empty">
+        <div class="hero-wrap">
+          <section class="hero" aria-labelledby="shell-hero-title">
+            <div class="hero-mark" aria-hidden="true">
+              ${waIcon('wand-magic-sparkles')}
+            </div>
+            <h1 id="shell-hero-title">What are you working on?</h1>
+            <p>
+              ${host.paper.name}. Describe the outcome you want: a polish, a
+              review, a literature pass, a proof check.
+            </p>
+          </section>
+          <wa-details class="context">
+            <span slot="summary" class="context-summary"
+              >${waIcon('file-circle-plus')} Context and attachments
+              <span class="context-files"
+                >${
+                  selectedFiles.length === 0
+                    ? 'Add files'
+                    : selectedFiles.map(getBasename).join(', ')
+                }</span
+              ></span
+            >
+            <div class="context-body">
+              ${repeat(
+                host.fileConfigs,
+                (config) => config.type,
+                (config) => html`
+                  <file-select-group
+                    .config=${config}
+                    .files=${launch[LAUNCH_FILE_LISTS[config.type]]}
+                    .checkboxValues=${launch}
+                    .sessionType=${launch.sessionType}
+                  ></file-select-group>
+                `,
+              )}
+            </div>
+          </wa-details>
+        </div>
+        ${
+          activeNow
+            ? html`<section class="active-now" aria-label="Active now">
+                <div class="active-label">Active now</div>
+                <stream-tabs
+                  activeOnly
+                  .view=${view}
+                  .surface=${surface}
+                ></stream-tabs>
+              </section>`
+            : nothing
+        }
+        <session-composer
+          class="launch-composer"
+          .view=${view}
+          .surface=${surface}
+          .stream=${null}
+          .host=${host}
+        ></session-composer>
+      </div>
+    `;
+  }
 }

@@ -50,14 +50,14 @@ export abstract class BaseApprovalPanel<
 
   override handleKeyboardShortcut(key: string): boolean {
     if (key === 'y') {
-      if (this.archived) return false;
+      if (this.readOnly) return false;
       this.emitAction(this.approvalDecision);
       return true;
     }
     // `a` accelerates whichever run-scoped action this panel's Approve menu
     // surfaces: the edit/bash session bypass or the proposal's approve-all.
     if (key === 'a') {
-      if (this.archived || this.showFeedback) return false;
+      if (this.readOnly || this.showFeedback) return false;
       if (this.canBypass) {
         this.approveSessionHandler();
         return true;
@@ -127,7 +127,7 @@ export abstract class BaseApprovalPanel<
         .canApproveAllDelegatedWork=${
           canUseRunScopedApproval && this.canApproveAllDelegatedWork
         }
-        .disabled=${this.archived}
+        .disabled=${this.readOnly}
         @approve=${() => this.emitAction(this.approvalDecision)}
         @approve-session=${() => this.approveSessionHandler()}
         @approve-all-delegated-work=${() =>

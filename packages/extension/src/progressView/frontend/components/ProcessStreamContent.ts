@@ -1,21 +1,15 @@
 /** Container for process-agent streams (e.g. `bash` child tabs). */
 
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
-import { consume } from '@lit/context';
-import { customElement, state } from 'lit/decorators.js';
+import { css, html, nothing, type TemplateResult } from 'lit';
+import { customElement } from 'lit/decorators.js';
 
-import {
-  EMPTY_STREAM_CONTEXT,
-  streamStateContext,
-  type StreamContextValue,
-} from '../streamContexts';
+import { BaseStreamContent } from './BaseStreamContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 
-import './LogList';
 import './StreamHeader';
 
 @customElement('process-stream-content')
-export class ProcessStreamContent extends LitElement {
+export class ProcessStreamContent extends BaseStreamContent {
   static override styles = [
     conversationContentStyles,
     css`
@@ -76,26 +70,16 @@ export class ProcessStreamContent extends LitElement {
     `,
   ];
 
-  @consume({ context: streamStateContext, subscribe: true })
-  @state()
-  private streamContext: StreamContextValue = EMPTY_STREAM_CONTEXT;
-
   override render(): TemplateResult | typeof nothing {
-    const streamInfo = this.streamContext.streamInfo;
-    const streamState = this.streamContext.streamState;
-    if (!streamInfo || !streamState) return nothing;
+    const stream = this.stream;
+    if (!stream) return nothing;
 
-    // Bash streams carry tool-use stream state, so <stream-header> can read
-    // the shared tool-use fields; the toolbar itself stays neutral for a
-    // process identity.
-    const command = (streamInfo.command ?? streamInfo.description ?? '').trim();
+    // The full command that spawned the process, from `run.start`; the
+    // toolbar itself stays neutral for a process identity.
+    const command = (stream.command ?? stream.description ?? '').trim();
 
     return html`
-      <stream-header
-        .stream=${streamInfo}
-        .state=${streamState}
-        .unsupportedCommands=${this.streamContext.unsupportedCommands}
-      ></stream-header>
+      <stream-header .stream=${stream} .view=${this.view}></stream-header>
       <div class="conversation-content">
         ${
           command
@@ -114,8 +98,7 @@ export class ProcessStreamContent extends LitElement {
               `
             : nothing
         }
-
-        <div class="conversation-log"><log-list></log-list></div>
+        ${this.renderLog()}
       </div>
     `;
   }

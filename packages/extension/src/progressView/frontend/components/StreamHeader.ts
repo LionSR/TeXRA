@@ -116,6 +116,16 @@ const TONE_INDICATOR_CLASS: Record<StreamView['tone'], string> = {
   neutral: 'is-ready',
 };
 
+/** Which toolbar buttons a stream's state licenses. */
+function enabledToolbarButtons(
+  stream: StreamView,
+  displayKey: StreamStatusDisplayKey | undefined,
+): ReadonlySet<string> | undefined {
+  if (stream.readOnly) return READ_ONLY_BUTTONS;
+  if (stream.group === 'interrupted') return new Set(TERMINAL_STATE_BUTTONS);
+  return displayKey ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey] : undefined;
+}
+
 @customElement('stream-header')
 export class StreamHeader extends LitElement {
   static override styles = [
@@ -422,7 +432,9 @@ export class StreamHeader extends LitElement {
         );
         return;
       case ELEMENT_IDS.DIFF_STREAM_BTN:
-        this.dispatchEvent(SessionUiEvents.host({ kind: 'latexdiff', streamId }));
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: 'latexdiff', streamId }),
+        );
         return;
       case ELEMENT_IDS.CLEAN_STREAM_BTN:
         this.dispatchEvent(SessionUiEvents.host({ kind: 'clean', streamId }));
@@ -455,13 +467,7 @@ export class StreamHeader extends LitElement {
     const toolbarButtons = isNativeAgentRun
       ? TOOLBAR_BUTTONS[stream.category]
       : NEUTRAL_TOOLBAR;
-    const enabledButtons = stream.readOnly
-      ? READ_ONLY_BUTTONS
-      : stream.group === 'interrupted'
-        ? new Set(TERMINAL_STATE_BUTTONS)
-        : displayKey
-          ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
-          : undefined;
+    const enabledButtons = enabledToolbarButtons(stream, displayKey);
     const runContext = this.runContextText(stream);
     const toolbarButtonViews = toolbarButtons.map((btn) => {
       const hidden = NATIVE_AGENT_ONLY_BUTTONS.has(btn.id) && !isNativeAgentRun;
@@ -471,7 +477,8 @@ export class StreamHeader extends LitElement {
         !enabledButtons?.has(btn.id) ||
         (isCopyRunContext && runContext === '');
       const isActive =
-        btn.bypassKind !== undefined && this.bypassActive(stream, btn.bypassKind);
+        btn.bypassKind !== undefined &&
+        this.bypassActive(stream, btn.bypassKind);
       const copied = isCopyRunContext && this.copyRunContext.state.copied;
       const restingTooltip =
         isActive && btn.titleActive ? btn.titleActive : btn.title;
@@ -530,8 +537,7 @@ export class StreamHeader extends LitElement {
             ${stream.statusDetail ?? statusLabel}
           </wa-tooltip>
           <span class="status-label" aria-hidden="true">${statusLabel}</span>
-          ${this.renderRunElapsed(stream)}
-          ${this.renderGoalChip(goal)}
+          ${this.renderRunElapsed(stream)} ${this.renderGoalChip(goal)}
           ${this.renderProgressBadge(stream.conversationProgress, stream.stage)}
         </div>
         <div class="header-actions">
@@ -572,7 +578,9 @@ export class StreamHeader extends LitElement {
       <wa-tooltip for=${ELEMENT_IDS.GOAL_CHIP}>${tooltip}</wa-tooltip>`;
   }
 
-  private renderRunElapsed(stream: StreamView): TemplateResult | typeof nothing {
+  private renderRunElapsed(
+    stream: StreamView,
+  ): TemplateResult | typeof nothing {
     if (stream.runStartedAt === null || stream.group === 'recent') {
       return nothing;
     }
@@ -597,7 +605,8 @@ export class StreamHeader extends LitElement {
         variant="neutral"
         size="s"
       >
-        ${waIcon('chart-line')} ${renderProgressBadgeContent(progress, stageValue)}
+        ${waIcon('chart-line')}
+        ${renderProgressBadgeContent(progress, stageValue)}
       </wa-tag>
       ${
         progressTitle

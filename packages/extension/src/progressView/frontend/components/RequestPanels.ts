@@ -21,7 +21,6 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -41,6 +40,7 @@ import {
 
 // Local imports - shared schemas
 import type { PermissionPayload, StreamTabId } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
 
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -51,15 +51,6 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { groupBy } from '@utils/core';
 import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
 import { getPermissionKey } from '../permissionState';
-import { streamDisplayLabel } from '../utils';
-
-// Local imports - progress view contexts
-import {
-  EMPTY_STREAM_BY_ID,
-  permissionsContext,
-  streamByIdContext,
-  type StreamByIdMap,
-} from '../streamContexts';
 
 // Local imports - progress view component types
 import type { ApproveSplitButton } from './ApproveSplitButton';
@@ -186,19 +177,15 @@ export class RequestPanels extends LitElement {
   /** Canonical selection for the external-inquiry carousel. */
   @state() private selectedExternalInquiryKey: string | null = null;
 
-  /** Run metadata for captioning requests when several runs wait at once. */
-  @consume({ context: streamByIdContext, subscribe: true })
-  @state()
-  private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
-
   /**
-   * All pending permissions across streams. `permissions` is already scoped to
-   * the active stream, so multi-run captions must read this unfiltered list —
-   * otherwise `runIds.size > 1` can never become true.
+   * The session, for the run captions: `permissions` is already scoped to
+   * the selected stream, so the "more than one run is asking" question is
+   * answered by `view.approvals`, the unfiltered set.
    */
-  @consume({ context: permissionsContext, subscribe: true })
-  @state()
-  private allPermissions: PermissionPayload[] = [];
+  @property({ attribute: false }) view: SessionView | null = null;
+
+  /** The selected stream's `readOnly`; every panel's actions no-op. */
+  @property({ type: Boolean }) readOnly = false;
 
   /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
   private permissionsByKind: ReadonlyMap<
@@ -226,15 +213,11 @@ export class RequestPanels extends LitElement {
       );
     }
 
-    if (
-      changedProperties.has('permissions') ||
-      changedProperties.has('allPermissions')
-    ) {
+    if (changedProperties.has('permissions') || changedProperties.has('view')) {
       // Captions key off every pending run, not the stream-filtered prop.
-      const runIds = new Set<StreamTabId>();
-      for (const permission of this.allPermissions) {
-        if (permission.data.streamId) runIds.add(permission.data.streamId);
-      }
+      const runIds = new Set<StreamTabId>(
+        (this.view?.approvals ?? []).map((approval) => approval.streamId),
+      );
       this.multiRunPending = runIds.size > 1;
     }
   }
@@ -358,13 +341,14 @@ export class RequestPanels extends LitElement {
       data-request-panel
       ?data-armed=${armed}
       .permission=${permission}
+      .readOnly=${this.readOnly}
     ></${config.tag}>`;
     if (!this.multiRunPending) return panel;
     const streamId = permission.data.streamId;
     if (!streamId) return panel;
-    // If the run's tab was evicted, skip the group caption rather than
+    // If the run's stream was evicted, skip the group caption rather than
     // show the raw `agent#executionId` handle.
-    const label = streamDisplayLabel(this.streamById.get(streamId));
+    const label = this.view?.streams.get(streamId)?.label;
     if (!label) return panel;
     return html`
       <div class="request-run-group">

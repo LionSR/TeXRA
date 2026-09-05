@@ -1,59 +1,21 @@
-/** `<stream-conversation>` — body of the Progress view's active stream. */
+/**
+ * `<stream-conversation>`: the body of the selected stream. A switch on the
+ * stream's `category` and `identity.kind` over plain properties; the three
+ * bodies take the same four records and nothing is provided by context.
+ */
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 
-// Third-party imports
-import { LitElement, css, html, type TemplateResult } from 'lit';
-import { provide } from '@lit/context';
-import { customElement, property, state } from 'lit/decorators.js';
+import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type { Surface } from '@shared/session/surface';
 
-// Local imports - shared
-import type {
-  InquiryThreadUpdatedEvent,
-  PermissionPayload,
-  StreamTabId,
-} from '@shared/schemas';
-import { SignalWatcher } from '@shared/signals';
-import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
-
-// Local imports - progress view
-import {
-  activeInquiries$,
-  logContext$,
-  permissions$,
-  phaseStages$,
-  streamById$,
-  streamContext$,
-} from '../progressState';
-import {
-  archivedContext,
-  childProgressContext,
-  EMPTY_CHILD_PROGRESS,
-  EMPTY_INQUIRY_THREADS,
-  EMPTY_LOG_CONTEXT,
-  EMPTY_PHASE_STAGE_MAP,
-  EMPTY_STREAM_BY_ID,
-  EMPTY_STREAM_CONTEXT,
-  followUpEventSinkContext,
-  inquiryThreadsContext,
-  permissionsContext,
-  phaseStagesContext,
-  streamByIdContext,
-  streamLogContext,
-  streamStateContext,
-  type FollowUpEventSink,
-  type PhaseStageMap,
-  type StreamByIdMap,
-  type StreamContextValue,
-  type StreamLogContextValue,
-} from '../streamContexts';
-
-// Side-effect imports - body components rendered below.
 import './ToolUseStreamContent';
 import './WorkflowStreamContent';
 import './ProcessStreamContent';
-import './LogList';
 
 @customElement('stream-conversation')
-export class StreamConversation extends SignalWatcher(LitElement) {
+export class StreamConversation extends LitElement {
   static override styles = css`
     :host {
       /* The transcript spans the panel instead of a fixed reading column:
@@ -84,85 +46,42 @@ export class StreamConversation extends SignalWatcher(LitElement) {
     }
   `;
 
-  @provide({ context: streamStateContext })
-  @state()
-  private streamContextValue: StreamContextValue = EMPTY_STREAM_CONTEXT;
+  @property({ attribute: false }) stream: StreamView | null = null;
+  @property({ attribute: false }) view: SessionView | null = null;
+  @property({ attribute: false }) surface: Surface | null = null;
+  @property({ attribute: false }) host: HostSnapshot | null = null;
+  /** The host's clock, for elapsed readings (G4). */
+  @property({ type: Number }) nowMs: number | null = null;
 
-  @provide({ context: streamLogContext })
-  @state()
-  private streamLogContextValue: StreamLogContextValue = EMPTY_LOG_CONTEXT;
+  override render(): TemplateResult | typeof nothing {
+    const { stream, view, surface } = this;
+    if (!stream || !view || !surface) return nothing;
 
-  @provide({ context: childProgressContext })
-  @state()
-  private childProgressContextValue: ReadonlyMap<
-    StreamTabId,
-    ChildRunProgress
-  > = EMPTY_CHILD_PROGRESS;
-
-  @provide({ context: permissionsContext })
-  @state()
-  private permissionsContextValue: PermissionPayload[] = [];
-
-  @provide({ context: streamByIdContext })
-  @state()
-  private streamByIdContextValue: StreamByIdMap = EMPTY_STREAM_BY_ID;
-
-  @provide({ context: inquiryThreadsContext })
-  @state()
-  private inquiryThreadsContextValue: InquiryThreadUpdatedEvent[] =
-    EMPTY_INQUIRY_THREADS;
-
-  @provide({ context: phaseStagesContext })
-  @state()
-  private phaseStagesContextValue: PhaseStageMap = EMPTY_PHASE_STAGE_MAP;
-
-  @provide({ context: followUpEventSinkContext })
-  private readonly followUpEventSink: FollowUpEventSink = (event) => {
-    this.dispatchEvent(event);
-  };
-
-  /**
-   * Externally settable (unlike the signal-derived contexts above): every
-   * live host leaves this `false`; the trace-viewer sets it once at mount
-   * (`conversationView.archived = true`) since it has no live backend for
-   * request-panel actions to reach.
-   */
-  @provide({ context: archivedContext })
-  @property({ type: Boolean })
-  archived = false;
-
-  /** Sync signal-computed values into @provide/@state context properties. */
-  protected override willUpdate(): void {
-    this.streamContextValue = streamContext$.get();
-    this.streamLogContextValue = logContext$.get();
-    this.childProgressContextValue = this.streamLogContextValue.childProgress;
-    this.permissionsContextValue = permissions$.get();
-    this.streamByIdContextValue = streamById$.get();
-    this.inquiryThreadsContextValue = activeInquiries$.get();
-    this.phaseStagesContextValue = phaseStages$.get();
-  }
-
-  override render(): TemplateResult {
-    const { streamInfo, streamState, isToolUse } = this.streamContextValue;
-
-    // No active stream — show empty log-list.
-    if (!streamInfo || !streamState) {
-      return html`<log-list></log-list>`;
+    if (stream.identity?.kind === 'process') {
+      return html`<process-stream-content
+        .stream=${stream}
+        .view=${view}
+        .surface=${surface}
+        .host=${this.host}
+      ></process-stream-content>`;
     }
 
-    // Process agents (e.g. bash) proxy raw stdout/stderr — render them with
-    // a dedicated terminal-style container, not the LLM workflow/tool-use
-    // chrome.
-    if (streamInfo.identity?.kind === 'process') {
-      return html`<process-stream-content></process-stream-content>`;
+    switch (stream.category) {
+      case 'toolUse':
+        return html`<tool-use-stream-content
+          .stream=${stream}
+          .view=${view}
+          .surface=${surface}
+          .host=${this.host}
+        ></tool-use-stream-content>`;
+      case 'workflow':
+        return html`<workflow-stream-content
+          .stream=${stream}
+          .view=${view}
+          .surface=${surface}
+          .nowMs=${this.nowMs}
+        ></workflow-stream-content>`;
     }
-
-    if (isToolUse) {
-      return html`<tool-use-stream-content></tool-use-stream-content>`;
-    }
-
-    // Workflow stream (default for non-tool-use).
-    return html`<workflow-stream-content></workflow-stream-content>`;
   }
 }
 

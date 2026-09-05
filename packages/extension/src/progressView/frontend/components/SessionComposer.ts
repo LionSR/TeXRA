@@ -33,11 +33,11 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import type { SessionType, StreamTabId } from '@shared/schemas';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { EMPTY_DRAFT, type Draft, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { designTokens, commonViewStyles } from '@shared/styles';
 import { appendClipboardImageChips } from '@shared/utils/clipboard';
 import {
   clipboardImageFiles,
@@ -117,6 +117,10 @@ export class SessionComposer extends LitElement {
       .routing .routing-parent:hover {
         text-decoration: underline;
       }
+      .routing .routing-note {
+        white-space: nowrap;
+        color: var(--color-text-muted);
+      }
 
       .composer {
         display: flex;
@@ -136,9 +140,30 @@ export class SessionComposer extends LitElement {
           var(--wa-color-surface-border)
         );
       }
+      /* Compact: one pill, the follow-up line and its trailing controls on
+         one row; the textarea grows with its content up to a few lines. */
       .composer.is-compact {
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
+        flex-direction: row;
+        align-items: flex-end;
+        gap: var(--wa-space-3xs);
+        padding: var(--wa-space-3xs) var(--wa-space-3xs) var(--wa-space-3xs)
+          var(--wa-space-2xs);
         border-radius: var(--wa-border-radius-xl, 20px);
+      }
+      .composer.is-compact wa-textarea {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .composer.is-compact wa-textarea::part(base) {
+        min-height: 0;
+      }
+      .composer.is-compact wa-textarea::part(textarea) {
+        min-height: 1.5em;
+        height: auto;
+        padding-block: var(--wa-space-3xs);
+      }
+      .composer.is-compact .row {
+        flex: 0 0 auto;
       }
 
       wa-textarea::part(base) {
@@ -148,8 +173,12 @@ export class SessionComposer extends LitElement {
       }
       wa-textarea::part(textarea) {
         padding-inline: var(--wa-space-3xs);
+        font-family: var(--wa-font-family-body, inherit);
         font-size: var(--font-size);
         line-height: var(--line-height-normal);
+        field-sizing: content;
+        min-height: 0;
+        max-height: 10em;
       }
 
       .row {
@@ -195,7 +224,7 @@ export class SessionComposer extends LitElement {
       .chips-collapsed {
         display: none;
       }
-      @container (max-width: 440px) {
+      @container (max-width: 380px) {
         .chips {
           display: none;
         }
@@ -227,7 +256,7 @@ export class SessionComposer extends LitElement {
   @state() private polishing = false;
   @state() private announcement = '';
 
-  @query('wa-textarea') private textArea: HTMLElement | null = null;
+  @query('wa-textarea') private textArea?: HTMLElement;
 
   private get compact(): boolean {
     return this.stream !== null;
@@ -417,7 +446,11 @@ export class SessionComposer extends LitElement {
     if (!stream) return;
     const draft = this.draft;
     this.dispatchEvent(
-      SessionUiEvents.surface({ kind: 'draft', streamId: parentId, patch: draft }),
+      SessionUiEvents.surface({
+        kind: 'draft',
+        streamId: parentId,
+        patch: draft,
+      }),
     );
     this.dispatchEvent(
       SessionUiEvents.surface({
@@ -457,8 +490,7 @@ export class SessionComposer extends LitElement {
     const agentLabel =
       launch.launchTarget === 'team' && team
         ? team.label
-        : (agents.find((option) => option.value === agentId)?.label ??
-          agentId);
+        : (agents.find((option) => option.value === agentId)?.label ?? agentId);
     const model = host.modelOptions.find(
       (option) => option.value === launch.model,
     );
@@ -476,8 +508,9 @@ export class SessionComposer extends LitElement {
               html`<wa-dropdown-item
                 value=${`agent:${option.value}`}
                 type="checkbox"
-                ?checked=${launch.launchTarget === 'agent' &&
-                option.value === agentId}
+                ?checked=${
+                  launch.launchTarget === 'agent' && option.value === agentId
+                }
                 >${option.label}</wa-dropdown-item
               >`,
           )}
@@ -491,8 +524,10 @@ export class SessionComposer extends LitElement {
                       html`<wa-dropdown-item
                         value=${`team:${option.value}`}
                         type="checkbox"
-                        ?checked=${launch.launchTarget === 'team' &&
-                        option.value === launch.selectedTeamId}
+                        ?checked=${
+                          launch.launchTarget === 'team' &&
+                          option.value === launch.selectedTeamId
+                        }
                         >${option.label}</wa-dropdown-item
                       >`,
                   )}
@@ -650,13 +685,15 @@ export class SessionComposer extends LitElement {
             size="s"
             type="button"
             with-caret
-            >${waIcon('screwdriver-wrench', { slot: 'start' })}<span class="chip-label"
+            >${waIcon('screwdriver-wrench', { slot: 'start' })}<span
+              class="chip-label"
               >${menus.map((menu) => menu.label).join(' · ')}</span
             ></wa-button
           >
           ${menus.map(
             (menu) =>
-              html`<div class="menu-heading">${menu.title}</div>${menu.items}`,
+              html`<div class="menu-heading">${menu.title}</div>
+                ${menu.items}`,
           )}
         </wa-dropdown>
         <wa-tooltip for="composer-setup">Setup</wa-tooltip>
@@ -668,22 +705,29 @@ export class SessionComposer extends LitElement {
     const parent = stream.parentId
       ? this.view?.streams.get(stream.parentId)
       : undefined;
+    // The link moves the draft to the parent, or the line states that the
+    // parent takes no replies (a workflow-script run has no chat).
     const parentAcceptsFollowUps =
       parent !== undefined && parent.followUpSupport !== 'unsupported';
     return html`<div class="routing">
       ${waIcon('code-branch')}
       <span class="routing-target">Goes to ${stream.label}</span>
       ${
-        parentAcceptsFollowUps
-          ? html`<span aria-hidden="true">·</span
-              ><button
-                type="button"
-                class="routing-parent"
-                @click=${() => this.replyToParent(parent.id)}
-              >
-                reply to ${parent.label} instead
-              </button>`
-          : nothing
+        parent === undefined
+          ? nothing
+          : html`<span aria-hidden="true">·</span>${
+                parentAcceptsFollowUps
+                  ? html`<button
+                      type="button"
+                      class="routing-parent"
+                      @click=${() => this.replyToParent(parent.id)}
+                    >
+                      reply to ${parent.label} instead
+                    </button>`
+                  : html`<span class="routing-note"
+                      >${parent.label} takes no replies</span
+                    >`
+              }`
       }
     </div>`;
   }
@@ -693,7 +737,9 @@ export class SessionComposer extends LitElement {
     if (stream && stream.followUpSupport === 'unsupported') return nothing;
     const compact = this.compact;
     const readOnly = stream?.readOnly === true;
-    const queued = stream ? (this.view?.queuedFollowUps.get(stream.id) ?? []) : [];
+    const queued = stream
+      ? (this.view?.queuedFollowUps.get(stream.id) ?? [])
+      : [];
     const text = this.text;
     const canSend =
       !readOnly && (text.trim() !== '' || this.draft.images.length > 0);
@@ -764,7 +810,7 @@ export class SessionComposer extends LitElement {
             className: 'composer-primary-action',
             appearance: 'filled',
             variant: 'brand',
-            size: 'l',
+            size: compact ? 'm' : 'l',
             disabled: !canSend,
             onClick: this.send,
           })}

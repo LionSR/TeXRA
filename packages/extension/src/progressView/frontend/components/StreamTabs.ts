@@ -14,10 +14,10 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports
 import type { StreamTabId } from '@shared/schemas';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { resolveSelected, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { designTokens, commonViewStyles } from '@shared/styles';
 import { focusRingStyles } from '@shared/styles/controlStyles';
 import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@shared/wa/icons';
 
@@ -223,7 +223,9 @@ class StreamTab extends LitElement {
               }
               ${
                 stream.worktree
-                  ? html`<worktree-chip .info=${stream.worktree}></worktree-chip>`
+                  ? html`<worktree-chip
+                      .info=${stream.worktree}
+                    ></worktree-chip>`
                   : nothing
               }
               ${
@@ -257,7 +259,9 @@ class StreamTab extends LitElement {
                 : nothing
             }
           </button>
-          <wa-tooltip for="stream-tab-status">${accessibleStatusLabel}</wa-tooltip>
+          <wa-tooltip for="stream-tab-status"
+            >${accessibleStatusLabel}</wa-tooltip
+          >
         </div>
         <wa-tooltip for="stream-tab-kind"
           >${
@@ -431,7 +435,8 @@ export class StreamTabs extends LitElement {
     const surface = this.surface;
     const selected = view && surface ? resolveSelected(view, surface) : null;
     const needle = (surface?.search ?? '').trim().toLowerCase();
-    const rootStream = this.root === null ? undefined : this.streamOf(this.root);
+    const rootStream =
+      this.root === null ? undefined : this.streamOf(this.root);
     const top = (rootStream ? [rootStream.id] : (view?.order ?? []))
       .map((id) => this.streamOf(id))
       .filter((stream): stream is StreamView => stream !== undefined)
@@ -491,7 +496,9 @@ export class StreamTabs extends LitElement {
 
     switch (action) {
       case 'select':
-        this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', streamId }));
+        this.dispatchEvent(
+          SessionUiEvents.surface({ kind: 'select', streamId }),
+        );
         break;
       case 'delete':
         this.dispatchEvent(
