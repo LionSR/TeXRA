@@ -1355,7 +1355,7 @@ describe('CLI conversation transcript', () => {
       '[Full output is unavailable because this run artifact was deleted.]';
 
     const hydrated = hydratedTranscript(
-      [read],
+      { rows: [read] },
       new Map([[spillPath, { kind: 'failed' as const, notice }]]),
     );
 

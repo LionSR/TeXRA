@@ -101,9 +101,12 @@ interface AgentLaunchInput {
    * Fires once the stream's `run.start` is published, before the run itself
    * begins: the stream exists for every fold by then, so a host may select
    * it (its own surface state, never a fact) and approval ancestry may be
-   * registered against it.
+   * registered against it. It carries the run's trace, which has emitted
+   * nothing yet: a consumer of every trace event (the agent package)
+   * attaches here, ahead of the instruction log, the root stage, and the
+   * launch warnings.
    */
-  onStreamResolved?: (streamId: StreamTabId) => void;
+  onStreamResolved?: (streamId: StreamTabId, trace: AgentTrace) => void;
   /** Delegated child of another run; carried on the failure `result`. */
   isSubagent?: boolean;
   /** Stream this run was launched from, stamped on `run.start`. */
@@ -473,7 +476,7 @@ async function assembleAgentLaunchContext(
     },
   ]);
   onStarted(runTrace, setting.agentCategory);
-  input.onStreamResolved?.(streamId);
+  input.onStreamResolved?.(streamId, runTrace.trace);
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).

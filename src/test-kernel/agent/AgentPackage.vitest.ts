@@ -16,6 +16,7 @@ import {
 
 interface RunAgentOptions {
   readonly onRun?: (handle: unknown) => void | Promise<void>;
+  readonly onStreamResolved?: (streamId: string, trace: unknown) => void;
 }
 
 const mocks = vi.hoisted(() => ({
@@ -124,8 +125,10 @@ const PLATFORM = {
   roots: {},
   processes: { selfIdentity: async () => 'test-start' },
 } as unknown as AgentPlatform;
-/** The run's handle as `onRun` hands it over: its trace is the event source. */
-const HANDLE = { trace: { subscribe: mocks.subscribe } };
+/** The run's trace as `onStreamResolved` hands it over: the event source. */
+const TRACE = { subscribe: mocks.subscribe };
+/** The run's handle as `onRun` hands it over: the interrupt target. */
+const HANDLE = { interrupt: vi.fn() };
 const RESULT = { outcome: 'COMPLETED' } as never;
 const EVENT = { type: 'run.start' } as never;
 const INPUT = {
@@ -147,6 +150,7 @@ describe('agent package run lifecycle', () => {
     mocks.loadAgents.mockResolvedValue(undefined);
     mocks.runValidatedAgent.mockImplementation(
       async (_input: unknown, options: RunAgentOptions) => {
+        options.onStreamResolved?.('stream-1', TRACE);
         await options.onRun?.(HANDLE);
         return RESULT;
       },
@@ -169,16 +173,30 @@ describe('agent package run lifecycle', () => {
     expect(mocks.initNodeAgentRuntime).toHaveBeenCalledTimes(1);
   });
 
-  it("subscribes to the run's own trace when its handle arrives", async () => {
-    await runAgent(INPUT).result;
+  it('delivers the launch events: the trace is subscribed when the stream resolves, before the run handle exists', async () => {
+    mocks.runValidatedAgent.mockImplementationOnce(
+      async (_input: unknown, options: RunAgentOptions) => {
+        options.onStreamResolved?.('stream-1', TRACE);
+        // The instruction log, the root stage, and the launch warnings fire
+        // here, before `onRun`.
+        mocks.eventListener?.(EVENT);
+        await options.onRun?.(HANDLE);
+        return RESULT;
+      },
+    );
 
+    const run = runAgent(INPUT);
+    const nextEvent = run[Symbol.asyncIterator]().next();
+
+    await expect(nextEvent).resolves.toEqual({ done: false, value: EVENT });
+    await run.result;
     expect(mocks.subscribe).toHaveBeenCalledOnce();
-    expect(mocks.subscribe).toHaveBeenCalledWith(expect.any(Function));
   });
 
   it('discards trace events when the caller only awaits the result', async () => {
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
+        options.onStreamResolved?.('stream-1', TRACE);
         await options.onRun?.(HANDLE);
         mocks.eventListener?.(EVENT);
         return RESULT;
@@ -297,6 +315,7 @@ describe('agent package run lifecycle', () => {
     let finishRun: ((result: typeof RESULT) => void) | undefined;
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
+        options.onStreamResolved?.('stream-1', TRACE);
         await options.onRun?.(HANDLE);
         return await new Promise<typeof RESULT>((resolve) => {
           finishRun = resolve;

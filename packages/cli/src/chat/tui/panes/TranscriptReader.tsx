@@ -20,6 +20,7 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
+import type { TranscriptView } from '@shared/session/sessionView';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { readTranscriptSpill } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -47,6 +48,7 @@ type SpillHydration =
   | { readonly kind: 'failed'; readonly notice: string };
 
 const EMPTY_SPILL_HYDRATIONS: ReadonlyMap<string, SpillHydration> = new Map();
+const EMPTY_TRANSCRIPT: Pick<TranscriptView, 'rows'> = { rows: [] };
 
 function spillFailureNotice(verb: string, error: unknown): string {
   return `[Unable to ${verb} full output. Close and reopen the transcript to retry: ${toErrorMessage(error)}]`;
@@ -71,11 +73,17 @@ function withSpillNotice(preview: string, notice: string): string {
   return preview ? `${preview}\n\n${notice}` : notice;
 }
 
+/**
+ * The rows with their spilled bodies restored. Takes the transcript value
+ * rather than its rows: the fold appends rows in place and replaces the
+ * transcript on every change, so the transcript is what a memo of this
+ * result keys on.
+ */
 export function hydratedTranscript(
-  rows: readonly TranscriptRow[],
+  transcript: Pick<TranscriptView, 'rows'>,
   spills: ReadonlyMap<string, SpillHydration>,
 ): readonly TranscriptRow[] {
-  return rows.map((row): TranscriptRow => {
+  return transcript.rows.map((row): TranscriptRow => {
     if (!row.spillPath) return row;
     const spill = spills.get(row.spillPath);
     if (spill === undefined) return { ...row, spillPath: undefined };
@@ -148,7 +156,13 @@ export function TranscriptReader({
 }): React.JSX.Element {
   const { columns } = useWindowSize();
   const view = useSignal(sessionView());
-  const rows = streamViewOf(view, streamId)?.transcript.rows ?? [];
+  // The transcript value, never its `rows` array: the fold appends and
+  // patches rows in place and replaces the transcript on every change (a
+  // new row, a patched row, a text chunk), so the transcript is the
+  // identity the effect and memos below key on to stay live while the
+  // reader is open.
+  const transcript =
+    streamViewOf(view, streamId)?.transcript ?? EMPTY_TRANSCRIPT;
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
   const [spillState, setSpillState] = useState<{
@@ -160,20 +174,14 @@ export function TranscriptReader({
     paths: Set<string>;
   }>({ streamId, paths: new Set() });
 
-  const spillPaths = useMemo(
-    () => [...new Set(rows.flatMap((entry) => entry.spillPath ?? []))],
-    [rows],
-  );
-  const spillPathsKey = spillPaths.join('\0');
-
   useEffect(() => {
     if (requestedSpills.current.streamId !== streamId) {
       requestedSpills.current = { streamId, paths: new Set() };
       setSpillState({ streamId, values: new Map() });
     }
-    const pending = spillPaths.filter(
-      (spillPath) => !requestedSpills.current.paths.has(spillPath),
-    );
+    const pending = [
+      ...new Set(transcript.rows.flatMap((entry) => entry.spillPath ?? [])),
+    ].filter((spillPath) => !requestedSpills.current.paths.has(spillPath));
     if (pending.length === 0) return;
     for (const spillPath of pending) {
       requestedSpills.current.paths.add(spillPath);
@@ -204,9 +212,7 @@ export function TranscriptReader({
         return { streamId, values };
       });
     })();
-    // `spillPathsKey` stands in for `spillPaths`: the key changes exactly
-    // when the path list does.
-  }, [spillPathsKey, streamId]);
+  }, [transcript, streamId]);
 
   const spills =
     spillState.streamId === streamId
@@ -214,8 +220,8 @@ export function TranscriptReader({
       : EMPTY_SPILL_HYDRATIONS;
 
   const hydratedRows = useMemo(
-    () => hydratedTranscript(rows, spills),
-    [rows, spills],
+    () => hydratedTranscript(transcript, spills),
+    [transcript, spills],
   );
 
   // Recomputed as the run appends rows, so the reader stays live rather than

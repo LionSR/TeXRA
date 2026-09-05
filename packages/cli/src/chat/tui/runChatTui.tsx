@@ -82,11 +82,13 @@ import {
   activeStreamId as activeStreamIdSignal,
   resetCliState,
   patchSessionMeta,
+  rootStreamId as rootStreamIdSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
 import {
   bindSessionView,
   currentView,
+  descendantStreamIds,
   sessionView,
   streamPhaseOf,
   streamViewOf,
@@ -439,8 +441,14 @@ export async function runChat(
     // StreamLogStore entries outlive resetCliState (which only clears the
     // React/signal view). Drop them so transcript projection can't replay
     // the cleared conversation into the fresh `<Static>` scrollback.
+    // Only this chat's conversation goes: the root run and its descendants.
+    // The view also holds every earlier run hydrated from the transcript
+    // summary; those are history, not this chat, and stay.
     const store = runtimeSession.transcripts;
-    for (const streamId of currentView().streams.keys()) {
+    for (const streamId of descendantStreamIds(
+      currentView(),
+      rootStreamIdSignal.get(),
+    )) {
       store.delete(streamId).catch(() => {
         // Best-effort: a KV failure leaves the log on disk, but the run
         // is already torn down, nothing actionable to surface here.

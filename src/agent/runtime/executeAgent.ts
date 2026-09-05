@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { logConversationProgress } from '@agent/trace';
+import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
@@ -364,9 +364,10 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /**
    * Fires with the real streamId once its `run.start` is published, before
    * the run begins: the stream exists for every fold, so a host may select
-   * it as its own surface state.
+   * it as its own surface state. The run's trace comes with it, before its
+   * first event, for a consumer that must hear every trace event.
    */
-  onStreamResolved?: (streamId: StreamTabId) => void;
+  onStreamResolved?: (streamId: StreamTabId, trace: AgentTrace) => void;
   /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
   onIdle?: () => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */

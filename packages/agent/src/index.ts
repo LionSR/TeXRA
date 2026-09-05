@@ -5,7 +5,7 @@
 // pinning the runtime's internal file layout — the same fold-in the three hosts
 // took in #10011. These never reach the emitted declarations, so they carry no
 // provider-type leak risk.
-import type { AgentEvent } from '@agent/trace';
+import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { loadAgents, resolveAgent } from '@agent/index';
 import {
   processOwnerId,
@@ -147,14 +147,20 @@ class AgentRunStream implements AgentRun {
 
   /**
    * The run's own trace is the event source: every trace event of the run,
-   * durable or not, in emission order, from the moment the run owns its
-   * handle.
+   * durable or not, in emission order. The launcher hands the trace over
+   * with the resolved stream, before the run's first trace event (the
+   * instruction log, the root stage, the launch warnings), so an iteration
+   * begun right after `runAgent()` misses none of them.
    */
-  attachHandle(handle: RuntimeAgentRunHandle): void {
-    this.liveHandle = handle;
-    this.detachEvents = handle.trace.subscribe((event) => {
+  attachTrace(trace: AgentTrace): void {
+    this.detachEvents = trace.subscribe((event) => {
       if (this.iteratorStarted) this.push(event);
     });
+  }
+
+  /** The live handle once the run is tracked: what `interrupt()` targets. */
+  attachHandle(handle: RuntimeAgentRunHandle): void {
+    this.liveHandle = handle;
   }
 
   interrupt(): void {
@@ -307,6 +313,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
           approvalPromptsUnavailable: true,
           launchSignal: stream.launchSignal,
           onRun: (handle) => stream.attachHandle(handle),
+          onStreamResolved: (_streamId, trace) => stream.attachTrace(trace),
           session,
           stopAfterCycle: true,
           tools: input.tools,

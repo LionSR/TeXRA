@@ -327,6 +327,7 @@ describe('executeCliRequest', () => {
     expect(mocks.attachWorkflowPlainOutput).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        executionId: 'abcdef',
         writeLine: mocks.writeTextStderr,
       }),
     );

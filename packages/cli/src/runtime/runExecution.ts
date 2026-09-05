@@ -279,6 +279,7 @@ export async function executeCliRequest(
       : async () => undefined;
   const detachWorkflowPlainOutput = renderWorkflowPlainProgress
     ? attachWorkflowPlainOutput(session, {
+        executionId: request.executionId,
         beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
         writeLine: writeTextStderr,
       })

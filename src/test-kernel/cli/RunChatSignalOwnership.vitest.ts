@@ -7,10 +7,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@test/support/sessionGraphTestSetup';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { ExecutionId } from '@shared/schemas';
+import { rootStreamId as rootStreamIdSignal } from '@cli/chat/tui/state/cliState';
+import { currentView } from '@cli/chat/tui/state/sessionView';
+import {
+  AgentCategory,
+  USER_FOLLOW_UP_SUPPORT,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
@@ -484,6 +492,60 @@ describe('runChat signal ownership wiring', () => {
       await vi.waitFor(() =>
         expect(mocks.submit).toHaveBeenCalledWith('', mediaFiles, undefined),
       );
+    } finally {
+      exitTui.resolve();
+      await runPromise;
+      restoreAgentRegistry();
+    }
+  }, 20_000);
+
+  it('drops only the current conversation on /clear and keeps hydrated history', async () => {
+    const exitTui = createDeferred();
+    mocks.waitUntilExit.mockReturnValue(exitTui.promise);
+    const restoreAgentRegistry = await stubAgentRegistry();
+    const { runChat } = await import('@cli/chat/tui/runChatTui');
+    const runPromise = runChat(INTERACTIVE_CONTEXT, {});
+
+    try {
+      await vi.waitFor(() =>
+        expect(mocks.createChatSessionController).toHaveBeenCalled(),
+      );
+      const session = defaultSession();
+      const ownRoot = 'stream:clear-own-root' as StreamTabId;
+      const history = 'stream:clear-history' as StreamTabId;
+      // Both land the way the transcript summary's runs hydrate: top-level
+      // streams in the view, only one of them this chat's root.
+      session.publish(
+        [history, ownRoot].map((streamId) => ({
+          type: 'run.start' as const,
+          aggregateId: streamId,
+          executionId: `execution:${streamId}` as ExecutionId,
+          identity: { kind: 'agent' as const, agent: 'assistant' },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+          worktree: null,
+          parentStreamId: null,
+          background: false,
+          approvalPolicy: null,
+          checkpointId: null,
+        })),
+      );
+      await vi.waitFor(() =>
+        expect(currentView().streams.has(ownRoot)).toBe(true),
+      );
+      rootStreamIdSignal.set(ownRoot);
+      const deleted = vi
+        .spyOn(session.transcripts, 'delete')
+        .mockResolvedValue(undefined);
+
+      const { getSlashCommandContext } =
+        mocks.createChatSessionController.mock.calls[0]![0];
+      getSlashCommandContext().resetSession();
+
+      expect(deleted.mock.calls.map(([streamId]) => streamId)).toEqual([
+        ownRoot,
+      ]);
     } finally {
       exitTui.resolve();
       await runPromise;

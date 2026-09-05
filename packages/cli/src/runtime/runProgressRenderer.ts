@@ -95,6 +95,26 @@ export function createRunProgressRenderer(
   });
 }
 
+/**
+ * The run a headless renderer describes: the stream of the named execution,
+ * or the first top-level stream created after the renderer attached (the
+ * view cursor it read then). Claimed once by each renderer; a child's later
+ * appearance never moves it.
+ */
+function claimRootStream(
+  view: SessionView,
+  wantedExecutionId: ExecutionId | undefined,
+  attachCursor: number,
+): StreamTabId | undefined {
+  const candidates = [...view.streams.values()].filter((stream) =>
+    wantedExecutionId !== undefined
+      ? stream.executionId === wantedExecutionId
+      : stream.parentId === null && stream.createdAt > attachCursor,
+  );
+  candidates.sort((a, b) => a.createdAt - b.createdAt);
+  return candidates.at(0)?.id;
+}
+
 /** Follow a view level with a callback; returns the detach. */
 function followView(
   session: RunProgressSession,
@@ -186,26 +206,14 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return isTerminalOutcomePhase(this.root()?.status);
   }
 
-  /**
-   * The run this renderer describes: the stream of the named execution, or
-   * the first top-level stream created after attach. A child's later
-   * appearance never moves it.
-   */
-  private claimRoot(view: SessionView): void {
-    if (this.rootStreamId !== undefined) return;
-    const candidates = [...view.streams.values()].filter((stream) =>
-      this.wantedExecutionId !== undefined
-        ? stream.executionId === this.wantedExecutionId
-        : stream.parentId === null && stream.createdAt > this.attachCursor,
-    );
-    candidates.sort((a, b) => a.createdAt - b.createdAt);
-    this.rootStreamId = candidates.at(0)?.id;
-  }
-
   private applyView(view: SessionView): void {
     const previous = this.view;
     this.view = view;
-    this.claimRoot(view);
+    this.rootStreamId ??= claimRootStream(
+      view,
+      this.wantedExecutionId,
+      this.attachCursor,
+    );
     const root = this.root();
     if (!root) return;
     const wasTerminal = isTerminalOutcomePhase(
@@ -403,6 +411,10 @@ function formatElapsed(ms: number): string {
 // ---------------------------------------------------------------------------
 
 interface WorkflowPlainOutputOptions {
+  /** The launched run when the request names it, else the first top-level
+   *  stream created after attach: the output prints the workflow streams
+   *  under it. */
+  readonly executionId?: ExecutionId;
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }
@@ -447,9 +459,10 @@ function workflowPlainLines(stream: StreamView): ReadonlyMap<string, string> {
 /**
  * The plain-text workflow progress of `texra run` (text output): what
  * `transcript.run` and the stream's rows say, printed as they change
- * between consecutive view levels (PRD 10.3). A line prints when its entry
- * is new or reads differently than at the previous level; nothing here
- * folds, gates, or relabels.
+ * between consecutive view levels (PRD 10.3), for the workflow streams in
+ * the launched execution's subtree. A line prints when its entry is new or
+ * reads differently than at the previous level; nothing here folds, gates,
+ * or relabels.
  */
 export function attachWorkflowPlainOutput(
   session: WorkflowPlainSession,
@@ -457,6 +470,8 @@ export function attachWorkflowPlainOutput(
 ): () => void {
   const previous = new Map<StreamTabId, ReadonlyMap<string, string>>();
   let subscribed = '';
+  let rootStreamId: StreamTabId | undefined;
+  const attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
   const write = (line: string): void => {
     options.beforeWrite?.();
     options.writeLine(line);
@@ -473,9 +488,19 @@ export function attachWorkflowPlainOutput(
     for (const streamId of [...previous.keys()]) {
       if (!view.streams.has(streamId)) previous.delete(streamId);
     }
-    const workflows = [...view.streams.values()].filter(
-      (stream) => stream.identity?.kind === 'multiAgentWorkflow',
-    );
+    // The view also holds every earlier run hydrated from the transcript
+    // summary; only the launched run's own subtree is this run's output.
+    rootStreamId ??= claimRootStream(view, options.executionId, attachCursor);
+    const root = rootStreamId;
+    const workflows =
+      root === undefined
+        ? []
+        : [...view.streams.values()].filter(
+            (stream) =>
+              stream.identity?.kind === 'multiAgentWorkflow' &&
+              (stream.id === root ||
+                stream.ancestors.some((ancestor) => ancestor.id === root)),
+          );
     const key = workflows.map((stream) => stream.id).join('\0');
     if (key !== subscribed) {
       subscribed = key;
