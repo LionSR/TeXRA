@@ -844,10 +844,14 @@ function createWindow(options: {
   };
   // Catalog refresh leaves each Surface's selections intact. Applying an
   // agent mode separately sends the chosen root to that paper's launcher.
+  // Each paper's catalogs are read inside its own session: the presets
+  // come from that paper's workspace state, not the caller's.
   const refreshCatalogs = async () => {
     await Promise.all(
       [...paperBindings.values()].map((binding) =>
-        binding.snapshot.refreshCatalogs(),
+        runInSession(binding.paper.session, () =>
+          binding.snapshot.refreshCatalogs(),
+        ),
       ),
     );
   };

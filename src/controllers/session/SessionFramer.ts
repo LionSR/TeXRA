@@ -5,8 +5,8 @@
  * completion marker, then durable events before live text. Host snapshots
  * are merged beside those inputs. A cold mount starts from the runtime
  * view's cursor; a resubscribe starts from the cursor it supplies.
- * Rows are tagged with their read, transcript rows of aggregates the
- * subscriber did not name are left out of the tail, and every frame
+ * Rows are tagged with their read, transcript rows and text chunks of
+ * aggregates the subscriber did not name are left out of the tail, and every frame
  * carries the commit the framer had drained when it cut it, left-out rows
  * included, so the subscriber's cursor moves past them.
  *
@@ -106,6 +106,7 @@ function cutFrame(
         break;
       }
       case 'chunk': {
+        if (!named.has(item.streamId)) continue;
         const rowKey = `${item.streamId}/${item.rowId}`;
         const held = chunks.get(rowKey);
         chunks.set(

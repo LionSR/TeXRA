@@ -197,7 +197,8 @@ describe('session framer', () => {
         expect(replay.at(-1)?.local?.self).toEqual([SELF]);
         // The tail: a commit after the replay is framed as an `all` row and
         // the frame's cursor is the commit the framer drained; two appends
-        // to one row in one window merge into one chunk, never two.
+        // to one row in one window merge into one chunk, never two; a chunk
+        // of an aggregate the Subscribe did not name is left out.
         yield* events.publish([running]);
         yield* SubscriptionRef.set(
           chunks.ref,
@@ -205,7 +206,10 @@ describe('session framer', () => {
         );
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, 'Hello']]),
+          new Map([
+            [`${STREAM}/row-1`, 'Hello'],
+            ['stream:unnamed/row-1', 'hidden'],
+          ]),
         );
         const tail: EventsFrame[] = [];
         while (
@@ -222,6 +226,7 @@ describe('session framer', () => {
         expect(tail.at(-1)?.cursor).toBe(3);
         expect(tail.every((frame) => frame.chunks.length <= 1)).toBe(true);
         const merged = tail.flatMap((frame) => frame.chunks);
+        expect(merged.every((chunk) => chunk.streamId === STREAM)).toBe(true);
         expect(merged.map((chunk) => chunk.text).join('')).toBe('Hello');
         expect(merged[0]).toMatchObject({
           streamId: STREAM,
@@ -250,13 +255,20 @@ describe('session framer', () => {
         const webview = yield* WebviewSessions.open(KEY);
         const { frames, view } = webview;
         const shell = webview.subscriptions;
+        // The shell names the second stream ahead of its run.start: live
+        // text is framed only for the aggregates a Subscribe names.
+        const child = 'stream:second';
+        const named: Subscribe = {
+          ...subscribe,
+          aggregates: [...subscribe.aggregates, { id: child, fromSeq: 0 }],
+        };
         // The shell: begin the generation and set its transcript set, then
         // post the Subscribe; the decoder feeds every frame that answers it.
-        yield* frames.begin(subscribe.generation);
-        yield* shell.set('shell', subscribe.aggregates);
+        yield* frames.begin(named.generation);
+        yield* shell.set('shell', named.aggregates);
         const decoder = yield* Effect.forkScoped(
           Stream.runForEach(
-            frameSubscription(source, PORT, host, subscribe),
+            frameSubscription(source, PORT, host, named),
             (frame) => frames.feed(frame),
           ),
         );
@@ -321,7 +333,6 @@ describe('session framer', () => {
         expect(folded.cursor).toBe(3);
 
         // A new stream and its first prefix can become ready in one turn.
-        const child = 'stream:second';
         yield* events.publish([
           { ...runStart, aggregateId: child, executionId: 'second' },
         ]);
@@ -351,7 +362,7 @@ describe('session framer', () => {
         yield* Fiber.interrupt(decoder);
         const beforeReplay = yield* SubscriptionRef.get(view.ref);
         yield* frames.begin(2);
-        yield* shell.set('shell', subscribe.aggregates);
+        yield* shell.set('shell', named.aggregates);
         yield* frames.feed({
           kind: 'events',
           session: KEY,
@@ -381,11 +392,11 @@ describe('session framer', () => {
           STREAM_PHASE.RUNNING,
         );
         yield* frames.begin(3);
-        yield* shell.set('shell', subscribe.aggregates);
+        yield* shell.set('shell', named.aggregates);
         const resumed = yield* Effect.forkScoped(
           Stream.runForEach(
             frameSubscription(source, PORT, host, {
-              ...subscribe,
+              ...named,
               generation: 3,
               cursor: beforeReplay.cursor,
             }),
