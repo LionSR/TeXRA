@@ -10,6 +10,7 @@ import {
   fingerprintWorkflowAgentDependencies,
 } from '@tools/delegation/workflowScriptAgentRunner';
 import { SubagentDurabilityError } from '@tools/delegation/inBandSubagentExecution';
+import { StorageFS } from '@utils/files/storageFS';
 
 const mocks = vi.hoisted(() => ({
   executeStableSubagentInBand: vi.fn(),
@@ -245,6 +246,22 @@ describe('createWorkflowScriptAgentRunner', () => {
 
     expect(oldFingerprint).not.toBe(newFingerprint);
     expect(mocks.workspaceReadBytes).toHaveBeenCalledWith('proof.tex');
+  });
+
+  it('rejects storage files outside run output storage before reading workflow dependencies', async () => {
+    const file = StorageFS.fullPath('streamLogs/private.json');
+
+    await expect(
+      fingerprintWorkflowAgentDependencies(runExecutionId, {
+        inputFiles: [file],
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining(file),
+    });
+    expect(mocks.assertWorkflowFilesExist).not.toHaveBeenCalled();
+    expect(mocks.workspaceReadBytes).not.toHaveBeenCalled();
+    expect(mocks.absoluteReadBytes).not.toHaveBeenCalled();
   });
 
   it('keeps dependency fingerprints stable for unchanged binary bytes', async () => {
