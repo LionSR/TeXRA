@@ -380,12 +380,12 @@ export class StreamTabs extends LitElement {
     return this.surface?.expanded.get(stream.id) === 'expanded';
   }
 
-  /** A workflow run's calls live on its run board, never in the list: the
-   *  root row alone carries their rollup (W2). */
+  /** The tree under a row, at any depth. The rail (`topLevelOnly`) shows
+   *  none and carries the rollup alone (W2); the drawer and the Subagents
+   *  pane show every child, a workflow run's calls included, so a call's
+   *  own subagents stay reachable under their parent (issue decision). */
   private childrenOf(stream: StreamView): StreamView[] {
-    if (this.topLevelOnly || stream.category === AgentCategory.Workflow) {
-      return [];
-    }
+    if (this.topLevelOnly) return [];
     return stream.childIds
       .map((id) => this.streamOf(id))
       .filter((child): child is StreamView => child !== undefined);

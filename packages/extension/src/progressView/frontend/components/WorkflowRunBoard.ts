@@ -4,8 +4,9 @@
  * controls a run without a chat offers instead of a composer.
  *
  * Reads `stream.transcript.run` (the fold's `workflowRunModel`), the child
- * streams the model joins by row, and the surface's phase, groups, and
- * focus. Dispatches `workflow.control` and `stream.stop` runtime
+ * streams the model joins by row, the stream's `readOnly` and
+ * `durableOutcome` (a settled run keeps its rows but nothing acts), and the
+ * surface's phase, groups, and focus. Dispatches `workflow.control` and `stream.stop` runtime
  * requests and `phase`, `group`, `select`, and `focusRow` surface actions;
  * it holds no state of its own. The host passes its clock as `nowMs` (G4).
  */
@@ -41,6 +42,7 @@ import {
   type WorkflowRowGroup,
   type WorkflowRunModel,
 } from '@shared/streams/workflowRunModel';
+import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 import {
@@ -50,7 +52,6 @@ import {
 } from '@utils/text/stringUtils';
 
 // Local imports - progress view
-import { workflowCallStatusIcon } from '../formatters/logFormatters/workflowCallFormatter';
 import { totalRunUsage } from '../usageTotals';
 import { workflowRunBoardStyles } from './WorkflowRunBoard.styles';
 
@@ -90,6 +91,33 @@ type Block =
       readonly group: Extract<WorkflowPhaseRow, { kind: 'group' }>;
       readonly members: readonly WorkflowPhaseRow[];
     };
+
+/** One icon per call status, for the tally and for a row alike. */
+function workflowCallStatusIcon(
+  status: WorkflowCallProgress['status'],
+): Parameters<typeof waIcon>[0] {
+  switch (status) {
+    case 'declared':
+      return 'circle';
+    case 'planned':
+    case 'queued':
+      return 'circle-dot';
+    case 'running':
+      return terminalStatusIcon('running');
+    case 'completed':
+      return terminalStatusIcon('completed');
+    case 'cached':
+      // A replayed result from an earlier attempt: nothing ran this time.
+      return 'clock-rotate-left';
+    case 'skipped':
+    case 'cancelled':
+      return terminalStatusIcon('cancelled');
+    case 'failed':
+      return terminalStatusIcon('failed');
+    default:
+      return assertNever(status, 'Unhandled workflow call status');
+  }
+}
 
 /** What a waiting child asks for, in the words the terminal's rows use. */
 function approvalLine(payload: PermissionPayload): string {
@@ -142,9 +170,23 @@ export class WorkflowRunBoard extends LitElement {
   /** The desktop's headline: the tally leads the strip instead of closing
    *  the board. */
   @property({ type: Boolean, reflect: true }) summary = false;
+  /** The run has a durable outcome: nothing on the board can act any more,
+   *  and the strip paints closed. Reflected for the styles; read from the
+   *  view on every update, never set by a caller. */
+  @property({ type: Boolean, reflect: true }) settled = false;
 
   private get run(): WorkflowRunModel | null {
     return this.stream.transcript.run;
+  }
+
+  override willUpdate(): void {
+    this.settled = this.stream.durableOutcome !== null;
+  }
+
+  /** Skip, retry, and kill act only on a run this process owns that is
+   *  still open. */
+  private get canControl(): boolean {
+    return !this.stream.readOnly && !this.settled;
   }
 
   /** The child a card opened, when the model resolved one. */
@@ -433,7 +475,7 @@ export class WorkflowRunBoard extends LitElement {
       >`;
     }
     if (row.call.status !== 'failed') return nothing;
-    const canAct = !this.stream.readOnly && child !== undefined;
+    const canAct = this.canControl && child !== undefined;
     return html`<span class="row-actions"
       ><wa-button
         size="s"
@@ -600,9 +642,11 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
+  /** Next failed only navigates, so it stays live on a settled run that
+   *  has failures to read; the two that act follow `canControl`. */
   private renderControls(): TemplateResult {
     const failed = this.failedRows().length;
-    const disabled = this.stream.readOnly;
+    const disabled = !this.canControl;
     return html`<div class="controls">
       <wa-button
         size="s"
@@ -628,7 +672,7 @@ export class WorkflowRunBoard extends LitElement {
         size="s"
         variant="danger"
         appearance="outlined"
-        ?disabled=${disabled || this.stream.durableOutcome !== null}
+        ?disabled=${disabled}
         @click=${this.killRun}
         >Kill run</wa-button
       >

@@ -20,7 +20,12 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
-import type { TranscriptView } from '@shared/session/sessionView';
+import type {
+  SessionView,
+  StreamView,
+  TranscriptView,
+} from '@shared/session/sessionView';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseHeadingOfGroup,
@@ -64,6 +69,8 @@ import { getTimeFormatter } from '../formatters/timestampUtils';
 // Local imports - sibling helpers
 // Side-effect import: registers <terminal-output>, which the terminal-stream
 // render path below instantiates.
+import './BackgroundTasksPanel';
+import { DISPATCH_GROUP_KEY } from './BackgroundTasksPanel';
 import './TerminalOutput';
 import type { TerminalOutput } from './TerminalOutput';
 
@@ -94,6 +101,25 @@ interface GroupTree {
 type TimelineEntry =
   | { key: string; time: number; row: TranscriptRow }
   | { key: string; time: number; tree: GroupTree };
+
+/**
+ * The dispatching row: the first delegation tool call of the transcript,
+ * where the stream's fan-out began. The dispatch card renders under it and
+ * reads "since" from its timestamp (E2). One card per stream: the children
+ * are the stream's, not a call's, since no fact links a child to the call
+ * that opened it.
+ */
+function dispatchRowOf(rows: readonly TranscriptRow[]): TranscriptRow | null {
+  return (
+    rows
+      .filter(
+        (row) =>
+          row.kind === 'tool' && DELEGATION_TOOLS.has(row.toolUse.toolName),
+      )
+      .toSorted(compareRows)
+      .at(0) ?? null
+  );
+}
 
 /** Wire append sequence when both rows carry one, wall-clock otherwise. */
 function compareRows(a: TranscriptRow, b: TranscriptRow): number {
@@ -184,6 +210,13 @@ export class TaskGroupList extends LitElement {
   /** The stream these rows belong to; every group toggle names it. */
   @property({ attribute: false }) streamId: StreamTabId | null = null;
 
+  /** The stream and the view, for the dispatch card at the dispatching
+   *  row: its children are `stream.childIds` resolved in `view.streams`. */
+  @property({ attribute: false }) stream: StreamView | null = null;
+  @property({ attribute: false }) view: SessionView | null = null;
+  /** The host's clock, for the dispatch card's elapsed times (G4). */
+  @property({ type: Number }) nowMs: number | null = null;
+
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
 
@@ -229,6 +262,9 @@ export class TaskGroupList extends LitElement {
    *  `rows` change; the rows arrive in wire order and the groups keyed, so
    *  the partition is one pass (PRD 10.2). */
   private timeline: TimelineEntry[] = [];
+
+  /** The row the dispatch card sits under; rebuilt with the timeline. */
+  private dispatchRow: TranscriptRow | null = null;
 
   /** Number of recent top-level timeline entries currently rendered. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
@@ -305,6 +341,7 @@ export class TaskGroupList extends LitElement {
     }
     if (this.terminal || !transcriptChanged) return;
     this.timeline = transcriptTimeline(this.groups, this.rows);
+    this.dispatchRow = dispatchRowOf(this.rows);
     // The windows count from the tail; a transcript that shrank (a
     // replaced history) or a fresh mount no longer lines up with them.
     const previous = changedProperties.get('transcript') as
@@ -405,10 +442,28 @@ export class TaskGroupList extends LitElement {
   /**
    * Paint one transcript row, guarded against re-render while the row stays
    * the same object. A row is replaced (never patched) whenever its source
-   * entry changes, so reference identity is the whole freshness test.
+   * entry changes, so reference identity is the whole freshness test. The
+   * dispatching row carries the dispatch card after it, unguarded: the card
+   * follows the children, not the row.
    */
   private renderLogEntry(row: TranscriptRow) {
-    return guard([row], () => formatLogEntry(row));
+    const painted = guard([row], () => formatLogEntry(row));
+    if (row !== this.dispatchRow) return painted;
+    return html`${painted}${this.renderDispatchCard(row)}`;
+  }
+
+  private renderDispatchCard(
+    row: TranscriptRow,
+  ): TemplateResult | typeof nothing {
+    const { stream, view } = this;
+    if (!stream || !view) return nothing;
+    return html`<background-tasks-panel
+      .stream=${stream}
+      .view=${view}
+      .nowMs=${this.nowMs}
+      .since=${row.timestamp}
+      .open=${this.isExpanded(DISPATCH_GROUP_KEY)}
+    ></background-tasks-panel>`;
   }
 
   private handleRevealOlderRows(event: Event): void {

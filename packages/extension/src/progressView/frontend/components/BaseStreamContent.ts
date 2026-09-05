@@ -50,7 +50,12 @@ export abstract class BaseStreamContent extends LitElement {
 
   protected renderLog(): TemplateResult {
     return html`<div class="conversation-log">
-      <log-list .stream=${this.stream} .surface=${this.surface}></log-list>
+      <log-list
+        .stream=${this.stream}
+        .view=${this.view}
+        .surface=${this.surface}
+        .nowMs=${this.nowMs}
+      ></log-list>
     </div>`;
   }
 

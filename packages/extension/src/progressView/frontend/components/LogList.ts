@@ -17,7 +17,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@shared/wa/spinner';
 import type { StreamTabId } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import type { StreamView } from '@shared/session/sessionView';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { getComposedPathElement } from '../utils';
@@ -34,7 +34,10 @@ export class LogList extends LitElement {
   static override styles = [designTokens, ...logStyles];
 
   @property({ attribute: false }) stream: StreamView | null = null;
+  @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
+  /** The host's clock, for the dispatch card's elapsed times (G4). */
+  @property({ type: Number }) nowMs: number | null = null;
 
   private static readonly MAX_CACHED_STREAMS = 5;
   private readonly streamCache = new LRUCache<StreamTabId, CachedStream>({
@@ -95,6 +98,9 @@ export class LogList extends LitElement {
             aria-relevant=${terminal ? nothing : 'additions'}
             ?hidden=${id !== this.activeStreamId}
             .streamId=${id}
+            .stream=${stream}
+            .view=${this.view}
+            .nowMs=${this.nowMs}
             .transcript=${stream.transcript}
             .hasStreams=${true}
             .streamStatus=${stream.status}

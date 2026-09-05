@@ -91,6 +91,20 @@ export const workflowRunBoardStyles = css`
     margin-inline-start: var(--wa-space-3xs);
   }
 
+  /* A settled run: the strip closes, its markers and tallies go quiet and
+     the active indicator is not drawn; the rows stay readable below. */
+  :host([settled]) .phases {
+    --indicator-color: transparent;
+  }
+
+  :host([settled]) .phase-tab {
+    color: var(--wa-color-text-quiet);
+  }
+
+  :host([settled]) .controls {
+    color: var(--wa-color-text-quiet);
+  }
+
   wa-tab-panel::part(base) {
     padding: 0;
   }
