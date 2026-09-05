@@ -300,13 +300,11 @@ function replaceTranscript(
   return next;
 }
 
-function emptyTranscript(settledSeq = 0): TranscriptView {
+function emptyTranscript(): TranscriptView {
   const compactionState = createCompactionActivityProjection();
   const transcript: TranscriptView = {
     rows: [],
     taskGroups: [],
-    compaction: compactionState.blocks,
-    settledSeq,
     settledRows: 0,
     run: null,
   };
@@ -1112,7 +1110,7 @@ function withTranscriptFacts(stream: StreamView): StreamView {
       : rowById(transcript, thinkingRowId);
   const thinkingActive =
     lastThinking?.kind === 'thinking' && lastThinking.streaming;
-  const compactingActive = transcript.compaction.some(
+  const compactingActive = indexesOf(transcript).compactionState.blocks.some(
     (block) => block.status === 'running',
   );
   const latestLine =
@@ -1534,9 +1532,6 @@ function foldDurable(
     ...own,
     ownerId: event.ownerId,
     lastTimestamp: event.at,
-    transcript: replaceTranscript(own.transcript, {
-      settledSeq: Math.max(own.transcript.settledSeq, event.commit),
-    }),
   };
   setStream(view, next);
 
@@ -1591,9 +1586,7 @@ function foldTranscriptRow(
   const withEntry: StreamView = {
     ...stream,
     lastTimestamp: event.at,
-    transcript: replaceTranscript(applyEntry(view, stream, event.entry), {
-      settledSeq: Math.max(stream.transcript.settledSeq, event.commit),
-    }),
+    transcript: applyEntry(view, stream, event.entry),
   };
   const next = withTranscriptFacts(withEntry);
   setStream(view, next);
@@ -1724,7 +1717,7 @@ function foldSubscriptions(
     clearInflight(view, stream);
     const evicted = withTranscriptFacts({
       ...stream,
-      transcript: emptyTranscript(stream.transcript.settledSeq),
+      transcript: emptyTranscript(),
     });
     setStream(view, runModelAt(view, evicted, deferred));
   }

@@ -31,7 +31,6 @@ import {
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
-import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -56,6 +55,7 @@ import { AgentCategory, STREAM_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { isActivePhase } from '@shared/streams/streamStatus';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -490,7 +490,7 @@ export async function runChat(
     onSkillSelect: chatController.activateSkill,
     onResumeSelect: chatController.resume,
     workPlanSnapshots: runtimeSession.snapshots,
-    getConfigStores: cliSettingsStores,
+    getConfigStores: platformSettingsStores,
     onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },

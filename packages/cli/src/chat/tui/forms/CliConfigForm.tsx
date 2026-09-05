@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
   loadGitHubTokenStatus,
   removeGitHubToken,
@@ -20,6 +19,7 @@ import {
 } from '@shared/config/settingsAccess';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { refreshSubscriptionPreferenceViews } from '../state/subscriptionPreference';
@@ -270,7 +270,7 @@ export function createCliConfigFormProps(
 
 /** Canonical CLI configuration form, shared by `texra config` and `/config`. */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
-  const [stores] = useState(() => props.stores ?? cliSettingsStores());
+  const [stores] = useState(() => props.stores ?? platformSettingsStores());
   const onError = useRef(props.onError);
   onError.current = props.onError;
 

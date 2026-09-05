@@ -518,7 +518,6 @@ describe('attachCliSessionProgressProjection', () => {
         agentName: 'bash',
         identity: { kind: 'process', tool: 'bash' },
         status: STREAM_PHASE.RUNNING,
-        resumeEligible: false,
       },
     ];
     const { writeRecord, emitRoster, hasRosterListener, detach } =
