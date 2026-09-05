@@ -13,7 +13,6 @@ import {
 } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
-import { bindTestSessionView } from './fixtures/sessionViewFixture';
 import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
 import type { PastedImageEntry } from '@cli/chat/tui/input/draftAttachments';
 import {
@@ -52,6 +51,7 @@ import {
   createDeferred,
   waitForCondition as waitFor,
 } from '@test/support/asyncTestUtils';
+import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const clipboardMock = vi.hoisted(() => ({
   attachClipboardImage: vi.fn(),

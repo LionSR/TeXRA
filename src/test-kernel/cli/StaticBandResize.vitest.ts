@@ -32,15 +32,15 @@ import {
 } from '@test/support/inkTestHarness.ts';
 import { pollForCondition } from '@test/support/asyncTestUtils';
 import {
+  textRowFixture,
+  toolRowFixture,
+} from '@test/support/transcriptRowFixtures';
+import {
   bindTestSessionView,
   makeStreamView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
-import {
-  textRowFixture,
-  toolRowFixture,
-} from '@test/support/transcriptRowFixtures';
 
 afterAll(() => {
   for (const [name, value] of Object.entries(ORIGINAL_COLOR_ENV)) {

@@ -66,7 +66,7 @@ interface CliNdjsonSetActiveStreamPayload {
 /**
  * Progress payloads retained only for CLI NDJSON public-output compatibility.
  *
- * Session- and run-scoped state changes are owned by `SessionEventHub` and
+ * Session- and run-scoped state changes are owned by `SessionEvent` and
  * `AgentEvent`; this table only types the remaining `kind: "progress"` record
  * names in `--output-format ndjson`. It is not a runtime-host event bus. Do
  * not add new fact keys here. New durable state should extend the session/run

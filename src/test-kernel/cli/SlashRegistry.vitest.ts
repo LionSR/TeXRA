@@ -16,7 +16,6 @@ import {
   unregisterSlashCommand,
   type SlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
-import { bindTestSessionView } from './fixtures/sessionViewFixture';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import {
   openCliSlashCommandForm,
@@ -46,6 +45,7 @@ import {
   waitForCondition as waitFor,
 } from '@test/support/asyncTestUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const CHAT_SESSION: SessionMeta = {
   agent: 'chat',

@@ -9,6 +9,7 @@ import {
 } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import type { ExecutionId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
 
 // Local imports - CLI runtime
@@ -20,7 +21,6 @@ import {
   type Logger,
   type LogSink,
 } from './logSinks';
-import type { ExecutionId } from '@shared/schemas';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
 import type { CliContext } from './cliContext';

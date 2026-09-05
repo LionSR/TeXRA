@@ -28,6 +28,8 @@ import { createLog } from '@logger/logUtils';
 import type { DisposableStore } from '@platform/disposable';
 import { platform } from '@platform/platform';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { StreamTabId } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -38,8 +40,6 @@ import {
   setTransientNotice,
 } from './state/cliState';
 import { currentView } from './state/sessionView';
-import type { SessionView } from '@shared/session/sessionView';
-import type { StreamTabId } from '@shared/schemas';
 
 interface ResumeHintSnapshot {
   readonly view: SessionView;

@@ -9,6 +9,7 @@ import { useLayoutEffect, type ReactNode } from 'react';
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
@@ -30,7 +31,6 @@ import {
 import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
-import { AgentCategory } from '@shared/schemas';
 import { inputBarContentRows } from '../state/cliState';
 import { sessionView, streamViewOf } from '../state/sessionView';
 import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';

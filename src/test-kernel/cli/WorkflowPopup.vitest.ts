@@ -15,13 +15,13 @@ import {
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
   bindTestSessionView,
   makeStreamView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
 const ROOT = 'workflow-root' as StreamTabId;
 

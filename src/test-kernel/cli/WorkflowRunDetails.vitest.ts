@@ -17,15 +17,15 @@ import {
 } from '@shared/schemas';
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import {
+  projectTaskGroupsFromStreamLog,
+  textRowFixture,
+} from '@test/support/transcriptRowFixtures';
+import {
   bindTestSessionView,
   makeStreamView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
-import {
-  projectTaskGroupsFromStreamLog,
-  textRowFixture,
-} from '@test/support/transcriptRowFixtures';
 
 const STREAM_ID = 'workflow#details' as StreamTabId;
 

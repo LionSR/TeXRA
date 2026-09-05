@@ -2,10 +2,10 @@
 
 // Local imports - shared schemas and utilities
 import { type StreamTabId } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
 import { assertNever, groupBy } from '@utils/core';
 
 // Local imports - TUI state
-import type { SessionView } from '@shared/session/sessionView';
 
 import {
   approvalPayloadStreamId,
