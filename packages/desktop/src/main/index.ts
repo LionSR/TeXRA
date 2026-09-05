@@ -951,6 +951,7 @@ function createWindow(options: {
         onError: reportAsyncError,
         workspaceState: paper.roots.workspaceState,
         globalState: platform().globalState,
+        config: paper.roots.config,
         renderer: {
           postToRenderer: postToRendererIfAlive,
         },
