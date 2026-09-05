@@ -1,16 +1,23 @@
 ---
 created: 2026-08-26
-updated: 2026-08-28
+updated: 2026-09-06
 ---
 
 # PRD: Effect 4 as the TeXRA backend runtime
 
-**Status:** Proposed; requires owner ratification before implementation.
+**Status:** Owner ruling of 2026-09-06: the agent runtime is written in pure
+Effect to Effect's best practice, and PocketFlow is not retained. That ruling
+amends R4, 8.4, Phase 2, and alternative 13.C below, in the form
+`docs/proposals/2026-09-04-agent-runtime-on-effect.md` §6 specifies, and
+closes open decisions 6 and 7 of section 15. The remaining items of section
+15 stay open; the governing rules R1 to R3 and R5 to R10 are unchanged.
 
 **Decision in one sentence:** TeXRA will adopt Effect 4 RC as the execution
-model for host-neutral asynchronous backend work, while retaining PocketFlow
-as the durable agent state machine, Zod as the existing data-contract system,
-and Promise-based APIs at host and SDK boundaries.
+model for host-neutral asynchronous backend work, with the two agent flow
+families as plain Effect loops whose only durable act is appending rows to
+the session event table (no graph, cursor, or flow record), Zod as the
+existing data-contract system, and Promise-based APIs at host and SDK
+boundaries.
 
 **Why ratification is required:** this PRD deliberately revisits the earlier
 decision that `platform()` plus a frozen `RunContext` was the final dependency
@@ -523,25 +530,35 @@ rebuilt in every node. A `Layer` is a construction recipe, not another domain
 layer in the repository: no `FooLayer` wrapper survives when it only calls
 `Layer.succeed(Foo, value)` once.
 
-### R4. PocketFlow retains state-machine authority
+### R4. The agent runtime is plain Effect; no state-machine framework
 
-PocketFlow continues to decide node order, actions, persisted cursors, and
-state snapshots. Effect governs one in-process attempt; PocketFlow governs what
-survives process death. These authorities must not be conflated: an Effect
-fiber, scope, `Ref`, `Exit`, or `Cause` is not a durable object and is never
-serialized into a flow record.
+**Amended 2026-09-06 by owner ruling.** This rule originally read "PocketFlow
+retains state-machine authority" and prescribed a typed `FlowNode.run`
+transition over a graph kernel. That is reversed. There is no PocketFlow, no
+node, no graph, no action string, no cursor, and no flow record. Each flow
+family (document-based reflection, tool use) is one plain Effect loop, written
+with `Effect.fn` and `Effect.gen`, whose only durable act is appending rows to
+the session event table on the execution's own aggregate; run state is a pure
+fold of those rows (`foldRunState`, in `src/shared`), computed the same way on
+resume and in the trace viewer, and never persisted. The shape, the six row
+types, the services (`RunLedger`, `RunContext`, `ModelInvoker`, `Tools`,
+`FollowUps`, `OutputPipeline`), and the elimination ledger are specified in
+`docs/proposals/2026-09-04-agent-runtime-on-effect.md` §2 and §4.
 
-The Promise-era `prep` / `exec` / `execFallback` / `post` protocol collapses to
-one typed transition:
+What does not change: an Effect fiber, scope, `Ref`, `Exit`, or `Cause` is
+still not a durable object and is never serialized. Effect governs one
+in-process attempt; the rows govern what survives process death.
 
-```ts
-interface FlowNode<Shared, Action, Error, Requirements> {
-  readonly id: NodeId;
-  readonly run: (
-    shared: Shared,
-  ) => Effect.Effect<Action | undefined, Error, Requirements>;
-}
-```
+The subsections R4.1 to R4.6 that follow are retained as the **durability
+requirements** the row model must satisfy, not as a description of the
+mechanism. Their mapping (explicit membrane = the append under
+`Effect.uninterruptibleMask`; declared replay classes = `tool.intent` rows for
+barrier tools and re-run for parallel-safe ones; finer tool-use checkpoints =
+per-call rows; stable identity = logical keys `round`, `turn`, `callId`, never
+a traversal path; rounds as durable coordinates = `flow.step`; one child
+protocol = the script journal folded into the event table) is the proposal's
+§6, first bullet. Where a subsection below speaks of a cursor, a node, a record,
+or an interpreter, read the corresponding row-model term.
 
 Preparation, external execution, recovery, and state mutation may remain as
 small private functions where they clarify a particular node, but the graph
@@ -934,20 +951,30 @@ SDK adapters rather than stored as a second cancellation authority on
 `RunScope`. A control handle may expose interruption to Promise callers, but it
 interrupts the owned root fiber.
 
-### 8.4 One graph transition kernel
+### 8.4 Two loops over one ledger, no kernel
 
-`Flow` and `PersistedFlow` no longer contain separate orchestration loops. An
-immutable graph plus one transition kernel computes node outcomes. A commit
-policy determines whether the new snapshot is published in memory or through
-the durable store. Persistence validation and atomic writing remain separate
-capabilities because they are true system boundaries; graph walking is not
-duplicated around them.
+**Amended 2026-09-06 by owner ruling** (this section originally specified
+"one graph transition kernel"). There is no graph and no transition kernel.
+`Flow`, `PersistedFlow`, `RoundPersistedFlow`, `ResponseCycleFlow`,
+`ToolUseRoundFlow`, and every node class are deleted. In their place:
 
-Specialized flow subclasses survive only when they add domain transitions.
-Subclass methods used merely to rewind a cursor or insert a checkpoint become
-operations of the durable interpreter. Nested response and tool-use flows use
-the same addressable graph representation instead of executing an opaque
-second interpreter inside one outer node.
+- `runToolUse` and `runReflection`, two `Effect.fn` loops in
+  `src/agent/runtime/loop/`, re-yielding the services they need from
+  `Context` rather than closures. The reflection loop carries one extra
+  coordinate (the round) and opens each round under `Effect.scoped` with an
+  `acquireRelease` stage.
+- `RunLedger`, a per-session-root `Context.Service` over `SessionEvents`:
+  `append(row) -> Effect<RunState>` and `load(executionId)`. The append is
+  the single uninterruptible region and runs under the publisher's permit.
+- `foldRunState(rows) -> RunState`, pure and data-only in `src/shared`: latest
+  `flow.snapshot`, then later `model.compaction`, `model.message`,
+  `tool.result`, and `flow.step` rows in order. It runs in `RunLedger.load`
+  and in the trace viewer's stepper and nowhere else; "state at step k" and
+  "resume would continue after step k" are the same fact.
+
+Persistence validation and atomic writing remain the substrate's boundaries
+(contract C1 to C10 in the persistence substrate decision); nothing in the
+runtime walks a graph around them.
 
 ### 8.5 External async adapters
 
@@ -1226,32 +1253,59 @@ beside an untouched `initPlatform()` would be exactly the wrapper-only dual
 runtime this PRD rejects. Either the Phase 1 seam has made some old machinery
 unreachable, or the foundation is reverted under the rollback rule.
 
-### Phase 2 — PocketFlow execution kernel
+### Phase 2 — the agent runtime on the ledger (lane D of the cutover)
 
-- Characterize version 2 cursor identities, commit order, `WAITING`, terminal
-  records, write failures, and projection failures before changing the
-  interpreter.
-- Replace `BaseNode`'s four-phase lifecycle with one typed node Effect while
-  preserving graph and durable semantics.
-- Collapse `Flow` and `PersistedFlow` onto one transition kernel with explicit
-  in-memory and durable commit policies.
-- Convert all sixteen production node subclasses in the same phase.
-- Preserve graph actions, cloning rules, persisted node identifiers, shared
-  state schemas, and cursor semantics.
-- Run every attempt against a private working copy and publish it only after a
-  successful atomic record write.
-- Keep node execution interruptible; make only record write plus cache
-  publication uninterruptible.
-- Represent success, typed failure, interruption, defect, suspension, and
-  commit failure distinctly at the interpreter boundary.
-- Delete `BaseNode`, its generic fallback dispatcher, `Svc`, `_services`,
-  `services`, `setServices()`, and service spreading.
-- Supply run services once at the flow boundary.
+**Amended 2026-09-06 by owner ruling.** The original Phase 2 ("PocketFlow
+execution kernel": one typed node Effect, one transition kernel, sixteen
+subclasses converted, cursor semantics preserved) is struck. The engine is not
+converted; it is deleted with its replacement in the same change. This phase is
+lane D of the persistence cutover branch, sequenced and sized by
+`docs/proposals/2026-09-04-agent-runtime-on-effect.md` §3 and §5:
 
-Like every phase, this one must delete; its mandatory target is structural.
-The phase is complete only when no production `setServices()` call remains.
-It does not yet change the version 2 record schema or make nested tool
-operations more durable.
+1. **Foundation.** `RunLedger` over `SessionEvents`, the six `AgentEvent` arms
+   (`flow.step`, `model.message`, `model.compaction`, `tool.intent`,
+   `tool.result`, `flow.snapshot`) with Zod schemas, `foldRunState` in
+   `src/shared`, the in-memory ledger layer, one ledger test and one fold
+   test under `it.effect`. A load-time warning on rows-since-snapshot lands
+   here (proposal §8). Nothing deleted yet; nothing in production calls it.
+2. **Both families on the ledger, one PR.** `ModelInvoker`, `Tools`,
+   `FollowUps`, `RunContext`, `OutputPipeline`, `runToolUse`, `runReflection`;
+   `executeAgent` and every resume arm call `runtime.runPromiseExit` with the
+   fiber's signal; the importer's `flow_<id>.json` to `flow.snapshot` arm.
+   Deletes `src/agent/node/`, `ModelInvocationNode`, `RoundPersistedFlow`,
+   `ResponseCycleFlow`, `ToolUseRoundFlow`, all sixteen node classes, the
+   disposition ladder, `linkAbortSignals`, `onAbort`, the startup window,
+   `p-retry` in the runtime, `resumability.ts`'s parse, the checkpoint arm of
+   `SessionResumeRetrieval`, the engine tests, and the PocketFlow sections of
+   CLAUDE.md, AGENTS.md, and
+   `docs/architecture/2026-06-20-pocketflow-state.md`. Reviewed as one
+   because splitting it is what creates a shim.
+3. **Replay along the flow.** `TraceDocument.steps` with `commit`, the
+   viewer scrubber over `foldRunState`, the `flow.transition` arm in the
+   session fold.
+4. **One child protocol.** Workflow-script journal rows into the event table
+   under the script run's aggregate; `workflowScript/persistence.ts`,
+   `ChildTurnState`, and the turn-state writes in `childRunLoop.ts` deleted.
+   In scope, not optional: two ledgers would be the intermediate this program
+   refuses.
+
+Rules that bind every step: no interim column, no Promise shim so one family
+can run on the old engine while the other runs on the new service, no window
+in which two runtimes or two checkpoint formats exist on the branch. Rollback
+is the cutover branch's rollback. The phase is complete when no production
+file imports `src/agent/node`, no `setServices()` call remains, and
+`config/ratchets/` carries no PocketFlow row. It also absorbs the original
+Phase 3's "convert `runReflectionFlow` and `runToolUseFlow` interiors" item
+and Phase 4's "one durable child-call operation" item, since both are the
+loops and PR 4 above.
+
+Three of the proposal's §7 decisions remain with the owner and do not block
+step 1: the C9 retention window for byte-exact conversation rows; whether the
+`approval.requested` / `approval.resolved` rows for outcome-unknown barrier
+tools and the manual-retry prompt land in step 2 (the arms already exist in the
+session vocabulary since lane 1 of the one-fold PRD, so step 2 is the
+default); and confirmation that step 4 is in scope (it is, by the
+no-intermediates rule, unless the owner says otherwise).
 
 ### Phase 3 — run lifecycle and cancellation
 
@@ -1538,6 +1592,13 @@ Effect 4's workflow facilities are under an unstable module, and TeXRA has
 product-specific durable cursor and resume semantics. Replacing them would mix
 a runtime migration with a persistence redesign. Rejected.
 
+_Amended 2026-09-06:_ upheld on the module, moot on the reason. The unstable
+`effect/unstable/workflow` module stays out. But PocketFlow is not kept either
+(R4 as amended): the persistence redesign this alternative feared mixing with
+the runtime migration is now its prerequisite, and the two land together as
+the cutover branch. The replacement is plain Effect loops over the event
+table, not a workflow engine of any kind.
+
 ### D. Publish Effect as the SDK API immediately
 
 This would give advanced consumers full service and error types but break the
@@ -1585,18 +1646,23 @@ unless the repository owner explicitly amends it.
    repository's TypeScript 6/7 toolchain.
 5. Whether a future optional Effect-native SDK entry point is desirable after
    Phase 7.
-6. Whether nested durable progress uses a hierarchical cursor, an activity
-   ledger, or both; this decision must be made before Stage 3b begins. The
-   PRD recommends the activity ledger as the default: an append-only sidecar
-   referenced by the outer cursor preserves version 2 cursor identity
-   (R4.4), keeps the flow record readable by pre-amendment code, and gives
-   rollback a defined degradation — coarse outer-cursor resume — rather than
-   unreadable sessions. A hierarchical cursor is admitted only with evidence
-   of a recovery need the ledger cannot express.
-7. Whether PocketFlow activities and workflow-script child calls share one
-   physical activity record or only one protocol over their existing stores.
-   Semantic unification is required; premature storage-schema unification is
-   not.
+6. ~~Whether nested durable progress uses a hierarchical cursor, an activity
+   ledger, or both.~~ **Decided 2026-09-06 by the owner's ruling:** there is
+   no cursor of either kind. Progress is the row ledger on the execution
+   aggregate (R4 as amended); `flow.snapshot` is the only derived row.
+7. ~~Whether PocketFlow activities and workflow-script child calls share one
+   physical activity record or only one protocol over their existing stores.~~
+   **Decided 2026-09-06:** one physical record, the session event table, with
+   the script journal moved into it in Phase 2 step 4.
+8. **Recorded 2026-09-06.** The owner ruled that the agent runtime uses no
+   PocketFlow and is pure Effect written to Effect's best practice (the
+   `effect-solutions` guides AGENTS.md mandates: `Context.Service` classes
+   with static layers, `Effect.fn` for every named operation, one `provide`
+   at the process entry, `Data.TaggedError` for expected failures with
+   defects left to die, per-test layers under `it.effect` with `TestClock`).
+   Effect Schema stays out: Zod remains the one data-contract system, so the
+   guides' `Schema.TaggedError` reads as `Data.TaggedError` here. This closes
+   the R4 question; decisions 1 to 5 above are untouched by it.
 
 None of these decisions blocks the read-only feasibility measurements.
 

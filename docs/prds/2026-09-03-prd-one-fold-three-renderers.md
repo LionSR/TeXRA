@@ -1,6 +1,6 @@
 ---
 created: 2026-09-03
-updated: 2026-09-03
+updated: 2026-09-06
 ---
 
 # PRD: One fold, three renderers
@@ -106,7 +106,16 @@ switch (`main/index.ts:577-596`).
 
 ## 3. Non-goals
 
-- Changing PocketFlow's state-machine authority (R4 of the migration PRD).
+- ~~Changing PocketFlow's state-machine authority (R4 of the migration PRD).~~
+  _Reversed 2026-09-06 by the owner's ruling_ (migration PRD R4 as amended):
+  PocketFlow is deleted, not retained. The runtime proposal's six row types
+  (`flow.step`, `model.message`, `model.compaction`, `tool.intent`,
+  `tool.result`, `flow.snapshot`) join the section 6 durable set, and
+  `fold(view, input)` gains the `flow.step` arm so the CLI's waiting-on row
+  and the progress board read `StreamView.flow`
+  (`docs/proposals/2026-09-04-agent-runtime-on-effect.md` §6, fifth bullet).
+  Still a non-goal of this PRD's lanes: none of them touches the flow
+  directories; that is lane D of the cutover.
 - Changing the persistence substrate; this PRD consumes the event table and
   the durable event set and adds to that set only what section 6 lists.
 - A new UI framework. Components stay Lit and Ink.
