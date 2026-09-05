@@ -11,14 +11,17 @@
 import { z } from 'zod';
 
 import {
+  AgentProposalSchema,
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,
+  GettingStartedActionSchema,
+  SessionTypeSchema,
   StreamTabIdSchema,
 } from '@shared/schemas';
 
 const streamScoped = { streamId: StreamTabIdSchema };
 
-const HostRequestSchema = z.discriminatedUnion('kind', [
+export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('openFile'),
     path: z.string().min(1),
@@ -102,5 +105,67 @@ const HostRequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('compileInputPdf') }),
   z.object({ kind: z.literal('extractFigures') }),
+  /** A tool-edit prompt's non-terminal verbs: they open editors and leave
+   *  the approval pending. */
+  z.object({
+    kind: z.literal('toolEditPreview'),
+    requestId: z.string().min(1),
+    action: z.enum(['openDiff', 'previewProposed', 'showLatexdiff']),
+  }),
+  /** An output file's verbs on a workflow run's file list. */
+  z.object({
+    kind: z.literal('fileAction'),
+    ...streamScoped,
+    action: z.enum([
+      'compareOriginal',
+      'comparePrevious',
+      'latexdiff',
+      'accept',
+      'merge',
+    ]),
+    file: z.string().min(1),
+    base: z.string().nullish(),
+    prev: z.string().nullish(),
+  }),
+  /** The "Restore setup" link on a settled proposal row. */
+  z.object({
+    kind: z.literal('restoreProposalConfig'),
+    proposal: AgentProposalSchema,
+  }),
+  // The New-task state's banners and onboarding cards (host-owned state,
+  // HostSnapshot.banners and .onboarding).
+  z.object({
+    kind: z.literal('apiKeyBanner'),
+    action: z.enum(['set', 'guide']),
+    provider: z.string().nullish(),
+  }),
+  z.object({
+    kind: z.literal('agentConfigBanner'),
+    action: z.enum(['edit', 'dir', 'docs']),
+    sessionType: SessionTypeSchema,
+    customDirSet: z.boolean().nullish(),
+  }),
+  z.object({ kind: z.literal('recheckDependencies') }),
+  z.object({ kind: z.literal('openInstallGuide'), tool: z.string() }),
+  z.object({ kind: z.literal('signIn') }),
+  z.object({
+    kind: z.literal('dismissBanner'),
+    banner: z.enum(['login', 'gettingStarted', 'dependency']),
+  }),
+  z.object({
+    kind: z.literal('gettingStarted'),
+    action: GettingStartedActionSchema,
+  }),
+  z.object({
+    kind: z.literal('onboarding'),
+    action: z.enum([
+      'signInChatGpt',
+      'setApiKey',
+      'skip',
+      'runSetup',
+      'skipSetup',
+      'openGettingStarted',
+    ]),
+  }),
 ]);
 export type HostRequest = z.infer<typeof HostRequestSchema>;

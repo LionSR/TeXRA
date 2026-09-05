@@ -3,43 +3,63 @@
  * host-provided data no surface may disagree about. A selection may differ
  * between two surfaces on one session; a catalog may not, so catalogs live
  * here and never in `Surface`. Components take it as a property; the root
- * receives it with the frame, and the design harness passes literals.
+ * receives it with the events frame (`sessionFrames.ts`), and the design
+ * harness passes literals. Zod because it crosses the bridge.
  */
-import type {
-  AgentCategory,
-  AgentOptionData,
-  FileOptions,
-  FileSelectConfig,
-  ModelOptionData,
-  TeamOptionData,
-  WorkspaceRootOptionData,
+import { z } from 'zod';
+
+import {
+  AgentCategorySchema,
+  AgentConfigBannerDataSchema,
+  AgentOptionDataSchema,
+  ApiKeyBannerDataSchema,
+  DependencyBannerDataSchema,
+  FileOptionsSchema,
+  FileSelectConfigSchema,
+  ModelOptionDataSchema,
+  OnboardingFunnelStateSchema,
+  TeamOptionDataSchema,
+  WorkspaceRootOptionDataSchema,
 } from '@shared/schemas';
 
-/** How a paper is named in a rail row, a chip, and the hero subtitle. */
-export interface PaperDisplay {
-  readonly key: string;
-  readonly name: string;
-  readonly initials: string;
-  readonly subtitle: string;
-}
+const visible = { visible: z.boolean() };
 
-export interface HostSnapshot {
-  readonly paper: PaperDisplay;
+/** How a paper is named in a rail row, a chip, and the hero subtitle. */
+const PaperDisplaySchema = z.object({
+  key: z.string().min(1),
+  name: z.string(),
+  initials: z.string(),
+  subtitle: z.string(),
+});
+export type PaperDisplay = z.infer<typeof PaperDisplaySchema>;
+
+export const HostSnapshotSchema = z.object({
+  paper: PaperDisplaySchema,
   /** Which view instance this is: the sidebar webview, the editor tab, or
    *  the desktop renderer. The sidebar alone reports `setActiveView`. */
-  readonly placement: 'sidebar' | 'editor' | 'desktop';
-  readonly agentOptions: Readonly<Record<AgentCategory, AgentOptionData[]>>;
-  readonly modelOptions: readonly ModelOptionData[];
-  readonly teamOptions: readonly TeamOptionData[];
-  readonly workspaceRoots: readonly WorkspaceRootOptionData[];
+  placement: z.enum(['sidebar', 'editor', 'desktop']),
+  agentOptions: z.record(AgentCategorySchema, z.array(AgentOptionDataSchema)),
+  modelOptions: z.array(ModelOptionDataSchema),
+  teamOptions: z.array(TeamOptionDataSchema),
+  workspaceRoots: z.array(WorkspaceRootOptionDataSchema),
   /** The launcher's multi-file groups (input, context, media). */
-  readonly fileConfigs: readonly FileSelectConfig[];
-  readonly fileOptions: FileOptions;
-  readonly isGitRepo: boolean;
+  fileConfigs: z.array(FileSelectConfigSchema),
+  fileOptions: FileOptionsSchema,
+  isGitRepo: z.boolean(),
   /** The one recorder per process and where its take is going. */
-  readonly recording: { session: string; target: string } | null;
-  readonly debugMode: boolean;
-}
+  recording: z.object({ session: z.string(), target: z.string() }).nullable(),
+  debugMode: z.boolean(),
+  /** The five banners of the New-task state; host-owned visibility. */
+  banners: z.object({
+    apiKey: ApiKeyBannerDataSchema.extend(visible),
+    agentConfig: AgentConfigBannerDataSchema.extend(visible),
+    dependency: DependencyBannerDataSchema.extend(visible),
+    gettingStarted: z.boolean(),
+    login: z.boolean(),
+  }),
+  onboarding: OnboardingFunnelStateSchema,
+});
+export type HostSnapshot = z.infer<typeof HostSnapshotSchema>;
 
 export function emptyHostSnapshot(
   paper: PaperDisplay,
@@ -57,5 +77,13 @@ export function emptyHostSnapshot(
     isGitRepo: false,
     recording: null,
     debugMode: false,
+    banners: {
+      apiKey: { visible: false },
+      agentConfig: { visible: false },
+      dependency: { visible: false },
+      gettingStarted: false,
+      login: false,
+    },
+    onboarding: 'done',
   };
 }

@@ -448,6 +448,7 @@ function sessionGraphOpener(
       view: view.ref,
       folded: view.all,
       local: Context.get(context, LocalRuntimeSource).ref,
+      chunks: Context.get(context, TextChunkSource).changes,
       subscriptions: Context.get(context, TranscriptSubscriptions),
       requests,
       now: () => SubscriptionRef.getUnsafe(eventLog.level),

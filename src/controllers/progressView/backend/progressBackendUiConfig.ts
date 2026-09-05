@@ -1,7 +1,5 @@
-import type { AgentTrace } from '@agent/trace';
 import {
   type BashSettlement,
-  type HostApprovalBypassStateUpdate,
   matchesCancelSelector,
   type HostInteractionCancelSelector,
   type UserQuestionSettlement,
@@ -15,26 +13,18 @@ import type {
   BashPermission,
   ExternalInquiryPermission,
   PlanApprovalPermission,
-  PermissionPayload,
-  ProgressPermissionKind,
   RetryPermission,
   ToolEditPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
-import { createAgentProposalTransport } from './agentProposalTransport';
-import { ApprovalRequestHandler } from './ApprovalRequestHandler';
-import { ExternalInquiryRequestHandler } from './ExternalInquiryRequestHandler';
-import type { LitSessionRenderer } from './LitSessionRenderer';
+import type { ApprovalRequestHandler } from './ApprovalRequestHandler';
 
 /**
- * The seven pending-approval handlers a progress backend wires. Every one of
- * them talks to the same {@link LitSessionRenderer}, so
- * {@link buildApprovalRequestHandlerSet} owns the whole set and hosts supply
- * only the renderer and the `canSend` gate. The set then goes to
- * {@link createProgressBackendUiConfig}, which derives the uniform UI callbacks
- * and the pending-permissions guard from it.
+ * The seven pending-approval handlers a host's progress interactions hold
+ * (`progressHostInteractions.ts`): the toolEdit diff, the retry preparation,
+ * and the inquiry residue a host still performs beside the fold's
+ * `approval.requested` rows and the `decision.*` arms that settle them.
  */
 export interface ApprovalRequestHandlerSet {
   toolEdit: ApprovalRequestHandler<ToolEditPermission, 'requestId'>;
@@ -89,173 +79,4 @@ export function cancelApprovalRequestHandlers(
     );
   }
   return cancelled;
-}
-
-type ReplayableApprovalRequestHandlerSet = {
-  [K in keyof ApprovalRequestHandlerSet]: Pick<
-    ApprovalRequestHandlerSet[K],
-    'replay'
-  >;
-};
-
-/**
- * The full key set of {@link ApprovalRequestHandlerSet}, enforced exhaustive
- * via `satisfies` against both the interface and the shared interaction-kind
- * vocabulary: the handler keys are the kinds, so renaming either side fails
- * here instead of silently dropping a kind. It also keeps
- * {@link replayApprovalRequestHandlers} and the `hasPendingPermissions` guard
- * below in sync with the interface.
- */
-const APPROVAL_REQUEST_HANDLER_KEY_MAP = {
-  toolEdit: true,
-  bash: true,
-  externalInquiry: true,
-  retry: true,
-  proposal: true,
-  planApproval: true,
-  userQuestion: true,
-} satisfies Record<keyof ApprovalRequestHandlerSet, true> &
-  Record<ProgressPermissionKind, true>;
-
-const APPROVAL_REQUEST_HANDLER_KEYS = Object.keys(
-  APPROVAL_REQUEST_HANDLER_KEY_MAP,
-) as Array<keyof ApprovalRequestHandlerSet>;
-
-export interface BuildApprovalRequestHandlerSetParams {
-  renderer: LitSessionRenderer;
-  /** Gate passed to every handler; an empty/false gate keeps it pending-only. */
-  canSend: () => boolean;
-  logger?: Pick<AgentTrace, 'debug'>;
-}
-
-type PermissionData<K extends PermissionPayload['kind']> = Extract<
-  PermissionPayload,
-  { kind: K }
->['data'] & { streamId: string };
-
-function webviewPermissionHandler<
-  K extends PermissionPayload['kind'],
-  IdField extends keyof PermissionData<K>,
-  Result = never,
->(
-  renderer: LitSessionRenderer,
-  canSend: () => boolean,
-  kind: K,
-  idField: IdField,
-): ApprovalRequestHandler<PermissionData<K>, IdField, Result> {
-  return new ApprovalRequestHandler(
-    idField,
-    (data) =>
-      renderer.showPermission({
-        kind,
-        data,
-      } as Extract<PermissionPayload, { kind: K }>),
-    (id) => renderer.resolvePermission(kind, id),
-    canSend,
-  );
-}
-
-export function buildApprovalRequestHandlerSet(
-  params: BuildApprovalRequestHandlerSetParams,
-): ApprovalRequestHandlerSet {
-  const { renderer, canSend } = params;
-  // The proposal transport asks its own handler whether a request is still
-  // pending (the RESOLVE-between-two-SHOWs guard). `proposal` is read only
-  // from inside that callback, which cannot run before the handler exists.
-  const proposalTransport = createAgentProposalTransport({
-    renderer,
-    isPending: (requestId) => proposal.get(requestId) !== undefined,
-  });
-  const proposal = new ApprovalRequestHandler<
-    AgentProposalPermission,
-    'requestId',
-    ProposalResult
-  >('requestId', proposalTransport.show, proposalTransport.dismiss, canSend);
-  return {
-    proposal,
-    toolEdit: webviewPermissionHandler(
-      renderer,
-      canSend,
-      PERMISSION_KIND.TOOL_EDIT,
-      'requestId',
-    ),
-    bash: webviewPermissionHandler<
-      typeof PERMISSION_KIND.BASH,
-      'requestId',
-      BashSettlement
-    >(renderer, canSend, PERMISSION_KIND.BASH, 'requestId'),
-    planApproval: webviewPermissionHandler<
-      typeof PERMISSION_KIND.PLAN_APPROVAL,
-      'requestId',
-      PlanApprovalResult
-    >(renderer, canSend, PERMISSION_KIND.PLAN_APPROVAL, 'requestId'),
-    externalInquiry: new ExternalInquiryRequestHandler({
-      show: (data) =>
-        renderer.showPermission({
-          kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
-          data,
-        }),
-      dismiss: (id) =>
-        renderer.resolvePermission(PERMISSION_KIND.EXTERNAL_INQUIRY, id),
-      syncThreads: (threads) => renderer.syncInquiryThreads(threads),
-      canSend,
-      logger: params.logger,
-    }),
-    userQuestion: webviewPermissionHandler<
-      typeof PERMISSION_KIND.USER_QUESTION,
-      'requestId',
-      UserQuestionSettlement
-    >(renderer, canSend, PERMISSION_KIND.USER_QUESTION, 'requestId'),
-    retry: webviewPermissionHandler<
-      typeof PERMISSION_KIND.RETRY,
-      'streamId',
-      RetryResult
-    >(renderer, canSend, PERMISSION_KIND.RETRY, 'streamId'),
-  };
-}
-
-export async function replayApprovalRequestHandlers(
-  handlers: ReplayableApprovalRequestHandlerSet,
-): Promise<void> {
-  await Promise.all(
-    APPROVAL_REQUEST_HANDLER_KEYS.map((key) => handlers[key].replay()),
-  );
-}
-
-interface ProgressBackendUiConfig {
-  setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
-  hasPendingPermissions(streamId: string): boolean;
-}
-
-interface ProgressBackendUiConfigParams {
-  handlers: ApprovalRequestHandlerSet;
-  /** Transport for approval-bypass state (handlers own their own transport). */
-  renderer: LitSessionRenderer;
-  /** Gate shared with the handlers; also guards the bypass-state pushes. */
-  canSend: () => boolean;
-}
-
-/**
- * Build the host-neutral bypass-state transport and pending-permissions guard
- * from a set of {@link ApprovalRequestHandler}s.
- *
- * The guard checks `hasPendingForStream` across all handlers (see
- * {@link APPROVAL_REQUEST_HANDLER_KEYS}), reusing the handler's
- * empty-streamId-blocks-all rule instead of re-deriving it per host.
- */
-export function createProgressBackendUiConfig(
-  params: ProgressBackendUiConfigParams,
-): ProgressBackendUiConfig {
-  const { handlers, renderer, canSend } = params;
-  return {
-    setApprovalBypassState: ({ streamId, kind, bypassActive }) => {
-      if (canSend()) {
-        renderer.updateBypassState(streamId, kind, bypassActive);
-      }
-    },
-    hasPendingPermissions: (streamId) =>
-      APPROVAL_REQUEST_HANDLER_KEYS.some((key) =>
-        handlers[key].hasPendingForStream(streamId),
-      ),
-  };
 }

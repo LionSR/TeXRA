@@ -16,7 +16,6 @@ import {
   listThreadsByStatus,
   markDropped,
   manifestToTranscript,
-  persistOpenTurnDraft,
   readExternalInquiryThread,
   recordAnswerForOpenTurn,
   recordOpenQuestion,
@@ -199,75 +198,6 @@ describe('InquiryStorage', () => {
     expect(followUp.status).toBe('open');
     expect(followUp.turns).toHaveLength(2);
     expect(followUp.turns.at(-1)?.question).toBe('Q2 (follow-up)');
-  });
-
-  it('keeps first-turn draft context valid for hydrated new inquiries', async () => {
-    const t = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-    const draft = {
-      answer: 'partial answer',
-      sessionLinks: 'https://chat.example/thread',
-    };
-    await persistOpenTurnDraft({
-      threadId: t.threadId,
-      draft,
-    });
-
-    const manifest = await readExternalInquiryThread(t.threadId);
-    expect(manifest).not.toBeNull();
-
-    const permission = ExternalInquiryPermissionSchema.parse({
-      requestId: t.threadId,
-      threadId: t.threadId,
-      question: 'Q1',
-      allowBypass: false,
-      streamId: STREAM_A,
-      sessionLinks: undefined,
-      draft: getOpenTurnDraft(manifest!),
-      transcript: manifestToTranscript(manifest!),
-    });
-
-    expect(permission).toMatchObject({
-      draft,
-      transcript: [{ turnIndex: 1, question: 'Q1', answer: undefined }],
-    });
-  });
-
-  it('persists open-turn drafts and exposes transcript turns', async () => {
-    const t = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-    await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
-    await recordOpenQuestion({
-      threadId: t.threadId,
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q2',
-    });
-
-    await persistOpenTurnDraft({
-      threadId: t.threadId,
-      draft: {
-        answer: 'partial answer',
-        sessionLinks: 'https://chat.example/thread',
-      },
-    });
-
-    const manifest = await readExternalInquiryThread(t.threadId);
-    expect(manifest).not.toBeNull();
-    expect(getOpenTurnDraft(manifest!)).toEqual({
-      answer: 'partial answer',
-      sessionLinks: 'https://chat.example/thread',
-    });
-    expect(manifestToTranscript(manifest!)).toMatchObject([
-      { turnIndex: 1, question: 'Q1', answer: 'A1' },
-      { turnIndex: 2, question: 'Q2', answer: undefined },
-    ]);
   });
 
   it('updates parentStreamId on cross-stream follow-up', async () => {

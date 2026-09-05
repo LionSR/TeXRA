@@ -6,7 +6,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { ProgressBackendOptions } from '@controllers/progressView/backend/ProgressBackend';
 import {
   ProgressWorkflowRunActionsController,
   type WorkflowDiffRequest,
@@ -162,23 +161,5 @@ export function createProgressWorkflowRunActionsHarness(
     metadataReads,
     diffs,
     fileOperations,
-  };
-}
-
-/** Approval transport a backend can send through. */
-export function createApprovalOptions(): ProgressBackendOptions['approvals'] {
-  return { canSend: () => true };
-}
-
-/** Host lifecycle callbacks as spies, so a suite asserts on what the backend asked its host to do. */
-export function createLifecycleOptions(
-  overrides: Partial<ProgressBackendOptions['lifecycle']> = {},
-): ProgressBackendOptions['lifecycle'] {
-  return {
-    cleanupDeletedStream: vi.fn(),
-    cleanupDeletedStreams: vi.fn(),
-    rebuildRenderedStreams: vi.fn(async () => {}),
-    notifyDeletionRetained: vi.fn(),
-    ...overrides,
   };
 }

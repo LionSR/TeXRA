@@ -15,6 +15,7 @@ import type {
   CommitOrdinal,
   LocalRuntimeState,
   SessionEvent,
+  TextChunk,
   TranscriptSubscription,
 } from '@shared/schemas';
 import type { RequestError } from '@shared/session/requestErrors';
@@ -38,6 +39,10 @@ export interface SessionGraph {
   readonly folded: (fromCommit: CommitOrdinal) => Stream.Stream<SessionEvent>;
   /** This process's local truth; the status machine writes `unreadable`. */
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
+  /** The in-flight text deltas, derived per subscriber from the level so a
+   *  fresh subscriber's first chunk per row is `from: 0` (PRD 7.4): what a
+   *  framer merges into its frames. */
+  readonly chunks: Stream.Stream<TextChunk>;
   /** The transcript subscription set, one set per port (PRD 7.2). */
   readonly subscriptions: {
     readonly set: (

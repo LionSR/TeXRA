@@ -54,7 +54,7 @@ type ExternalInquiryAction =
   | Extract<InquiryActionMessage, { readonly action: 'submit' }>
   | InquiryDropAction;
 
-export type ExternalInquiryTransition =
+type ExternalInquiryTransition =
   | {
       readonly kind: 'answered';
       readonly threadId: InquiryActionMessage['threadId'];
@@ -71,7 +71,7 @@ export type ExternalInquiryTransition =
     };
 
 /** Persist one terminal inquiry action without reaching into host presentation. */
-export async function persistExternalInquiryAction(
+async function persistExternalInquiryAction(
   payload: ExternalInquiryAction,
 ): Promise<ExternalInquiryTransition> {
   if (payload.action === 'submit') {
@@ -123,7 +123,7 @@ export async function persistExternalInquiryAction(
 }
 
 /** Deliver the continuation represented by a completed durable transition. */
-export async function continueExternalInquiryAction(
+async function continueExternalInquiryAction(
   transition: ExternalInquiryTransition,
   options: { session?: SessionHandle } = {},
 ): Promise<void> {

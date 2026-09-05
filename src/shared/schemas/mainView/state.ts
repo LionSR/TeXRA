@@ -215,7 +215,7 @@ export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 // File State Schemas
 // ============================================================
 
-const FileSelectConfigSchema = z.object({
+export const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,
   label: z.string(),
   icon: z.enum(TEXRA_ICON_CANONICAL_NAMES),
@@ -234,7 +234,7 @@ const SingleFilesSchema = z.object({
 });
 export type SingleFiles = z.infer<typeof SingleFilesSchema>;
 
-const FileOptionsSchema = z.object({
+export const FileOptionsSchema = z.object({
   baseFile: z.array(z.string()),
   editedFile: z.array(z.string()),
   commit: z.array(z.string()),

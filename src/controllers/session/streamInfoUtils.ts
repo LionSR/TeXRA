@@ -42,15 +42,3 @@ export function buildStreamInfo(
     worktreeInfo,
   });
 }
-
-/** Build metadata objects for all streams in the given state, newest first. */
-export function buildStreamInfos(
-  state: StreamInfoListSource,
-  activeStream?: StreamTabId | '',
-): StreamTabInfo[] {
-  // selectableStreamNames() already returns newest-first, so the mapped
-  // tab infos inherit that order without re-sorting.
-  return state
-    .selectableStreamNames()
-    .map((id) => buildStreamInfo(state, id, activeStream));
-}

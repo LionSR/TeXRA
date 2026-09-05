@@ -47,6 +47,7 @@ import type {
   SessionEventDraft,
   StreamTabId,
 } from '@shared/schemas';
+import { SessionFrames } from '@shared/session/sessionFrames';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 
 const logger = createLog('sessionEvents');
@@ -448,6 +449,33 @@ export class SessionEvents extends Context.Service<
         all,
         aggregate: log.readAggregate,
         anchor,
+      };
+    }),
+  );
+
+  /**
+   * A webview's plane (PRD 7.1, 7.7): no database, no publish; the bridge's
+   * frames are the source. The runtime ran this `Subscribe`'s reads in the
+   * fold fiber's order (7.4) and framed their rows tagged by read; the
+   * decoder routes each row to its read's queue and ends the listing and
+   * aggregate queues at the frame that carries `replayComplete` (8.1), so
+   * the fold fiber's `Stream.concat` over these reads is the same code as
+   * in the runtime. `all` ignores its argument: the tail is the frames after
+   * that marker, anchored by the runtime at the `Subscribe` cursor. The
+   * anchor is that cursor, 0 on a cold mount; no durable ordinal exists
+   * here and none is read.
+   */
+  static readonly transportLayer = Layer.effect(
+    SessionEvents,
+    Effect.gen(function* () {
+      const frames = yield* SessionFrames;
+      return {
+        publish: () => Effect.die(new Error('A webview cannot publish')),
+        listing: () => frames.listing(),
+        all: () => frames.events(),
+        aggregate: (aggregateId, fromSeq) =>
+          frames.aggregate(aggregateId, fromSeq),
+        anchor: frames.cursor,
       };
     }),
   );

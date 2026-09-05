@@ -144,6 +144,13 @@ export class SessionHandle {
    * (`effectRuntime()`) and reads the Effect's own result as the response.
    */
   readonly requests: SessionGraph['requests'];
+  /**
+   * What a transport framer reads beside `view` and `events` (PRD 7.4): the
+   * local snapshot level and the in-flight text deltas. Reads only: the
+   * status machine and the transcript bridge are the writers.
+   */
+  readonly local: SessionGraph['local'];
+  readonly chunks: SessionGraph['chunks'];
   /** Session-scoped status plane. */
   readonly status: StreamStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
@@ -215,6 +222,8 @@ export class SessionHandle {
     this.view = graph.view;
     this.folded = graph.folded;
     this.requests = graph.requests;
+    this.local = graph.local;
+    this.chunks = graph.chunks;
     const status = new StreamStatusMachine(
       (event) => this.publishStatus(event),
       (streamId, detail) => this.setUnreadable(streamId, detail),

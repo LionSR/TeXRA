@@ -30,7 +30,7 @@ const RejectionSchema = z.object({
   feedback: z.string().nullish(),
 });
 
-const RuntimeRequestSchema = z.discriminatedUnion('kind', [
+export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('stream.stop'),
     ...streamScoped,
@@ -130,7 +130,7 @@ const RuntimeRequestSchema = z.discriminatedUnion('kind', [
 export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;
 
 /** What the runtime answers with: a typed value the host renders. */
-const OutcomeSchema = z.discriminatedUnion('kind', [
+export const OutcomeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('done') }),
   z.object({
     kind: z.literal('followUp'),

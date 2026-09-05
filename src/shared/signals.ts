@@ -6,20 +6,38 @@
  */
 
 import { SignalWatcher, signal, Signal } from '@lit-labs/signals';
+import { Effect, Fiber, Stream, type ManagedRuntime } from 'effect';
 
 export { SignalWatcher, Signal };
 
+/** A signal fed by an Effect stream, with the fiber's interrupt. */
+export type StreamSignal<A> = Signal.State<A> & { dispose: () => void };
+
 /**
- * Selector: extracts a field from a monolithic signal.
- * Only propagates when the selected value's reference changes.
- * Works with Mutative's structural sharing — unchanged branches
- * keep their reference, so Object.is() correctly skips propagation.
+ * The one meeting point between Effect and the components (PRD
+ * one-fold-three-renderers, 7.5): a stream drained into a signal on the
+ * given runtime, coalesced here by taking the last element of each drained
+ * array. Components are `SignalWatcher`s; nothing else of Effect reaches
+ * them. `dispose` interrupts the drain.
  */
-export function select<S, T>(
-  source: Signal.State<S>,
-  selector: (state: S) => T,
-): Signal.Computed<T> {
-  return new Signal.Computed(() => selector(source.get()));
+export function toSignal<A>(
+  runtime: ManagedRuntime.ManagedRuntime<never, never>,
+  changes: Stream.Stream<A>,
+  initial: A,
+): StreamSignal<A> {
+  const s = signal(initial);
+  const fiber = runtime.runFork(
+    Stream.runForEachArray(changes, (arr) =>
+      Effect.sync(() => {
+        s.set(arr.at(-1) as A);
+      }),
+    ),
+  );
+  return Object.assign(s, {
+    dispose: () => {
+      runtime.runFork(Fiber.interrupt(fiber));
+    },
+  });
 }
 
 /**

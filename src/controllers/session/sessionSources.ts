@@ -15,6 +15,11 @@
  *   chunk per row is `from: 0` and no chunk is ever lost.
  * - `TranscriptSubscriptions`: the aggregates some surface holds a
  *   transcript subscription on, the union of one set per port.
+ *
+ * Each source has a runtime layer and, for the first two, a transport layer
+ * fed by the frame decoder (`SessionFrames`): a webview's local snapshot and
+ * chunks are the runtime's, as the last frame carried them, and its one
+ * port is the shell.
  */
 import { Context, Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
@@ -24,6 +29,7 @@ import type {
   TextChunk,
   TranscriptSubscription,
 } from '@shared/schemas';
+import { SessionFrames } from '@shared/session/sessionFrames';
 
 export class LocalRuntimeSource extends Context.Service<
   LocalRuntimeSource,
@@ -42,6 +48,18 @@ export class LocalRuntimeSource extends Context.Service<
         unreadable: [],
       });
       return { ref, changes: SubscriptionRef.changes(ref) };
+    }),
+  );
+
+  /** A webview's: the runtime's snapshot as the frames carry it. */
+  static readonly transportLayer = Layer.effect(
+    LocalRuntimeSource,
+    Effect.gen(function* () {
+      const frames = yield* SessionFrames;
+      return {
+        ref: frames.local,
+        changes: SubscriptionRef.changes(frames.local),
+      };
     }),
   );
 }
@@ -96,6 +114,16 @@ export class TextChunkSource extends Context.Service<
         ),
       );
       return { ref, changes };
+    }),
+  );
+
+  /** A webview's: the runtime already derived each frame's chunks from its
+   *  own level, so they pass through as they arrived. */
+  static readonly transportLayer = Layer.effect(
+    TextChunkSource,
+    Effect.gen(function* () {
+      const frames = yield* SessionFrames;
+      return { ref: frames.inflight, changes: frames.chunks };
     }),
   );
 }

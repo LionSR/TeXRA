@@ -149,7 +149,7 @@ const RunStartEventSchema = durable('run.start', {
  * facts with the payload flattened. `stream.removed` is the tombstone: the
  * last row of its aggregate, final (PRD 5.2, "Existence").
  */
-const SessionEventSchema = z.discriminatedUnion('type', [
+export const SessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema,
   /**
    * Every activation of a run, the first launch and each resume (PRD 6,
@@ -292,7 +292,7 @@ export function listingTypeOf(event: SessionEvent): string | null {
  * The read that delivered a durable row (PRD 7.1): the cold listing, one
  * aggregate's history, or the tail. Only a tail row advances `cursor`.
  */
-const FoldEventSchema = z.object({
+export const FoldEventSchema = z.object({
   _tag: z.literal('event'),
   read: z.enum(['listing', 'aggregate', 'all']),
   event: SessionEventSchema,
@@ -306,7 +306,7 @@ const FoldEventSchema = z.object({
  * a no-op, a `from: 0` chunk replaces the row, and two adjacent chunks merge
  * into one exactly. Never durable, never a seq.
  */
-const TextChunkSchema = z.object({
+export const TextChunkSchema = z.object({
   _tag: z.literal('chunk'),
   streamId: StreamTabIdSchema,
   rowId: z.string(),
@@ -325,7 +325,7 @@ export type TextChunk = z.infer<typeof TextChunkSchema>;
  * so every ownerless run reads as interrupted until the runtime says
  * otherwise.
  */
-const LocalRuntimeStateSchema = z.object({
+export const LocalRuntimeStateSchema = z.object({
   self: z.array(OwnerIdSchema),
   heldBy: z.array(OwnerIdSchema),
   unreadable: z.array(
@@ -340,7 +340,7 @@ export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
  * is a fold input: an aggregate entering it gets its `folded` entry, one
  * leaving it loses its transcript tier.
  */
-const TranscriptSubscriptionSchema = z.object({
+export const TranscriptSubscriptionSchema = z.object({
   id: AggregateIdSchema,
   fromSeq: z.int().nonnegative(),
 });

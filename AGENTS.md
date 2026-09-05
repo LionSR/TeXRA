@@ -93,7 +93,7 @@ subset of the same files under the same options.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
 - Keep the directory structure aligned among different webviews (webview, progressView, settingsView). Use the same folder names for modules of the same type and functionality but in different webviews.
-- Place view-specific, extension-only manager classes under that view's `managers` folder (e.g. `FileManager.ts` in `packages/extension/src/webview/managers/`). Host-neutral view backend logic instead lives under `src/controllers/<view>/backend/` (e.g. `src/controllers/progressView/backend/LitSessionRenderer.ts`), per the `controllers/` host-neutral-orchestration rule.
+- Place view-specific, extension-only manager classes under that view's `managers` folder (e.g. `FileManager.ts` in `packages/extension/src/webview/managers/`). Host-neutral view backend logic instead lives under `src/controllers/<view>/backend/` (e.g. `src/controllers/progressView/backend/ProgressBackend.ts`), per the `controllers/` host-neutral-orchestration rule.
 
 ### Naming conventions
 
@@ -520,7 +520,7 @@ travel through the flows are described in `docs/architecture/2026-06-20-pocketfl
 
 **Progress view**
 
-- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and the frontend state slices in `packages/extension/src/progressView/frontend/slices/` (`logSlice`, `taskSlice`, `streamLifecycleSlice`, etc., mirroring the `settingsView/frontend/slices/` pattern) — augment them rather than manipulating the DOM directly.
+- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.); they read the `SessionView` fold (`src/shared/session/sessionView.ts`) and the `Surface` record as properties and dispatch typed request events. Augment them rather than manipulating the DOM directly.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
 
 **Error handling and types**
