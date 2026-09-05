@@ -330,8 +330,6 @@ describe('SupabaseAuthProvider model availability', () => {
     vi.clearAllMocks();
   });
 
-  // Listeners recompute model options from the session-change event, so an
-  // event published ahead of the invalidation serves the stale option list.
   // The shared client persists no session, so a remote sign-out would revoke
   // whichever session was last handed to it — at supabase-js's default global
   // scope, on every device. Sign-out clears local storage only, as on desktop

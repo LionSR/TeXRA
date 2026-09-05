@@ -421,8 +421,7 @@ export function getEnabledModels(
 }
 
 /**
- * Enable or disable one model, and invalidate the options cache derived from
- * the list. The only writer of `GlobalStateKey.ENABLED_MODELS` outside the
+ * Enable or disable one model. The only writer of `GlobalStateKey.ENABLED_MODELS` outside the
  * startup reconciliation in `modelListRefresh.ts`.
  *
  * Two invariants, previously enforced only on the CLI path:

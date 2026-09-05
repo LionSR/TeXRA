@@ -191,8 +191,7 @@ async function refreshModelListStateIfNeeded(
 }
 
 /**
- * Runs {@link refreshModelListStateIfNeeded} and, when it changed anything,
- * invalidates the model-options cache. Every host (extension, desktop, CLI)
+ * Runs {@link refreshModelListStateIfNeeded}. Every host (extension, desktop, CLI)
  * calls this at startup with the same added/removed/reordered/route-
  * preference handling; only the resulting `messages` (logged by the caller,
  * so a host can interleave its own follow-up lines, e.g. the extension's
