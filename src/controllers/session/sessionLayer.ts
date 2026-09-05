@@ -59,7 +59,6 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type OwnerId,
   type SessionEventDraft,
-  type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
@@ -295,11 +294,6 @@ const historyImport = (transcripts: StreamLogStore) =>
     }),
   );
 
-/** `${streamId}/${rowId}`: the in-flight text key of one streaming row. */
-function inflightKey(streamId: StreamTabId, entry: StreamLogEntry): string {
-  return `${streamId}/${entry.id}`;
-}
-
 /**
  * The transcript bridge, until the cutover: the root's transcript store's
  * change feed, in emission order, as `transcript.entry` rows on the plane
@@ -343,7 +337,7 @@ const transcriptBridge = (transcripts: StreamLogStore) =>
             yield* SubscriptionRef.update(chunks.ref, (held) => {
               const next = new Map(held);
               for (const entry of rows) {
-                const key = inflightKey(streamId, entry);
+                const key = `${streamId}/${entry.id}`;
                 if (isRunningStreamingTextEntry(entry)) {
                   next.set(key, entry.text ?? '');
                 } else next.delete(key);

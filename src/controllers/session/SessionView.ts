@@ -32,10 +32,7 @@ import { WorkspaceRoots } from './WorkspaceRoots';
 
 export class SessionViewService extends Context.Service<
   SessionViewService,
-  {
-    readonly ref: SubscriptionRef.SubscriptionRef<SessionView>;
-    readonly changes: Stream.Stream<SessionView>;
-  }
+  { readonly ref: SubscriptionRef.SubscriptionRef<SessionView> }
 >()('@texra/session/SessionView') {
   static readonly layer = Layer.effect(
     SessionViewService,
@@ -117,7 +114,7 @@ export class SessionViewService extends Context.Service<
           Stream.runForEach(({ view }) => SubscriptionRef.set(ref, view)),
         ),
       );
-      return { ref, changes: SubscriptionRef.changes(ref) };
+      return { ref };
     }),
   );
 }

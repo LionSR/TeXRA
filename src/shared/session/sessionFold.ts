@@ -117,9 +117,8 @@ import { isObject } from '@utils/core';
 
 import type { SessionView, StreamView, TranscriptView } from './sessionView';
 
-type DurableEvent = SessionEvent;
-type RunStartEvent = Extract<DurableEvent, { type: 'run.start' }>;
-type TranscriptEntryEvent = Extract<DurableEvent, { type: 'transcript.entry' }>;
+type RunStartEvent = Extract<SessionEvent, { type: 'run.start' }>;
+type TranscriptEntryEvent = Extract<SessionEvent, { type: 'transcript.entry' }>;
 
 /** Workflow-script stream ids whose run model a batch derives at its end. */
 type DeferredRunModels = Set<StreamTabId> | null;
@@ -1203,7 +1202,7 @@ function mergeRounds<T>(
 
 /** A tool-use fact on a stream whose arm cannot hold it is a publisher or
  *  category defect, made loud at the fold's boundary. */
-function wrongArm(stream: StreamView, event: DurableEvent): never {
+function wrongArm(stream: StreamView, event: SessionEvent): never {
   throw new Error(
     `${event.type} names ${stream.id}, a ${stream.category} stream; the fact belongs to the ${AgentCategory.ToolUse} arm`,
   );
@@ -1213,7 +1212,7 @@ function wrongArm(stream: StreamView, event: DurableEvent): never {
  *  the transcript tier are handled by the caller). */
 function applyOwnArm(
   stream: StreamView,
-  event: Exclude<DurableEvent, TranscriptEntryEvent>,
+  event: Exclude<SessionEvent, TranscriptEntryEvent>,
 ): StreamView {
   switch (event.type) {
     case 'run.start':
@@ -1352,7 +1351,7 @@ function applyOwnArm(
 function applySessionSlices(
   view: SessionView,
   streamId: StreamTabId | null,
-  event: DurableEvent,
+  event: SessionEvent,
 ): void {
   switch (event.type) {
     case 'run.start':
@@ -1449,7 +1448,7 @@ function relink(
 
 /** The stream a durable event names: its aggregate, except for the thread
  *  aggregate of an inquiry (5.1). */
-function streamOf(event: DurableEvent): StreamTabId | null {
+function streamOf(event: SessionEvent): StreamTabId | null {
   return event.type === 'inquiryThreadUpdated'
     ? null
     : (event.aggregateId as StreamTabId);
@@ -1458,7 +1457,7 @@ function streamOf(event: DurableEvent): StreamTabId | null {
 /** Returns whether the event changed anything. */
 function foldDurable(
   view: SessionView,
-  event: DurableEvent,
+  event: SessionEvent,
   deferred: DeferredRunModels,
 ): boolean {
   if (event.type === 'transcript.entry') return foldTranscriptRow(view, event);

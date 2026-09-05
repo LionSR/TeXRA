@@ -379,10 +379,9 @@ export class SessionEvents extends Context.Service<
         );
       return {
         publish,
-        listing: () => log.readListing(),
+        listing: log.readListing,
         all,
-        aggregate: (aggregateId, fromSeq) =>
-          log.readAggregate(aggregateId, fromSeq),
+        aggregate: log.readAggregate,
         anchor,
       };
     }),

@@ -160,7 +160,7 @@ describe('session events and view', () => {
         // replays the state it holds on subscribe: the empty view before the
         // marker, or the marker's state when the fold got there first.
         const states = yield* Effect.forkScoped(
-          view.changes.pipe(
+          SubscriptionRef.changes(view.ref).pipe(
             Stream.map(drawn),
             Stream.takeUntil((next) => next.cursor >= 5),
             Stream.runCollect,

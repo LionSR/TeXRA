@@ -1442,18 +1442,6 @@
       "name": "RoundKeyStringSchema"
     },
     {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "withEnvelope"
-    },
-    {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "SessionEventBody"
-    },
-    {
       "file": "src/shared/schemas/settingsViewMessages.ts",
       "category": "production-dead",
       "kind": "exports",

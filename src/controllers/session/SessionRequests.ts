@@ -315,12 +315,7 @@ function handle(
       });
     case 'workflow.control':
       return Effect.sync(() => {
-        session.workflowControls.control(
-          req.executionId as Parameters<
-            SessionHandle['workflowControls']['control']
-          >[0],
-          req.action,
-        );
+        session.workflowControls.control(req.executionId, req.action);
         return done;
       });
   }

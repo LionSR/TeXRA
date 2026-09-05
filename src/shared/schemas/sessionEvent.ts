@@ -100,7 +100,6 @@ const envelope = {
   ownerId: OwnerIdSchema.nullable(),
   at: z.number(),
 };
-type Envelope = { [K in keyof typeof envelope]: z.infer<(typeof envelope)[K]> };
 
 function durable<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
   return z.object({ ...envelope, type: z.literal(type), ...shape });
@@ -254,34 +253,17 @@ const SessionEventSchema = z.discriminatedUnion('type', [
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
-/** A durable arm without its envelope: what an in-process publisher builds
- *  before the aggregate, seq, commit, owner, and clock are stamped on. */
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
-export type SessionEventBody = DistributiveOmit<SessionEvent, keyof Envelope>;
-
 /**
  * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
  * it lives on (contract C2). The publisher stamps the rest of the envelope
  * (`seq`, `commit`, `ownerId`, `at`) under its permit; no caller passes them.
+ * `Omit` is distributed over the union so a draft keeps its arm.
  */
-export type SessionEventDraft = DistributiveOmit<
-  SessionEvent,
-  'seq' | 'commit' | 'ownerId' | 'at'
->;
-
-/**
- * Stamp the envelope on a body. The one place the two halves meet: a body is
- * a distributive omit over the union, so the spread cannot be typed back
- * into the union without this assertion.
- */
-export function withEnvelope(
-  body: SessionEventBody,
-  stamp: Envelope,
-): SessionEvent {
-  return { ...stamp, ...body } as SessionEvent;
-}
+export type SessionEventDraft = SessionEvent extends infer E
+  ? E extends unknown
+    ? Omit<E, 'seq' | 'commit' | 'ownerId' | 'at'>
+    : never
+  : never;
 
 /**
  * The listing types the fold keys `latest` by (PRD 5.1): every durable arm

@@ -283,8 +283,6 @@ export function createChatSessionController(
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
 
-  /** Issue one request to the session's runtime and read its Effect result
-   *  as the response (PRD 7.6): the refusal text, or undefined on success. */
   /** The stream of `executionId`, from the first view level that holds it. */
   const rootStreamOf = (
     executionId: string | undefined,
@@ -310,6 +308,8 @@ export function createChatSessionController(
           ),
         );
 
+  /** Issue one request to the session's runtime and read its Effect result
+   *  as the response (PRD 7.6): the refusal text, or undefined on success. */
   const request = (req: RuntimeRequest): Promise<string | undefined> =>
     effectRuntime().runPromise(
       runtimeSession.requests.request(req).pipe(

@@ -12,13 +12,11 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   runIdentityDisplayName,
-  withEnvelope,
   type ApprovalPolicySnapshot,
   type FoldInput,
   type LocalRuntimeState,
   type RunIdentity,
   type SessionEvent,
-  type SessionEventBody,
   type StreamLogEntry,
   type StreamTabId,
   type TaskGroup,
@@ -67,6 +65,14 @@ type EntryFixture = StreamLogEntry extends infer E
     : never
   : never;
 
+/** A durable arm without its envelope: what a publisher builds before the
+ *  aggregate, seq, commit, owner, and clock are stamped on. */
+type SessionEventBody = SessionEvent extends infer E
+  ? E extends unknown
+    ? Omit<E, 'aggregateId' | 'seq' | 'commit' | 'ownerId' | 'at'>
+    : never
+  : never;
+
 /** Seq numbered per aggregate and committed in one session order, the way
  *  the event table keys them (contract C1). */
 class Log {
@@ -84,13 +90,16 @@ class Log {
     const seq = (this.seq.get(aggregateId) ?? 0) + 1;
     this.seq.set(aggregateId, seq);
     this.commit += 1;
-    const event = withEnvelope(body, {
+    // A body is a distributive omit over the union, so the spread cannot be
+    // typed back into the union without this assertion.
+    const event = {
       aggregateId,
       seq,
       commit: this.commit,
       ownerId,
       at,
-    });
+      ...body,
+    } as SessionEvent;
     this.events.push(event);
     return event;
   }
@@ -876,18 +885,20 @@ describe('sessionFold', () => {
     const settled = foldAll(scenario.events);
     const stamp = { seq: 1, commit: 99, ownerId: OWNER, at: 4000 };
     const facts: FoldInput[] = [
-      tail(
-        withEnvelope(
-          { type: 'updateStreamDescription', description: 'boo' },
-          { ...stamp, aggregateId: ghost },
-        ),
-      ),
-      tail(
-        withEnvelope(
-          { type: 'setParentStream', parentStreamId: ghost },
-          { ...stamp, aggregateId: PROCESS, seq: 3, commit: 100 },
-        ),
-      ),
+      tail({
+        ...stamp,
+        aggregateId: ghost,
+        type: 'updateStreamDescription',
+        description: 'boo',
+      }),
+      tail({
+        ...stamp,
+        aggregateId: PROCESS,
+        seq: 3,
+        commit: 100,
+        type: 'setParentStream',
+        parentStreamId: ghost,
+      }),
     ];
     // The run.start alone states resume eligibility: a plain tool-use agent
     // can be resumed natively; a workflow root and a process child cannot.
