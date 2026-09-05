@@ -50,12 +50,12 @@ import {
   tailFrom,
 } from '@agent/runtime/SessionEvents';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createLog } from '@logger/logUtils';
 import {
   initSessionOwner,
   type SessionGraph,
   type SessionOpen,
 } from '@agent/runtime/sessionGraph';
+import { createLog } from '@logger/logUtils';
 import {
   initProcessRuntime,
   type ProcessRuntime,
@@ -395,25 +395,40 @@ async function untilSettled(
   }
 }
 
+/** A root with nothing open: nothing to settle, nothing abandoned. */
+const NOTHING_TO_CLOSE: SessionCloseReport = { settled: true, abandoned: [] };
+
+/** Resolves once `signal` aborts; interrupting it detaches the listener. */
+const aborted = (signal: AbortSignal) =>
+  Effect.callback<void>((resume, interrupt) => {
+    if (signal.aborted) return resume(Effect.void);
+    signal.addEventListener('abort', () => resume(Effect.void), {
+      once: true,
+      signal: interrupt,
+    });
+  });
+
 /**
  * Close the session of one root (proposal 2026-09-05, section 9): refuse
  * new executions, stop the root executions it owns (the stop cascades into
- * their children), wait for their drivers to settle them inside the
- * lifecycle's phase budget, flush the session's artifacts while its stores
- * are still open, and release the entry. Executions that outlive the
- * budget are reported, and the entry stays, refusing new work, until they
- * actually settle; only then is it released, so no later open builds a
- * second session over a root whose stores a run still writes. Nothing here
- * touches the process lifecycle or another root.
+ * their children), wait for their drivers to settle them inside one budget,
+ * flush the session's artifacts while its stores are still open, and
+ * release the entry. The budget is the caller's `signal` when it passes one
+ * (the lifecycle's shutdown phase, whose deadline started before this
+ * close), the lifecycle's phase deadline otherwise: never both. Executions
+ * that outlive the budget are reported, and the entry stays, refusing new
+ * work, until they actually settle; only then is it released, so no later
+ * open builds a second session over a root whose stores a run still
+ * writes. Nothing here touches the process lifecycle or another root.
  */
-const closeSession = (root: string) =>
+const closeSession = (root: string, signal?: AbortSignal) =>
   Effect.gen(function* () {
     const sessions = yield* Sessions;
     const keys = yield* RcMap.keys(sessions.rcMap);
     const key = [...keys].find((candidate) => candidate.storage === root);
-    if (key === undefined) return { settled: true, abandoned: [] };
+    if (key === undefined) return NOTHING_TO_CLOSE;
     const held = yield* sessions.contextEffectOption(key).pipe(Effect.scoped);
-    if (Option.isNone(held)) return { settled: true, abandoned: [] };
+    if (Option.isNone(held)) return NOTHING_TO_CLOSE;
     const session = Context.get(held.value, Session);
     const { executions } = session;
     executions.closeAdmissions();
@@ -428,31 +443,42 @@ const closeSession = (root: string) =>
         }
       }),
     );
+    // Ends at the actual settlement, or when interrupted.
     const settled = Effect.promise(
-      (signal) =>
+      (interrupt) =>
         runInSession(session, () =>
-          untilSettled(executions, signal),
+          untilSettled(executions, interrupt),
         ) as Promise<void>,
     );
-    yield* settled.pipe(Effect.timeoutOption(SHUTDOWN_PHASE_DEADLINE_MS));
+    yield* Effect.race(
+      settled,
+      signal ? aborted(signal) : Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS),
+    );
     const abandoned = executions.getActiveIds();
+    const release =
+      abandoned.length === 0
+        ? sessions.invalidate(key)
+        : Effect.sync(() =>
+            log.warn(
+              `Session ${root} is closing with executions still live past its budget: ${abandoned.join(', ')}; it stays open, refusing new work, until they settle`,
+            ),
+          ).pipe(
+            // Started now, so the wait holds its listener before this close
+            // returns and no timer stands between the report and the release.
+            Effect.andThen(
+              Effect.forkDetach(
+                settled.pipe(Effect.andThen(sessions.invalidate(key))),
+                { startImmediately: true },
+              ),
+            ),
+          );
+    // The release is the flush's finalizer: the entry goes, or its release
+    // is armed on the settlement, whatever the flush's exit, and a flush
+    // that fails still fails this close.
     yield* Effect.promise(
       () =>
         runInSession(session, () => session.flushArtifacts()) as Promise<void>,
-    );
-    const release = sessions.invalidate(key);
-    if (abandoned.length === 0) {
-      yield* release;
-    } else {
-      log.warn(
-        `Session ${root} is closing with executions still live past the ${SHUTDOWN_PHASE_DEADLINE_MS}ms budget: ${abandoned.join(', ')}; it stays open, refusing new work, until they settle`,
-      );
-      // Started now, so the wait holds its listener before this close
-      // returns and no timer stands between the report and the release.
-      yield* Effect.forkDetach(settled.pipe(Effect.andThen(release)), {
-        startImmediately: true,
-      });
-    }
+    ).pipe(Effect.ensuring(release));
     const report: SessionCloseReport = {
       settled: abandoned.length === 0,
       abandoned,
@@ -487,7 +513,7 @@ export function installProcessRuntime(
   initProcessRuntime(runtime);
   initSessionOwner({
     open: (open) => runtime.runSync(openSession(open)),
-    close: (root) => runtime.runPromise(closeSession(root)),
+    close: (root, signal) => runtime.runPromise(closeSession(root, signal)),
   });
   return runtime;
 }

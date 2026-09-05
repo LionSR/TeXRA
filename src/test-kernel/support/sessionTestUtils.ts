@@ -16,11 +16,10 @@ type TestSessionInit = Omit<SessionHandleInit, 'transcripts'> & {
 let opened = 0;
 
 /**
- * Open an isolated session with an explicitly ephemeral transcript. A
- * session is one per workspace storage root (the `Sessions` owner returns
- * the session already open on a root), so each call names its own storage
- * root under the process roots, as a desktop paper would: two test sessions
- * never share a graph, and neither shares the process default session's.
+ * Open an isolated session with an explicitly ephemeral transcript, on a
+ * storage root of its own under the process roots (one root holds one
+ * session): it shares a graph with no other test session and not with the
+ * process default session.
  */
 export function createTestSession(init: TestSessionInit = {}): SessionHandle {
   const process = processWorkspaceRoots();
@@ -39,11 +38,10 @@ export function createTestSession(init: TestSessionInit = {}): SessionHandle {
 }
 
 /**
- * Open a fresh session over the process roots, for a file that installs no
- * default session and seeds or reads the process storage outside the
- * session's scope. One root holds one session, so a session still open
- * there (a previous test's, left undisposed) is released first: the caller
- * gets a session of its own, over the store it supplies.
+ * Open a fresh session over the process roots, for a file that seeds or
+ * reads the process storage outside the session's scope. One root holds one
+ * session, so a session still open there (a previous test's) is released
+ * first: the caller gets its own, over the store it supplies.
  */
 export function createProcessSession(
   init: TestSessionInit = {},

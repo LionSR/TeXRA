@@ -82,8 +82,9 @@ export interface SessionOwner {
   /** The session of `open.roots`' storage root: the one already open there,
    *  or built now over what `open` supplies. */
   open(open: SessionOpen): SessionHandle;
-  /** Close the session of a storage root, settling what it owns. */
-  close(root: string): Promise<SessionCloseReport>;
+  /** Close the session of a storage root, settling what it owns inside
+   *  `signal`'s budget, or the runtime's own when the caller passes none. */
+  close(root: string, signal?: AbortSignal): Promise<SessionCloseReport>;
 }
 
 let owner: SessionOwner | undefined;
@@ -127,13 +128,20 @@ export function openSession(init: SessionHandleInit): SessionHandle {
 /**
  * Close the session of a storage root (proposal 2026-09-05, section 9):
  * refuse new executions on it, interrupt the ones it owns and wait for
- * them to settle within the process's shutdown-phase budget, flush its
- * artifacts, and release it from its owner. A root with no open session
- * has nothing to close and reports `settled`. A session whose executions
+ * them to settle within `signal`'s budget (the caller's shutdown phase) or,
+ * without one, the process's shutdown-phase budget, flush its artifacts,
+ * and release it from its owner. A root with no open session has nothing
+ * to close and reports `settled`; so does a process with no owner
+ * installed, where no session was ever opened. A session whose executions
  * outlive the budget is reported `abandoned` and stays open, refusing new
  * work, until they end; it is released then, never before. This never
  * touches the process lifecycle or another root's session.
  */
-export function closeSession(root: string): Promise<SessionCloseReport> {
-  return sessions().close(root);
+export function closeSession(
+  root: string,
+  signal?: AbortSignal,
+): Promise<SessionCloseReport> {
+  return owner
+    ? owner.close(root, signal)
+    : Promise.resolve({ settled: true, abandoned: [] });
 }

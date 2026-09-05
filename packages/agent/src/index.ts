@@ -158,18 +158,6 @@ interface EnteredRun {
   readonly view: RuntimeSessionHandle['viewChanges'];
 }
 
-/**
- * The package's one process-wide state, made on the first run and torn down
- * on the embedder's shutdown path: the node runtime features and the Effect
- * runtime the sessions run on (PRD 7.7, 11). The sessions themselves have
- * no package-side owner: the runtime's `Sessions` map holds one per storage
- * root, the same owner every TeXRA host opens through, so a run resolves
- * its session by the platform's roots and the map hands back the one
- * already open there or builds it. The shutdown path resets this, so the
- * package has no life of its own past it.
- */
-let packageRuntime: Promise<void> | undefined;
-
 /** The session of the platform's storage root, as the runtime's owner
  *  holds it: built on the first open, over what the package supplies then. */
 function sessionFor(platform: AgentPlatform): RuntimeSessionHandle {
@@ -402,19 +390,22 @@ class AgentRunStream implements AgentRun {
 
 /**
  * Close the session of a workspace's storage root: refuse new runs on it,
- * interrupt the ones it owns and wait for them to settle within the
- * runtime's shutdown budget, flush its artifacts, and release it. The report
- * says whether every run settled; the runs it names as `abandoned` were
- * still live when the budget ran out, and the session stays open, refusing
- * new runs, until they end. A root with no open session reports `settled`.
- * The embedder's shutdown path (`lifecycle.runShutdown()`) closes the
- * platform's session this way; call it directly to close a root before
- * that, or to close one of several roots one platform opened.
+ * interrupt the ones it owns and wait for them to settle within `signal`'s
+ * budget (the embedder's own shutdown phase) or, without one, the runtime's
+ * shutdown budget, flush its artifacts, and release it. The report says
+ * whether every run settled; the runs it names as `abandoned` were still
+ * live when the budget ran out, and the session stays open, refusing new
+ * runs, until they end. A root with no open session reports `settled`, as
+ * does a process no run has initialized. The embedder's shutdown path
+ * (`lifecycle.runShutdown()`) closes the platform's session this way, under
+ * its phase budget; call it directly to close a root before that, or to
+ * close one of several roots one platform opened.
  */
 export function closeSession(
   roots: WorkspaceRoots,
+  signal?: AbortSignal,
 ): Promise<SessionCloseReport> {
-  return closeRuntimeSession(roots.storage);
+  return closeRuntimeSession(roots.storage, signal);
 }
 
 /**
@@ -435,6 +426,9 @@ export function runAgent(input: RunAgentInput): AgentRun {
       );
     }
 
+    // The identity first: everything from the platform check to the runtime
+    // install is then synchronous, so two first runs cannot both pass it.
+    const processStart = await input.platform.processes.selfIdentity();
     const activePlatform = tryPlatform();
     if (activePlatform && activePlatform !== input.platform) {
       throw new Error(
@@ -442,35 +436,30 @@ export function runAgent(input: RunAgentInput): AgentRun {
       );
     }
     if (!activePlatform) {
+      // No composition root has run in this process, so the package is its
+      // composition root: the platform, the node agent runtime, the one
+      // Effect runtime holding the sessions' owner (PRD 7.7), and the hosts'
+      // shutdown order on the embedder's shutdown path. A run beside a host
+      // that already ran its own (the same platform object) reuses all four,
+      // its session included: the owner is process-wide, and nothing here
+      // may be installed twice.
       initPlatform(input.platform);
       initProcessWorkspaceRoots(input.platform.roots);
-    }
-    packageRuntime ??= (async () => {
       initNodeAgentRuntime(input.platform.lifecycle);
-      // The one Effect runtime of the embedding process (PRD 7.7), holding
-      // the sessions' owner.
-      const runtime = installProcessRuntime(
-        await input.platform.processes.selfIdentity(),
-      );
-      // The hosts' shutdown order, on the embedder's shutdown path: the
-      // session's agent-spawned children and agent-CLI sessions are stopped,
-      // then the platform's session is closed through its owner (its runs
-      // stopped and settled, its artifacts flushed, the session released:
-      // the headless shape, as the CLI's headless run stops and awaits its
-      // run in this phase), then the runtime that held it goes.
+      const runtime = installProcessRuntime(processStart);
+      // The session's agent-spawned children and agent-CLI sessions are
+      // stopped, then the platform's session is closed through its owner
+      // under the phase's own budget (its runs stopped and settled, its
+      // artifacts flushed, the session released: the headless shape, as the
+      // CLI's headless run stops and awaits its run in this phase), then
+      // the runtime that held it goes.
       registerRuntimeShutdownHandlers(input.platform.lifecycle, {
-        flushArtifacts: async () => {
-          await closeSession(input.platform.roots);
+        flushArtifacts: async (signal) => {
+          await closeSession(input.platform.roots, signal);
         },
-        afterExecutionSettlement: [
-          () => {
-            packageRuntime = undefined;
-          },
-          () => runtime.dispose(),
-        ],
+        afterExecutionSettlement: [() => runtime.dispose()],
       });
-    })();
-    await packageRuntime;
+    }
     const session = sessionFor(input.platform);
     await loadAgents({ includeRemote: false });
     const resolved = resolveAgent(input.agent);

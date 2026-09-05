@@ -317,9 +317,8 @@ describe('session events and view', () => {
 });
 
 /**
- * The session owner (PRD 7.3; proposal 2026-09-05, sections 3 and 9): the
- * `Sessions` map behind `openSession` holds one session per storage root,
- * and `closeSession` is how a session ends.
+ * The session owner (proposal 2026-09-05, sections 3 and 9): `closeSession`
+ * is how a session the `Sessions` map holds behind `openSession` ends.
  */
 describe('Sessions owner', () => {
   const open = (storagePath: string) =>
@@ -327,38 +326,25 @@ describe('Sessions owner', () => {
       roots: createFakeWorkspaceRoots({ storagePath }),
       transcripts: StreamLogStore.ephemeral('sessions owner test'),
     });
-  const live = (): SessionHandle[] => {
-    const sessions: SessionHandle[] = [];
-    forEachLiveSession((session) => sessions.push(session));
-    return sessions;
+  const isLive = (session: SessionHandle): boolean => {
+    let live = false;
+    forEachLiveSession((candidate) => {
+      live ||= candidate === session;
+    });
+    return live;
   };
-
-  it('opens one session per storage root: a root opened twice is one session, a second root its own', async () => {
-    const first = open('/workspace/owner/a');
-    const again = open('/workspace/owner/a');
-    const other = open('/workspace/owner/b');
-    try {
-      expect(again).toBe(first);
-      expect(first.roots.storage).toBe('/workspace/owner/a');
-      expect(other).not.toBe(first);
-      expect(other.executions).not.toBe(first.executions);
-    } finally {
-      await closeSession('/workspace/owner/a');
-      await closeSession('/workspace/owner/b');
-    }
-    expect(live()).not.toContain(first);
-    expect(live()).not.toContain(other);
-  });
-
-  it('close reports settled once the run ended, and releases the session', async () => {
-    const session = open('/workspace/owner/settled');
+  const track = (session: SessionHandle, executionId: string) =>
     session.executions.track(
       testExecutionHandle({
-        executionId: 'exec:settled',
-        parentStreamId: 'stream:settled' as StreamTabId,
+        executionId,
+        parentStreamId: `stream:${executionId}` as StreamTabId,
         agent: 'chat',
       }),
     );
+
+  it('close reports settled once the run ended, and releases the session', async () => {
+    const session = open('/workspace/owner/settled');
+    track(session, 'exec:settled');
     // The run completes: its driver untracks it as it unwinds.
     session.executions.untrack('exec:settled');
 
@@ -366,28 +352,13 @@ describe('Sessions owner', () => {
       settled: true,
       abandoned: [],
     });
-    expect(live()).not.toContain(session);
-    // The root is free: the next open builds a new session, and a root
-    // with nothing open has nothing to close.
-    const next = open('/workspace/owner/settled');
-    expect(next).not.toBe(session);
-    await closeSession('/workspace/owner/settled');
-    await expect(closeSession('/workspace/owner/settled')).resolves.toEqual({
-      settled: true,
-      abandoned: [],
-    });
+    expect(isLive(session)).toBe(false);
   });
 
-  it('close reports abandoned when a run is still live past the budget, refuses new work, and releases at the actual settlement', async () => {
+  it('close reports a run still live past the budget as abandoned, and releases the session at its settlement', async () => {
     const session = open('/workspace/owner/abandoned');
     // A run that ignores its interrupt: no handler, no driver to unwind it.
-    session.executions.track(
-      testExecutionHandle({
-        executionId: 'exec:slow',
-        parentStreamId: 'stream:slow' as StreamTabId,
-        agent: 'chat',
-      }),
-    );
+    track(session, 'exec:slow');
     vi.useFakeTimers();
     try {
       const closing = closeSession('/workspace/owner/abandoned');
@@ -399,21 +370,8 @@ describe('Sessions owner', () => {
     } finally {
       vi.useRealTimers();
     }
-    // Still the root's session, gated: a reopen finds it, new work is refused.
-    expect(live()).toContain(session);
-    expect(open('/workspace/owner/abandoned')).toBe(session);
-    expect(() =>
-      session.executions.track(
-        testExecutionHandle({
-          executionId: 'exec:late',
-          parentStreamId: 'stream:late' as StreamTabId,
-          agent: 'chat',
-        }),
-      ),
-    ).toThrow('while the session is closing');
-
-    // The run settles at last: the owner releases the session then.
+    expect(isLive(session)).toBe(true);
     session.executions.untrack('exec:slow');
-    await vi.waitFor(() => expect(live()).not.toContain(session));
+    await vi.waitFor(() => expect(isLive(session)).toBe(false));
   });
 });

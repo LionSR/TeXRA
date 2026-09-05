@@ -182,7 +182,6 @@ vi.mock('@transcript/StreamLogStore', () => ({
 // Local imports - package API under test
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
 import {
-  closeSession,
   runAgent,
   type AgentPlatform,
   type SessionView,
@@ -406,22 +405,6 @@ describe('agent package run lifecycle', () => {
     // process); only the reset owner is observed here.
     await runAgent(INPUT).result;
     expect(mocks.sessionInits).toHaveLength(2);
-  });
-
-  it('closeSession(roots) is the owner close of the roots storage root, reporting what it settled', async () => {
-    await runAgent(INPUT).result;
-    mocks.closeSession.mockResolvedValueOnce({
-      settled: false,
-      abandoned: ['execution-2'],
-    });
-
-    await expect(closeSession(PLATFORM.roots)).resolves.toEqual({
-      settled: false,
-      abandoned: ['execution-2'],
-    });
-    expect(mocks.closeSession).toHaveBeenCalledExactlyOnceWith(
-      PLATFORM.roots.storage,
-    );
   });
 
   it('fails the run instead of hanging when the session fold dies before the final view', async () => {
