@@ -50,40 +50,24 @@ function streamStatusDisplayKey(
   return substate ?? status;
 }
 
-// cli and cliCompact share every label except the STARTING ellipsis, so
-// cliCompact is derived from cli rather than hand-synced.
-const cliStreamStatusLabels: Record<StreamStatusCopyKey, string> = {
-  [STREAM_SUBSTATE.STARTING]: 'starting\u2026',
-  [STREAM_PHASE.RUNNING]: 'running',
-  [STREAM_PHASE.FAILED]: 'error',
-  [STREAM_PHASE.COMPLETED]: 'completed',
-  [STREAM_PHASE.CANCELLED]: 'stopped',
-  ready: 'ready',
-  [STREAM_PHASE.WAITING]: 'idle',
-  [STREAM_SUBSTATE.RESUMING]: 'resuming',
-  [STREAM_LIFECYCLE_UNAVAILABLE]: 'unavailable',
-  [STREAM_DISPLAY_INTERRUPTED]: 'interrupted',
-} as const;
-
-const STREAM_STATUS_LABELS = {
-  cli: cliStreamStatusLabels,
-  cliCompact: {
-    ...cliStreamStatusLabels,
-    [STREAM_SUBSTATE.STARTING]: 'starting',
-  },
-  progressHeader: {
-    [STREAM_SUBSTATE.STARTING]: 'Initializing',
-    [STREAM_PHASE.RUNNING]: 'Running',
-    [STREAM_PHASE.FAILED]: 'Error',
-    [STREAM_PHASE.COMPLETED]: 'Completed',
-    [STREAM_PHASE.CANCELLED]: 'Stopped',
-    ready: 'Ready',
-    [STREAM_PHASE.WAITING]: 'Idle',
-    [STREAM_SUBSTATE.RESUMING]: 'Resuming',
-    [STREAM_LIFECYCLE_UNAVAILABLE]: 'Unavailable',
-    [STREAM_DISPLAY_INTERRUPTED]: 'Interrupted',
-  },
-} as const;
+/**
+ * The one status label table (PRD one-fold-three-renderers, G4): the fold
+ * reads it into `StreamView.statusLabel`, and every renderer prints that
+ * word as is. `packages/cli/scripts/validate-run.mjs` pins the completed and
+ * stopped words from here against the real headless run.
+ */
+const STREAM_STATUS_LABELS: Record<StreamStatusCopyKey, string> = {
+  [STREAM_SUBSTATE.STARTING]: 'Initializing',
+  [STREAM_PHASE.RUNNING]: 'Running',
+  [STREAM_PHASE.FAILED]: 'Error',
+  [STREAM_PHASE.COMPLETED]: 'Completed',
+  [STREAM_PHASE.CANCELLED]: 'Stopped',
+  ready: 'Ready',
+  [STREAM_PHASE.WAITING]: 'Idle',
+  [STREAM_SUBSTATE.RESUMING]: 'Resuming',
+  [STREAM_LIFECYCLE_UNAVAILABLE]: 'Unavailable',
+  [STREAM_DISPLAY_INTERRUPTED]: 'Interrupted',
+};
 
 /**
  * The one status-to-tone mapping (PRD one-fold-three-renderers, G4 and 15):
@@ -130,7 +114,7 @@ export function streamStatusCopy(
     ? STREAM_DISPLAY_INTERRUPTED
     : streamStatusDisplayKey(status, options.substate);
   return {
-    statusLabel: STREAM_STATUS_LABELS.progressHeader[key],
+    statusLabel: STREAM_STATUS_LABELS[key],
     tone: STREAM_STATUS_TONES[key],
   };
 }
@@ -152,10 +136,7 @@ export function streamUnreadableMessage(cause: string): string {
   return `Could not read this run's state: ${cause}. Delete removes it.`;
 }
 
-export type StreamStatusLabelStyle = keyof typeof STREAM_STATUS_LABELS;
-
 interface FormatStreamStatusLabelOptions {
-  readonly style?: StreamStatusLabelStyle;
   readonly missingLabel?: string;
   readonly substate?: StreamSubstate;
 }
@@ -180,14 +161,11 @@ export function formatStreamStatusLabel(
   options: FormatStreamStatusLabelOptions = {},
 ): string | undefined {
   if (status === undefined) return options.missingLabel;
-  const style = options.style ?? 'progressHeader';
-  const key = streamStatusDisplayKey(status, options.substate);
-  return STREAM_STATUS_LABELS[style][key];
+  return STREAM_STATUS_LABELS[streamStatusDisplayKey(status, options.substate)];
 }
 
 /**
- * One-stop label + display-key derivation for the progress-header style.
- * `formatStreamStatusLabel(..., { style: 'progressHeader' })` and
+ * One-stop label + display-key derivation. `formatStreamStatusLabel` and
  * `streamStatusDisplayKey` are the same status→vocabulary lookup seen from
  * two sides (a label and the key that drives icon/state styling), so callers
  * that need both compute them together instead of double-parsing the status.
