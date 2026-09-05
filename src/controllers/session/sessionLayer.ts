@@ -439,7 +439,7 @@ function sessionGraphOpener(
     // scheduler's yield budget (`Scheduler.MaxOpsBeforeYield` steps per
     // yield) or the open reads as asynchronous and throws. The import
     // appends the whole history in one call for that reason; moving it to
-    // row open (#11865) is what removes the history pass from here.
+    // row open (#11907) is what removes the history pass from here.
     const scope = runtime.runSync(Scope.make());
     const context = runtime.runSync(
       Sessions.contextEffect(
