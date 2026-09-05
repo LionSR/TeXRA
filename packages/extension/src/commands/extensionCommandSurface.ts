@@ -76,7 +76,7 @@ export function createExtensionCommandActions(
       // state into view.
       progressViewProvider.surfaceAction({
         kind: 'launch',
-        patch: emptySurface(progressViewProvider.backend.key).launch,
+        patch: emptySurface(progressViewProvider.bridge.key).launch,
       });
       await progressViewProvider.showLauncher();
     },

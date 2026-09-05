@@ -28,4 +28,10 @@ export class Rejected extends Data.TaggedError('Rejected')<{
   readonly reason: string;
 }> {}
 
-export type RequestError = NotOwner | Unavailable | Rejected;
+/** A handler died. The cause is in the host log under `ref` (the request
+ *  id); the surface hears that the request failed, never the text. */
+export class Internal extends Data.TaggedError('Internal')<{
+  readonly ref: string;
+}> {}
+
+export type RequestError = NotOwner | Unavailable | Rejected | Internal;

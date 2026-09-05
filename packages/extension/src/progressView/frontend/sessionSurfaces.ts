@@ -46,6 +46,8 @@ interface SessionSurface {
 }
 
 export interface SessionSurfaces {
+  /** One host-bridge message: true when it was a session message. */
+  receive(data: unknown): boolean;
   /** Open the sessions the host names and close the rest. */
   sync(keys: readonly string[]): void;
   get(key: string): SessionSurface | undefined;
@@ -290,6 +292,7 @@ export function createSessionSurfaces(options: {
   });
 
   return {
+    receive: transport.receive,
     sync(keys) {
       // A closed session's surface stays persisted for its next opening;
       // its graph is released with the transport, once, on dispose.

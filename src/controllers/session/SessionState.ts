@@ -539,7 +539,7 @@ export class SessionState {
 
   async clearStream(stream: StreamTabId): Promise<DeleteStreamResult> {
     // The removal barrier is installed by the caller (the fact applier for a
-    // `removeStream` fact, or `ProgressBackend` for a host command) before
+    // `removeStream` fact, or `SessionBridge` for a host command) before
     // this storage await, and that caller owns its retirement and buffered-fact
     // replay. This method only commits the durable delete and the tombstone.
     const deletion = await this.stores.deleteStream(stream);

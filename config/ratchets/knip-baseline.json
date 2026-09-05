@@ -1424,18 +1424,6 @@
       "name": "ActiveSkillSummarySchema"
     },
     {
-      "file": "src/shared/schemas/progressView/outbound.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "SyncStreamContentMessageSchema"
-    },
-    {
-      "file": "src/shared/schemas/progressView/outbound.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "SyncStreamContentPayload"
-    },
-    {
       "file": "src/shared/schemas/roundIndexed.ts",
       "category": "production-dead",
       "kind": "exports",

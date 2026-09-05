@@ -32,15 +32,11 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { paperDisplayOf } from '@shared/session/hostSnapshot';
 import { StreamLogStore } from '@transcript';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type {
-  DesktopPaperDisplay,
-  DesktopPapersMessage,
-} from '../shared/desktopPaperMessages.js';
+import type { DesktopPapersMessage } from '../shared/desktopPaperMessages.js';
 import { initializeDesktopProcessStores } from './desktopProcessStores.js';
 
 export interface DesktopPaper {
@@ -203,12 +199,6 @@ async function stopPaperExecutions(session: SessionHandle): Promise<void> {
       await executions.waitForAnyChange(active);
     }
   });
-}
-
-/** The display record of one open paper (PRD 8.1): produced here once, so
- *  no renderer derives a name or initials from a path. */
-function paperDisplay(key: string, root: string): DesktopPaperDisplay {
-  return { ...paperDisplayOf(key, root), root };
 }
 
 /**
@@ -405,7 +395,7 @@ export async function openDesktopPaperRegistry(
     },
     summary: () => ({
       papers: openPapers().flatMap((paper) =>
-        paper.root === undefined ? [] : [paperDisplay(paper.key, paper.root)],
+        paper.root === undefined ? [] : [{ key: paper.key, root: paper.root }],
       ),
       activeKey: active().key,
     }),

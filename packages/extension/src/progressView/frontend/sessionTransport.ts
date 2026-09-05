@@ -4,9 +4,12 @@
  * deliveries, request responses, and surface actions, and the signals the
  * root reads. The runtime and the per-session graphs are
  * `webviewSessionLayer`'s; the rest of the frontend reads signals and posts
- * `UpMessage`s, and nothing else touches the session layer.
+ * `UpMessage`s, and nothing else touches the session layer. The entry owns
+ * the window's one message listener and hands each message to `receive`;
+ * the desktop renderer runs it as the last of its routes.
  */
 import { Effect, Exit, Scope, SubscriptionRef } from 'effect';
+import { z } from 'zod';
 
 import {
   installWebviewRuntime,
@@ -47,6 +50,9 @@ export interface WebviewSession {
 }
 
 export interface WebviewTransport {
+  /** One message from the host bridge: true when it was a session message
+   *  and this transport took it, false when it belongs to another route. */
+  receive(data: unknown): boolean;
   /** Open (or reuse) a session's graph. */
   open(session: string): WebviewSession;
   /** A new generation over the named transcript aggregates. */
@@ -66,6 +72,14 @@ interface OpenSession extends WebviewSession {
   readonly scope: Scope.Closeable;
 }
 
+/** The discriminator alone: a message of one of the session kinds that
+ *  still fails the schema is malformed, not another route's. */
+const DownKindSchema = z.object({
+  kind: z.enum(
+    DownMessageSchema.options.map((option) => option.shape.kind.value),
+  ),
+});
+
 export function installWebviewTransport(): WebviewTransport {
   const runtime = installWebviewRuntime();
   const sessions = new Map<string, OpenSession>();
@@ -77,7 +91,9 @@ export function installWebviewTransport(): WebviewTransport {
 
   /** Route one frame to its session's frames service; the frames service
    *  drops a frame of another generation. A frame for a session that is
-   *  not open is the host's defect, dropped loudly. */
+   *  not open is the host's defect, dropped loudly. `feed` is synchronous,
+   *  so frames are fed in arrival order on the caller's turn: a forked
+   *  fiber per frame would let the scheduler interleave two frames' rows. */
   const deliver = (frame: EventsFrame): void => {
     const session = sessions.get(frame.session);
     if (!session) {
@@ -86,45 +102,41 @@ export function installWebviewTransport(): WebviewTransport {
       );
       return;
     }
-    const { graph } = session;
-    runtime.runFork(
-      frame.host
-        ? SubscriptionRef.set(graph.host.ref, frame.host).pipe(
-            Effect.andThen(graph.frames.feed(frame)),
-          )
-        : graph.frames.feed(frame),
-    );
+    runtime.runSync(session.graph.frames.feed(frame));
   };
 
-  const decode = (event: MessageEvent): void => {
-    const parsed = DownMessageSchema.safeParse(event.data);
+  const receive = (data: unknown): boolean => {
+    const parsed = DownMessageSchema.safeParse(data);
     if (!parsed.success) {
-      console.warn(
-        '[progress] unrecognized host message',
-        event.data,
-        parsed.error,
-      );
-      return;
+      if (!DownKindSchema.safeParse(data).success) return false;
+      console.warn('[progress] malformed session message', data, parsed.error);
+      return true;
     }
     const message = parsed.data;
     switch (message.kind) {
       case 'events':
         deliver(message);
-        return;
+        return true;
       case 'response': {
         const settle = pending.get(message.requestId);
+        if (!settle) {
+          console.warn(
+            `[progress] dropped a response to request ${message.requestId}: not pending`,
+          );
+          return true;
+        }
         pending.delete(message.requestId);
-        settle?.(message.result);
-        return;
+        settle(message.result);
+        return true;
       }
       case 'surface.action':
         surfaceListener(message.session, message.action);
-        return;
+        return true;
     }
   };
-  window.addEventListener('message', decode);
 
   return {
+    receive,
     open(key) {
       const held = sessions.get(key);
       if (held) return held;
@@ -165,7 +177,7 @@ export function installWebviewTransport(): WebviewTransport {
       const open = sessions.get(session.key);
       if (!open) throw new Error(`Session ${session.key} is not open`);
       const { graph } = open;
-      runtime.runFork(
+      runtime.runSync(
         graph.frames
           .begin(message.generation)
           .pipe(
@@ -184,7 +196,6 @@ export function installWebviewTransport(): WebviewTransport {
       surfaceListener = listener;
     },
     dispose() {
-      window.removeEventListener('message', decode);
       for (const session of sessions.values()) {
         session.view$.dispose();
         session.host$.dispose();

@@ -15,25 +15,22 @@ export const DESKTOP_PAPER_COMMANDS = {
 } as const;
 
 /**
- * What a rail row, switcher entry, or paper chip prints for one paper: fact
- * strings only (G4), produced once by the main process (PRD 8.1). `root` is
- * the folder the paper is, which the renderer's editor and terminal need.
+ * One open paper: its session key and the folder it is, which the
+ * renderer's editor and terminal need. What a rail row, switcher entry, or
+ * paper chip prints for it is the `paper` display record of the session's
+ * host snapshot (PRD 8.1), which rides the session's frames and is not
+ * repeated here.
  */
-const DesktopPaperDisplaySchema = z.object({
+const DesktopPaperSchema = z.object({
   /** The session key; the paper's identity on every message. */
   key: z.string(),
   /** Canonical folder path. */
   root: z.string(),
-  /** Folder basename. */
-  name: z.string(),
-  initials: z.string(),
-  subtitle: z.string(),
 });
-export type DesktopPaperDisplay = z.infer<typeof DesktopPaperDisplaySchema>;
 
 export const DesktopPapersMessageSchema = z.object({
   command: z.literal(DESKTOP_PAPER_COMMANDS.PAPERS),
-  papers: z.array(DesktopPaperDisplaySchema),
+  papers: z.array(DesktopPaperSchema),
   /** Key of the session this window shows: an open paper's, or the
    *  no-workspace session's, which is never listed in `papers`. */
   activeKey: z.string(),

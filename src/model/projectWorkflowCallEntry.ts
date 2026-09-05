@@ -12,9 +12,9 @@ import { getModelLabel } from '@shared/model/modelLabel';
  * static label lookup (the CLI's headless workflow output does the same at its
  * write site), keeping runtime model state out of the browser import graph.
  *
- * Shared by the live `WebviewBridge` LOG_DELTA path and the host-side trace
- * exporters so exported/archived traces show the same runtime label as the
- * live surface (see #10178).
+ * Shared by the transcript rows the session fold consumes and the host-side
+ * trace exporters so exported/archived traces show the same runtime label
+ * as the live surface (see #10178).
  */
 export function projectWorkflowCallEntry(
   entry: StreamLogEntry,

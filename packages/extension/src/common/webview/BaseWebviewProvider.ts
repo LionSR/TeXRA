@@ -34,10 +34,6 @@ export abstract class BaseWebviewProvider {
    * messages to this provider's handler. The returned disposable removes that
    * listener; callers keep it wherever the listener's lifetime belongs (a view
    * disposable store, or the single slot a swappable surface reassigns).
-   *
-   * Public because the sidebar is one VS Code view slot two providers share:
-   * MainViewProvider hands the slot to the progress view by calling this on
-   * ProgressViewProvider.
    */
   public setupWebviewContent(
     view: vscode.WebviewView | vscode.WebviewPanel,

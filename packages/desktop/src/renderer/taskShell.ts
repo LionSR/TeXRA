@@ -12,6 +12,7 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
+import type { PaperDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { resolveSelected, type Surface } from '@shared/session/surface';
@@ -25,11 +26,11 @@ import {
   type WorkbenchPlacement,
   type WorkbenchTab,
 } from '../shared/desktopTaskShell.js';
-import type { DesktopPaperDisplay } from '../shared/desktopPaperMessages.js';
 
-/** One open paper as the rail lists it: what it is, its session, its surface. */
+/** One open paper as the rail lists it: how its host names it, its session,
+ *  its surface. */
 export interface RailPaper {
-  readonly display: DesktopPaperDisplay;
+  readonly display: PaperDisplay;
   readonly view: SessionView;
   readonly surface: Surface;
 }

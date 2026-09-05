@@ -208,8 +208,8 @@ function isUnrecognizedCommand(error: z.ZodError): boolean {
 //
 // Both functions below are no-ops outside `isDevAssertionMode()` — zero
 // `safeParse` cost in production. Some of these boundaries (desktop's single
-// `postToRenderer` channel carries high-frequency progress-stream chunks,
-// e.g. `LOG_DELTA`) are hot enough that even a cheap parse per message is
+// `postToRenderer` channel carries the session frames and their text
+// chunks) are hot enough that even a cheap parse per message is
 // worth avoiding outside dev/test; production keeps sending the
 // TypeScript-typed payload as-is (a compile-time type-assert, not a runtime
 // check) exactly as it did before this validation existed, so there is no

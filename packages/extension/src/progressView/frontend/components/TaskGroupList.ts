@@ -536,9 +536,9 @@ export class TaskGroupList extends LitElement {
 
     // Tree roots: simple container (no collapsible), always render content.
     // Keyed on tree position (isRoot), NOT group.parentGroupId, so a re-rooted
-    // orphan — a group whose parent is absent, promoted to a root by
-    // `transcriptTimeline` — gets the root layout instead of nested/collapsible
-    // even though it retains its dangling parentGroupId.
+    // orphan (a group whose parent is absent, promoted to a root by
+    // `transcriptTimeline`) gets the root layout instead of the nested
+    // collapsible one even though it retains its dangling parentGroupId.
     if (isRoot) {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>

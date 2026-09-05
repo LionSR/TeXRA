@@ -3,8 +3,9 @@
  * transport port, answering each `Subscribe` the port sends with the frames
  * of 8.1. Every `Subscribe` is answered the same way: the port's transcript
  * set is replaced by the one it names, then `listing()`, then
- * `aggregate(id, fromSeq)` per named aggregate in turn, then the local and
- * host snapshots and the `replayComplete` marker, then `all(cursor)`, where
+ * `aggregate(id, fromSeq)` per named aggregate in turn, then the
+ * `replayComplete` marker, then `all(cursor)`, with the local and host
+ * levels merged in from their current value on, where
  * the cursor is the runtime view's own cursor read before those reads on a
  * cold mount (cursor 0) and the `Subscribe`'s cursor on a resubscribe.
  * Rows are tagged with their read, transcript rows of aggregates the
@@ -18,7 +19,7 @@
  * same buffer, merged to one per streaming row per frame where adjacent,
  * which the offsets make lossless. A later `Subscribe` on the port
  * supersedes the replay in flight; its frames echo its generation and the
- * decoder drops the superseded one's; `ProgressBackend` owns the fiber per
+ * decoder drops the superseded one's; `SessionBridge` owns the fiber per
  * port and forks the next `Subscribe`'s stream after interrupting it.
  *
  * Display redaction (contract C3): every framer to a renderer process
@@ -171,14 +172,6 @@ export function frameSubscription(
         subscribe.cursor === 0
           ? (yield* SubscriptionRef.get(source.view)).cursor
           : subscribe.cursor;
-      const snapshot = <T>(
-        ref: SubscriptionRef.SubscriptionRef<T>,
-        item: (value: T) => FrameItem | null,
-      ) =>
-        Stream.fromEffect(SubscriptionRef.get(ref)).pipe(
-          Stream.map(item),
-          Stream.filter((value): value is FrameItem => value !== null),
-        );
       const localItem = (local: LocalRuntimeState): FrameItem => ({
         _tag: 'local',
         local,
@@ -196,16 +189,12 @@ export function frameSubscription(
       const reads = Stream.concat(
         histories,
         Stream.concat(
-          Stream.concat(
-            snapshot(source.local, localItem),
-            snapshot(host, hostItem),
-          ),
-          Stream.concat(
-            Stream.make<[FrameItem]>({ _tag: 'replay.complete' }),
-            source.events.all(tailFrom).pipe(tagged('all')),
-          ),
+          Stream.make<[FrameItem]>({ _tag: 'replay.complete' }),
+          source.events.all(tailFrom).pipe(tagged('all')),
         ),
       );
+      // The two levels, each replaying its current value on subscribe, so
+      // the snapshots ride the first window with the history.
       const levels = Stream.merge(
         SubscriptionRef.changes(source.local).pipe(Stream.map(localItem)),
         SubscriptionRef.changes(host).pipe(

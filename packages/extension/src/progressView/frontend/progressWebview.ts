@@ -1,10 +1,11 @@
 /**
  * The progress webview's root wiring (PRD one-fold-three-renderers, 7.7, 8,
  * 9): the one session of this webview, opened through the shared session
- * surfaces, assigned to the `<progress-app>` element on every change, and
- * the three shell events forwarded to it. The sidebar port also reports
- * which state it shows, so the view-title menus can differ between the
- * New-task state and a conversation.
+ * surfaces, assigned to the `<progress-app>` element on every change, the
+ * window's one message listener, and the three shell events forwarded to
+ * the surfaces. The sidebar port also reports which state it shows, so the
+ * view-title menus can differ between the New-task state and a
+ * conversation.
  */
 import { resolveSelected } from '@shared/session/surface';
 
@@ -18,6 +19,14 @@ export function mountProgressWebview(app: ProgressApp): void {
     throw new Error('<progress-app> is missing its data-session key');
   }
   const sessions = createSessionSurfaces({ storage: webviewStorage });
+  // Every message the extension posts to this window is a session message;
+  // one that is not is the host's defect.
+  const receive = (event: MessageEvent): void => {
+    if (!sessions.receive(event.data)) {
+      console.warn('[progress] unrecognized host message', event.data);
+    }
+  };
+  window.addEventListener('message', receive);
   sessions.sync([sessionKey]);
   const session = sessions.get(sessionKey);
   if (!session) throw new Error(`Session ${sessionKey} did not open`);
@@ -56,6 +65,7 @@ export function mountProgressWebview(app: ProgressApp): void {
   window.addEventListener(
     'pagehide',
     () => {
+      window.removeEventListener('message', receive);
       window.clearInterval(clock);
       unsubscribe();
       sessions.dispose();

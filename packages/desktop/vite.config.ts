@@ -19,7 +19,6 @@ export default defineConfig({
     alias: aliases,
     dedupe: [
       '@awesome.me/webawesome',
-      '@lit/context',
       '@lit-labs/signals',
       'lit',
       'signal-polyfill',

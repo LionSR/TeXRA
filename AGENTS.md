@@ -93,7 +93,7 @@ subset of the same files under the same options.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
 - Keep the directory structure aligned among different webviews (webview, progressView, settingsView). Use the same folder names for modules of the same type and functionality but in different webviews.
-- Place view-specific, extension-only manager classes under that view's `managers` folder (e.g. `FileManager.ts` in `packages/extension/src/webview/managers/`). Host-neutral view backend logic instead lives under `src/controllers/<view>/backend/` (e.g. `src/controllers/progressView/backend/ProgressBackend.ts`), per the `controllers/` host-neutral-orchestration rule.
+- Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`). Host-neutral session bridging lives under `src/controllers/session/` (e.g. `src/controllers/session/SessionBridge.ts`), per the `controllers/` host-neutral-orchestration rule.
 
 ### Naming conventions
 
@@ -129,8 +129,7 @@ frozen deep-import lists, not another lint rule.
   - `frontend/latex/` - LaTeX build integration, linting
   - `frontend/media/` - Image and audio handling
 - `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
-- `packages/extension/src/common/` holds extension-only helpers (state managers, webview base classes):
-  - `packages/extension/src/common/state/` - State managers including `pendingStateManager`
+- `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
   - `packages/extension/src/common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
 - `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: as of this writing exactly five modules are reachable from `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` — `@utils/core`, `@utils/core/keyedMutex`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`. Those five, and anything they import, must not reach for Node built-ins. There are 64 TypeScript modules under `src/utils/` in the current tree; the other 59 are not browser-reachable today and must not be assumed browser-safe. `scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.
 

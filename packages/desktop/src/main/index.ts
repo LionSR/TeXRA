@@ -31,9 +31,9 @@ import {
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
-  ProgressBackend,
+  SessionBridge,
   type AttachedPort,
-} from '@controllers/progressView/backend/ProgressBackend';
+} from '@controllers/session/SessionBridge';
 import { createHostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
@@ -717,8 +717,8 @@ function createWindow(options: {
    */
   interface PaperBinding {
     readonly paper: DesktopPaper;
-    readonly backend: ProgressBackend;
-    /** This window's port on the paper's backend. */
+    readonly bridge: SessionBridge;
+    /** This window's port on the paper's bridge. */
     readonly port: AttachedPort;
     readonly snapshot: ReturnType<typeof createHostSnapshotSource>;
     readonly execution: ReturnType<typeof createDesktopAgentExecution>;
@@ -761,7 +761,7 @@ function createWindow(options: {
       workspacePath: paper.root,
       resourcesPath: options.resourcesPath,
       postToRenderer: postToRendererIfAlive,
-      postSurfaceAction: (action) => backend.surfaceAction(action),
+      postSurfaceAction: (action) => bridge.surfaceAction(action),
       shell: shellActions,
       onboarding: requireOnboardingIpc(),
       openExternalUrl: (url) => previewHost.openExternal(url),
@@ -770,15 +770,15 @@ function createWindow(options: {
       },
       logger: console,
     });
-    // The paper's backend and this window's port on it: the framer cuts
+    // The paper's bridge and this window's port on it: the framer cuts
     // frames from the paper's session graph, and the host snapshot rides
     // them (PRD 8.1).
-    const backend = new ProgressBackend({
+    const bridge = new SessionBridge({
       session: paper.session,
       handleHostRequest: (request) => hostRequests.handle(request),
     });
-    const detachSnapshot = snapshot.onChange((next) => backend.setHost(next));
-    const port = backend.attach({
+    const detachSnapshot = snapshot.onChange((next) => bridge.setHost(next));
+    const port = bridge.attach({
       id: `window:${window.id}`,
       send: (message) => {
         postToRendererIfAlive(message);
@@ -787,19 +787,19 @@ function createWindow(options: {
     // A run launched from this window is the window's selection: the
     // launching surface selects the stream (PRD 9).
     const detachLaunched = execution.onLaunched((streamId) =>
-      backend.surfaceAction({ kind: 'select', streamId }),
+      bridge.surfaceAction({ kind: 'select', streamId }),
     );
     void snapshot.refresh();
     return {
       paper,
-      backend,
+      bridge,
       port,
       snapshot,
       execution,
       dispose() {
         detachLaunched();
         detachSnapshot();
-        backend.dispose();
+        bridge.dispose();
         hostRequests.dispose();
         execution.dispose();
       },
@@ -859,7 +859,7 @@ function createWindow(options: {
       if (!binding) return 'unavailable';
       const view = SubscriptionRef.getUnsafe(binding.paper.session.view);
       if (!view.streams.has(streamId)) return 'missing';
-      binding.backend.surfaceAction({ kind: 'select', streamId });
+      binding.bridge.surfaceAction({ kind: 'select', streamId });
       return 'revealed';
     },
     getStreamLabel: (streamId) =>

@@ -8,6 +8,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type StreamTabId,
 } from '@shared/schemas';
+import type { PaperDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { emptySurface, type Surface } from '@shared/session/surface';
@@ -25,7 +26,6 @@ import {
   withWaitingCall,
 } from '@test/shared/session/fanOutScenario';
 
-import type { DesktopPaperDisplay } from '../../src/shared/desktopPaperMessages.js';
 import type {
   PapersLayout,
   WorkbenchTab,
@@ -115,16 +115,15 @@ const display = (
   key: string,
   name: string,
   subtitle: string,
-): DesktopPaperDisplay => ({
+): PaperDisplay => ({
   key,
-  root: subtitle,
   name,
   initials: key,
   subtitle,
 });
 
 function paper(
-  displayRecord: DesktopPaperDisplay,
+  displayRecord: PaperDisplay,
   view: SessionView,
   selected: StreamTabId | null = null,
 ): RailPaper {

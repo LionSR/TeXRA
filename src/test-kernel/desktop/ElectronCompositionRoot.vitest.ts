@@ -81,7 +81,7 @@ describe('desktop composition root and launch environment', () => {
     expect(source).toMatch(/createWindow\(\{[\s\S]*?\bpapers,[\s\S]*?\}\)/u);
     // Every open paper is bound to the window: one backend with this
     // window's port (the framer's), one host snapshot, one presentation each.
-    expect(source).toContain('new ProgressBackend({');
+    expect(source).toContain('new SessionBridge({');
     expect(source).toContain('createHostSnapshotSource({');
     expect(source).toContain('for (const [key, paper] of open)');
 

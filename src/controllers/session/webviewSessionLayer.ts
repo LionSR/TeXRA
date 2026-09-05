@@ -11,9 +11,9 @@
  * The shell opens a session with `WebviewSessions.open(key)`, begins a
  * generation on its frames right before it posts the `Subscribe` up, and
  * feeds every frame the bridge delivers to `frames.feed`, which routes rows
- * by read, chunks, the local snapshot, and the host snapshot. `dispose` on
- * `pagehide` and on hot-module dispose, so a reloaded module cannot run two
- * fold fibers against one signal.
+ * by read, chunks, the local snapshot, and the host snapshot. The transport
+ * that installed the runtime disposes it, once, on the shutdown path its
+ * entry drives.
  */
 import {
   Context,
@@ -113,21 +113,9 @@ export type WebviewRuntime = ManagedRuntime.ManagedRuntime<
 
 /**
  * Make the one Effect runtime of this webview over its session family (PRD
- * 7.7): called by a webview entry exactly once per module evaluation. The
- * entry passes its `import.meta.hot` so a hot reload disposes the runtime
- * before the next module evaluation installs another; `pagehide` disposes
- * it when the document goes away.
+ * 7.7): called by the webview transport exactly once per module evaluation
+ * and disposed by it, on the one shutdown path the entry drives.
  */
-export function installWebviewRuntime(
-  options: {
-    readonly hot?: { dispose(callback: () => void): void } | undefined;
-  } = {},
-): WebviewRuntime {
-  const runtime = ManagedRuntime.make(WebviewSessions.layerNoDeps);
-  const dispose = () => {
-    void runtime.dispose();
-  };
-  globalThis.addEventListener?.('pagehide', dispose, { once: true });
-  options.hot?.dispose(dispose);
-  return runtime;
+export function installWebviewRuntime(): WebviewRuntime {
+  return ManagedRuntime.make(WebviewSessions.layerNoDeps);
 }

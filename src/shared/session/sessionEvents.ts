@@ -86,8 +86,9 @@ export class SessionEvents extends Context.Service<
    * the fold fiber's `Stream.concat` over these reads is the same code as
    * in the runtime. `all` ignores its argument: the tail is the frames after
    * that marker, anchored by the runtime at the `Subscribe` cursor. The
-   * anchor is that cursor, 0 on a cold mount; no durable ordinal exists
-   * here and none is read.
+   * anchor is 0: the webview's cursor is its own fold's, advanced by the
+   * tail rows it folds and carried back up by its next `Subscribe`; no
+   * durable ordinal exists here and none is read.
    */
   static readonly transportLayer = Layer.effect(
     SessionEvents,
@@ -99,7 +100,7 @@ export class SessionEvents extends Context.Service<
         all: () => frames.events(),
         aggregate: (aggregateId, fromSeq) =>
           frames.aggregate(aggregateId, fromSeq),
-        anchor: frames.cursor,
+        anchor: 0,
       };
     }),
   );

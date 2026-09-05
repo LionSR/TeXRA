@@ -444,7 +444,9 @@ export function runEventDraft(
         executionId: event.executionId,
         category: event.category,
         isSubagent: event.isSubagent,
-        error: event.error,
+        // The kind only: the message is provider or launcher text no fold
+        // reads, and the plane frames to renderer processes (C3).
+        error: event.error ? { kind: event.error.kind } : null,
       };
     case 'stage.start':
       return {

@@ -85,10 +85,7 @@ import {
   type WorkbenchTab,
 } from '../shared/desktopTaskShell';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
-import {
-  DESKTOP_PAPER_COMMANDS,
-  type DesktopPaperDisplay,
-} from '../shared/desktopPaperMessages';
+import { DESKTOP_PAPER_COMMANDS } from '../shared/desktopPaperMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createPdfPane } from './pdfPane';
@@ -191,10 +188,10 @@ let shell: Shell = {
   search: '',
 };
 let papersKnown = false;
-// The display record of every open paper, as the main process produced it
-// (PRD 8.1); the no-workspace session is never among them.
-let paperDisplays: ReadonlyMap<string, DesktopPaperDisplay> = new Map();
-const activePaperRoot = () => paperDisplays.get(shell.active)?.root;
+// The folder of every open paper, by session key; the no-workspace session
+// is never among them. How a paper is named is its host snapshot's.
+let paperRoots: ReadonlyMap<string, string> = new Map();
+const activePaperRoot = () => paperRoots.get(shell.active);
 const hasWorkspace = () => !papersKnown || activePaperRoot() !== undefined;
 function setShell(next: Shell): void {
   shell = next;
@@ -206,13 +203,13 @@ function setShell(next: Shell): void {
 // chrome read those three records and nothing else.
 const paperSessions = createSessionSurfaces({ storage: rendererState });
 paperSessions.onChange(rerenderShell);
-// A paper whose session is not open yet is not listed: the rail shows what
-// is known.
+// A paper whose session has not framed its host snapshot yet is not listed:
+// the rail shows what is known.
 const railPapers = (): RailPaper[] =>
   shell.open.flatMap((key) => {
-    const display = paperDisplays.get(key);
     const session = paperSessions.get(key);
-    if (!display || !session) return [];
+    const display = session?.host$.get()?.paper;
+    if (!session || !display) return [];
     return [
       {
         display,
@@ -1079,8 +1076,8 @@ const MESSAGE_ROUTES = createMessageRoutes({
     updateShell(renameWorkbenchTab(shellState, tabId, title)),
   papers: (message) => {
     const previousRoot = activePaperRoot();
-    paperDisplays = new Map(
-      message.papers.map((paper) => [paper.key, paper] as const),
+    paperRoots = new Map(
+      message.papers.map((paper) => [paper.key, paper.root] as const),
     );
     papersKnown = true;
     const open = message.papers.map((paper) => paper.key);
@@ -1102,10 +1099,12 @@ const MESSAGE_ROUTES = createMessageRoutes({
   },
 });
 
-// Every other message is the progress view's: the mounted <progress-app>
-// is its one sink (BaseWebviewApp's window listener).
+// The shell's one message listener: the desktop routes first, then the
+// session transport, which takes the frames, responses, and surface
+// actions of every open paper's session. The settings view's pushes reach
+// `<settings-app>` through its own listener and match no route here.
 window.addEventListener('message', (event) => {
-  for (const route of MESSAGE_ROUTES) {
+  for (const route of [...MESSAGE_ROUTES, paperSessions.receive]) {
     if (route(event.data)) return;
   }
 });

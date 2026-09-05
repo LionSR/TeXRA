@@ -38,9 +38,9 @@ import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprov
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
 import {
-  ProgressBackend,
+  SessionBridge,
   type AttachedPort,
-} from '@controllers/progressView/backend/ProgressBackend';
+} from '@controllers/session/SessionBridge';
 import {
   createHostSnapshotSource,
   type HostSnapshotSource,
@@ -88,7 +88,7 @@ const log = createLog('ProgressViewProvider');
 
 export type ProgressStreamRevealResult = 'revealed' | 'missing';
 
-/** One transport port: a VS Code webview attached to the backend. */
+/** One transport port: a VS Code webview attached to the bridge. */
 interface Port {
   readonly attached: AttachedPort;
   readonly disposables: vscode.Disposable[];
@@ -99,7 +99,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private static _instance: ProgressViewProvider | undefined;
 
   public readonly session: SessionHandle;
-  public readonly backend: ProgressBackend;
+  public readonly bridge: SessionBridge;
   public readonly snapshot: HostSnapshotSource;
   public readonly toolEditApprovals: ToolEditApprovalController;
 
@@ -183,7 +183,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
     this.disposables.push({
       dispose: this.snapshot.onChange((snapshot) =>
-        this.backend.setHost(snapshot),
+        this.bridge.setHost(snapshot),
       ),
     });
 
@@ -230,7 +230,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
     });
     this.disposables.push({ dispose: () => hostRequests.dispose() });
-    this.backend = new ProgressBackend({
+    this.bridge = new SessionBridge({
       session,
       handleHostRequest: (request, port) => hostRequests.handle(request, port),
     });
@@ -452,9 +452,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Port {
     view.webview.html = this.contentProvider.getHtmlContent(view.webview, {
-      sessionKey: this.backend.key,
+      sessionKey: this.bridge.key,
     });
-    const attached = this.backend.attach({
+    const attached = this.bridge.attach({
       id,
       send: (message) => {
         void Promise.resolve(view.webview.postMessage(message)).then(
@@ -490,7 +490,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /** The host acting on the surfaces' shared state (PRD 8.5). */
   public surfaceAction(action: SurfaceActionMessage['action']): void {
-    this.backend.surfaceAction(action);
+    this.bridge.surfaceAction(action);
   }
 
   public isViewVisible(): boolean {
@@ -583,7 +583,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.editorPort = undefined;
     this.editorPanel?.dispose();
     this.editorPanel = undefined;
-    this.backend.dispose();
+    this.bridge.dispose();
     for (const disposable of this.disposables.splice(0)) disposable.dispose();
     if (ProgressViewProvider._instance === this) {
       ProgressViewProvider._instance = undefined;

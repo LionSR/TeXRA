@@ -182,9 +182,8 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
     executionId: z.string(),
     category: AgentCategorySchema,
     isSubagent: z.boolean(),
-    error: z
-      .looseObject({ kind: z.string(), message: z.string().nullish() })
-      .nullish(),
+    /** The failure's kind alone; its message stays in the runtime's log. */
+    error: z.object({ kind: z.string() }).nullish(),
   }),
   durable('status', {
     phase: StreamPhaseSchema,

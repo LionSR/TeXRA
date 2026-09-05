@@ -36,7 +36,6 @@ import {
   TextChunkSchema,
   TranscriptSubscriptionSchema,
   type AggregateId,
-  type CommitOrdinal,
   type LocalRuntimeState,
   type SessionEvent,
   type TextChunk,
@@ -81,7 +80,9 @@ const EventsFrameSchema = z.object({
 export type EventsFrame = z.infer<typeof EventsFrameSchema>;
 
 /** The request errors of 7.6 on the wire, plus the bridge's own `Invalid`
- *  for a message it could not parse. */
+ *  for a message it could not parse. `Internal` is a handler defect: the
+ *  message stays in the host log under `ref`, the request id, and never
+ *  crosses to a renderer (C3). */
 const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
   z.object({ _tag: z.literal('NotOwner'), streamId: StreamTabIdSchema }),
   z.object({
@@ -91,6 +92,7 @@ const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
   }),
   z.object({ _tag: z.literal('Rejected'), reason: z.string() }),
   z.object({ _tag: z.literal('Invalid'), reason: z.string() }),
+  z.object({ _tag: z.literal('Internal'), ref: RequestIdSchema }),
 ]);
 export type RequestErrorWire = z.infer<typeof RequestErrorWireSchema>;
 
@@ -186,9 +188,6 @@ function applyChunk(held: string, chunk: TextChunk): string {
 export class SessionFrames extends Context.Service<
   SessionFrames,
   {
-    /** The tail anchor: the cursor of the `Subscribe` the layer was built
-     *  for, 0 on a cold mount. No durable ordinal exists here. */
-    readonly cursor: CommitOrdinal;
     /** The current `Subscribe`'s listing rows; ends at `replayComplete`. */
     readonly listing: () => Stream.Stream<SessionEvent>;
     /** The tail: every `all` row of a current-generation frame. */
@@ -209,12 +208,13 @@ export class SessionFrames extends Context.Service<
     readonly chunks: Stream.Stream<TextChunk>;
     /** The in-flight text level the chunks build, keyed `${streamId}/${rowId}`. */
     readonly inflight: SubscriptionRef.SubscriptionRef<InflightText>;
-    /** The last frame's cursor: where a resubscribe reads its tail from. */
-    readonly drained: SubscriptionRef.SubscriptionRef<CommitOrdinal>;
-    /** A new `Subscribe` was issued under `generation`: fresh replay queues;
-     *  frames of any other generation are dropped from here on. */
+    /** A new `Subscribe` was issued under `generation`: fresh replay queues
+     *  replace the current ones; frames of any other generation are dropped
+     *  from here on. */
     readonly begin: (generation: number) => Effect.Effect<void>;
-    /** Route one frame's rows, chunks, and local snapshot. */
+    /** Route one frame's rows, chunks, and the two snapshots it carries;
+     *  synchronous, so a decoder feeds frames in arrival order with
+     *  `runSync` and no two frames ever interleave. */
     readonly feed: (frame: EventsFrame) => Effect.Effect<void>;
   }
 >()('@texra/session/SessionFrames') {
@@ -230,9 +230,19 @@ export class SessionFrames extends Context.Service<
       });
       const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
       const inflight = yield* SubscriptionRef.make<InflightText>(new Map());
-      const drained = yield* SubscriptionRef.make<CommitOrdinal>(0);
-      let replay: Replay | null = null;
       const newQueue = Queue.unbounded<SessionEvent, Cause.Done>();
+      const newReplay = (generation: number): Effect.Effect<Replay> =>
+        Effect.map(newQueue, (listing) => ({
+          generation,
+          listing,
+          aggregates: new Map(),
+          ended: false,
+        }));
+      // A frames service always has a current generation: the fold opens
+      // its reads at build, before the shell's first `Subscribe`, on
+      // generation 0, whose queues end when a frame of it says so and are
+      // otherwise superseded by the first `begin`.
+      let replay = yield* newReplay(0);
       const aggregateQueue = (
         current: Replay,
         aggregateId: AggregateId,
@@ -247,26 +257,12 @@ export class SessionFrames extends Context.Service<
           if (current.ended) yield* Queue.end(queue);
           return queue;
         });
-      /** The replay of the current generation, or a defect: a read before
-       *  any `Subscribe` is a fold started ahead of its shell. */
-      const currentReplay = Effect.suspend(() =>
-        replay
-          ? Effect.succeed(replay)
-          : Effect.die(new Error('SessionFrames read before a Subscribe')),
-      );
       return {
-        cursor: 0,
-        listing: () =>
-          Stream.unwrap(
-            currentReplay.pipe(
-              Effect.map((current) => Stream.fromQueue(current.listing)),
-            ),
-          ),
+        listing: () => Stream.suspend(() => Stream.fromQueue(replay.listing)),
         events: () => Stream.fromQueue(tail),
         aggregate: (aggregateId) =>
           Stream.unwrap(
-            currentReplay.pipe(
-              Effect.flatMap((current) => aggregateQueue(current, aggregateId)),
+            Effect.suspend(() => aggregateQueue(replay, aggregateId)).pipe(
               Effect.map((queue) => Stream.fromQueue(queue)),
             ),
           ),
@@ -274,20 +270,14 @@ export class SessionFrames extends Context.Service<
         host,
         chunks: Stream.fromQueue(chunks),
         inflight,
-        drained,
         begin: (generation) =>
           Effect.gen(function* () {
-            replay = {
-              generation,
-              listing: yield* newQueue,
-              aggregates: new Map(),
-              ended: false,
-            };
+            replay = yield* newReplay(generation);
           }),
         feed: (frame) =>
           Effect.gen(function* () {
             const current = replay;
-            if (!current || current.generation !== frame.generation) return;
+            if (current.generation !== frame.generation) return;
             for (const row of frame.events) {
               switch (row.read) {
                 case 'listing':
@@ -317,7 +307,6 @@ export class SessionFrames extends Context.Service<
             }
             if (frame.local) yield* SubscriptionRef.set(local, frame.local);
             if (frame.host) yield* SubscriptionRef.set(host, frame.host);
-            yield* SubscriptionRef.set(drained, frame.cursor);
             if (frame.replayComplete && !current.ended) {
               current.ended = true;
               yield* Queue.end(current.listing);

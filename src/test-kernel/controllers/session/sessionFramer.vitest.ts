@@ -287,9 +287,6 @@ describe('session framer', () => {
         expect(drawn(yield* SubscriptionRef.get(view.ref))).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
-        expect((yield* SubscriptionRef.get(frames.drained)).toString()).toBe(
-          '2',
-        );
         // A tail commit reaches both folds.
         yield* events.publish([running]);
         yield* settle(
