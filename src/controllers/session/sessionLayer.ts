@@ -446,6 +446,7 @@ function sessionGraphOpener(
       events: reads,
       publish,
       view: view.ref,
+      viewChanges: view.changes,
       folded: view.all,
       local: Context.get(context, LocalRuntimeSource).ref,
       subscriptions: Context.get(context, TranscriptSubscriptions),

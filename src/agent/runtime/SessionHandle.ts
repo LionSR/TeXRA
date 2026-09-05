@@ -30,7 +30,7 @@
  * session is justified only as the ownership container.
  */
 
-import { SubscriptionRef } from 'effect';
+import { SubscriptionRef, type Stream } from 'effect';
 import pDefer, { type DeferredPromise } from 'p-defer';
 
 import type {
@@ -119,6 +119,15 @@ export class SessionHandle {
    * `SubscriptionRef.getUnsafe(view)`; nothing here writes it.
    */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
+  /**
+   * {@link view} as a level stream (`SessionViewService.changes`, 7.2): the
+   * current view on subscribe, then every later one, ending as the fold
+   * does, with the fold's defect if it died and cleanly when the graph
+   * closes. A reader that waits on a view the fold has yet to publish (the
+   * SDK's drain to a run's final view) reads this, so a dead fold fails it
+   * instead of hanging it.
+   */
+  readonly viewChanges: Stream.Stream<SessionView>;
   /**
    * Per-run execution handles: registration, lookup, change listeners, and
    * subagent lineage. Hears every canonical `status` fact from
@@ -213,6 +222,7 @@ export class SessionHandle {
     this.graph = graph;
     this.events = graph.events;
     this.view = graph.view;
+    this.viewChanges = graph.viewChanges;
     this.folded = graph.folded;
     this.requests = graph.requests;
     const status = new StreamStatusMachine(

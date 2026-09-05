@@ -24,7 +24,16 @@
  * canonical-store applier, until lane 4 retires it) never sees a row the
  * fold has not.
  */
-import { Context, Effect, Layer, Stream, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Context,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import {
   SessionEventLog,
@@ -59,6 +68,13 @@ export class SessionViewService extends Context.Service<
   SessionViewService,
   {
     readonly ref: SubscriptionRef.SubscriptionRef<SessionView>;
+    /**
+     * `ref` as a level stream: the current view on subscribe, then every
+     * later one, ending as the fold does. A reader waiting on a view the
+     * fold will never publish must not wait forever: the stream dies with
+     * the fold's defect, and ends when the graph closes under it.
+     */
+    readonly changes: Stream.Stream<SessionView>;
     /** Every tail row above `fromCommit` in commit order, released once
      *  `ref` holds the state that folded it. */
     readonly all: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>;
@@ -133,7 +149,7 @@ export class SessionViewService extends Context.Service<
         Stream.map(single),
       );
       const text = chunks.changes.pipe(Stream.map(single));
-      yield* Effect.forkScoped(
+      const folding = yield* Effect.forkScoped(
         Stream.mergeAll([reads, local, text], { concurrency: 3 }).pipe(
           // Each state paired with the frame that produced it, so the gate
           // can see the marker without the view carrying a flag for it.
@@ -160,6 +176,21 @@ export class SessionViewService extends Context.Service<
           ),
         ),
       );
+      // The fold's own exit ends the level stream (the merge halts on it): a
+      // defect fails every reader of `changes` at the boundary that named it
+      // once above; the graph closing, an interrupt, ends them cleanly.
+      const changes = SubscriptionRef.changes(ref).pipe(
+        Stream.merge(
+          Stream.fromEffect(Fiber.await(folding)).pipe(
+            Stream.flatMap((exit) =>
+              Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
+                ? Stream.failCause(exit.cause)
+                : Stream.empty,
+            ),
+          ),
+          { haltStrategy: 'right' },
+        ),
+      );
       const all = (fromCommit: SessionCursor): Stream.Stream<SessionEvent> =>
         tailFrom(
           log.readAll,
@@ -171,7 +202,7 @@ export class SessionViewService extends Context.Service<
           },
           fromCommit,
         );
-      return { ref, all };
+      return { ref, changes, all };
     }),
   );
 }
