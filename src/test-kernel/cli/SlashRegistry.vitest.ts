@@ -38,7 +38,6 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
-import { AgentCategory } from '@shared/schemas';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {
   createDeferred,
@@ -49,12 +48,10 @@ import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const CHAT_SESSION: SessionMeta = {
   agent: 'chat',
-  category: AgentCategory.ToolUse,
   model: 'deepseekT',
   modelSource: 'builtin-default',
   cwd: '/tmp/workspace',
   approvalPolicy: 'ask',
-  canDelegate: false,
   transcriptMode: 'persistent',
   version: 'test',
 };

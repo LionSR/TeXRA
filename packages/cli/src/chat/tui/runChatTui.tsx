@@ -10,7 +10,6 @@ import PQueue from 'p-queue';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { detachSubagentsOnStop, type AgentConfig } from '@agent/runtime';
-import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import {
   firstRunSetupAgentOverride,
@@ -276,12 +275,10 @@ export async function runChat(
     initialResume?.config.cli?.multiAgentPresetId ?? init.cliMultiAgentPresetId;
   sessionMetaSignal.set({
     agent,
-    category: AgentCategory.ToolUse,
     model,
     modelSource: defaults.modelSource,
     cwd: context.cwd,
     approvalPolicy: runtimeSession.approvalPolicy,
-    canDelegate: chatAgentSupportsDelegation(agent),
     transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
     teamName: init.teamName ?? readCliMultiAgentPresetName(initialPresetId),
     cliMultiAgentPresetId: initialPresetId,

@@ -1867,7 +1867,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_BASH_APPROVAL: '1',
-      HARNESS_CAN_DELEGATE: '1',
       HARNESS_TEAM_NAME: 'Physicist',
     },
     bootExpect: '· Ctrl-C ',

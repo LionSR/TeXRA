@@ -44,7 +44,6 @@ import {
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
 import {
-  AgentCategory,
   RUN_OUTCOME,
   STREAM_PHASE,
   TOOL_USE_STATUS,
@@ -76,13 +75,11 @@ const ROOT_STREAM = 'root-stream' as StreamTabId;
 const CHILD_STREAM = 'claude@agent-sdk#1' as StreamTabId;
 const SESSION_META = {
   agent: 'research',
-  category: AgentCategory.ToolUse,
   model: 'deepseekT',
   modelSource: 'builtin-default',
   cwd: '/tmp/project',
   apiMode: 'personal',
   approvalPolicy: 'ask',
-  canDelegate: false,
   transcriptMode: 'persistent',
   version: '0.38.0',
 } as const;

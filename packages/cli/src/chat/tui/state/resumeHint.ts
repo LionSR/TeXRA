@@ -80,7 +80,7 @@ export function collectResumeUsage(
   return isEmptyUsage(total) ? undefined : total;
 }
 
-export function formatResumeUsage(
+function formatResumeUsage(
   usage: TokenUsageStats | undefined,
 ): string | undefined {
   if (!usage || isEmptyUsage(usage)) return undefined;
