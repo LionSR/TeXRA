@@ -37,7 +37,6 @@ import {
   formatWebFetchTemplate,
   formatWebSearchTemplate,
 } from './logFormatters/toolFormatters/webFormatters';
-import { formatWorkflowCallTemplate } from './logFormatters/workflowCallFormatter';
 import type { FormatResult } from './baseLogFormatter';
 
 type RowOf<K extends TranscriptRowKind> = Extract<TranscriptRow, { kind: K }>;
@@ -62,10 +61,9 @@ const ROW_FORMATTERS: RowFormatters = {
   statistics: formatStatisticsTemplate,
   contextManagement: formatContextManagementTemplate,
   progressStatus: formatProgressStatusTemplate,
-  // No run model on this path, so the card's own field is the only link
-  // source; a model-backed board passes the model's resolved id instead.
-  workflowTask: (row) =>
-    formatWorkflowCallTemplate(row, [], row.call.childStreamId),
+  // The run board paints every call of a script run; only a legacy import
+  // without a run identity reaches this line.
+  workflowTask: formatDefaultLogMessageTemplate,
   compactionActivity: formatCompactionActivityTemplate,
   phase: formatDefaultLogMessageTemplate,
   log: formatDefaultLogMessageTemplate,
