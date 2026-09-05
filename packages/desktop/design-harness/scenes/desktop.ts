@@ -3,7 +3,11 @@
 // of these are the verification for the desktop boards.
 import { html, nothing, type TemplateResult } from 'lit';
 
-import type { StreamTabId } from '@shared/schemas';
+import {
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
+  type StreamTabId,
+} from '@shared/schemas';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { emptySurface, type Surface } from '@shared/session/surface';
@@ -17,6 +21,7 @@ import {
   local,
   OWNER,
   ROOT,
+  tail,
   withWaitingCall,
 } from '@test/shared/session/fanOutScenario';
 
@@ -47,6 +52,61 @@ function runningOnlyView(): SessionView {
     ),
     local({ self: [OWNER] }),
   ]);
+}
+
+/**
+ * The fan-out with a chat on `search`: the shared fixture carries no
+ * transcript rows on a tool-use stream, and the desktop boards show that
+ * stream's conversation, so the child gets a user turn, two tool rows, and
+ * the reply, all before its bash approval.
+ */
+function withConversation(): SessionView {
+  const scenario = buildScenario();
+  const { log } = scenario;
+  const before = log.events.length;
+  const LOG = STREAM_LOG_ENTRY_TYPES.LOG;
+  log.entry(CHILD, 1610, {
+    id: 'chat-user',
+    type: LOG,
+    messageType: MESSAGE_TYPES.USER_MESSAGE,
+    text: 'what should we do next',
+  });
+  log.entry(CHILD, 1620, {
+    id: 'chat-bash',
+    type: LOG,
+    messageType: MESSAGE_TYPES.TOOL_USE,
+    text: 'bash',
+    data: {
+      toolName: 'bash',
+      input: { command: 'git status && echo "--- LOG ---" && git log -n 5' },
+      output: 'On branch main\nnothing to commit, working tree clean',
+      status: 'completed',
+    },
+  });
+  log.entry(CHILD, 1630, {
+    id: 'chat-glob',
+    type: LOG,
+    messageType: MESSAGE_TYPES.TOOL_USE,
+    text: 'glob',
+    data: {
+      toolName: 'glob',
+      input: { pattern: '*' },
+      output: 'Found 18 files for "*" in .',
+      status: 'completed',
+    },
+  });
+  log.entry(CHILD, 1640, {
+    id: 'chat-reply',
+    type: LOG,
+    messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    text:
+      'Two candidates for the next step. Section 2 still cites the retracted ' +
+      'Palomar registry, and the soundness proof in Appendix B has an ' +
+      "unproven lemma the reviewer flagged. I'd start with the citation fix " +
+      'since it blocks the resubmission.',
+  });
+  const chat = log.events.slice(before).map(tail);
+  return foldAll([...scenario.pending, ...chat, local({ self: [OWNER] })]);
 }
 
 const display = (
@@ -147,11 +207,6 @@ const conversationPane = (
           ? nothing
           : paperChipTemplate(papers, active, noop)
       }
-      ${
-        stream
-          ? html`<stream-header .stream=${stream}></stream-header>`
-          : nothing
-      }
       <span class="task-header-spacer"></span>
       ${iconBtn('circle-stop', 'Stop')}${iconBtn('window-maximize', 'Layout')}${iconBtn('ellipsis', 'More')}
     </header>
@@ -174,14 +229,15 @@ const conversationPane = (
     </div>
   </main>`;
 
-const transcriptBody = (view: SessionView, stream: StreamView) =>
-  html`<log-list
-    .rows=${stream.transcript.rows}
-    .taskGroups=${stream.transcript.taskGroups}
-    .compaction=${stream.transcript.compaction}
-    .inflight=${view.inflight}
-    .settledRows=${stream.transcript.settledRows}
-  ></log-list>`;
+/** What `progress-app` puts in the column for a selected stream: its header
+ *  (label, ancestors path, status) over its transcript. */
+const transcriptBody = (paper: RailPaper, stream: StreamView) =>
+  html`<stream-header .stream=${stream} .view=${paper.view}></stream-header>
+    <log-list
+      .stream=${stream}
+      .view=${paper.view}
+      .surface=${paper.surface}
+    ></log-list>`;
 
 const pdfPane = createPdfPane();
 const tab = (
@@ -217,12 +273,12 @@ const desktopFrame = (cols: string, ...panes: TemplateResult[]) =>
 
 // ── scenes ────────────────────────────────────────────────────────────────
 
-/** Plan 3: papers as sections; the selected root's conversation; the PDF
- *  in the workbench. */
+/** Plan 3: papers as sections; the selected conversation (the fixture's
+ *  chat transcript is the child's); the PDF in the workbench. */
 function sceneDesktopPapers(): TemplateResult {
-  const lp = paper(LP, fanOutView(), ROOT);
+  const lp = paper(LP, withConversation(), CHILD);
   const papers = [lp, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
-  const stream = lp.view.streams.get(ROOT);
+  const stream = lp.view.streams.get(CHILD);
   const tabs = [
     tab('pdf', 'main.pdf', '/paper/main.pdf'),
     tab('editor', 'section2.tex', '/paper/section2.tex'),
@@ -235,7 +291,7 @@ function sceneDesktopPapers(): TemplateResult {
       papers,
       lp,
       stream,
-      stream ? transcriptBody(lp.view, stream) : nothing,
+      stream ? transcriptBody(lp, stream) : nothing,
     ),
     workbench(tabs, tabs[0].id, pdfPane.frameFor(tabs[0])),
   );
@@ -244,9 +300,9 @@ function sceneDesktopPapers(): TemplateResult {
 /** Plan 2: the active paper in focus; the other papers' live streams in
  *  one card under it. */
 function sceneDesktopSwitcher(): TemplateResult {
-  const lp = paper(LP, fanOutView(), ROOT);
+  const lp = paper(LP, withConversation(), CHILD);
   const papers = [lp, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
-  const stream = lp.view.streams.get(ROOT);
+  const stream = lp.view.streams.get(CHILD);
   return desktopFrame(
     '288px minmax(0,1fr)',
     rail(papers, shellOf('LP', ['LP', 'CT', 'TN'], []), { layout: 'focus' }),
@@ -254,7 +310,7 @@ function sceneDesktopSwitcher(): TemplateResult {
       papers,
       lp,
       stream,
-      stream ? transcriptBody(lp.view, stream) : nothing,
+      stream ? transcriptBody(lp, stream) : nothing,
       { chip: false },
     ),
   );
@@ -263,7 +319,7 @@ function sceneDesktopSwitcher(): TemplateResult {
 /** Desktop 5: the rail lists top-level streams only while the Subagents
  *  workbench tab owns the tree; a child is selected. */
 function sceneDesktopSubagents(): TemplateResult {
-  const lp = paper(LP, fanOutView(), CHILD);
+  const lp = paper(LP, withConversation(), CHILD);
   const papers = [lp, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
   const stream = lp.view.streams.get(CHILD);
   const root = lp.view.streams.get(ROOT);
@@ -278,7 +334,7 @@ function sceneDesktopSubagents(): TemplateResult {
       papers,
       lp,
       stream,
-      stream ? transcriptBody(lp.view, stream) : nothing,
+      stream ? transcriptBody(lp, stream) : nothing,
     ),
     workbench(
       tabs,

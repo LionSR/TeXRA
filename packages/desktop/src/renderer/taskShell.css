@@ -410,17 +410,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   font-size: var(--font-size-xs);
 }
 
-/* The paper this window shows: the rail's active-stream styling. */
-.task-project-row.is-active::part(base) {
-  background: var(--wa-color-list-active-bg);
-  color: var(--wa-color-list-active-fg);
-}
-
-.task-project-row.is-active,
-.task-project-row.is-active .task-project-mark,
-.task-project-row.is-active .task-project-copy small,
-.task-project-row.is-active .task-project-chevron {
-  color: var(--wa-color-list-active-fg);
+/* The paper this window shows reads as a section heading: its streams sit
+   beneath it and the header's paper chip names it, so the row itself stays
+   plain and only its name firms up. */
+.task-project-row.is-active .task-project-copy strong {
+  font-weight: var(--font-weight-semibold);
 }
 
 .task-project-add {
@@ -1061,15 +1055,26 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   scrollbar-width: thin;
 }
 
+/* A collapsed paper's one count sits on the row's top-right corner, clear of
+   the chevron, the way a notification count sits on an icon. */
+.task-project-row {
+  position: relative;
+}
+
 .task-paper-badge {
-  flex: 0 0 auto;
-  font-size: var(--font-size-xs);
+  position: absolute;
+  top: -3px;
+  right: 2px;
+  z-index: 1;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .task-paper-badge::part(base) {
-  min-width: 18px;
-  padding: 1px 5px;
-  line-height: 1.3;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  line-height: 16px;
 }
 
 .task-paper-streams {

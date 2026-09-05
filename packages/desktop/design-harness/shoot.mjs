@@ -26,6 +26,9 @@ const page = await browser.newPage({
   viewport: { width: 1400, height: 900 },
   deviceScaleFactor: 2,
 });
+// Fixture timestamps sit near the epoch; pin the page clock beside them
+// (fanOutScenario BOARD_NOW) so elapsed labels read as minutes, not decades.
+await page.clock.setFixedTime(10_000_000);
 page.on('pageerror', (e) => console.error('[pageerror]', e.message));
 page.on('console', (m) => {
   if (m.type() === 'error') console.error('[console]', m.text());
