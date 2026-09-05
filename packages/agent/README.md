@@ -61,11 +61,27 @@ status, transcript rows, and pending approvals are read from it rather than
 re-folded from the trace. Each `for await` over it yields the current view
 first, then subsequent changes through the first view containing the run's
 durable outcome. That final view is included even when iteration starts after
-`result` settles. Session disposal waits for the final view to fold, independently
-of whether the caller reads it. Breaking the loop stops that reader while the
-run continues. If launch fails before the run enters the session, `view` ends
-without a value and `result` carries the failure. The `SessionView`, `StreamView`,
-and `TranscriptView` types are exported beside it.
+`result` settles, and the first view yielded always holds the run's stream.
+`result` settles only once the final view has folded, independently of whether
+the caller reads it; if the session's fold dies first, `result` and every
+`view` iteration fail with its defect instead of waiting. Breaking the loop
+stops that reader while the run continues. If launch fails before the run
+enters the session, `view` ends without a value and `result` carries the
+failure.
+
+Each view is the runtime's own value, not a copy: a yielded view supersedes
+the one before it, and the maps and arrays beneath an older view may already
+show a later level. The exported `SessionView`, `StreamView`, and
+`TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
+arrays); a write through a cast corrupts the session every later run in the
+process reads. The run's transcript rows (`StreamView.transcript`) are
+subscribed on its behalf, its stream and its descendants as they appear, and
+stay resident for the life of the process.
+
+Runs share one session per workspace storage root for the life of the
+process. It is disposed, after its live executions settle, on the platform's
+shutdown path (`lifecycle.runShutdown()`), which an embedder runs before it
+exits.
 
 ## Run results
 

@@ -32,6 +32,9 @@ export interface SessionGraph {
   readonly publish: SessionEventsShape['publish'];
   /** The one session state every renderer reads: the fold fiber's level. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
+  /** `view` as a level stream (PRD 7.2): ends as the fold does, with its
+   *  defect when the fold died, so a reader waiting on a view never hangs. */
+  readonly viewChanges: Stream.Stream<SessionView>;
   /** The plane's tail as `view` has folded it (PRD 7.2): every row above
    *  `fromCommit`, released once the view holds the state that folded it,
    *  for a reader that reads the view beside each row. */
