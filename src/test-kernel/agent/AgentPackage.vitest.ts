@@ -6,15 +6,7 @@ import { setImmediate } from 'node:timers/promises';
 
 // Third-party imports
 import { Deferred, Effect, Stream, SubscriptionRef } from 'effect';
-import {
-  beforeEach,
-  describe,
-  expect,
-  expectTypeOf,
-  it,
-  onTestFinished,
-  vi,
-} from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 interface RunAgentOptions {
   readonly onRun?: (handle: unknown) => void | Promise<void>;
@@ -174,8 +166,6 @@ import type { SessionView as RuntimeSessionView } from '@shared/session/sessionV
 import {
   runAgent,
   type AgentPlatform,
-  type HostInteractionCancelSelector,
-  type PendingInteractionKind,
   type SessionView,
 } from '../../../packages/agent/src/index';
 import { nodePlatform } from '../../../packages/agent/src/node';
@@ -194,7 +184,6 @@ const EVENT = { type: 'run.start' } as never;
 const INPUT = {
   agent: 'assistant',
   instruction: 'Test instruction',
-  interactions: { cancel: vi.fn() },
   platform: PLATFORM,
 };
 
@@ -268,13 +257,6 @@ describe('agent package run lifecycle', () => {
         })),
       );
     }
-  });
-
-  it('exports cancellation selector types from the package entry point', () => {
-    expectTypeOf<{
-      kind: 'planApproval';
-    }>().toMatchTypeOf<HostInteractionCancelSelector>();
-    expectTypeOf<'planApproval'>().toMatchTypeOf<PendingInteractionKind>();
   });
 
   it('initializes standard runtime features once for concurrent first runs', async () => {
@@ -398,7 +380,11 @@ describe('agent package run lifecycle', () => {
     const [runtimeOrder] = mocks.disposeRuntime.mock.invocationCallOrder;
     expect(disposeOrder).toBeLessThan(runtimeOrder);
 
-    // The next run on the root builds the session anew, over the same roots.
+    // Shutdown cleared the module-level sessions map: a later call finds no
+    // entry for the root and constructs one. Whether such a run works is out
+    // of contract (the README scopes the session to the process, and the
+    // runtime the graph would open on is disposed); only the cleared map is
+    // observed here.
     await runAgent(INPUT).result;
     expect(mocks.sessionInits).toHaveLength(1);
     expect(mocks.sessionInits[0]).toMatchObject({ roots: PLATFORM.roots });

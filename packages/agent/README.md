@@ -31,7 +31,6 @@ const run = runAgent({
   platform,
   agent: 'polish',
   instruction: 'Tighten the abstract in paper.tex.',
-  interactions: { cancel: () => {} },
 });
 
 for await (const event of run) {
@@ -145,8 +144,9 @@ These are enforced, not undocumented — each throws or degrades loudly rather
 than failing quietly:
 
 - **Approval-requiring tools are refused.** A tool with `requiresApproval` throws
-  at launch. The public `HostInteractions` is deliberately the minimal
-  `cancel()` shape; there is no interactive approval channel yet.
+  at launch. There is no interactive approval channel yet: the package attaches
+  one headless host to each session for its whole life, so concurrent runs on a
+  root never displace each other's host.
 - **Interactive retry always denies.** A run that would prompt to retry gets a
   denial with a reason instead.
 - **No resume.** `nodePlatform` reports no resumable streams; resuming a

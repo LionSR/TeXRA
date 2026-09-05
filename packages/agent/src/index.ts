@@ -15,7 +15,6 @@ import {
   runAgent as runValidatedAgent,
   SessionHandle as RuntimeSessionHandle,
   type AgentRunHandle as RuntimeAgentRunHandle,
-  type HostInteractions as RuntimeHostInteractions,
 } from '@agent/runtime';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 
@@ -38,11 +37,7 @@ import {
 } from '@platform/workspaceRoots';
 import { effectRuntime } from '@platform/processRuntime';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
-import type {
-  ProgressPermissionKind as PendingInteractionKind,
-  StreamTabId,
-} from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import type {
   SessionView as RuntimeSessionView,
   StreamView as RuntimeStreamView,
@@ -60,7 +55,6 @@ export type {
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/define';
 export type { DefinedToolClass } from '@tools/core/define';
-export type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 export type {
   AgentFlowResult,
   ToolUseFlowResult,
@@ -92,23 +86,6 @@ export type StreamView = ReadonlyDeep<RuntimeStreamView>;
 /** A stream's transcript slice: what hosts paint. */
 export type TranscriptView = ReadonlyDeep<RuntimeTranscriptView>;
 
-/** Select pending host interactions to cancel. */
-export interface HostInteractionCancelSelector {
-  readonly streamId?: string | null;
-  readonly kind?: PendingInteractionKind;
-  readonly cause?: string;
-}
-
-/**
- * Minimum interaction contract for an unattached package run.
- *
- * Interactive approval methods will be added here when they acquire a stable
- * package-level contract. Until then, approval-requiring tools are withheld.
- */
-export interface HostInteractions {
-  cancel(selector?: HostInteractionCancelSelector): void;
-}
-
 /**
  * The process platform together with the workspace roots the package's runs
  * work in. `nodePlatform()` builds both; an embedder supplying its own
@@ -123,7 +100,6 @@ export interface RunAgentInput {
   readonly platform: AgentPlatform;
   readonly agent: string;
   readonly instruction: string;
-  readonly interactions: HostInteractions;
   readonly model?: string;
   readonly tools?: readonly ITool[];
 }
@@ -194,6 +170,20 @@ function sessionFor(platform: AgentPlatform): RuntimeSessionHandle {
     session = new RuntimeSessionHandle({
       roots: platform.roots,
       transcripts: StreamLogStore.ephemeral('npm package consumer'),
+    });
+    // The session's one host, for its whole life, like every TeXRA host
+    // attaches one per session: the interaction hub keeps a single active
+    // host and tells runs apart by the stream its requests and cancellations
+    // name. Attaching per run instead would make each new run displace the
+    // previous run's host. The package has no interactive prompts, so there
+    // is nothing for a cancellation to settle; a retry prompt is denied so
+    // that it never parks the run waiting for a host.
+    session.interactions.use({
+      cancel: () => {},
+      requestRetry: async () => ({
+        action: 'deny',
+        reason: 'Interactive retries are unavailable in the agent package.',
+      }),
     });
     sessions.set(platform.roots.storage, session);
   }
@@ -464,57 +454,45 @@ export function runAgent(input: RunAgentInput): AgentRun {
     await runtimeInitialized;
 
     const session = sessionFor(input.platform);
-    const interactions: RuntimeHostInteractions = {
-      cancel: (selector) => input.interactions.cancel(selector),
-      requestRetry: async () => ({
-        action: 'deny',
-        reason: 'Interactive retries are unavailable in the agent package.',
-      }),
-    };
-    const detachInteractions = session.interactions.use(interactions);
-    try {
-      await loadAgents({ includeRemote: false });
-      const resolved = resolveAgent(input.agent);
-      if (!resolved) {
-        throw new Error(
-          `Agent "${input.agent}" was not found in the configured agent directory.`,
-        );
-      }
-      if (
-        input.tools &&
-        input.tools.length > 0 &&
-        resolved.entry.category !== AgentCategory.ToolUse
-      ) {
-        throw new Error(
-          `Custom tools are supported only for tool-use agents; "${input.agent}" is a workflow agent.`,
-        );
-      }
-      const config = AgentConfigSchema.parse({
-        agent: resolved.entry.name,
-        agentCategory: resolved.entry.category,
-        agentSource: resolved.entry.source,
-        instruction: input.instruction,
-        ...(input.model ? { model: input.model } : {}),
-      });
-      return await runValidatedAgent(
-        { kind: 'fresh', config },
-        {
-          approvalPromptsUnavailable: true,
-          launchSignal: stream.launchSignal,
-          onRun: (handle) => stream.attachHandle(handle),
-          onStreamResolved: (streamId, trace) =>
-            stream.attachRun(streamId, session, trace),
-          session,
-          stopAfterCycle: true,
-          tools: input.tools,
-        },
-      ).finally(() => {
-        // The run settles only once the asynchronous fold holds its final
-        // view, or has died trying.
-        return effectRuntime().runPromise(stream.finalView());
-      });
-    } finally {
-      detachInteractions();
+    await loadAgents({ includeRemote: false });
+    const resolved = resolveAgent(input.agent);
+    if (!resolved) {
+      throw new Error(
+        `Agent "${input.agent}" was not found in the configured agent directory.`,
+      );
     }
+    if (
+      input.tools &&
+      input.tools.length > 0 &&
+      resolved.entry.category !== AgentCategory.ToolUse
+    ) {
+      throw new Error(
+        `Custom tools are supported only for tool-use agents; "${input.agent}" is a workflow agent.`,
+      );
+    }
+    const config = AgentConfigSchema.parse({
+      agent: resolved.entry.name,
+      agentCategory: resolved.entry.category,
+      agentSource: resolved.entry.source,
+      instruction: input.instruction,
+      ...(input.model ? { model: input.model } : {}),
+    });
+    return await runValidatedAgent(
+      { kind: 'fresh', config },
+      {
+        approvalPromptsUnavailable: true,
+        launchSignal: stream.launchSignal,
+        onRun: (handle) => stream.attachHandle(handle),
+        onStreamResolved: (streamId, trace) =>
+          stream.attachRun(streamId, session, trace),
+        session,
+        stopAfterCycle: true,
+        tools: input.tools,
+      },
+    ).finally(() => {
+      // The run settles only once the asynchronous fold holds its final
+      // view, or has died trying.
+      return effectRuntime().runPromise(stream.finalView());
+    });
   });
 }
