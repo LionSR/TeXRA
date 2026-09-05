@@ -5,7 +5,11 @@ import { html, type TemplateResult } from 'lit';
 
 import { applySurfaceAction, emptySurface } from '@shared/session/surface';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { BOARD_NOW, ROOT, withWaitingCall } from '@test/shared/session/fanOutScenario';
+import {
+  BOARD_NOW,
+  ROOT,
+  withWaitingCall,
+} from '@test/shared/session/fanOutScenario';
 
 import '@progressView/frontend/components/WorkflowRunBoard';
 
@@ -33,10 +37,8 @@ export function runBoardBar(
         >${stream.statusLabel}</strong
       >
     </div>
-    <span class="h-spacer"></span>${iconButton('circle-stop', 'Kill run')}${iconButton(
-      'ellipsis',
-      'More',
-    )}
+    <span class="h-spacer"></span
+    >${iconButton('circle-stop', 'Kill run')}${iconButton('ellipsis', 'More')}
   </div>`;
 }
 
