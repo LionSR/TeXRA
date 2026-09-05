@@ -70,9 +70,11 @@ stops that reader while the run continues. If launch fails before the run
 enters the session, `view` ends without a value and `result` carries the
 failure.
 
-Each view is the runtime's own value, not a copy: a yielded view supersedes
-the one before it, and the maps and arrays beneath an older view may already
-show a later level. The exported `SessionView`, `StreamView`, and
+Every yielded view is immutable: an older view stays what it was for as long
+as it is held, and a branch the later level did not touch is the same object
+in both. An older view is stable to read; it is not a fold input, so nothing
+in the package folds onto anything but the latest level. The exported
+`SessionView`, `StreamView`, and
 `TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
 arrays); a write through a cast corrupts the session every later run in the
 process reads. The run's transcript rows (`StreamView.transcript`) are
