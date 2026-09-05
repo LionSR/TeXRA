@@ -75,7 +75,6 @@ import {
   setSidebarWidth,
   setWorkbenchWidth,
   toggleFiles,
-  togglePapersLayout,
   toggleSidebar,
   toggleSummaryBar,
   workspaceName,
@@ -177,7 +176,6 @@ let shell: Shell = {
   active: '',
   open: [],
   collapsed: persistedShell.getState().collapsed,
-  search: '',
 };
 let papersKnown = false;
 let applyingPaperList = false;
@@ -441,8 +439,7 @@ function taskConversationTemplate(): TemplateResult {
           }
         </span>
         ${
-          // In the focus layout the rail's switcher is the paper's one home.
-          shellState().papersLayout === 'sections' && papers.length > 0
+          papers.length > 0
             ? paperChipTemplate(papers, activePaper, selectPaper)
             : nothing
         }
@@ -677,7 +674,6 @@ function shellTemplate(): TemplateResult {
             filesExpanded: shellState().filesExpanded,
             papers: railPapers(),
             shell,
-            papersLayout: shellState().papersLayout,
             subagentsOpen: shellState().workbenchTabs.some(
               (tab) => tab.kind === 'subagents',
             ),
@@ -710,8 +706,6 @@ function shellTemplate(): TemplateResult {
                   collapsed: !shell.collapsed.includes(key),
                 }),
               ),
-            onTogglePapersLayout: () =>
-              updateShell(togglePapersLayout(shellState())),
             onOpenTerminal: () =>
               currentWorkbench().workbench.openKind('terminal'),
             onOpenBrowser: () =>
@@ -1039,13 +1033,6 @@ const MESSAGE_ROUTES = createMessageRoutes({
         }),
       );
     },
-    close: (session) => {
-      const paper = paperWorkbenches.get(session);
-      if (!paper) return;
-      for (const tab of paper.getState().workbenchTabs) {
-        if (tab.kind === 'pdf') paper.workbench.disposeWorkbenchTab(tab.id);
-      }
-    },
   },
   prompt: { open: (message) => promptOverlay.open(message) },
   terminal: {
@@ -1191,7 +1178,13 @@ function wireShellEvents(): void {
   });
   appRoot.addEventListener('surface-action', (event) => {
     const key = sessionOf(event);
-    if (key) paperSessions.act(key, event.detail);
+    if (!key) return;
+    paperSessions.act(key, event.detail);
+    // The rail is bound to one active stream across every section: picking
+    // a stream in another paper's tree picks that paper too (PRD 12.2).
+    if (event.detail.kind === 'select' && key !== shell.active) {
+      selectPaper(key);
+    }
   });
 }
 
