@@ -23,7 +23,6 @@ import {
 } from '@auth/SupabaseSession';
 import { classifyAuthFailureStatus } from '@auth/TokenProvider';
 import * as logger from '@logger/logUtils';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -242,13 +241,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return this.authCommitQueue.add(commit) as Promise<T>;
   }
 
-  /**
-   * Store a newly created session and publish the credential change: clear the
-   * caches that depend on the account and fire the session-change event.
-   */
+  /** Store a newly created session and fire the session-change event. */
   private async storeSession(session: SupabaseSession): Promise<void> {
     await this.sessionCoordinator.storeSession(session);
-    invalidateModelOptionsCache();
     this._onDidChangeSessions.fire({
       added: [this.toVSCodeSession(session)],
       removed: [],
@@ -593,7 +588,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   private async afterLocalSessionCleared(sessionId: string): Promise<void> {
-    invalidateModelOptionsCache();
     await refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut,
       log.warn,

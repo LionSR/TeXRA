@@ -44,7 +44,6 @@ const modelMocks = vi.hoisted(() => ({
   compute: vi.fn(async (models: readonly string[] = []) =>
     models.map((model) => ({ value: model, label: model })),
   ),
-  invalidate: vi.fn(),
 }));
 
 vi.mock('@auth/codex', async (importOriginal) => ({
@@ -67,7 +66,6 @@ vi.mock('@model/codex/codexPreference', () => ({
 vi.mock('@model/computeModelOptions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@model/computeModelOptions')>()),
   computeModelOptionsData: modelMocks.compute,
-  invalidateModelOptionsCache: modelMocks.invalidate,
 }));
 
 type ControllerOptions = ConstructorParameters<

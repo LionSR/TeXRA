@@ -40,7 +40,6 @@ const computeModelOptionsData = vi.hoisted(() =>
 vi.mock('@model/computeModelOptions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@model/computeModelOptions')>()),
   computeModelOptionsData,
-  invalidateModelOptionsCache: vi.fn(),
 }));
 
 type DesktopSettingsIpcModule =

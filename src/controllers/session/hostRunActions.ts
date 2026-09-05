@@ -18,7 +18,6 @@ import {
   hasUsableApiKey,
   isApiProvider,
 } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import { effectRuntime } from '@platform/processRuntime';
 import { platform } from '@platform/platform';
@@ -166,7 +165,6 @@ export function createHostRunActions(
     readKey: (provider) => platform().secrets.get(apiKeySecretName(provider)),
     hasUsableKey: (provider) => hasUsableApiKey(platform().secrets, provider),
     promptForApiKey: (provider) => ports.promptForApiKey(provider),
-    invalidateModelOptionsCache,
     isRetryPending,
     triggerRetry: (streamId, requestId) =>
       settleRetry(streamId, requestId, {

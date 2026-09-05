@@ -8,7 +8,6 @@ import {
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local file imports
@@ -60,10 +59,9 @@ export class UnsetApiKeyTool extends defineTool({
     }
 
     await setupSecrets.deleteApiKey(provider);
-    // Mirror the manual `texra.setApiKey` command ordering: drop cached model
-    // availability and key-origin lookups so models that just lost their
-    // credential stop appearing selectable, then refresh the status surfaces.
-    invalidateModelOptionsCache();
+    // Mirror the manual `texra.setApiKey` command ordering: drop the cached
+    // key lookups so models that just lost their credential stop appearing
+    // selectable, then refresh the status surfaces.
     invalidateApiKeyCache();
     if (platform.commands) {
       // Credential changes must remain successful when a host cannot refresh

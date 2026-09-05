@@ -4,12 +4,6 @@ import { SettingsProfileController } from '@controllers/settingsView/SettingsPro
 import type { StateStore } from '@platform/interfaces';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
-// The controller reads the shipped provider catalog directly, so the picker
-// invalidation it triggers is the real module function; stub it here.
-vi.mock('@model/computeModelOptions', () => ({
-  invalidateModelOptionsCache: vi.fn(),
-}));
-
 function createController(
   options: { state?: StateStore; config?: Record<string, unknown> } = {},
 ): SettingsProfileController {

@@ -69,7 +69,6 @@ function createHarness(options: HarnessOptions = {}): {
   glmCodingPlanValues: boolean[];
   kimiCodeValues: boolean[];
   grokSubscriptionValues: boolean[];
-  invalidations: number;
   retries: string[];
 } {
   const keys = new Map<ApiProvider, string | undefined>(
@@ -86,7 +85,6 @@ function createHarness(options: HarnessOptions = {}): {
   let preferGrokSubscription = options.grok ?? true;
   let glmCodingPlan = options.glmCodingPlan ?? true;
   let kimiCode = options.kimiCode ?? true;
-  let invalidations = 0;
   const retries: string[] = [];
 
   return {
@@ -96,9 +94,6 @@ function createHarness(options: HarnessOptions = {}): {
     glmCodingPlanValues,
     kimiCodeValues,
     grokSubscriptionValues,
-    get invalidations() {
-      return invalidations;
-    },
     retries,
     controller: new ProgressApiKeyRetryController({
       providers: PROVIDERS,
@@ -157,9 +152,6 @@ function createHarness(options: HarnessOptions = {}): {
           },
         ),
       ],
-      invalidateModelOptionsCache: () => {
-        invalidations += 1;
-      },
       isRetryPending:
         options.isRetryPending ?? (() => options.retryPending ?? true),
       triggerRetry:
@@ -190,7 +182,6 @@ describe('ProgressApiKeyRetryController', () => {
 
     expect(result).toStrictEqual(RETRIED_WITH_OWN_KEY_RESULT);
     expect(harness.prompts).toStrictEqual(['anthropic']);
-    expect(harness.invalidations).toBe(0);
     expect(harness.retries).toStrictEqual(['stream-a']);
   });
 
@@ -211,7 +202,6 @@ describe('ProgressApiKeyRetryController', () => {
 
     expect(result).toStrictEqual(IDLE_RESULT);
     expect(harness.prompts).toStrictEqual(['anthropic']);
-    expect(harness.invalidations).toBe(0);
     expect(harness.retries).toStrictEqual([]);
   });
 
@@ -229,7 +219,6 @@ describe('ProgressApiKeyRetryController', () => {
     });
 
     expect(result).toStrictEqual(IDLE_RESULT);
-    expect(harness.invalidations).toBe(0);
     expect(harness.retries).toStrictEqual([]);
   });
 
@@ -268,7 +257,6 @@ describe('ProgressApiKeyRetryController', () => {
 
     expect(result).toStrictEqual(RETRIED_WITH_OWN_KEY_RESULT);
     expect(harness.prompts).toStrictEqual([undefined]);
-    expect(harness.invalidations).toBe(0);
     expect(harness.retries).toStrictEqual(['stream-b']);
   });
 
@@ -287,7 +275,6 @@ describe('ProgressApiKeyRetryController', () => {
 
     expect(result).toStrictEqual(IDLE_RESULT);
     expect(harness.chatGptSubscriptionValues).toStrictEqual([false, true]);
-    expect(harness.invalidations).toBe(2);
     expect(harness.retries).toStrictEqual(['stream-race']);
   });
 
@@ -312,7 +299,6 @@ describe('ProgressApiKeyRetryController', () => {
     // usable, so "Use your own API key" must not jump to the key-input prompt.
     expect(harness.prompts).toStrictEqual([]);
     expect(harness.chatGptSubscriptionValues).toStrictEqual([false]);
-    expect(harness.invalidations).toBe(1);
     expect(harness.retries).toStrictEqual(['stream-d']);
   });
 
@@ -335,7 +321,6 @@ describe('ProgressApiKeyRetryController', () => {
     });
     expect(harness.prompts).toStrictEqual([]);
     expect(harness.grokSubscriptionValues).toStrictEqual([false]);
-    expect(harness.invalidations).toBe(1);
     expect(harness.retries).toStrictEqual(['stream-grok']);
   });
 
@@ -377,7 +362,6 @@ describe('ProgressApiKeyRetryController', () => {
     // usable, so "Use your own API key" must not jump to the key-input prompt.
     expect(harness.prompts).toStrictEqual([]);
     expect(harness.glmCodingPlanValues).toStrictEqual([false]);
-    expect(harness.invalidations).toBe(1);
     expect(harness.retries).toStrictEqual(['stream-glm']);
   });
 
@@ -446,7 +430,6 @@ describe('ProgressApiKeyRetryController', () => {
 
     expect(started).toBe(true);
     expect(harness.chatGptSubscriptionValues).toStrictEqual([false]);
-    expect(harness.invalidations).toBe(1);
   });
 
   it('restores ChatGPT access when an eligible Copilot fallback does not start', async () => {
@@ -464,7 +447,6 @@ describe('ProgressApiKeyRetryController', () => {
 
     expect(started).toBe(false);
     expect(harness.chatGptSubscriptionValues).toStrictEqual([false, true]);
-    expect(harness.invalidations).toBe(2);
   });
 
   it('keeps the global Copilot preference while scoping direct routing to the fallback launch', async () => {
@@ -665,7 +647,6 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.keys.get('moonshot')).toBe('new-moonshot');
     expect(harness.keys.get('kimiCode')).toBe('old-kimi');
     expect(harness.kimiCodeValues).toStrictEqual([false]);
-    expect(harness.invalidations).toBe(1);
     expect(harness.retries).toStrictEqual(['stream-kimi-dual']);
   });
 
@@ -699,7 +680,6 @@ describe('ProgressApiKeyRetryController', () => {
     expect(harness.keys.get('moonshot')).toBe('new-moonshot');
     expect(harness.keys.get('kimiCode')).toBe('old-kimi');
     expect(harness.kimiCodeValues).toStrictEqual([]);
-    expect(harness.invalidations).toBe(0);
     expect(harness.retries).toStrictEqual(['stream-kimi-moonshot']);
   });
 
@@ -746,6 +726,5 @@ describe('ProgressApiKeyRetryController', () => {
     await expect(holder).resolves.toBe(true);
     await expect(stale).resolves.toBe(false);
     expect(startCalls).toStrictEqual(['holder']);
-    expect(harness.invalidations).toBe(0);
   });
 });
