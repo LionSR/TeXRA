@@ -180,7 +180,6 @@ function verifyDistEntrypoints(entries, failures) {
     'extension/dist/extension.js',
     'extension/dist/progressView/bundle.js',
     'extension/dist/settingsView/bundle.js',
-    'extension/dist/webview/bundle.js',
   ]) {
     assertEntryExists(entries, entryPath, failures);
   }

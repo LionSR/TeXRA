@@ -150,7 +150,7 @@ frozen deep-import lists, not another lint rule.
   Usage, Subscriptions, Providers & Models, Agents, Teams, Tools, Integrations,
   Git, Shortcuts, LaTeX, Memory, Goals)
 - `packages/extension/src/progressView/` - Task tracking board webview
-- `packages/extension/src/webview/` - Main agent interaction webview
+- `packages/extension/src/webview/` - Webview components and helpers shared by the progress view (file selection, banners, onboarding cards); there is no separate main-view bundle
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 - `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform/platform`.
 - `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.

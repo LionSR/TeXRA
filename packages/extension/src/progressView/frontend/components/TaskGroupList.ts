@@ -20,6 +20,7 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
+import type { TranscriptView } from '@shared/session/sessionView';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseHeadingOfGroup,
@@ -165,11 +166,20 @@ function transcriptTimeline(
 export class TaskGroupList extends LitElement {
   static override styles = [designTokens, ...logStyles, taskGroupListStyles];
 
-  /** All task groups to render */
-  @property({ attribute: false }) groups: TaskGroup[] = [];
+  /**
+   * The stream's transcript slice. The fold appends rows and groups in
+   * place and replaces the slice on every change, so the slice, never one
+   * of its arrays, is the property Lit compares.
+   */
+  @property({ attribute: false }) transcript: TranscriptView | null = null;
 
-  /** All transcript rows to render */
-  @property({ attribute: false }) rows: TranscriptRow[] = [];
+  private get groups(): TaskGroup[] {
+    return this.transcript?.taskGroups ?? [];
+  }
+
+  private get rows(): TranscriptRow[] {
+    return this.transcript?.rows ?? [];
+  }
 
   /** The stream these rows belong to; every group toggle names it. */
   @property({ attribute: false }) streamId: StreamTabId | null = null;
@@ -280,29 +290,28 @@ export class TaskGroupList extends LitElement {
   }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
-    const groupsChanged = changedProperties.has('groups');
-    const rowsChanged = changedProperties.has('rows');
+    const transcriptChanged = changedProperties.has('transcript');
 
     // The painted status is a fold of the group and the run's durable
     // outcome, so a change in any of the three is a change in what the
     // chime's memory holds: a run that becomes durably final repaints its
     // open groups as its outcome without any group row changing.
     if (
-      groupsChanged ||
+      transcriptChanged ||
       changedProperties.has('streamDurablyFinal') ||
       changedProperties.has('streamStatus')
     ) {
       this.checkForCompletedRuns();
     }
-    if (this.terminal || !(groupsChanged || rowsChanged)) return;
+    if (this.terminal || !transcriptChanged) return;
     this.timeline = transcriptTimeline(this.groups, this.rows);
     // The windows count from the tail; a transcript that shrank (a
     // replaced history) or a fresh mount no longer lines up with them.
-    const previousRows = changedProperties.get('rows') as
-      TranscriptRow[] | undefined;
+    const previous = changedProperties.get('transcript') as
+      TranscriptView | null | undefined;
     if (
       changedProperties.get('terminal') === true ||
-      (previousRows !== undefined && this.rows.length < previousRows.length)
+      (previous != null && this.rows.length < previous.rows.length)
     ) {
       this.resetRenderWindows();
     }

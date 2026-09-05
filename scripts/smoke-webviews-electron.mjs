@@ -2,7 +2,6 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import process from 'node:process';
 import {
   renderWebviewHtml,
   runElectronWebviewHarness,
@@ -17,9 +16,202 @@ const desktopRequire = createRequire(
 );
 const nonce = 'texra-webview-smoke';
 
+// The progress webview is the one bundle the sidebar and the editor tab
+// load. It renders nothing until the host answers its `subscribe` with an
+// events frame carrying the host snapshot, so each progress view carries a
+// session fixture: the bridge shim below plays the host, answering every
+// subscribe with the fixture's events (listing rows for every stream, the
+// transcript tier for the aggregates the subscribe named), the way
+// `SessionFramer` cuts a frame.
+const SESSION_KEY = '/tmp/texra-smoke/paper';
+const OWNER = '4242:2026-09-04T00:00:00.000Z';
+const NOW = 1_783_353_600_000;
+const STREAM = 'research#smoke0000001';
+const EXECUTION = 'a1b2c3d4e5f6';
+const CHILD_STREAM = 'reviewer#smoke0000002';
+const CHILD_EXECUTION = 'b1b2c3d4e5f6';
+
+const hostSnapshot = {
+  paper: {
+    key: SESSION_KEY,
+    name: 'paper',
+    initials: 'PA',
+    subtitle: SESSION_KEY,
+  },
+  agentOptions: {
+    toolUse: [
+      { value: 'orchestrator', label: 'orchestrator' },
+      { value: 'research', label: 'research' },
+    ],
+    workflow: [{ value: 'correct', label: 'correct' }],
+  },
+  modelOptions: [{ value: 'deepseekT', label: 'DeepSeek V4 Flash' }],
+  teamOptions: [],
+  workspaceRoots: [],
+  fileConfigs: [
+    {
+      type: 'input',
+      label: 'Input',
+      icon: 'file-code',
+      addOpenedLabel: 'Add opened files as input',
+      emptyListLabel: 'Clear all input files',
+      selectListLabel: 'Add input files',
+      toolConfig: 'tool',
+    },
+    {
+      type: 'context',
+      label: 'Context',
+      icon: 'book',
+      addOpenedLabel: 'Add opened files as context',
+      emptyListLabel: 'Clear all context files',
+      selectListLabel: 'Add context files',
+    },
+    {
+      type: 'media',
+      label: 'Media',
+      icon: 'video',
+      addOpenedLabel: 'Add opened files as media',
+      emptyListLabel: 'Clear all media files',
+      selectListLabel: 'Add media files',
+      toolConfig: 'autoExtract',
+    },
+  ],
+  fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
+  isGitRepo: false,
+  recording: null,
+  debugMode: false,
+  banners: {
+    apiKey: { visible: false },
+    agentConfig: { visible: false },
+    dependency: { visible: false },
+    gettingStarted: false,
+    login: false,
+  },
+  onboarding: 'done',
+};
+
+/** Seq numbered per aggregate and committed in one session order. */
+function sessionLog() {
+  const events = [];
+  const seqs = new Map();
+  const entrySeqs = new Map();
+  let commit = 0;
+  const emit = (aggregateId, at, body) => {
+    const seq = (seqs.get(aggregateId) ?? 0) + 1;
+    seqs.set(aggregateId, seq);
+    commit += 1;
+    events.push({ aggregateId, seq, commit, ownerId: OWNER, at, ...body });
+  };
+  const entry = (streamId, at, fields) => {
+    const seqNo = (entrySeqs.get(streamId) ?? 0) + 1;
+    entrySeqs.set(streamId, seqNo);
+    emit(streamId, at, {
+      type: 'transcript.entry',
+      entry: { seqNo, level: 'info', timestamp: at, type: 'log', ...fields },
+    });
+  };
+  return { events, emit, entry };
+}
+
+function startRun(log, { streamId, executionId, agent, at, parentStreamId }) {
+  log.emit(streamId, at, {
+    type: 'run.start',
+    executionId,
+    identity: { kind: 'agent', agent },
+    category: 'toolUse',
+    isRemote: false,
+    userFollowUpSupport: 'nativeInteractive',
+    approvalPolicy: {
+      policy: 'ask',
+      bypasses: { bash: false, toolEdit: false, superYolo: false },
+    },
+    ...(parentStreamId ? { parentStreamId } : {}),
+  });
+  log.emit(streamId, at, {
+    type: 'run.activate',
+    category: 'toolUse',
+    isRemote: false,
+    background: false,
+  });
+  log.emit(streamId, at, {
+    type: 'run.config',
+    executionId,
+    config: { model: 'deepseekT', agent, inputFiles: ['main.tex'] },
+  });
+  log.emit(streamId, at, {
+    type: 'status',
+    phase: 'running',
+    cause: 'lifecycle',
+    runStartedAt: at,
+  });
+}
+
+function conversationEvents({ approval = false } = {}) {
+  const log = sessionLog();
+  startRun(log, {
+    streamId: STREAM,
+    executionId: EXECUTION,
+    agent: 'research',
+    at: NOW,
+  });
+  log.emit(STREAM, NOW + 500, {
+    type: 'updateStreamDescription',
+    description: 'Check citation coverage and suggest BibTeX entries.',
+  });
+  log.entry(STREAM, NOW, {
+    id: 'msg-1',
+    messageType: 'userMessage',
+    text: 'hello world',
+  });
+  log.entry(STREAM, NOW + 1000, {
+    id: 'msg-2',
+    messageType: 'modelResponse',
+    text: 'I will inspect the manuscript and report missing citations.',
+  });
+  log.emit(STREAM, NOW + 1500, {
+    type: 'conversation.progress',
+    progress: { toolCallCount: 1 },
+  });
+  if (approval) {
+    startRun(log, {
+      streamId: CHILD_STREAM,
+      executionId: CHILD_EXECUTION,
+      agent: 'reviewer',
+      at: NOW + 2000,
+      parentStreamId: STREAM,
+    });
+    log.emit(STREAM, NOW + 3000, {
+      type: 'approval.requested',
+      requestId: 'smoke-tool-edit-approval',
+      payload: {
+        kind: 'toolEdit',
+        data: {
+          requestId: 'smoke-tool-edit-approval',
+          streamId: STREAM,
+          allowBypass: true,
+          path: '/tmp/texra-smoke/main.tex',
+          relativePath: 'main.tex',
+          sourceTool: 'edit_file',
+          addedLines: 1,
+          removedLines: 1,
+          isLatex: true,
+        },
+      },
+    });
+    log.entry(STREAM, NOW + 3000, {
+      id: 'msg-3',
+      messageType: 'modelResponse',
+      text: 'I found a one-line correction and need approval before editing main.tex.',
+    });
+  }
+  return log.events;
+}
+
 const progressViewReplacements = {
   bundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
   styleUri: fileUri('packages/extension/dist/progressView/index.css'),
+  sessionKey: SESSION_KEY,
+  placement: 'sidebar',
 };
 
 const commonReplacements = {
@@ -33,258 +225,43 @@ const commonReplacements = {
 
 const views = [
   {
-    name: 'main',
-    tagName: 'main-app',
-    templatePath: join(extensionRoot, 'src', 'webview', 'index.html'),
-    replacements: {
-      bundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
-    },
-    fixtureMessages: [
-      {
-        command: 'setOnboardingFunnel',
-        state: 'done',
-      },
-      {
-        command: 'setSelectedAgent',
-        sessionType: 'workflow',
-        agentId: 'correct',
-      },
-      {
-        command: 'setInputFiles',
-        files: ['main.tex', 'appendix.tex', 'References/2509.24978/main.tex'],
-      },
-      {
-        command: 'setContextFiles',
-        files: [
-          'refs.bib',
-          'References/2509.24978/only_supplement.tex',
-          'ltxfront.sty',
-          'References/2509.24978/revtex4-2.cls',
-        ],
-      },
-      {
-        command: 'setMediaFiles',
-        files: [
-          'Fig.1.pdf',
-          'References/2509.24978/summary_figure_arbitrary1d_6.jpg',
-        ],
-      },
-    ],
-  },
-  {
     name: 'progress',
     tagName: 'progress-app',
     templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
     replacements: progressViewReplacements,
+    session: { host: hostSnapshot, events: [], selected: null },
   },
   {
     name: 'progress-populated',
     tagName: 'progress-app',
     templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
-    attributes: {
-      'data-desktop-view': 'progress',
-    },
     viewport: {
       width: 420,
       height: 600,
     },
     assertions: ['progressComposerLayout'],
-    seedMessages: [
-      {
-        command: 'updateStreams',
-        streams: [
-          {
-            kind: 'agent',
-            name: 'builtInToolUse:chat',
-            label: 'chat',
-            model: 'deepseekT',
-            modelLabel: 'DeepSeek V4 Flash',
-            agent: 'research',
-            agentCategory: 'toolUse',
-            creationTimestamp: 1_783_353_600_000,
-            description: 'Check citation coverage and suggest BibTeX entries.',
-          },
-        ],
-        activeStream: 'builtInToolUse:chat',
-        agentFilter: 'all',
-        streamStates: {
-          'builtInToolUse:chat': {
-            kind: 'toolUse',
-            status: 'running',
-            lastTimestamp: 1_783_353_600_000,
-            conversationProgress: {
-              toolCallCount: 1,
-            },
-            stage: { kind: 'round', index: 0 },
-            subagents: [],
-            processes: [],
-          },
-        },
-      },
-      {
-        command: 'logDelta',
-        streamId: 'builtInToolUse:chat',
-        entries: [
-          {
-            seqNo: 1,
-            id: 'msg-1',
-            type: 'log',
-            level: 'info',
-            timestamp: 1_783_353_600_000,
-            messageType: 'userMessage',
-            text: 'hello world',
-          },
-          {
-            seqNo: 2,
-            id: 'msg-2',
-            type: 'log',
-            level: 'info',
-            timestamp: 1_783_353_601_000,
-            messageType: 'modelResponse',
-            text: 'I will inspect the manuscript and report missing citations.',
-          },
-        ],
-        updates: [],
-      },
-    ],
     replacements: progressViewReplacements,
-  },
-  {
-    name: 'progress-compact-status',
-    tagName: 'progress-app',
-    templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
-    viewport: {
-      width: 320,
-      height: 600,
+    session: {
+      host: hostSnapshot,
+      events: conversationEvents(),
+      selected: STREAM,
     },
-    assertions: ['compactStreamStatusLayout'],
-    seedMessages: [
-      {
-        command: 'updateStreams',
-        streams: [
-          {
-            kind: 'agent',
-            name: 'compact-parent',
-            label: 'compact-parent',
-            agent: 'research',
-            agentCategory: 'toolUse',
-            creationTimestamp: 1_783_353_600_000,
-            description:
-              'A long compact execution title that must not displace status.',
-          },
-          {
-            kind: 'agent',
-            name: 'compact-child',
-            label: 'compact-child',
-            agent: 'reviewer',
-            agentCategory: 'toolUse',
-            creationTimestamp: 1_783_353_601_000,
-            parentStreamId: 'compact-parent',
-          },
-        ],
-        activeStream: 'compact-parent',
-        agentFilter: 'all',
-        streamStates: {
-          'compact-parent': {
-            kind: 'toolUse',
-            status: 'running',
-            lastTimestamp: 1_783_353_600_000,
-            subagents: [],
-            processes: [],
-          },
-          'compact-child': {
-            kind: 'toolUse',
-            status: 'waiting',
-            lastTimestamp: 1_783_353_601_000,
-            subagents: [],
-            processes: [],
-          },
-        },
-      },
-    ],
-    replacements: progressViewReplacements,
   },
   {
     name: 'progress-approval',
     tagName: 'progress-app',
     templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
-    attributes: {
-      'data-desktop-view': 'progress',
-    },
     viewport: {
       width: 420,
       height: 700,
     },
     assertions: ['toolEditApprovalLayout'],
-    seedMessages: [
-      {
-        command: 'updateStreams',
-        streams: [
-          {
-            kind: 'agent',
-            name: 'builtInToolUse:orchestrator',
-            label: 'orchestrator',
-            model: 'deepseekT',
-            modelLabel: 'DeepSeek V4 Flash',
-            agent: 'orchestrator',
-            agentCategory: 'toolUse',
-            creationTimestamp: 1_783_353_600_000,
-            description:
-              'Revise main.tex and ask before applying the proposed patch.',
-          },
-        ],
-        activeStream: 'builtInToolUse:orchestrator',
-        agentFilter: 'all',
-        streamStates: {
-          'builtInToolUse:orchestrator': {
-            kind: 'toolUse',
-            status: 'running',
-            lastTimestamp: 1_783_353_600_000,
-            conversationProgress: {
-              toolCallCount: 12,
-            },
-            stage: { kind: 'round', index: 3 },
-            subagents: [],
-            processes: [],
-          },
-        },
-      },
-      {
-        command: 'updatePermission',
-        action: 'show',
-        permission: {
-          kind: 'toolEdit',
-          data: {
-            requestId: 'smoke-tool-edit-approval',
-            streamId: 'builtInToolUse:orchestrator',
-            allowBypass: true,
-            path: '/tmp/texra-smoke/main.tex',
-            relativePath: 'main.tex',
-            sourceTool: 'edit_file',
-            addedLines: 1,
-            removedLines: 1,
-            isLatex: true,
-          },
-        },
-      },
-      {
-        command: 'logDelta',
-        streamId: 'builtInToolUse:orchestrator',
-        entries: [
-          {
-            seqNo: 1,
-            id: 'approval-smoke-msg-1',
-            type: 'log',
-            level: 'info',
-            timestamp: 1_783_353_600_000,
-            messageType: 'modelResponse',
-            text: 'I found a one-line correction and need approval before editing main.tex.',
-          },
-        ],
-        updates: [],
-      },
-    ],
     replacements: progressViewReplacements,
+    session: {
+      host: hostSnapshot,
+      events: conversationEvents({ approval: true }),
+      selected: STREAM,
+    },
   },
   {
     name: 'settings',
@@ -300,12 +277,59 @@ function fileUri(relativePath) {
   return pathToFileURL(join(repoRoot, relativePath)).toString();
 }
 
-function hostBridgeShim() {
+/**
+ * The host bridge a webview acquires, playing the host for one session:
+ * the persisted surface (so a selected stream reopens selected), and an
+ * events frame in answer to every `subscribe`, cut like `SessionFramer`
+ * cuts one. Every request is answered as done.
+ */
+function hostBridgeShim(session) {
+  const state = session
+    ? { [`surface:${SESSION_KEY}`]: { selected: session.selected } }
+    : undefined;
   const shim = `
+    const smokeSession = ${JSON.stringify(session ?? null)};
+    const smokeLocal = { self: [${JSON.stringify(OWNER)}], heldBy: [], unreadable: [] };
+    function smokeFrame(subscribe) {
+      const named = new Set(subscribe.aggregates.map((aggregate) => aggregate.id));
+      const events = smokeSession.events.flatMap((event) => {
+        if (event.type !== 'transcript.entry') {
+          return [{ _tag: 'event', read: 'listing', event }];
+        }
+        return named.has(event.aggregateId)
+          ? [{ _tag: 'event', read: 'aggregate', event }]
+          : [];
+      });
+      return {
+        kind: 'events',
+        session: subscribe.session,
+        generation: subscribe.generation,
+        cursor: smokeSession.events.reduce((max, event) => Math.max(max, event.commit), 0),
+        events,
+        chunks: [],
+        local: smokeLocal,
+        host: smokeSession.host,
+        replayComplete: true,
+      };
+    }
     const texraSmokeBridge = {
-      _state: undefined,
+      _state: ${JSON.stringify(state)},
       postMessage(message) {
         window.__texraSmokeMessages = [...(window.__texraSmokeMessages ?? []), message];
+        if (!smokeSession) return;
+        if (message.kind === 'subscribe') {
+          window.postMessage(smokeFrame(message), '*');
+        } else if (message.kind === 'runtime.request' || message.kind === 'host.request') {
+          window.postMessage(
+            {
+              kind: 'response',
+              session: message.session,
+              requestId: message.requestId,
+              result: { ok: true, outcome: { kind: 'done' } },
+            },
+            '*',
+          );
+        }
       },
       getState() {
         return this._state;
@@ -324,18 +348,16 @@ async function prepareViewHtml(view) {
   const template = await readFile(view.templatePath, 'utf8');
   const html = renderWebviewHtml(template, {
     attributeLabel: 'smoke',
-    bridgeScript: hostBridgeShim(),
+    bridgeScript: hostBridgeShim(view.session),
     replacements: { ...commonReplacements, ...view.replacements },
     view,
   });
   const htmlPath = join(generatedHtmlDir, `${view.name}.html`);
   await writeFile(htmlPath, html);
   return {
-    fixtureMessages: view.fixtureMessages ?? [],
     htmlPath,
     name: view.name,
     tagName: view.tagName,
-    seedMessages: view.seedMessages ?? [],
     assertions: view.assertions ?? [],
     viewport: view.viewport,
   };

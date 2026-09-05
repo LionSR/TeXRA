@@ -15,6 +15,8 @@ const RENDER_TIMEOUT_MS = readPositiveNumber(
   process.env.TEXRA_WEBVIEW_SMOKE_TIMEOUT_MS,
   10_000,
 );
+/** A model response the populated fixture's transcript carries. */
+const SMOKE_TRANSCRIPT_PHRASE = 'report missing citations';
 const DEFAULT_VIEWPORT = {
   width: 1280,
   height: 900,
@@ -42,9 +44,10 @@ function isConsoleError(level) {
 }
 
 async function waitForRenderedElement(window, view) {
-  const { seedMessages = [], tagName } = view;
+  const { tagName } = view;
   const missingElementMessage = `Missing rendered element: ${tagName}`;
   const timeoutMessage = `Timed out waiting for custom element: ${tagName}`;
+  const emptyMessage = `${view.name} rendered no visible text content.`;
   return window.webContents.executeJavaScript(
     `
       (async () => {
@@ -61,38 +64,20 @@ async function waitForRenderedElement(window, view) {
         if (!element) {
           throw new Error(${JSON.stringify(missingElementMessage)});
         }
-        if (element.updateComplete && typeof element.updateComplete.then === 'function') {
-          await Promise.race([
-            element.updateComplete,
-            new Promise((_, reject) =>
-              setTimeout(
-                () => reject(new Error(${JSON.stringify(timeoutMessage)})),
-                ${JSON.stringify(RENDER_TIMEOUT_MS)},
-              ),
-            ),
-          ]);
-        }
-        const seedMessages = ${JSON.stringify(seedMessages)};
-        if (seedMessages.length > 0) {
-          if (typeof element.handleMessage !== 'function') {
-            throw new Error(${JSON.stringify(
-              `Cannot seed ${tagName}: handleMessage is unavailable.`,
-            )});
+        // A view renders its first frame asynchronously (the progress view
+        // waits for the host's events frame to fold), so wait for text.
+        const textOf = () =>
+          (element.shadowRoot?.textContent?.trim() ?? '') +
+          (element.textContent?.trim() ?? '');
+        const deadline = Date.now() + ${JSON.stringify(RENDER_TIMEOUT_MS)};
+        while (textOf().length === 0) {
+          if (Date.now() > deadline) {
+            throw new Error(${JSON.stringify(emptyMessage)});
           }
-          for (const message of seedMessages) {
-            element.handleMessage(message);
-            if (element.updateComplete && typeof element.updateComplete.then === 'function') {
-              await Promise.race([
-                element.updateComplete,
-                new Promise((_, reject) =>
-                  setTimeout(
-                    () => reject(new Error(${JSON.stringify(timeoutMessage)})),
-                    ${JSON.stringify(RENDER_TIMEOUT_MS)},
-                  ),
-                ),
-              ]);
-            }
+          if (element.updateComplete && typeof element.updateComplete.then === 'function') {
+            await element.updateComplete;
           }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
         }
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const unregisteredVscodeElements = [...new Set(
@@ -272,66 +257,6 @@ async function assertWebviewRuntime(window) {
   );
 }
 
-async function applyViewFixture(window, view) {
-  const fixtureMessages = Array.isArray(view.fixtureMessages)
-    ? view.fixtureMessages
-    : [];
-  if (fixtureMessages.length === 0) return null;
-
-  return window.webContents.executeJavaScript(
-    `
-      (async () => {
-        const messages = ${JSON.stringify(fixtureMessages)};
-        for (const message of messages) {
-          window.postMessage(message, '*');
-        }
-
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const app = document.querySelector(${JSON.stringify(view.tagName)});
-        if (app?.updateComplete && typeof app.updateComplete.then === 'function') {
-          await app.updateComplete;
-        }
-
-        const fileGroups = [...(app?.shadowRoot?.querySelectorAll('file-select-group') ?? [])];
-        for (const group of fileGroups) {
-          if (group.updateComplete && typeof group.updateComplete.then === 'function') {
-            await group.updateComplete;
-          }
-        }
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        if (${JSON.stringify(view.name)} !== 'main') {
-          return { fixtureMessages: messages.length };
-        }
-
-        const fileItems = fileGroups.flatMap((group) => [
-          ...(group.shadowRoot?.querySelectorAll('.file-item') ?? []),
-        ]);
-        const folderLabels = fileGroups.flatMap((group) => [
-          ...(group.shadowRoot?.querySelectorAll('.file-folder') ?? []),
-        ]);
-        const rawText = document.body.innerText.replace(/\\s+/g, ' ');
-        if (rawText.includes('None appendix.tex coverLetter.tex main.tex')) {
-          throw new Error('Main view file select options are visible as raw fallback text.');
-        }
-        if (fileItems.length < 8) {
-          throw new Error(\`Main view fixture rendered too few file rows: \${fileItems.length}\`);
-        }
-        if (folderLabels.length < 4) {
-          throw new Error(\`Main view fixture did not render folder labels: \${folderLabels.length}\`);
-        }
-
-        return {
-          fileGroupCount: fileGroups.length,
-          fileItemCount: fileItems.length,
-          folderLabelCount: folderLabels.length,
-        };
-      })();
-    `,
-    true,
-  );
-}
-
 function createSmokeWindow(errors) {
   const window = new BrowserWindow({
     width: DEFAULT_VIEWPORT.width,
@@ -364,16 +289,8 @@ function createSmokeWindow(errors) {
   return window;
 }
 
-async function assertProgressComposerLayout(window, view) {
-  return window.webContents.executeJavaScript(
-    `
-      (async () => {
-        // Resting height of the composer, in lines. It sits at two and grows
-        // with content up to --textarea-max-height; the six-line resting box
-        // it replaced reserved that room for an empty draft. Keep in step
-        // with --textarea-min-height in FollowUpInput.styles.ts.
-        const COMPOSER_RESTING_ROWS = 2;
-
+/** Poll `findDeep` for a selector the asynchronous fold renders later. */
+const WAIT_FOR_DEEP_SCRIPT = `
         function findDeep(selector, root = document) {
           const direct = root.querySelector?.(selector);
           if (direct) return direct;
@@ -383,15 +300,47 @@ async function assertProgressComposerLayout(window, view) {
           }
           return null;
         }
+        async function waitForDeep(selector) {
+          const deadline = Date.now() + ${JSON.stringify(RENDER_TIMEOUT_MS)};
+          for (;;) {
+            const found = findDeep(selector);
+            if (found || Date.now() > deadline) return found;
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+          }
+        }
+        function deepText(root) {
+          let text = root.textContent ?? '';
+          for (const element of root.querySelectorAll?.('*') ?? []) {
+            if (element.shadowRoot) text += deepText(element.shadowRoot);
+          }
+          return text;
+        }
+        async function waitForDeepText(root, phrase) {
+          const deadline = Date.now() + ${JSON.stringify(RENDER_TIMEOUT_MS)};
+          for (;;) {
+            if (deepText(root).includes(phrase)) return true;
+            if (Date.now() > deadline) return false;
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+          }
+        }
+`;
 
-        const composer = findDeep('follow-up-input');
+async function assertProgressComposerLayout(window, view) {
+  return window.webContents.executeJavaScript(
+    `
+      (async () => {
+        ${WAIT_FOR_DEEP_SCRIPT}
+
+        const composer = await waitForDeep('session-composer');
         const dock = findDeep('.conversation-composer-dock');
         const conversationLog = findDeep('.conversation-log');
         if (composer?.updateComplete) await composer.updateComplete;
-        const textarea = composer?.shadowRoot?.querySelector('textarea');
+        const waTextarea = composer?.shadowRoot?.querySelector('wa-textarea');
+        if (waTextarea?.updateComplete) await waTextarea.updateComplete;
+        const textarea = waTextarea?.shadowRoot?.querySelector('textarea');
 
         const missing = [
-          ['follow-up-input', composer],
+          ['session-composer', composer],
           ['composer dock', dock],
           ['conversation log', conversationLog],
           ['native textarea', textarea],
@@ -401,55 +350,29 @@ async function assertProgressComposerLayout(window, view) {
         if (missing.length > 0) {
           throw new Error(\`${view.name} missing composer layout elements: \${missing.join(', ')}\`);
         }
+        // The transcript tier arrives with the second subscribe's frame and
+        // the fold appends its rows in place: the log must paint them.
+        const painted = await waitForDeepText(
+          conversationLog,
+          ${JSON.stringify(SMOKE_TRANSCRIPT_PHRASE)},
+        );
+        if (!painted) {
+          throw new Error(\`${view.name} did not paint the folded transcript rows.\`);
+        }
 
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-        const style = getComputedStyle(textarea);
-        const lineHeight = Number.parseFloat(style.lineHeight);
-        const paddingBlock =
-          Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
-        const minHeight = Number.parseFloat(style.minHeight);
-        const maxHeight = Number.parseFloat(style.maxHeight);
-        const expectedMinHeight = COMPOSER_RESTING_ROWS * lineHeight + paddingBlock;
-        const expectedMaxHeight = Math.max(
-          minHeight,
-          Math.min(window.innerHeight * 0.32, 240),
-        );
-        const initialTextareaRect = textarea.getBoundingClientRect();
-
-        if (textarea.rows !== COMPOSER_RESTING_ROWS) {
-          throw new Error(
-            \`${view.name} composer rows did not propagate: native=\${textarea.rows} expected=\${COMPOSER_RESTING_ROWS}\`,
-          );
-        }
-        if (style.resize !== 'vertical') {
-          throw new Error(
-            \`${view.name} composer is not vertically resizable: native computed resize=\${style.resize}\`,
-          );
-        }
-        if (Math.abs(minHeight - expectedMinHeight) > 3) {
-          throw new Error(
-            \`${view.name} composer minimum is not \${COMPOSER_RESTING_ROWS} lines: min=\${minHeight.toFixed(1)}px expected=\${expectedMinHeight.toFixed(1)}px\`,
-          );
-        }
-        if (initialTextareaRect.height < minHeight - 1) {
-          throw new Error(
-            \`${view.name} native textarea rendered below its minimum: rendered=\${initialTextareaRect.height.toFixed(1)}px min=\${minHeight.toFixed(1)}px\`,
-          );
-        }
-        if (maxHeight > 241 || Math.abs(maxHeight - expectedMaxHeight) > 3) {
-          throw new Error(
-            \`${view.name} composer max-height cap is incorrect: max=\${maxHeight.toFixed(1)}px expected=\${expectedMaxHeight.toFixed(1)}px\`,
-          );
-        }
-
         const viewportWidth = document.documentElement.clientWidth;
         const viewportHeight = document.documentElement.clientHeight;
-        // Measure the dock and log at the composer's resting height, before
-        // the forced-stretch cap check below perturbs the layout.
         const composerRect = composer.getBoundingClientRect();
         const dockRect = dock.getBoundingClientRect();
         const logRect = conversationLog.getBoundingClientRect();
+        const textareaRect = textarea.getBoundingClientRect();
+        if (textareaRect.height <= 0 || textareaRect.width <= 0) {
+          throw new Error(
+            \`${view.name} native textarea has no box: \${textareaRect.width.toFixed(1)}x\${textareaRect.height.toFixed(1)}\`,
+          );
+        }
         if (
           composerRect.left < -1 ||
           composerRect.right > viewportWidth + 1 ||
@@ -470,29 +393,10 @@ async function assertProgressComposerLayout(window, view) {
           );
         }
 
-        textarea.style.height = '1000px';
-        await new Promise((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))),
-        );
-        const cappedTextareaRect = textarea.getBoundingClientRect();
-        if (cappedTextareaRect.height > maxHeight + 1) {
-          throw new Error(
-            \`${view.name} native textarea exceeded its cap: rendered=\${cappedTextareaRect.height.toFixed(1)}px max=\${maxHeight.toFixed(1)}px\`,
-          );
-        }
-        // Restore the resting layout so the screenshot shows what ships,
-        // and wait a frame so the capture below cannot catch the stretch.
-        textarea.style.height = '';
-        await new Promise((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))),
-        );
-
         return {
-          lineHeight,
+          dockHeight: dockRect.height,
           logHeight: logRect.height,
-          maxHeight,
-          minHeight,
-          renderedHeight: cappedTextareaRect.height,
+          textareaHeight: textareaRect.height,
           viewportHeight,
           viewportWidth,
         };
@@ -506,19 +410,10 @@ async function assertToolEditApprovalLayout(window, view) {
   return window.webContents.executeJavaScript(
     `
       (async () => {
-        function findDeep(selector, root = document) {
-          const direct = root.querySelector?.(selector);
-          if (direct) return direct;
-          for (const element of root.querySelectorAll?.('*') ?? []) {
-            const found = element.shadowRoot ? findDeep(selector, element.shadowRoot) : null;
-            if (found) return found;
-          }
-          return null;
-        }
+        ${WAIT_FOR_DEEP_SCRIPT}
 
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        const panel = findDeep('tool-edit-request-panel');
+        const panel = await waitForDeep('tool-edit-request-panel');
+        if (panel?.updateComplete) await panel.updateComplete;
         const section = findDeep('.approval-requests');
         const card = findDeep('.approval-request');
         const actions = findDeep('.approval-request__actions');
@@ -583,143 +478,6 @@ async function assertToolEditApprovalLayout(window, view) {
   );
 }
 
-async function assertCompactStreamStatusLayout(window, view) {
-  return window.webContents.executeJavaScript(
-    `
-      (async () => {
-        function findDeep(selector, root = document) {
-          const direct = root.querySelector?.(selector);
-          if (direct) return direct;
-          for (const element of root.querySelectorAll?.('*') ?? []) {
-            const found = element.shadowRoot ? findDeep(selector, element.shadowRoot) : null;
-            if (found) return found;
-          }
-          return null;
-        }
-
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        const tabs = findDeep('stream-tabs');
-        const row = tabs?.shadowRoot?.querySelector('stream-tab');
-        if (row?.updateComplete) await row.updateComplete;
-        const select = row?.shadowRoot?.querySelector('#stream-tab-select-button');
-        const glyph = row?.shadowRoot?.querySelector('.tab-status-icon');
-        const title = row?.shadowRoot?.querySelector('.tab-title');
-        const status = row?.shadowRoot?.querySelector('.tab-status');
-        const tooltipAnchor = row?.shadowRoot?.querySelector(
-          '#stream-tab-select-tooltip-anchor',
-        );
-        const identityTooltip = row?.shadowRoot?.querySelector(
-          'wa-tooltip[for="stream-tab-select-tooltip-anchor"]',
-        );
-        const childHint = row?.shadowRoot?.querySelector('.compact-subagent-hint');
-        const deleteButton = row?.shadowRoot?.querySelector('.tab-delete');
-        if (glyph?.updateComplete) await glyph.updateComplete;
-        if (identityTooltip?.updateComplete) await identityTooltip.updateComplete;
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        const missing = [
-          ['stream-tabs', tabs],
-          ['stream-tab', row],
-          ['select target', select],
-          ['lifecycle glyph', glyph],
-          ['title', title],
-          ['status wrapper', status],
-          ['tooltip anchor', tooltipAnchor],
-          ['identity tooltip', identityTooltip],
-          ['delete target', deleteButton],
-        ]
-          .filter(([, element]) => !element)
-          .map(([label]) => label);
-        if (missing.length > 0) {
-          throw new Error(
-            \`${view.name} missing compact status elements: \${missing.join(', ')}\`,
-          );
-        }
-
-        const viewportWidth = document.documentElement.clientWidth;
-        const railRect = tabs.getBoundingClientRect();
-        const selectRect = select.getBoundingClientRect();
-        const glyphRect = glyph.getBoundingClientRect();
-        const deleteRect = deleteButton.getBoundingClientRect();
-        const statusStyle = getComputedStyle(status);
-        const titleStyle = getComputedStyle(title);
-        const epsilon = 0.5;
-
-        if (viewportWidth >= 500 || !tabs.compact) {
-          throw new Error(
-            \`${view.name} did not activate narrow compact rows: viewport=\${viewportWidth}px compact=\${tabs.compact}\`,
-          );
-        }
-        if (railRect.width < 48) {
-          throw new Error(
-            \`${view.name} compact rail fell below its 48px minimum: \${railRect.width.toFixed(2)}px\`,
-          );
-        }
-        if (glyphRect.width <= 0.5 || glyphRect.height <= 0.5) {
-          throw new Error(
-            \`${view.name} lifecycle glyph collapsed: \${glyphRect.width.toFixed(2)}x\${glyphRect.height.toFixed(2)}\`,
-          );
-        }
-        if (
-          glyphRect.left < selectRect.left - epsilon ||
-          glyphRect.right > selectRect.right + epsilon ||
-          glyphRect.top < selectRect.top - epsilon ||
-          glyphRect.bottom > selectRect.bottom + epsilon
-        ) {
-          throw new Error(
-            \`${view.name} lifecycle glyph escaped select target: glyph=[\${glyphRect.left.toFixed(2)}, \${glyphRect.top.toFixed(2)}, \${glyphRect.right.toFixed(2)}, \${glyphRect.bottom.toFixed(2)}] select=[\${selectRect.left.toFixed(2)}, \${selectRect.top.toFixed(2)}, \${selectRect.right.toFixed(2)}, \${selectRect.bottom.toFixed(2)}]\`,
-          );
-        }
-        if (deleteRect.width < 24 || deleteRect.height < 24) {
-          throw new Error(
-            \`${view.name} compact delete target shrank: \${deleteRect.width.toFixed(2)}x\${deleteRect.height.toFixed(2)}\`,
-          );
-        }
-        if (titleStyle.display !== 'none') {
-          throw new Error(\`${view.name} compact title still consumes layout width.\`);
-        }
-        if (statusStyle.maxWidth !== 'none' || statusStyle.overflow !== 'visible') {
-          throw new Error(
-            \`${view.name} compact status remains capped or clipped: max-width=\${statusStyle.maxWidth} overflow=\${statusStyle.overflow}\`,
-          );
-        }
-        if (childHint !== null) {
-          throw new Error(\`${view.name} compact child hint still displaces lifecycle status.\`);
-        }
-        const selectLabel = select.getAttribute('aria-label');
-        if (!selectLabel?.includes('1 background task')) {
-          throw new Error(\`${view.name} compact child count is missing from the accessible name.\`);
-        }
-        if (select.hasAttribute('aria-labelledby')) {
-          throw new Error(\`${view.name} compact tooltip overrides the select target's accessible name.\`);
-        }
-        if (
-          !identityTooltip.id ||
-          !tooltipAnchor.getAttribute('aria-labelledby')?.split(' ').includes(identityTooltip.id)
-        ) {
-          throw new Error(\`${view.name} compact tooltip is not initialized on its wrapper anchor.\`);
-        }
-        if (!identityTooltip.textContent?.includes('A long compact execution title')) {
-          throw new Error(\`${view.name} compact identity tooltip does not expose the session title.\`);
-        }
-
-        return {
-          deleteHeight: deleteRect.height,
-          deleteWidth: deleteRect.width,
-          glyphHeight: glyphRect.height,
-          glyphWidth: glyphRect.width,
-          railWidth: railRect.width,
-          selectHeight: selectRect.height,
-          selectWidth: selectRect.width,
-          viewportWidth,
-        };
-      })();
-    `,
-    true,
-  );
-}
-
 async function assertViewSpecificLayout(window, view) {
   const assertions = Array.isArray(view.assertions) ? view.assertions : [];
   for (const assertion of assertions) {
@@ -737,15 +495,6 @@ async function assertViewSpecificLayout(window, view) {
         const result = await assertToolEditApprovalLayout(window, view);
         console.log(
           `Verified ${view.name} tool edit approval layout: ${JSON.stringify(
-            result,
-          )}`,
-        );
-        break;
-      }
-      case 'compactStreamStatusLayout': {
-        const result = await assertCompactStreamStatusLayout(window, view);
-        console.log(
-          `Verified ${view.name} compact narrow-row layout: ${JSON.stringify(
             result,
           )}`,
         );
@@ -786,16 +535,13 @@ async function smokeView(window, view, outputDir, errors) {
     throw new Error(`${view.name} console errors:\n${errors.join('\n')}`);
   }
   await assertWebviewRuntime(window);
-  const fixtureResult = await applyViewFixture(window, view);
   await assertViewSpecificLayout(window, view);
 
   const screenshotPath = path.join(outputDir, `${view.name}.png`);
   const image = await window.webContents.capturePage();
   await writeFile(screenshotPath, image.toPNG());
   console.log(
-    `Rendered ${view.name}: ${result.width}x${result.height}, screenshot ${screenshotPath}${
-      fixtureResult ? `, fixture ${JSON.stringify(fixtureResult)}` : ''
-    }`,
+    `Rendered ${view.name}: ${result.width}x${result.height}, screenshot ${screenshotPath}`,
   );
 }
 

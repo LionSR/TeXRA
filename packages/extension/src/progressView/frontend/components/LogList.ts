@@ -95,8 +95,7 @@ export class LogList extends LitElement {
             aria-relevant=${terminal ? nothing : 'additions'}
             ?hidden=${id !== this.activeStreamId}
             .streamId=${id}
-            .groups=${stream.transcript.taskGroups}
-            .rows=${stream.transcript.rows}
+            .transcript=${stream.transcript}
             .hasStreams=${true}
             .streamStatus=${stream.status}
             .streamDurablyFinal=${stream.durableOutcome !== null}
