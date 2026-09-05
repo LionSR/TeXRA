@@ -133,12 +133,11 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
    * The first view yielded holds the run's stream: a level from before the
    * run entered the session is not this run's and is skipped.
    *
-   * Each view is the runtime's own value, never a copy. The fold replaces
-   * the envelope per level and appends to the maps and arrays beneath it in
-   * place, so a yielded view supersedes the one before it, and a value read
-   * through an older view may already show a later level. The type is
-   * read-only all the way down; a write through a cast corrupts the session
-   * every host and every later run on it reads.
+   * Every yielded view is immutable: an older view stays what it was for as
+   * long as it is held, and a branch the later level did not touch is the
+   * same object in both. The type is read-only all the way down; a write
+   * through a cast corrupts the session every host and every later run on
+   * it reads.
    *
    * The run's transcript rows (`StreamView.transcript`) are resident for the
    * life of the package session, which is the process: its stream and, as
@@ -281,10 +280,10 @@ class AgentRunStream implements AgentRun {
     });
     // The transcript tier folds only for subscribed aggregates (PRD 7.2), on
     // a port of this run's own: its stream now, its descendants as the view
-    // gains them. The port is never cleared: the fold evicts an unsubscribed
-    // stream's rows through the maps a delivered view shares, so clearing
-    // at the terminal view would empty the transcript of the view a consumer
-    // just received. The rows live as long as the session, as a TUI's do.
+    // gains them. The port is never cleared, by choice: the run's rows stay
+    // resident for the life of the package session (the README's residency
+    // contract), as a TUI's do, so a consumer can read the transcript of a
+    // finished run from the latest level as well as from the one it held.
     const port = `sdk/${streamId}`;
     let subscribed = '';
     const subscribe = (ids: readonly StreamTabId[]): void => {
