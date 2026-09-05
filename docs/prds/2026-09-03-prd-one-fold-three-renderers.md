@@ -110,12 +110,14 @@ switch (`main/index.ts:577-596`).
   _Reversed 2026-09-06 by the owner's ruling_ (migration PRD R4 as amended):
   PocketFlow is deleted, not retained. The runtime proposal's six row types
   (`flow.step`, `model.message`, `model.compaction`, `tool.intent`,
-  `tool.result`, `flow.snapshot`) join the section 6 durable set, and
-  `fold(view, input)` gains the `flow.step` arm so the CLI's waiting-on row
-  and the progress board read `StreamView.flow`
-  (`docs/proposals/2026-09-04-agent-runtime-on-effect.md` §6, fifth bullet).
-  Still a non-goal of this PRD's lanes: none of them touches the flow
-  directories; that is lane D of the cutover.
+  `tool.result`, `flow.snapshot`) are section 6 item 9 below, and
+  `fold(view, input)` gains the `flow.step` arm, folded latest-of-type into
+  `StreamView.flow` (5.1), so the CLI's waiting-on row and the progress
+  board read that field
+  (`docs/proposals/2026-09-04-agent-runtime-on-effect.md` §6, sixth bullet,
+  and §5 item 3). Still a non-goal of this PRD's lanes: none of them touches
+  the flow directories; the arm, the field, and the rows land with lane D of
+  the cutover.
 - Changing the persistence substrate; this PRD consumes the event table and
   the durable event set and adds to that set only what section 6 lists.
 - A new UI framework. Components stay Lit and Ink.
@@ -226,6 +228,11 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   runStartedAt: number | null, lastTimestamp: number | null
   conversationProgress: ConversationProgress
   stage: StreamStage | null
+  // latest `flow.step` payload, null until lane D lands (amended 2026-09-06;
+  // migration PRD R4 as amended): the loop's own coordinate, never derived
+  // from stage rows
+  flow: { family: 'toolUse' | 'reflection', step: string, round: number | null,
+          turn: number | null, outcome: string | null } | null
   followUpSupport: UserFollowUpSupport
   parentId: StreamTabId | null
   // root first; evicted parent keeps its last label
@@ -939,6 +946,17 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    `agentCategory` and `isRemote`, which a `status` fact does not have and a
    projection attached at the current ordinal (10.3) cannot recover from a
    historical `run.start`.
+9. **The six flow rows** (added 2026-09-06 by the owner's ruling; migration
+   PRD R4 as amended; enumerated in the runtime proposal §2.1). On the
+   stream aggregate: `flow.step` (`{ family, step, round?, turn?, outcome? }`
+   at round and turn begin and end, `waiting`, `halted`, and the terminal
+   outcome; the fold reads it latest-of-type into `StreamView.flow`). On the
+   execution aggregate, byte-exact and never scrubbed: `model.message`,
+   `model.compaction`, `tool.intent`, `tool.result`, and `flow.snapshot`; the
+   fold never reads them, only `RunLedger` and the trace viewer's stepper do.
+   They are lane D's rows, not this document's lanes', and the eight changes
+   above stay eight; this item exists so the durable set this section
+   enumerates is complete.
 
 **Rename, cut before add (lane 1).** The tombstone this document calls
 `stream.removed` is today's `removeStream` session fact

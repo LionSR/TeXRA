@@ -553,8 +553,10 @@ transition over a graph kernel. That is reversed. There is no PocketFlow, no
 node, no graph, no action string, no cursor, and no flow record. Each flow
 family (document-based reflection, tool use) is one plain Effect loop, written
 with `Effect.fn` and `Effect.gen`, whose only durable act is appending rows to
-the session event table on the execution's own aggregate; run state is a pure
-fold of those rows (`foldRunState`, in `src/shared`), computed the same way on
+the session event table on the run's two aggregates (the stream aggregate for
+`flow.step` and the display rows, the execution aggregate for the byte-exact
+model rows and `flow.snapshot`; proposal §2.1); run state is a pure fold of
+those rows (`foldRunState`, in `src/shared`), computed the same way on
 resume and in the trace viewer, and never persisted. The shape, the six row
 types, the services (`RunLedger`, `RunContext`, `ModelInvoker`, `Tools`,
 `FollowUps`, `OutputPipeline`), and the elimination ledger are specified in
@@ -575,24 +577,36 @@ protocol = the script journal folded into the event table) is the proposal's
 §6, first bullet. Where a subsection below speaks of a cursor, a node, a record,
 or an interpreter, read the corresponding row-model term.
 
-Preparation, external execution, recovery, and state mutation may remain as
+~~Preparation, external execution, recovery, and state mutation may remain as
 small private functions where they clarify a particular node, but the graph
 kernel does not prescribe or dynamically dispatch those phases. Typed recovery
 uses the node's Effect program; the kernel handles only graph transition and
-durable commit.
+durable commit.~~ _Amended 2026-09-06:_ preparation, invocation, dispatch,
+and output are plain functions the two loops call in sequence; there is no
+phase protocol and nothing dispatches them. Typed recovery is the loop's own
+`E` channel.
 
-The requirements type is inferred from the Effect. `BaseNode<S, Svc>`, `Svc`,
+~~The requirements type is inferred from the Effect. `BaseNode<S, Svc>`, `Svc`,
 `_services`, `services`, `setServices()`, and the generic fallback dispatcher
 disappear. Mutable shared state continues to be explicit and schema-validated.
 Each attempt receives a private working copy of the last committed shared
 state. The interpreter publishes that copy only after the authoritative record
 has been written successfully; failed and interrupted attempts cannot leak
-uncommitted mutations through the in-memory record cache.
+uncommitted mutations through the in-memory record cache.~~ _Amended
+2026-09-06:_ `BaseNode`, `Svc`, `_services`, `services`, `setServices()`, and
+the fallback dispatcher are deleted with the engine. Run state stays
+schema-validated (`flow.snapshot` carries the family's Zod state). The
+private-working-copy rule becomes the append rule: a row is the only way
+state becomes durable, the append is the one uninterruptible region, and a
+failed or interrupted turn leaves no row, so nothing uncommitted can be
+observed by a later load.
 
-There are only sixteen production `BaseNode` subclasses at the survey date.
+~~There are only sixteen production `BaseNode` subclasses at the survey date.
 The graph kernel and all subclasses therefore migrate in one bounded phase;
 the repository must not carry Promise-nodes and Effect-nodes as two permanent
-frameworks.
+frameworks.~~ _Amended 2026-09-06:_ the sixteen subclasses, the engine, and
+its three interpreters are deleted in one change (Phase 2 step 2); the
+repository never carries the engine and the loops together.
 
 #### R4.1. The durability membrane is explicit
 
@@ -981,11 +995,19 @@ interrupts the owned root fiber.
 - `RunLedger`, a per-session-root `Context.Service` over `SessionEvents`:
   `append(row) -> Effect<RunState>` and `load(executionId)`. The append is
   the single uninterruptible region and runs under the publisher's permit.
+  `append` returns the state obtained by folding the new row into the
+  current state with the same `foldRunState` step; there is no second
+  reducer, so the state the loop sees after an append is the state a later
+  load would produce at that row.
 - `foldRunState(rows) -> RunState`, pure and data-only in `src/shared`: latest
   `flow.snapshot`, then later `model.compaction`, `model.message`,
-  `tool.result`, and `flow.step` rows in order. It runs in `RunLedger.load`
-  and in the trace viewer's stepper and nowhere else; "state at step k" and
-  "resume would continue after step k" are the same fact.
+  `tool.intent`, `tool.result`, and `flow.step` rows in order. A
+  `tool.intent` with no matching `tool.result` stays in the state as an
+  unresolved intent, which is what lets resume enter the outcome-unknown path
+  for a barrier tool instead of repeating the call (R4.2, proposal §2.3).
+  The function has exactly three callers: `RunLedger.load`,
+  `RunLedger.append` (one step), and the trace viewer's stepper; "state at
+  step k" and "resume would continue after step k" are the same fact.
 
 Persistence validation and atomic writing remain the substrate's boundaries
 (contract C1 to C10 in the persistence substrate decision); nothing in the
@@ -1291,13 +1313,19 @@ lane D of the persistence cutover branch, sequenced and sized by
    `ResponseCycleFlow`, `ToolUseRoundFlow`, all sixteen node classes, the
    disposition ladder, `linkAbortSignals`, `onAbort`, the startup window,
    `p-retry` in the runtime, `resumability.ts`'s parse, the checkpoint arm of
-   `SessionResumeRetrieval`, the engine tests, and the PocketFlow sections of
-   CLAUDE.md, AGENTS.md, and
-   `docs/architecture/2026-06-20-pocketflow-state.md`. Reviewed as one
+   `SessionResumeRetrieval`, the engine tests, and every guidance passage
+   that names the engine: at this commit `rg -l PocketFlow` finds CLAUDE.md,
+   AGENTS.md, `src/README.md`, `.claude/agents/our-code-simplifier.md`,
+   `.claude/skills/code-review/SKILL.md` and its
+   `references/review-checklist.md`,
+   `.claude/skills/find-simplification/SKILL.md`, and
+   `docs/architecture/2026-06-20-pocketflow-state.md`; the PR re-runs that
+   search and `npm run check:guidance-refs` is the gate. Reviewed as one
    because splitting it is what creates a shim.
 3. **Replay along the flow.** `TraceDocument.steps` with `commit`, the
-   viewer scrubber over `foldRunState`, the `flow.transition` arm in the
-   session fold.
+   viewer scrubber over `foldRunState`, the `flow.step` arm in the session
+   fold (the proposal's §5 PR 3 writes `flow.transition`; the declared row
+   type is `flow.step` and there is no seventh discriminator).
 4. **One child protocol.** Workflow-script journal rows into the event table
    under the script run's aggregate; `workflowScript/persistence.ts`,
    `ChildTurnState`, and the turn-state writes in `childRunLoop.ts` deleted.
@@ -1317,13 +1345,14 @@ into the event table) is step 4. The `executeAgent` and `AgentRunLifecycle`
 interiors stay in Stage 3a, and the native-delegation, in-band, and
 child-run-loop launch paths stay in Phase 4.
 
-Three of the proposal's §7 decisions remain with the owner and do not block
-step 1: the C9 retention window for byte-exact conversation rows; whether the
-`approval.requested` / `approval.resolved` rows for outcome-unknown barrier
-tools and the manual-retry prompt land in step 2 (the arms already exist in the
-session vocabulary since lane 1 of the one-fold PRD, so step 2 is the
-default); and confirmation that step 4 is in scope (it is, by the
-no-intermediates rule, unless the owner says otherwise).
+Two of the proposal's §7 decisions remain with the owner and do not block
+step 1: the C9 retention window for byte-exact conversation rows, and whether
+the `approval.requested` / `approval.resolved` rows for outcome-unknown
+barrier tools and the manual-retry prompt land in step 2 (the arms already
+exist in the session vocabulary since lane 1 of the one-fold PRD, so step 2
+is the default). The proposal's fourth item, whether step 4 is in scope, is
+closed: section 15 decision 7 records one physical record, and step 4 is how
+that record comes to exist.
 
 ### Phase 3 — run lifecycle and cancellation
 
@@ -1584,25 +1613,25 @@ custom runtime machinery.
 
 ## 12. Risks and mitigations
 
-| Risk                          | Consequence                                                                                 | Mitigation                                                                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| RC API churn                  | Repeated mechanical changes distract from product work.                                     | Exact pinning; dedicated upgrade PRs; stable modules only; no automatic dependency updates.                                                |
-| Wrapper-only adoption         | The repository gains Effect without deleting complexity.                                    | Replacement-must-delete rule and phase acceptance gates.                                                                                   |
-| Layer multiplication          | Existing fields acquire tags, constructors, and test wrappers without changing ownership.   | Service census, semantic grouping, one carrier per lifetime, and rejection of trivial layer modules.                                       |
-| Two runtimes per host         | Stateful layers duplicate queues, caches, or resources.                                     | One managed runtime owned by each host process; architecture test for constructors.                                                        |
-| Effect leaks into public APIs | SDK consumers acquire a new programming model involuntarily.                                | Promise adapters remain the published surface.                                                                                             |
-| Error semantics change        | Cancellation or defects become user-facing failures, or vice versa.                         | Preserve the current outer classifier; test `Exit` mapping at one boundary.                                                                |
-| Catch-all migration           | Broad recovery handlers swallow interruption or defects under a new API.                    | Classify every touched catch; prefer tagged recovery; permit raw catch only in named foreign adapters.                                     |
-| Iteration conflation          | A durable round or paid model continuation is treated as an ephemeral retry.                | Distinct coordinate types and failure-injection tests at every durable iteration boundary.                                                 |
-| Workflow rewrite drift        | Script replay identity, sandbox behavior, or child delivery changes during runtime cleanup. | Keep the script/journal interpreter authoritative; extract only the common child activity and runtime mechanics.                           |
-| Durable flow behavior changes | Resume records or node identifiers become incompatible.                                     | Preserve version 2 exactly through Stage 3a; Stage 3b needs an explicit version, reader-outlives-writer rollback, and retirement decision. |
-| External action is repeated   | Recovery duplicates a tool write, charge, or subagent launch.                               | Replay classification, stable idempotency keys, immediate checkpoints, and an explicit unknown-outcome state.                              |
-| Interruption races a commit   | The caller retries while the previous atomic write is still running.                        | Keep node work interruptible but mask the short write-and-cache-publication critical region.                                               |
-| Excess abstraction            | Fine-grained service classes make simple code harder to read.                               | Service boundaries follow existing ports and co-usage; pure arguments stay arguments.                                                      |
-| Bundle growth                 | Extension, CLI, or SDK distribution becomes materially larger.                              | Phase 0 size gate; tree-shaken imports; no Effect in browser code.                                                                         |
-| Finalizer-order drift         | Shutdown behavior changes subtly.                                                           | Record current order before conversion; use sequential scopes where ordering is semantic.                                                  |
-| Training cost                 | Contributors write unsafe or non-idiomatic Effect code.                                     | Small repository guide, boundary lint rules, and examples from migrated TeXRA code.                                                        |
-| False promise of correctness  | Teams expect Effect to repair domain ownership automatically.                               | Explicit non-solution list and unchanged single-authority rulings.                                                                         |
+| Risk                          | Consequence                                                                                 | Mitigation                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RC API churn                  | Repeated mechanical changes distract from product work.                                     | Exact pinning; dedicated upgrade PRs; stable modules only; no automatic dependency updates.                                                                                                                 |
+| Wrapper-only adoption         | The repository gains Effect without deleting complexity.                                    | Replacement-must-delete rule and phase acceptance gates.                                                                                                                                                    |
+| Layer multiplication          | Existing fields acquire tags, constructors, and test wrappers without changing ownership.   | Service census, semantic grouping, one carrier per lifetime, and rejection of trivial layer modules.                                                                                                        |
+| Two runtimes per host         | Stateful layers duplicate queues, caches, or resources.                                     | One managed runtime owned by each host process; architecture test for constructors.                                                                                                                         |
+| Effect leaks into public APIs | SDK consumers acquire a new programming model involuntarily.                                | Promise adapters remain the published surface.                                                                                                                                                              |
+| Error semantics change        | Cancellation or defects become user-facing failures, or vice versa.                         | Preserve the current outer classifier; test `Exit` mapping at one boundary.                                                                                                                                 |
+| Catch-all migration           | Broad recovery handlers swallow interruption or defects under a new API.                    | Classify every touched catch; prefer tagged recovery; permit raw catch only in named foreign adapters.                                                                                                      |
+| Iteration conflation          | A durable round or paid model continuation is treated as an ephemeral retry.                | Distinct coordinate types and failure-injection tests at every durable iteration boundary.                                                                                                                  |
+| Workflow rewrite drift        | Script replay identity, sandbox behavior, or child delivery changes during runtime cleanup. | Keep the script/journal interpreter authoritative; extract only the common child activity and runtime mechanics.                                                                                            |
+| Durable flow behavior changes | Resume records or node identifiers become incompatible.                                     | Amended 2026-09-06: the version 2 record is read once by the importer into `flow.snapshot` and never written again; row types are versioned by the substrate (C1); rollback is the cutover branch's revert. |
+| External action is repeated   | Recovery duplicates a tool write, charge, or subagent launch.                               | Replay classification, stable idempotency keys, immediate checkpoints, and an explicit unknown-outcome state.                                                                                               |
+| Interruption races a commit   | The caller retries while the previous atomic write is still running.                        | Keep node work interruptible but mask the short write-and-cache-publication critical region.                                                                                                                |
+| Excess abstraction            | Fine-grained service classes make simple code harder to read.                               | Service boundaries follow existing ports and co-usage; pure arguments stay arguments.                                                                                                                       |
+| Bundle growth                 | Extension, CLI, or SDK distribution becomes materially larger.                              | Phase 0 size gate; tree-shaken imports; no Effect in browser code.                                                                                                                                          |
+| Finalizer-order drift         | Shutdown behavior changes subtly.                                                           | Record current order before conversion; use sequential scopes where ordering is semantic.                                                                                                                   |
+| Training cost                 | Contributors write unsafe or non-idiomatic Effect code.                                     | Small repository guide, boundary lint rules, and examples from migrated TeXRA code.                                                                                                                         |
+| False promise of correctness  | Teams expect Effect to repair domain ownership automatically.                               | Explicit non-solution list and unchanged single-authority rulings.                                                                                                                                          |
 
 ## 13. Alternatives considered
 
@@ -1682,8 +1711,10 @@ unless the repository owner explicitly amends it.
    Phase 7.
 6. ~~Whether nested durable progress uses a hierarchical cursor, an activity
    ledger, or both.~~ **Decided 2026-09-06 by the owner's ruling:** there is
-   no cursor of either kind. Progress is the row ledger on the execution
-   aggregate (R4 as amended); `flow.snapshot` is the only derived row.
+   no cursor of either kind. Progress is the row ledger on the run's two
+   aggregates (`flow.step` on the stream aggregate, the model rows and
+   `flow.snapshot` on the execution aggregate; R4 as amended);
+   `flow.snapshot` is the only derived row.
 7. ~~Whether PocketFlow activities and workflow-script child calls share one
    physical activity record or only one protocol over their existing stores.~~
    **Decided 2026-09-06:** one physical record, the session event table, with
