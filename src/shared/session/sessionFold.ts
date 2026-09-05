@@ -349,12 +349,12 @@ function replaceTranscript(
   return next;
 }
 
-/** A replaced transcript value whose arrays this call may write: the arms
- *  that upsert rows or task groups start here, once per call. */
+/** A replaced transcript value whose rows this call may write: the arms
+ *  that upsert rows start here, once per call. `applyEntry`, the one arm
+ *  that also writes task groups, copies that array itself. */
 function writableTranscript(transcript: TranscriptView): TranscriptView {
   return replaceTranscript(transcript, {
     rows: writableArray(transcript.rows),
-    taskGroups: writableArray(transcript.taskGroups),
   });
 }
 
@@ -964,7 +964,10 @@ function applyEntry(
   stream: StreamView,
   entry: StreamLogEntry,
 ): TranscriptView {
-  const next = writableTranscript(stream.transcript);
+  const next = replaceTranscript(stream.transcript, {
+    rows: writableArray(stream.transcript.rows),
+    taskGroups: writableArray(stream.transcript.taskGroups),
+  });
   const indexes = indexesOf(next);
   upsertTaskGroupFromStreamLog(next.taskGroups, indexes.taskGroupIndex, entry);
   const marker = workflowMarkerOf(entry);
