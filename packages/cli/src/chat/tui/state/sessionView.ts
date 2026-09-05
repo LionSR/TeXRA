@@ -122,21 +122,6 @@ export function streamLabelOf(stream: StreamView): string {
   return stream.parentId === null ? 'main' : stream.label;
 }
 
-/**
- * The focus tree of one root: the root, then its children in the fold's
- * `childIds` order (newest creation first, PRD 5.2 `streamOrdering`), so
- * Alt+1 names the newest child (the Surface's Alt-index rule, PRD 9). A
- * grandchild is reached through its own parent's list.
- */
-export function focusTreeOf(
-  view: SessionView,
-  rootStreamId: StreamTabId | undefined,
-): readonly StreamTabId[] {
-  const root = streamViewOf(view, rootStreamId);
-  if (!root) return [];
-  return [root.id, ...root.childIds];
-}
-
 /** The stream's phase: undefined before the first `status` folds. */
 export function streamPhaseOf(
   stream: StreamView | undefined,

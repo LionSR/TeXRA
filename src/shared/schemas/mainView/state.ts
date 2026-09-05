@@ -1,17 +1,16 @@
 /**
- * MainView state and data schemas (option rows, persisted state, banners,
+ * MainView state and data schemas (option rows, banners,
  * file state, and event detail shapes). Kept free of any IPC message wrappers
  * so the message modules can compose these without circular dependencies.
  */
 import { z } from 'zod';
 
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { AgentCategorySchema, AgentSourceSchema } from '@shared/schemas/agent';
 import {
   TEXRA_ICON_CANONICAL_NAMES,
   type TeXRAIconName,
 } from '@shared/wa/iconNames';
-import { UIFileFieldsSchema, requiredFileListFields } from '../fileFields';
+import { requiredFileListFields } from '../fileFields';
 import {
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,
@@ -35,7 +34,6 @@ export type SessionType = z.infer<typeof SessionTypeSchema>;
 
 /** Who runs a main-view request: a single agent or a multi-agent team. */
 export const LaunchTargetSchema = z.enum(['agent', 'team']);
-export type LaunchTarget = z.infer<typeof LaunchTargetSchema>;
 
 // ============================================================
 // Option Data Schemas
@@ -139,40 +137,6 @@ export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
 export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
 
 // ============================================================
-// Persisted State Schema
-// ============================================================
-
-// Composes: UIFileFieldsSchema (file fields) + workflow tool options.
-export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
-  ToolConfigFieldsSchema,
-).extend({
-  sessionType: SessionTypeSchema.prefault('toolUse'),
-  launchTarget: LaunchTargetSchema.prefault('agent'),
-  selectedTeamId: z.string().prefault(''),
-  workingDirectory: z.string().prefault(''),
-  agent: z
-    .object({
-      workflow: z.string().prefault('correct'),
-      toolUse: z.string().prefault('orchestrator'),
-    })
-    .prefault({}),
-  model: z.string().prefault(DEFAULT_AGENT_MODEL),
-  commit: z.string().prefault('HEAD'),
-  instruction: z
-    .object({
-      workflow: z.string().prefault(''),
-      toolUse: z.string().prefault(''),
-    })
-    .prefault({}),
-  baseFile: z.string().prefault(''),
-  latexdiffsVisible: z.boolean().prefault(false),
-  openedFiles: z.array(z.string()).nullish(),
-});
-export type MainViewPersistedState = z.infer<
-  typeof MainViewPersistedStateSchema
->;
-
-// ============================================================
 // Banner State Schemas
 // ============================================================
 
@@ -239,13 +203,8 @@ export const FileOptionsSchema = z.object({
 });
 export type FileOptions = z.infer<typeof FileOptionsSchema>;
 
-const MultiFilesSchema = z.object(requiredFileListFields);
-export type MultiFiles = z.infer<typeof MultiFilesSchema>;
-
-// Enumerates the four `MultiFiles` keys (`inputFiles` / `contextFiles` /
-// `mediaFiles` / `outputFiles`) so `listId` fields below are constrained to
-// valid `keyof MultiFiles` values instead of an unconstrained `z.string()`.
-const MultiFilesKeySchema = MultiFilesSchema.keyof();
+// Enumerates the four multi-file keys so listId fields below name a file list.
+const MultiFilesKeySchema = z.object(requiredFileListFields).keyof();
 
 const StringValueDetailSchema = z.object({
   value: z.string(),

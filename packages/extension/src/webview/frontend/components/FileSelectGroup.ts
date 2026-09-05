@@ -9,7 +9,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import { designTokens } from '@shared/styles';
 import {
-  MainViewPersistedStateSchema,
+  ToolConfigFieldsSchema,
   type CheckboxValues,
   type DocumentFileType,
   type FileSelectConfig,
@@ -25,7 +25,6 @@ import { capitalize, formatResultCount } from '@utils/text/stringUtils';
 import { MainViewEvents } from '../events';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { SESSION_TYPES } from '../constants';
-import { SESSION_DEFAULTS } from '../sessionDefaults';
 import { fileSelectStyles } from '../fileSelectStyles';
 
 @customElement('file-select-group')
@@ -66,7 +65,7 @@ export class FileSelectGroup extends LitElement {
 
   /** The tool and auto-extract toggles (`Surface.launch`). */
   @property({ attribute: false }) checkboxValues: CheckboxValues =
-    MainViewPersistedStateSchema.parse({});
+    ToolConfigFieldsSchema.parse({});
 
   /** The launch mode: a tool-use session takes no input files. */
   @property() sessionType: SessionType = SESSION_TYPES.WORKFLOW;
@@ -164,7 +163,7 @@ export class FileSelectGroup extends LitElement {
   }
 
   private get isFileInputDisabled(): boolean {
-    return !SESSION_DEFAULTS[this.sessionType].fileInputEnabled;
+    return this.sessionType === SESSION_TYPES.TOOL_USE;
   }
 
   /**

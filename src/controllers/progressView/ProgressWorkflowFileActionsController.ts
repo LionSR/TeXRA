@@ -9,6 +9,7 @@ import type {
   ReadonlyRoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { StreamOutputsSource } from './streamOutputs';
@@ -50,6 +51,25 @@ export class ProgressWorkflowFileActionsController {
   constructor(
     private readonly deps: ProgressWorkflowFileActionsControllerDeps,
   ) {}
+
+  /** Apply an output-file request from either GUI host. */
+  async handle(
+    request: Extract<HostRequest, { kind: 'fileAction' }>,
+  ): Promise<void> {
+    const base = request.base ?? undefined;
+    switch (request.action) {
+      case 'compareOriginal':
+        return this.compareOriginal(request.file, base, request.streamId);
+      case 'comparePrevious':
+        return this.comparePrevious(request.file, request.prev ?? undefined);
+      case 'accept':
+        return this.acceptFile(request.file, base, request.streamId);
+      case 'merge':
+        return this.mergeFile(request.file, base);
+      case 'latexdiff':
+        return this.latexdiffFile(request.file, base);
+    }
+  }
 
   async openTaskStorage(stream: StreamTabId): Promise<void> {
     try {

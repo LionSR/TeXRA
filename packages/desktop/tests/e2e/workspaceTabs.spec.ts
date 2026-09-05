@@ -39,6 +39,7 @@ test.beforeAll(async () => {
     'export const projectTreeLoaded = true;\n',
     'utf8',
   );
+  writeFileSync(join(workspacePath, 'paper-retention.tex'), 'Paper A.\n');
   mkdirSync(join(workspacePath, 'src', 'components'), { recursive: true });
   writeFileSync(
     join(workspacePath, 'src', 'components', 'Panel.ts'),
@@ -96,21 +97,12 @@ test('opens with a permanent task conversation and no workbench', async () => {
   );
   await expect(page.locator('.task-conversation')).toBeVisible();
   await expect(
-    page.locator('.task-conversation-pane[data-pane="launcher"]:not([hidden])'),
+    page.locator('.task-conversation-pane[data-pane="conversation"]'),
   ).toBeVisible();
   await expect(
-    page.locator('main-app[data-desktop-view="main"]'),
+    page.locator('progress-app[data-desktop-view="progress"]'),
   ).toBeVisible();
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          document
-            .querySelector('main-app')
-            ?.shadowRoot?.querySelector('.launcher-loading') != null,
-      ),
-    )
-    .toBe(false);
+  await expect(page.locator('session-composer.launch-composer')).toBeVisible();
   await expect(page.locator('.task-workbench:visible')).toHaveCount(0);
 });
 
@@ -150,7 +142,7 @@ test('loads the project tree before an editor panel is opened', async () => {
   ).toHaveCount(0);
 });
 
-test('resizes the window canvas, project sidebar, and project/task sections', async () => {
+test('resizes the window canvas and paper sidebar', async () => {
   const { page } = launched;
 
   const contentBounds = await setContentSize(1500, 900);
@@ -181,33 +173,6 @@ test('resizes the window canvas, project sidebar, and project/task sections', as
   await expect
     .poll(async () => (await sidebar.boundingBox())?.width ?? 0)
     .toBeGreaterThan(initialSidebarWidth + 40);
-
-  await page.locator('.task-sidebar-scroll').evaluate(async (element) => {
-    await (element as HTMLElement & { updateComplete: Promise<unknown> })
-      .updateComplete;
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
-  });
-  const projectDividerY = (): Promise<number> =>
-    page.locator('.task-sidebar-scroll').evaluate((element) => {
-      const divider = element.shadowRoot?.querySelector('[part~="divider"]');
-      if (!(divider instanceof HTMLElement)) {
-        throw new Error('Project/Tasks divider was not rendered.');
-      }
-      return divider.getBoundingClientRect().y;
-    });
-  const initialSectionDividerY = await projectDividerY();
-
-  await page
-    .locator('.task-sidebar-scroll > [part~="divider"]')
-    .first()
-    .focus();
-  await page.keyboard.press('Shift+ArrowDown');
-  await expect
-    .poll(projectDividerY)
-    .toBeGreaterThan(initialSectionDividerY + 40);
-  await expect(page.locator('.task-history-section')).toBeVisible();
 });
 
 test('aligns titlebar content and keeps the collapsed toggle clear of macOS controls', async () => {
@@ -262,89 +227,41 @@ test('keeps the composer grouped and centered at compact widths', async () => {
     .toBe(contentBounds.width);
 
   const layout = await page.evaluate(() => {
-    const mainApp = document.querySelector('main-app');
-    const panel =
-      mainApp?.shadowRoot?.querySelector<HTMLElement>('instruction-panel');
-    const root = panel?.shadowRoot;
-    const box = root?.querySelector<HTMLElement>('.instruction-box');
-    const mode = root?.querySelector<HTMLElement>('.desktop-mode-controls');
-    const agent = root?.querySelector<HTMLElement>('.agent-select-group');
-    const model = root?.querySelector<HTMLElement>('.model-select-group');
-    const settings = root?.querySelector<HTMLElement>('#agentSettingsButton');
-    const settingsBase =
-      settings?.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
-    const settingsIcon = settings?.querySelector<HTMLElement>('wa-icon');
-    const settingsSvg =
-      settingsIcon?.shadowRoot?.querySelector<SVGElement>('svg');
-    const execute = root?.querySelector<HTMLElement>('#executeButton');
-    const executeBase =
-      execute?.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
-    const sendIcon = execute?.querySelector<HTMLElement>('wa-icon');
-    if (
-      !box ||
-      !mode ||
-      !agent ||
-      !model ||
-      !settingsBase ||
-      !settingsIcon ||
-      !settingsSvg ||
-      !executeBase ||
-      !sendIcon
-    ) {
-      throw new Error('Desktop composer controls were not mounted.');
+    const root = document
+      .querySelector('progress-app')
+      ?.shadowRoot?.querySelector('session-composer')?.shadowRoot;
+    const box = root?.querySelector<HTMLElement>('.composer');
+    const chips = [
+      ...(root?.querySelectorAll<HTMLElement>('.chips, .chips-collapsed') ??
+        []),
+    ].find((element) => element.getClientRects().length > 0);
+    const tools = root?.querySelector<HTMLElement>('.tools');
+    const send = root?.querySelector<HTMLElement>('#composer-send');
+    if (!box || !chips || !tools || !send) {
+      throw new Error('Conversation composer controls were not mounted.');
     }
-
     const boxRect = box.getBoundingClientRect();
-    const modeRect = mode.getBoundingClientRect();
-    const agentRect = agent.getBoundingClientRect();
-    const modelRect = model.getBoundingClientRect();
-    const settingsBaseRect = settingsBase.getBoundingClientRect();
-    const settingsIconRect = settingsIcon.getBoundingClientRect();
-    const settingsSvgRect = settingsSvg.getBoundingClientRect();
-    const buttonRect = executeBase.getBoundingClientRect();
-    const sendIconRect = sendIcon.getBoundingClientRect();
+    const chipsRect = chips.getBoundingClientRect();
+    const toolsRect = tools.getBoundingClientRect();
+    const sendRect = send.getBoundingClientRect();
     return {
       overflow: box.scrollWidth - box.clientWidth,
-      controlsInside: [modeRect, agentRect, modelRect, buttonRect].every(
+      controlsInside: [chipsRect, toolsRect, sendRect].every(
         (rect) =>
           rect.left >= boxRect.left - 1 &&
           rect.right <= boxRect.right + 1 &&
           rect.top >= boxRect.top - 1 &&
           rect.bottom <= boxRect.bottom + 1,
       ),
-      modeCenter: (modeRect.top + modeRect.bottom) / 2,
-      agentCenter: (agentRect.top + agentRect.bottom) / 2,
-      modelBottom: modelRect.bottom,
-      buttonBottom: buttonRect.bottom,
-      verticalSendIconOffset:
-        (sendIconRect.top + sendIconRect.bottom) / 2 -
-        (buttonRect.top + buttonRect.bottom) / 2,
-      settingsIconOffset: {
-        x:
-          (settingsSvgRect.left + settingsSvgRect.right) / 2 -
-          (settingsBaseRect.left + settingsBaseRect.right) / 2,
-        y:
-          (settingsSvgRect.top + settingsSvgRect.bottom) / 2 -
-          (settingsBaseRect.top + settingsBaseRect.bottom) / 2,
-      },
-      settingsHostOffset: {
-        x:
-          (settingsIconRect.left + settingsIconRect.right) / 2 -
-          (settingsBaseRect.left + settingsBaseRect.right) / 2,
-        y:
-          (settingsIconRect.top + settingsIconRect.bottom) / 2 -
-          (settingsBaseRect.top + settingsBaseRect.bottom) / 2,
-      },
+      controlsCenterOffset:
+        (chipsRect.top + chipsRect.bottom - toolsRect.top - toolsRect.bottom) /
+        2,
     };
   });
 
   expect(layout.overflow).toBe(0);
   expect(layout.controlsInside).toBe(true);
-  expect(Math.abs(layout.modeCenter - layout.agentCenter)).toBeLessThan(1);
-  expect(Math.abs(layout.buttonBottom - layout.modelBottom)).toBeLessThan(1);
-  expect(Math.abs(layout.verticalSendIconOffset)).toBeLessThan(1);
-  expect(layout.settingsHostOffset).toEqual({ x: 0, y: 0 });
-  expect(layout.settingsIconOffset).toEqual({ x: 0, y: 0 });
+  expect(Math.abs(layout.controlsCenterOffset)).toBeLessThan(1);
 
   await setContentSize(1500, 900);
 });
@@ -380,7 +297,9 @@ test('opens settings beside the permanent conversation', async () => {
   await openSidebarWorkbench('Settings');
 
   await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
-  await expect(page.locator('.task-workbench')).toBeVisible();
+  await expect(
+    page.locator('.task-workbench[data-placement="right"]'),
+  ).toBeVisible();
   await expect(
     page.locator(
       '.task-workbench-surface settings-app[data-desktop-view="settings"]',
@@ -389,7 +308,9 @@ test('opens settings beside the permanent conversation', async () => {
   await expect(page.locator('.task-conversation')).toBeVisible();
 
   // Hiding the workbench must leave the task canvas mounted and visible.
-  await page.locator('.task-workbench-close').click();
+  await page
+    .locator('.task-workbench[data-placement="right"] .task-workbench-close')
+    .click();
   await expect(page.locator('.task-shell')).toHaveAttribute(
     'data-workbench-open',
     'false',
@@ -430,7 +351,7 @@ test('toggles and restores the bottom, side, and summary bars', async () => {
   }
 
   await bottomToggle.click();
-  await expect(bottomWorkbench).toHaveCount(0);
+  await expect(bottomWorkbench).toBeHidden();
   await expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.task-sidebar-footer')).toBeVisible();
 
@@ -465,7 +386,10 @@ test('moves tabs between Bottom and Right from the context menu', async () => {
   await expect(
     terminalTab.locator('xpath=ancestor::aside[@data-placement="right"]'),
   ).toBeVisible();
-  await expect(page.locator('.task-bottom-split')).toHaveCount(0);
+  await expect(page.locator('.task-shell')).toHaveAttribute(
+    'data-bottom-panel-open',
+    'false',
+  );
 
   await terminalTab.click({ button: 'right' });
   await terminalTab.locator('wa-dropdown-item[value="move-bottom"]').click();
@@ -577,7 +501,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     platform === 'darwin' ? '⌘⇧J' : 'Ctrl+Shift+J',
   );
 
-  await page.locator('.task-header-title').click();
+  await recorder.evaluate((element) => (element as HTMLElement).blur());
   await page.keyboard.press(customShortcut);
   await expect(
     page.locator('wa-dialog.desktop-command-palette'),
@@ -820,14 +744,14 @@ test('keeps paper workbenches alive across selection and releases them on closur
       .getAttribute('title');
     expect(paperA).toBeTruthy();
     await page
-      .locator('.desktop-editor-tree-row[data-path="sample.tex"]')
+      .locator('.desktop-editor-tree-row[data-path="paper-retention.tex"]')
       .click();
     const editor = page.locator(
       '.desktop-editor-surface .monaco-editor:visible',
     );
     await expect(editor).toBeVisible({ timeout: 20_000 });
-    await expect(editor.locator('.view-lines')).toContainText('hello');
-    await editor.locator('.view-line').filter({ hasText: 'hello' }).click();
+    await expect(editor.locator('.view-lines')).toContainText('Paper A.');
+    await editor.locator('.view-line').filter({ hasText: 'Paper A.' }).click();
     await page.keyboard.type('paper-a-unsaved');
     await expect(editor.locator('.view-lines')).toContainText(
       'paper-a-unsaved',

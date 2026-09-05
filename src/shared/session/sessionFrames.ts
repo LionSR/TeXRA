@@ -86,7 +86,12 @@ const RequestErrorWireSchema = z.discriminatedUnion('_tag', [
     streamId: StreamTabIdSchema,
     reason: z.string(),
   }),
-  z.object({ _tag: z.literal('Rejected'), reason: z.string() }),
+  z.object({ _tag: z.literal('Cancelled') }),
+  z.object({
+    _tag: z.literal('Rejected'),
+    reason: z.string(),
+    docsCommand: z.string().optional(),
+  }),
   z.object({ _tag: z.literal('Invalid'), reason: z.string() }),
   z.object({ _tag: z.literal('Internal'), ref: RequestIdSchema }),
 ]);

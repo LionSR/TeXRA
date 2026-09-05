@@ -73,3 +73,83 @@ function escapeAttributeValue(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
 }
+
+/**
+ * The host bridge a webview acquires, playing the host for one session:
+ * the persisted surface (so a selected stream reopens selected), and an
+ * events frame in answer to every `subscribe`, cut like `SessionFramer`
+ * cuts one. Every request is answered as done.
+ */
+export function renderSessionHarnessBridge({
+  nonce,
+  sessionKey,
+  owner,
+  session,
+  messagesKey,
+  nowMs,
+}) {
+  const state = session
+    ? {
+        [`surface:${sessionKey}`]: {
+          selected: session.selected,
+          ...session.surface,
+        },
+      }
+    : undefined;
+  const source = `
+    ${nowMs === undefined ? '' : `Date.now = () => ${nowMs};`}
+    const harnessSession = ${JSON.stringify(session ?? null)};
+    const harnessLocal = { self: [${JSON.stringify(owner)}], heldBy: [], unreadable: [] };
+    function harnessFrame(subscribe) {
+      const named = new Set(subscribe.aggregates.map((aggregate) => aggregate.id));
+      const events = harnessSession.events.flatMap((event) => {
+        if (event.type !== 'transcript.entry') {
+          return [{ _tag: 'event', read: 'listing', event }];
+        }
+        return named.has(event.aggregateId)
+          ? [{ _tag: 'event', read: 'aggregate', event }]
+          : [];
+      });
+      return {
+        kind: 'events',
+        session: subscribe.session,
+        generation: subscribe.generation,
+        cursor: harnessSession.events.reduce((max, event) => Math.max(max, event.commit), 0),
+        events,
+        chunks: [],
+        local: harnessLocal,
+        host: harnessSession.host,
+        replayComplete: true,
+      };
+    }
+    const texraHarnessBridge = {
+      _state: ${JSON.stringify(state)},
+      postMessage(message) {
+        (window[${JSON.stringify(messagesKey)} ] ??= []).push(message);
+        if (!harnessSession) return;
+        if (message.kind === 'subscribe') {
+          window.postMessage(harnessFrame(message), '*');
+        } else if (message.kind === 'runtime.request' || message.kind === 'host.request') {
+          window.postMessage(
+            {
+              kind: 'response',
+              session: message.session,
+              requestId: message.requestId,
+              result: { ok: true, outcome: { kind: 'done' } },
+            },
+            '*',
+          );
+        }
+      },
+      getState() {
+        return this._state;
+      },
+      setState(state) {
+        this._state = state;
+      },
+    };
+    window.__texraHostBridgeApi = texraHarnessBridge;
+    window.acquireVsCodeApi = () => texraHarnessBridge;
+  `;
+  return `<script nonce="${nonce}">${source}</script>`;
+}
