@@ -1460,6 +1460,10 @@ describe('DesktopProgressBridge', () => {
       kind: 'round',
       index: 2,
     });
+    // The renderer-facing push follows the fold, so the stream's provisional
+    // creation timestamp is minted when the tail delivers, not at publish.
+    // Let it land before the clock moves on.
+    await settleProgressEvents();
     vi.spyOn(Date, 'now').mockReturnValue(2_000);
     bridgeSession(bridge).executions.track(
       testExecutionHandle({
@@ -1531,6 +1535,7 @@ describe('DesktopProgressBridge', () => {
       streamId: 'new-stream',
       status: STREAM_STATUS.RUNNING,
     });
+    await settleProgressEvents();
 
     expect(
       messages.map((message) => (message as ProgressMessage).command),
