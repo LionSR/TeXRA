@@ -347,11 +347,25 @@ describe('Sessions owner', () => {
     track(session, 'exec:settled');
     // The run completes: its driver untracks it as it unwinds.
     session.executions.untrack('exec:settled');
+    // A native child between turns, detached from its stopped parent: its
+    // activation is its only record, so the close must stop it itself, and
+    // wait for the loop to release the activation after its last delivery.
+    let releaseChild = (): void => {};
+    const interrupt = vi.fn(() => releaseChild());
+    releaseChild = session.executions.reserveChildActivation({
+      executionId: 'exec:child' as ExecutionId,
+      parentStreamId: 'stream:exec:settled' as StreamTabId,
+      childStreamId: 'stream:exec:child' as StreamTabId,
+      interrupt,
+      detach: () => {},
+      isDetached: () => true,
+    });
 
     await expect(closeSession('/workspace/owner/settled')).resolves.toEqual({
       settled: true,
       abandoned: [],
     });
+    expect(interrupt).toHaveBeenCalledOnce();
     expect(isLive(session)).toBe(false);
   });
 

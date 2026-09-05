@@ -324,8 +324,9 @@ export class ExecutionRegistry {
   /**
    * Refuse every execution registered from here on: the session is closing
    * (`Sessions.close`). The executions already tracked keep their handles,
-   * waiters, and status until they settle, which is what the close waits
-   * for; only new admissions are turned away.
+   * waiters, and status until they settle, and a native child loop keeps
+   * its activation until its final delivery, which is what the close waits
+   * for ({@link getActiveIds}); only new admissions are turned away.
    */
   closeAdmissions(): void {
     this.closing = true;
@@ -493,10 +494,19 @@ export class ExecutionRegistry {
     return { kind: 'no_session', streamStatus: status };
   }
 
-  /** Terminate an execution via its handle. Returns true on success. */
+  /**
+   * Terminate an execution via its handle, or, for a native child loop
+   * between turns (an activation with no turn handle), interrupt the loop
+   * itself. Returns true on success.
+   */
   kill(executionId: string, options: ExecutionStopOptions = {}): boolean {
     const handle = this.handles.get(executionId);
-    if (!handle) return false;
+    if (!handle) {
+      const activation = this.childActivations.get(executionId);
+      activation?.interrupt();
+      this.notifyWaiters(executionId);
+      return activation !== undefined;
+    }
     const visited = new Set<string>();
     if (options.detachActiveChildren === true) {
       this.detachActiveChildren(handle.childStreamId);
@@ -512,8 +522,17 @@ export class ExecutionRegistry {
     return result;
   }
 
+  /**
+   * Every execution live in this session: the tracked handles and the
+   * native child loops retained between turns, whose activation is the
+   * only record of them. This is what a close stops and waits on, so a
+   * child with final delivery still to do is never left running under a
+   * released session.
+   */
   getActiveIds(): string[] {
-    return [...this.handles.keys()];
+    return [
+      ...new Set([...this.handles.keys(), ...this.childActivations.keys()]),
+    ];
   }
 
   /**
@@ -861,5 +880,7 @@ export class ExecutionRegistry {
     if (this.childActivations.get(executionId) !== expected) return;
     this.childActivations.delete(executionId);
     this.interactionOwnership.observeChildActivation(expected, false);
+    // The loop's last record is gone: a waiter on its settlement wakes.
+    this.notifyWaiters(executionId);
   }
 }

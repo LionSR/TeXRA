@@ -84,7 +84,11 @@ import {
   type HostInteractions,
 } from './HostInteractions';
 import { runEventDraft, statusDraft } from './SessionEvents';
-import { openSession, type SessionGraph } from './sessionGraph';
+import {
+  defaultRootSession,
+  openSession,
+  type SessionGraph,
+} from './sessionGraph';
 import { ModelRetryGate } from './ModelRetryGate';
 import {
   createSessionApprovals,
@@ -797,30 +801,31 @@ export async function settleLiveSessionExecutions(
   }
 }
 
-let cachedDefaultSession: SessionHandle | undefined;
 let defaultSessionFallbackWarned = false;
 
-/** Install the process-default session after its transcript store is valid. */
+/**
+ * Open the process-default session, the session of the process roots, after
+ * its transcript store is valid. Its owner holds it, as it holds every
+ * session: {@link defaultSession} reads it from there on each call, so no
+ * second reference to it exists to go stale when the root is closed.
+ */
 export function initializeDefaultSession(
   init: SessionHandleInit,
 ): SessionHandle {
-  if (cachedDefaultSession) {
+  if (defaultRootSession()) {
     throw new Error('The default session has already been initialized.');
   }
-  cachedDefaultSession = openSession(init);
-  return cachedDefaultSession;
+  return openSession(init);
 }
 
 /** Inspect whether the host has installed its process-default session. */
 export function tryDefaultSession(): SessionHandle | undefined {
-  return cachedDefaultSession;
+  return defaultRootSession();
 }
 
-/** Clear and dispose the process-default session during host teardown. */
+/** Dispose the process-default session during host teardown. */
 export function teardownDefaultSession(): void {
-  const session = cachedDefaultSession;
-  cachedDefaultSession = undefined;
-  session?.dispose();
+  defaultRootSession()?.dispose();
 }
 
 /**
@@ -837,12 +842,12 @@ export function teardownDefaultSession(): void {
  * teardown and reinitialization of the default session.
  */
 export function defaultSession(): SessionHandle {
-  if (!cachedDefaultSession) {
+  const processDefault = defaultRootSession();
+  if (!processDefault) {
     throw new Error(
       'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.',
     );
   }
-  const processDefault = cachedDefaultSession;
   if (
     !defaultSessionFallbackWarned &&
     [...liveSessions].some((session) => session !== processDefault)

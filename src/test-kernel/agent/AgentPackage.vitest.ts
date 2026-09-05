@@ -123,7 +123,9 @@ vi.mock('@agent/runtime', async () => {
   }
   const sessions = new Map<string, FakeSession>();
   return {
-    openSession: (init: ConstructorParameters<typeof FakeSession>[0]) => {
+    openSessionAsync: async (
+      init: ConstructorParameters<typeof FakeSession>[0],
+    ) => {
       let session = sessions.get(init.roots.storage);
       if (!session) {
         session = new FakeSession(init);
@@ -140,7 +142,8 @@ vi.mock('@agent/runtime', async () => {
 });
 
 vi.mock('@controllers/session/sessionLayer', () => ({
-  installProcessRuntime: () => ({ dispose: mocks.disposeRuntime }),
+  disposeProcessRuntime: mocks.disposeRuntime,
+  installProcessRuntime: vi.fn(),
 }));
 
 vi.mock('@platform/processRuntime', async () => {
@@ -374,7 +377,11 @@ describe('agent package run lifecycle', () => {
   });
 
   it('resolves every run through the runtime session owner: two runs on one root share one session, closed through the owner before the runtime goes', async () => {
-    await runAgent(INPUT).result;
+    const first = runAgent(INPUT);
+    // The launch is the owner's before `runAgent` returns: a close or a
+    // shutdown issued now finds this session, not an unopened root.
+    expect(mocks.sessionInits).toHaveLength(1);
+    await first.result;
     await runAgent(INPUT).result;
 
     // Both runs resolved the platform's root through the owner, which built

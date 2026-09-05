@@ -12,7 +12,7 @@ import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { loadAgents, resolveAgent } from '@agent/index';
 import {
   closeSession as closeRuntimeSession,
-  openSession,
+  openSessionAsync,
   runAgent as runValidatedAgent,
   type AgentRunHandle as RuntimeAgentRunHandle,
   type SessionHandle as RuntimeSessionHandle,
@@ -30,7 +30,10 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - config and host services
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import {
+  disposeProcessRuntime,
+  installProcessRuntime,
+} from '@controllers/session/sessionLayer';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import {
   initProcessWorkspaceRoots,
@@ -159,9 +162,11 @@ interface EnteredRun {
 }
 
 /** The session of the platform's storage root, as the runtime's owner
- *  holds it: built on the first open, over what the package supplies then. */
-function sessionFor(platform: AgentPlatform): RuntimeSessionHandle {
-  return openSession({
+ *  holds it: built on the first open, over what the package supplies then.
+ *  Registered with the owner before the returned promise is awaited, so a
+ *  close issued after `runAgent` returns finds this open. */
+function sessionFor(platform: AgentPlatform): Promise<RuntimeSessionHandle> {
+  return openSessionAsync({
     roots: platform.roots,
     transcripts: StreamLogStore.ephemeral('npm package consumer'),
     // The session's one host, for its whole life, like every TeXRA host
@@ -426,9 +431,13 @@ export function runAgent(input: RunAgentInput): AgentRun {
       );
     }
 
-    // The identity first: everything from the platform check to the runtime
-    // install is then synchronous, so two first runs cannot both pass it.
-    const processStart = await input.platform.processes.selfIdentity();
+    // Everything from the platform check to the session open is
+    // synchronous: two first runs cannot both pass the check, and the owner
+    // holds this run's session before the run's first await, so a
+    // `closeSession` or a `runShutdown` issued right after `runAgent`
+    // returns settles this launch too (the run then fails at admission
+    // instead of starting model work after the cleanup). The process
+    // identity is read while the session builds.
     const activePlatform = tryPlatform();
     if (activePlatform && activePlatform !== input.platform) {
       throw new Error(
@@ -446,21 +455,22 @@ export function runAgent(input: RunAgentInput): AgentRun {
       initPlatform(input.platform);
       initProcessWorkspaceRoots(input.platform.roots);
       initNodeAgentRuntime(input.platform.lifecycle);
-      const runtime = installProcessRuntime(processStart);
+      installProcessRuntime(input.platform.processes.selfIdentity());
       // The session's agent-spawned children and agent-CLI sessions are
       // stopped, then the platform's session is closed through its owner
       // under the phase's own budget (its runs stopped and settled, its
       // artifacts flushed, the session released: the headless shape, as the
       // CLI's headless run stops and awaits its run in this phase), then
-      // the runtime that held it goes.
+      // the runtime that held it goes, and its owner with it: a later
+      // `closeSession` answers as a process with none does.
       registerRuntimeShutdownHandlers(input.platform.lifecycle, {
         flushArtifacts: async (signal) => {
           await closeSession(input.platform.roots, signal);
         },
-        afterExecutionSettlement: [() => runtime.dispose()],
+        afterExecutionSettlement: [() => disposeProcessRuntime()],
       });
     }
-    const session = sessionFor(input.platform);
+    const session = await sessionFor(input.platform);
     await loadAgents({ includeRemote: false });
     const resolved = resolveAgent(input.agent);
     if (!resolved) {

@@ -28,7 +28,10 @@ import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProj
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import {
+  disposeProcessRuntime,
+  installProcessRuntime,
+} from '@controllers/session/sessionLayer';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { appSignals } from '@eventBus/AppSignals';
@@ -70,7 +73,6 @@ import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { initPlatform, platform } from '@platform/platform';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   bootstrapNodeAgentDirectories,
@@ -127,17 +129,13 @@ let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 // handlers registered by a second activate() in the same process.
 let lifecycleHost: LifecycleHost | undefined;
 let extensionShutdownPromise: Promise<void> | undefined;
-/** The one Effect runtime of this extension host (PRD 7.7). */
-let processRuntime: ProcessRuntime | undefined;
 
 /**
  * Make the process runtime over the process identity and install it beside
  * the platform: the session graphs and every Promise-facing fiber run on it.
  */
 async function installRuntime(): Promise<void> {
-  processRuntime = installProcessRuntime(
-    await platform().processes.selfIdentity(),
-  );
+  installProcessRuntime(await platform().processes.selfIdentity());
 }
 
 /**
@@ -192,9 +190,7 @@ function shutdownExtension(): Promise<void> {
       if (lifecycleHost === host) lifecycleHost = undefined;
       teardownDefaultSession();
       // After the session: its graph releases on the runtime it runs on.
-      const runtime = processRuntime;
-      processRuntime = undefined;
-      await runtime?.dispose();
+      await disposeProcessRuntime();
     }
   })();
   extensionShutdownPromise = shutdownPromise;

@@ -56,10 +56,7 @@ import {
   type SessionOpen,
 } from '@agent/runtime/sessionGraph';
 import { createLog } from '@logger/logUtils';
-import {
-  initProcessRuntime,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
+import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   type OwnerId,
@@ -97,7 +94,8 @@ const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
  * sidecar store, the response text policy, the host it is born with).
  * Equal and hashed by the storage root alone: two opens of one root resolve
  * one session, over what the first of them supplied. Nothing store-bound
- * can be injected past that boundary (proposal 2026-09-05, section 3).
+ * can be injected past that boundary (PR #11893, agent SDK architecture
+ * proposal, section 3).
  */
 class SessionKey implements Equal.Equal {
   constructor(readonly open: SessionOpen) {}
@@ -336,12 +334,21 @@ const sessionGraphLayer = (key: SessionKey) =>
  * handle alone being the entry's service. `Layer.fresh`: the layer map
  * builds every key's entry through one memo map, and layers memoize by
  * reference, so without it the static service layers would be built once
- * and every root on the process would share one log and one fold.
+ * and every root on the process would share one log and one fold. The
+ * process identity is provided here, per entry, rather than under the map:
+ * the map then builds synchronously, so an open issued while the identity
+ * is still being read (the package's) registers its entry with the map
+ * before its first yield, and only the entry's build waits.
  */
-const sessionLayer = (key: SessionKey, release: (key: SessionKey) => void) =>
+const sessionLayer = (
+  key: SessionKey,
+  release: (key: SessionKey) => void,
+  identity: Layer.Layer<ProcessIdentity>,
+) =>
   Layer.fresh(
     sessionHandleLayer(key, release).pipe(
       Layer.provide(sessionGraphLayer(key)),
+      Layer.provide(identity),
     ),
   );
 
@@ -351,7 +358,8 @@ const sessionLayer = (key: SessionKey, release: (key: SessionKey) => void) =>
  * or the runtime goes. Opens borrow (the reference an open takes is
  * released at once) and the idle lifetime is infinite, so no reader's
  * detachment and no reference count decides a session's end: the
- * application does, explicitly (proposal 2026-09-05, section 3).
+ * application does, explicitly (PR #11893, agent SDK architecture
+ * proposal, section 3).
  */
 class Sessions extends Context.Service<
   Sessions,
@@ -359,10 +367,13 @@ class Sessions extends Context.Service<
 >()('@texra/session/Sessions') {
   /** The map, releasing an entry the handle asked to be released through
    *  the runtime that holds the map. */
-  static layer(release: (key: SessionKey) => void) {
+  static layer(
+    release: (key: SessionKey) => void,
+    identity: Layer.Layer<ProcessIdentity>,
+  ) {
     return Layer.effect(
       Sessions,
-      LayerMap.make((key: SessionKey) => sessionLayer(key, release), {
+      LayerMap.make((key: SessionKey) => sessionLayer(key, release, identity), {
         idleTimeToLive: Duration.infinity,
       }),
     );
@@ -381,6 +392,20 @@ const openSession = (open: SessionOpen) =>
       .pipe(Effect.onError(() => sessions.invalidate(key)));
     return Context.get(context, Session);
   }).pipe(Effect.scoped);
+
+/** The session held for `root`, if the map holds one: an entry still
+ *  building is waited for, never skipped. Builds nothing. */
+const heldSession = (root: string) =>
+  Effect.gen(function* () {
+    const sessions = yield* Sessions;
+    const keys = yield* RcMap.keys(sessions.rcMap);
+    const key = [...keys].find((candidate) => candidate.storage === root);
+    if (key === undefined) return undefined;
+    const held = yield* sessions.contextEffectOption(key).pipe(Effect.scoped);
+    return Option.isNone(held)
+      ? undefined
+      : { key, session: Context.get(held.value, Session) };
+  });
 
 /** Resolve once every execution the registry holds has left it. Detaches
  *  on `signal`, so a bounded wait leaves no listener behind. */
@@ -409,9 +434,11 @@ const aborted = (signal: AbortSignal) =>
   });
 
 /**
- * Close the session of one root (proposal 2026-09-05, section 9): refuse
- * new executions, stop the root executions it owns (the stop cascades into
- * their children), wait for their drivers to settle them inside one budget,
+ * Close the session of one root (PR #11893, agent SDK architecture
+ * proposal, section 9): refuse new executions, stop the root executions it
+ * owns (the stop cascades into their children) and the children no root
+ * owns any more (a native subagent detached from a stopped parent, between
+ * turns), wait for their drivers to settle them inside one budget,
  * flush the session's artifacts while its stores are still open, and
  * release the entry. The budget is the caller's `signal` when it passes one
  * (the lifecycle's shutdown phase, whose deadline started before this
@@ -424,17 +451,16 @@ const aborted = (signal: AbortSignal) =>
 const closeSession = (root: string, signal?: AbortSignal) =>
   Effect.gen(function* () {
     const sessions = yield* Sessions;
-    const keys = yield* RcMap.keys(sessions.rcMap);
-    const key = [...keys].find((candidate) => candidate.storage === root);
-    if (key === undefined) return NOTHING_TO_CLOSE;
-    const held = yield* sessions.contextEffectOption(key).pipe(Effect.scoped);
-    if (Option.isNone(held)) return NOTHING_TO_CLOSE;
-    const session = Context.get(held.value, Session);
+    const held = yield* heldSession(root);
+    if (held === undefined) return NOTHING_TO_CLOSE;
+    const { key, session } = held;
     const { executions } = session;
     executions.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop
     // writes each run's outcome under the session's roots, and the flush
-    // writes its stores there.
+    // writes its stores there. A child with a handle is stopped by its
+    // parent's cascade; a native child between turns has no handle, and
+    // its kill interrupts the loop the registry retains for it.
     yield* Effect.sync(() =>
       runInSession(session, () => {
         for (const executionId of executions.getActiveIds()) {
@@ -490,30 +516,54 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * Make the one Effect runtime of this process over its identity (PRD 7.7)
  * and install it with the session family it serves: called by a
  * composition root exactly once at startup, right beside `initPlatform()`,
- * which disposes the returned runtime on its shutdown path after the last
- * session has released its graph. The owner it installs is the map's
- * Promise-and-sync face: `open` builds under `runSync`, so everything a
- * root's graph does at build time, the history import included, must
- * complete inside the scheduler's yield budget (`Scheduler.MaxOpsBeforeYield`
- * steps per yield) or the open reads as asynchronous and throws. The import
- * appends the whole history in one call for that reason; moving it to row
- * open (#11907) is what removes the history pass from here.
+ * which calls {@link disposeProcessRuntime} on its shutdown path after the
+ * last session has released its graph. The identity is the process start
+ * a host read before installing, or its pending read for a process whose
+ * composition root is its first run (the package): the map itself never
+ * waits for it, so an open registers its root with the owner before the
+ * caller's first await, and only the entry's build does. The owner it
+ * installs is the map's Promise-and-sync face: `open` builds under
+ * `runSync`, so everything a root's graph does at build time, the history
+ * import included, must complete inside the scheduler's yield budget
+ * (`Scheduler.MaxOpsBeforeYield` steps per yield) or the open reads as
+ * asynchronous and throws; an opener whose identity is pending opens through
+ * `openAsync`. The import appends the whole history in one call for that
+ * reason; moving it to row open (#11907) is what removes the history pass
+ * from here.
  */
 export function installProcessRuntime(
-  processStart: string | undefined,
-): ProcessRuntime {
+  processStart: string | undefined | Promise<string | undefined>,
+): void {
+  const identity =
+    processStart instanceof Promise
+      ? Layer.effect(
+          ProcessIdentity,
+          Effect.map(
+            Effect.promise(() => processStart),
+            (start) => ({ ownerId: processOwnerId(start) }),
+          ),
+        )
+      : ProcessIdentity.layer(processOwnerId(processStart));
   const release = (key: SessionKey): void => {
     runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
   };
-  const runtime = ManagedRuntime.make(
-    Sessions.layer(release).pipe(
-      Layer.provide(ProcessIdentity.layer(processOwnerId(processStart))),
-    ),
-  );
+  const runtime = ManagedRuntime.make(Sessions.layer(release, identity));
   initProcessRuntime(runtime);
   initSessionOwner({
     open: (open) => runtime.runSync(openSession(open)),
+    openAsync: (open) => runtime.runPromise(openSession(open)),
+    current: (root) => runtime.runSync(heldSession(root))?.session,
     close: (root, signal) => runtime.runPromise(closeSession(root, signal)),
   });
-  return runtime;
+}
+
+/**
+ * Uninstall the session owner and dispose the runtime it ran on, releasing
+ * every session still open there: the one shutdown step for both, so a
+ * close issued after it answers as a process with no owner does instead of
+ * reaching the disposed runtime.
+ */
+export function disposeProcessRuntime(): Promise<void> {
+  initSessionOwner(undefined);
+  return effectRuntime().dispose();
 }

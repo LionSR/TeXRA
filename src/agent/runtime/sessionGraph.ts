@@ -14,6 +14,7 @@
 
 import {
   processWorkspaceRoots,
+  tryProcessWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import type {
@@ -82,6 +83,12 @@ export interface SessionOwner {
   /** The session of `open.roots`' storage root: the one already open there,
    *  or built now over what `open` supplies. */
   open(open: SessionOpen): SessionHandle;
+  /** The same open for a process still reading its identity (the package):
+   *  the root's entry is registered with the owner before this returns, so
+   *  a close issued after it finds the session and waits for its build. */
+  openAsync(open: SessionOpen): Promise<SessionHandle>;
+  /** The session open on a storage root, if one is; never builds one. */
+  current(root: string): SessionHandle | undefined;
   /** Close the session of a storage root, settling what it owns inside
    *  `signal`'s budget, or the runtime's own when the caller passes none. */
   close(root: string, signal?: AbortSignal): Promise<SessionCloseReport>;
@@ -89,9 +96,13 @@ export interface SessionOwner {
 
 let owner: SessionOwner | undefined;
 
-/** Install the process's session owner. Called by `installProcessRuntime`
- *  exactly once at startup, right beside `initPlatform()`. */
-export function initSessionOwner(sessions: SessionOwner): void {
+/** Install the process's session owner, or uninstall it with `undefined`.
+ *  Called by `installProcessRuntime` exactly once at startup, right beside
+ *  `initPlatform()`, and by `disposeProcessRuntime` in the shutdown step
+ *  that disposes the runtime the owner runs on: from then on a close
+ *  answers as a process with no owner does, instead of reaching a disposed
+ *  runtime. */
+export function initSessionOwner(sessions: SessionOwner | undefined): void {
   owner = sessions;
 }
 
@@ -115,24 +126,52 @@ function sessions(): SessionOwner {
  * opener of the same root gets the session the first opener built.
  *
  * The returned handle is borrowed access to an owner-held session
- * (proposal 2026-09-05, section 3): holding it carries no disposal
- * obligation, and {@link closeSession} is how the session ends.
+ * (PR #11893, agent SDK architecture proposal, section 3): holding it
+ * carries no disposal obligation, and {@link closeSession} is how the
+ * session ends.
  */
 export function openSession(init: SessionHandleInit): SessionHandle {
-  return sessions().open({
-    ...init,
-    roots: init.roots ?? processWorkspaceRoots(),
-  });
+  return sessions().open(resolveRoots(init));
 }
 
 /**
- * Close the session of a storage root (proposal 2026-09-05, section 9):
- * refuse new executions on it, interrupt the ones it owns and wait for
- * them to settle within `signal`'s budget (the caller's shutdown phase) or,
- * without one, the process's shutdown-phase budget, flush its artifacts,
- * and release it from its owner. A root with no open session has nothing
- * to close and reports `settled`; so does a process with no owner
- * installed, where no session was ever opened. A session whose executions
+ * {@link openSession} for an opener whose process identity is still being
+ * read (the package, whose composition root is its first run): the root's
+ * entry is registered with the owner before this returns, so a close or a
+ * shutdown issued right after it settles this open too, and the handle
+ * arrives when the session is built.
+ */
+export function openSessionAsync(
+  init: SessionHandleInit,
+): Promise<SessionHandle> {
+  return sessions().openAsync(resolveRoots(init));
+}
+
+function resolveRoots(init: SessionHandleInit): SessionOpen {
+  return { ...init, roots: init.roots ?? processWorkspaceRoots() };
+}
+
+/**
+ * The session open on the process roots' storage root, if one is: the
+ * hosts' default session, read through its owner on every call rather than
+ * from a cached reference, so a root closed through the owner has no
+ * default session until one is opened again. No owner, or no process
+ * roots yet, no session.
+ */
+export function defaultRootSession(): SessionHandle | undefined {
+  const roots = tryProcessWorkspaceRoots();
+  return roots && owner?.current(roots.storage);
+}
+
+/**
+ * Close the session of a storage root (PR #11893, agent SDK architecture
+ * proposal, section 9): refuse new executions on it, interrupt the ones it
+ * owns and wait for them to settle within `signal`'s budget (the caller's
+ * shutdown phase) or, without one, the process's shutdown-phase budget,
+ * flush its artifacts, and release it from its owner. A root with no open
+ * session has nothing to close and reports `settled`; so does a process
+ * with no owner installed, where no session was ever opened or the owner
+ * has gone with its runtime. A session whose executions
  * outlive the budget is reported `abandoned` and stays open, refusing new
  * work, until they end; it is released then, never before. This never
  * touches the process lifecycle or another root's session.

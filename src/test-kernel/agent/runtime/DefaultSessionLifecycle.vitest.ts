@@ -214,11 +214,7 @@ describe('default session lifecycle', () => {
       }),
     ).toThrow('already been initialized');
 
-    const originalDispose = first.dispose.bind(first);
-    const disposeSpy = vi.spyOn(first, 'dispose').mockImplementation(() => {
-      expect(tryDefaultSession()).toBeUndefined();
-      originalDispose();
-    });
+    const disposeSpy = vi.spyOn(first, 'dispose');
 
     teardownDefaultSession();
 
@@ -231,6 +227,13 @@ describe('default session lifecycle', () => {
     try {
       expect(defaultSession()).toBe(second);
       expect(second).not.toBe(first);
+      // The default session is read from its owner: closing its root
+      // through the owner leaves no default session behind.
+      const { closeSession } = await import('@agent/runtime/sessionGraph');
+      const { processWorkspaceRoots } =
+        await import('@platform/workspaceRoots');
+      await closeSession(processWorkspaceRoots().storage);
+      expect(tryDefaultSession()).toBeUndefined();
     } finally {
       teardownDefaultSession();
     }
