@@ -24,7 +24,7 @@ import { RunUsageMapSchema } from './usage';
 // verbatim; renderers key icons and clickability on `identity.kind` instead
 // of tool-name sniffing or a roster-side kind union.
 
-export const ActiveChildInfoSchema = z.object({
+const ActiveChildInfoSchema = z.object({
   executionId: z.string(),
   /** Stream tab ID — every child stream owns a tab. */
   childStreamId: z.string(),
@@ -119,10 +119,9 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
-export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
+const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
 
-// Stream Metadata — the lightweight subset sent over postMessage in UPDATE_STREAMS.
-// Contains only backend-owned fields that mergeBackendOwnedState() actually reads.
+// Stream metadata: the backend-owned fields of a stream's state.
 
 export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
@@ -163,137 +162,13 @@ export const BackendOwnedFieldsSchema = z.object({
   subagents: z.array(ActiveChildInfoSchema).prefault([]),
 });
 
-export const StreamMetadataSchema = BackendOwnedFieldsSchema.extend({
-  // Nullable over the wire: an explicit `null` clears a stage the frontend
-  // still holds, which a plain omission cannot express.
-  stage: StreamStageSchema.nullish(),
-  /** Absent while the stream's run identity is still pending. */
-  category: AgentCategorySchema.optional(),
-});
-
-export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
-
-// Base Stream State
-
-const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
-  // Frontend-owned fields — set by frontend handlers, preserved during backend merges.
-  taskGroups: z.array(TaskGroupSchema).prefault([]),
-  contextState: ContextStateDataSchema.optional(),
-  // Per-run usage, the only stored usage state: the session total is summed
-  // at the render site. Both stream kinds carry it so resume accumulates
-  // across the original and resumed runs.
-  runUsage: RunUsageMapSchema.prefault({}),
-});
-
-// Tool-Use UI State (frontend-only, preserved during backend updates)
-
-const ToolUseUIStateSchema = z.object({
-  followUpText: z.string().prefault(''),
-  /** A send is awaiting its admission ack; the draft stays until it lands. */
-  followUpSending: z.boolean().prefault(false),
-  polishedText: z.string().nullable().prefault(null),
-  polishRevision: z.int().prefault(0),
-  transcribedText: z.string().nullable().prefault(null),
-  recording: z.boolean().prefault(false),
-  shouldFocusFollowUp: z.boolean().prefault(false),
-});
-
-// Tool-Use Stream State
-
-/** Which approval kinds a run bypasses; one definition for the persisted
- *  stream state and the `approval.policy` snapshot event. */
 export const ApprovalBypassesSchema = z.record(
   z.enum(APPROVAL_BYPASS_KINDS),
   z.boolean(),
 );
 
-const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
-  category: z.literal(AgentCategory.ToolUse),
-  // Frontend-owned fields updated by targeted progress-view messages
-  todos: z.array(TodoItemSchema).prefault([]),
-  plan: PlanSchema.nullable().prefault(null),
-  queuedFollowUps: z.array(z.string()).prefault([]),
-  bypasses: ApprovalBypassesSchema.prefault({
-    bash: false,
-    toolEdit: false,
-    superYolo: false,
-  }),
-  goal: GoalStateSchema.prefault({ active: false }),
-  // Frontend-owned (nested under ui)
-  ui: ToolUseUIStateSchema.prefault({}),
-});
-
-export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
-
-// Workflow Stream State
-// One run per tab — all run-scoped data is flat, not keyed by runId.
-
-/**
- * Value schemas for the three round-keyed output sidecars
- * (`streamData/{id}/outputFiles.json` / `missingOutputs.json` /
- * `compileFailures.json`). Shared between the live workflow stream state and
- * the persisted `StreamSnapshot` (which assembles those files under its own
- * `*ByRound` field names) so the element schemas and `.prefault({})` default
- * can't drift between the two surfaces — the same unification
- * `SharedBackendOwnedFieldsSchema` provides for the metadata fields.
- */
 export const RoundKeyedOutputSidecarValueSchemas = {
   outputFiles: roundIndexedRecord(OutputFileInfoSchema),
   missingOutputs: roundIndexedRecord(z.string()),
   compileFailures: roundIndexedRecord(CompileFailureSchema),
 } as const;
-
-const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
-  category: z.literal(AgentCategory.Workflow),
-  // Frontend-owned fields updated by targeted progress-view messages.
-  files: RoundKeyedOutputSidecarValueSchemas.outputFiles.prefault({}),
-  missingOutputs: RoundKeyedOutputSidecarValueSchemas.missingOutputs.prefault(
-    {},
-  ),
-  compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures.prefault(
-    {},
-  ),
-});
-
-export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;
-
-// Discriminated Union
-
-const StreamStateSchema = z.discriminatedUnion('category', [
-  ToolUseStreamStateSchema,
-  WorkflowStreamStateSchema,
-]);
-
-export type StreamState = z.infer<typeof StreamStateSchema>;
-
-// Type Guards
-
-export function isToolUseState(
-  state: StreamState,
-): state is ToolUseStreamState {
-  return state.category === AgentCategory.ToolUse;
-}
-
-export function isWorkflowState(
-  state: StreamState,
-): state is WorkflowStreamState {
-  return state.category === AgentCategory.Workflow;
-}
-
-// Factory Functions
-
-export function createStreamState(
-  agentCategory: AgentCategory,
-  partial?: Partial<StreamState>,
-): StreamState {
-  if (agentCategory === AgentCategory.ToolUse) {
-    return ToolUseStreamStateSchema.parse({
-      category: AgentCategory.ToolUse,
-      ...partial,
-    });
-  }
-  return WorkflowStreamStateSchema.parse({
-    category: AgentCategory.Workflow,
-    ...partial,
-  });
-}

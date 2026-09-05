@@ -30,6 +30,7 @@ type PendingFileRequest =
     };
 
 interface PendingFileRequestEntry {
+  readonly session: string;
   readonly request: PendingFileRequest;
   readonly timeout?: ReturnType<typeof setTimeout>;
 }
@@ -37,6 +38,7 @@ interface PendingFileRequestEntry {
 const pendingFileRequests = new Map<string, PendingFileRequestEntry>();
 
 function registerFileRequest(
+  session: string,
   requestId: string,
   request: PendingFileRequest,
   send: () => void,
@@ -47,43 +49,51 @@ function registerFileRequest(
     request.kind === 'write'
       ? undefined
       : setTimeout(() => {
-          takePendingFileRequest(requestId)?.reject(
+          takePendingFileRequest(session, requestId)?.reject(
             new Error('The desktop file request timed out.'),
           );
         }, FILE_REQUEST_TIMEOUT_MS);
-  pendingFileRequests.set(requestId, { request, timeout });
+  pendingFileRequests.set(requestId, { session, request, timeout });
   try {
     send();
   } catch (error) {
-    takePendingFileRequest(requestId)?.reject(ensureError(error));
+    takePendingFileRequest(session, requestId)?.reject(ensureError(error));
   }
 }
 
 export function takePendingFileRequest(
+  session: string,
   requestId: string,
 ): PendingFileRequest | undefined {
   const pending = pendingFileRequests.get(requestId);
-  if (!pending) return undefined;
+  if (!pending || pending.session !== session) return undefined;
   pendingFileRequests.delete(requestId);
   clearTimeout(pending.timeout);
   return pending.request;
 }
 
 /** Reject every request owned by the current renderer document. */
-export function disposePendingFileRequests(): void {
+export function disposePendingFileRequests(session?: string): void {
   const error = new Error('The desktop renderer was disposed.');
-  for (const requestId of [...pendingFileRequests.keys()]) {
-    takePendingFileRequest(requestId)?.reject(error);
+  for (const [requestId, pending] of [...pendingFileRequests]) {
+    if (session !== undefined && pending.session !== session) continue;
+    takePendingFileRequest(pending.session, requestId)?.reject(error);
   }
 }
 
 export function requestFiles(
+  session: string,
   directory: string,
 ): Promise<readonly EditorFileEntry[]> {
   // A second list for a directory already in flight shares the promise rather
   // than posting a redundant LIST_FILES.
-  for (const { request } of pendingFileRequests.values()) {
-    if (request.kind === 'list' && request.directory === directory) {
+  for (const pending of pendingFileRequests.values()) {
+    const { request } = pending;
+    if (
+      pending.session === session &&
+      request.kind === 'list' &&
+      request.directory === directory
+    ) {
       return request.promise;
     }
   }
@@ -96,6 +106,7 @@ export function requestFiles(
     rejectList = reject;
   });
   registerFileRequest(
+    session,
     requestId,
     {
       kind: 'list',
@@ -106,6 +117,7 @@ export function requestFiles(
     },
     () =>
       postMessage(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES, {
+        session,
         requestId,
         directory,
       }),
@@ -113,22 +125,35 @@ export function requestFiles(
   return promise;
 }
 
-export function requestFileRead(path: string): Promise<string> {
+export function requestFileRead(
+  session: string,
+  path: string,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
-    registerFileRequest(requestId, { kind: 'read', resolve, reject }, () =>
-      postMessage(DESKTOP_WORKSPACE_COMMANDS.READ_FILE, { requestId, path }),
+    registerFileRequest(
+      session,
+      requestId,
+      { kind: 'read', resolve, reject },
+      () =>
+        postMessage(DESKTOP_WORKSPACE_COMMANDS.READ_FILE, {
+          session,
+          requestId,
+          path,
+        }),
     );
   });
 }
 
 export function requestFileWrite(
+  session: string,
   path: string,
   contents: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
     registerFileRequest(
+      session,
       requestId,
       {
         kind: 'write',
@@ -137,6 +162,7 @@ export function requestFileWrite(
       },
       () =>
         postMessage(DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE, {
+          session,
           requestId,
           path,
           contents,

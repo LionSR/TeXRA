@@ -410,17 +410,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   font-size: var(--font-size-xs);
 }
 
-/* The paper this window shows: the rail's active-stream styling. */
-.task-project-row.is-active::part(base) {
-  background: var(--wa-color-list-active-bg);
-  color: var(--wa-color-list-active-fg);
-}
-
-.task-project-row.is-active,
-.task-project-row.is-active .task-project-mark,
-.task-project-row.is-active .task-project-copy small,
-.task-project-row.is-active .task-project-chevron {
-  color: var(--wa-color-list-active-fg);
+/* The paper this window shows reads as a section heading: its streams sit
+   beneath it and the header's paper chip names it, so the row itself stays
+   plain and only its name firms up. */
+.task-project-row.is-active .task-project-copy strong {
+  font-weight: var(--font-weight-semibold);
 }
 
 .task-project-add {
@@ -1039,4 +1033,228 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* A compiled PDF fills its workbench pane; Chromium's viewer draws the chrome. */
+.task-workbench-pdf-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--wa-color-surface-default);
+}
+
+/* ---------------------------------------------------------------------------
+ * Papers as rail sections
+ * ------------------------------------------------------------------------- */
+
+.task-sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+/* A collapsed paper's one count sits on the row's top-right corner, clear of
+   the chevron, the way a notification count sits on an icon. */
+.task-project-row {
+  position: relative;
+}
+
+.task-paper-badge {
+  position: absolute;
+  top: -3px;
+  right: 2px;
+  z-index: 1;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.task-paper-badge::part(base) {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  line-height: 16px;
+}
+
+.task-paper-streams {
+  margin: 2px 0 4px 10px;
+}
+
+.task-project-files-toggle {
+  display: block;
+  width: 100%;
+  margin: 0 0 2px 10px;
+  color: var(--wa-color-text-quiet);
+}
+
+.task-project-files-toggle::part(base) {
+  justify-content: flex-start;
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: var(--font-size-sm);
+}
+
+.task-rollup-running {
+  color: var(--wa-color-success-on-quiet);
+  font-size: 8px;
+}
+
+.task-rollup-waiting {
+  color: var(--wa-color-warning-on-quiet);
+  font-size: 10px;
+}
+
+/* Focus layout: the switcher and the Other papers card. */
+.task-paper-switcher {
+  display: block;
+  margin: 0 0 6px;
+}
+
+.task-paper-switcher-trigger {
+  width: 100%;
+}
+
+.task-paper-switcher-trigger::part(base) {
+  justify-content: flex-start;
+  min-height: 44px;
+}
+
+.task-paper-switcher-trigger::part(label) {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.task-paper-switcher-trigger .task-project-copy {
+  min-width: 0;
+  text-align: left;
+}
+
+.task-other-papers {
+  display: grid;
+  gap: 2px;
+  margin: 12px 0 0;
+  padding: 8px;
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: 10px;
+  background: var(--wa-color-surface-default);
+}
+
+.task-other-papers-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 6px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.task-other-papers-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: var(--font-weight-normal);
+}
+
+.task-other-papers-paper {
+  display: grid;
+  gap: 2px;
+}
+
+.task-other-papers-paper > stream-tabs {
+  display: flex;
+  min-width: 0;
+  --background-color: transparent;
+  --color-border: transparent;
+}
+
+.task-other-papers-mark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.task-other-papers-note {
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+}
+
+.task-other-papers-note {
+  padding: 6px 8px 0;
+}
+
+.task-workflow-calls-note {
+  padding: 4px 10px 6px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+}
+
+/* The conversation pane's paper chip and dock. */
+.task-paper-chip {
+  flex: 0 0 auto;
+}
+
+.task-paper-chip wa-button::part(base) {
+  gap: 6px;
+}
+
+.task-conversation-dock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 8px 0;
+}
+
+/* The Subagents workbench tab. */
+.task-subagents {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+}
+
+.task-subagents-path {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+}
+
+.task-subagents-path .is-current {
+  color: var(--wa-color-text-normal);
+  font-weight: var(--font-weight-medium);
+}
+
+.task-subagents > stream-tabs {
+  display: flex;
+  min-width: 0;
+  --background-color: transparent;
+  --color-border: transparent;
+}
+
+.task-subagents-note,
+.task-subagents-empty {
+  padding: 6px 8px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+}
+
+/* Paper and tab contents retain their DOM nodes while another owner is visible. */
+.task-paper-workbench,
+.task-workbench-retained-surface {
+  height: 100%;
+  min-height: 0;
+}
+
+.task-paper-workbench[hidden],
+.task-workbench-retained-surface[hidden] {
+  display: none;
 }

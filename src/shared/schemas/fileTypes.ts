@@ -20,7 +20,7 @@ export function isMultipleDocumentFileType(
   return (MULTIPLE_DOCUMENT_FILE_TYPES as readonly string[]).includes(value);
 }
 
-export const ExtendedDocumentFileTypeSchema = z.enum([
+const ExtendedDocumentFileTypeSchema = z.enum([
   ...DocumentFileTypeSchema.options,
   'edited',
   'output',

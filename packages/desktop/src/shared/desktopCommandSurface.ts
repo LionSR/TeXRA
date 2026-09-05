@@ -3,7 +3,7 @@ import type {
   GettingStartedAction,
   SettingsTabPanelName,
 } from '@shared/schemas';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,
   type DesktopPlatform,
@@ -179,11 +179,6 @@ interface DesktopSettingsTabMessage {
   command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
   tab: SettingsTabPanelName;
   agentSubTab?: AgentCategory;
-}
-
-interface DesktopMainViewResetMessage {
-  command: typeof MAIN_VIEW_COMMANDS.STATE_RESTORE;
-  isResetOperation: true;
 }
 
 /**
@@ -384,11 +379,4 @@ export function postDesktopSettingsView(
   });
   if (tab == null) return;
   postToRenderer(buildDesktopSettingsTabMessage(tab, agentSubTab));
-}
-
-export function buildDesktopMainViewResetMessage(): DesktopMainViewResetMessage {
-  return {
-    command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-    isResetOperation: true,
-  };
 }

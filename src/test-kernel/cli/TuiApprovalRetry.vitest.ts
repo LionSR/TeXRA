@@ -11,6 +11,8 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
+import { SubscriptionRef } from 'effect';
+import { currentSession } from '@agent/runtime/SessionHandle';
 
 const mocks = vi.hoisted(() => ({
   apiKeyExistsUncached: vi.fn(),
@@ -100,7 +102,6 @@ vi.mock('@platform/platform', async () => {
   };
 });
 
-import { SubscriptionRef } from 'effect';
 import type {
   HostInteractions,
   HostRetryInteractionOptions,
@@ -130,11 +131,7 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionAutoApproval } from '@tools/goal';
-import {
-  isApprovalBypassedForStream,
-  isBashApprovalBypassedForStream,
-  proposalApprovals,
-} from '@tools/approval';
+import { proposalApprovals } from '@tools/approval';
 import {
   bashApprovalRequest,
   toolEditApprovalRequest,
@@ -499,6 +496,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
         threadId: 'thread-interrupted',
+        turnIndex: 1,
         cause: 'Session interrupted.',
       }),
     );
@@ -526,6 +524,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
         threadId: 'thread-note-free',
+        turnIndex: 1,
       }),
     );
   });
@@ -644,10 +643,16 @@ describe('TUI retry approvals', () => {
 
     await expect(result).resolves.toEqual({ action: 'approve' });
     expect(proposalApprovals().isBypassed('proposal-bypass-stream')).toBe(true);
-    expect(isApprovalBypassedForStream('proposal-bypass-stream')).toBe(true);
-    expect(isBashApprovalBypassedForStream('proposal-bypass-stream')).toBe(
-      true,
-    );
+    expect(
+      currentSession().approvals.toolEdit.bypass.isBypassed(
+        'proposal-bypass-stream',
+      ),
+    ).toBe(true);
+    expect(
+      currentSession().approvals.bash.bypass.isBypassed(
+        'proposal-bypass-stream',
+      ),
+    ).toBe(true);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'proposal-bypass-stream',
       kind: 'superYolo',
@@ -759,8 +764,12 @@ describe('TUI retry approvals', () => {
 
     await expect(result).resolves.toEqual({ action: 'approve' });
     expect(proposalApprovals().isBypassed(streamId)).toBe(false);
-    expect(isApprovalBypassedForStream(streamId)).toBe(false);
-    expect(isBashApprovalBypassedForStream(streamId)).toBe(false);
+    expect(
+      currentSession().approvals.toolEdit.bypass.isBypassed(streamId),
+    ).toBe(false);
+    expect(currentSession().approvals.bash.bypass.isBypassed(streamId)).toBe(
+      false,
+    );
   });
 
   it('fails closed when a switchable retry does not identify its provider', async () => {

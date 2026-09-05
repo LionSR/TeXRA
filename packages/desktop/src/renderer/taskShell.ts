@@ -7,33 +7,44 @@
 
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
+import type { PaperDisplay } from '@shared/session/hostSnapshot';
+import type { SessionView } from '@shared/session/sessionView';
+import type { Shell } from '@shared/session/shell';
+import { resolveSelected, type Surface } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import {
   WORKBENCH_KIND_META,
-  workspaceInitials,
+  type PapersLayout,
   type WorkbenchPlacement,
   type WorkbenchTab,
 } from '../shared/desktopTaskShell.js';
-import type { DesktopPaperSummary } from '../shared/desktopPaperMessages.js';
+
+/** One open paper as the rail lists it: how its host names it, its session,
+ *  its surface. */
+export interface RailPaper {
+  readonly display: PaperDisplay;
+  readonly view: SessionView;
+  readonly surface: Surface;
+}
 
 interface TaskSidebarModel {
   readonly files: Node;
   readonly filesExpanded: boolean;
-  /** Every open paper; the window shows `activeRoot`. */
-  readonly papers: readonly DesktopPaperSummary[];
-  readonly activeRoot: string | undefined;
-  readonly initials: string;
-  readonly projectSectionPosition: number;
-  readonly sessions: Node;
-  readonly streamCount: number;
-  readonly workspaceName: string;
+  /** Every open paper, in `shell.open` order. */
+  readonly papers: readonly RailPaper[];
+  readonly shell: Shell;
+  readonly papersLayout: PapersLayout;
+  /** The stream tree lives in the Subagents workbench tab while it is open;
+   *  the rail then lists top-level streams only. */
+  readonly subagentsOpen: boolean;
   /** Canonical name of the command palette action, from the command catalog. */
   readonly commandsLabel: string;
 }
@@ -43,13 +54,14 @@ interface TaskSidebarCallbacks {
   onSearch(): void;
   onToggleFiles(): void;
   onOpenFolder(): void;
-  onSelectPaper(root: string): void;
-  onClosePaper(root: string): void;
+  onSelectPaper(key: string): void;
+  onClosePaper(key: string): void;
+  onTogglePaperCollapsed(key: string): void;
+  onTogglePapersLayout(): void;
   onOpenTerminal(): void;
   onOpenBrowser(): void;
   onOpenSettings(): void;
   onOpenLogs(): void;
-  onResizeProjectSection(event: Event): void;
 }
 
 function sidebarAction(options: {
@@ -77,21 +89,81 @@ function sidebarAction(options: {
 }
 
 /**
- * One row per open paper. The active row toggles its file tree and carries
- * the same active styling as a rail stream; any other row asks the window to
- * show that paper. The close control beside the row is the one place a paper
- * is closed from.
+ * A collapsed paper's badge: the one count that needs the user first
+ * (waiting, then interrupted, then running), read from the view's rollup.
  */
-function paperRow(
-  paper: DesktopPaperSummary,
+function paperBadge(view: SessionView): TemplateResult | typeof nothing {
+  const { waiting, interrupted, running } = view.rollup;
+  if (waiting > 0) {
+    return html`<wa-badge class="task-paper-badge" variant="warning" pill
+      >${waiting}</wa-badge
+    >`;
+  }
+  if (interrupted > 0) {
+    return html`<wa-badge class="task-paper-badge" variant="danger" pill
+      >${interrupted}</wa-badge
+    >`;
+  }
+  if (running > 0) {
+    return html`<wa-badge class="task-paper-badge" variant="success" pill
+      >${running}</wa-badge
+    >`;
+  }
+  return nothing;
+}
+
+function streamTabsTemplate(
+  paper: RailPaper,
+  options: { topLevelOnly: boolean; activeOnly?: boolean },
+): TemplateResult {
+  return html`<div data-session=${paper.display.key}>
+    <stream-tabs
+      .view=${paper.view}
+      .surface=${paper.surface}
+      .topLevelOnly=${options.topLevelOnly}
+      .activeOnly=${options.activeOnly ?? false}
+    ></stream-tabs>
+  </div>`;
+}
+
+/**
+ * Under a selected workflow run the list shows the root alone (W2): its
+ * calls are child streams the run board lists, and the note says so. The
+ * selection may sit on one of those calls; the note is the family root's.
+ */
+export function workflowCallsNote(
+  view: SessionView,
+  surface: Surface,
+): TemplateResult | typeof nothing {
+  const selected = resolveSelected(view, surface);
+  const stream = selected === null ? undefined : view.streams.get(selected);
+  const rootId = stream?.ancestors[0]?.id ?? stream?.id;
+  const root = rootId === undefined ? undefined : view.streams.get(rootId);
+  if (root?.category !== 'workflow' || root.rollup.total === 0) {
+    return nothing;
+  }
+  const { total } = root.rollup;
+  return html`<div class="task-workflow-calls-note">
+    ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child streams`},
+    reachable from the board. They never appear here.
+  </div>`;
+}
+
+/**
+ * One section per open paper. The active paper's section holds its stream
+ * tree (and its file tree behind the row's disclosure); any other paper
+ * shows its badge and opens on click. The close control beside the row is
+ * the one place a paper is closed from.
+ */
+function paperSection(
+  paper: RailPaper,
   model: TaskSidebarModel,
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult {
-  const active = paper.root === model.activeRoot;
-  let disclosureIcon: TeXRAIconName = 'arrow-right';
-  if (active) {
-    disclosureIcon = model.filesExpanded ? 'chevron-down' : 'chevron-right';
-  }
+  const { key, name, initials, subtitle } = paper.display;
+  const active = key === model.shell.active;
+  const collapsed = model.shell.collapsed.includes(key);
+  const expanded = active && !collapsed;
   return html`
     <div class="task-project-item">
       <wa-button
@@ -99,22 +171,24 @@ function paperRow(
         class="task-project-row btn-ghost ${active ? 'is-active' : ''}"
         appearance="plain"
         size="s"
-        title=${paper.root}
+        title=${key}
         aria-current=${active ? 'true' : nothing}
+        aria-expanded=${expanded ? 'true' : 'false'}
         @click=${
           active
-            ? callbacks.onToggleFiles
-            : () => callbacks.onSelectPaper(paper.root)
+            ? () => callbacks.onTogglePaperCollapsed(key)
+            : () => callbacks.onSelectPaper(key)
         }
       >
-        <span class="task-project-mark icon-surface is-size-m">
-          ${workspaceInitials(paper.root)}
-        </span>
+        <span class="task-project-mark icon-surface is-size-m"
+          >${initials}</span
+        >
         <span class="task-project-copy">
-          <strong>${paper.name}</strong>
-          <small>${active ? 'Local workspace' : 'Open paper'}</small>
+          <strong>${name}</strong>
+          <small>${subtitle}</small>
         </span>
-        ${waIcon(disclosureIcon, {
+        ${expanded ? nothing : paperBadge(paper.view)}
+        ${waIcon(expanded ? 'chevron-down' : 'chevron-right', {
           className: 'task-project-chevron',
           slot: 'end',
         })}
@@ -124,16 +198,33 @@ function paperRow(
         class="task-project-close icon-button is-size-s"
         appearance="plain"
         size="s"
-        title="Close ${paper.name}"
-        aria-label="Close ${paper.name}"
-        @click=${() => callbacks.onClosePaper(paper.root)}
+        title="Close ${name}"
+        aria-label="Close ${name}"
+        @click=${() => callbacks.onClosePaper(key)}
       >
         ${waIcon('xmark')}
       </wa-button>
     </div>
     ${
-      active
+      expanded
         ? html`
+            <div class="task-sidebar-sessions task-paper-streams">
+              ${streamTabsTemplate(paper, { topLevelOnly: model.subagentsOpen })}
+              ${workflowCallsNote(paper.view, paper.surface)}
+            </div>
+            <wa-button
+              type="button"
+              class="task-project-files-toggle btn-ghost"
+              appearance="plain"
+              size="s"
+              aria-expanded=${model.filesExpanded ? 'true' : 'false'}
+              @click=${callbacks.onToggleFiles}
+            >
+              ${waIcon(model.filesExpanded ? 'chevron-down' : 'chevron-right', {
+                slot: 'start',
+              })}
+              <span>Files</span>
+            </wa-button>
             <div class="task-project-files" ?hidden=${!model.filesExpanded}>
               ${model.files}
             </div>
@@ -143,52 +234,228 @@ function paperRow(
   `;
 }
 
+function papersSectionsTemplate(
+  model: TaskSidebarModel,
+  callbacks: TaskSidebarCallbacks,
+): TemplateResult {
+  return html`
+    <section class="task-sidebar-section task-project-section">
+      <div class="task-sidebar-section-heading">
+        <span class="task-sidebar-section-label">
+          ${model.papers.length > 1 ? 'Papers' : 'Paper'}
+        </span>
+        <wa-badge
+          class="task-sidebar-section-count"
+          variant="neutral"
+          appearance="outlined"
+          pill
+          >${model.papers.length}</wa-badge
+        >
+      </div>
+      ${model.papers.map((paper) => paperSection(paper, model, callbacks))}
+      <wa-button
+        type="button"
+        class="task-project-add"
+        appearance="outlined"
+        size="s"
+        @click=${callbacks.onOpenFolder}
+      >
+        ${waIcon('folder-open', { slot: 'start' })}
+        <span>Add paper</span>
+      </wa-button>
+    </section>
+  `;
+}
+
+/** Streams the Other papers card lists for a paper: what `activeOnly` shows. */
+function liveCount(view: SessionView): number {
+  return view.rollup.running + view.rollup.waiting + view.rollup.interrupted;
+}
+
+/**
+ * The focus layout: the active paper's streams under a switcher, and every
+ * other paper's running or waiting streams in one card. Opening a row there
+ * switches paper.
+ */
+function papersFocusTemplate(
+  model: TaskSidebarModel,
+  callbacks: TaskSidebarCallbacks,
+): TemplateResult {
+  const active = model.papers.find(
+    (paper) => paper.display.key === model.shell.active,
+  );
+  const others = model.papers.filter((paper) => paper !== active);
+  const running = others.reduce(
+    (total, paper) => total + paper.view.rollup.running,
+    0,
+  );
+  const waiting = others.reduce(
+    (total, paper) => total + paper.view.rollup.waiting,
+    0,
+  );
+  return html`
+    <section class="task-sidebar-section task-project-section">
+      <div class="task-sidebar-section-heading">
+        <span class="task-sidebar-section-label">Tasks on this paper</span>
+        <wa-badge
+          class="task-sidebar-section-count"
+          variant="neutral"
+          appearance="outlined"
+          pill
+          >${active?.view.order.length ?? 0}</wa-badge
+        >
+      </div>
+      ${
+        active
+          ? html`<div class="task-sidebar-sessions">
+              ${streamTabsTemplate(active, { topLevelOnly: model.subagentsOpen })}
+            </div>`
+          : nothing
+      }
+      ${
+        others.length > 0
+          ? html`
+              <div class="task-other-papers">
+                <div class="task-other-papers-head">
+                  <span>Other papers</span>
+                  <span class="task-other-papers-counts">
+                    ${waIcon('circle', { className: 'task-rollup-running' })}
+                    ${running} running ·
+                    ${waIcon('circle-dot', { className: 'task-rollup-waiting' })}
+                    ${waiting} waiting
+                  </span>
+                </div>
+                ${others
+                  .filter((paper) => liveCount(paper.view) > 0)
+                  .map(
+                    (paper) => html`
+                      <div
+                        class="task-other-papers-paper"
+                        @click=${() => callbacks.onSelectPaper(paper.display.key)}
+                      >
+                        <span class="task-other-papers-mark">
+                          <span class="task-project-mark icon-surface is-size-s"
+                            >${paper.display.initials}</span
+                          >
+                          ${paper.display.name}
+                        </span>
+                        ${streamTabsTemplate(paper, {
+                          topLevelOnly: true,
+                          activeOnly: true,
+                        })}
+                      </div>
+                    `,
+                  )}
+                <div class="task-other-papers-note">
+                  Opening one switches paper
+                </div>
+              </div>
+            `
+          : nothing
+      }
+    </section>
+  `;
+}
+
+/** The switcher at the top of the focus layout: the active paper, and a
+ *  menu of every open paper plus the layout and folder actions. */
+function paperSwitcherTemplate(
+  model: TaskSidebarModel,
+  callbacks: TaskSidebarCallbacks,
+): TemplateResult {
+  const active = model.papers.find(
+    (paper) => paper.display.key === model.shell.active,
+  );
+  return html`
+    <wa-dropdown
+      class="task-paper-switcher"
+      placement="bottom-start"
+      @wa-select=${(
+        event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
+      ) => {
+        const value = event.detail.item.value;
+        if (value === 'open-folder') callbacks.onOpenFolder();
+        else if (value === 'show-sections') callbacks.onTogglePapersLayout();
+        else if (value) callbacks.onSelectPaper(value);
+      }}
+    >
+      <wa-button
+        slot="trigger"
+        type="button"
+        class="task-paper-switcher-trigger"
+        appearance="outlined"
+        size="s"
+        with-caret
+      >
+        <span class="task-project-mark icon-surface is-size-m" slot="start"
+          >${active?.display.initials ?? 'TX'}</span
+        >
+        <span class="task-project-copy">
+          <strong>${active?.display.name ?? 'No paper open'}</strong>
+          <small>${active?.display.subtitle ?? 'Open a folder to start'}</small>
+        </span>
+      </wa-button>
+      ${model.papers.map(
+        (paper) => html`
+          <wa-dropdown-item
+            value=${paper.display.key}
+            type="checkbox"
+            ?checked=${paper === active}
+          >
+            <span class="task-project-mark icon-surface is-size-s" slot="icon"
+              >${paper.display.initials}</span
+            >
+            ${paper.display.name}
+          </wa-dropdown-item>
+        `,
+      )}
+      <wa-divider></wa-divider>
+      <wa-dropdown-item value="show-sections">
+        ${waIcon('list-ul', { slot: 'icon' })} Show all papers
+      </wa-dropdown-item>
+      <wa-dropdown-item value="open-folder">
+        ${waIcon('folder-open', { slot: 'icon' })} Add paper
+      </wa-dropdown-item>
+    </wa-dropdown>
+  `;
+}
+
 export function taskSidebarTemplate(
   model: TaskSidebarModel,
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult {
-  const papers =
-    model.papers.length > 0
-      ? html`
-          ${model.papers.map((paper) => paperRow(paper, model, callbacks))}
-          <wa-button
-            type="button"
-            class="task-project-add btn-ghost"
-            appearance="plain"
-            size="s"
-            @click=${callbacks.onOpenFolder}
-          >
-            ${waIcon('folder-open', { slot: 'start' })}
-            <span>Open folder</span>
-          </wa-button>
-        `
-      : html`
-          <wa-button
-            type="button"
-            class="task-project-row btn-ghost"
-            appearance="plain"
-            size="s"
-            title="Open a project folder"
-            @click=${callbacks.onOpenFolder}
-          >
-            <span class="task-project-mark icon-surface is-size-m">
-              ${model.initials}
-            </span>
-            <span class="task-project-copy">
-              <strong>${model.workspaceName}</strong>
-              <small>Get started</small>
-            </span>
-            ${waIcon('arrow-up-right-from-square', {
-              className: 'task-project-chevron',
-              slot: 'end',
-            })}
-          </wa-button>
-        `;
-
-  // The nested split panel can connect before its slotted parent has a height.
-  // Web Awesome recovers its pixel position from this attribute after resize.
+  const focus = model.papersLayout === 'focus' && model.papers.length > 0;
+  let papersBody: TemplateResult;
+  if (model.papers.length === 0) {
+    papersBody = html`
+      <section class="task-sidebar-section task-project-section">
+        <wa-button
+          type="button"
+          class="task-project-row btn-ghost"
+          appearance="plain"
+          size="s"
+          title="Open a project folder"
+          @click=${callbacks.onOpenFolder}
+        >
+          <span class="task-project-mark icon-surface is-size-m">TX</span>
+          <span class="task-project-copy">
+            <strong>No paper open</strong>
+            <small>Get started</small>
+          </span>
+          ${waIcon('arrow-up-right-from-square', {
+            className: 'task-project-chevron',
+            slot: 'end',
+          })}
+        </wa-button>
+      </section>
+    `;
+  } else if (focus) {
+    papersBody = papersFocusTemplate(model, callbacks);
+  } else {
+    papersBody = papersSectionsTemplate(model, callbacks);
+  }
   return html`
-    <aside class="task-sidebar" aria-label="Projects and tasks">
+    <aside class="task-sidebar" aria-label="Papers and tasks">
       <header class="task-sidebar-brand">
         <div class="task-sidebar-logo" aria-hidden="true">T</div>
         <span class="task-sidebar-product">TeXRA</span>
@@ -206,6 +473,7 @@ export function taskSidebarTemplate(
       </header>
 
       <nav class="task-sidebar-primary" aria-label="Task actions">
+        ${focus ? paperSwitcherTemplate(model, callbacks) : nothing}
         ${sidebarAction({
           icon: 'pencil',
           label: 'New task',
@@ -219,36 +487,7 @@ export function taskSidebarTemplate(
         })}
       </nav>
 
-      <wa-split-panel
-        class="task-sidebar-scroll"
-        orientation="vertical"
-        position=${model.projectSectionPosition}
-        @wa-reposition=${callbacks.onResizeProjectSection}
-      >
-        <span slot="divider" class="task-section-split-handle">
-          ${waIcon('ellipsis')}
-        </span>
-        <section slot="start" class="task-sidebar-section task-project-section">
-          <div class="task-sidebar-section-label">
-            ${model.papers.length > 1 ? 'Papers' : 'Project'}
-          </div>
-          ${papers}
-        </section>
-
-        <section slot="end" class="task-sidebar-section task-history-section">
-          <div class="task-sidebar-section-heading">
-            <span class="task-sidebar-section-label">Tasks</span>
-            <wa-badge
-              class="task-sidebar-section-count"
-              variant="neutral"
-              appearance="outlined"
-              pill
-              >${model.streamCount}</wa-badge
-            >
-          </div>
-          <div class="task-sidebar-sessions">${model.sessions}</div>
-        </section>
-      </wa-split-panel>
+      <div class="task-sidebar-scroll">${papersBody}</div>
 
       <footer class="task-sidebar-footer">
         ${sidebarAction({
@@ -276,6 +515,87 @@ export function taskSidebarTemplate(
   `;
 }
 
+/**
+ * The paper chip at the head of the conversation pane (sections layout):
+ * names the paper the conversation belongs to and switches paper from its
+ * menu. In the focus layout the rail's switcher is that home instead.
+ */
+export function paperChipTemplate(
+  papers: readonly RailPaper[],
+  active: RailPaper | undefined,
+  onSelectPaper: (key: string) => void,
+): TemplateResult {
+  return html`
+    <wa-dropdown
+      class="task-paper-chip"
+      placement="bottom-start"
+      @wa-select=${(
+        event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
+      ) => {
+        if (event.detail.item.value) onSelectPaper(event.detail.item.value);
+      }}
+    >
+      <wa-button
+        slot="trigger"
+        type="button"
+        appearance="outlined"
+        size="s"
+        with-caret
+        title=${active?.display.key ?? 'No paper open'}
+      >
+        <span class="task-project-mark icon-surface is-size-s" slot="start"
+          >${active?.display.initials ?? 'TX'}</span
+        >
+        ${active?.display.name ?? 'No paper open'}
+      </wa-button>
+      ${papers.map(
+        (paper) => html`
+          <wa-dropdown-item
+            value=${paper.display.key}
+            type="checkbox"
+            ?checked=${paper === active}
+            >${paper.display.name}</wa-dropdown-item
+          >
+        `,
+      )}
+    </wa-dropdown>
+  `;
+}
+
+/**
+ * The dock chips above the composer: the paper-level actions a running
+ * conversation reaches for, dispatched as the host and surface arms they
+ * are. A git count for the edited file has no home in the view yet.
+ */
+export function conversationDockTemplate(): TemplateResult {
+  return html`
+    <div class="task-conversation-dock" role="group" aria-label="Paper actions">
+      <wa-button
+        type="button"
+        appearance="outlined"
+        size="s"
+        @click=${(event: Event) =>
+          event.target?.dispatchEvent(
+            SessionUiEvents.host({ kind: 'compileInputPdf' }),
+          )}
+      >
+        ${waIcon('file-pdf', { slot: 'start' })} Compile PDF
+      </wa-button>
+      <wa-button
+        type="button"
+        appearance="outlined"
+        size="s"
+        @click=${(event: Event) =>
+          event.target?.dispatchEvent(
+            SessionUiEvents.surface({ kind: 'toolsSheet', open: true }),
+          )}
+      >
+        ${waIcon('code-compare', { slot: 'start' })} latexdiff vs last commit
+      </wa-button>
+    </div>
+  `;
+}
+
 interface WorkbenchTabsCallbacks {
   onActivate(tabId: string): void;
   onClose(tabId: string): void;
@@ -284,13 +604,16 @@ interface WorkbenchTabsCallbacks {
 }
 
 /** DOM id of one tab's activate button; the tabpanel references it via aria-labelledby. */
-export function workbenchTabDomId(tabId: string): string {
-  return `task-workbench-tab-${tabId}`;
+export function workbenchTabDomId(tabId: string, session = ''): string {
+  return `task-workbench-tab-${session}-${tabId}`;
 }
 
 /** DOM id of the single pane a placement's tab strip switches. */
-export function workbenchPanelDomId(placement: WorkbenchPlacement): string {
-  return `task-workbench-panel-${placement}`;
+export function workbenchPanelDomId(
+  placement: WorkbenchPlacement,
+  session = '',
+): string {
+  return `task-workbench-panel-${session}-${placement}`;
 }
 
 /** Moves focus to a tab's activate button within its tab strip. */
@@ -396,6 +719,7 @@ export function workbenchTabsTemplate(
   activeTabId: string | undefined,
   placement: WorkbenchPlacement,
   callbacks: WorkbenchTabsCallbacks,
+  session = '',
 ): TemplateResult {
   const hideDirection =
     placement === 'right' ? 'chevron-right' : 'chevron-down';
@@ -424,9 +748,9 @@ export function workbenchTabsTemplate(
                 appearance="plain"
                 size="s"
                 role="tab"
-                id=${workbenchTabDomId(tab.id)}
+                id=${workbenchTabDomId(tab.id, session)}
                 aria-selected=${active ? 'true' : 'false'}
-                aria-controls=${workbenchPanelDomId(placement)}
+                aria-controls=${workbenchPanelDomId(placement, session)}
                 tabindex=${active ? '0' : '-1'}
                 title=${tab.target ?? tab.title}
                 @click=${() => callbacks.onActivate(tab.id)}

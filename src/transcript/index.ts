@@ -16,12 +16,7 @@ export {
   STREAM_LOG_SUMMARIES_DIR,
 } from './StreamLogStore';
 export { createRunTrace, type RunTrace } from './runTrace';
-export {
-  findTranscriptSpillFile,
-  readTranscriptSpill,
-  spillArtifactOpenFailedMessage,
-  SPILL_ARTIFACT_DELETED_MESSAGE,
-} from './spillArtifacts';
+export { readTranscriptSpill } from './spillArtifacts';
 export {
   StreamSnapshotPreloadError,
   StreamSnapshotStore,

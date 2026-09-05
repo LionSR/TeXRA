@@ -13,6 +13,6 @@ export function commandOnly<T extends string>(command: T) {
 }
 
 /** Schema with `command` + required `files` string array. */
-export function withFilesArray<T extends string>(command: T) {
+function withFilesArray<T extends string>(command: T) {
   return z.object({ command: z.literal(command), files: z.array(z.string()) });
 }

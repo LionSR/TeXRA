@@ -48,7 +48,6 @@ import {
   type ChildRunProgress,
   type WorkflowPhaseModel,
   type WorkflowPhaseRow,
-  type WorkflowRowGroup,
   type WorkflowRunModel,
 } from '@shared/streams/workflowRunModel';
 import { filterNotNullish } from '@utils/core';
@@ -198,15 +197,11 @@ function DeclaredTaskRow({
 
 /** A counted group of quiet rows; Enter unfolds it in place. */
 function GroupRow({
-  count,
-  expanded,
   focused,
-  group,
+  row,
 }: {
-  readonly count: number;
-  readonly expanded: boolean;
   readonly focused: boolean;
-  readonly group: WorkflowRowGroup;
+  readonly row: Extract<WorkflowPhaseRow, { kind: 'group' }>;
 }): React.JSX.Element {
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
@@ -215,11 +210,11 @@ function GroupRow({
           {focused ? POINTER : ' '}
         </Text>
         <Text aria-hidden dimColor>
-          {markerCell(expanded ? '▾' : '▸')}
+          {markerCell(row.expanded ? '▾' : '▸')}
         </Text>
       </Box>
       <RowSegment dimColor={!focused} flexShrink={1}>
-        {formatWorkflowRowGroup({ count, group })}
+        {formatWorkflowRowGroup(row)}
       </RowSegment>
     </Box>
   );
@@ -270,15 +265,32 @@ export function WorkflowPopup({
     Math.min(Math.max(0, index), Math.max(0, phases.length - 1));
   const phaseIndex = clampPhaseIndex(view.phaseIndex);
   const phase = phases[phaseIndex];
+  // The cards whose child run needs the user, its own approval or a
+  // descendant's: the fold's `approval` aggregate, read off the child
+  // streams this host holds, as the board reads it.
+  const waitingOf = (candidate: WorkflowPhaseModel): ReadonlySet<string> =>
+    new Set(
+      candidate.tasks
+        .filter((task) => {
+          const childId = model.childStreamOf.get(task.id);
+          const child =
+            childId === undefined
+              ? undefined
+              : sessionState.streams.get(childId);
+          return child !== undefined && child.approval !== 'none';
+        })
+        .map((task) => task.id),
+    );
   const rows = useMemo(
     () =>
       phase
         ? workflowPhaseRows(phase, {
             expanded: view.expanded,
             filter: view.filter,
+            waiting: waitingOf(phase),
           })
         : [],
-    [phase, view.expanded, view.filter],
+    [phase, view.expanded, view.filter, model, sessionState],
   );
   const rowByKey = useMemo(
     () => new Map(rows.map((row) => [row.key, row] as const)),
@@ -435,6 +447,7 @@ export function WorkflowPopup({
         workflowPhaseRows(candidate, {
           expanded: view.expanded,
           filter: view.filter,
+          waiting: waitingOf(candidate),
         }).map((row) => ({ phaseIndex: candidatePhaseIndex, row })),
       );
       const current = allRows.findIndex(
@@ -499,14 +512,7 @@ export function WorkflowPopup({
       case 'declared':
         return <DeclaredTaskRow task={row.task} />;
       case 'group':
-        return (
-          <GroupRow
-            count={row.count}
-            expanded={row.expanded}
-            focused={state.focused}
-            group={row.group}
-          />
-        );
+        return <GroupRow focused={state.focused} row={row} />;
     }
   };
   const activate = (key: string): void => {

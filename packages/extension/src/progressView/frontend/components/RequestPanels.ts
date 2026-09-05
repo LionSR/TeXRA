@@ -21,7 +21,6 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -41,6 +40,8 @@ import {
 
 // Local imports - shared schemas
 import type { PermissionPayload, StreamTabId } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
+import type { Surface } from '@shared/session/surface';
 
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -51,15 +52,6 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { groupBy } from '@utils/core';
 import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
 import { getPermissionKey } from '../permissionState';
-import { streamDisplayLabel } from '../utils';
-
-// Local imports - progress view contexts
-import {
-  EMPTY_STREAM_BY_ID,
-  permissionsContext,
-  streamByIdContext,
-  type StreamByIdMap,
-} from '../streamContexts';
 
 // Local imports - progress view component types
 import type { ApproveSplitButton } from './ApproveSplitButton';
@@ -186,19 +178,18 @@ export class RequestPanels extends LitElement {
   /** Canonical selection for the external-inquiry carousel. */
   @state() private selectedExternalInquiryKey: string | null = null;
 
-  /** Run metadata for captioning requests when several runs wait at once. */
-  @consume({ context: streamByIdContext, subscribe: true })
-  @state()
-  private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
-
   /**
-   * All pending permissions across streams. `permissions` is already scoped to
-   * the active stream, so multi-run captions must read this unfiltered list —
-   * otherwise `runIds.size > 1` can never become true.
+   * The session, for the run captions: `permissions` is already scoped to
+   * the selected stream, so the "more than one run is asking" question is
+   * answered by `view.approvals`, the unfiltered set.
    */
-  @consume({ context: permissionsContext, subscribe: true })
-  @state()
-  private allPermissions: PermissionPayload[] = [];
+  @property({ attribute: false }) view: SessionView | null = null;
+
+  /** The selected stream's `readOnly`; every panel's actions no-op. */
+  @property({ type: Boolean }) readOnly = false;
+
+  /** For the inquiry panels' drafts (`Surface.inquiryDrafts`). */
+  @property({ attribute: false }) surface: Surface | null = null;
 
   /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
   private permissionsByKind: ReadonlyMap<
@@ -226,15 +217,11 @@ export class RequestPanels extends LitElement {
       );
     }
 
-    if (
-      changedProperties.has('permissions') ||
-      changedProperties.has('allPermissions')
-    ) {
+    if (changedProperties.has('permissions') || changedProperties.has('view')) {
       // Captions key off every pending run, not the stream-filtered prop.
-      const runIds = new Set<StreamTabId>();
-      for (const permission of this.allPermissions) {
-        if (permission.data.streamId) runIds.add(permission.data.streamId);
-      }
+      const runIds = new Set<StreamTabId>(
+        (this.view?.approvals ?? []).map((approval) => approval.streamId),
+      );
       this.multiRunPending = runIds.size > 1;
     }
   }
@@ -254,14 +241,15 @@ export class RequestPanels extends LitElement {
    *
    * Single source of truth: `handleGlobalKeydown` resolves the DOM node from
    * this via `findPanelFor`, and the renderers mark that same permission
-   * `data-armed`. Deriving the two separately let them disagree — the newest
+   * `data-armed`. Deriving the two separately let them disagree: the newest
    * permission is not the target while the external-inquiry carousel is
-   * active, so an indicator keyed off `permissions[0]` would ring a panel the
-   * carousel does not even render, while the keypress landed on the visible
-   * one.
+   * active, so an indicator keyed off the newest alone would ring a panel
+   * the carousel does not even render, while the keypress landed on the
+   * visible one. `permissions` is the fold's order, oldest first, so the
+   * newest is the last.
    */
   private get armedPermission(): PermissionPayload | null {
-    const newest = this.permissions[0];
+    const newest = this.permissions.at(-1);
     if (!newest) return null;
     return (
       (this.externalInquiryCarouselActive
@@ -320,12 +308,21 @@ export class RequestPanels extends LitElement {
     if (permissions.length === 0) return nothing;
 
     const armedKey = this.armedPermissionKey();
+    // A workflow-script proposal (W0) is its own card, headed by what it
+    // proposes; the kind heading is for the sections whose cards need it.
+    const headless = permissions.every(
+      (permission) =>
+        permission.kind === PERMISSION_KIND.PROPOSAL &&
+        'workflowScript' in permission.data &&
+        permission.data.workflowScript !== undefined,
+    );
     return html`
       <section
         class=${config.cssClass}
-        aria-labelledby="${config.cssClass}-heading"
+        aria-labelledby=${headless ? nothing : `${config.cssClass}-heading`}
+        aria-label=${headless ? config.title : nothing}
       >
-        ${this.renderSectionHeader(config)}
+        ${headless ? nothing : this.renderSectionHeader(config)}
         <div class="${config.cssClass}__list">
           ${repeat(
             permissions,
@@ -358,13 +355,15 @@ export class RequestPanels extends LitElement {
       data-request-panel
       ?data-armed=${armed}
       .permission=${permission}
+      .readOnly=${this.readOnly}
+      .surface=${this.surface}
     ></${config.tag}>`;
     if (!this.multiRunPending) return panel;
     const streamId = permission.data.streamId;
     if (!streamId) return panel;
-    // If the run's tab was evicted, skip the group caption rather than
+    // If the run's stream was evicted, skip the group caption rather than
     // show the raw `agent#executionId` handle.
-    const label = streamDisplayLabel(this.streamById.get(streamId));
+    const label = this.view?.streams.get(streamId)?.label;
     if (!label) return panel;
     return html`
       <div class="request-run-group">
@@ -472,7 +471,7 @@ export class RequestPanels extends LitElement {
   /** True when the newest permission is one of several pending inquiries. */
   private get externalInquiryCarouselActive(): boolean {
     return (
-      this.permissions[0]?.kind === PERMISSION_KIND.EXTERNAL_INQUIRY &&
+      this.permissions.at(-1)?.kind === PERMISSION_KIND.EXTERNAL_INQUIRY &&
       this.externalInquiries.length > 1
     );
   }
@@ -501,7 +500,7 @@ export class RequestPanels extends LitElement {
   /**
    * Handle keyboard shortcuts for permission actions.
    * Only active when permissions are visible and no text input is focused.
-   * Delegates to the panel matching the newest permission (permissions[0]),
+   * Delegates to the panel matching the newest permission (the last one),
    * or the currently visible carousel panel for external inquiries.
    *
    * Left/right arrow keys navigate the external inquiry carousel.

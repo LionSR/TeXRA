@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 // Shared path aliases from tsconfig.json (single source of truth)
 import { aliases } from '../../scripts/aliases.mjs';
 
-const webviews = ['progressView', 'settingsView', 'webview'] as const;
+const webviews = ['progressView', 'settingsView'] as const;
 
 /**
  * Builds a single webview, named by VITE_WEBVIEW.

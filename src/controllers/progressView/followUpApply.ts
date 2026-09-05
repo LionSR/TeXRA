@@ -1,18 +1,12 @@
 /**
- * Host-neutral interpretation of the follow-up plan and polish-result unions.
- *
- * The consumer of both unions is already shared
- * ({@link createProgressViewSecondTierHandlers}); only the switch that turns a
- * union member into host messaging had escaped into each host, once per host,
- * with no behavioural difference beyond the verb names of the notification
- * ports. Hosts now bind {@link FollowUpApplyPorts} and pass it here.
+ * Host-neutral interpretation of the follow-up plan union: the switch that
+ * turns a plan into host messaging or a launch, bound once per host through
+ * {@link FollowUpApplyPorts}.
  */
 
 // Local imports
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
-import type { ProgressViewOutboundMessage } from '@shared/schemas';
 import type { ProgressFollowUpPlan } from './ProgressFollowUpController';
-import type { ProgressFollowUpPolishResult } from './ProgressFollowUpPolishController';
 
 /** Host messaging ports the two interpreters need. */
 export interface FollowUpApplyPorts {
@@ -20,7 +14,6 @@ export interface FollowUpApplyPorts {
   readonly showWarning: (message: string) => Promise<void> | void;
   readonly showError: (message: string) => Promise<void> | void;
   readonly logError: (message: string, error: Error | undefined) => void;
-  readonly post: (message: ProgressViewOutboundMessage) => void;
   /**
    * Run a compile-fixer request. Follow-up `execute` plans are only ever the
    * compile fixer (latexFixer), so both hosts run them on the configured
@@ -44,18 +37,4 @@ export async function applyFollowUpPlan(
     case 'execute':
       await ports.runCompileFixer(plan.request);
   }
-}
-
-/** Render a result from `ProgressFollowUpPolishController`. */
-export async function applyFollowUpPolishResult(
-  result: ProgressFollowUpPolishResult,
-  ports: FollowUpApplyPorts,
-): Promise<void> {
-  if (result.kind === 'skipped') return;
-  ports.post(result.update);
-  if (result.kind === 'updated') return;
-  if (result.kind === 'exception') {
-    ports.logError(result.logMessage, result.logData);
-  }
-  await ports.showError(result.userMessage);
 }

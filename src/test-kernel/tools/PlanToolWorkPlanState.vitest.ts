@@ -18,12 +18,7 @@ import { withToolEnvironment } from '@test/support/toolEnvironment';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore } from '@tools/goal';
-import {
-  isApprovalBypassedForStream,
-  isBashApprovalBypassedForStream,
-  proposalApprovals,
-  releaseStreamResources,
-} from '@tools/approval';
+import { proposalApprovals, releaseStreamResources } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 
 // Local file imports
@@ -227,8 +222,10 @@ describe('PlanTool — update (plan approval)', () => {
       expect(goal!.status).toBe('active');
       // The approved plan document seeds the goal verbatim.
       expect(goal!.objective).toBe(plan.objective);
-      expect(isBashApprovalBypassedForStream(streamId, session)).toBe(true);
-      expect(isApprovalBypassedForStream(streamId, session)).toBe(false);
+      expect(session.approvals.bash.bypass.isBypassed(streamId)).toBe(true);
+      expect(session.approvals.toolEdit.bypass.isBypassed(streamId)).toBe(
+        false,
+      );
       expect(
         events.filter((entry) => entry.event === 'setApprovalBypassState'),
       ).toEqual([
@@ -271,8 +268,8 @@ describe('PlanTool — update (plan approval)', () => {
       await expect(resultPromise).resolves.toMatchObject({
         status: 'executed',
       });
-      expect(isBashApprovalBypassedForStream(streamId, session)).toBe(true);
-      expect(isApprovalBypassedForStream(streamId, session)).toBe(true);
+      expect(session.approvals.bash.bypass.isBypassed(streamId)).toBe(true);
+      expect(session.approvals.toolEdit.bypass.isBypassed(streamId)).toBe(true);
       expect(session.approvals.proposal.isBypassed(streamId)).toBe(true);
       expect(
         events.filter((entry) => entry.event === 'setApprovalBypassState'),
@@ -323,8 +320,10 @@ describe('PlanTool — update (plan approval)', () => {
       expect(goal!.status).toBe('active');
       expect(goal!.objective).toBe(followUpPlan.objective);
       expect(goal!.objective).not.toContain('Old objective');
-      expect(isBashApprovalBypassedForStream(streamId, session)).toBe(true);
-      expect(isApprovalBypassedForStream(streamId, session)).toBe(false);
+      expect(session.approvals.bash.bypass.isBypassed(streamId)).toBe(true);
+      expect(session.approvals.toolEdit.bypass.isBypassed(streamId)).toBe(
+        false,
+      );
     } finally {
       await GoalStore.forget(streamId);
       releaseStreamResources(streamId, session);

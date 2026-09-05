@@ -1,91 +1,63 @@
 /**
- * Shared scaffolding for stream container components: consumes the stream and
- * permission contexts and keeps `filteredPermissions` scoped to the current
- * stream. Subclasses narrow `streamContext.streamState` and render.
+ * What every stream kind's content shares: the stream, the view, the
+ * surface, and the host snapshot as properties, the approval dock filtered
+ * to this stream, the transcript, and the usage footer.
  */
+import { html, LitElement, nothing, type TemplateResult } from 'lit';
+import { property } from 'lit/decorators.js';
 
-// Third-party imports
-import {
-  html,
-  LitElement,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
-import { consume } from '@lit/context';
-import { state } from 'lit/decorators.js';
-
-// Local imports - shared schemas
-import type {
-  ContextStateData,
-  PermissionPayload,
-  TokenUsageStats,
-} from '@shared/schemas';
-
-// Local imports - progress view
-import { filterPermissionsForStream, totalRunUsage } from '../stateUtils';
-import {
-  EMPTY_STREAM_CONTEXT,
-  permissionsContext,
-  streamStateContext,
-  type StreamContextValue,
-} from '../streamContexts';
-
-// Side-effect imports - sibling components shared by both stream-content
-// containers (registered once, consumed by the render helpers below)
+import type { PermissionPayload } from '@shared/schemas';
+import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type { Surface } from '@shared/session/surface';
+import { totalRunUsage } from '../usageTotals';
 import './RequestPanels';
 import './LogList';
 import './UsagePanel';
 
 export abstract class BaseStreamContent extends LitElement {
-  @consume({ context: streamStateContext, subscribe: true })
-  @state()
-  protected streamContext: StreamContextValue = EMPTY_STREAM_CONTEXT;
+  @property({ attribute: false }) stream: StreamView | null = null;
+  @property({ attribute: false }) view: SessionView | null = null;
+  @property({ attribute: false }) surface: Surface | null = null;
+  @property({ attribute: false }) host: HostSnapshot | null = null;
+  /** The host's clock, for elapsed readings (G4). */
+  @property({ type: Number }) nowMs: number | null = null;
 
-  @consume({ context: permissionsContext, subscribe: true })
-  @state()
-  protected permissionContext: PermissionPayload[] = [];
-
-  // Derived values - recomputed in willUpdate() before render.
-  protected filteredPermissions: PermissionPayload[] = [];
-
-  protected override willUpdate(changedProperties: PropertyValues): void {
-    if (
-      changedProperties.has('streamContext') ||
-      changedProperties.has('permissionContext')
-    ) {
-      this.filteredPermissions = filterPermissionsForStream(
-        this.permissionContext,
-        this.streamContext.streamInfo?.name,
-      );
-    }
+  /** The pending approvals asked by this stream, in the fold's request
+   *  order: oldest first, the newest last. */
+  protected get streamPermissions(): PermissionPayload[] {
+    const stream = this.stream;
+    if (!stream || !this.view) return [];
+    return this.view.approvals
+      .filter((approval) => approval.streamId === stream.id)
+      .map((approval) => approval.payload);
   }
 
-  /** Pending-approval dock, shared verbatim by the two stream-content renders. */
   protected renderApprovalDock(): TemplateResult | typeof nothing {
-    if (this.filteredPermissions.length === 0) return nothing;
+    const permissions = this.streamPermissions;
+    if (permissions.length === 0) return nothing;
     return html`
       <div class="conversation-column conversation-approval-dock">
         <request-panels
-          .permissions=${this.filteredPermissions}
+          .permissions=${permissions}
+          .view=${this.view}
+          .surface=${this.surface}
+          .readOnly=${this.stream?.readOnly === true}
         ></request-panels>
       </div>
     `;
   }
 
-  /** The transcript log column, shared verbatim by the two stream-content renders. */
   protected renderLog(): TemplateResult {
-    return html`<div class="conversation-log"><log-list></log-list></div>`;
+    return html`<div class="conversation-log">
+      <log-list .stream=${this.stream} .surface=${this.surface}></log-list>
+    </div>`;
   }
 
-  /** Session-total usage panel, shared by the two stream-content renders. */
-  protected renderUsagePanel(
-    runUsage: Record<string, TokenUsageStats>,
-    contextState: ContextStateData | undefined,
-  ): TemplateResult {
+  protected renderUsagePanel(stream: StreamView): TemplateResult {
     return html`<usage-panel
-      .usage=${totalRunUsage(runUsage)}
-      .contextState=${contextState ?? null}
+      .usage=${totalRunUsage(stream.usage)}
+      .contextState=${stream.context}
     ></usage-panel>`;
   }
 }

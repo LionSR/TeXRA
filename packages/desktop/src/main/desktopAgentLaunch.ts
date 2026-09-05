@@ -17,6 +17,7 @@ interface DesktopAgentLaunchContext {
 
 export type DesktopAgentLaunchOptions = Pick<
   RunAgentOptions,
+  | 'copilotRouteOverride'
   | 'modelHandlerCompatibilityKey'
   | 'preferHelperModel'
   | 'onRun'

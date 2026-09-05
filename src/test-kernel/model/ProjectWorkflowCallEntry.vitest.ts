@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  projectWorkflowCallEntries,
-  projectWorkflowCallEntry,
-} from '@model/projectWorkflowCallEntry';
+import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -28,29 +25,6 @@ function workflowCallEntry(model: string): StreamLogEntry {
     },
   };
 }
-
-describe('projectWorkflowCallEntry', () => {
-  it('projects a workflow-call canonical model id to its runtime label', () => {
-    const projected = projectWorkflowCallEntry(workflowCallEntry('gpt56-'));
-
-    expect(projected.data).toMatchObject({ model: 'GPT-5.6 Terra' });
-  });
-
-  it('leaves non-workflow entries untouched', () => {
-    const entry: StreamLogEntry = {
-      seqNo: 1,
-      id: 'entry-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'hello',
-      data: { model: 'gpt56-' },
-    };
-
-    expect(projectWorkflowCallEntry(entry)).toBe(entry);
-  });
-});
 
 describe('projectWorkflowCallEntries', () => {
   it('projects every entry in a range', () => {

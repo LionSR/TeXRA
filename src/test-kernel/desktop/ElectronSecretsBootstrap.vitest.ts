@@ -152,7 +152,6 @@ describe('desktop renderer bootstrap fallback', () => {
     expect(source).toMatch(
       /window\.addEventListener\('unhandledrejection',[\s\S]*?event\.preventDefault\(\);[\s\S]*?if \(bootstrapComplete\) \{[\s\S]*?reportRuntimeFailure\(event\.reason\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?bootstrapFailed = true;[\s\S]*?renderBootstrapFallback\(event\.reason\);/u,
     );
-    expect(source).toContain('if (bootstrapFailed) return;');
     expect(source).toContain('bootstrapComplete = true;');
   });
 
@@ -168,11 +167,11 @@ describe('desktop renderer bootstrap fallback', () => {
   it('skips IPC requests and DOM-dependent setup when bootstrap fails', () => {
     const source = loadRendererMain();
     // The DOM-dependent setup (event wiring + onboarding REQUEST_STATE +
-    // WEBVIEW_READY emission) must be gated behind !bootstrapFailed so it
+    // the papers request) must be gated behind !bootstrapFailed so it
     // cannot throw on top of the already-rendered fallback UI.
     expect(source).toContain('if (!bootstrapFailed) {');
     expect(source).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
-    expect(source).toContain('postWebviewReady');
+    expect(source).toContain('DESKTOP_PAPER_COMMANDS.REQUEST_PAPERS');
   });
 });
 

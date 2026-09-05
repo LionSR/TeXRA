@@ -71,10 +71,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const view = useSignal(sessionView());
   const rootStreamId = useSignal(rootStreamIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
-  // Subscribe to the shared SessionState: the model/stage/queued-follow-up
-  // reads below go through its helpers rather than the streams map.
-  // The usage gauge projects `StreamArtifactProjection.cumulativeUsage`, which
-  // repaints on this revision rather than on the streams map.
   const transientNotice = useSignal(transientNoticeSignal);
   const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();

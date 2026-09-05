@@ -21,28 +21,3 @@ export function formatCliHistoryDeletionSummary(counts: {
   }
   return sentences.join(' ');
 }
-
-export function formatActiveStreamRetention(count: number): string {
-  return count === 1
-    ? 'The stream is still active in TeXRA and was not deleted.'
-    : `${formatResultCount(count, 'stream')} are still active in TeXRA and were not deleted.`;
-}
-
-export function formatStreamDeletionRetention(
-  activeCount: number,
-  failedCount: number,
-): string {
-  const reasons = [
-    activeCount > 0
-      ? formatResultCount(activeCount, 'active stream')
-      : undefined,
-    failedCount > 0
-      ? formatResultCount(
-          failedCount,
-          'stream that could not be deleted',
-          'streams that could not be deleted',
-        )
-      : undefined,
-  ].filter(filterNotNullish);
-  return `Kept ${reasons.join(' and ')}.`;
-}

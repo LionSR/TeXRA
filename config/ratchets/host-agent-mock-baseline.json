@@ -102,36 +102,6 @@
       "specifier": "@agent/storage"
     },
     {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/executeAgent"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/runAgent"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/SessionResumeRetrieval"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/executeAgent"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/runAgent"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/SessionResumeRetrieval"
-    },
-    {
       "file": "src/test-kernel/desktop/DesktopToolEditApproval.vitest.ts",
       "form": "doMock",
       "specifier": "@agent/runtime/RunContext"

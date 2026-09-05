@@ -45,9 +45,6 @@ importers:
       '@lit-labs/ssr':
         specifier: ^4.1.0
         version: 4.1.0(@types/node@22.19.17)
-      '@lit/context':
-        specifier: ^1.1.6
-        version: 1.1.6
       '@octokit/request':
         specifier: ^10.0.16
         version: 10.0.16
@@ -820,9 +817,6 @@ importers:
       '@lit-labs/ssr':
         specifier: ^4.1.0
         version: 4.1.0(@types/node@22.19.17)
-      '@lit/context':
-        specifier: ^1.1.6
-        version: 1.1.6
       '@openai/codex-sdk':
         specifier: ^0.153.3
         version: 0.153.3
@@ -1049,9 +1043,6 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
-      '@lit/context':
-        specifier: ^1.1.6
-        version: 1.1.6
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0

@@ -36,7 +36,6 @@ const frontendDirs = [
 // both guidance files below.
 const EXPECTED_REACHABLE = [
   '@utils/core',
-  '@utils/core/boundedIdSet',
   '@utils/core/keyedMutex',
   '@utils/errors/errorMessage',
   '@utils/files/pastedImageName',
@@ -526,7 +525,7 @@ function documentedFacts() {
   );
   const agentsList = documentedList(
     agents,
-    /exactly \w+ modules are reachable from[\s\S]*?—\s*([\s\S]*?)\.\s*Those \w+/,
+    /exactly \w+ modules are reachable from[\s\S]*?[—:]\s*([\s\S]*?)\.\s*Those \w+/,
   );
 
   if (

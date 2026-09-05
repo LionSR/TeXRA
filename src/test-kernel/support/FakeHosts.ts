@@ -7,20 +7,20 @@ import type {
   PromptMessageOptions,
 } from '@hosts/uiHosts';
 
-export type PromptEventKind = 'info' | 'warning' | 'error';
+type PromptEventKind = 'info' | 'warning' | 'error';
 
-export interface PromptMessageEvent {
+interface PromptMessageEvent {
   kind: PromptEventKind;
   message: string;
   options?: PromptMessageOptions;
 }
 
-export interface PromptConfirmEvent {
+interface PromptConfirmEvent {
   message: string;
   options?: PromptConfirmOptions;
 }
 
-export interface PromptInputEvent {
+interface PromptInputEvent {
   options: PromptInputOptions;
 }
 
@@ -30,7 +30,7 @@ export interface FakeUIHostsOptions {
   inputResponses?: readonly (string | undefined)[];
 }
 
-export class FakePromptHost implements PromptHost {
+class FakePromptHost implements PromptHost {
   readonly messages: PromptMessageEvent[] = [];
 
   readonly confirms: PromptConfirmEvent[] = [];

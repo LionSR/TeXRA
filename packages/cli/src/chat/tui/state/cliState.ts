@@ -470,16 +470,6 @@ export function bumpCodexPreferenceVersion(): void {
   codexPreferenceVersion.set(codexPreferenceVersion.get() + 1);
 }
 
-// ---------------------------------------------------------------------------
-// removeStream
-// ---------------------------------------------------------------------------
-
-// Cross-slice cleanup when a stream goes away: drops it from the streams map
-// and clears focus if it was active. The removal tombstone itself — what
-// refuses later roster, edge, attachment, and status facts for the identity —
-// is owned by the shared `SessionState` (the applier installs it before this
-// runs), not by CLI view state.
-
 const RESET_HOOKS = new Set<() => void>();
 
 export function registerCliStateResetHook(resetHook: () => void): () => void {

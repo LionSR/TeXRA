@@ -40,9 +40,9 @@ import {
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import {
   ownerProcessStart,
-  ProcessIdentity,
   SessionEventLog,
-  SessionEvents,
+  sessionEventsLayer,
+  tailFrom,
 } from '@agent/runtime/SessionEvents';
 import {
   initSessionGraphs,
@@ -61,8 +61,10 @@ import {
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import { SessionInputs } from '@shared/session/sessionInputs';
 import {
   isRunningStreamingTextEntry,
   type StreamLogDelta,
@@ -75,6 +77,7 @@ import {
   TranscriptSubscriptions,
 } from './sessionSources';
 import { SessionViewService } from './SessionView';
+import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 const log = createLog('sessionLayer');
@@ -276,7 +279,7 @@ function historicalStream(
  * The history import (above): the first layer of a root's graph, one
  * ordered append per stream under the log's permit, parents before
  * children, stamped at the stream's own time, and complete before
- * `SessionEvents.layer` reads its anchor, so the listing hydrate sees every
+ * `sessionEventsLayer` reads its anchor, so the listing hydrate sees every
  * historical stream and the tail starts after them.
  */
 const historyImport = (transcripts: StreamLogStore) =>
@@ -364,8 +367,9 @@ const sessionLayer = (key: SessionKey) =>
   Layer.fresh(
     Layer.mergeAll(ownerLiveness, transcriptBridge(key.transcripts)).pipe(
       Layer.provideMerge(SessionViewService.layer),
+      Layer.provideMerge(sessionInputsLayer),
       Layer.provideMerge(
-        SessionEvents.layer.pipe(
+        sessionEventsLayer.pipe(
           Layer.provideMerge(
             historyImport(key.transcripts).pipe(
               Layer.provideMerge(
@@ -447,8 +451,24 @@ function sessionGraphOpener(
       publish,
       view: view.ref,
       viewChanges: view.changes,
-      folded: view.all,
+      // The plane's tail woken by the view's cursor instead of the log's
+      // level: the same rows `events.all` delivers, none before the fold
+      // has landed the state it produced.
+      folded: (fromCommit) =>
+        tailFrom(
+          eventLog.readAll,
+          {
+            get: SubscriptionRef.get(view.ref).pipe(
+              Effect.map((v) => v.cursor),
+            ),
+            changes: SubscriptionRef.changes(view.ref).pipe(
+              Stream.map((v) => v.cursor),
+            ),
+          },
+          fromCommit,
+        ),
       local: Context.get(context, LocalRuntimeSource).ref,
+      inputs: Context.get(context, SessionInputs).read,
       subscriptions: Context.get(context, TranscriptSubscriptions),
       requests,
       now: () => SubscriptionRef.getUnsafe(eventLog.level),

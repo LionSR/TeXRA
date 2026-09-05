@@ -1,40 +1,10 @@
 /**
- * Typed custom events for ProgressView components.
- * Both dispatch and handler sides use these types.
+ * The decision vocabulary of the request panels: what each permission kind
+ * may answer with. `BaseRequestPanel.emitAction` maps a decision onto the
+ * `runtime.request` (or `host.request`) arm it names.
  */
 
-import type {
-  GettingStartedActionDetail,
-  PermissionPayload,
-  UserQuestionAnswers,
-} from '@shared/schemas';
-import { createEvent } from '@shared/utils/events';
-import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
-
-// =============================================================================
-// Event Detail Types
-// =============================================================================
-
-export interface StreamEventDetail {
-  streamId: string;
-}
-
-export interface ToolbarCommandDetail {
-  command: string;
-}
-
-export interface FollowUpChangeDetail {
-  readonly streamId: string;
-  readonly value: string;
-  /** Append is used when an async paste finishes after its stream is hidden. */
-  readonly mode?: 'replace' | 'append';
-}
-
-/** Images pasted into the follow-up box, carried with the send event. */
-export interface FollowUpSendDetail {
-  readonly streamId: string;
-  readonly images: readonly ExtractedClipboardImage[];
-}
+import type { PermissionPayload, UserQuestionAnswers } from '@shared/schemas';
 
 /**
  * Frontend-only panel action emitted by the inline edit/command approval
@@ -140,66 +110,3 @@ export type ApprovalDecision<K extends ApprovalPermissionKind> = Extract<
   PermissionDecisionByKind[K],
   { action: 'approve' }
 >;
-
-/** A permission and the only decisions valid for that permission kind. */
-export type PermissionActionDetail<K extends PermissionKind = PermissionKind> =
-  {
-    [P in K]: Extract<PermissionPayload, { kind: P }> & {
-      decision: PermissionDecision<P>;
-    };
-  }[K];
-
-/**
- * Detail for file-related actions in ProgressView.
- * Named to distinguish from mainView's FileActionDetail which has different fields.
- */
-export interface ProgressFileActionDetail {
-  command: string;
-  file: string;
-  base?: string;
-  prev?: string;
-}
-
-// =============================================================================
-// Event Creators - use these to dispatch typed events
-// =============================================================================
-
-export const ProgressEvents = {
-  streamSwitch: (detail: StreamEventDetail) =>
-    createEvent('stream-switch', detail),
-
-  streamDelete: (detail: StreamEventDetail) =>
-    createEvent('stream-delete', detail),
-
-  toolbarCommand: (detail: ToolbarCommandDetail) =>
-    createEvent('toolbar-command', detail),
-
-  fileAction: (detail: ProgressFileActionDetail) =>
-    createEvent('file-action', detail),
-
-  followupChange: (detail: FollowUpChangeDetail) =>
-    createEvent('followup-change', detail),
-
-  followupSend: (detail: FollowUpSendDetail) =>
-    createEvent('followup-send', detail),
-
-  followupPolish: () => createEvent('followup-polish', undefined),
-
-  compileFixerRun: () => createEvent('compile-fixer-run', undefined),
-
-  permissionAction: <K extends PermissionKind>(
-    permission: Extract<PermissionPayload, { kind: K }>,
-    decision: PermissionDecision<K>,
-  ) => createEvent('permission-action', { ...permission, decision }),
-
-  fileClick: (detail: { file: string; line?: number }) =>
-    createEvent('file-click', detail),
-
-  focusComplete: () => createEvent('focus-complete', undefined),
-
-  followupFocusComplete: () =>
-    createEvent('followup-focus-complete', undefined),
-
-  gettingStartedAction: (detail: GettingStartedActionDetail) =>
-    createEvent('getting-started-action', detail),
-} as const;

@@ -1,8 +1,8 @@
 // The pure fold over a recorded fan-out session: a workflow-script root, one
 // child agent run with a grandchild of its own, a background process stream.
-// The scenario is the commit-ordered event log a publisher would replay; every
-// assertion compares the fold's output to the existing shared folds it must
-// reproduce, so the two can never drift.
+// The scenario (`fanOutScenario.ts`) is the commit-ordered event log a
+// publisher would replay; every assertion compares the fold's output to the
+// existing shared folds it must reproduce, so the two can never drift.
 
 import { describe, expect, it } from 'vitest';
 
@@ -12,15 +12,10 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   runIdentityDisplayName,
-  type ApprovalPolicySnapshot,
   type FoldInput,
-  type LocalRuntimeState,
-  type RunIdentity,
-  type SessionEvent,
   type StreamLogEntry,
   type StreamTabId,
   type TaskGroup,
-  type WorkflowCallProgress,
 } from '@shared/schemas';
 import { projectTranscriptRow, type TranscriptRow } from '@shared/transcript';
 import { fold } from '@shared/session/sessionFold';
@@ -36,130 +31,23 @@ import {
   type ChildRunProgress,
 } from '@shared/streams/workflowRunModel';
 
-/** A process identity, never a lease token (contract C5). */
-const OWNER = '4242:2026-09-04T00:00:00.000Z';
-const OTHER_OWNER = '4343:2026-09-04T00:00:00.000Z';
-const ROOT = 'review#aaaaaaaaaaaa' as StreamTabId;
-const CHILD = 'search#bbbbbbbbbbbb' as StreamTabId;
-const GRANDCHILD = 'lint#dddddddddddd' as StreamTabId;
-const PROCESS = 'bash@tool#cccccccccccc' as StreamTabId;
-
-const ROOT_IDENTITY: RunIdentity = {
-  kind: 'multiAgentWorkflow',
-  workflowName: 'review',
-};
-const CHILD_IDENTITY: RunIdentity = { kind: 'agent', agent: 'custom:search' };
-const GRANDCHILD_IDENTITY: RunIdentity = {
-  kind: 'agent',
-  agent: 'custom:lint',
-};
-const ROOT_POLICY: ApprovalPolicySnapshot = {
-  policy: 'ask',
-  bypasses: { bash: false, toolEdit: true, superYolo: false },
-};
-
-/** `Omit` over each member of a union, so a fixture keeps its arm. */
-type EntryFixture = StreamLogEntry extends infer E
-  ? E extends unknown
-    ? Omit<E, 'seqNo' | 'timestamp' | 'level'>
-    : never
-  : never;
-
-/** A durable arm without its envelope: what a publisher builds before the
- *  aggregate, seq, commit, owner, and clock are stamped on. */
-type SessionEventBody = SessionEvent extends infer E
-  ? E extends unknown
-    ? Omit<E, 'aggregateId' | 'seq' | 'commit' | 'ownerId' | 'at'>
-    : never
-  : never;
-
-/** Seq numbered per aggregate and committed in one session order, the way
- *  the event table keys them (contract C1). */
-class Log {
-  readonly events: SessionEvent[] = [];
-  private readonly seq = new Map<string, number>();
-  private readonly entrySeq = new Map<StreamTabId, number>();
-  private commit = 0;
-
-  emit(
-    aggregateId: string,
-    at: number,
-    body: SessionEventBody,
-    ownerId: string | null = OWNER,
-  ): SessionEvent {
-    const seq = (this.seq.get(aggregateId) ?? 0) + 1;
-    this.seq.set(aggregateId, seq);
-    this.commit += 1;
-    // A body is a distributive omit over the union, so the spread cannot be
-    // typed back into the union without this assertion.
-    const event = {
-      aggregateId,
-      seq,
-      commit: this.commit,
-      ownerId,
-      at,
-      ...body,
-    } as SessionEvent;
-    this.events.push(event);
-    return event;
-  }
-
-  entry(
-    streamId: StreamTabId,
-    at: number,
-    entry: EntryFixture,
-  ): StreamLogEntry {
-    const seqNo = (this.entrySeq.get(streamId) ?? 0) + 1;
-    this.entrySeq.set(streamId, seqNo);
-    const full: StreamLogEntry = {
-      ...entry,
-      seqNo,
-      timestamp: at,
-      level: 'info',
-    };
-    this.emit(streamId, at, { type: 'transcript.entry', entry: full });
-    return full;
-  }
-}
-
-function call(
-  status: 'planned' | 'running' | 'completed',
-  childStreamId?: StreamTabId,
-): WorkflowCallProgress {
-  return {
-    id: 'inspect',
-    label: 'inspect',
-    phase: 'Map',
-    attemptId: 'attempt-1',
-    ...(childStreamId ? { childStreamId } : {}),
-    status,
-  };
-}
-
-const tail = (event: SessionEvent): FoldInput => ({
-  _tag: 'event',
-  read: 'all',
-  event,
-});
-
-const subscribe = (...ids: StreamTabId[]): FoldInput => ({
-  _tag: 'subscriptions',
-  set: ids.map((id) => ({ id, fromSeq: 0 })),
-});
-
-function local(state: Partial<LocalRuntimeState>): FoldInput {
-  return {
-    _tag: 'local',
-    local: { self: [], heldBy: [], unreadable: [], ...state },
-  };
-}
-
-function foldAll(
-  inputs: readonly FoldInput[],
-  from = emptySessionView('paper'),
-): SessionView {
-  return inputs.reduce(fold, from);
-}
+import {
+  CHILD,
+  CHILD_IDENTITY,
+  GRANDCHILD,
+  Log,
+  OTHER_OWNER,
+  OWNER,
+  PROCESS,
+  ROOT,
+  ROOT_IDENTITY,
+  ROOT_POLICY,
+  buildScenario,
+  foldAll,
+  local,
+  subscribe,
+  tail,
+} from './fanOutScenario';
 
 function stream(view: SessionView, id: StreamTabId): StreamView {
   const found = view.streams.get(id);
@@ -188,230 +76,6 @@ function rowsOf(entries: readonly StreamLogEntry[]): TranscriptRow[] {
     if (row) byId.set(entry.id, row);
   }
   return [...byId.values()];
-}
-
-function buildScenario() {
-  const log = new Log();
-  const rootEntries: StreamLogEntry[] = [];
-
-  log.emit(ROOT, 1000, {
-    type: 'run.start',
-    executionId: 'aaaaaaaaaaaa',
-    identity: ROOT_IDENTITY,
-    category: AgentCategory.Workflow,
-    isRemote: false,
-    worktree: { workingDirectory: '/paper', branch: 'main' },
-    userFollowUpSupport: 'unsupported',
-    approvalPolicy: ROOT_POLICY,
-    checkpointId: 'review@chat',
-  });
-  log.emit(ROOT, 1000, {
-    type: 'run.activate',
-    category: AgentCategory.Workflow,
-    isRemote: false,
-    background: false,
-  });
-  log.emit(ROOT, 1000, {
-    type: 'run.config',
-    executionId: 'aaaaaaaaaaaa',
-    config: {
-      model: 'claude-sonnet-4-5',
-      instruction: 'review the draft',
-      agent: 'review',
-      inputFiles: ['draft.tex'],
-    },
-  });
-  log.emit(ROOT, 1000, {
-    type: 'status',
-    phase: STREAM_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: 1000,
-  });
-  rootEntries.push(
-    log.entry(ROOT, 1001, {
-      id: 'phase-Map',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      text: 'Map',
-      data: { kind: 'phase', index: 0, total: 1, attemptId: 'attempt-1' },
-    }),
-  );
-  log.emit(ROOT, 1001, {
-    type: 'stage.start',
-    id: 'phase-Map',
-    label: 'Map',
-    kind: 'phase',
-    index: 0,
-    total: 1,
-  });
-  rootEntries.push(
-    log.entry(ROOT, 1002, {
-      id: 'call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: 'phase-Map',
-      data: call('planned'),
-    }),
-  );
-
-  // The child agent run: its run.start carries the parent, and the registry
-  // confirms the edge as a session fact.
-  log.emit(CHILD, 1500, {
-    type: 'run.start',
-    executionId: 'bbbbbbbbbbbb',
-    identity: CHILD_IDENTITY,
-    category: AgentCategory.ToolUse,
-    isRemote: false,
-    parentStreamId: ROOT,
-    userFollowUpSupport: 'nativeInteractive',
-  });
-  log.emit(CHILD, 1500, { type: 'setParentStream', parentStreamId: ROOT });
-  log.emit(CHILD, 1500, {
-    type: 'run.config',
-    executionId: 'bbbbbbbbbbbb',
-    config: { model: 'claude-sonnet-4-5', instruction: 'search' },
-  });
-  log.emit(CHILD, 1500, {
-    type: 'status',
-    phase: STREAM_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: 1500,
-  });
-  rootEntries.push(
-    log.entry(ROOT, 1501, {
-      id: 'call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: 'phase-Map',
-      data: call('running', CHILD),
-    }),
-  );
-  log.emit(CHILD, 1600, {
-    type: 'conversation.progress',
-    progress: { toolCallCount: 3 },
-  });
-  log.emit(CHILD, 1700, {
-    type: 'approval.requested',
-    requestId: 'req-1',
-    payload: {
-      kind: 'bash',
-      data: {
-        requestId: 'req-1',
-        allowBypass: true,
-        streamId: CHILD,
-        command: 'ls',
-      },
-    },
-  });
-
-  // The child's own delegate: a grandchild that starts and finishes while the
-  // child waits, and one empty-round file fact the tab must not show.
-  log.emit(GRANDCHILD, 1750, {
-    type: 'run.start',
-    executionId: 'dddddddddddd',
-    identity: GRANDCHILD_IDENTITY,
-    category: AgentCategory.ToolUse,
-    isRemote: false,
-    userFollowUpSupport: 'unsupported',
-    parentStreamId: CHILD,
-  });
-  log.emit(GRANDCHILD, 1750, {
-    type: 'status',
-    phase: STREAM_PHASE.RUNNING,
-    cause: 'lifecycle',
-    runStartedAt: 1750,
-  });
-  log.emit(GRANDCHILD, 1760, {
-    type: 'addOutputFiles',
-    filesByRound: { 1: [] },
-  });
-  log.emit(GRANDCHILD, 1780, {
-    type: 'result',
-    outcome: 'completed',
-    executionId: 'dddddddddddd',
-    category: AgentCategory.ToolUse,
-    isSubagent: true,
-  });
-  log.emit(GRANDCHILD, 1780, {
-    type: 'status',
-    phase: STREAM_PHASE.COMPLETED,
-    previousPhase: STREAM_PHASE.RUNNING,
-    cause: 'lifecycle',
-  });
-
-  // A background process stream, newer than the root: leads the order.
-  log.emit(PROCESS, 2000, {
-    type: 'run.start',
-    executionId: 'cccccccccccc',
-    identity: { kind: 'process', tool: 'bash' },
-    category: AgentCategory.ToolUse,
-    isRemote: false,
-    userFollowUpSupport: 'unsupported',
-  });
-  log.emit(PROCESS, 2000, {
-    type: 'run.config',
-    executionId: 'cccccccccccc',
-    config: { model: 'unused', instruction: 'npm test' },
-  });
-
-  const pending = log.events.length;
-
-  log.emit(CHILD, 1800, { type: 'approval.resolved', requestId: 'req-1' });
-  log.emit(CHILD, 1900, {
-    type: 'result',
-    outcome: 'completed',
-    executionId: 'bbbbbbbbbbbb',
-    category: AgentCategory.ToolUse,
-    isSubagent: true,
-  });
-  log.emit(CHILD, 1900, {
-    type: 'status',
-    phase: STREAM_PHASE.COMPLETED,
-    previousPhase: STREAM_PHASE.RUNNING,
-    cause: 'lifecycle',
-  });
-  rootEntries.push(
-    log.entry(ROOT, 1901, {
-      id: 'call-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      groupId: 'phase-Map',
-      data: call('completed', CHILD),
-    }),
-  );
-  rootEntries.push(
-    log.entry(ROOT, 1902, {
-      id: 'phase-Map',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      text: 'Map',
-      data: { kind: 'phase', status: 'completed', endTime: 1902 },
-    }),
-  );
-  log.emit(ROOT, 1903, {
-    type: 'result',
-    outcome: 'completed',
-    executionId: 'aaaaaaaaaaaa',
-    category: AgentCategory.Workflow,
-    isSubagent: false,
-  });
-  log.emit(ROOT, 1903, {
-    type: 'status',
-    phase: STREAM_PHASE.COMPLETED,
-    previousPhase: STREAM_PHASE.RUNNING,
-    cause: 'lifecycle',
-  });
-
-  const events = log.events.map(tail);
-  return {
-    log,
-    rootEntries,
-    /** The replay a subscriber of every transcript folds. */
-    events: [subscribe(ROOT, CHILD, GRANDCHILD, PROCESS), ...events],
-    /** The prefix that ends with the child's approval still pending. */
-    pending: [
-      subscribe(ROOT, CHILD, GRANDCHILD, PROCESS),
-      ...events.slice(0, pending),
-    ],
-  };
 }
 
 const alive = local({ self: [OWNER] });

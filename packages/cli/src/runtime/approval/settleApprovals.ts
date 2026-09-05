@@ -149,6 +149,7 @@ export function settleHumanInputDenial(
  */
 export function denyExternalInquiryIfNoHumanInput(
   threadId: string,
+  turnIndex: number,
   context: CliContext,
 ): boolean {
   const denial = settleHumanInputDenial(context, EXTERNAL_INQUIRY_YOLO_MESSAGE);
@@ -159,6 +160,7 @@ export function denyExternalInquiryIfNoHumanInput(
   handleExternalInquiryAction({
     action: 'drop',
     threadId,
+    turnIndex,
     reason: denial.reason,
   }).catch((error: unknown) => {
     logWarning(

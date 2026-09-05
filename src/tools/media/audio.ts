@@ -117,11 +117,11 @@ export async function startRecording(): Promise<{
         } else {
           log.info('Recording process completed successfully');
         }
-        resetRecordingState();
+        if (activeRecordingProcess === subprocess) resetRecordingState();
       })
       .catch((error) => {
         log.error(`Sox process error: ${error.message}`);
-        resetRecordingState();
+        if (activeRecordingProcess === subprocess) resetRecordingState();
       });
 
     subprocess.stderr?.on('data', (data: Buffer) => {

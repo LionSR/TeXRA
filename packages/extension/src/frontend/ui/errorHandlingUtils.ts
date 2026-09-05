@@ -7,8 +7,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 /** Valid documentation identifiers for error messages. */
 type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
 
-/** Log a formatted error message and return it. */
-export function logErrorMessage(
+function logErrorMessage(
   channel: string,
   prefix: string,
   err: unknown,

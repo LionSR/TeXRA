@@ -18,6 +18,7 @@ export const DESKTOP_DIFF_COMMANDS = {
 } as const;
 
 export const DesktopShowDiffMessageSchema = z.object({
+  session: z.string().min(1),
   command: z.literal(DESKTOP_DIFF_COMMANDS.SHOW_DIFF),
   title: z.string(),
   // The one path the Review workbench displays. Always supplied by the
@@ -37,6 +38,7 @@ export type DesktopShowDiffMessage = z.infer<
 >;
 
 export const DesktopCloseDiffMessageSchema = z.object({
+  session: z.string().min(1),
   command: z.literal(DESKTOP_DIFF_COMMANDS.CLOSE_DIFF),
 });
 

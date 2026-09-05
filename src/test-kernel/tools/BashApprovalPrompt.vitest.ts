@@ -13,10 +13,7 @@ import type {
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { BashPermissionSchema, type StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import {
-  requestBashApproval,
-  setBashApprovalSessionBypass,
-} from '@tools/approval/bashApproval';
+import { requestBashApproval } from '@tools/approval/bashApproval';
 
 const sid = (s: string): StreamTabId => s as StreamTabId;
 
@@ -62,7 +59,7 @@ describe('requestBashApproval queueing', () => {
     let policyDenials = 0;
     let prompts = 0;
     session.setApprovalPolicy('never');
-    setBashApprovalSessionBypass(streamId, true, { silent: true, session });
+    session.approvals.bash.bypass.setBypass(streamId, true, { silent: true });
     session.interactions.use({
       requestBashApproval: async () => {
         prompts += 1;
@@ -123,7 +120,7 @@ describe('requestBashApproval queueing', () => {
 
       // The user answers the first prompt with "approve and stop asking";
       // the second must honor that instead of prompting again.
-      setBashApprovalSessionBypass(streamId, true, { silent: true, session });
+      session.approvals.bash.bypass.setBypass(streamId, true, { silent: true });
       firstAnswer.resolve({ action: 'approve' });
 
       expect(await first).toEqual({ action: 'approve' });

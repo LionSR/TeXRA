@@ -50,7 +50,7 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
   protected readonly approvalDecision = { action: 'approve' } as const;
 
   protected override handleExtraKey(key: string): boolean {
-    if (key !== 'r' || this.archived || !this.permission.data.goalEnabled) {
+    if (key !== 'r' || this.readOnly || !this.permission.data.goalEnabled) {
       return false;
     }
     this.emitAction({ action: 'approve_and_goal' });
@@ -84,7 +84,7 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
             title:
               'Approve this plan and keep working across turns until it completes or needs your input (r)',
             action: 'approve_and_goal',
-            disabled: this.archived,
+            disabled: this.readOnly,
             onClick: () => this.emitAction({ action: 'approve_and_goal' }),
           })
         : nothing,

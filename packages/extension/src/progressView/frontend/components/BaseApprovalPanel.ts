@@ -50,14 +50,14 @@ export abstract class BaseApprovalPanel<
 
   override handleKeyboardShortcut(key: string): boolean {
     if (key === 'y') {
-      if (this.archived) return false;
+      if (this.readOnly) return false;
       this.emitAction(this.approvalDecision);
       return true;
     }
     // `a` accelerates whichever run-scoped action this panel's Approve menu
     // surfaces: the edit/bash session bypass or the proposal's approve-all.
     if (key === 'a') {
-      if (this.archived || this.showFeedback) return false;
+      if (this.readOnly || this.showFeedback) return false;
       if (this.canBypass) {
         this.approveSessionHandler();
         return true;
@@ -79,6 +79,8 @@ export abstract class BaseApprovalPanel<
     prefix: string;
     details: TemplateResult;
     approveTitle: string;
+    /** Visible text of the approve button; 'Approve' unless given. */
+    approveLabel?: string;
     rejectTitle: string;
     leadingActions?: TemplateResult | typeof nothing;
     middleActions?: TemplateResult | typeof nothing;
@@ -95,7 +97,7 @@ export abstract class BaseApprovalPanel<
         <div class="${prefix}__details">${options.details}</div>
         <div class="${prefix}__actions">
           ${options.leadingActions ?? nothing}
-          ${this.renderApproveButton(options.approveTitle)}
+          ${this.renderApproveButton(options.approveTitle, options.approveLabel)}
           ${options.middleActions ?? nothing}
           ${this.renderRejectButton(options.rejectTitle)}
           ${options.trailingActions ?? nothing}
@@ -113,7 +115,10 @@ export abstract class BaseApprovalPanel<
    * wiring of every run-scoped menu item. Subclasses configure which items
    * surface via the overridable members above; none re-template this markup.
    */
-  protected renderApproveButton(approveTitle: string): TemplateResult {
+  protected renderApproveButton(
+    approveTitle: string,
+    approveLabel = 'Approve',
+  ): TemplateResult {
     // Rejection feedback is a distinct decision mode. Keep the one-off
     // Approve action available so the user can change course, but hide the
     // conflicting run-scoped grants just as handleKeyboardShortcut blocks
@@ -122,12 +127,13 @@ export abstract class BaseApprovalPanel<
     return html`
       <approve-split-button
         .approveTitle=${approveTitle}
+        .approveLabel=${approveLabel}
         .canBypass=${canUseRunScopedApproval && this.canBypass}
         .bypassAction=${this.bypassAction}
         .canApproveAllDelegatedWork=${
           canUseRunScopedApproval && this.canApproveAllDelegatedWork
         }
-        .disabled=${this.archived}
+        .disabled=${this.readOnly}
         @approve=${() => this.emitAction(this.approvalDecision)}
         @approve-session=${() => this.approveSessionHandler()}
         @approve-all-delegated-work=${() =>

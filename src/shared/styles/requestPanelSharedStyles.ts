@@ -40,7 +40,7 @@ const truncateTextRule: CSSResult = css`
  * still sets its own `--textarea-min-height` / `--textarea-max-height`, which
  * is the intended per-surface difference.
  */
-export const proseTextareaPartRule: CSSResult = css`
+const proseTextareaPartRule: CSSResult = css`
   field-sizing: content;
   width: 100%;
   height: auto;

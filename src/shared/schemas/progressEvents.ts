@@ -1,15 +1,13 @@
-import type {
-  UpdateCompileFailuresMessageSchema,
-  UpdateConversationProgressMessageSchema,
-  UpdateFilesMessageSchema,
-  UpdateMissingOutputsMessageSchema,
-  UpdateStreamStatusMessageSchema,
-} from './progressView/outbound';
 import type { z } from 'zod';
 
 import type { ExecutionId, StreamTabId } from './identifiers';
 import type { FileLocation } from './output';
-import type { RoundStage } from './streamState';
+import type { StreamPhase, StreamSubstate } from './stream';
+import type {
+  ConversationProgress,
+  RoundKeyedOutputSidecarValueSchemas,
+  RoundStage,
+} from './streamState';
 import type { ExtendedTokenUsageStats } from './usage';
 
 /**
@@ -35,37 +33,33 @@ export interface RemoveStreamPayload {
   streamId: StreamTabId;
 }
 
-type UpdateStreamStatusMessage = z.infer<
-  typeof UpdateStreamStatusMessageSchema
->;
-
 export interface UpdateStreamStatusPayload {
   streamId: StreamTabId;
-  status: UpdateStreamStatusMessage['status'];
+  status: StreamPhase;
   /** Diagnostic transition cause retained for legacy host/public output. */
   cause?: string;
   /** Previous phase before this update, for detecting transitions. */
-  previousStatus?: UpdateStreamStatusMessage['status'];
+  previousStatus?: StreamPhase;
   /** Narrower in-flight display state for launch/resume overlays. */
-  substate?: UpdateStreamStatusMessage['substate'];
+  substate?: StreamSubstate;
 }
 
 export interface AddOutputFilesPayload {
   streamId: StreamTabId;
-  filesByRound: NonNullable<z.infer<typeof UpdateFilesMessageSchema>['rounds']>;
+  filesByRound: z.infer<typeof RoundKeyedOutputSidecarValueSchemas.outputFiles>;
 }
 
 export interface UpdateMissingOutputsPayload {
   streamId: StreamTabId;
-  filesByRound: NonNullable<
-    z.infer<typeof UpdateMissingOutputsMessageSchema>['rounds']
+  filesByRound: z.infer<
+    typeof RoundKeyedOutputSidecarValueSchemas.missingOutputs
   >;
 }
 
 export interface UpdateCompileFailuresPayload {
   streamId: StreamTabId;
-  filesByRound: NonNullable<
-    z.infer<typeof UpdateCompileFailuresMessageSchema>['rounds']
+  filesByRound: z.infer<
+    typeof RoundKeyedOutputSidecarValueSchemas.compileFailures
   >;
 }
 
@@ -79,7 +73,7 @@ export interface UpdateStreamUsagePayload {
 
 export interface UpdateConversationProgressPayload {
   streamId: StreamTabId;
-  progress: z.infer<typeof UpdateConversationProgressMessageSchema>['progress'];
+  progress: ConversationProgress;
 }
 
 /** Round advance within a run, projected from `stage.start` (kind 'round').

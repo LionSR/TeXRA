@@ -263,23 +263,13 @@ describe('desktop Electron host bridge', () => {
       };
     }
 
-    it('throws on a ProgressView-domain message with a bad field (schema/producer drift)', async () => {
-      const { bridge } = await createBridge();
-      // Same fixture shape as the channel-routing test above, but with the
-      // invalid theme value restored — proves the assertion actually fires
-      // for a real MainView/ProgressView schema mismatch, not just that the
-      // production code compiles.
-      expect(() =>
-        bridge.postToRenderer({ command: 'setTheme', theme: 'vscode-dark' }),
-      ).toThrow(/Outbound message failed schema validation/);
-    });
-
-    it('forwards a well-formed MainView outbound message unchanged', async () => {
+    it('forwards the session protocol untouched: the bridge builds it typed', async () => {
       const { bridge, sends } = await createBridge();
       const message = {
-        command: 'setCurrentFile',
-        filePath: 'paper.tex',
-        fileType: 'input',
+        kind: 'response',
+        session: '/papers/one',
+        requestId: 'r1',
+        result: { ok: true, outcome: { kind: 'done' } },
       };
       expect(() => bridge.postToRenderer(message)).not.toThrow();
       expect(sends).toEqual([
@@ -301,6 +291,7 @@ describe('desktop Electron host bridge', () => {
       const { bridge, sends } = await createBridge();
       const message = {
         command: 'desktop:showPdf',
+        session: '/tmp/paper',
         title: 't',
         pdfPath: '/tmp/paper.pdf',
       };

@@ -12,7 +12,6 @@ import {
   openWorkbenchTab,
   renameWorkbenchTab,
   setBottomPanelHeight,
-  setProjectSectionPosition,
   setSidebarWidth,
   setWorkbenchTabDirty,
   setWorkbenchWidth,
@@ -20,7 +19,6 @@ import {
   toggleSidebar,
   toggleSummaryBar,
   toggleWorkbench,
-  workspaceInitials,
   workspaceName,
   type DesktopTaskShellState,
   type OpenWorkbenchTabRequest,
@@ -53,7 +51,6 @@ describe('desktop task shell model', () => {
       sidebarCollapsed: false,
       sidebarWidth: 288,
       filesExpanded: true,
-      projectSectionPosition: 52,
       summaryBarVisible: true,
       workbenchWidth: 640,
       workbenchTabs: [],
@@ -260,7 +257,7 @@ describe('desktop task shell model', () => {
     expect(summaryBarHidden.summaryBarVisible).toBe(false);
   });
 
-  it('rounds and clamps sidebar, section, and workbench dimensions', () => {
+  it('rounds and clamps sidebar, bottom panel, and workbench dimensions', () => {
     const initial = initialDesktopTaskShellState();
 
     expect(setBottomPanelHeight(initial, 344.6).bottomPanelHeight).toBe(345);
@@ -269,15 +266,6 @@ describe('desktop task shell model', () => {
     expect(setSidebarWidth(initial, 312.7).sidebarWidth).toBe(313);
     expect(setSidebarWidth(initial, -1).sidebarWidth).toBe(220);
     expect(setSidebarWidth(initial, 10_000).sidebarWidth).toBe(480);
-    expect(
-      setProjectSectionPosition(initial, 44.6).projectSectionPosition,
-    ).toBe(45);
-    expect(setProjectSectionPosition(initial, -1).projectSectionPosition).toBe(
-      20,
-    );
-    expect(setProjectSectionPosition(initial, 100).projectSectionPosition).toBe(
-      80,
-    );
     expect(setWorkbenchWidth(initial, 503.4).workbenchWidth).toBe(503);
     expect(setWorkbenchWidth(initial, -1).workbenchWidth).toBe(380);
     expect(setWorkbenchWidth(initial, 10_000).workbenchWidth).toBe(960);
@@ -287,11 +275,5 @@ describe('desktop task shell model', () => {
     expect(workspaceName('/work/My Paper/')).toBe('My Paper');
     expect(workspaceName(String.raw`C:\work\TeXRA.paper`)).toBe('TeXRA.paper');
     expect(workspaceName(undefined)).toBe('No project open');
-
-    expect(workspaceInitials('/work/My Paper/')).toBe('MP');
-    expect(workspaceInitials(String.raw`C:\work\TeXRA.paper`)).toBe('TP');
-    expect(workspaceInitials('/work/single')).toBe('S');
-    expect(workspaceInitials('/work/.__-')).toBe('TX');
-    expect(workspaceInitials(undefined)).toBe('TX');
   });
 });

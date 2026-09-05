@@ -93,7 +93,7 @@ subset of the same files under the same options.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
 - Keep the directory structure aligned among different webviews (webview, progressView, settingsView). Use the same folder names for modules of the same type and functionality but in different webviews.
-- Place view-specific, extension-only manager classes under that view's `managers` folder (e.g. `FileManager.ts` in `packages/extension/src/webview/managers/`). Host-neutral view backend logic instead lives under `src/controllers/<view>/backend/` (e.g. `src/controllers/progressView/backend/LitSessionRenderer.ts`), per the `controllers/` host-neutral-orchestration rule.
+- Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`). Host-neutral session bridging lives under `src/controllers/session/` (e.g. `src/controllers/session/SessionBridge.ts`), per the `controllers/` host-neutral-orchestration rule.
 
 ### Naming conventions
 
@@ -129,12 +129,11 @@ frozen deep-import lists, not another lint rule.
   - `frontend/latex/` - LaTeX build integration, linting
   - `frontend/media/` - Image and audio handling
 - `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
-- `packages/extension/src/common/` holds extension-only helpers (state managers, webview base classes):
-  - `packages/extension/src/common/state/` - State managers including `pendingStateManager`
+- `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
   - `packages/extension/src/common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
-- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: as of this writing exactly six modules are reachable from `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` — `@utils/core`, `@utils/core/boundedIdSet`, `@utils/core/keyedMutex`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`. Those six, and anything they import, must not reach for Node built-ins. There are 64 TypeScript modules under `src/utils/` in the current tree; the other 58 are not browser-reachable today and must not be assumed browser-safe. `scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.
+- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: as of this writing exactly five modules are reachable from `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/`: `@utils/core`, `@utils/core/keyedMutex`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`. Those five, and anything they import, must not reach for Node built-ins. There are 64 TypeScript modules under `src/utils/` in the current tree; the other 59 are not browser-reachable today and must not be assumed browser-safe. `scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.
 
-  Do not read this as "everything in `utils/` is shared with the webviews" — it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the six browser-reachable modules, check that it stays browser-safe.
+  Do not read this as "everything in `utils/` is shared with the webviews": it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the five browser-reachable modules, check that it stays browser-safe.
   - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `delay`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`); re-exports string primitives from `utils/text/stringUtils` for browser-safe barrel access
     - `utils/core/boundedIdSet.ts` - `createBoundedIdSet` (LRU-capped `Set<Id>` for "seen id" guards)
     - `utils/core/idHash.ts` - Node-only deterministic execution-ID derivation
@@ -151,7 +150,7 @@ frozen deep-import lists, not another lint rule.
   Usage, Subscriptions, Providers & Models, Agents, Teams, Tools, Integrations,
   Git, Shortcuts, LaTeX, Memory, Goals)
 - `packages/extension/src/progressView/` - Task tracking board webview
-- `packages/extension/src/webview/` - Main agent interaction webview
+- `packages/extension/src/webview/` - Webview components and helpers shared by the progress view (file selection, banners, onboarding cards); there is no separate main-view bundle
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 - `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform/platform`.
 - `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
@@ -520,7 +519,7 @@ travel through the flows are described in `docs/architecture/2026-06-20-pocketfl
 
 **Progress view**
 
-- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.) and the frontend state slices in `packages/extension/src/progressView/frontend/slices/` (`logSlice`, `taskSlice`, `streamLifecycleSlice`, etc., mirroring the `settingsView/frontend/slices/` pattern) — augment them rather than manipulating the DOM directly.
+- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.); they read the `SessionView` fold (`src/shared/session/sessionView.ts`) and the `Surface` record as properties and dispatch typed request events. Augment them rather than manipulating the DOM directly.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
 
 **Error handling and types**

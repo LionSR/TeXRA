@@ -219,11 +219,9 @@ export const TraceStreamLogEntrySchema = z
  * the same frame. Rows without even a stream-log envelope are omitted: there
  * is no stable id, sequence, or type from which to construct a safe row.
  */
-export const StreamLogEntryBatchSchema = z
-  .array(z.unknown())
-  .transform((entries) =>
-    entries.flatMap((entry) => {
-      const parsed = TraceStreamLogEntrySchema.safeParse(entry);
-      return parsed.success ? [parsed.data] : [];
-    }),
-  );
+const StreamLogEntryBatchSchema = z.array(z.unknown()).transform((entries) =>
+  entries.flatMap((entry) => {
+    const parsed = TraceStreamLogEntrySchema.safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
+  }),
+);

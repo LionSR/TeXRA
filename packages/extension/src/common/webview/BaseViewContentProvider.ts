@@ -8,10 +8,18 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 /**
  * Build HTML content for a webview by replacing placeholder tokens.
  */
+function escapeAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;');
+}
+
 function buildWebviewHtml(
   webview: vscode.Webview,
   htmlPath: vscode.Uri,
   replacements: Record<string, vscode.Uri>,
+  attributes: Record<string, string>,
 ): string {
   const htmlContent = AbsoluteFS.readSync(htmlPath.fsPath);
   const nonce = nanoid(32);
@@ -25,6 +33,9 @@ function buildWebviewHtml(
       `\${${key}}`,
       webview.asWebviewUri(value).toString(),
     );
+  }
+  for (const [key, value] of Object.entries(attributes)) {
+    result = result.replaceAll(`\${${key}}`, escapeAttribute(value));
   }
 
   return result;
@@ -50,7 +61,16 @@ export class BundledViewContentProvider {
     this.log = createLog(`${viewName}ContentProvider`);
   }
 
-  public getHtmlContent(webview: vscode.Webview): string {
+  /**
+   * `attributes` are the view's own HTML tokens, escaped for an attribute
+   * value: the progress view carries its session key as
+   * `<progress-app data-session>`, which is how the bundle knows which
+   * session to subscribe to before any frame arrives.
+   */
+  public getHtmlContent(
+    webview: vscode.Webview,
+    attributes: Record<string, string> = {},
+  ): string {
     try {
       const htmlPath = vscode.Uri.joinPath(
         this.context.extensionUri,
@@ -61,11 +81,16 @@ export class BundledViewContentProvider {
 
       this.log.debug(`Generated HTML content for ${this.viewName}`);
 
-      return buildWebviewHtml(webview, htmlPath, {
-        commonStyleUri: this.buildUri(['src', 'common', 'styles/common.css']),
-        bundleUri: this.buildUri(['dist', this.viewFolder, 'bundle.js']),
-        styleUri: this.buildUri(['dist', this.viewFolder, 'index.css']),
-      });
+      return buildWebviewHtml(
+        webview,
+        htmlPath,
+        {
+          commonStyleUri: this.buildUri(['src', 'common', 'styles/common.css']),
+          bundleUri: this.buildUri(['dist', this.viewFolder, 'bundle.js']),
+          styleUri: this.buildUri(['dist', this.viewFolder, 'index.css']),
+        },
+        attributes,
+      );
     } catch (err) {
       this.log.error(`Error generating HTML content: ${toErrorMessage(err)}`);
       return '<html><body>Error loading content</body></html>';

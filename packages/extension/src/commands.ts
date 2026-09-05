@@ -11,26 +11,25 @@ import { registerOpenFileCommands } from '@commands/files/openFileCommands';
 import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 import { registerMergeCommands } from '@commands/agent/mergeCommands';
 import { registerMainViewCommands } from '@commands/system/mainViewCommands';
-import { registerStateRestoreCommand } from '@commands/taskFormState/stateRestoreCommand';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerAgentReviewCommands } from '@commands/review/agentReviewCommands';
 
 // Local imports - components
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import { MainViewProvider } from './webview/MainViewProvider';
+import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 
 export function registerCommands(
   context: vscode.ExtensionContext,
-): MainViewProvider {
+  progressViewProvider: ProgressViewProvider,
+): void {
   registerFileSelectionCommands(context);
   registerLatexdiffCommands(context);
   registerGitCommands(context);
   registerAgentReviewCommands(context);
   registerMergeCommands(context);
-  registerStateRestoreCommand(context);
   const settingsViewProvider = new SettingsViewProvider(context);
   registerOpenFileCommands(context);
-  registerMainViewCommands(context);
+  registerMainViewCommands(context, progressViewProvider);
 
   // The shared registry owns every command whose handler map lives in
   // `extensionCommandSurface.ts`, dispatched the same way as the desktop
@@ -39,14 +38,17 @@ export function registerCommands(
   // Uri, agent execution payloads) or capture VS Code state directly.
   registerExtensionCommandRegistry(
     context,
-    createExtensionCommandActions(context, settingsViewProvider),
+    createExtensionCommandActions(
+      context,
+      settingsViewProvider,
+      progressViewProvider,
+    ),
   );
 
-  const mainViewProvider = new MainViewProvider(context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
-      'texra.mainView',
-      mainViewProvider,
+      ProgressViewProvider.viewType,
+      progressViewProvider,
       {
         webviewOptions: {
           retainContextWhenHidden: true,
@@ -54,14 +56,9 @@ export function registerCommands(
       },
     ),
     // Registered here rather than through the shared registry because the
-    // handlers need the `MainViewProvider` instance created just above.
+    // handler needs the provider instance.
     vscode.commands.registerCommand('texra.showMainView', () =>
-      mainViewProvider.showInSidebar(),
-    ),
-    vscode.commands.registerCommand('texra.getWebviewView', () =>
-      mainViewProvider.getMainModeView(),
+      progressViewProvider.showLauncher(),
     ),
   );
-
-  return mainViewProvider;
 }

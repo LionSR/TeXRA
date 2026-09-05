@@ -26,22 +26,22 @@ export const streamTabStyles = css`
     overflow: hidden;
   }
 
-  .tab-container.status-running {
+  /* The fold spells the tone (G4); the row only maps it to a hue. */
+  .tab-container.tone-running {
     --stream-status-color: var(--color-success);
   }
 
-  .tab-container.status-error,
-  .tab-container.status-failed {
+  .tab-container.tone-danger {
     --stream-status-color: var(--color-error);
   }
 
-  .tab-container.status-waiting,
-  .tab-container.status-resuming {
-    --stream-status-color: var(--wa-color-text-link);
+  .tab-container.tone-warning {
+    --stream-status-color: var(--color-warning);
+    --stream-status-rail-color: var(--color-warning);
   }
 
-  .tab-container.status-starting {
-    --stream-status-color: var(--color-warning);
+  .tab-container.tone-success .tab-status-icon {
+    color: var(--color-success);
   }
 
   /* Finished states (completed/cancelled/ready) and unavailable keep the
@@ -193,11 +193,13 @@ export const streamTabStyles = css`
    * (.last-active, .model) and codicon glyphs to inherit the selection
    * color even when intermediate elements define their own.
    */
+  /* The selected row's background and foreground are one pair: a host that
+     overrides the foreground (the desktop's white-on-accent) overrides the
+     background with it, so light text never lands on the quiet brand fill. */
   .tab-container.is-active {
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-brand-fill-quiet) 85%,
-      transparent
+    background-color: var(
+      --wa-color-list-active-bg,
+      color-mix(in srgb, var(--wa-color-brand-fill-quiet) 85%, transparent)
     );
     /* brand-on-quiet is the foreground paired with the quiet fill above in
        both hosts. list-active-fg is not: it is authored to sit on the loud
@@ -218,12 +220,9 @@ export const streamTabStyles = css`
   /* Selection is the primary row state. Keep the lifecycle rail present, but
      neutralize its hue against the selected surface. */
   .tab-container.is-active:is(
-      .status-running,
-      .status-waiting,
-      .status-resuming,
-      .status-starting,
-      .status-failed,
-      .status-error,
+      .tone-running,
+      .tone-danger,
+      .tone-warning,
       .has-pending-approval
     ) {
     --stream-status-rail-color: currentColor;
@@ -248,17 +247,40 @@ export const streamTabStyles = css`
     background: transparent;
   }
 
-  .tab-container.is-compact .tab {
-    padding: var(--wa-space-3xs) var(--wa-space-3xs);
+  /* Rollup pill on a collapsed parent: how many descendants it hides, and
+     how many of them are running. */
+  .tab-rollup {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
   }
 
-  /* No compact override for .tab-delete: even the narrow rail's 48px minimum
-     fits the 24px target, and shrinking it there would put the same
-     sub-minimum hit area back on the layout that most needs a reliable one. */
+  .tab-rollup wa-badge::part(base) {
+    font-size: 10px;
+    line-height: 1;
+    padding: 1px 5px;
+  }
 
-  .tab-container.is-compact .tab-header {
-    justify-content: center;
-    gap: 0;
+  /* The fold's banner copy: the unreadable detail or the interrupted notice. */
+  .tab-detail {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-size-xs);
+    color: var(--color-warning);
+  }
+
+  /* An interrupted row's primary action. */
+  .tab-resume {
+    flex-shrink: 0;
+    margin-inline-start: var(--wa-space-3xs);
+  }
+
+  .tab-container.is-read-only .tab-title {
+    color: var(--color-text-secondary);
   }
 
   /* The compact rail reserves its remaining select width for lifecycle state.
@@ -353,24 +375,17 @@ export const streamTabStyles = css`
   }
 
   @media (forced-colors: active) {
-    .tab-container:is(
-      .status-running,
-      .status-waiting,
-      .status-resuming,
-      .status-starting,
-      .has-pending-approval
-    ) {
+    .tab-container:is(.tone-running, .tone-warning, .has-pending-approval) {
       --stream-status-color: Highlight;
       --stream-status-rail-color: Highlight;
     }
 
-    .tab-container.status-failed,
-    .tab-container.status-error {
+    .tab-container.tone-danger {
       --stream-status-color: CanvasText;
       --stream-status-rail-color: CanvasText;
     }
 
-    .tab-container:is(.status-completed, .status-cancelled, .status-ready) {
+    .tab-container:is(.tone-success, .tone-neutral) {
       --stream-status-color: GrayText;
       --stream-status-rail-color: transparent;
     }
@@ -383,12 +398,9 @@ export const streamTabStyles = css`
     }
 
     .tab-container.is-active:is(
-        .status-running,
-        .status-waiting,
-        .status-resuming,
-        .status-starting,
-        .status-failed,
-        .status-error,
+        .tone-running,
+        .tone-danger,
+        .tone-warning,
         .has-pending-approval
       ) {
       --stream-status-rail-color: HighlightText;

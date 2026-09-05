@@ -32,10 +32,6 @@ interface DesktopWindowLifecycleWiring {
   workspaceIpc: DisposableRendererResources;
   showDiscardDialog(): number;
   isFatalShutdownRequested(): boolean;
-  /** The user kept editing: the paper switch that asked for this reload is off. */
-  clearPendingPaperActivation(): void;
-  /** The renderer reloaded: the paper switch that asked for it takes effect. */
-  commitPendingPaperActivation(): void;
   clearContinueQuitAfterWindowClose(): void;
 }
 
@@ -44,7 +40,6 @@ export function bootstrapDesktopWindowLifecycle(
 ): void {
   options.webContents.on('will-prevent-unload', (event) => {
     if (options.isFatalShutdownRequested()) {
-      options.clearPendingPaperActivation();
       event.preventDefault();
       return;
     }
@@ -52,7 +47,6 @@ export function bootstrapDesktopWindowLifecycle(
       event.preventDefault();
       return;
     }
-    options.clearPendingPaperActivation();
     options.clearContinueQuitAfterWindowClose();
   });
 
@@ -62,9 +56,8 @@ export function bootstrapDesktopWindowLifecycle(
       initialRendererNavigationComplete = true;
       return;
     }
-    // A paper switch reloads the renderer; the switch lands once the old
-    // document is gone and before the new one asks for its state.
-    options.commitPendingPaperActivation();
+    // A real document reload releases its resources. Switching papers
+    // changes visibility and never navigates the document.
     options.workspaceIpc.disposeRendererResources();
   });
 }

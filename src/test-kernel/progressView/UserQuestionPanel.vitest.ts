@@ -43,7 +43,7 @@ type Decision = { action: string; answers?: Record<string, string | string[]> };
 
 function collectActions(element: UserQuestionPanel): Decision[] {
   const actions: Decision[] = [];
-  element.addEventListener('permission-action', (event) => {
+  element.addEventListener('runtime-request', (event) => {
     actions.push(
       (event as CustomEvent<{ decision: Decision }>).detail.decision,
     );

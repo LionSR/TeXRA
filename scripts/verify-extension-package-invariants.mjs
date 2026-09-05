@@ -57,7 +57,6 @@ const REQUIRED_PACKAGED_PATHS = [
   'src/common/styles/common.css',
   'src/progressView/index.html',
   'src/settingsView/index.html',
-  'src/webview/index.html',
 ];
 
 // Paths produced by the build from canonical repo-root sources. They do not
@@ -77,7 +76,6 @@ const REQUIRED_VSCODEIGNORE_LINES = [
   '!src/common/styles/*.css',
   '!src/progressView/*.html',
   '!src/settingsView/*.html',
-  '!src/webview/*.html',
 ];
 
 // A blanket `!resources/**` (or an equivalent whitespace variant) would

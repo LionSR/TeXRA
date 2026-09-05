@@ -15,9 +15,9 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
 
   // Every `stream.removed` from now on, in commit order: the process-owned
   // delete, so a stream removed while no window shows it (a child stream's
-  // auto-close) still leaves storage. A live ProgressBackend reads the same
-  // fact and deletes too; the store's per-stream deletion dedup is the one
-  // claim there is, whichever reader gets there first.
+  // auto-close, the leftover sweep) still leaves storage. A `stream.delete`
+  // request deletes through the same store; its per-stream deletion dedup is
+  // the one claim there is, whichever path gets there first.
   const removals = effectRuntime().runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {

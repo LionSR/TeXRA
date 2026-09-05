@@ -1,9 +1,9 @@
 // Host-neutral projection of task-group lifecycle rows from a StreamLog.
 //
-// The extension applies entries incrementally as LOG_DELTA messages arrive,
-// while the CLI also needs to rebuild the same task groups from persisted
-// entries. Both paths use this module so ordering, legacy status recovery,
-// and orphan GROUP_END behavior remain identical.
+// The session fold applies entries as they arrive and the CLI rebuilds the
+// same task groups from persisted entries. Both paths use this module so
+// ordering, legacy status recovery, and orphan GROUP_END behavior remain
+// identical.
 
 import {
   END_GROUP_STATUS,

@@ -16,9 +16,8 @@ import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
 import { describe, expect } from 'vitest';
 
 import {
-  ProcessIdentity,
   SessionEventLog,
-  SessionEvents,
+  sessionEventsLayer,
 } from '@agent/runtime/SessionEvents';
 import {
   LocalRuntimeSource,
@@ -26,6 +25,7 @@ import {
   TranscriptSubscriptions,
 } from '@controllers/session/sessionSources';
 import { SessionViewService } from '@controllers/session/SessionView';
+import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
   AgentCategory,
@@ -34,6 +34,7 @@ import {
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
@@ -97,8 +98,9 @@ const graph = (history: readonly SessionEventDraft[]) => {
     }),
   );
   return SessionViewService.layer.pipe(
+    Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(
-      SessionEvents.layer.pipe(
+      sessionEventsLayer.pipe(
         Layer.provideMerge(
           seeded.pipe(
             Layer.provideMerge(

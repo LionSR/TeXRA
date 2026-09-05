@@ -44,7 +44,6 @@ CLAUDE.md
 resources/traceViewerShared/**
 
 # Webview HTML entry points (loaded by BaseViewContentProvider)
-!src/webview/*.html
 !src/progressView/*.html
 !src/settingsView/*.html
 

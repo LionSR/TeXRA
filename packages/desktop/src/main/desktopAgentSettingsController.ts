@@ -10,11 +10,7 @@ import {
   type refresh,
 } from '@agent/index';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
-import {
-  loadTeamOptions,
-  type TeamAvailabilityPrompt,
-} from '@common/teams/TeamPlan';
-import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
+import { type TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentCategoryLabel,
@@ -24,7 +20,7 @@ import {
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import type { MessageHost } from '@hosts/uiHosts';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
   type AgentCategory,
@@ -83,6 +79,12 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
   readonly renderer: {
     readonly postToRenderer: (message: unknown) => void;
   };
+  /**
+   * The agent and team catalogs changed: the `host` snapshot of every open
+   * paper reloads them (PRD 8.1). A team that was just applied names the
+   * tool-use root the launcher should select.
+   */
+  readonly onCatalogChanged: (selectedToolUseAgent?: string) => Promise<void>;
   readonly prompts: {
     readonly promptText: (input: {
       title: string;
@@ -132,6 +134,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly registry: DefaultDesktopAgentSettingsControllerOptions['registry'];
   private readonly directory: DefaultDesktopAgentSettingsControllerOptions['directory'];
   private readonly renderer: DefaultDesktopAgentSettingsControllerOptions['renderer'];
+  private readonly onCatalogChanged: DefaultDesktopAgentSettingsControllerOptions['onCatalogChanged'];
   private readonly prompts: DefaultDesktopAgentSettingsControllerOptions['prompts'];
   private readonly remoteCatalog: DefaultDesktopAgentSettingsControllerOptions['remoteCatalog'];
   private readonly notifications: DefaultDesktopAgentSettingsControllerOptions['notifications'];
@@ -146,6 +149,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       registry,
       directory,
       renderer,
+      onCatalogChanged,
       prompts,
       remoteCatalog,
       notifications,
@@ -154,6 +158,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     this.registry = registry;
     this.directory = directory;
     this.renderer = renderer;
+    this.onCatalogChanged = onCatalogChanged;
     this.prompts = prompts;
     this.remoteCatalog = remoteCatalog;
     this.notifications = notifications;
@@ -245,38 +250,16 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     );
   }
 
-  private async postMainAgentOptionsData(
-    selectedToolUseAgent?: string,
-  ): Promise<void> {
-    this.renderer.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      optionsData: await this.registry.loadAgentOptionsData(),
-      ...(selectedToolUseAgent && { selectedToolUseAgent }),
-    });
-  }
-
-  private async postMainTeamOptionsData(): Promise<void> {
-    this.renderer.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-      optionsData: await loadTeamOptions(createTeamCatalogPorts()),
-    });
-  }
-
   /**
-   * Every catalog-refresh path posts agent and team options together,
-   * mirroring the extension host's `refreshAgentOptions` pairing — team
-   * availability depends on the same catalog (sign-in, remote load, roster,
-   * and custom-dir changes), so refreshing one without the other leaves the
-   * main-view team picker stale. Startup is exempt: the main-view startup
-   * controller already posts both.
+   * Every catalog-refresh path reloads agent and team options together:
+   * team availability depends on the same catalog (sign-in, remote load,
+   * roster, and custom-dir changes), so refreshing one without the other
+   * would leave the launcher's team picker stale.
    */
-  private async postMainAgentAndTeamOptionsData(
+  private postMainAgentAndTeamOptionsData(
     selectedToolUseAgent?: string,
   ): Promise<void> {
-    await Promise.all([
-      this.postMainAgentOptionsData(selectedToolUseAgent),
-      this.postMainTeamOptionsData(),
-    ]);
+    return this.onCatalogChanged(selectedToolUseAgent);
   }
 
   private async postCustomAgentDir(): Promise<void> {
@@ -474,7 +457,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.registry.loadAgents();
     const preset = await this.catalogController.saveCurrentPreset(name);
     this.postAgentModePresets();
-    await this.postMainTeamOptionsData();
+    await this.onCatalogChanged();
     await this.notifications.showInfoMessage(`Saved team "${preset.name}"`);
   }
 
@@ -500,6 +483,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
     await this.catalogController.deleteCustomPreset(presetId);
     this.postAgentModePresets();
-    await this.postMainTeamOptionsData();
+    await this.onCatalogChanged();
   }
 }

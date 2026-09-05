@@ -7,11 +7,7 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
-import type {
-  AgentOptionData,
-  ModelOptionData,
-  TeamOptionData,
-} from '@shared/schemas';
+import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { AGENT_DECORATORS, getModelProviderDecorator } from '@shared/wa/icons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -27,20 +23,6 @@ export function readSelectValue(event: Event): string {
   const select = event.currentTarget as WaSelect | null;
   return typeof select?.value === 'string' ? select.value : '';
 }
-
-/**
- * Sentinel option value for the launcher dropdown's "Browse all agents…"
- * tail item. Never a real agent selection — handlers must intercept it
- * and open Settings → Agents instead.
- */
-export const BROWSE_ALL_AGENTS_OPTION_VALUE = '__browse-all-agents__';
-
-/**
- * Sentinel option value for the team dropdown's "Manage teams…" tail item.
- * Never a real team selection — handlers must intercept it and open the
- * multi-agent settings section instead.
- */
-export const MANAGE_TEAMS_OPTION_VALUE = '__manage-teams__';
 
 function buildAgentTooltip(opt: AgentOptionData): string {
   const { properties } = AGENT_DECORATORS;
@@ -91,28 +73,13 @@ function renderAgentOption(opt: AgentOptionData): TemplateResult {
   `;
 }
 
-export function renderAgentOptions(
-  options: AgentOptionData[],
-  { includeBrowseAll = false }: { includeBrowseAll?: boolean } = {},
-): TemplateResult {
+export function renderAgentOptions(options: AgentOptionData[]): TemplateResult {
   return html`
     ${repeat(
       options,
       (opt) => opt.value,
       (opt) => renderAgentOption(opt),
     )}
-    ${
-      includeBrowseAll
-        ? html`
-            <wa-option
-              value=${BROWSE_ALL_AGENTS_OPTION_VALUE}
-              title="Open Settings → Agents to browse the full catalog"
-            >
-              Browse all agents…
-            </wa-option>
-          `
-        : nothing
-    }
   `;
 }
 
@@ -162,58 +129,5 @@ export function renderModelOptions(options: ModelOptionData[]): TemplateResult {
       (opt) => opt.value,
       (opt) => renderModelOption(opt),
     )}
-  `;
-}
-
-function buildTeamTooltip(opt: TeamOptionData): string {
-  const hints: string[] = [];
-  if (opt.description) hints.push(opt.description);
-  if (opt.disabledReason) hints.push(opt.disabledReason);
-  if (opt.unavailableMembers.length) {
-    hints.push(`Unavailable members: ${opt.unavailableMembers.join(', ')}`);
-  }
-  return hints.join('\n');
-}
-
-function renderTeamOption(opt: TeamOptionData): TemplateResult {
-  const tooltip = buildTeamTooltip(opt);
-  const isCustom = opt.source === 'custom';
-
-  return html`
-    <wa-option
-      value=${opt.value}
-      ?disabled=${opt.disabled}
-      title=${tooltip || nothing}
-      aria-label=${`${opt.label}, ${isCustom ? 'custom' : 'built-in'} team`}
-    >
-      <span class="agent-icon">${waIcon(opt.icon as TeXRAIconName)} </span
-      >${opt.label}
-      ${isCustom ? html`<span class="option-suffix">Custom</span>` : nothing}
-    </wa-option>
-  `;
-}
-
-export function renderTeamOptions(
-  options: TeamOptionData[],
-  { includeManageTeams = false }: { includeManageTeams?: boolean } = {},
-): TemplateResult {
-  return html`
-    ${repeat(
-      options,
-      (opt) => opt.value,
-      (opt) => renderTeamOption(opt),
-    )}
-    ${
-      includeManageTeams
-        ? html`
-            <wa-option
-              value=${MANAGE_TEAMS_OPTION_VALUE}
-              title="Open Settings → Multi-agent to manage teams"
-            >
-              Manage teams…
-            </wa-option>
-          `
-        : nothing
-    }
   `;
 }

@@ -1,12 +1,10 @@
 // Third-party imports
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { ApproveSplitButton } from '@progressView/frontend/components/ApproveSplitButton';
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
 import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
@@ -15,20 +13,6 @@ import {
   mountComponent,
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
-
-type PostedMessage = { command: string; file?: string };
-let posted: PostedMessage[] = [];
-
-// Install the host-bridge stub at module scope, BEFORE the DOM harness
-// imports the panel module — `hostBridge` resolves this global at module
-// load (see MainAppPersistenceRestore.vitest.ts for the same pattern).
-(globalThis as Record<string, unknown>)[HOST_BRIDGE_API_KEY] = {
-  postMessage: (message: unknown) => {
-    posted.push(message as PostedMessage);
-  },
-  getState: () => undefined,
-  setState: () => undefined,
-};
 
 function createPermission(): ProposalRequestPanel['permission'] {
   return {
@@ -72,10 +56,6 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     () => import('@progressView/frontend/components/ProposalRequestPanel'),
   );
 
-  beforeEach(() => {
-    posted = [];
-  });
-
   it('uses a shared tooltip for the direct Setup action', async () => {
     const element = await mountPanel();
     const setup = element.shadowRoot?.querySelector('#proposal-setup-button');
@@ -86,7 +66,7 @@ describe('proposal-request-panel file-name keyboard activation', () => {
       element.shadowRoot
         ?.querySelector('wa-tooltip[for="proposal-setup-button"]')
         ?.textContent?.trim(),
-    ).toBe('Setup (s)');
+    ).toBe('Edit as new task (s)');
   });
 
   it('maps the menu and a shortcut to approve-all while y stays one-off', async () => {
@@ -106,17 +86,27 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(element.handleKeyboardShortcut('y')).toBe(true);
 
-    expect(actions).toEqual([
-      { action: 'approveSuperYolo' },
-      { action: 'approveSuperYolo' },
-      { action: 'approve' },
-    ]);
+    const superYolo = {
+      kind: 'policy.set',
+      change: {
+        field: 'bypass',
+        streamId: 'stream-a',
+        bypass: 'superYolo',
+        enabled: true,
+      },
+    };
+    const approve = {
+      kind: 'decision.proposal',
+      streamId: 'stream-a',
+      approvalId: 'proposal-1',
+      decision: { action: 'approve', model: null, agent: null },
+    };
+    expect(actions).toEqual([superYolo, approve, superYolo, approve, approve]);
   });
 
   it('renders archived proposal approval as a plain disabled button', async () => {
     const element = await mountPanel();
-    (element as unknown as { archived: boolean }).archived = true;
-    element.requestUpdate();
+    element.readOnly = true;
     await element.updateComplete;
 
     const split = element.shadowRoot?.querySelector<ApproveSplitButton>(
@@ -165,11 +155,14 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     await element.updateComplete;
     expect(element.handleKeyboardShortcut('n')).toBe(true);
 
-    expect(actions).toEqual([
+    const decisionOf = (request: (typeof actions)[number]) =>
+      'decision' in request ? request.decision : request.kind;
+    expect(actions.map(decisionOf)).toEqual([
       { action: 'approve', model: 'opus', agent: 'reviewer' },
-      { action: 'approveSuperYolo', model: 'opus', agent: 'reviewer' },
+      'policy.set',
+      { action: 'approve', model: 'opus', agent: 'reviewer' },
       { action: 'setup' },
-      { action: 'reject' },
+      { action: 'reject', feedback: null },
     ]);
   });
 
@@ -191,29 +184,11 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     permission.data.model = 'gpt56';
 
     const element = await mountPanel(permission);
-    const summary = element.shadowRoot?.querySelector(
-      '.workflow-proposal__workflow-summary',
-    );
-    const details = element.shadowRoot?.querySelector(
-      'wa-details.workflow-proposal__workflow-details',
-    );
 
-    expect(summary?.textContent).toContain('review-team');
-    expect(summary?.textContent).toContain('2 phases · 2 declared items');
-    expect(summary?.textContent).not.toContain('tasks');
-    expect(element.shadowRoot?.textContent).toContain('Multi-agent workflow');
-    expect(
-      element.shadowRoot
-        ?.querySelector('.workflow-proposal__model')
-        ?.textContent?.trim(),
-    ).toBe('GPT-5.6 Sol');
     expect(element.shadowRoot?.textContent).toContain(
-      'Defaults: writer (GPT-5.6 Sol)',
+      'Proposes a multi-agent run',
     );
-    expect(element.shadowRoot?.textContent).toContain('high model cost');
-    expect(details?.textContent).toContain('plan labels');
-    expect(details?.textContent).toContain('Files available to the script');
-    expect(details?.hasAttribute('open')).toBe(false);
+    expect(element.shadowRoot?.textContent).toContain('review-team');
     expect(
       element.shadowRoot?.querySelector('.proposal-agent-dropdown'),
     ).toBeNull();
@@ -249,6 +224,7 @@ describe('proposal-request-panel file-name keyboard activation', () => {
 
   it('opens the file on Enter and Space, not on other keys', async () => {
     const element = await mountPanel();
+    const posted = recordPermissionActions(element);
     const fileName = element.shadowRoot?.querySelector(
       '.workflow-proposal__file-name',
     );
@@ -261,8 +237,9 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     dispatchKey(fileName!, ' ');
 
     const openPaper = {
-      command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
-      file: '/workspace/paper.tex',
+      kind: 'openFile',
+      path: '/workspace/paper.tex',
+      line: null,
     };
     expect(posted).toEqual([openPaper, openPaper]);
   });
@@ -272,6 +249,7 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     permission.data.memories = ['/memories/notes.md'];
     const element = await mountPanel(permission);
 
+    const posted = recordPermissionActions(element);
     const readonlyName = element.shadowRoot?.querySelector(
       '.workflow-proposal__file-name--readonly',
     );

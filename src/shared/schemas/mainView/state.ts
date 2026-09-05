@@ -114,9 +114,7 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
 /** Open workspace folder offered as an execution working directory. */
 export const WorkspaceRootOptionDataSchema = PickerOptionBaseSchema;
-export type WorkspaceRootOptionData = z.infer<
-  typeof WorkspaceRootOptionDataSchema
->;
+type WorkspaceRootOptionData = z.infer<typeof WorkspaceRootOptionDataSchema>;
 
 /**
  * Team picker option row for the main-view "Run with: Team" target. `value`
@@ -215,7 +213,7 @@ export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 // File State Schemas
 // ============================================================
 
-const FileSelectConfigSchema = z.object({
+export const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,
   label: z.string(),
   icon: z.enum(TEXRA_ICON_CANONICAL_NAMES),
@@ -232,9 +230,9 @@ const SingleFilesSchema = z.object({
   baseFile: z.string(),
   editedFile: z.string(),
 });
-export type SingleFiles = z.infer<typeof SingleFilesSchema>;
+type SingleFiles = z.infer<typeof SingleFilesSchema>;
 
-const FileOptionsSchema = z.object({
+export const FileOptionsSchema = z.object({
   baseFile: z.array(z.string()),
   editedFile: z.array(z.string()),
   commit: z.array(z.string()),
@@ -248,37 +246,6 @@ export type MultiFiles = z.infer<typeof MultiFilesSchema>;
 // `mediaFiles` / `outputFiles`) so `listId` fields below are constrained to
 // valid `keyof MultiFiles` values instead of an unconstrained `z.string()`.
 const MultiFilesKeySchema = MultiFilesSchema.keyof();
-
-const FileStateContextSchema = z.object({
-  sessionType: SessionTypeSchema,
-  checkboxValues: ToolConfigFieldsSchema,
-  singleFiles: SingleFilesSchema,
-  fileOptions: FileOptionsSchema,
-  multiFiles: MultiFilesSchema,
-});
-export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
-
-const SessionContextSchema = z.object({
-  sessionType: SessionTypeSchema,
-  launchTarget: LaunchTargetSchema,
-  selectedTeamId: z.string(),
-  instruction: z.string(),
-  placeholder: z.string(),
-  agent: z.record(AgentCategorySchema, z.string()),
-  model: z.string(),
-  agentOptions: z.record(AgentCategorySchema, z.array(AgentOptionDataSchema)),
-  modelOptions: z.array(ModelOptionDataSchema),
-  teamOptions: z.array(TeamOptionDataSchema),
-  workspaceRootOptions: z.array(WorkspaceRootOptionDataSchema),
-  workingDirectory: z.string(),
-  isRecording: z.boolean(),
-  isPolishing: z.boolean(),
-  debugMode: z.boolean(),
-  isOrchestratorSelected: z.boolean(),
-  /** Last status line pushed to the panel's aria-live region. */
-  statusAnnouncement: z.string(),
-});
-export type SessionContextValue = z.infer<typeof SessionContextSchema>;
 
 const StringValueDetailSchema = z.object({
   value: z.string(),

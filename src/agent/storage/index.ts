@@ -58,8 +58,4 @@ export {
 } from './executionLease';
 export { persistChildRunResultMeta } from './childRunPersistence';
 export { resolveChildRunOutput } from './childRunOutput';
-export {
-  SessionStores,
-  type DeleteAllStreamsResult,
-  type DeleteStreamResult,
-} from './SessionStores';
+export { SessionStores } from './SessionStores';

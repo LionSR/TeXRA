@@ -67,7 +67,12 @@ function createIpc(
   // The IPC subscribes to a process-global bus, so a fixture left undisposed
   // would keep reacting to later tests' emits.
   liveWorkspaceIpcs.push(ipc);
-  return ipc;
+  return {
+    ...ipc,
+    handleMessage(message: Parameters<typeof ipc.handleMessage>[0]) {
+      return ipc.handleMessage({ ...message, session: workspacePath });
+    },
+  };
 }
 
 const liveWorkspaceIpcs: ReturnType<typeof createDesktopWorkspaceIpc>[] = [];

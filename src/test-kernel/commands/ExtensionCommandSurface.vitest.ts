@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { EXTENSION_COMMAND_HANDLERS } from '@commands/extensionCommandHandlers';
 import { createExtensionCommandActions } from '@commands/extensionCommandSurface';
+import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 import type * as vscode from 'vscode';
@@ -23,6 +24,7 @@ describe('extension command action wiring', () => {
       const actions = createExtensionCommandActions(
         {} as vscode.ExtensionContext,
         settingsViewProvider,
+        {} as ProgressViewProvider,
       );
       const result = dispatchCommandFromRegistry(
         commandId,

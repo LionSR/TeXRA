@@ -601,11 +601,11 @@ describe('desktop settings IPC', () => {
     });
 
     const errors: unknown[] = [];
-    const postMainModelOptionsData = vi.fn(async () => undefined);
+    const refreshModelOptions = vi.fn(async () => undefined);
     const credentialSettingsController =
       createStubDesktopCredentialSettingsController(
         { globalState, workspaceState },
-        { postMainModelOptionsData },
+        { refreshModelOptions },
       );
 
     const { settings, posted } = createCapturedSettingsFixture({
@@ -640,7 +640,7 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
       helperModel: DEFAULT_HELPER_MODEL,
     });
-    expect(postMainModelOptionsData).toHaveBeenCalledOnce();
+    expect(refreshModelOptions).toHaveBeenCalledOnce();
 
     expect(
       settings.handleMessage({

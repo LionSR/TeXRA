@@ -3,7 +3,6 @@ import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefres
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { StateStore } from '@platform/interfaces';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   readOnboardingFlags,
@@ -16,7 +15,8 @@ import {
   DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
 } from '../shared/desktopOnboardingMessages.js';
 import {
-  createCommandHandler,
+  createDesktopErrorReporter,
+  type DesktopCommandMessage,
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
@@ -30,7 +30,7 @@ interface DesktopOnboardingIpcOptions {
    * provider API key). Async because the secrets read can involve disk I/O.
    */
   hasCredential: () => boolean | Promise<boolean>;
-  /** Post SET_SELECTED_AGENT to the renderer when entering State 1. */
+  /** Put the setup agent in the launcher when entering State 1. */
   selectSetupAgent: () => Promise<void>;
   /** Launch the setup conversation when the user clicks "Run Setup". */
   kickoffSetup: () => Promise<void>;
@@ -45,9 +45,26 @@ interface DesktopOnboardingIpcOptions {
   onAsyncError?: (error: unknown) => void;
 }
 
+/**
+ * The onboarding funnel of one window: the startup team chooser's own two
+ * messages, the funnel state the `host` snapshot carries (PRD 8.1), and the
+ * card actions the host request arms call.
+ */
 export interface DesktopOnboardingIpc extends DesktopMessageHandler {
-  /** Recompute the funnel from credentials + flags and push it to the webview. */
+  /** Recompute the funnel from credentials + flags and publish it. */
   refreshOnboardingFunnel(): Promise<void>;
+  /** The funnel as last derived; null before the first refresh. */
+  funnelState(): OnboardingFunnelState | null;
+  /** Fires after every refresh that changed the funnel. */
+  onFunnelChange(listener: (state: OnboardingFunnelState) => void): () => void;
+  /** The welcome card's skip: persists the declined flag and refreshes. */
+  skipOnboarding(): Promise<void>;
+  /** The setup card's skip: marks the first run done and refreshes. */
+  skipSetup(): Promise<void>;
+  /** The setup card's Run Setup: selects the setup agent and launches. */
+  runSetup(): Promise<void>;
+  signInWithChatGpt(): Promise<void>;
+  openGettingStarted(): Promise<void>;
 }
 
 export function createDesktopOnboardingIpc(
@@ -55,8 +72,10 @@ export function createDesktopOnboardingIpc(
   options: DesktopOnboardingIpcOptions,
 ): DesktopOnboardingIpc {
   const state = options.state ?? platform().globalState;
+  const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
   let previousFunnelState: OnboardingFunnelState | undefined;
   let setupKickoffStarted = false;
+  const funnelListeners = new Set<(state: OnboardingFunnelState) => void>();
   // Serialize refreshes so concurrent callers (WEBVIEW_READY, post-backfill,
   // auth refresh, api-key hooks, run completion) never interleave. The funnel
   // derivation has an internal `await` (the credential probe) and mutates the
@@ -95,12 +114,11 @@ export function createDesktopOnboardingIpc(
       hasCredential,
       ...flags,
     });
+    const changed = previousFunnelState !== transition.state;
     previousFunnelState = transition.state;
-
-    renderer.postToRenderer({
-      command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      state: transition.state,
-    });
+    if (changed) {
+      for (const listener of [...funnelListeners]) listener(transition.state);
+    }
 
     if (transition.clearDeclined) {
       await setOnboardingDeclined(state, false);
@@ -172,35 +190,30 @@ export function createDesktopOnboardingIpc(
   }
 
   return {
-    ...createCommandHandler(
-      {
-        // Every main-view mount must clear MainApp's first-paint `pending`
-        // guard with a concrete state (State 0 welcome card, State 1 setup,
-        // or State 2 done).
-        [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: {
-          when: (message) => message.view === 'main',
-          run: () => refreshOnboardingFunnel(),
-          claim: false,
-        },
-        [DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE]: () => postCurrentState(),
-        [DESKTOP_ONBOARDING_COMMANDS.DISMISS]: () => dismiss(),
-        // Welcome-card skip (PRD: agent-native onboarding). Host-neutral
-        // declined flag — the same one the CLI picker persists. After
-        // persisting the declined flag, recompute the funnel; the derivation
-        // produces 'done' when no credential is present.
-        [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP]: () => skipMainOnboarding(),
-        [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP]: () => skipSetup(),
-        [MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP]: () => runSetup(),
-        [MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT]: () =>
-          signInWithChatGpt(),
-        // State 0 walkthrough button. The desktop shell can't host the VS Code
-        // getting-started walkthrough, so this opens the desktop docs externally
-        // (the host wires `openGettingStarted`).
-        [MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED]: () =>
-          options.openGettingStarted(),
-      },
-      { onAsyncError: options.onAsyncError },
-    ),
+    handleMessage(message: DesktopCommandMessage): boolean {
+      switch (message.command) {
+        case DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE:
+          postCurrentState();
+          return true;
+        case DESKTOP_ONBOARDING_COMMANDS.DISMISS:
+          dismiss().catch(reportAsyncError);
+          return true;
+        default:
+          return false;
+      }
+    },
     refreshOnboardingFunnel,
+    funnelState: () => previousFunnelState ?? null,
+    onFunnelChange(listener) {
+      funnelListeners.add(listener);
+      return () => {
+        funnelListeners.delete(listener);
+      };
+    },
+    skipOnboarding: skipMainOnboarding,
+    skipSetup,
+    runSetup,
+    signInWithChatGpt,
+    openGettingStarted: () => options.openGettingStarted(),
   };
 }

@@ -54,7 +54,7 @@ type ExternalInquiryAction =
   | Extract<InquiryActionMessage, { readonly action: 'submit' }>
   | InquiryDropAction;
 
-export type ExternalInquiryTransition =
+type ExternalInquiryTransition =
   | {
       readonly kind: 'answered';
       readonly threadId: InquiryActionMessage['threadId'];
@@ -71,12 +71,13 @@ export type ExternalInquiryTransition =
     };
 
 /** Persist one terminal inquiry action without reaching into host presentation. */
-export async function persistExternalInquiryAction(
+async function persistExternalInquiryAction(
   payload: ExternalInquiryAction,
 ): Promise<ExternalInquiryTransition> {
   if (payload.action === 'submit') {
     const manifest = await recordAnswerForOpenTurn({
       threadId: payload.threadId,
+      turnIndex: payload.turnIndex,
       answer: payload.answer,
       sessionLinks: payload.sessionLinks ?? undefined,
     });
@@ -107,7 +108,10 @@ export async function persistExternalInquiryAction(
       data: payload.cause,
     });
   }
-  const droppedManifest = await markDropped({ threadId: payload.threadId });
+  const droppedManifest = await markDropped({
+    threadId: payload.threadId,
+    turnIndex: payload.turnIndex,
+  });
   if (droppedManifest) {
     return {
       kind: 'dropped',
@@ -123,7 +127,7 @@ export async function persistExternalInquiryAction(
 }
 
 /** Deliver the continuation represented by a completed durable transition. */
-export async function continueExternalInquiryAction(
+async function continueExternalInquiryAction(
   transition: ExternalInquiryTransition,
   options: { session?: SessionHandle } = {},
 ): Promise<void> {
@@ -153,7 +157,8 @@ export async function continueExternalInquiryAction(
 export async function handleExternalInquiryAction(
   payload: ExternalInquiryAction,
   options: { session?: SessionHandle } = {},
-): Promise<void> {
+): Promise<boolean> {
   const transition = await persistExternalInquiryAction(payload);
   await continueExternalInquiryAction(transition, options);
+  return transition.kind !== 'stale';
 }

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { RunUsageAccumulatorJSONSchema } from '@agent/core/usage/RunUsageAccumulator';
 import {
-  ActiveChildInfoSchema,
   ContextManagementDataSchema,
   STREAM_PHASE,
   STREAM_STATUS,
@@ -77,57 +76,6 @@ describe('ContextManagementDataSchema', () => {
   it('rejects retired entries missing their completion statistics', () => {
     expect(() =>
       ContextManagementDataSchema.parse({ ...base, action: 'clear_tool_uses' }),
-    ).toThrow();
-  });
-});
-
-describe('ActiveChildInfoSchema — flat roster row', () => {
-  const base = {
-    executionId: 'exec-1',
-    childStreamId: 'stream-1',
-    agentName: 'review',
-    identity: { kind: 'agent', agent: 'review' },
-  };
-
-  it('accepts a row carrying its parsed identity verbatim', () => {
-    const result = ActiveChildInfoSchema.parse({
-      ...base,
-      identity: { kind: 'process', tool: 'bash' },
-    });
-    expect(result).toMatchObject({
-      identity: { kind: 'process', tool: 'bash' },
-    });
-  });
-
-  it('requires childStreamId — every child owns a stream tab', () => {
-    expect(() =>
-      ActiveChildInfoSchema.parse({
-        executionId: 'exec-1',
-        agentName: 'review',
-      }),
-    ).toThrow();
-  });
-
-  // `status` has no legacy migration on purpose. The child roster is liveness
-  // state: `assembleSnapshot` never writes `subagents`, and every hydrate
-  // clamps it to `[]`, so no on-disk roster carries the retired 7-value
-  // `StreamStatus` vocabulary. The v0.41 cut dropped the speculative union
-  // member that mapped it; the field now takes `StreamPhase` only.
-  it('accepts a StreamPhase status', () => {
-    const result = ActiveChildInfoSchema.parse({
-      ...base,
-      status: STREAM_PHASE.RUNNING,
-    });
-
-    expect(result).toMatchObject({ status: STREAM_PHASE.RUNNING });
-  });
-
-  it('rejects a retired StreamStatus value rather than folding it', () => {
-    expect(() =>
-      ActiveChildInfoSchema.parse({
-        ...base,
-        status: STREAM_STATUS.INITIALIZING,
-      }),
     ).toThrow();
   });
 });

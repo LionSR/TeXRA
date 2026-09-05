@@ -15,28 +15,16 @@ import {
   type GettingStartedAction,
   type RunOutcome,
   type StreamLifecycleStatus,
-  type StreamLogEntry,
+  type StreamTabId,
   type TaskGroup,
-  type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
+import type { TranscriptView } from '@shared/session/sessionView';
 import {
-  WORKFLOW_CALL_STATUS_GLYPH,
-  WORKFLOW_PHASE_GLYPH,
   formatWorkflowPhaseHeading,
-  formatWorkflowPhaseTally,
-  formatWorkflowTally,
   workflowPhaseHeadingOfGroup,
 } from '@shared/copy/workflowCall';
-import {
-  formatWorkflowCallLiveParts,
-  formatWorkflowRowGroup,
-  workflowPhaseRows,
-  type WorkflowPhaseModel,
-  type WorkflowRowGroup,
-  type WorkflowRunModel,
-} from '@shared/streams/workflowRunModel';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -52,10 +40,11 @@ import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
-import { ToggleStateStore } from '@shared/state/ToggleStateStore';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
+import { compareBySeqNo } from '@shared/streams/streamOrdering';
 import { formatDuration } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -70,18 +59,12 @@ import { playCompletionSound } from '../audioNotification';
 
 // Local imports - formatters
 import { formatLogEntry } from '../formatters';
-import {
-  formatWorkflowCallTemplate,
-  formatWorkflowDeclaredTaskTemplate,
-} from '../formatters/logFormatters/workflowCallFormatter';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 
 // Local imports - sibling helpers
-import { TranscriptIndex, type GroupTree } from './messageIndex';
 // Side-effect import: registers <terminal-output>, which the terminal-stream
 // render path below instantiates.
 import './TerminalOutput';
-import { ProgressEvents } from '../events';
 import type { TerminalOutput } from './TerminalOutput';
 
 const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
@@ -100,68 +83,106 @@ const taskGroupListStyles = css`
   .group-time {
     font-variant-numeric: tabular-nums;
   }
-
-  /* This compact disclosure is the only native button in the task-group
-     surface. Keep its target at the WCAG minimum without increasing the
-     visual density of every workflow row. */
-  .workflow-row-group {
-    min-block-size: 24px;
-  }
-
-  :host(:dir(rtl)) .workflow-row-group wa-icon {
-    transform: scaleX(-1);
-  }
 `;
 
-const WORKFLOW_ROW_GROUPS = ['queued', 'declared'] as const;
+interface GroupTree {
+  group: TaskGroup;
+  children: GroupTree[];
+  rows: TranscriptRow[];
+}
 
-/** Toggle-store key of one phase's counted group of quiet cards. */
-function rowGroupToggleKey(phaseKey: string, group: WorkflowRowGroup): string {
-  return `${phaseKey}#${group}`;
+type TimelineEntry =
+  | { key: string; time: number; row: TranscriptRow }
+  | { key: string; time: number; tree: GroupTree };
+
+/** Wire append sequence when both rows carry one, wall-clock otherwise. */
+function compareRows(a: TranscriptRow, b: TranscriptRow): number {
+  return compareBySeqNo(
+    a,
+    b,
+    (row) => row.seqNo,
+    (row) => row.timestamp,
+  );
+}
+
+function compareGroups(a: TaskGroup, b: TaskGroup): number {
+  return compareBySeqNo(
+    a,
+    b,
+    () => undefined,
+    (group) => group.startTime,
+  );
 }
 
 /**
- * One glyph per card in issue order — the same cells, from the same model,
- * the CLI popup's strip paints — so a phase reads at a glance and reads
- * without colour.
+ * The transcript as the list renders it: ungrouped rows (the user's
+ * inputs, follow-ups, errors) interleaved chronologically with the group
+ * trees. Rows are classified by `groupId` alone; a group whose parent is
+ * absent is a root.
  */
-function renderStatusStrip(
-  cells: readonly WorkflowCallProgress['status'][],
-): TemplateResult {
-  return html`<span class="group-strip" aria-hidden="true"
-    >${cells.map(
-      (status) =>
-        html`<span class="group-cell group-cell--${status}"
-          >${WORKFLOW_CALL_STATUS_GLYPH[status]}</span
-        >`,
-    )}</span
-  >`;
+function transcriptTimeline(
+  groups: readonly TaskGroup[],
+  rows: readonly TranscriptRow[],
+): TimelineEntry[] {
+  const groupIds = new Set(groups.map((group) => group.id));
+  const children = new Map<string, TaskGroup[]>();
+  for (const group of groups) {
+    if (!group.parentGroupId || !groupIds.has(group.parentGroupId)) continue;
+    const siblings = children.get(group.parentGroupId) ?? [];
+    siblings.push(group);
+    children.set(group.parentGroupId, siblings);
+  }
+  const rowsByGroup = new Map<string, TranscriptRow[]>();
+  const ungrouped: TranscriptRow[] = [];
+  for (const row of rows.toSorted(compareRows)) {
+    if (row.groupId && groupIds.has(row.groupId)) {
+      const bucket = rowsByGroup.get(row.groupId) ?? [];
+      bucket.push(row);
+      rowsByGroup.set(row.groupId, bucket);
+    } else {
+      ungrouped.push(row);
+    }
+  }
+  const node = (group: TaskGroup): GroupTree => ({
+    group,
+    children: (children.get(group.id) ?? []).sort(compareGroups).map(node),
+    rows: rowsByGroup.get(group.id) ?? [],
+  });
+  const roots = groups
+    .filter((g) => !g.parentGroupId || !groupIds.has(g.parentGroupId))
+    .sort(compareGroups)
+    .map(node);
+  return [
+    ...ungrouped.map((row) => ({ key: row.id, time: row.timestamp, row })),
+    ...roots.map((tree) => ({
+      key: tree.group.id,
+      time: tree.group.startTime,
+      tree,
+    })),
+  ].sort((a, b) => a.time - b.time);
 }
 
 @customElement('task-group-list')
 export class TaskGroupList extends LitElement {
   static override styles = [designTokens, ...logStyles, taskGroupListStyles];
 
-  /** All task groups to render */
-  @property({ attribute: false }) groups: TaskGroup[] = [];
-
-  /** All transcript rows to render */
-  @property({ attribute: false }) rows: TranscriptRow[] = [];
-
   /**
-   * Source log entries. Read only by the terminal render path, which shows a
-   * process stream's raw output text rather than transcript rows.
+   * The stream's transcript slice. The fold appends rows and groups in
+   * place and replaces the slice on every change, so the slice, never one
+   * of its arrays, is the property Lit compares.
    */
-  @property({ attribute: false }) entries: StreamLogEntry[] = [];
+  @property({ attribute: false }) transcript: TranscriptView | null = null;
 
-  /** Existing row indices updated by the most recent backend delta. */
-  @property({ attribute: false }) updatedRowIndices: readonly number[] = [];
+  private get groups(): TaskGroup[] {
+    return this.transcript?.taskGroups ?? [];
+  }
 
-  /** Generation immediately before updatedRowIndices was collected. */
-  @property({ attribute: false }) updatedRowBaseGeneration = 0;
+  private get rows(): TranscriptRow[] {
+    return this.transcript?.rows ?? [];
+  }
 
-  /** Current generation for the rows array. */
-  @property({ attribute: false }) rowGeneration = 0;
+  /** The stream these rows belong to; every group toggle names it. */
+  @property({ attribute: false }) streamId: StreamTabId | null = null;
 
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
@@ -190,12 +211,10 @@ export class TaskGroupList extends LitElement {
       : undefined;
   }
 
-  /** The run's workflow display structure, computed by the state selector;
-   *  null when this stream declares no workflow. */
-  @property({ attribute: false }) runModel: WorkflowRunModel | null = null;
-
-  /** Toggle state store for persistence */
-  @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
+  /** `Surface.groups` for this stream: true is expanded, false collapsed,
+   *  a missing key expanded. Toggles go out as surface actions. */
+  @property({ attribute: false }) expanded:
+    ReadonlyMap<string, boolean> | undefined = undefined;
 
   /**
    * Render log output in terminal style (monospace, no bullets/timestamps).
@@ -206,10 +225,10 @@ export class TaskGroupList extends LitElement {
   /** Track previous group statuses to detect completion (not rendered — no @state needed) */
   private previousStatuses = new Map<string, string>();
 
-  private readonly index = new TranscriptIndex();
-
-  /** The model's opened phases by task-group id, for the group tree. */
-  private phaseModels = new Map<string, WorkflowPhaseModel>();
+  /** The transcript partitioned for render: rebuilt when `groups` or
+   *  `rows` change; the rows arrive in wire order and the groups keyed, so
+   *  the partition is one pass (PRD 10.2). */
+  private timeline: TimelineEntry[] = [];
 
   /** Number of recent top-level timeline entries currently rendered. */
   @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
@@ -234,9 +253,6 @@ export class TaskGroupList extends LitElement {
 
   /** Threshold for detecting "near bottom" in scroll listener (px) */
   private static readonly STICKY_THRESHOLD = 150;
-
-  /** Row generation represented by the current cached tree/timeline. */
-  private processedRowGeneration = 0;
 
   /** Handle native scroll events from the log container to track user intent */
   private handleScroll = (): void => {
@@ -274,51 +290,31 @@ export class TaskGroupList extends LitElement {
   }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
-    const groupsChanged = changedProperties.has('groups');
-    const rowsChanged = changedProperties.has('rows');
+    const transcriptChanged = changedProperties.has('transcript');
 
     // The painted status is a fold of the group and the run's durable
     // outcome, so a change in any of the three is a change in what the
     // chime's memory holds: a run that becomes durably final repaints its
     // open groups as its outcome without any group row changing.
     if (
-      groupsChanged ||
+      transcriptChanged ||
       changedProperties.has('streamDurablyFinal') ||
       changedProperties.has('streamStatus')
     ) {
       this.checkForCompletedRuns();
     }
-    if (changedProperties.has('runModel')) {
-      this.phaseModels = new Map(
-        (this.runModel?.phases ?? [])
-          .filter((phase) => phase.opened)
-          .map((phase) => [phase.key, phase]),
-      );
-    }
-
-    const renderWindowsStale = this.index.apply({
-      terminal: this.terminal,
-      wasTerminal: changedProperties.get('terminal') === true,
-      groups: this.groups,
-      previousGroups: changedProperties.get('groups') as
-        TaskGroup[] | undefined,
-      groupsChanged,
-      rows: this.rows,
-      previousRows: changedProperties.get('rows') as
-        TranscriptRow[] | undefined,
-      rowsChanged,
-      deltaIndices:
-        this.updatedRowBaseGeneration === this.processedRowGeneration
-          ? this.updatedRowIndices
-          : null,
-    });
-    if (renderWindowsStale) {
+    if (this.terminal || !transcriptChanged) return;
+    this.timeline = transcriptTimeline(this.groups, this.rows);
+    // The windows count from the tail; a transcript that shrank (a
+    // replaced history) or a fresh mount no longer lines up with them.
+    const previous = changedProperties.get('transcript') as
+      TranscriptView | null | undefined;
+    if (
+      changedProperties.get('terminal') === true ||
+      (previous != null && this.rows.length < previous.rows.length)
+    ) {
       this.resetRenderWindows();
     }
-  }
-
-  override updated(): void {
-    this.processedRowGeneration = this.rowGeneration;
   }
 
   /**
@@ -435,8 +431,8 @@ export class TaskGroupList extends LitElement {
     }
   }
 
-  private visibleTimelineEntries(): typeof this.index.timeline {
-    const timeline = this.index.timeline;
+  private visibleTimelineEntries(): TimelineEntry[] {
+    const timeline = this.timeline;
     return timeline.length <= this.timelineItemWindow
       ? timeline
       : timeline.slice(-this.timelineItemWindow);
@@ -444,8 +440,7 @@ export class TaskGroupList extends LitElement {
 
   /** Check if a group is expanded */
   private isExpanded(groupId: string): boolean {
-    if (!this.toggleStates) return true;
-    return this.toggleStates.get(groupId) !== true;
+    return this.expanded?.get(groupId) !== false;
   }
 
   private isNearBottom(threshold: number): boolean {
@@ -463,167 +458,22 @@ export class TaskGroupList extends LitElement {
    * groups would otherwise re-trigger their ancestors — guard on
    * target === currentTarget. Open state comes from the event type; groupId
    * from the element ID (no per-row closures). Lit binds the host as `this`.
+   * The surface owns the answer: the toggle is dispatched, and the group
+   * body follows the `expanded` map the host hands back.
    */
   private handleGroupToggle(event: Event): void {
     if (event.target !== event.currentTarget) return;
     const details = event.currentTarget as HTMLElement;
     const groupId = details.id.slice(GROUP_DOM_IDS.DETAILS_PREFIX.length);
-    if (this.toggleStates) {
-      // toggleStates stores `true` = collapsed; wa-show means now-open.
-      this.toggleStates.set(groupId, event.type !== 'wa-show');
-    }
-    // Re-render to add/remove children from the DOM (lazy collapsed groups)
-    this.requestUpdate();
-  }
-
-  /**
-   * A phase header's tally and status strip, read off the model: the one
-   * spelling of `done/total · N running · N failed · N declared`, then one
-   * glyph per card. A phase with nothing to count shows neither.
-   */
-  private renderPhaseProgress(
-    phase: WorkflowPhaseModel,
-  ): TemplateResult | typeof nothing {
-    if (phase.tally.total === 0 && phase.tally.declared === 0) return nothing;
-    return html`<span class="group-progress"
-        >${formatWorkflowPhaseTally(phase)}</span
-      >${phase.cells.length > 0 ? renderStatusStrip(phase.cells) : nothing}`;
-  }
-
-  /** Whole-run tally above a multi-agent workflow's phases. */
-  private renderRunBand(node: GroupTree): TemplateResult | typeof nothing {
-    const model = this.runModel;
-    if (this.isToolUse || !model || model.tally.total === 0) return nothing;
-    if (!node.children.some((child) => this.phaseModels.has(child.group.id))) {
-      return nothing;
-    }
-    return html`<div class="log-run-band">
-      ${formatWorkflowTally(model.tally)}
-    </div>`;
-  }
-
-  /** Quiet groups stay closed until the reader opens one. `true` in the
-   *  store means collapsed, as for task groups, so only an explicit `false`
-   *  opens a group. */
-  private expandedRowGroups(phaseKey: string): ReadonlySet<WorkflowRowGroup> {
-    const expanded = new Set<WorkflowRowGroup>();
-    for (const group of WORKFLOW_ROW_GROUPS) {
-      if (
-        this.toggleStates?.get(rowGroupToggleKey(phaseKey, group)) === false
-      ) {
-        expanded.add(group);
-      }
-    }
-    return expanded;
-  }
-
-  private handleRowGroupToggle(event: Event): void {
-    event.preventDefault();
-    event.stopPropagation();
-    const target = event.currentTarget as HTMLElement;
-    const key = target.dataset.toggleKey;
-    if (!key || !this.toggleStates) return;
-    // Open → collapse (true), closed → open (false).
-    this.toggleStates.set(key, target.getAttribute('aria-expanded') === 'true');
-    this.requestUpdate();
-  }
-
-  /**
-   * One phase's cards in the model's order — the CLI popup's order: cards
-   * needing attention first, finished cards as ticked rows, the unstarted
-   * ones as counted groups that open in place, and the plan's tasks the run
-   * has not issued yet.
-   */
-  private renderPhaseRows(phase: WorkflowPhaseModel): TemplateResult {
-    const rows = workflowPhaseRows(phase, {
-      expanded: this.expandedRowGroups(phase.key),
-      filter: '',
-    });
-    return html`${repeat(
-      rows,
-      (row) => row.key,
-      (row) => {
-        switch (row.kind) {
-          case 'task': {
-            // The card plus the model's live join for it; the board has no
-            // clock, so elapsed is left to the popup.
-            const live = this.runModel?.liveOf.get(row.row.id);
-            // The model owns the link rule: a stream two cards claim is
-            // nobody's, so read the resolved id rather than the raw field.
-            const childStreamId = this.runModel?.childStreamOf.get(row.row.id);
-            return guard([row.row, live, childStreamId], () =>
-              formatWorkflowCallTemplate(
-                row.row,
-                formatWorkflowCallLiveParts(row.row.call, live),
-                childStreamId,
-              ),
-            );
-          }
-          case 'declared':
-            return formatWorkflowDeclaredTaskTemplate(row.task);
-          case 'group':
-            return html`<button
-              type="button"
-              class="workflow-row-group"
-              aria-expanded=${row.expanded ? 'true' : 'false'}
-              data-toggle-key=${rowGroupToggleKey(phase.key, row.group)}
-              @click=${this.handleRowGroupToggle}
-            >
-              ${waIcon(row.expanded ? 'chevron-down' : 'chevron-right')}
-              ${formatWorkflowRowGroup(row)}
-            </button>`;
-        }
-      },
-    )}`;
-  }
-
-  /**
-   * Phases the plan declares that the run has not opened, after everything it
-   * has: the hollow twin of an opened phase's header, holding the plan's tasks
-   * for that phase. The model drops them once the run settles.
-   */
-  private renderDeclaredPhases(): TemplateResult | typeof nothing {
-    const declared =
-      this.runModel?.phases.filter((phase) => !phase.opened) ?? [];
-    if (declared.length === 0) return nothing;
-    return html`${repeat(
-      declared,
-      (phase) => phase.key,
-      (phase) => {
-        const expanded = this.isExpanded(phase.key);
-        return html`
-          <wa-details
-            id=${`${GROUP_DOM_IDS.DETAILS_PREFIX}${phase.key}`}
-            class="log-group"
-            ?open=${expanded}
-            @wa-show=${this.handleGroupToggle}
-            @wa-hide=${this.handleGroupToggle}
-          >
-            <div
-              slot="summary"
-              id="${GROUP_DOM_IDS.HEADER_PREFIX}${phase.key}"
-              class="log-group-header is-declared"
-            >
-              <span class="group-status-icon" aria-hidden="true"
-                >${WORKFLOW_PHASE_GLYPH.declared}</span
-              >
-              <bdi class="group-title"
-                >${formatWorkflowPhaseHeading(phase.heading)}</bdi
-              >
-              <span class="group-progress"
-                >${formatWorkflowPhaseTally(phase)}</span
-              >
-            </div>
-            <div
-              id=${`${GROUP_DOM_IDS.CONTENT_PREFIX}${phase.key}`}
-              class="log-group-content"
-            >
-              ${expanded ? this.renderPhaseRows(phase) : nothing}
-            </div>
-          </wa-details>
-        `;
-      },
-    )}`;
+    if (this.streamId === null) return;
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'group',
+        streamId: this.streamId,
+        key: groupId,
+        expanded: event.type === 'wa-show',
+      }),
+    );
   }
 
   /** Render child group header inline (only called for non-root groups) */
@@ -638,7 +488,6 @@ export class TaskGroupList extends LitElement {
 
     const status = taskGroupDisplayStatus(group, this.runDurableOutcome);
     const statusIcon = terminalStatusIcon(status);
-    const phase = this.phaseModels.get(group.id);
     const title =
       group.kind === 'round' && group.index !== undefined
         ? formatRoundStageLabel({
@@ -653,7 +502,6 @@ export class TaskGroupList extends LitElement {
         })}
       </span>
       <bdi class="group-title">${title}</bdi>
-      ${phase ? this.renderPhaseProgress(phase) : nothing}
       <span class="group-time">
         <span class="group-start-time">
           ${waIcon('clock')}
@@ -674,20 +522,10 @@ export class TaskGroupList extends LitElement {
     `;
   }
 
-  /**
-   * Rows of a group followed by its child groups. A phase's cards come from
-   * the model (`renderPhaseRows`); its other rows — the script's own log
-   * lines — follow in transcript order. Superseded phase groups do not reach
-   * this path: the shared model is the authority for which attempt is visible.
-   */
-  private renderGroupBody(node: GroupTree, isRoot: boolean): TemplateResult {
-    const phase = this.phaseModels.get(node.group.id);
-    const rows =
-      phase || (isRoot && this.runModel !== null)
-        ? node.rows.filter((row) => row.kind !== 'workflowTask')
-        : node.rows;
-    return html`${phase ? this.renderPhaseRows(phase) : nothing}${this.renderRowEntries(
-      rows,
+  /** Rows of a group followed by its child groups, in transcript order. */
+  private renderGroupBody(node: GroupTree): TemplateResult {
+    return html`${this.renderRowEntries(
+      node.rows,
       `group:${node.group.id}`,
     )}${repeat(
       node.children,
@@ -702,26 +540,19 @@ export class TaskGroupList extends LitElement {
     isRoot = false,
   ): TemplateResult | typeof nothing {
     const { group } = node;
-    if (
-      group.kind === 'phase' &&
-      this.runModel !== null &&
-      !this.phaseModels.has(group.id)
-    ) {
-      return nothing;
-    }
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
     // Tree roots: simple container (no collapsible), always render content.
     // Keyed on tree position (isRoot), NOT group.parentGroupId, so a re-rooted
-    // orphan — a group whose parent is absent, promoted to a root by
-    // messageIndex (R2) — gets the root layout instead of nested/collapsible
-    // even though it retains its dangling parentGroupId.
+    // orphan (a group whose parent is absent, promoted to a root by
+    // `transcriptTimeline`) gets the root layout instead of the nested
+    // collapsible one even though it retains its dangling parentGroupId.
     if (isRoot) {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
           <div id=${contentId} class="log-group-content">
-            ${this.renderRunBand(node)} ${this.renderGroupBody(node, true)}
+            ${this.renderGroupBody(node)}
           </div>
         </div>
       `;
@@ -750,21 +581,26 @@ export class TaskGroupList extends LitElement {
           ${this.renderGroupHeader(node)}
         </div>
         <div id=${contentId} class="log-group-content">
-          ${expanded ? this.renderGroupBody(node, false) : nothing}
+          ${expanded ? this.renderGroupBody(node) : nothing}
         </div>
       </wa-details>
     `;
   }
 
+  /** A process stream's output: its plain log rows, in order, as one text. */
   private renderTerminalOutput(): TemplateResult {
     return html`<terminal-output
       fill
-      .text=${this.entries.map((entry) => entry.text ?? '').join('')}
+      .text=${this.rows
+        .map((row) => (row.kind === 'log' ? row.text.full : ''))
+        .join('')}
     ></terminal-output>`;
   }
 
   private handleGettingStartedAction(action: GettingStartedAction): void {
-    this.dispatchEvent(ProgressEvents.gettingStartedAction({ action }));
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'gettingStarted', action }),
+    );
   }
 
   override render(): TemplateResult {
@@ -799,11 +635,7 @@ export class TaskGroupList extends LitElement {
     // Pre-output placeholder, including terminal-mode (process-agent) streams:
     // with no output the terminal buffer is empty and would render a blank
     // pane, so show the same "Run is starting" / idle text instead.
-    if (
-      this.rows.length === 0 &&
-      this.entries.length === 0 &&
-      this.groups.length === 0
-    ) {
+    if (this.rows.length === 0 && this.groups.length === 0) {
       const active = isInFlightPhase(this.streamStatus);
       return html`
         <div class="log-placeholder">
@@ -825,8 +657,7 @@ export class TaskGroupList extends LitElement {
     // streams render a recent window first; older timeline entries remain in
     // memory and can be revealed from the top control.
     const visibleTimeline = this.visibleTimelineEntries();
-    const hiddenTimelineCount =
-      this.index.timeline.length - visibleTimeline.length;
+    const hiddenTimelineCount = this.timeline.length - visibleTimeline.length;
 
     return html`
       ${
@@ -845,19 +676,11 @@ export class TaskGroupList extends LitElement {
         (item) => item.key,
         (item) => {
           if ('row' in item) {
-            return this.runModel !== null && item.row.kind === 'workflowTask'
-              ? nothing
-              : this.renderLogEntry(item.row);
+            return this.renderLogEntry(item.row);
           }
           return this.renderGroupNode(item.tree, true);
         },
       )}
-      ${
-        this.runModel?.unphasedPhase
-          ? this.renderPhaseRows(this.runModel.unphasedPhase)
-          : nothing
-      }
-      ${this.renderDeclaredPhases()}
     `;
   }
 }

@@ -12,7 +12,7 @@ const extensionDist = path.join(repoRoot, 'packages', 'extension', 'dist');
 
 const webviewOnly = process.argv.includes('--webviews-only');
 const targets = webviewOnly
-  ? ['progressView', 'settingsView', 'webview', 'shared'].map((name) =>
+  ? ['progressView', 'settingsView', 'shared'].map((name) =>
       path.join(extensionDist, name),
     )
   : [extensionDist];

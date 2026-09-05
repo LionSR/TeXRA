@@ -20,8 +20,9 @@ import type {
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
-import type { Effect, Stream, SubscriptionRef } from 'effect';
-import type { SessionEventsShape } from './SessionEvents';
+import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import type { SessionInputs } from '@shared/session/sessionInputs';
+import type { Context, Effect, Stream, SubscriptionRef } from 'effect';
 import type { SessionHandle } from './SessionHandle';
 
 /** What a session holds of its graph, resolved once at construction. */
@@ -41,6 +42,8 @@ export interface SessionGraph {
   readonly folded: (fromCommit: CommitOrdinal) => Stream.Stream<SessionEvent>;
   /** This process's local truth; the status machine writes `unreadable`. */
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
+  /** Ordered fold inputs: complete replay, then events before live text. */
+  readonly inputs: Context.Service.Shape<typeof SessionInputs>['read'];
   /** The transcript subscription set, one set per port (PRD 7.2). */
   readonly subscriptions: {
     readonly set: (

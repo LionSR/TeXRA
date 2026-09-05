@@ -3,7 +3,7 @@
 // settings-view tab invariants).
 
 import { describe, expect, it } from 'vitest';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchSettingsViewOutbound,
   SETTINGS_TAB_GROUPS,
@@ -14,7 +14,6 @@ import {
   planSummaryLine,
   parseClaudeAgentModel,
   parseCodexApprovalPolicy,
-  MainViewInboundMessageSchema,
 } from '@shared/schemas';
 
 describe('work plan schema helpers', () => {
@@ -43,22 +42,6 @@ describe('parseClaudeAgentModel', () => {
 
   it('maps a persisted claude-fable-5 selection forward to its 5.1 successor', () => {
     expect(parseClaudeAgentModel('claude-fable-5')).toBe('claude-fable-5-1');
-  });
-});
-
-describe('MainView housekeeping messages', () => {
-  it('uses inputFiles for Pack/Clean multiple payloads', () => {
-    const parsed = MainViewInboundMessageSchema.parse({
-      command: MAIN_VIEW_COMMANDS.PACK_MULTIPLE,
-      inputFile: 'main.tex',
-      inputFiles: ['chapter.tex'],
-      agent: 'correct',
-      model: 'gpt-5.4',
-    });
-
-    expect('inputFiles' in parsed ? parsed.inputFiles : undefined).toEqual([
-      'chapter.tex',
-    ]);
   });
 });
 

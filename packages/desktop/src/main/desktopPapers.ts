@@ -4,7 +4,6 @@
 // the process; the window switches which paper it shows.
 
 import { statSync } from 'node:fs';
-import { basename } from 'node:path';
 
 import type { SessionStores } from '@agent/storage';
 import {
@@ -41,6 +40,9 @@ import { initializeDesktopProcessStores } from './desktopProcessStores.js';
 import type { DesktopPapersMessage } from '../shared/desktopPaperMessages.js';
 
 export interface DesktopPaper {
+  /** The session key: the storage root the fold's `SessionView.key`
+   *  carries, and the paper's name on every renderer message. */
+  readonly key: string;
   /** Canonical folder path, or undefined for the no-workspace session. */
   readonly root: string | undefined;
   readonly roots: WorkspaceRoots;
@@ -243,6 +245,7 @@ async function openPaperSession(
       // or shutting the process down cancels it if it has not started.
       resources.add(scheduleLeftoverStreamSweep(session));
       return {
+        key: roots.storage,
         root,
         roots,
         session,
@@ -391,11 +394,10 @@ export async function openDesktopPaperRegistry(
       return closed;
     },
     summary: () => ({
-      papers: openPapers().map(({ root = '' }) => ({
-        root,
-        name: basename(root) || root,
-      })),
-      activeRoot: activeRoot ?? null,
+      papers: openPapers().flatMap((paper) =>
+        paper.root === undefined ? [] : [{ key: paper.key, root: paper.root }],
+      ),
+      activeKey: active().key,
     }),
     onChange(listener) {
       listeners.add(listener);

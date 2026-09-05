@@ -207,12 +207,3 @@ export function buildBaseModelOption(
 }
 
 /** Build model options from static config without provider availability checks. */
-export function buildBasicModelOptionsData(
-  visibleModels: readonly string[],
-): ModelOptionData[] {
-  return visibleModels.map((model) => {
-    const config = getRuntimeModelConfig(model);
-    if (!config) return { value: model, label: model };
-    return buildBaseModelOption(model, config);
-  });
-}

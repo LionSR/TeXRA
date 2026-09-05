@@ -3,7 +3,6 @@ import { dirname, join } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 import { loadSourceModule } from './loadSourceModule.ts';
@@ -29,18 +28,9 @@ const BASE_FILE_OPTIONS = [
   'templates/main.tex',
 ];
 
-/** Lets microtasks and a macrotask queued via `runAsync` settle. */
-function flushAsyncWork(): Promise<void> {
-  return new Promise((resolve) =>
-    setImmediate(() => setImmediate(() => resolve())),
-  );
-}
-
 /**
- * Post W4-collapse the desktop file selection module routes only single-slot
- * base/edited dropdowns + the disk-listing refresh; input/context/media are
- * multi-only and travel through the SELECT_MULTIPLE_FILES path which the
- * desktop main delegates to its native picker elsewhere.
+ * The file lists and pickers of one paper: the `host` snapshot's file
+ * catalogs and the `pickFiles` and `attachDroppedFiles` arms (PRD 8.1, 8.3).
  */
 describe('desktop file selection', () => {
   const tempDirs = useTempDirs();
@@ -71,104 +61,56 @@ describe('desktop file selection', () => {
     overrides: Partial<
       Parameters<DesktopFileSelectionModule['createDesktopFileSelection']>[0]
     > = {},
-  ): Promise<{
-    files: ReturnType<DesktopFileSelectionModule['createDesktopFileSelection']>;
-    messages: unknown[];
-  }> {
+  ) {
     const { createDesktopFileSelection } = await loadDesktopFileSelection();
-    const messages: unknown[] = [];
-    const files = createDesktopFileSelection({
-      postToRenderer: (message) => messages.push(message),
+    return createDesktopFileSelection({
       workspacePath,
-      showOpenFileDialog: async () => undefined,
-      // A listing failure the test did not ask for surfaces as an unhandled
-      // rejection instead of vanishing.
-      onError: (error) => {
-        throw error;
-      },
+      showOpenFileDialog: vi.fn(async () => undefined),
       ...overrides,
     });
-    return { files, messages };
   }
 
-  it('refreshes the base-file dropdown options on REFRESH_ALL_FILES', async () => {
-    const { files, messages } = await createFileSelection();
+  it('lists the base and edited candidates of the paper', async () => {
+    const files = await createFileSelection();
 
-    expect(
-      files.handleMessage({ command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES }),
-    ).toBe(true);
+    const options = await files.fileOptions();
 
-    await vi.waitFor(() =>
-      expect(messages).toContainEqual({
-        command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
-        files: BASE_FILE_OPTIONS,
-        preserveBaseFile: true,
-      }),
+    expect(options.baseFile).toEqual(BASE_FILE_OPTIONS);
+    expect(options.editedFile).toEqual(
+      expect.arrayContaining([
+        'sections/main_edited.tex',
+        'sections/main_r1.tex',
+      ]),
     );
+    expect(options.commit).toEqual(['HEAD']);
+    expect(await files.hasInputFiles()).toBe(true);
   });
 
-  it('preserves the current base-file selection when requested', async () => {
-    const { files, messages } = await createFileSelection();
+  it('lists nothing without a workspace', async () => {
+    const files = await createFileSelection({ workspacePath: undefined });
 
-    expect(
-      files.handleMessage({
-        command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
-        preserveBaseFile: true,
-      }),
-    ).toBe(true);
-
-    await vi.waitFor(() =>
-      expect(messages).toContainEqual({
-        command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
-        files: BASE_FILE_OPTIONS,
-        preserveBaseFile: true,
-      }),
-    );
+    expect(await files.fileOptions()).toEqual({
+      baseFile: [],
+      editedFile: [],
+      commit: ['HEAD'],
+    });
+    expect(await files.hasInputFiles()).toBe(false);
+    expect(await files.pickFiles('input')).toBeNull();
   });
 
-  it('lists edited-file options for a given base file', async () => {
-    const { files, messages } = await createFileSelection();
-
-    expect(
-      files.handleMessage({
-        command: MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE,
-        baseFile: 'main.tex',
-      }),
-    ).toBe(true);
-
-    await vi.waitFor(() =>
-      expect(messages).toContainEqual({
-        command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
-        files: ['sections/main_edited.tex', 'sections/main_r1.tex'],
-      }),
-    );
-  });
-
-  it('opens the desktop multi-file picker and returns relative input paths', async () => {
+  it('opens the native picker and returns workspace-relative paths', async () => {
     const showOpenFileDialog = vi
       .fn()
       .mockResolvedValue([
         join(workspacePath, 'main.tex'),
         join(workspacePath, 'sections', 'main_r1.tex'),
       ]);
-    const { files, messages } = await createFileSelection({
-      showOpenFileDialog,
-    });
+    const files = await createFileSelection({ showOpenFileDialog });
 
-    expect(
-      files.handleMessage({
-        command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
-        fileType: 'input',
-        currentFile: 'main.tex',
-      }),
-    ).toBe(true);
-
-    await vi.waitFor(() =>
-      expect(messages).toContainEqual({
-        command: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
-        files: ['main.tex', 'sections/main_r1.tex'],
-      }),
-    );
+    expect(await files.pickFiles('input', 'main.tex')).toEqual([
+      'main.tex',
+      'sections/main_r1.tex',
+    ]);
     expect(showOpenFileDialog).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Select input files',
@@ -178,68 +120,30 @@ describe('desktop file selection', () => {
     );
   });
 
-  it.each([
-    {
-      name: 'without a workspace',
-      overrides: { workspacePath: undefined },
-      request: { fileType: 'input' },
-    },
-    {
-      // 'output' is a valid MultipleDocumentFileType and the shared webview
-      // frontend's "Select output files" button posts it through this same
-      // command on every host, but MULTI_SET_COMMAND_BY_FILE_TYPE here only
-      // covers input/context/media, so isDesktopMultiFileType rejects it and
-      // the picker never opens. Pinned so a future fix to add output support
-      // has to update this expectation deliberately.
-      name: 'for output files',
-      overrides: {},
-      request: { fileType: 'output', currentFile: 'main.tex' },
-    },
-  ])(
-    'does not open the multi-file picker $name',
-    async ({ overrides, request }) => {
-      const showOpenFileDialog = vi.fn();
-      const { files } = await createFileSelection({
-        showOpenFileDialog,
-        ...overrides,
-      });
+  it('reports a cancelled picker as null and attaches only the admitted dropped files', async () => {
+    const files = await createFileSelection();
 
-      expect(
-        files.handleMessage({
-          command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
-          ...request,
-        }),
-      ).toBe(true);
-
-      // The picker path is async (dispatched via runAsync), so let queued
-      // work settle before asserting the picker stayed closed — a negative
-      // vi.waitFor would pass on its first poll without observing anything.
-      await flushAsyncWork();
-      expect(showOpenFileDialog).not.toHaveBeenCalled();
-    },
-  );
-
-  it('leaves recent-commit requests for the main IPC router', async () => {
-    const { files } = await createFileSelection();
-
+    expect(await files.pickFiles('context')).toBeNull();
     expect(
-      files.handleMessage({
-        command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
-      }),
-    ).toBe(false);
+      await files.attachDroppedFiles(
+        [
+          join(workspacePath, 'notes.md'),
+          join(workspacePath, 'sections'),
+          '/elsewhere/x.tex',
+        ],
+        'context',
+      ),
+    ).toEqual(['notes.md']);
+    await expect(
+      files.attachDroppedFiles([join(workspacePath, 'sections')], 'input'),
+    ).rejects.toMatchObject({ _tag: 'Rejected' });
   });
 
-  it('reports asynchronous file-listing errors without rejecting from handleMessage', async () => {
-    const onError = vi.fn();
-    const { files } = await createFileSelection({
+  it('rejects a listing of a missing workspace loudly', async () => {
+    const files = await createFileSelection({
       workspacePath: join(workspacePath, 'missing'),
-      onError,
     });
 
-    expect(
-      files.handleMessage({ command: MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES }),
-    ).toBe(true);
-
-    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    await expect(files.fileOptions()).rejects.toThrow();
   });
 });

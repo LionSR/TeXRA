@@ -43,9 +43,6 @@ export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
   readonly description: string;
 }>;
 
-export const NO_TRANSCRIPT_TO_EXPORT_MESSAGE =
-  'This run has no saved transcript to export yet.';
-
 export interface TranscriptExportPorts {
   pickFormat(): Promise<TranscriptExportFormat | undefined>;
   openPath(filePath: string, kind: TranscriptExportOpenKind): Promise<void>;

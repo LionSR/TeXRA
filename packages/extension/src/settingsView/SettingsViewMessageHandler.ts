@@ -27,10 +27,7 @@ import { SettingsProfileKeyController } from '@controllers/settingsView/Settings
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
-import {
-  getMainWebview,
-  safeExecuteCommand,
-} from '@frontend/system/commandUtils';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
   setInlineCriticismEnabled,
@@ -58,7 +55,8 @@ import {
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { revealProgressStream } from '@progressView/progressNavigation';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   codingPlanForApiProvider,
   codingPlanForUsageSetting,
@@ -640,18 +638,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   public async refreshAfterProviderKeyChange(provider: string): Promise<void> {
     invalidateApiKeyCache();
     const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
-    const mainView = await getMainWebview(this.viewName);
-    if (mainView) {
-      const setupComplete = await hasUsableSetupCredential(
-        platform().secrets,
-        this.log.warn,
-      );
-      mainView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_BANNER,
-        banner: 'apiKey',
-        visible: !setupComplete,
-      });
-    }
+    // The launcher's API-key banner reads the same credential probe from
+    // the host snapshot.
+    await ProgressViewProvider.getInstance()?.refreshHostBanners();
     await this.refreshCredentialDependentSurfaces({
       usageProvider,
       refreshProfileData: (webview) =>

@@ -23,14 +23,3 @@ export async function safeExecuteCommand<T>(
     return undefined;
   }
 }
-
-/** Get the main webview view instance. */
-export async function getMainWebview(
-  channel: string = DEFAULT_CHANNEL,
-): Promise<vscode.WebviewView | undefined> {
-  return safeExecuteCommand<vscode.WebviewView>(
-    'texra.getWebviewView',
-    [],
-    channel,
-  );
-}

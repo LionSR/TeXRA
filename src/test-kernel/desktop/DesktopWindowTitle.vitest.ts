@@ -1,36 +1,38 @@
 import { EventEmitter } from 'node:events';
 
+import { SubscriptionRef } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from '@desktop/main/desktopWindowTitle';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { effectRuntime } from '@platform/processRuntime';
 import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
-import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
-import { testExecutionHandle } from '@test/support/executionHandleFixtures';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  emptySessionView,
+  type SessionView,
+} from '@shared/session/sessionView';
 
-function createAgentHandle(id: string, streamId: StreamTabId) {
-  return testExecutionHandle({
-    executionId: id,
-    parentStreamId: streamId,
-    agent: 'test-agent',
-  });
-}
-
-function trackRunningAgent(
-  session: ReturnType<typeof createTestSession>,
-  id: string,
-  streamId: StreamTabId,
-): ReturnType<typeof createAgentHandle> {
-  const handle = createAgentHandle(id, streamId);
-  session.executions.trackAgentExecution(handle, {
-    status: STREAM_PHASE.RUNNING,
-  });
-  return handle;
+/** A session as the title reads it: the fold's level and nothing else. */
+function createSession(rollup: Partial<SessionView['rollup']> = {}) {
+  const view = effectRuntime().runSync(
+    SubscriptionRef.make<SessionView>({
+      ...emptySessionView('paper'),
+      rollup: { running: 0, waiting: 0, interrupted: 0, ...rollup },
+    }),
+  );
+  return {
+    session: { view },
+    setRollup(next: Partial<SessionView['rollup']>) {
+      effectRuntime().runSync(
+        SubscriptionRef.update(view, (current) => ({
+          ...current,
+          rollup: { ...current.rollup, ...next },
+        })),
+      );
+    },
+  };
 }
 
 function createWindow(initialTitle: string) {
@@ -55,9 +57,11 @@ function createWindow(initialTitle: string) {
   };
 }
 
+type TitleSession = Parameters<typeof installDesktopWindowTitle>[1];
+
 function installTitle(
   window: ReturnType<typeof createWindow>['window'],
-  session: SessionHandle,
+  session: TitleSession,
   workspacePath = '/work/geometry',
 ): () => void {
   return installDesktopWindowTitle(
@@ -66,6 +70,9 @@ function installTitle(
     workspacePath,
   );
 }
+
+/** The fold publishes on the runtime; one macrotask lets its drain land. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('desktop process-session window title', () => {
   it('formats exact copy for absent and hostile workspace names', () => {
@@ -82,96 +89,24 @@ describe('desktop process-session window title', () => {
     ).toBe('Approval needed TeXRA · draft — Running <script>.tex');
   });
 
-  it('requires a registered agent with canonical RUNNING status', () => {
-    const session = createTestSession();
-    const orphanStream = 'stream:provisional-orphan' as StreamTabId;
-    const waitingStream = 'stream:waiting' as StreamTabId;
-    try {
-      seedStreamStatusForTest(session.status, orphanStream, {
-        phase: STREAM_PHASE.RUNNING,
-      });
-      expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
+  it('reads the activity from the view rollup, a decision first', () => {
+    const { session, setRollup } = createSession();
+    expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
 
-      const waitingHandle = trackRunningAgent(
-        session,
-        'execution:waiting',
-        waitingStream,
-      );
-      session.executions.updateAgentExecutionStatus(
-        waitingHandle,
-        STREAM_PHASE.WAITING,
-      );
-      expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
-    } finally {
-      session.dispose();
-    }
+    setRollup({ running: 2 });
+    expect(getDesktopWindowTitle(session, undefined)).toBe('Running TeXRA');
+
+    setRollup({ waiting: 1 });
+    expect(getDesktopWindowTitle(session, '/work/geometry')).toBe(
+      'Approval needed TeXRA · geometry',
+    );
+
+    setRollup({ waiting: 0, running: 0 });
+    expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
   });
 
-  it('remains running until the last of two live agents completes', () => {
-    const session = createTestSession();
-    try {
-      const first = trackRunningAgent(
-        session,
-        'execution:first',
-        'stream:first' as StreamTabId,
-      );
-      const second = trackRunningAgent(
-        session,
-        'execution:second',
-        'stream:second' as StreamTabId,
-      );
-      expect(getDesktopWindowTitle(session, undefined)).toBe('Running TeXRA');
-
-      session.executions.untrack(first.executionId);
-      expect(getDesktopWindowTitle(session, undefined)).toBe('Running TeXRA');
-
-      session.executions.untrack(second.executionId);
-      expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it('gives approval precedence and returns to running or idle', async () => {
-    const session = createTestSession();
-    const streamId = 'stream:approval' as StreamTabId;
-    const handle = trackRunningAgent(session, 'execution:approval', streamId);
-    try {
-      const firstApproval = session.interactions.requestPlanApproval({
-        requestId: 'approval:running',
-        streamId,
-        plan: { objective: 'Check the title.' },
-        goalEnabled: false,
-      });
-      expect(getDesktopWindowTitle(session, undefined)).toBe(
-        'Approval needed TeXRA',
-      );
-
-      session.interactions.cancel({ cause: 'Decision recorded.' });
-      await firstApproval;
-      expect(getDesktopWindowTitle(session, undefined)).toBe('Running TeXRA');
-
-      session.executions.untrack(handle.executionId);
-      const secondApproval = session.interactions.requestPlanApproval({
-        requestId: 'approval:idle',
-        streamId,
-        plan: { objective: 'Check the idle title.' },
-        goalEnabled: false,
-      });
-      expect(getDesktopWindowTitle(session, undefined)).toBe(
-        'Approval needed TeXRA',
-      );
-
-      session.interactions.cancel({ cause: 'Decision recorded.' });
-      await secondApproval;
-      expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
-    } finally {
-      session.dispose();
-    }
-  });
-
-  it('prevents renderer replacement, deduplicates writes, and disposes', () => {
-    const session = createTestSession();
+  it('follows the view, prevents renderer replacement, deduplicates writes, and disposes', async () => {
+    const { session, setRollup } = createSession();
     const view = createWindow('TeXRA · geometry');
     const dispose = installTitle(view.window, session);
     try {
@@ -181,77 +116,55 @@ describe('desktop process-session window title', () => {
       view.webContents.emit('page-title-updated', event, 'Renderer title');
       expect(event.preventDefault).toHaveBeenCalledOnce();
 
-      seedStreamStatusForTest(
-        session.status,
-        'stream:orphan-update' as StreamTabId,
-        { phase: STREAM_PHASE.RUNNING },
-      );
+      setRollup({ running: 1 });
+      await settle();
+      expect(view.setTitle).toHaveBeenCalledWith('Running TeXRA · geometry');
+      view.setTitle.mockClear();
+
+      setRollup({ running: 1 });
+      await settle();
       expect(view.setTitle).not.toHaveBeenCalled();
 
       dispose();
       expect(view.webContents.listenerCount('page-title-updated')).toBe(0);
-      trackRunningAgent(
-        session,
-        'execution:after-close',
-        'stream:after-close' as StreamTabId,
-      );
+      setRollup({ waiting: 1 });
+      await settle();
       expect(view.setTitle).not.toHaveBeenCalled();
     } finally {
       dispose();
-      session.dispose();
     }
   });
 
-  it('does not write the native title after window destruction', () => {
-    const session = createTestSession();
+  it('does not write the native title after window destruction', async () => {
+    const { session, setRollup } = createSession();
     const view = createWindow('TeXRA · geometry');
     const dispose = installTitle(view.window, session);
     try {
       view.destroy();
-      trackRunningAgent(
-        session,
-        'execution:destroyed-window',
-        'stream:destroyed-window' as StreamTabId,
-      );
+      setRollup({ running: 1 });
+      await settle();
       expect(view.setTitle).not.toHaveBeenCalled();
     } finally {
       dispose();
-      session.dispose();
     }
   });
 
-  it('derives a pending approval on reopen and isolates process sessions', () => {
-    const firstSession = createTestSession();
-    const secondSession = createTestSession();
-    const streamId = 'stream:reopen' as StreamTabId;
-    try {
-      void firstSession.interactions.requestPlanApproval({
-        requestId: 'approval:reopen',
-        streamId,
-        plan: { objective: 'Preserve this request across window detach.' },
-        goalEnabled: false,
-      });
+  it('derives a pending approval on reopen and isolates sessions', () => {
+    const first = createSession({ waiting: 1 });
+    const second = createSession();
 
-      expect(getDesktopWindowTitle(firstSession, '/work/geometry')).toBe(
-        'Approval needed TeXRA · geometry',
-      );
-      expect(getDesktopWindowTitle(secondSession, '/work/algebra')).toBe(
-        'TeXRA · algebra',
-      );
+    expect(getDesktopWindowTitle(first.session, '/work/geometry')).toBe(
+      'Approval needed TeXRA · geometry',
+    );
+    expect(getDesktopWindowTitle(second.session, '/work/algebra')).toBe(
+      'TeXRA · algebra',
+    );
 
-      const reopened = createWindow(
-        getDesktopWindowTitle(firstSession, '/work/geometry'),
-      );
-      const dispose = installTitle(
-        reopened.window,
-        firstSession,
-        '/work/geometry',
-      );
-      expect(reopened.setTitle).not.toHaveBeenCalled();
-      dispose();
-    } finally {
-      firstSession.dispose();
-      secondSession.dispose();
-    }
+    const reopened = createWindow(
+      getDesktopWindowTitle(first.session, '/work/geometry'),
+    );
+    const dispose = installTitle(reopened.window, first.session);
+    expect(reopened.setTitle).not.toHaveBeenCalled();
+    dispose();
   });
 });

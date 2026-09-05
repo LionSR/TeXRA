@@ -4,6 +4,8 @@ export const DESKTOP_SHELL_COMMANDS = {
   OPEN_WORKBENCH: 'desktop:openWorkbench',
   SAVE_FILE: 'desktop:saveFile',
   SHOW_LAUNCHER: 'desktop:showLauncher',
+  /** Clear the launcher's selections back to their defaults. */
+  RESET_LAUNCHER: 'desktop:resetLauncher',
   TOGGLE_LAYOUT: 'desktop:toggleLayout',
 } as const;
 
@@ -17,6 +19,10 @@ export const DesktopOpenWorkbenchMessageSchema = z.object({
 
 export const DesktopShowLauncherMessageSchema = z.object({
   command: z.literal(DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER),
+});
+
+export const DesktopResetLauncherMessageSchema = z.object({
+  command: z.literal(DESKTOP_SHELL_COMMANDS.RESET_LAUNCHER),
 });
 
 export const DesktopSaveFileMessageSchema = z.object({
