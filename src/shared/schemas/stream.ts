@@ -201,7 +201,7 @@ export const StreamLifecycleStatusSchema = z.union([
   z.literal(STREAM_LIFECYCLE_UNAVAILABLE),
 ]);
 
-const WorktreeInfoSchema = z.object({
+export const WorktreeInfoSchema = z.object({
   /** Absolute path of the worktree the agent is operating in. */
   workingDirectory: z.string(),
   /** Current HEAD branch, if checked out. */

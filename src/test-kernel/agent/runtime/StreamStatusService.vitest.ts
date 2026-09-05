@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { StatusEvent } from '@agent/trace';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_PHASE,
@@ -16,27 +15,33 @@ import {
 } from '@shared/streams/streamStatus';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
-import { recordSessionEvents, sessionFactsOfType } from '../progressTestUtils';
-
 /** Fresh registry + recording host, keyed to a per-test stream id. */
 function setupMachine(streamId: string): {
   machine: StreamStatusMachine;
   statusEvents: () => StatusEvent[];
   streamId: StreamTabId;
 } {
-  const events = new SessionEventHub();
-  const published = recordSessionEvents(events, { scope: 'session' });
+  const published: StatusEvent[] = [];
   return {
-    machine: new StreamStatusMachine(events),
-    statusEvents: () => sessionFactsOfType(published.events, 'status'),
+    machine: new StreamStatusMachine(
+      (event) => published.push(event),
+      () => {},
+    ),
+    statusEvents: () => published,
     streamId: streamId as StreamTabId,
   };
 }
 
 describe('StreamStatusMachine', () => {
   it('keeps stream status state per instance', () => {
-    const first = new StreamStatusMachine(new SessionEventHub());
-    const second = new StreamStatusMachine(new SessionEventHub());
+    const first = new StreamStatusMachine(
+      () => {},
+      () => {},
+    );
+    const second = new StreamStatusMachine(
+      () => {},
+      () => {},
+    );
     const streamId = 'stream-status-instance-test' as StreamTabId;
 
     seedStreamStatusForTest(first, streamId, { phase: STREAM_PHASE.WAITING });
@@ -46,24 +51,22 @@ describe('StreamStatusMachine', () => {
   });
 
   it('publishes only through its owning session hub', () => {
-    const firstEvents = new SessionEventHub();
-    const secondEvents = new SessionEventHub();
-    const first = new StreamStatusMachine(firstEvents);
-    const second = new StreamStatusMachine(secondEvents);
-    const firstPublished = recordSessionEvents(firstEvents, {
-      scope: 'session',
-    });
-    const secondPublished = recordSessionEvents(secondEvents, {
-      scope: 'session',
-    });
+    const firstPublished = { events: [] as StatusEvent[] };
+    const secondPublished = { events: [] as StatusEvent[] };
+    const first = new StreamStatusMachine(
+      (event) => firstPublished.events.push(event),
+      () => {},
+    );
+    const second = new StreamStatusMachine(
+      (event) => secondPublished.events.push(event),
+      () => {},
+    );
     const streamId = 'stream-status-listener-test' as StreamTabId;
 
     second.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
 
-    expect(sessionFactsOfType(firstPublished.events, 'status')).toEqual([]);
-    expect(sessionFactsOfType(secondPublished.events, 'status')).toHaveLength(
-      1,
-    );
+    expect(firstPublished.events).toEqual([]);
+    expect(secondPublished.events).toHaveLength(1);
   });
 
   it('exercises the live machine against the exhaustive transition table', () => {
@@ -74,7 +77,10 @@ describe('StreamStatusMachine', () => {
     for (const from of [undefined, ...phases]) {
       for (const to of phases) {
         for (const cause of causes) {
-          const machine = new StreamStatusMachine(new SessionEventHub());
+          const machine = new StreamStatusMachine(
+            () => {},
+            () => {},
+          );
           const streamId =
             `stream-status-table:${from ?? 'none'}:${to}:${cause}` as StreamTabId;
           if (from) seedStreamStatusForTest(machine, streamId, { phase: from });
@@ -91,7 +97,10 @@ describe('StreamStatusMachine', () => {
   });
 
   it('keeps reservations outside the transition table', () => {
-    const machine = new StreamStatusMachine(new SessionEventHub());
+    const machine = new StreamStatusMachine(
+      () => {},
+      () => {},
+    );
     const streamId = 'stream-status-reservation-test' as StreamTabId;
 
     expect(machine.tryAcquire(streamId)).toBe(true);
@@ -291,10 +300,15 @@ describe('StreamStatusMachine', () => {
   });
 
   it('rolls back reservation state identically with and without a subscriber', () => {
-    const hidden = new StreamStatusMachine(new SessionEventHub());
-    const events = new SessionEventHub();
-    const observed = new StreamStatusMachine(events);
-    const published = recordSessionEvents(events, { scope: 'session' });
+    const hidden = new StreamStatusMachine(
+      () => {},
+      () => {},
+    );
+    const published = { events: [] as StatusEvent[] };
+    const observed = new StreamStatusMachine(
+      (event) => published.events.push(event),
+      () => {},
+    );
     const streamId =
       'stream-status-observer-independent-rollback' as StreamTabId;
 
@@ -306,11 +320,10 @@ describe('StreamStatusMachine', () => {
 
     expect(hidden.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
     expect(observed.get(streamId)).toBe(hidden.get(streamId));
-    expect(
-      sessionFactsOfType(published.events, 'status').map(
-        (event) => event.phase,
-      ),
-    ).toEqual([STREAM_PHASE.RUNNING, STREAM_PHASE.CANCELLED]);
+    expect(published.events.map((event) => event.phase)).toEqual([
+      STREAM_PHASE.RUNNING,
+      STREAM_PHASE.CANCELLED,
+    ]);
   });
 
   it('publishes rollback when a visible reservation is released', () => {

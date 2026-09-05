@@ -35,6 +35,10 @@ import {
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import {
+  bashApprovalRequest,
+  toolEditApprovalRequest,
+} from '../progressTestUtils';
 
 /**
  * Plan approval, proposal, and retry requests travel `session.interactions`
@@ -127,7 +131,6 @@ function createPortSession(): {
   // Real controller with an inert host: tool-edit approvals are not exercised
   // by these tests, but the port contract requires a full controller.
   const toolEditApprovals = new ToolEditApprovalController({
-    session,
     host: {
       stagePreview: async () => {
         throw new Error('tool-edit approvals are not exercised here');
@@ -142,7 +145,6 @@ function createPortSession(): {
   });
   const interactions = createProgressHostInteractions({
     interactions: presentationSink,
-    session,
     setApprovalBypassState,
     getApprovalHandlers: () => handlers,
     getToolEditApprovals: () => toolEditApprovals,
@@ -709,17 +711,21 @@ describe('session.interactions request bookkeeping', () => {
       pendingCounts.push(count),
     );
     const requests = [
-      session.interactions.requestToolEditApproval({
-        path: 'paper.tex',
-        originalContent: 'old',
-        proposedContent: 'new',
-        sourceTool: 'edit_file',
-        streamId,
-      }),
-      session.interactions.requestBashApproval({
-        command: 'lake build',
-        streamId,
-      }),
+      session.interactions.requestToolEditApproval(
+        toolEditApprovalRequest({
+          path: 'paper.tex',
+          originalContent: 'old',
+          proposedContent: 'new',
+          sourceTool: 'edit_file',
+          streamId,
+        }),
+      ),
+      session.interactions.requestBashApproval(
+        bashApprovalRequest({
+          command: 'lake build',
+          streamId,
+        }),
+      ),
       requestPlan(session, 'approval:count'),
       requestProposal(session, 'proposal:count'),
       session.interactions.requestRetry({

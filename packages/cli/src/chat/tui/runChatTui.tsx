@@ -1,4 +1,4 @@
-// `texra chat` entry point — single Ink-based session. The Ink TUI runs for
+// `texra chat` entry point, single Ink-based session. The Ink TUI runs for
 // every interactive `texra chat` invocation, and non-TTY callers are pointed
 // at `texra run` (which is what they actually want for piping/scripting).
 //
@@ -54,6 +54,7 @@ import type {
   StreamPhase,
 } from '@shared/schemas';
 import { AgentCategory, STREAM_PHASE } from '@shared/schemas';
+import { subscribeToSignalChanges } from '@shared/signals';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -63,7 +64,6 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import { createChatSubmitDriver } from './chatSubmitDriver';
 import {
   applyCliModelSelection,
   applyInitialCliAgentSelection,
@@ -76,19 +76,24 @@ import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
+import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { createTuiViewportController } from './render/tuiViewportController';
-import { clearApprovals } from './state/approvalQueue';
 import {
   activeStreamId as activeStreamIdSignal,
   resetCliState,
   patchSessionMeta,
+  rootStreamId as rootStreamIdSignal,
   sessionMeta as sessionMetaSignal,
-  streams as streamsSignal,
-  streamPhaseFor,
 } from './state/cliState';
-import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
+import {
+  bindSessionView,
+  currentView,
+  descendantStreamIds,
+  sessionView,
+  streamPhaseOf,
+  streamViewOf,
+} from './state/sessionView';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
-import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
   appendLocalAssistantTranscript,
@@ -117,8 +122,8 @@ interface RunChatInit {
   readonly modelOverride?: string;
   /**
    * Display-only transcript notice shown at session start (never sent to the
-   * model). Callers that steer the session themselves — the first-run
-   * setup-agent handoff in `orchestrate` — use it to explain that steering.
+   * model). Callers that steer the session themselves, the first-run
+   * setup-agent handoff in `orchestrate`, use it to explain that steering.
    */
   readonly startupNotice?: string;
   /** Visible team identity when chat was launched from a multi-agent preset. */
@@ -161,7 +166,7 @@ export async function runChat(
   }
 
   // The platform's own SIGINT/SIGTERM handler stays live through onboarding
-  // and model resolution below — this function does not suppress it. Once
+  // and model resolution below, this function does not suppress it. Once
   // Ink actually mounts (below), handOffCliShutdownSignalHandlers() removes
   // it immediately before this function installs its own process.on pair, so
   // exactly one owner is ever registered for a given signal; see
@@ -187,13 +192,13 @@ export async function runChat(
   if (onboarding.declined) {
     // The user saw the picker and chose "Skip for now"; the skip summary already
     // told them how to set up later. Exit cleanly instead of falling through to
-    // the no-models resolution error — the dead-end this feature exists to fix.
+    // the no-models resolution error, the dead-end this feature exists to fix.
     return { exitCode: CliExitCode.Success };
   }
   // State 1 continuation (docs/prds/2026-06-11-agent-native-onboarding.md): on a true
   // first run the post-picker session starts with the setup agent. Threaded
   // through the same override slot resolveChatDefaults already honors, and
-  // only when the user didn't pin an agent (--agent, resume, or env) — an
+  // only when the user didn't pin an agent (--agent, resume, or env), an
   // explicit choice always wins.
   const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
   const setupAgentOverride = firstRunSetupAgentOverride({
@@ -291,7 +296,7 @@ export async function runChat(
     appendLocalAssistantTranscript(modelSelection.notice);
   }
   // First-run handoff explanation: when the setup agent owns this session
-  // (decided here for `texra chat`, passed in by `orchestrate`), say so —
+  // (decided here for `texra chat`, passed in by `orchestrate`), say so -
   // display-only, so the agent waits for the user's first message.
   const startupNotice =
     init.startupNotice ??
@@ -303,7 +308,7 @@ export async function runChat(
   const inputHistory = await loadInputHistory();
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
-  // toggle exclusively — interleaving with Ink's own raw-mode lifecycle (set
+  // toggle exclusively, interleaving with Ink's own raw-mode lifecycle (set
   // when `useInput` mounts) caused capability discovery to flip raw mode off
   // ~250ms in, breaking input. Capability-gated notifications fall back to
   // BEL during this window (~250ms typical, hard 250ms cap on no DA1 reply).
@@ -322,14 +327,33 @@ export async function runChat(
   // navigate. Keep the project name while surfacing live attention state.
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposables.add(terminalTitleUpdates.dispose);
-  disposables.add(subscribeStreamLog(runtimeSession));
-  disposables.add(subscribeStreamArtifacts(runtimeSession.snapshots));
+  // The one session state the TUI renders (PRD 10.1): the session's fold
+  // bridged into a signal, with every stream's transcript tier subscribed
+  // for this surface. The TUI shows the whole session, so its subscription
+  // set is the view's stream set.
+  const unbindSessionView = bindSessionView(runtimeSession.view);
+  disposables.add(announceForegroundApprovals());
+  let subscribedStreams = '';
+  const syncTranscriptSubscriptions = (): void => {
+    const ids = [...currentView().streams.keys()];
+    const key = ids.join('\0');
+    if (key === subscribedStreams) return;
+    subscribedStreams = key;
+    runtimeSession.setTranscriptSubscriptions(
+      'tui',
+      ids.map((id) => ({ id, fromSeq: 0 })),
+    );
+  };
+  disposables.add(
+    subscribeToSignalChanges([sessionView()], syncTranscriptSubscriptions),
+  );
+  syncTranscriptSubscriptions();
 
   const session = new TuiSession();
 
   const followUpQueue = new PQueue({ concurrency: 1 });
   const rootStreamStatus = (): StreamPhase | undefined =>
-    streamPhaseFor(session.streamId)?.phase;
+    streamPhaseOf(streamViewOf(currentView(), session.streamId));
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
@@ -369,7 +393,7 @@ export async function runChat(
       hasActiveToolUseFlow: hasActiveToolUseFlow(),
     });
   // Chat-session controller: owns run start/resume/stop orchestration.
-  // The Ink layer never directly mutates session run-state fields — every
+  // The Ink layer never directly mutates session run-state fields, every
   // state transition flows through one of the controller's narrow commands.
   const chatController: ChatSessionController = createChatSessionController({
     session,
@@ -378,24 +402,13 @@ export async function runChat(
     disposables,
     followUpQueue,
     snapshotStore: runtimeSession.snapshots,
-  });
-  disposables.add(setCliAgentResumeHandler(chatController.tryResumeStream));
-
-  // Session-command engine: slash-command dispatch, follow-up admission, the
-  // stream-id poll loop, queued-follow-up emission, and skill-activation
-  // reservation/restore. Lives outside this mount function so the submission
-  // state machine is testable without mounting Ink.
-  const submitDriver = createChatSubmitDriver({
-    session,
-    chatController,
-    followUpQueue,
-    runtimeSession,
     initialAgent: agent,
     initialModel: model,
     initialModelSource: defaults.modelSource,
     cwd: context.cwd,
     getSlashCommandContext: slashCommandContext,
   });
+  disposables.add(setCliAgentResumeHandler(chatController.tryResumeStream));
 
   const interruptActive = (): void => {
     chatController.stop();
@@ -403,7 +416,9 @@ export async function runChat(
 
   const resetSessionForClear = (): void => {
     const currentStreamId = session.streamId ?? activeStreamIdSignal.get();
-    const activeStatus = streamPhaseFor(currentStreamId)?.phase;
+    const activeStatus = streamPhaseOf(
+      streamViewOf(currentView(), currentStreamId),
+    );
     const isRunPending = chatTuiRunPending(session);
 
     if (
@@ -418,25 +433,31 @@ export async function runChat(
 
     const meta = sessionMetaSignal.get();
     if (isRunPending) chatController.stop();
-    clearApprovals();
+    runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
     followUpQueue.clear();
     chatController.clearInterruptedRecovery();
-    submitDriver.clearPendingSkills();
+    chatController.clearPendingSkills();
     session.clearRunState();
     // StreamLogStore entries outlive resetCliState (which only clears the
     // React/signal view). Drop them so transcript projection can't replay
     // the cleared conversation into the fresh `<Static>` scrollback.
+    // Only this chat's conversation goes: the root run and its descendants.
+    // The view also holds every earlier run hydrated from the transcript
+    // summary; those are history, not this chat, and stay.
     const store = runtimeSession.transcripts;
-    for (const streamId of streamsSignal.get().keys()) {
+    for (const streamId of descendantStreamIds(
+      currentView(),
+      rootStreamIdSignal.get(),
+    )) {
       store.delete(streamId).catch(() => {
         // Best-effort: a KV failure leaves the log on disk, but the run
-        // is already torn down — nothing actionable to surface here.
+        // is already torn down, nothing actionable to surface here.
       });
     }
     resetCliState(meta);
     clearTerminalScrollback();
     // The erase above happened outside Ink, so everything the static
-    // transcript printed is gone from the terminal — even when the state
+    // transcript printed is gone from the terminal, even when the state
     // rebuild is a no-op (empty history) that would skip the repaint-epoch
     // bump. The erase epoch forces a rebuild after the reset state commits,
     // so the remounted `<Static>` repaints the header without ever carrying
@@ -467,7 +488,7 @@ export async function runChat(
     // an override, to carry this session's CliContext.
     onLoginSelect: (value, output) => loginFromChat(value, context, output),
     onMemorySelect: showCliMemoryPreview,
-    onSkillSelect: submitDriver.activateSkill,
+    onSkillSelect: chatController.activateSkill,
     onResumeSelect: chatController.resume,
     workPlanSnapshots: runtimeSession.snapshots,
     getConfigStores: cliSettingsStores,
@@ -482,7 +503,7 @@ export async function runChat(
   const ink = render(
     <App
       onSubmit={(line, mediaFiles, images) =>
-        void submitDriver.handleSubmittedLine(line, mediaFiles, images)
+        void chatController.submit(line, mediaFiles, images)
       }
       canInterruptStream={(streamId) =>
         (streamId === session.streamId && canInterruptActiveRun()) ||
@@ -495,7 +516,7 @@ export async function runChat(
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
       onKillExecution={(executionId) => {
-        clearApprovals();
+        runtimeSession.interactions.cancel({ cause: 'Session interrupted.' });
         runtimeSession.executions.kill(executionId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
@@ -520,7 +541,7 @@ export async function runChat(
       // ctrl+c key reach our handler uniformly on every terminal.
       exitOnCtrlC: false,
       // Enable the Kitty keyboard protocol (disambiguate flag only) when the
-      // terminal supports it — already confirmed by discoverTerminalCapabilities
+      // terminal supports it, already confirmed by discoverTerminalCapabilities
       // above, so use 'enabled' to skip Ink's redundant detection query. This
       // is what lets Ink distinguish Shift+Enter (newline) from Enter (submit);
       // plain Enter stays a legacy `\r`, and Ink pops the protocol on unmount.
@@ -554,14 +575,14 @@ export async function runChat(
     interruptActive,
   });
   // Transfer signal ownership from the platform handler and arm this session's
-  // handlers — not any earlier: everything above (initInteractiveCliPlatform,
+  // handlers, not any earlier: everything above (initInteractiveCliPlatform,
   // onboarding, model resolution) ran with the platform's own handler still
   // live, so a signal during that window still got a graceful shutdown.
   exitController.install();
 
   // Interactive resume: kick off the continued tool-use run now that Ink is
   // mounted (so the rehydrated transcript + streamed continuation render) and
-  // the signal handlers are armed. Fire-and-forget — resumeAgentRun installs
+  // the signal handlers are armed. Fire-and-forget, resumeAgentRun installs
   // session.runPromise, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target session.streamId as usual).
   if (initialResume) {
@@ -570,13 +591,13 @@ export async function runChat(
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
   // signals "your turn," alongside the StatusBar pill.
+  let rootPhase = rootStreamStatus();
   disposables.add(
-    runtimeSession.events.subscribeStatus((change) => {
-      if (
-        change.streamId === session.streamId &&
-        change.phase === STREAM_PHASE.WAITING &&
-        !session.stopRequested
-      ) {
+    subscribeToSignalChanges([sessionView()], () => {
+      const phase = rootStreamStatus();
+      if (phase === rootPhase) return;
+      rootPhase = phase;
+      if (phase === STREAM_PHASE.WAITING && !session.stopRequested) {
         notify('agentFinished');
       }
     }),
@@ -585,7 +606,13 @@ export async function runChat(
   try {
     await ink.waitUntilExit();
   } finally {
+    // The exit policy reads the view (a resumable idle root) after it has
+    // released the store, so the bridge outlives the session's disposables.
+    // A signal exit leaves the store to process.exit; releasing it here keeps
+    // the order on every path: nothing subscribed to the view outlives it.
     await exitController.gracefulTeardown();
+    disposables.dispose();
+    unbindSessionView();
   }
   return { exitCode: session.runExitCode };
 }

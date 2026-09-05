@@ -1,5 +1,4 @@
 import type { StatusEvent } from '@agent/trace';
-import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -58,8 +57,9 @@ type StreamEntry =
        * Classification could not settle on a phase (held by another process,
        * or the run state unreadable). RUNNING/WAITING mean a live flow in this
        * process, and this process never adopts anyone else's run, so a hold
-       * with no prior phase has no phase to publish — the `streamHoldChanged`
-       * fact carries the change instead, and hosts re-read the resolved phase.
+       * with no prior phase has no phase to publish: it is written to the
+       * session's local runtime snapshot (`unreadable`, PRD 5.1), which the
+       * fold reads as `readOnly` and `statusDetail`.
        */
       readonly kind: 'hold';
       readonly detail: string;
@@ -85,15 +85,24 @@ export class StreamStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
 
   /**
-   * @param eventHub Session hub this machine publishes canonical `status` facts
-   *   on — the ONLY status rail; every consumer, including the transcript
-   *   recorder (via its `handleStatus` port), reads it. The session constructs
-   *   both and hands the hub over once, so a transition reaches every consumer
-   *   no matter which caller triggered it. It is required and never rebound: a
-   *   machine publishing where nobody listens is a status plane that silently
-   *   loses every transition.
+   * @param publishStatus Where this machine publishes canonical `status`
+   *   facts: the session's `publishStatus`, the ONLY status rail; every
+   *   consumer, including the transcript recorder (via its `handleStatus`
+   *   port), reads it. The session constructs the machine with its own
+   *   publisher, so a transition reaches every consumer no matter which
+   *   caller triggered it. Required and never rebound: a machine publishing
+   *   where nobody listens is a status plane that silently loses every
+   *   transition.
+   * @param setUnreadable Where a hold lands: the session's local runtime
+   *   snapshot, with the hold's detail or null when the hold is dropped.
    */
-  constructor(private readonly eventHub: SessionEventHub) {}
+  constructor(
+    private readonly publishStatus: (event: StatusEvent) => void,
+    private readonly setUnreadable: (
+      stream: StreamTabId,
+      detail: string | null,
+    ) => void,
+  ) {}
 
   get(stream: StreamTabId): StreamPhase | undefined {
     return this.getStreamState(stream)?.phase;
@@ -134,7 +143,7 @@ export class StreamStatusMachine {
       runStartedAt,
       ...(previousState ? { rollbackTo: previousState } : {}),
     });
-    this.publishStatus(stream, STREAM_PHASE.RUNNING, {
+    this.publishTransition(stream, STREAM_PHASE.RUNNING, {
       ...options,
       cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
       ...(previousPhase ? { previousPhase } : {}),
@@ -226,7 +235,7 @@ export class StreamStatusMachine {
       },
     });
     const previousPhase = fromReservation ? STREAM_PHASE.RUNNING : from;
-    this.publishStatus(stream, to, {
+    this.publishTransition(stream, to, {
       ...options,
       cause,
       ...(previousPhase ? { previousPhase } : {}),
@@ -393,18 +402,15 @@ export class StreamStatusMachine {
   }
 
   /**
-   * Announce that this stream's hold was recorded or dropped. A hold has no
-   * phase, so it cannot ride the `status` fact; hosts react by re-reading the
-   * stream's resolved phase, which is where the hold's detail is rendered.
+   * Write this stream's hold, or its release, to the session's local runtime
+   * snapshot. A hold has no phase, so it cannot ride the `status` fact; the
+   * fold reads it as `readOnly` with the detail as `statusDetail` (PRD 5.1).
    */
   private publishHoldChanged(stream: StreamTabId): void {
-    this.eventHub.emit({
-      scope: 'session',
-      event: { type: 'streamHoldChanged', payload: { streamId: stream } },
-    });
+    this.setUnreadable(stream, this.holdState(stream) ?? null);
   }
 
-  private publishStatus(
+  private publishTransition(
     stream: StreamTabId,
     phase: StreamPhase,
     options: StreamStatusEmitOptions & {
@@ -413,7 +419,7 @@ export class StreamStatusMachine {
       runStartedAt?: number;
     },
   ): void {
-    const event: StatusEvent = {
+    this.publishStatus({
       type: 'status',
       streamId: stream,
       phase,
@@ -425,10 +431,6 @@ export class StreamStatusMachine {
       ...(options.runStartedAt !== undefined
         ? { runStartedAt: options.runStartedAt }
         : {}),
-    };
-    this.eventHub.emit({
-      scope: 'session',
-      event,
     });
   }
 }

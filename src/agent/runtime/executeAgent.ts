@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { logConversationProgress } from '@agent/trace';
+import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { runReflectionFlow } from '@agent/implementations/flows/reflection/runReflectionFlow';
@@ -65,7 +65,11 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { runInSession } from './RunContext';
-import { defaultSession, type SessionHandle } from './SessionHandle';
+import {
+  currentSession,
+  defaultSession,
+  type SessionHandle,
+} from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
@@ -153,13 +157,14 @@ async function launchToolUseRun(
         shared.onProgress?.(update);
       },
       onFollowUpConsumed: () => {
-        ctx.runScope.session.events.emit({
-          scope: 'session',
-          event: {
+        const { session, streamId } = ctx.runScope;
+        session.publish([
+          {
             type: 'updateQueuedFollowUps',
-            payload: { streamId: ctx.runScope.streamId },
+            aggregateId: streamId,
+            messages: session.followUps.getAll(streamId),
           },
-        });
+        ]);
         shared.onFollowUpConsumed?.();
       },
       onFlowRecordDisposition: (disposition) =>
@@ -222,7 +227,6 @@ function buildLifecycleOptions(
     isSubagent,
     parentStreamId: options.parentStreamId,
     workflowPhase: options.workflowPhase,
-    userFollowUpSupport: options.userFollowUpSupport,
     onError: options.onRunError,
     onRun: options.onRun,
     onRunEnd: (runId) => stopLeanServersForEndedRun(runId),
@@ -357,8 +361,13 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * agent's YAML-defined category.
    */
   enforceCategory?: boolean;
-  /** Fires with the real streamId before the stream is activated (before UI sync). */
-  onStreamResolved?: (streamId: StreamTabId) => void;
+  /**
+   * Fires with the real streamId once its `run.start` is published, before
+   * the run begins: the stream exists for every fold, so a host may select
+   * it as its own surface state. The run's trace comes with it, before its
+   * first event, for a consumer that must hear every trace event.
+   */
+  onStreamResolved?: (streamId: StreamTabId, trace: AgentTrace) => void;
   /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
   onIdle?: () => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
@@ -402,8 +411,10 @@ export async function executeAgent(
     config,
     executionId,
     streamTabIdOverride: options.streamTabIdOverride,
-    onBeforeActivation: options.onStreamResolved,
-    suppressViewSwitch: options.isSubagent,
+    onStreamResolved: options.onStreamResolved,
+    isSubagent: options.isSubagent,
+    parentStreamId: options.parentStreamId,
+    userFollowUpSupport: options.userFollowUpSupport,
     enforceCategory: options.enforceCategory,
     suppressErrorNotification:
       options.suppressErrorNotification ?? options.isSubagent,
@@ -539,11 +550,24 @@ async function resumeToolUseWithOwnedLease(
     // This execution is running again, so the terminal facts its previous
     // run left behind stop describing it here, before any turn of the
     // resumed run can write a result envelope for readers to project onto.
+    // Lane 2 follow-up (PRD 5.2): once approval facts replay from durable
+    // history, this same step appends `approval.resolved` (cause:
+    // interrupted) for every request still pending on the stream, so a
+    // replayed resume never folds back to waiting on a request no runtime
+    // listens for. In process the run lifecycle's end-of-run cancel already
+    // resolves them, so nothing is pending here today.
     await clearTerminalExecutionState(resume.executionId);
     [isSubagent, userFollowUpSupport] = await Promise.all([
       hasPersistedParent(resume.executionId),
       getPersistedUserFollowUpSupport(resume.executionId),
     ]);
+    // Load the transcript before the launch reserves its writer, the order
+    // `createRehydratedChildStream` uses. Nothing between the launch's
+    // `run.start` and the run lifecycle may reject: the lifecycle's failure
+    // path is what ends a started stream with its terminal result.
+    await (options.session ?? currentSession()).transcripts.ensureLoaded(
+      resume.streamId,
+    );
     ctx = await buildAgentLaunchContext({
       config: resume.agentConfig,
       executionId: resume.executionId,
@@ -551,7 +575,9 @@ async function resumeToolUseWithOwnedLease(
       // SessionResumeRetrieval already resolved the persisted ?? inferred key
       // for this exact record; do not re-infer here.
       modelHandlerCompatibilityKey: resume.shared.modelHandlerCompatibilityKey,
-      suppressViewSwitch: isSubagent,
+      isSubagent,
+      parentStreamId: options.parentStreamId,
+      userFollowUpSupport,
       // Host resume callers surface their own warning toast on failure;
       // skip the bus-level error to avoid double-notifying.
       suppressErrorNotification: true,
@@ -568,7 +594,7 @@ async function resumeToolUseWithOwnedLease(
     );
   }
   const { setting } = ctx;
-  const { streamId: runStreamId, session: runSession } = ctx.runScope;
+  const { session: runSession } = ctx.runScope;
 
   // Only the run itself is guarded here. The release below is deliberately
   // outside: a release that fails must not be retried by the catch arm.
@@ -577,20 +603,19 @@ async function resumeToolUseWithOwnedLease(
     result = await withExecutionRunContext(
       ctx,
       { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
-      async () => {
-        if (setting.agentCategory !== AgentCategory.ToolUse) {
-          // Keep this historical diagnostic byte-for-byte for external monitors.
-          throw new AgentError(
-            'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-          );
-        }
-
-        await runSession.transcripts.ensureLoaded(runStreamId);
-
-        return await runFlowWithLifecycle(
+      async () =>
+        runFlowWithLifecycle(
           ctx,
-          async (handle, lifecycle) =>
-            launchToolUseRun(
+          async (handle, lifecycle) => {
+            // Inside the lifecycle so the rejection ends the started stream
+            // with its FAILED result like any other run failure.
+            if (setting.agentCategory !== AgentCategory.ToolUse) {
+              // Keep this historical diagnostic byte-for-byte for external monitors.
+              throw new AgentError(
+                'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+              );
+            }
+            return launchToolUseRun(
               ctx,
               handle,
               lifecycle,
@@ -604,13 +629,10 @@ async function resumeToolUseWithOwnedLease(
                 onCancellationAtFlowAttachment:
                   options.onCancellationAtFlowAttachment,
               },
-            ),
-          buildLifecycleOptions(
-            { ...options, userFollowUpSupport },
-            isSubagent,
-          ),
-        );
-      },
+            );
+          },
+          buildLifecycleOptions(options, isSubagent),
+        ),
     );
   } catch (error) {
     // The run's own failure is the one the caller must see; a release failure

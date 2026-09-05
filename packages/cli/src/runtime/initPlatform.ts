@@ -1,6 +1,7 @@
 // Local imports
 import {
   initializeBundledPrompts,
+  processOwnerId,
   teardownDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime';
@@ -8,9 +9,10 @@ import { createPlatformAgentDirectories } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
-import { initPlatform, tryPlatform } from '@platform/platform';
+import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { DisposableStore } from '@platform/disposable';
@@ -300,6 +302,12 @@ export async function initCliPlatform(
       workspaceState: stateStores.workspaceState,
     });
     initProcessWorkspaceRoots(roots);
+    // The one Effect runtime of this process (PRD 7.7): the session graph
+    // and every Promise-facing fiber run on it. Disposed after the default
+    // session has released its graph.
+    const runtime = installProcessRuntime(
+      processOwnerId(await platform().processes.selfIdentity()),
+    );
     initProcessSettingHost('cli');
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
@@ -351,7 +359,10 @@ export async function initCliPlatform(
       // transcripts, so its shutdown lookup remains lazy.
       flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
       afterFlushArtifacts: [() => UsageLogService.dispose()],
-      afterExecutionSettlement: [() => teardownDefaultSession()],
+      afterExecutionSettlement: [
+        () => teardownDefaultSession(),
+        () => runtime.dispose(),
+      ],
     });
 
     // Route CLI model traffic to the same Supabase usage log the extension

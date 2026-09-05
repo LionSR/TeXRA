@@ -22,12 +22,10 @@ import {
   type SettledInteractionKind,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { warn as logWarning } from '@logger/logUtils';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
-import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
 import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
@@ -41,7 +39,6 @@ import {
 
 export interface ProgressHostInteractionsOptions {
   interactions: Pick<SessionHostInteractions, 'emit'>;
-  session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   getToolEditApprovals(): ToolEditApprovalController;
   setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
@@ -94,22 +91,11 @@ export function createProgressHostInteractions(
 
   // Interaction requests surface per-stream: the request panel is scoped to
   // the viewed stream and the requesting stream's row shows a pending badge.
-  // `suppressViewSwitch` registers the stream so that row exists without
-  // yanking the active tab away from whatever the user is inspecting (#8246).
-  const revealStream = (streamId?: StreamTabId | null) => {
+  // The row exists from the stream's `run.start`, so revealing only ensures
+  // the view is open; it never yanks the active tab away from whatever the
+  // user is inspecting (#8246).
+  const revealStream = () => {
     options.interactions.emit('requestEnsureProgressView', {});
-    if (streamId) {
-      options.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId,
-            suppressViewSwitch: true,
-          },
-        },
-      });
-    }
   };
 
   /**
@@ -363,24 +349,25 @@ export function createProgressHostInteractions(
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
     ): Promise<ToolEditApprovalResult> {
-      revealStream(request.streamId);
+      revealStream();
       return options.getToolEditApprovals().requestApproval(request);
     },
 
     requestBashApproval(
       request: HostBashApprovalRequest,
     ): Promise<BashSettlement> {
-      revealStream(request.streamId);
-      return handlers().bash.request(
-        prepareBashApprovalPrompt(request, options.session),
-        { cancellationResult: (cause) => cancellationResultFor('bash', cause) },
-      );
+      revealStream();
+      // The prompt the tool boundary prepared is the `approval.requested`
+      // payload: showing it keeps one requestId per request.
+      return handlers().bash.request(request.permission, {
+        cancellationResult: (cause) => cancellationResultFor('bash', cause),
+      });
     },
 
     requestPlanApproval(
       request: HostPlanApprovalRequest,
     ): Promise<PlanApprovalResult> {
-      revealStream(request.streamId);
+      revealStream();
       return handlers().planApproval.request(request, {
         cancellationResult: (cause) =>
           cancellationResultFor('planApproval', cause),
@@ -390,7 +377,7 @@ export function createProgressHostInteractions(
     requestAgentProposal(
       request: AgentProposalPermission,
     ): Promise<ProposalResult> {
-      revealStream(request.streamId);
+      revealStream();
       return handlers().proposal.request(request, {
         cancellationResult: (cause) => cancellationResultFor('proposal', cause),
       });
@@ -406,7 +393,7 @@ export function createProgressHostInteractions(
       request: HostRetryRequest,
       interactionOptions?: HostRetryInteractionOptions,
     ): Promise<RetryResult> {
-      revealStream(request.streamId);
+      revealStream();
       // A replacement retry on the same stream cancels any preparation still
       // in flight for the request it replaces; the shared handler does the same
       // for its pending entry below.
@@ -429,7 +416,7 @@ export function createProgressHostInteractions(
     askUserQuestion(
       request: Parameters<NonNullable<HostInteractions['askUserQuestion']>>[0],
     ): Promise<UserQuestionSettlement> {
-      revealStream(request.streamId || undefined);
+      revealStream();
       return handlers().userQuestion.request(request, {
         cancellationResult: (cause) =>
           cancellationResultFor('userQuestion', cause),
@@ -437,7 +424,7 @@ export function createProgressHostInteractions(
     },
 
     async openExternalInquiry(request) {
-      revealStream(request.streamId || undefined);
+      revealStream();
       handlers().externalInquiry.show(request);
     },
 

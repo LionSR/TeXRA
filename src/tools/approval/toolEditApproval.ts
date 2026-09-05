@@ -22,7 +22,7 @@ import {
 } from '@shared/schemas';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
-import { clamp } from '@utils/core';
+import { clamp, generateShortId } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { applyPatchToText } from '@utils/text/diff';
@@ -42,6 +42,12 @@ export interface ToolEditApprovalRequest {
   readonly proposedContent: string;
   readonly sourceTool: string;
   readonly streamId?: StreamTabId | null;
+  /**
+   * What the UI shows for this request, prepared once at the tool boundary
+   * (`prepareToolEditApprovalPrompt`): the payload of the `approval.requested`
+   * fact the session publishes, and what every host surface renders.
+   */
+  readonly permission: ToolEditPermission;
 }
 
 /**
@@ -98,7 +104,7 @@ export function prepareToolEditApprovalPrompt(
   session: SessionHandle,
   params: {
     requestId: string;
-    request: ToolEditApprovalRequest;
+    request: Omit<ToolEditApprovalRequest, 'permission'>;
     relativePath: string;
   },
 ): ToolEditPermission {
@@ -188,7 +194,7 @@ export function firstChangedLine(
 // ============================================================================
 
 export async function requestToolEditApproval(
-  request: ToolEditApprovalRequest,
+  request: Omit<ToolEditApprovalRequest, 'permission'>,
 ): Promise<ToolEditApprovalResult> {
   const approvalsEnabled = getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY);
 
@@ -227,7 +233,14 @@ export async function requestToolEditApproval(
   return session.approvals.toolEdit.enqueue(streamId, {
     prompt: async () =>
       finalizeApprovalResult(
-        await session.interactions.requestToolEditApproval(preparedRequest),
+        await session.interactions.requestToolEditApproval({
+          ...preparedRequest,
+          permission: prepareToolEditApprovalPrompt(session, {
+            requestId: `approval-${generateShortId()}`,
+            request: preparedRequest,
+            relativePath: WorkspaceFS.relativePath(preparedRequest.path),
+          }),
+        }),
         preparedRequest,
       ),
     bypassed: acceptProposedAsIs,
@@ -236,7 +249,7 @@ export async function requestToolEditApproval(
 
 function finalizeApprovalResult(
   result: ToolEditApprovalResult,
-  request: ToolEditApprovalRequest,
+  request: Omit<ToolEditApprovalRequest, 'permission'>,
 ): ToolEditApprovalResult {
   if (result.action !== 'apply') {
     return result;

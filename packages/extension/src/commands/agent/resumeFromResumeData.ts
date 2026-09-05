@@ -38,6 +38,7 @@ export async function tryResumeFromResumeData(
     return await resumeStreamWithRefusalNotice(
       streamId,
       {
+        session,
         recovery,
         isCancellationRequested,
         executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>

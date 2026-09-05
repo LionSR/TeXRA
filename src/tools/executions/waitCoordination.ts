@@ -51,9 +51,9 @@ export function shouldSkipWait(executionId: string): boolean {
  * AbortController when one arrives. This lets users break out of a blocking
  * `executions wait` by sending a follow-up message.
  *
- * Subscribes to the owning session's `followUpSent` fact — the same hub
- * `notifyFollowUpSent` publishes on — so follow-up delivery has exactly one
- * emission channel.
+ * Observes the owning session's follow-up queue (`ToolUseFollowUpQueue.onSent`,
+ * what `notifyFollowUpSent` fires), so follow-up delivery has exactly one
+ * in-process channel and no plane row.
  *
  * Returns a cleanup function that removes the listener.
  */
@@ -62,10 +62,7 @@ export function listenForFollowUp(ac: AbortController): () => void {
   const streamId = getRunContextStreamId(context);
   if (!streamId) return () => {};
 
-  const session = currentSession();
-  return session.events.subscribeSessionFacts((fact) => {
-    if (fact.type === 'followUpSent' && fact.payload.streamId === streamId) {
-      ac.abort();
-    }
+  return currentSession().followUps.onSent((sentStreamId) => {
+    if (sentStreamId === streamId) ac.abort();
   });
 }

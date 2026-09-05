@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
 import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
@@ -93,7 +94,7 @@ async function createSyncHarness(
     goal: { active: false },
   }),
 ): Promise<SyncHarness> {
-  const state = new SessionState();
+  const state = new SessionState(defaultSession());
   await state.snapshots.load([]);
   const messages: SyncStreamContentPayload[] = [];
   const bridge = {

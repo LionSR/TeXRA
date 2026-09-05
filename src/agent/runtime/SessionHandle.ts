@@ -6,9 +6,9 @@
  * (`session.interactions.x(...)`, `session.executions.y(...)`). It has no
  * readiness gate: a restored session is usable the moment it is constructed,
  * and what a stream with no live flow context in this process is gets decided
- * at read time by `SessionState.resolveStreamPhase`, never by a boot pass. It
- * composes {@link ExecutionRegistry}, {@link SessionHostInteractions}, and the
- * other session-scoped owners.
+ * by the fold's `readOnly` and `group` rules over the session's view, never
+ * by a boot pass. It composes {@link ExecutionRegistry},
+ * {@link SessionHostInteractions}, and the other session-scoped owners.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop Electron process. The default instance is installed
@@ -30,9 +30,15 @@
  * session is justified only as the ownership container.
  */
 
+import { SubscriptionRef } from 'effect';
 import pDefer, { type DeferredPromise } from 'p-defer';
 
-import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
+import type {
+  AgentEvent,
+  AgentTrace,
+  ResultEvent,
+  StatusEvent,
+} from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   ownsExecutionLease,
@@ -43,6 +49,7 @@ import { finalizeRun } from '@agent/storage/executionLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   processWorkspaceRoots,
   type WorkspaceRoots,
@@ -53,10 +60,15 @@ import {
 } from '@shared/approvalPolicy';
 import {
   RUN_OUTCOME,
+  type ApprovalPolicySnapshot,
+  type CommitOrdinal,
   type ExecutionId,
+  type SessionEventDraft,
   type StreamTabId,
+  type TranscriptSubscription,
 } from '@shared/schemas';
-import type { RunTraceFlushEntry } from '@transcript/runTrace';
+import type { SessionView } from '@shared/session/sessionView';
+import type { RunTrace, RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { throwAggregated } from '@utils/core';
@@ -68,7 +80,12 @@ import {
 import { ExecutionRegistry } from './executionRegistry';
 import { StreamStatusMachine } from './StreamStatusService';
 import { SessionHostInteractions } from './HostInteractions';
-import { SessionEventHub } from './SessionEventHub';
+import {
+  runEventDraft,
+  statusDraft,
+  type SessionEventsShape,
+} from './SessionEvents';
+import { openSessionGraph, type SessionGraph } from './sessionGraph';
 import { ModelRetryGate } from './ModelRetryGate';
 import {
   createSessionApprovals,
@@ -82,32 +99,51 @@ const logger = createLog('sessionHandle');
 /**
  * A valid transcript store is required; other owners may be injected.
  *
- * `status` is deliberately absent: the machine publishes canonical `status`
- * on the hub it is handed at construction, so a separately-injected machine
- * could be bound to a different hub than `events` and silently drop every
- * status fact. The session always co-constructs the pair instead.
+ * `status` and `events` are deliberately absent: the machine publishes
+ * canonical `status` through the session, and the event plane is the
+ * session's graph (`openSessionGraph`), resolved by workspace root, so a
+ * separately-injected machine or plane could not silently drop every fact
+ * of a session onto a plane nobody reads. The session co-constructs them.
  */
 export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
   Partial<
-    Pick<
-      SessionHandle,
-      | 'events'
-      | 'snapshots'
-      | 'interactions'
-      | 'responseTextProcessing'
-      | 'roots'
-    >
+    Pick<SessionHandle, 'snapshots' | 'responseTextProcessing' | 'roots'>
   >;
 
 export class SessionHandle {
   /**
+   * The one session state every renderer of this session reads (PRD
+   * one-fold-three-renderers, 5.1), keyed by the session's storage root (7.3):
+   * the fold fiber's level (`SessionViewService.ref`, 7.2), resolved from the
+   * session's graph once at construction. Synchronous readers take
+   * `SubscriptionRef.getUnsafe(view)`; nothing here writes it.
+   */
+  readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
+  /**
    * Per-run execution handles: registration, lookup, change listeners, and
-   * subagent lineage. Owns the status subscription bound to the hub
-   * {@link status} publishes on.
+   * subagent lineage. Hears every canonical `status` fact from
+   * {@link publishStatus}, in publish order.
    */
   readonly executions: ExecutionRegistry;
-  /** Session-scoped one-way fact plane. */
-  readonly events: SessionEventHub;
+  /**
+   * The session's event plane (PRD 7.1, contract C7): what a renderer reads
+   * with `events.all(session.now())`. The reads only: publishing goes
+   * through {@link publish}, which runs the session's ordering-sensitive
+   * bookkeeping before the log moves, and nothing else can append.
+   */
+  readonly events: Omit<SessionEventsShape, 'publish'>;
+  /**
+   * The tail as the view has folded it (PRD 7.2): what a reader that reads
+   * {@link view} beside each row reads, from `now()`, so no row reaches it
+   * before the fold has landed the state that row produced.
+   */
+  readonly folded: SessionGraph['folded'];
+  /**
+   * The one handler of every request a surface issues to this session (PRD
+   * 7.6, 8.2): an in-process surface runs it on the process runtime
+   * (`effectRuntime()`) and reads the Effect's own result as the response.
+   */
+  readonly requests: SessionGraph['requests'];
   /** Session-scoped status plane. */
   readonly status: StreamStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
@@ -123,7 +159,17 @@ export class SessionHandle {
   readonly followUps: ToolUseFollowUpQueue;
   /** Session-owned per-stream sidecar store for runs launched in this session. */
   readonly snapshots: StreamSnapshotStore;
-  private readonly detachSnapshotEvents: () => void;
+  /** The store's projection of the durable facts, called inside `publish`. */
+  private readonly applySnapshotEvent: (event: SessionEventDraft) => void;
+  private readonly graph: SessionGraph;
+  /**
+   * The transcript recorders' status ports (`RunTrace.handleStatus`), one per
+   * attached run trace: status is a session fact the recorder cannot hear on
+   * its own trace, and it must land in transcript order, so the session calls
+   * them inside {@link publishStatus} before the log moves.
+   */
+  private readonly statusPorts = new Set<(event: StatusEvent) => void>();
+  private disposed = false;
   /** This session's execution-keyed trace flushers. */
   readonly flushers: Map<string, RunTraceFlushEntry>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
@@ -155,15 +201,35 @@ export class SessionHandle {
     }
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
-    const events = init.events ?? new SessionEventHub();
-    const status = new StreamStatusMachine(events);
     const transcripts = init.transcripts;
+    this.transcripts = transcripts;
+    // Process roots unless the host names a folder: the extension, the CLI,
+    // and the SDK build exactly one session over the process roots; the
+    // desktop opens one session per paper and passes that paper's roots.
+    this.roots = init.roots ?? processWorkspaceRoots();
+    // The graph is keyed by the roots above and reads the transcript store
+    // at build (the pre-cutover hydration), so both are set before it opens.
+    const graph = openSessionGraph(this);
+    this.graph = graph;
+    this.events = graph.events;
+    this.view = graph.view;
+    this.folded = graph.folded;
+    this.requests = graph.requests;
+    const status = new StreamStatusMachine(
+      (event) => this.publishStatus(event),
+      (streamId, detail) => this.setUnreadable(streamId, detail),
+    );
     const followUps = new ToolUseFollowUpQueue();
-    const interactions = init.interactions ?? new SessionHostInteractions();
-    const approvals = createSessionApprovals(interactions);
+    const interactions = new SessionHostInteractions(this);
+    // The approval authority publishes a stream's full policy snapshot on
+    // every effective bypass change; `setApprovalPolicy` below publishes the
+    // same snapshot when the policy half moves.
+    const approvals = createSessionApprovals(interactions, (streamId) =>
+      this.publishApprovalPolicy(streamId),
+    );
     const executions = new ExecutionRegistry({
       streamStatus: status,
-      events,
+      publish: (events) => this.publish(events),
       approvals,
       publishResult: (event, streamId) => this.publishRunEvent(streamId, event),
       releaseRootExecutionLease: (executionId) =>
@@ -171,13 +237,7 @@ export class SessionHandle {
     });
 
     this.executions = executions;
-    this.events = events;
     this.status = status;
-    this.transcripts = transcripts;
-    // Process roots unless the host names a folder: the extension, the CLI,
-    // and the SDK build exactly one session over the process roots; the
-    // desktop opens one session per paper and passes that paper's roots.
-    this.roots = init.roots ?? processWorkspaceRoots();
     this.followUps = followUps;
     // The sidecar store is a session artifact exactly like `transcripts`: the
     // session projects its own run events into it and flushes it below, so no
@@ -187,7 +247,7 @@ export class SessionHandle {
     // always-resident stream summaries, so sidebars and all-streams metadata
     // paths read summaries instead of per-stream sidecars (#9947). Always
     // writable: this constructor rejects read-only transcript stores above.
-    this.detachSnapshotEvents = this.snapshots.attachSessionEvents(events, {
+    this.applySnapshotEvent = this.snapshots.attachSessionEvents({
       summaryMetaSink: (stream, meta) =>
         transcripts.recordSummaryMeta(stream, meta),
       summaryMetaSource: (stream) => transcripts.getSummaryMeta(stream),
@@ -208,11 +268,15 @@ export class SessionHandle {
     this.teardown.add(() => {
       liveSessions.delete(this);
     });
+    // The graph outlives every publisher above it: a late fact still lands
+    // in the log until the last owner has unwound.
     this.teardown.add(() => {
-      for (const detach of [...this.resultListenerDetachers]) detach();
+      this.disposed = true;
+      this.statusPorts.clear();
+      this.graph.close();
     });
+    this.teardown.add(() => this.resultListeners.clear());
     this.teardown.add(() => this.artifactFlushers.clear());
-    this.teardown.add(() => this.detachSnapshotEvents());
     this.teardown.add(() => this.interactions.dispose());
     this.teardown.add(() => this.modelRetries.dispose());
     // Drop bypass state before the interaction slot settles pending approvals.
@@ -228,7 +292,42 @@ export class SessionHandle {
   }
 
   setApprovalPolicy(policy: TexraApprovalPolicy): void {
+    if (policy === this.texraApprovalPolicy) return;
     this.texraApprovalPolicy = policy;
+    // The policy is session-wide; the snapshot is per run, so every stream
+    // the view holds (the ones whose `run.start` has folded: the existence
+    // rule, PRD 5.2) gets its own `approval.policy`. A reservation still
+    // short of its `run.start` is not in the view: its launcher stamps the
+    // initial snapshot, read from this new value, on that event instead.
+    for (const streamId of SubscriptionRef.getUnsafe(
+      this.view,
+    ).streams.keys()) {
+      this.publishApprovalPolicy(streamId);
+    }
+  }
+
+  /**
+   * One run's full approval-policy snapshot: the policy this session holds
+   * plus the bypass values its approval queues own. The launcher stamps it on
+   * `run.start` as the initial snapshot; every later change is published
+   * through {@link publishApprovalPolicy}. Never a toggle delta.
+   */
+  approvalPolicySnapshotFor(streamId: StreamTabId): ApprovalPolicySnapshot {
+    return {
+      policy: this.texraApprovalPolicy,
+      bypasses: this.approvals.bypassesFor(streamId),
+    };
+  }
+
+  /**
+   * The one emitter of `approval.policy` (PRD one-fold-three-renderers,
+   * section 6, item 2), for a change after the run's `run.start`.
+   */
+  private publishApprovalPolicy(streamId: StreamTabId): void {
+    this.publishRunEvent(streamId, {
+      type: 'approval.policy',
+      snapshot: this.approvalPolicySnapshotFor(streamId),
+    });
   }
 
   /** Drain one execution's pending trace, or every trace during shutdown. */
@@ -362,51 +461,51 @@ export class SessionHandle {
   }
 
   /**
-   * Disposers for active `onResult` hub subscriptions, so `dispose()` can
-   * drop them like the pre-hub listener set did — a late `publishRunEvent`
-   * after teardown must not reach host closures.
+   * Terminal `result` listeners, called from {@link publishRunEvent} with
+   * the run's own event (its usage totals and agent name included, which the
+   * durable arm does not carry). Cleared by `dispose()`: a late
+   * `publishRunEvent` after teardown must not reach host closures.
    */
-  private readonly resultListenerDetachers = new Set<() => void>();
+  private readonly resultListeners = new Set<(event: ResultEvent) => void>();
 
   /**
    * Subscribe to terminal `result` events for runs in this session. Hosts hold
    * the session, so this is how they receive a run's outcome — per-run traces
    * are created inside the run and are not reachable from the host otherwise.
-   *
-   * Delivery rides the session event hub (`result` events travel as run-scoped
-   * facts); this method only keeps the disposer so `dispose()` can drop the
-   * subscription with the session.
    */
   onResult(listener: (event: ResultEvent) => void): () => void {
-    const detach = this.events.subscribeRunFacts(
-      ({ event }) => listener(event),
-      { types: ['result'] },
-    );
-    let disposed = false;
-    const dispose = (): void => {
-      if (disposed) return;
-      disposed = true;
-      this.resultListenerDetachers.delete(dispose);
-      detach();
+    this.resultListeners.add(listener);
+    return () => {
+      this.resultListeners.delete(listener);
     };
-    this.resultListenerDetachers.add(dispose);
-    return dispose;
   }
 
   /**
-   * Bridge a run's trace into this session's event hub: re-publish each event
-   * as a run-scoped fact. Returns a detach disposer the run bundles into its
+   * Bridge a run's trace into this session's event plane: every durable
+   * trace event becomes the fact of its arm on the stream's aggregate, and
+   * the recorder's status port hears every canonical `status` fact in
+   * transcript order. Returns a detach disposer the run bundles into its
    * trace teardown.
    */
-  attachRunTrace(trace: AgentTrace, streamId: StreamTabId): () => void {
-    return trace.subscribe((event) => this.publishRunEvent(streamId, event));
+  attachRunTrace(
+    run: Pick<RunTrace, 'trace' | 'handleStatus'>,
+    streamId: StreamTabId,
+  ): () => void {
+    const detachTrace = run.trace.subscribe((event) =>
+      this.publishRunEvent(streamId, event),
+    );
+    this.statusPorts.add(run.handleStatus);
+    return () => {
+      this.statusPorts.delete(run.handleStatus);
+      detachTrace();
+    };
   }
 
   /**
-   * Forward one run-scoped event to this session's event bus. Shared by
-   * `attachRunTrace` (the live per-run trace
-   * subscription above) and by `ExecutionRegistry`'s injected `publishResult`
-   * constructor callback, which needs the identical
+   * Publish one run-scoped trace event as its durable arm (`runEventDraft`);
+   * a trace event with no arm goes nowhere. Shared by `attachRunTrace` (the
+   * live per-run trace subscription above) and by `ExecutionRegistry`'s
+   * injected `publishResult` constructor callback, which needs the identical
    * forwarding for a terminal event synthesized *after* the originating run's
    * own trace has already been disposed — killing a native subagent suspended
    * at WAITING (`terminateWaitingHandle`) settles `handle.result` and the
@@ -414,7 +513,98 @@ export class SessionHandle {
    * session's `onResult` subscribers.
    */
   publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
-    this.events.emit({ scope: 'run', streamId, event });
+    if (this.disposed) return;
+    if (event.type === 'result') {
+      for (const listener of [...this.resultListeners]) {
+        try {
+          listener(event);
+        } catch (error) {
+          logger.warn('Session result listener threw', { data: error });
+        }
+      }
+    }
+    const draft = runEventDraft(streamId, event);
+    if (draft) this.publish([draft]);
+  }
+
+  /**
+   * Publish one canonical status fact from the session's status machine. The
+   * runtime's ordering-sensitive consumers hear it here, in publish order and
+   * before the log moves and any renderer wakes: the recorders' status ports
+   * and the execution registry's waiters and child rosters.
+   */
+  publishStatus(event: StatusEvent): void {
+    if (this.disposed) return;
+    for (const port of [...this.statusPorts]) {
+      try {
+        port(event);
+      } catch (error) {
+        logger.warn('Session status port threw', { data: error });
+      }
+    }
+    this.executions.handleStatus(event.streamId);
+    this.publish([statusDraft(event)]);
+  }
+
+  /**
+   * The one publisher of this session's facts (PRD 7.1). The snapshot store
+   * projects each durable fact synchronously, before the log moves, so its
+   * summary mirror is current for every reader the wake reaches; then the
+   * batch commits under the plane's permit. A publish after teardown goes
+   * nowhere: the session's owners have unwound and a late fact has no reader.
+   */
+  publish(events: readonly SessionEventDraft[]): void {
+    if (this.disposed || events.length === 0) return;
+    for (const event of events) {
+      // A projection that rejects a fact (a malformed payload, a store that
+      // refused a patch) is logged and the fact still lands: the store owns
+      // its own validation, and a publisher must not lose the plane over it.
+      try {
+        this.applySnapshotEvent(event);
+      } catch (error) {
+        logger.warn(`Snapshot projection rejected a ${event.type} fact`, {
+          data: error,
+        });
+      }
+    }
+    effectRuntime().runFork(this.graph.publish(events));
+  }
+
+  /**
+   * The session's current commit ordinal: where a reader attaching now starts
+   * its `events.all` read (PRD 10.3), so it sees what is published from here
+   * on and replays nothing.
+   */
+  now(): CommitOrdinal {
+    return this.graph.now();
+  }
+
+  /**
+   * Replace one port's transcript subscription set (PRD 7.2, 8.1): the
+   * aggregates whose transcript tier the view folds for that port. An empty
+   * set removes the port; the view's set is the union over every port.
+   */
+  setTranscriptSubscriptions(
+    port: string,
+    set: readonly TranscriptSubscription[],
+  ): void {
+    if (this.disposed) return;
+    effectRuntime().runFork(this.graph.subscriptions.set(port, set));
+  }
+
+  /** The status machine's hold on a stream this process cannot read, or its
+   *  release: local truth the fold reads as `readOnly` (PRD 5.1). */
+  private setUnreadable(streamId: StreamTabId, detail: string | null): void {
+    if (this.disposed) return;
+    effectRuntime().runFork(
+      SubscriptionRef.update(this.graph.local, (local) => {
+        const rest = local.unreadable.filter((u) => u.streamId !== streamId);
+        return {
+          ...local,
+          unreadable: detail === null ? rest : [...rest, { streamId, detail }],
+        };
+      }),
+    );
   }
 
   /**

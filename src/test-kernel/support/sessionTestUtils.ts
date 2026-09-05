@@ -1,3 +1,5 @@
+import '@test/support/sessionGraphTestSetup';
+
 import {
   SessionHandle,
   type SessionHandleInit,

@@ -25,10 +25,11 @@ import {
   type ExecutionId,
   type ProgressViewOutboundMessage,
   type RunIdentity,
-  type SetActiveStreamPayload,
   type StreamTabId,
   type UpdateStreamDescriptionPayload,
   USER_FOLLOW_UP_SUPPORT,
+  type SessionEvent,
+  type SessionEventDraft,
 } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import {
@@ -168,20 +169,46 @@ export function emitRunEvent(
   streamId: StreamTabId,
   event: AgentEvent,
 ): void {
-  target.session.events.emit({ scope: 'run', streamId, event });
+  target.session.publishRunEvent(streamId, event);
 }
 
-export function emitActiveStream(
+let testEventCommit = 0;
+
+/**
+ * One event of the session's plane as a reader would receive it, for tests
+ * that drive the applier directly: the envelope is minted here, in
+ * arrival order, because the applier reads the arm and the aggregate only.
+ */
+export function sessionEventOf(draft: SessionEventDraft): SessionEvent {
+  testEventCommit += 1;
+  return {
+    ...draft,
+    seq: testEventCommit,
+    commit: testEventCommit,
+    ownerId: null,
+    at: Date.now(),
+  } as SessionEvent;
+}
+
+let runStartSeq = 0;
+
+/** The existence fact for a stream, as the launcher publishes it. */
+export function emitRunStart(
   target: { session: SessionHandle },
-  payload: SetActiveStreamPayload,
+  payload: { streamId: StreamTabId; agentCategory?: AgentCategory },
 ): void {
-  target.session.events.emit({
-    scope: 'session',
-    event: {
-      type: 'setActiveStream',
-      payload,
+  runStartSeq += 1;
+  target.session.publish([
+    {
+      type: 'run.start',
+      aggregateId: payload.streamId,
+      executionId: `e0000${runStartSeq.toString(16)}` as ExecutionId,
+      identity: { kind: 'agent', agent: payload.streamId },
+      category: payload.agentCategory ?? AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     },
-  });
+  ]);
 }
 
 export function emitRunConfig(
@@ -202,11 +229,11 @@ export function emitStreamDescription(
   target: { session: SessionHandle },
   payload: UpdateStreamDescriptionPayload,
 ): void {
-  target.session.events.emit({
-    scope: 'session',
-    event: {
+  target.session.publish([
+    {
       type: 'updateStreamDescription',
-      payload,
+      aggregateId: payload.streamId,
+      description: payload.description,
     },
-  });
+  ]);
 }

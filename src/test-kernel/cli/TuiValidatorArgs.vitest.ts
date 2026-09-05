@@ -151,15 +151,15 @@ describe('TUI validator args', () => {
     expectSelectedScenarios(
       [
         '--list-selected',
-        'child-event-order-roster-first',
+        'static-transcript-repaint-reflow',
         'compact-user-question',
-        'child-event-order-roster-first',
+        'static-transcript-repaint-reflow',
       ],
       [
-        'child-event-order-canonical',
-        'child-event-order-roster-first',
+        'static-transcript-repaint-canonical',
+        'static-transcript-repaint-reflow',
         'compact-user-question',
-        'child-event-order-roster-first',
+        'static-transcript-repaint-reflow',
       ],
     );
   });

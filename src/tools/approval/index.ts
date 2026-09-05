@@ -56,10 +56,11 @@ export function configureDelegatedChildApprovals(
   if (parentStreamId) {
     session.approvals.registerStreamParent(childStreamId, parentStreamId);
   }
+  // The child's `run.start` is published by the time this runs, so the
+  // write is not pre-activation setup: it notifies the host and publishes
+  // the child's `approval.policy` like any other bypass change.
   if (policy === 'auto-approved') {
-    session.approvals.toolEdit.bypass.setBypass(childStreamId, true, {
-      silent: true,
-    });
+    session.approvals.toolEdit.bypass.setBypass(childStreamId, true);
   }
 }
 

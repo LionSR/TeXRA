@@ -1,21 +1,22 @@
-// Typed approval pipeline per docs/prds/cli-tui-ink/2026-05-14-10-architecture.md §9.
+// The TUI's approval Surface (PRD one-fold-three-renderers, 9 and 10.1).
 //
-// One explicit FIFO owns every pending approval or human-input prompt. The
-// head is projected onto `currentApproval`; settling or removing it promotes
-// the next entry. `clearApprovals` resolves every caller promise directly, so
-// a session interrupt cannot leave a hidden scheduler task or queue slot
-// blocked.
-//
-// The queue is also the only owner of "this request is still live".
-// `reserveApproval` takes a slot before the request can be shown (a retry has
-// to read the keychain first) and keeps it after the decision while its owner
-// commits, so one clear or cancel settles the pre-modal lookup, the modal, and
-// the committing work through the same structure — there is no second registry
-// to sweep and no staleness re-check at the call sites.
+// Which requests are pending is a fold fact: `view.approvals` holds every
+// `approval.requested` the runtime has not resolved, and `view.inquiries`
+// every inquiry thread with its status. This module owns only what the fold
+// cannot: the presentation payload a host hook hands over beside the fact (a
+// tool edit's before and after text, a retry's personal-key lookup, an
+// inquiry's full question), the settle latch of the three kinds the host
+// still answers through its hook (tool edit, retry, external inquiry), the
+// "decided here, not yet resolved there" gap, and the jump-to-waiting order.
+// Every other decision is a `decision.*` runtime request; the runtime settles
+// its pending set and publishes `approval.resolved`, which the fold drops.
 
-import { computed, signal, type Signal } from '@lit-labs/signals';
+import { computed, signal } from '@lit-labs/signals';
+import { Effect } from 'effect';
 
-import { warn as logWarning } from '@logger/logUtils';
+import { currentSession } from '@agent/runtime';
+import { USER_QUESTION_SKIPPED_FEEDBACK } from '@cli/runtime/userQuestionAnswer';
+import { effectRuntime } from '@platform/processRuntime';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { QuotaFallbackRouteId } from '@shared/quotaFallbackRoutes';
 import type {
@@ -25,21 +26,14 @@ import type {
   ProgressPermissionKind,
   StreamTabId,
 } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
+import { registerCliStateResetHook } from './cliState';
+import { sessionView } from './sessionView';
+import { appendLocalRequestRefusal } from './transcript';
 
-/**
- * What the in-process TUI renderer needs on top of the wire payload, per kind.
- *
- * The wire arm is authoritative for everything a host displays. These are the
- * two facts a webview cannot receive over IPC and the TUI can read directly:
- * the edit's file contents (the inline diff renders them; the webview opens a
- * diff editor instead) and the keychain answer the retry card asks for before
- * it offers the "use your own API key" action. A kind absent from this map has
- * no TUI-only state at all.
- */
 interface TuiApprovalAdornments {
   readonly toolEdit: {
     readonly originalContent: string;
@@ -52,12 +46,11 @@ interface TuiApprovalAdornments {
 }
 
 /**
- * The queued payload IS the wire {@link PermissionPayload}, with the TUI-only
- * adornments above carried beside its `data` rather than merged into it.
- * Derivation is the point: a kind added to the wire union appears here without
- * an edit, so every `switch` below and in the modal dispatcher stops compiling
- * until the TUI handles it — the silent-gap class of bug this queue used to
- * have (issue #9021 register) cannot recur.
+ * The presented payload IS the wire {@link PermissionPayload}, with the
+ * TUI-only adornments above carried beside its `data`. Derivation is the
+ * point: a kind added to the wire union appears here without an edit, so
+ * every `switch` below and in the modal dispatcher stops compiling until the
+ * TUI handles it.
  */
 export type ApprovalPayload = {
   [K in ProgressPermissionKind]: Extract<PermissionPayload, { kind: K }> &
@@ -76,8 +69,7 @@ export type RetryApprovalPayload = Extract<ApprovalPayload, { kind: 'retry' }>;
 /**
  * The TUI decision = the host-neutral {@link SharedApprovalDecision}
  * (accepted / userMessage / userQuestionAnswers) plus the CLI-only session
- * bypass + credential mode applied before accepting. See
- * docs/proposals/2026-05-31-tui-extension-sharing.md (Rung 1).
+ * bypass + credential mode applied before accepting.
  */
 export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Queue or prompt lifecycle failure, never text entered by the user. */
@@ -99,420 +91,513 @@ export interface PendingApproval {
   readonly decide: (decision: ApprovalDecision) => void;
 }
 
-interface ApprovalQueueStatus {
-  readonly depth: number;
-  readonly kind: ApprovalQueueStatusKind;
-}
-
-interface EnqueueApprovalOptions {
-  /** Called with the payload as presented, once, when the entry becomes the
-   *  foreground modal. */
-  readonly onPresent?: (payload: ApprovalPayload) => void;
-}
-
-interface ReserveApprovalOptions extends EnqueueApprovalOptions {
-  /** The host attachment this reservation belongs to. Hosts overlap while a
-   *  previous run's detached children finish, so a detaching host must settle
-   *  its own reservations without touching the live host's. */
-  readonly owner?: object;
-}
-
-/** Derived from the wire contract, so the queue's payload kinds and every
- *  kind-keyed record here stay exhaustive against it. */
+/** Derived from the wire contract, so every kind-keyed record here stays
+ *  exhaustive against it. */
 export type PendingApprovalKind = ProgressPermissionKind;
 
-/** Stream key for payloads that carry no stream id — they are session-wide
- *  and belong to the root/main row, never a child row. */
-export const ROOT_APPROVAL_STREAM_KEY = '';
-
-/** One queued approval as seen by list surfaces: its owning stream key and
- *  payload kind, in global FIFO position. */
-export interface PendingApprovalSummary {
-  readonly streamKey: string;
+/** One request the user's attention is on: a fold fact, read once. */
+export interface AttentionRequest {
+  readonly requestId: string;
+  readonly streamId: StreamTabId;
   readonly kind: PendingApprovalKind;
+  /** The fact's payload; the host payload replaces it when presented. */
+  readonly payload: PermissionPayload;
 }
-
-/** The approval the modal is showing, or `undefined` when none is
- *  foregrounded. Projected from the queue head by {@link presentForeground};
- *  every other surface reads it. */
-export const currentApproval = signal<PendingApproval | undefined>(undefined);
 
 /**
- * `preparing` holds a slot for a request that cannot be shown yet: invisible
- * to the modal, the depth, and the summaries, but settleable and cancellable.
- * `pending` is a live request waiting for its turn at the modal. `committing`
- * is a decided reservation whose owner is still acting on the answer, so a
- * later cancel can still reach that work.
+ * What a host hook holds for one request beside the fact: the payload it
+ * presents, and for the hook-settled kinds the latch its promise waits on.
+ * A retry enters unpresentable (its keychain lookup runs first) and presents
+ * once prepared; a `decided` entry stays until its hook releases it.
  */
-type ApprovalQueuePhase = 'preparing' | 'pending' | 'committing';
-
-interface ApprovalQueueItem {
-  /** Mutable so a reservation can publish the finished request when it
-   *  presents; every other entry keeps the payload it was queued with. */
-  payload: ApprovalPayload;
-  readonly resolve: (decision: ApprovalDecision) => void;
-  readonly onPresent?: (payload: ApprovalPayload) => void;
-  /** Reservations only. Aborted when the entry is cleared or replaced — never
-   *  by its own decision — so preparation and commit work stops at its next
-   *  await. */
-  readonly preparation?: AbortController;
-  /** Reservations only. The host attachment that took the slot. */
-  readonly owner?: object;
-  phase: ApprovalQueuePhase;
-  /** Set once the item has been foregrounded, so re-presentations after a
-   *  queue reorder cannot re-fire focus/notification side effects. */
-  presented?: boolean;
+interface HostRequest {
+  readonly payload: ApprovalPayload;
+  readonly presentable: boolean;
+  readonly settle: ((decision: ApprovalDecision) => void) | undefined;
+  readonly preparation: AbortController | undefined;
+  readonly owner: object | undefined;
 }
 
-/** The queue itself. Every mutation republishes a fresh array, so the
- *  projections below are derived rather than mirrored: there is no second
- *  write that can be forgotten or ordered wrongly. */
-const QUEUE = signal<readonly ApprovalQueueItem[]>([]);
+const hostRequests = signal<ReadonlyMap<string, HostRequest>>(new Map());
 
-/** Entries the user can act on right now: a reservation is not a prompt
- *  before it presents, and no longer one once it is decided. */
-const WAITING = computed(() =>
-  QUEUE.get().filter((item) => item.phase === 'pending'),
-);
+/** Decided on this surface; hidden until the fold drops the fact. */
+const decided = signal<ReadonlySet<string>>(new Set());
 
-export const approvalQueueStatus: Signal.Computed<ApprovalQueueStatus> =
-  computed(() => {
-    const waiting = WAITING.get();
-    return {
-      depth: waiting.length,
-      kind:
-        waiting.length === 0
-          ? 'approval'
-          : approvalQueueStatusKind(waiting.map((item) => item.payload)),
-    };
-  });
-
-/** Every pending approval's stream key and kind, in global FIFO order;
- *  stream-less payloads carry {@link ROOT_APPROVAL_STREAM_KEY}. Kept flat so
- *  callers that fold buckets together (e.g. root row + session-wide) can
- *  still order by first-to-present. Powers the session list's per-row
- *  "waiting on what" suffix. */
-export const pendingApprovalSummaries: Signal.Computed<
-  readonly PendingApprovalSummary[]
-> = computed(() =>
-  WAITING.get().map((item) => ({
-    streamKey:
-      approvalPayloadStreamId(item.payload) ?? ROOT_APPROVAL_STREAM_KEY,
-    kind: item.payload.kind,
-  })),
-);
+/** Jump-to-waiting: the focused stream's requests lead the order. */
+const promoted = signal<
+  | {
+      readonly streamId: StreamTabId;
+      readonly includeStreamIds: ReadonlySet<StreamTabId>;
+    }
+  | undefined
+>(undefined);
 
 const INTERRUPT: ApprovalDecision = {
   accepted: false,
   rejectionCause: 'Session interrupted.',
 };
 
-/** The entry the modal shows: the first one waiting for a user decision. */
-function foregroundItem(): ApprovalQueueItem | undefined {
-  return QUEUE.get().find((item) => item.phase === 'pending');
-}
-
-function presentForeground(): void {
-  const item = foregroundItem();
-  if (!item || currentApproval.get()) return;
-
-  if (!item.presented) {
-    item.presented = true;
-    try {
-      item.onPresent?.(item.payload);
-    } catch (error) {
-      // Presentation hooks update surrounding TUI state only; approval
-      // resolution must remain available even if focus activation fails.
-      logWarning(
-        'cli.tui',
-        `Approval presentation hook failed: ${toErrorMessage(error)}`,
-      );
-    }
-  }
-  if (foregroundItem() !== item) return;
-
-  currentApproval.set({
-    payload: item.payload,
-    decide: (decision) => {
-      settleItems((candidate) => candidate === item, decision);
-    },
-  });
-}
-
-/**
- * Apply one queue mutation and re-project the foreground from the result.
- * `settle` runs at the single point where the queue is already consistent and
- * the next modal has not been presented yet, so a bulk cancellation cannot
- * briefly foreground an item that the same operation removes.
- */
-function updateQueue(
-  mutate: () => readonly ApprovalQueueItem[],
-  settle?: () => void,
-): void {
-  const previousForeground = foregroundItem();
-  QUEUE.set(mutate());
-  const foregroundChanged = previousForeground !== foregroundItem();
-  if (foregroundChanged) currentApproval.set(undefined);
-  settle?.();
-  if (foregroundChanged) presentForeground();
-}
-
-/**
- * Settle every matching entry with `decision`. A cancelled settlement drops
- * each entry and aborts any reservation among them; an answered one keeps a
- * reservation's slot (as `committing`) until its owner releases it, so a
- * cancel arriving after the decision still reaches the work that decision
- * started.
- */
-function settleItems(
-  predicate: (item: ApprovalQueueItem) => boolean,
-  decision: ApprovalDecision,
-  options: { readonly cancelled?: boolean } = {},
-): number {
-  const matched = QUEUE.get().filter(predicate);
-  if (matched.length === 0) return 0;
-  const dropped = new Set(
-    options.cancelled === true
-      ? matched
-      : matched.filter((item) => !item.preparation),
-  );
-
-  updateQueue(
-    () => {
-      for (const item of matched) {
-        if (!dropped.has(item)) item.phase = 'committing';
-      }
-      return QUEUE.get().filter((item) => !dropped.has(item));
-    },
-    () => {
-      for (const item of matched) {
-        if (options.cancelled === true) {
-          item.preparation?.abort(new Error('Approval request was cancelled.'));
-        }
-        item.resolve(decision);
-      }
-    },
-  );
-  return matched.length;
-}
-
-function statusKindForPayload(
-  payload: ApprovalPayload,
-): Exclude<ApprovalQueueStatusKind, 'request'> {
-  switch (payload.kind) {
-    case 'externalInquiry':
-    case 'userQuestion':
-      return 'question';
-    case 'bash':
-    case 'toolEdit':
-    case 'planApproval':
-    case 'proposal':
-    case 'retry':
-      return 'approval';
-    default:
-      return assertNever(payload, 'Unknown approval payload kind');
-  }
-}
-
-function approvalQueueStatusKind(
-  payloads: Iterable<ApprovalPayload>,
-): ApprovalQueueStatusKind {
-  let sawApproval = false;
-  let sawQuestion = false;
-  for (const payload of payloads) {
-    const kind = statusKindForPayload(payload);
-    sawApproval ||= kind === 'approval';
-    sawQuestion ||= kind === 'question';
-    if (sawApproval && sawQuestion) return 'request';
-  }
-  return sawQuestion ? 'question' : 'approval';
-}
-
+/** Whether `payload` presents; a hook keys its host entry by the same id. */
 export function approvalPayloadStreamId(
-  payload: ApprovalPayload,
+  payload: Pick<ApprovalPayload, 'data'>,
 ): StreamTabId | undefined {
-  // Every payload variant carries a `streamId` field; all resolve the same way.
   return payload.data.streamId || undefined;
 }
 
+function inquiryHostRequest(
+  host: ReadonlyMap<string, HostRequest>,
+  threadId: string,
+): [string, HostRequest] | undefined {
+  for (const entry of host) {
+    const payload = entry[1].payload;
+    if (
+      payload.kind === 'externalInquiry' &&
+      payload.data.threadId === threadId
+    )
+      return entry;
+  }
+  return undefined;
+}
+
 /**
- * Stable-partition the queue so `streamId`'s pending items lead, then
- * re-project the head. Settling matches by item identity, so a decision made
- * against the previous projection still resolves the right item; nothing is
- * settled, resolved, or (re-)notified by a promotion. Used by jump-to-waiting:
- * focusing a session surfaces that session's approval immediately.
- * `includeSessionWide` also promotes stream-less (session-wide) items — pass
- * it when promoting the root stream, whose row those items fold onto.
- * `includeStreamIds` lets a composite surface promote requests owned by the
- * streams it presents, such as a workflow popup's direct children.
+ * Every request awaiting the user, from the fold: the outstanding approvals
+ * in commit order, then the open inquiry threads. The promoted stream's
+ * requests lead; nothing is settled, resolved, or re-notified by a
+ * promotion. The status bar, the title, and the modal all read this one
+ * list.
+ */
+export function attentionRequests(
+  view: SessionView,
+  host: ReadonlyMap<string, HostRequest> = hostRequests.get(),
+  lead = promoted.get(),
+): readonly AttentionRequest[] {
+  const requests: AttentionRequest[] = view.approvals.map((approval) => ({
+    requestId: approval.requestId,
+    streamId: approval.streamId,
+    kind: approval.payload.kind,
+    payload: approval.payload,
+  }));
+  for (const thread of view.inquiries) {
+    if (thread.status !== 'open') continue;
+    const entry = inquiryHostRequest(host, thread.threadId);
+    if (!entry) continue;
+    requests.push({
+      requestId: entry[0],
+      streamId: entry[1].payload.data.streamId as StreamTabId,
+      kind: 'externalInquiry',
+      payload: entry[1].payload,
+    });
+  }
+  if (!lead) return requests;
+  const leads = (request: AttentionRequest): boolean =>
+    request.streamId === lead.streamId ||
+    lead.includeStreamIds.has(request.streamId);
+  return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
+}
+
+/** The payload the modal renders: the host's when presented, else the fact's. */
+function presentedPayload(
+  request: AttentionRequest,
+  host: ReadonlyMap<string, HostRequest>,
+): ApprovalPayload | undefined {
+  const entry = host.get(request.requestId);
+  if (entry) return entry.presentable ? entry.payload : undefined;
+  const payload = request.payload;
+  switch (payload.kind) {
+    case 'bash':
+    case 'planApproval':
+    case 'proposal':
+    case 'userQuestion':
+    case 'externalInquiry':
+      return payload;
+    case 'toolEdit':
+    case 'retry':
+      // Presentable only through the hook that carries its adornments.
+      return undefined;
+  }
+  assertNever(payload, 'Unhandled approval payload kind');
+}
+
+/** The order requests became presentable: a request that only became
+ *  showable now (a retry after its key lookup) joins behind the modal the
+ *  user is already answering rather than displacing it. */
+const presentedOrder = new Map<string, number>();
+
+/** The entry the modal shows: the first pending request this surface can
+ *  render and has not decided, in presentation order under the promoted
+ *  stream's lead. */
+export const currentApproval = computed<PendingApproval | undefined>(() => {
+  const view = sessionView().get();
+  const host = hostRequests.get();
+  const done = decided.get();
+  const candidates: Array<{
+    readonly request: AttentionRequest;
+    readonly payload: ApprovalPayload;
+    readonly rank: number;
+  }> = [];
+  attentionRequests(view, host, promoted.get()).forEach((request, rank) => {
+    if (done.has(request.requestId)) return;
+    const payload = presentedPayload(request, host);
+    if (!payload) return;
+    if (!presentedOrder.has(request.requestId)) {
+      presentedOrder.set(request.requestId, presentedOrder.size);
+    }
+    candidates.push({ request, payload, rank });
+  });
+  const lead = promoted.get();
+  const leads = (request: AttentionRequest): boolean =>
+    lead !== undefined &&
+    (request.streamId === lead.streamId ||
+      lead.includeStreamIds.has(request.streamId));
+  candidates.sort((a, b) => {
+    const leadDelta = Number(leads(b.request)) - Number(leads(a.request));
+    if (leadDelta !== 0) return leadDelta;
+    return (
+      (presentedOrder.get(a.request.requestId) ?? a.rank) -
+      (presentedOrder.get(b.request.requestId) ?? b.rank)
+    );
+  });
+  const first = candidates[0];
+  if (!first) return undefined;
+  return {
+    payload: first.payload,
+    decide: (decision) => decideRequest(first.request, first.payload, decision),
+  };
+});
+
+/**
+ * Stable-partition the pending requests so `streamId`'s lead, then re-read
+ * the head. Used by jump-to-waiting: focusing a session surfaces that
+ * session's request immediately. `includeStreamIds` lets a composite surface
+ * promote requests owned by the streams it presents, such as a workflow
+ * popup's direct children.
  */
 export function promoteApprovalsForStream(
   streamId: StreamTabId,
-  options: {
-    readonly includeSessionWide?: boolean;
-    readonly includeStreamIds?: ReadonlySet<StreamTabId>;
-  } = {},
+  options: { readonly includeStreamIds?: ReadonlySet<StreamTabId> } = {},
 ): void {
-  const items = QUEUE.get();
-  if (items.length < 2) return;
-  const matches = (item: ApprovalQueueItem): boolean => {
-    const itemStreamId = approvalPayloadStreamId(item.payload);
-    return (
-      itemStreamId === streamId ||
-      (itemStreamId !== undefined &&
-        options.includeStreamIds?.has(itemStreamId) === true) ||
-      (options.includeSessionWide === true && itemStreamId === undefined)
-    );
-  };
-  const promoted = items.filter(matches);
-  if (promoted.length === 0) return;
-  const next = [...promoted, ...items.filter((item) => !matches(item))];
-  // Already a contiguous prefix (a head-only check would miss matching items
-  // still parked behind other streams) — nothing to reorder.
-  if (next.every((item, index) => item === items[index])) return;
-  // The current projection's decide closure settles by item identity, so it
-  // stays valid when the foreground entry keeps its place.
-  updateQueue(() => next);
-}
-
-export function enqueueApproval(
-  payload: ApprovalPayload,
-  options: EnqueueApprovalOptions = {},
-): Promise<ApprovalDecision> {
-  return new Promise<ApprovalDecision>((resolve) => {
-    QUEUE.set([
-      ...QUEUE.get(),
-      {
-        payload,
-        resolve,
-        onPresent: options.onPresent,
-        phase: 'pending',
-      },
-    ]);
-    presentForeground();
+  promoted.set({
+    streamId,
+    includeStreamIds: options.includeStreamIds ?? new Set(),
   });
 }
 
+function markDecided(requestId: string): void {
+  const view = sessionView().get();
+  const live = new Set(
+    attentionRequests(view, hostRequests.get(), undefined).map(
+      (request) => request.requestId,
+    ),
+  );
+  const next = new Set([...decided.get()].filter((id) => live.has(id)));
+  next.add(requestId);
+  decided.set(next);
+  for (const id of presentedOrder.keys()) {
+    if (!live.has(id)) presentedOrder.delete(id);
+  }
+}
+
+function updateHost(
+  mutate: (
+    previous: ReadonlyMap<string, HostRequest>,
+  ) => ReadonlyMap<string, HostRequest>,
+): void {
+  hostRequests.set(mutate(hostRequests.get()));
+}
+
+/** A hook-settled request leaves the surface with its decision. */
+function settleHost(
+  requestId: string,
+  decision: ApprovalDecision,
+  options: { readonly cancelled?: boolean } = {},
+): boolean {
+  const entry = hostRequests.get().get(requestId);
+  if (!entry) return false;
+  if (options.cancelled) {
+    entry.preparation?.abort(new Error('Approval request was cancelled.'));
+    updateHost((previous) => {
+      const next = new Map(previous);
+      next.delete(requestId);
+      return next;
+    });
+  }
+  entry.settle?.(decision);
+  return true;
+}
+
+/** Issue runtime requests in order; a refusal reads in the conversation. */
+function issue(streamId: StreamTabId, ...requests: RuntimeRequest[]): void {
+  const session = currentSession();
+  void effectRuntime().runPromise(
+    Effect.forEach(requests, (request) => session.requests.request(request), {
+      discard: true,
+    }).pipe(
+      Effect.match({
+        onFailure: (error) => appendLocalRequestRefusal(error, streamId),
+        onSuccess: () => undefined,
+      }),
+    ),
+  );
+}
+
+function bypassRequest(
+  streamId: StreamTabId,
+  bypass: ApprovalBypassKind | undefined,
+): RuntimeRequest[] {
+  if (bypass === undefined) return [];
+  return [
+    {
+      kind: 'policy.set',
+      change: { field: 'bypass', streamId, bypass, enabled: true },
+    },
+  ];
+}
+
+function rejection(decision: ApprovalDecision): {
+  readonly action: 'reject';
+  readonly feedback: string | null;
+} {
+  return {
+    action: 'reject',
+    feedback:
+      decision.rejectionCause ??
+      decision.rejectionReason ??
+      decision.userMessage ??
+      null,
+  };
+}
+
+type DecisionOf<K extends RuntimeRequest['kind']> =
+  Extract<RuntimeRequest, { kind: K }> extends { decision: infer D }
+    ? D
+    : never;
+
+function planDecision(decision: ApprovalDecision): DecisionOf<'decision.plan'> {
+  if (!decision.accepted) return rejection(decision);
+  if (decision.planAction === 'approve_and_goal') {
+    return {
+      action: 'approve_and_goal',
+      autoApproveAll: decision.goalAutoApproveAll ?? null,
+    };
+  }
+  return { action: 'approve' };
+}
+
+function userQuestionDecision(
+  decision: ApprovalDecision,
+): DecisionOf<'decision.userQuestion'> {
+  if (decision.accepted && decision.userQuestionAnswers) {
+    return { action: 'submit', answers: decision.userQuestionAnswers };
+  }
+  if (decision.rejectionCause !== undefined) return rejection(decision);
+  return {
+    action: 'skip',
+    feedback: decision.userMessage || USER_QUESTION_SKIPPED_FEEDBACK,
+  };
+}
+
 /**
- * A queue entry held from before its request can be shown until its owner has
- * finished acting on the decision. Every operation is a no-op once the queue
- * has settled the entry from the other direction, which is what makes a
- * staleness check at the call site unnecessary.
+ * Apply one decision: the hook-settled kinds resolve their latch, the rest
+ * become `decision.*` requests (PRD 8.2), each preceded by the `policy.set`
+ * the modal's bypass choice names.
  */
-interface ApprovalReservation {
-  /** Resolves once the queue answers this entry: its own modal decision, an
-   *  auto-decision passed to {@link settle}, a replacement, or a clear. */
+function decideRequest(
+  request: AttentionRequest,
+  payload: ApprovalPayload,
+  decision: ApprovalDecision,
+): void {
+  markDecided(request.requestId);
+  const { streamId } = request;
+  const approvalId = request.requestId;
+  switch (payload.kind) {
+    case 'toolEdit':
+    case 'retry':
+    case 'externalInquiry':
+      if (decision.accepted && decision.bypass === 'toolEdit') {
+        issue(streamId, ...bypassRequest(streamId, decision.bypass));
+      }
+      settleHost(request.requestId, decision);
+      return;
+    case 'bash':
+      issue(
+        streamId,
+        ...bypassRequest(
+          streamId,
+          decision.accepted ? decision.bypass : undefined,
+        ),
+        {
+          kind: 'decision.bash',
+          streamId,
+          approvalId,
+          decision: decision.accepted
+            ? { action: 'approve' }
+            : rejection(decision),
+        },
+      );
+      return;
+    case 'planApproval':
+      issue(streamId, {
+        kind: 'decision.plan',
+        streamId,
+        approvalId,
+        decision: planDecision(decision),
+      });
+      return;
+    case 'proposal': {
+      const delegated = decision.accepted && decision.bypass === 'superYolo';
+      issue(
+        streamId,
+        ...bypassRequest(
+          streamId,
+          decision.accepted ? decision.bypass : undefined,
+        ),
+        {
+          kind: 'decision.proposal',
+          streamId,
+          approvalId,
+          decision: decision.accepted
+            ? { action: 'approve' }
+            : rejection(decision),
+        },
+      );
+      if (delegated) approveQueuedDelegatedWorkForStream(streamId);
+      return;
+    }
+    case 'userQuestion':
+      issue(streamId, {
+        kind: 'decision.userQuestion',
+        streamId,
+        approvalId,
+        decision: userQuestionDecision(decision),
+      });
+      return;
+  }
+  assertNever(payload, 'Unhandled approval payload kind');
+}
+
+/**
+ * A host hook's hold on one request from before it can be shown until the
+ * hook has acted on the decision: the latch its promise awaits, the abort
+ * that stops its preparation and commit work, and the presentation payload.
+ * Every operation is a no-op once the entry has left the surface.
+ */
+export interface HostReservation {
+  /** Resolves with the surface's decision: the modal's, an auto-decision
+   *  passed to {@link settle}, a replacement, or a cancel. */
   readonly decided: Promise<ApprovalDecision>;
-  /** Aborts when the entry is cleared or replaced, never on its own decision,
-   *  so work running for the entry stops at its next await. */
+  /** Aborts when the entry is cancelled or replaced, never on its own
+   *  decision, so work running for it stops at its next await. */
   readonly signal: AbortSignal;
-  /** Publish the finished payload and join the visible queue. */
+  /** Publish the finished payload; the modal can show it from here on. */
   readonly present: (payload: ApprovalPayload) => void;
-  /** Answer the entry without showing a modal. */
+  /** Answer without showing a modal. */
   readonly settle: (decision: ApprovalDecision) => void;
-  /** Hand the slot back once the decision has been acted on. */
+  /** Hand the entry back once the decision has been acted on. */
   readonly release: () => void;
 }
 
 /**
- * Take a queue slot for a request that is not ready to show yet.
+ * Take a host entry for a request the runtime has published (or, for an
+ * inquiry, opened) and this host's hook will settle.
  */
-export function reserveApproval(
+export function reserveHostRequest(
   payload: ApprovalPayload,
-  options: ReserveApprovalOptions = {},
-): ApprovalReservation {
+  options: { readonly owner?: object; readonly presentable?: boolean } = {},
+): HostReservation {
+  const requestId = payload.data.requestId;
   const preparation = new AbortController();
   let decide!: (decision: ApprovalDecision) => void;
-  const decided = new Promise<ApprovalDecision>((resolve) => {
+  const decidedPromise = new Promise<ApprovalDecision>((resolve) => {
     decide = resolve;
   });
-  const item: ApprovalQueueItem = {
+  const entry: HostRequest = {
     payload,
-    resolve: decide,
-    onPresent: options.onPresent,
+    presentable: options.presentable ?? false,
+    settle: decide,
     preparation,
     owner: options.owner,
-    phase: 'preparing',
   };
-  QUEUE.set([...QUEUE.get(), item]);
-
+  updateHost((previous) => new Map(previous).set(requestId, entry));
+  const live = (): boolean =>
+    hostRequests.get().get(requestId)?.settle === decide;
   return {
-    decided,
+    decided: decidedPromise,
     signal: preparation.signal,
     present: (presented) => {
-      if (item.phase !== 'preparing' || !QUEUE.get().includes(item)) return;
-      updateQueue(() => {
-        item.payload = presented;
-        item.phase = 'pending';
-        // Enter the visible queue at its tail: the reservation held liveness,
-        // not a place in line, so a request that only became showable now
-        // cannot displace a modal the user is already answering.
-        return [...QUEUE.get().filter((candidate) => candidate !== item), item];
-      });
+      if (!live()) return;
+      updateHost((previous) =>
+        new Map(previous).set(requestId, {
+          ...entry,
+          payload: presented,
+          presentable: true,
+        }),
+      );
     },
     settle: (decision) => {
-      settleItems((candidate) => candidate === item, decision);
+      if (!live()) return;
+      markDecided(requestId);
+      decide(decision);
     },
     release: () => {
-      if (!QUEUE.get().includes(item)) return;
-      updateQueue(() => QUEUE.get().filter((candidate) => candidate !== item));
+      if (!live()) return;
+      updateHost((previous) => {
+        const next = new Map(previous);
+        next.delete(requestId);
+        return next;
+      });
     },
   };
 }
 
 /**
- * Hard-cancel every entry and clear the foreground projection.
+ * Settle the host entries `predicate` selects with `decision`, aborting their
+ * work. The runtime's own pending set is not touched: cancelling a runtime
+ * request is `session.interactions.cancel(selector)`, which calls back into
+ * the host's `cancel` hook, which is where this runs.
  */
-export function clearApprovals(): void {
-  settleItems(() => true, INTERRUPT, { cancelled: true });
-}
-
-/**
- * Settle the reservations `owner` took, leaving every other entry alone. A host
- * detaches when the last execution it owns finishes, which can be after a newer
- * host has taken over the session, so this must not reach the newer host's
- * requests.
- */
-export function clearApprovalsForOwner(owner: object): number {
-  return settleItems((item) => item.owner === owner, INTERRUPT, {
-    cancelled: true,
-  });
-}
-
-/** Replace a retry only within the host attachment that owns it. */
-export function clearRetryApprovalsForStream(
-  streamId: string,
-  owner: object,
-): void {
-  settleItems(
-    (item) =>
-      item.owner === owner &&
-      item.payload.kind === 'retry' &&
-      item.payload.data.streamId === streamId,
-    INTERRUPT,
-    { cancelled: true },
-  );
-}
-
-/** Approve delegated requests that were queued before stream bypass began. */
-export function approveQueuedDelegatedWorkForStream(
-  streamId: StreamTabId,
-): number {
-  return clearApprovalsWhere(
-    (payload) =>
-      approvalPayloadStreamId(payload) === streamId &&
-      (payload.kind === 'proposal' ||
-        payload.kind === 'toolEdit' ||
-        payload.kind === 'bash'),
-    { accepted: true },
-  );
-}
-
-export function clearApprovalsWhere(
-  predicate: (payload: ApprovalPayload) => boolean,
+export function settleHostRequestsWhere(
+  predicate: (payload: ApprovalPayload, owner: object | undefined) => boolean,
   decision: ApprovalDecision = INTERRUPT,
 ): number {
-  return settleItems((item) => predicate(item.payload), decision, {
-    cancelled: true,
-  });
+  let count = 0;
+  for (const [requestId, entry] of hostRequests.get()) {
+    if (!predicate(entry.payload, entry.owner)) continue;
+    if (settleHost(requestId, decision, { cancelled: true })) count += 1;
+  }
+  return count;
 }
+
+/** Approve every delegated request pending on `streamId` once its bypass is
+ *  on: the decisions the user's super-YOLO choice implied. */
+function approveQueuedDelegatedWorkForStream(streamId: StreamTabId): number {
+  const view = sessionView().get();
+  const host = hostRequests.get();
+  const done = decided.get();
+  let count = 0;
+  for (const request of attentionRequests(view, host, undefined)) {
+    if (request.streamId !== streamId || done.has(request.requestId)) continue;
+    if (
+      request.kind !== 'proposal' &&
+      request.kind !== 'toolEdit' &&
+      request.kind !== 'bash'
+    ) {
+      continue;
+    }
+    const payload = presentedPayload(request, host);
+    if (!payload) continue;
+    decideRequest(request, payload, { accepted: true });
+    count += 1;
+  }
+  return count;
+}
+
+/** Forget every host entry and decision latch: the Surface reset (`/clear`). */
+function resetApprovalSurface(): void {
+  settleHostRequestsWhere(() => true);
+  hostRequests.set(new Map());
+  decided.set(new Set());
+  promoted.set(undefined);
+  presentedOrder.clear();
+}
+
+registerCliStateResetHook(resetApprovalSurface);

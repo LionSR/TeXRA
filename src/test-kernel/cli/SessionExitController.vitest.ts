@@ -1,10 +1,11 @@
 import PQueue from 'p-queue';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { DisposableStore } from '@platform/disposable';
+import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const mocks = vi.hoisted(() => ({
   cleanupTerminalModes: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock('@platform/platform', () => ({
 }));
 
 describe('chat TUI session exit controller', () => {
+  beforeAll(bindTestSessionView);
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.runCliPlatformShutdownSequence.mockResolvedValue(undefined);

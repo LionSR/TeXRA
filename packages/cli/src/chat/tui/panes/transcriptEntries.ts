@@ -4,11 +4,7 @@ import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { redactSecrets } from '@logger/redaction';
 import { type StreamPhase } from '@shared/schemas';
-import {
-  isSelfSettledRow,
-  type TranscriptRow,
-  type TranscriptRowKind,
-} from '@shared/transcript';
+import { type TranscriptRow, type TranscriptRowKind } from '@shared/transcript';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
@@ -173,19 +169,11 @@ export function isRenderableTranscriptEntry(row: TranscriptRow): boolean {
   );
 }
 
-/**
- * Whether the row at `index` may be printed into append-only scrollback: the
- * settled-prefix promotion has already reached it, or the row settles on its
- * own regardless of what precedes it (`isSelfSettledRow`, the projector's
- * half of "finalized"; this is the fold's half, the append-only promotion
- * cursor `StreamSlice.finalizedFrontier`).
- */
-export function isFinalizedTranscriptRow(
-  row: TranscriptRow,
-  index: number,
-  finalizedFrontier: number,
-): boolean {
-  return index < finalizedFrontier || isSelfSettledRow(row);
+/** Whether the row at `index` is inside the fold's settled prefix
+ *  (`transcript.settledRows`, PRD 5.1), the one rule for what append-only
+ *  scrollback may print. */
+function isFinalizedTranscriptRow(index: number, settledRows: number): boolean {
+  return index < settledRows;
 }
 
 /** Callers gate on {@link isRenderableTranscriptEntry} before asking. */
@@ -260,7 +248,7 @@ function inSettlementOrder<
  */
 export function orderedStaticTranscriptEntries(
   entries: readonly TranscriptRow[],
-  finalizedFrontier: number,
+  settledRows: number,
   status: StreamPhase | undefined,
 ): readonly TranscriptRow[] {
   const candidates: Array<{
@@ -271,7 +259,7 @@ export function orderedStaticTranscriptEntries(
   for (const [index, entry] of entries.entries()) {
     // Finalized, renderable, and not a user prompt still awaiting its live
     // continuation: the three conditions for append-only scrollback.
-    if (!isFinalizedTranscriptRow(entry, index, finalizedFrontier)) break;
+    if (!isFinalizedTranscriptRow(index, settledRows)) break;
     if (!isRenderableTranscriptEntry(entry)) continue;
     if (userPromptAwaitsLiveContinuation(entries, index, status)) continue;
     candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
@@ -292,47 +280,28 @@ export function orderedStaticTranscriptEntries(
  */
 export function pendingTranscriptEntries(
   entries: readonly TranscriptRow[],
-  finalizedFrontier: number,
+  settledRows: number,
   status: StreamPhase | undefined,
 ): TranscriptRow[] {
   const showLiveAssistant = isActivePhase(status);
   const pending: TranscriptRow[] = [];
-  let canPromoteToStatic = true;
   for (const [index, entry] of entries.entries()) {
-    const entryFinalized = isFinalizedTranscriptRow(
-      entry,
-      index,
-      finalizedFrontier,
-    );
-    // Mirror the static-ring settled-prefix barrier: any unfinished entry
-    // blocks later finalized rows from static promotion, so they stay visible
-    // in the live pending pane instead of disappearing between the two panes.
-    if (!entryFinalized) {
-      canPromoteToStatic = false;
-    }
     if (!isRenderableTranscriptEntry(entry)) continue;
     if (userPromptAwaitsLiveContinuation(entries, index, status)) {
       pending.push(entry);
       continue;
     }
-    if (entryFinalized) {
-      if (!canPromoteToStatic) pending.push(entry);
-      continue;
-    }
-    if (
-      entry.kind === 'compactionActivity' ||
-      entry.kind === 'tool' ||
-      entry.kind === 'workflowTask'
-    ) {
-      pending.push(entry);
-      continue;
-    }
+    // The settled prefix is scrollback's; everything past it is live, and a
+    // row behind an unsettled one stays visible here rather than vanishing
+    // between the two panes.
+    if (isFinalizedTranscriptRow(index, settledRows)) continue;
     if (
       (entry.kind === 'assistant' || entry.kind === 'log') &&
-      showLiveAssistant
+      !showLiveAssistant
     ) {
-      pending.push(entry);
+      continue;
     }
+    pending.push(entry);
   }
   return pending;
 }
@@ -392,7 +361,7 @@ function makeStaticTranscriptScanCursor(
  */
 export function incrementalStaticTranscriptEntries(
   entries: readonly TranscriptRow[] | undefined,
-  finalizedFrontier: number,
+  settledRows: number,
   status: StreamPhase | undefined,
   previous: StaticTranscriptScanCursor | undefined,
 ): StaticTranscriptScanResult {
@@ -441,7 +410,7 @@ export function incrementalStaticTranscriptEntries(
   let scannedIndex = start;
   for (let index = 0; index < suffix.length; index += 1) {
     const entry = suffix[index]!;
-    if (!isFinalizedTranscriptRow(entry, start + index, finalizedFrontier)) {
+    if (!isFinalizedTranscriptRow(start + index, settledRows)) {
       break;
     }
     if (!isRenderableTranscriptEntry(entry)) {

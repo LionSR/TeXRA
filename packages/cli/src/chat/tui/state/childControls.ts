@@ -1,33 +1,25 @@
-// State helpers for App-level child execution navigation and presentation.
-
-// Local imports - shared schemas
+/**
+ * Focus-order rules over the session view (PRD one-fold-three-renderers,
+ * 9): which stream the child list roots at, which stream Alt+N names, and
+ * how a stream is presented. Surface decisions over fold facts; nothing
+ * here derives topology.
+ */
 import {
   STREAM_PHASE,
-  type ActiveChildInfo,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
 import { childElapsedMs } from '@shared/streams/childElapsed';
 import { formatCompactDuration } from '@utils/core';
+import { focusStream, openWorkflowPopup } from './cliState';
+import { currentView, focusTreeOf, streamViewOf } from './sessionView';
 
-// Local imports - CLI state
-import {
-  nearestActiveStreamAncestor,
-  streamIdentityFor,
-  streamTreeEntries,
-} from './streamViews';
-import {
-  childRosters,
-  parentStream,
-  visibleSubagentRows,
-  type ChildRosters,
-} from './childExecutions';
-import { focusStream, openWorkflowPopup, type StreamSlice } from './cliState';
-
-/** Compact elapsed reading for one child row, shown only while it is running:
- *  a settled row's duration is reported by the task card that owns its
- *  outcome, so repeating a frozen figure in the live list is noise. */
 export function childElapsed(
-  child: Pick<ActiveChildInfo, 'startedAt' | 'finishedAt' | 'status'>,
+  child: {
+    readonly status: StreamPhase | undefined;
+    readonly startedAt: number | undefined;
+  },
   nowMs = Date.now(),
 ): string | undefined {
   if (child.status !== undefined && child.status !== STREAM_PHASE.RUNNING) {
@@ -37,103 +29,59 @@ export function childElapsed(
   return elapsedMs === undefined ? undefined : formatCompactDuration(elapsedMs);
 }
 
-function hasChildListItems(
-  parentStreamId: StreamTabId | undefined,
-  childRosters: ChildRosters,
-): boolean {
-  if (parentStreamId === undefined) return false;
-  return visibleSubagentRows(parentStreamId, childRosters).length > 0;
-}
-
-/** Direct children known through either side of the roster-first edge race. */
-export function directChildStreamIds({
-  parentStreamId,
-  childRosters,
-  parentStream,
-}: {
-  readonly parentStreamId: StreamTabId;
-  readonly childRosters: ChildRosters;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-}): ReadonlySet<StreamTabId> {
-  const streamIds = new Set(
-    childRosters.get(parentStreamId)?.map((child) => child.childStreamId) ?? [],
-  );
-  for (const [streamId, parentId] of parentStream) {
-    if (parentId === parentStreamId) streamIds.add(streamId);
-  }
-  return streamIds;
-}
-
-/** Resolve the nearest stream whose child sessions populate the persistent
- * child list. */
-export function resolveChildListTarget({
-  activeStreamId,
-  childRosters,
-  parentStream,
-  streams,
-}: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly childRosters: ChildRosters;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): StreamTabId | undefined {
-  if (activeStreamId && !hasChildListItems(activeStreamId, childRosters)) {
-    const ancestor = nearestActiveStreamAncestor({
-      activeStreamId,
-      parentStream,
-      values: streams,
-      canUseValue: (_slice, streamId) =>
-        hasChildListItems(streamId, childRosters),
-    });
-    if (ancestor) return ancestor.streamId;
-  }
-
-  return activeStreamId;
-}
-
-export function numericFocusTargetForActiveStream(init: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly childRosters: ChildRosters;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-  readonly zeroBasedIndex: number;
-}): StreamTabId | undefined {
-  if (!init.activeStreamId || init.zeroBasedIndex < 0) return undefined;
-  const shortcutIndex = init.zeroBasedIndex + 1;
-  return streamTreeEntries({
-    activeStreamId: init.activeStreamId,
-    childRosters: init.childRosters,
-    parentStream: init.parentStream,
-    rootStreamId: resolveChildListTarget(init),
-    streams: init.streams,
-  }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
-}
-
-/** Whether a stream is a workflow-script run. */
-export function isWorkflowScriptStream(streamId: StreamTabId): boolean {
-  return (
-    streamIdentityFor({ childRosters: childRosters.get(), streamId })?.kind ===
-    'multiAgentWorkflow'
-  );
+function hasChildren(view: SessionView, streamId: StreamTabId): boolean {
+  return (streamViewOf(view, streamId)?.childIds.length ?? 0) > 0;
 }
 
 /**
- * Show a stream the way the user expects to see it. A workflow-script run is
- * never a viewport: presenting one lands on its parent with the popup open
- * over it. Every writer of `activeStreamId` that means "show me this stream"
- * — the session list, Alt-N, Esc out of a child, an approval announcing its
- * stream, the return to a finished child's owner — goes through here, so the
- * rule has one owner.
+ * The stream whose children the list shows: the active stream when it has
+ * any, else its nearest ancestor that has, else the active stream itself.
+ */
+export function resolveChildListTarget(
+  view: SessionView,
+  activeStreamId: StreamTabId | undefined,
+): StreamTabId | undefined {
+  if (activeStreamId === undefined || hasChildren(view, activeStreamId)) {
+    return activeStreamId;
+  }
+  const ancestors = streamViewOf(view, activeStreamId)?.ancestors ?? [];
+  // Root first in the view; the nearest ancestor with children wins.
+  for (const ancestor of ancestors.toReversed()) {
+    if (hasChildren(view, ancestor.id)) return ancestor.id;
+  }
+  return activeStreamId;
+}
+
+/** Alt+1..9: the Nth entry after the list root in the focus tree. */
+export function numericFocusTargetForActiveStream(
+  view: SessionView,
+  activeStreamId: StreamTabId | undefined,
+  zeroBasedIndex: number,
+): StreamTabId | undefined {
+  if (activeStreamId === undefined || zeroBasedIndex < 0) return undefined;
+  if (zeroBasedIndex >= 9) return undefined;
+  const tree = focusTreeOf(view, resolveChildListTarget(view, activeStreamId));
+  return tree[zeroBasedIndex + 1];
+}
+
+export function isWorkflowScriptStream(
+  view: SessionView,
+  streamId: StreamTabId,
+): boolean {
+  return streamViewOf(view, streamId)?.identity?.kind === 'multiAgentWorkflow';
+}
+
+/**
+ * A workflow-script run is presented through its popup over its parent;
+ * every other stream becomes the active conversation.
  */
 export function presentStream(
   streamId: StreamTabId,
 ): 'stream' | 'workflowPopup' {
-  if (isWorkflowScriptStream(streamId)) {
-    // The parent edge is here whenever the roster row is: the status applier
-    // creates the child's stream before the roster and the edge are emitted
-    // back to back, and the edge clears only with the parent, roster included.
-    const parentId = parentStream.get().get(streamId);
-    if (parentId !== undefined) focusStream(parentId);
+  const view = currentView();
+  if (isWorkflowScriptStream(view, streamId)) {
+    const parentId = streamViewOf(view, streamId)?.parentId;
+    if (parentId) focusStream(parentId);
     openWorkflowPopup(streamId);
     return 'workflowPopup';
   }

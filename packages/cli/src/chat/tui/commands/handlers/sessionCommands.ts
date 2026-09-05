@@ -1,17 +1,10 @@
-// Session-scoped slash commands (`/help`, `/goal`, `/status`, `/compact`),
-// wired to their command names in `registerBuiltins`.
+import { Effect } from 'effect';
 
 import { defaultSession } from '@agent/runtime';
 import { notifyFollowUpSent } from '@agent/followUp';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
-import {
-  activeSubagentsFor,
-  childRosters,
-  parentStream,
-  streamMetadataFor,
-} from '@cli/chat/tui/state/childExecutions';
 import {
   activeStreamId as activeStreamIdSignal,
   beginWorkPlanReaderRequest,
@@ -22,27 +15,40 @@ import {
   openInfoPane,
   sessionMeta,
   setTransientNotice,
-  streamPhaseFor,
-  streams,
   workPlanReaderRequestIsCurrent,
 } from '@cli/chat/tui/state/cliState';
 import {
-  hydrateStreamArtifacts,
-  readStreamArtifacts,
-} from '@cli/chat/tui/state/subscribeStreamArtifacts';
-import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
+  cumulativeUsageOf,
+  currentView,
+  runningChildCount,
+  streamPhaseOf,
+  streamViewOf,
+} from '@cli/chat/tui/state/sessionView';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
-import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
+import {
+  appendLocalAssistantTranscript,
+  describeRequestError,
+} from '@cli/chat/tui/state/transcript';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
-import { MESSAGE_TYPES } from '@shared/schemas';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import { effectRuntime } from '@platform/processRuntime';
+import { MESSAGE_TYPES, type StreamTabId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
+import {
+  StreamSnapshotPreloadError,
+  type StreamSnapshotStore,
+} from '@transcript';
+import type { WorkPlanProvenance } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
 import { listSlashCommands } from '../slashRegistry';
 import { type SlashCommandContext } from './slashContext';
+
+/** What the work-plan reader loads and reads from the snapshot store. */
+export type StreamArtifactReader = Pick<
+  StreamSnapshotStore,
+  'preload' | 'getWorkPlan' | 'workPlanProvenance'
+>;
 
 export function showCliSlashCommandHelp(): void {
   openInfoPane(
@@ -58,6 +64,38 @@ export function showCliGoalModeHelp(): void {
   openInfoPane('/goal', GOAL_MODE_HELP);
 }
 
+type StreamArtifactHydrationOutcome =
+  | { readonly kind: 'complete' }
+  | {
+      readonly kind: 'partial';
+      readonly workPlanProvenance: WorkPlanProvenance;
+      readonly error: unknown;
+    }
+  | { readonly kind: 'failed'; readonly error: unknown };
+
+/** Load a stream's artifact tier from disk so the reader can vouch for it. */
+async function hydrateStreamArtifacts(
+  store: StreamArtifactReader,
+  streamId: StreamTabId,
+): Promise<StreamArtifactHydrationOutcome> {
+  try {
+    await store.preload([streamId], { reportArtifactAuthority: true });
+  } catch (error) {
+    if (
+      error instanceof StreamSnapshotPreloadError &&
+      error.streamId === streamId
+    ) {
+      return {
+        kind: 'partial',
+        workPlanProvenance: error.workPlanProvenance,
+        error,
+      };
+    }
+    return { kind: 'failed', error };
+  }
+  return { kind: 'complete' };
+}
+
 export async function showCliWorkPlan(
   snapshots: StreamArtifactReader = defaultSession().snapshots,
 ): Promise<void> {
@@ -69,10 +107,8 @@ export async function showCliWorkPlan(
   }
   clearTransientNotice();
   const request = beginWorkPlanReaderRequest(streamId);
-  const outcome = await hydrateStreamArtifacts(snapshots, streamId, () =>
-    workPlanReaderRequestIsCurrent(request),
-  );
-  if (!outcome || !workPlanReaderRequestIsCurrent(request)) return;
+  const outcome = await hydrateStreamArtifacts(snapshots, streamId);
+  if (!workPlanReaderRequestIsCurrent(request)) return;
   if (outcome.kind === 'failed') {
     if (!cancelWorkPlanReaderRequest(request)) return;
     setTransientNotice(
@@ -110,15 +146,6 @@ export async function showCliWorkPlan(
   );
 }
 
-/**
- * Skill names in effect for `streamId`, read straight from the stream log.
- *
- * A tool-use run emits one ACTIVE_SKILLS snapshot at prompt-build time, so the
- * newest entry is the answer; older ones only exist across resumed lifetimes.
- * Read on demand rather than folded per delta — `/status` is a one-shot
- * command, and the transcript projection (`projectTranscriptRow`) deliberately
- * carries no row for this message type, so the raw log is the source.
- */
 function activeSkillNamesFor(streamId: string | undefined): readonly string[] {
   if (streamId === undefined) return [];
   const entries = defaultSession().transcripts.get(streamId)?.getRange(0) ?? [];
@@ -132,31 +159,17 @@ export async function showCliSessionStatus(
   context: SlashCommandContext,
 ): Promise<void> {
   const meta = sessionMeta.get();
+  const view = currentView();
   const activeStreamId = activeStreamIdSignal.get();
-  const streamSlices = streams.get();
-  const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
-  const activePhase = slice ? streamPhaseFor(activeStreamId) : undefined;
-  const rosters = childRosters.get();
-  const directActiveChildren = activeStreamId
-    ? activeSubagentsFor(activeStreamId, rosters)
-    : [];
-  let workflowChildren = directActiveChildren;
-  if (activeStreamId && directActiveChildren.length === 0) {
-    const parentOrSelfStreamId = activeStreamParentOrSelfId({
-      activeStreamId,
-      parentStream: parentStream.get(),
-    });
-    workflowChildren = activeSubagentsFor(parentOrSelfStreamId, rosters);
-  }
-  const activeChildSessions = workflowChildren.filter((child) =>
-    isActivePhase(child.status),
-  ).length;
-  // Use root-session access facts only before any stream exists.
-  const model =
-    (activeStreamId
-      ? streamMetadataFor(activeStreamId)?.config?.model
-      : undefined) ??
-    (meta.model || context.initialModel);
+  const stream = streamViewOf(view, activeStreamId);
+  // The children a status line counts: the active stream's, else its
+  // parent's (a focused leaf reports its siblings' activity).
+  const countedParent =
+    stream && stream.childIds.length === 0 && stream.parentId
+      ? streamViewOf(view, stream.parentId)
+      : stream;
+  const activeChildSessions = runningChildCount(view, countedParent);
+  const model = stream?.model ?? (meta.model || context.initialModel);
   const prospectiveRoute = await activeSubscriptionUsageRoute(model);
   appendLocalAssistantTranscript(
     formatCliSessionStatus({
@@ -164,21 +177,19 @@ export async function showCliSessionStatus(
       model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: activeStreamId
-          ? readStreamArtifacts(activeStreamId)?.cumulativeUsage?.usageRoute
-          : undefined,
+        usageRoute: cumulativeUsageOf(stream)?.usageRoute,
         prospectiveRoute,
       }),
-      approvalBypasses: slice?.bypass,
-      status: activePhase?.phase,
-      substate: activePhase?.substate,
+      approvalBypasses:
+        activeStreamId === undefined
+          ? undefined
+          : view.policy.get(activeStreamId)?.bypasses,
+      statusLabel: stream?.statusLabel,
       activeChildSessions,
       goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,
       activeSkills: activeSkillNamesFor(activeStreamId),
-      // Only surface the resume id once a stream exists — never next to
-      // a "not started" status.
       sessionId:
-        slice && meta.transcriptMode === 'persistent'
+        stream && meta.transcriptMode === 'persistent'
           ? context.session.executionId
           : undefined,
       commandName: context.cliContext.commandName,
@@ -188,34 +199,36 @@ export async function showCliSessionStatus(
       queuedFollowUpMessages:
         activeStreamId === undefined
           ? []
-          : defaultSession().followUps.getAll(activeStreamId),
+          : (view.queuedFollowUps.get(activeStreamId) ?? []),
     }),
   );
 }
 
+/** `/compact`: one runtime request; the outcome or refusal becomes a notice. */
 export function requestCliSessionCompaction(): void {
-  const result = defaultSession().executions.requestManualCompaction(
-    activeStreamIdSignal.get(),
-  );
-  switch (result.kind) {
-    case 'no_active_tool_use':
-      appendLocalAssistantTranscript(
-        'No active tool-use session found for context compaction.',
-        result.streamId,
-      );
-      return;
-    case 'unsupported':
-      appendLocalAssistantTranscript(
-        'Manual context compaction is not available for this model.',
-        result.streamId,
-      );
-      return;
-    case 'requested':
-      notifyFollowUpSent(result.streamId, result.session);
-      appendLocalAssistantTranscript(
-        'Context compaction requested. The agent will process it on the next model call.',
-        result.streamId,
-      );
-      return;
+  const streamId = activeStreamIdSignal.get();
+  if (streamId === undefined) {
+    appendLocalAssistantTranscript(
+      'No active tool-use session found for context compaction.',
+    );
+    return;
   }
+  const session = defaultSession();
+  void effectRuntime()
+    .runPromise(
+      session.requests.request({ kind: 'stream.compact', streamId }).pipe(
+        Effect.match({
+          onFailure: describeRequestError,
+          onSuccess: () => undefined,
+        }),
+      ),
+    )
+    .then((refusal) => {
+      if (refusal === undefined) notifyFollowUpSent(streamId, session);
+      appendLocalAssistantTranscript(
+        refusal ??
+          'Context compaction requested. The agent will process it on the next model call.',
+        streamId,
+      );
+    });
 }

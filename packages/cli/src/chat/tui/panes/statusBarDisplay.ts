@@ -23,6 +23,7 @@ import {
   type StreamPhase,
   type StreamStage,
   type StreamSubstate,
+  type ApprovalPolicySnapshot,
   type StreamTabId,
   type TokenUsageStats,
   type UsageRoute,
@@ -36,7 +37,9 @@ import {
 } from '@shared/copy/nestedRuns';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
+import type { SessionView } from '@shared/session/sessionView';
 import {
+  assertNever,
   filterNotNullish,
   formatCompactDuration,
   formatCompactTokenCount,
@@ -44,18 +47,48 @@ import {
 } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import { formatCliStatusLabel } from '../sessionStatus';
 import { formatResumeCommand } from '../state/resumeHint';
-import {
-  type BypassState,
-  type StreamSlice,
-  type TransientNotice,
-} from '../state/cliState';
-import {
-  activeStreamScope,
-  nearestActiveStreamAncestor,
-} from '../state/streamViews';
-import type { ApprovalQueueStatusKind } from '../state/approvalQueue';
+import { type TransientNotice } from '../state/cliState';
+import { streamPhaseOf, streamViewOf } from '../state/sessionView';
+import type { PendingApprovalKind } from '../state/approvalQueue';
+
+/** The approval bypass flags a stream's policy snapshot carries. */
+export type BypassState = ApprovalPolicySnapshot['bypasses'];
+
+/** What the pending-interaction count names: approvals, questions, or both. */
+export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
+
+function statusKindForApproval(
+  kind: PendingApprovalKind,
+): Exclude<ApprovalQueueStatusKind, 'request'> {
+  switch (kind) {
+    case 'externalInquiry':
+    case 'userQuestion':
+      return 'question';
+    case 'bash':
+    case 'toolEdit':
+    case 'planApproval':
+    case 'proposal':
+    case 'retry':
+      return 'approval';
+    default:
+      return assertNever(kind, 'Unknown approval payload kind');
+  }
+}
+
+export function approvalQueueStatusKind(
+  kinds: Iterable<PendingApprovalKind>,
+): ApprovalQueueStatusKind {
+  let sawApproval = false;
+  let sawQuestion = false;
+  for (const kind of kinds) {
+    const status = statusKindForApproval(kind);
+    sawApproval ||= status === 'approval';
+    sawQuestion ||= status === 'question';
+    if (sawApproval && sawQuestion) return 'request';
+  }
+  return sawQuestion ? 'question' : 'approval';
+}
 
 const STATUS_BAR_HORIZONTAL_PADDING = 2;
 
@@ -93,7 +126,8 @@ interface StatusBarSegment {
 
 export interface StatusBarDisplayInput {
   readonly status: StreamPhase | undefined;
-  readonly substate?: StreamSubstate;
+  /** The fold's label for `status` (G4, one table); undefined with no stream. */
+  readonly statusLabel: string | undefined;
   /** Milliseconds since the running turn began. When set and `status` is
    *  `running`, the bar shows a live `Ns` segment so a long token-less
    *  "thinking" turn still reads as alive. Omitted in tests/headless. */
@@ -105,7 +139,8 @@ export interface StatusBarDisplayInput {
   readonly runningFrame?: string;
   readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
-  readonly bypass: BypassState;
+  /** The stream's policy snapshot bypasses; absent before `approval.policy` folds. */
+  readonly bypass?: BypassState;
   readonly thinkingActive?: boolean;
   readonly compactingActive?: boolean;
   readonly queuedFollowUpMessages: readonly string[];
@@ -814,78 +849,51 @@ function approvalPolicySegment(
 
 interface StatusBarStreamTarget {
   readonly ctrlCAction: CtrlCAction;
-  readonly displaySlice: StreamSlice | undefined;
-  /** The stream id `displaySlice` was resolved for — the live-ancestor
-   *  fallback can surface an ancestor other than the nominally "active" id,
-   *  so this is not always `activeStreamId`. */
   readonly displayStreamId: StreamTabId | undefined;
-  /** True when `displaySlice` belongs to a child/subagent stream rather than
-   *  the root session (the live-ancestor fallback can surface an ancestor
-   *  other than the nominally "active" id, so this is derived from whichever
-   *  stream is actually displayed, not from `activeStreamId` alone). */
   readonly isChildStream: boolean;
 }
 
+/**
+ * Which stream the status bar describes: the active stream when the view
+ * holds it, else its nearest live ancestor; and what Ctrl-C does there.
+ */
 export function statusBarStreamTarget({
   activeStreamId,
   canStopActiveRun,
   canStopPendingRun = false,
-  parentStream,
-  phaseOf,
-  streams,
+  ownedStreamIds,
+  view,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly canStopActiveRun: boolean;
-  /** Whether the session's own pending root run is stoppable — the whole
-   *  window from launch until the run's stream reports a terminal phase,
-   *  including the part where the stream id exists but has no phase yet.
-   *  `chatTuiCanStopActiveRun` is the single derivation of that fact. */
   readonly canStopPendingRun?: boolean;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  /** Lifecycle phase for a stream, from the session's read-time phase rule.
-   *  Undefined means no live producer in this process, not "not known yet". */
-  readonly phaseOf: (streamId: StreamTabId) => StreamPhase | undefined;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  /** The streams this TUI runs: the root run and its descendants. */
+  readonly ownedStreamIds: readonly StreamTabId[];
+  readonly view: SessionView;
 }): StatusBarStreamTarget {
-  const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const liveAncestor = nearestActiveStreamAncestor<StreamSlice>({
-    activeStreamId,
-    parentStream,
-    values: streams,
-    canUseValue: (_stream, streamId) => isActivePhase(phaseOf(streamId)),
-  });
-  // This scan answers only "is some stream on the rail live", so an absent
-  // phase reads as not-live here: a restored stream now answers from durable
-  // facts, and treating its unknown phase as live would say "stop" for a
-  // session with nothing running. The session's own pending run is a separate
-  // fact, and `canStopPendingRun` carries it — including the launch window
-  // where a stream id exists but no phase does.
-  let hasLiveStream = false;
-  for (const streamId of streams.keys()) {
-    if (isActivePhase(phaseOf(streamId))) {
-      hasLiveStream = true;
-      break;
-    }
-  }
+  const active = streamViewOf(view, activeStreamId);
+  const isLive = (streamId: StreamTabId): boolean =>
+    isActivePhase(streamPhaseOf(streamViewOf(view, streamId)));
+  // Root first in the view; the nearest live ancestor wins.
+  const liveAncestor = (active?.ancestors ?? [])
+    .toReversed()
+    .find((ancestor) => isLive(ancestor.id));
+  const hasLiveStream = ownedStreamIds.some(isLive);
   const canStopVisibleRun =
     canStopActiveRun && (canStopPendingRun || hasLiveStream);
-  const displayStreamId = activeSlice ? activeStreamId : liveAncestor?.streamId;
+  const displayStreamId = active ? active.id : liveAncestor?.id;
   let ctrlCAction: CtrlCAction;
   if (!canStopVisibleRun) {
     ctrlCAction = 'exit';
   } else {
-    ctrlCAction =
-      activeStreamScope({ activeStreamId, parentStream }).kind === 'child'
-        ? 'stop root'
-        : 'stop';
+    ctrlCAction = active?.parentId ? 'stop root' : 'stop';
   }
   return {
     ctrlCAction,
-    displaySlice: activeSlice ?? liveAncestor?.value,
     displayStreamId,
     isChildStream:
       displayStreamId !== undefined &&
-      parentStream.get(displayStreamId) !== undefined,
+      streamViewOf(view, displayStreamId)?.parentId != null,
   };
 }
 
@@ -958,11 +966,8 @@ export function buildStatusBarDisplay(
     });
   }
 
-  const statusLabel = formatCliStatusLabel(
-    input.status,
-    input.substate,
-    input.isChildStream,
-  );
+  // No stream yet: a child row has no status column, the root keeps its slot.
+  const statusLabel = input.statusLabel ?? (input.isChildStream ? '' : '-');
   const spinPrefix =
     isActivePhase(input.status) && input.runningFrame
       ? `${input.runningFrame} `
@@ -1055,7 +1060,7 @@ export function buildStatusBarDisplay(
     ].filter(filterNotNullish),
   );
   for (const badge of BYPASS_BADGES) {
-    if (input.bypass[badge.field]) {
+    if (input.bypass?.[badge.field]) {
       left.push({
         text: badge.text,
         badge: true,

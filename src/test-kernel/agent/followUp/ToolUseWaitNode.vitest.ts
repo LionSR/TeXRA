@@ -17,7 +17,6 @@ import {
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import {
   MESSAGE_TYPES,
@@ -34,10 +33,11 @@ import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 
 import {
+  eventsOfType,
   recordSessionEvents,
-  runEventsOfType,
-  sessionFactsOfType,
+  recordTraceEvents,
   sessionWithInteractions,
+  traceEventsOfType,
   testRunScope,
   toolUseRunShared,
   withTestRunContext,
@@ -401,11 +401,7 @@ describe('ToolUseWaitNode', () => {
       await startErroredGoal(streamId, 'finish the refactor', 'cycle failed');
 
     const logger = new TraceEmitter();
-    const hub = new SessionEventHub();
-    const recorded = recordSessionEvents(hub, { scope: 'run' });
-    const detachTrace = logger.subscribe((event) =>
-      hub.emit({ scope: 'run', streamId, event }),
-    );
+    const recorded = recordTraceEvents(logger);
     const waitForFollowUp = vi.fn();
     const services = createWaitNodeServices({
       isSubagent: false,
@@ -429,7 +425,7 @@ describe('ToolUseWaitNode', () => {
       expect(exec.kind).toBe('stop');
       expect(waitForFollowUp).not.toHaveBeenCalled();
       expect(goal?.status).toBe('paused');
-      expect(runEventsOfType(recorded.events, 'goalPaused')).toContainEqual(
+      expect(traceEventsOfType(recorded.events, 'goalPaused')).toContainEqual(
         expect.objectContaining({
           streamId,
         }),
@@ -450,8 +446,6 @@ describe('ToolUseWaitNode', () => {
         bypassActive: false,
       });
     } finally {
-      detachTrace();
-      recorded.detach();
       await GoalStore.forget(streamId);
       releaseStreamResources(streamId);
     }
@@ -704,11 +698,10 @@ describe('ToolUseWaitNode', () => {
 
   it('repairs retry-cancelled parent cycles to waiting before blocking', async () => {
     const streamId = 'wait-node-retry-cancelled-wait' as StreamTabId;
-    const statusHub = new SessionEventHub();
-    const ownerSession = sessionWithInteractions(undefined, statusHub);
+    const ownerSession = sessionWithInteractions(undefined);
     const streamStatus = ownerSession.status;
-    // Status is a session fact on the machine's own hub — the single rail.
-    const recorded = recordSessionEvents(statusHub);
+    // Status is a session fact on the session's plane, the single rail.
+    const recorded = recordSessionEvents(ownerSession);
     const waitForFollowUp = vi.fn(async () => null);
     const services = createWaitNodeServices({
       isSubagent: false,
@@ -732,7 +725,7 @@ describe('ToolUseWaitNode', () => {
       expect(exec.kind).toBe('stop');
       expect(waitForFollowUp).toHaveBeenCalledOnce();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.WAITING);
-      expect(sessionFactsOfType(recorded.events, 'status')).toEqual([
+      expect(eventsOfType(recorded.events, 'status')).toEqual([
         expect.objectContaining({
           phase: STREAM_PHASE.RUNNING,
           previousPhase: STREAM_PHASE.CANCELLED,
@@ -745,7 +738,6 @@ describe('ToolUseWaitNode', () => {
         }),
       ]);
     } finally {
-      recorded.detach();
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -766,13 +758,17 @@ describe('ToolUseWaitNode', () => {
       error: vi.fn(),
       info,
     });
-    const statusHub = new SessionEventHub();
-    // Status is a session fact on the machine's own hub — the single rail.
-    const recorded = recordSessionEvents(statusHub);
-    const detachSequence = statusHub.subscribeStatus(() =>
-      sequence.push('status'),
+    const ownerSession = sessionWithInteractions(undefined);
+    // Status is a session fact on the session's plane, the single rail; the
+    // recorder-style status port hears it in publish order.
+    const recorded = recordSessionEvents(ownerSession);
+    const detachSequence = ownerSession.attachRunTrace(
+      {
+        trace: new TraceEmitter(),
+        handleStatus: () => sequence.push('status'),
+      },
+      streamId,
     );
-    const ownerSession = sessionWithInteractions(undefined, statusHub);
     const streamStatus = ownerSession.status;
     const services = createWaitNodeServices({
       logger,
@@ -815,13 +811,12 @@ describe('ToolUseWaitNode', () => {
       );
 
       expect(transition).toBe(FlowTransition.CONTINUE);
-      expect(sessionFactsOfType(recorded.events, 'status')).toContainEqual(
+      expect(eventsOfType(recorded.events, 'status')).toContainEqual(
         expect.objectContaining({ phase: STREAM_STATUS.RUNNING }),
       );
       expect(sequence.indexOf('status')).toBeLessThan(sequence.indexOf('info'));
     } finally {
       detachSequence();
-      recorded.detach();
     }
     expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(
       1,

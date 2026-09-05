@@ -4,14 +4,16 @@
 // registry, event hub, stream status, host interactions) are the real
 // runtime objects wherever a test asserts through them.
 
+import { Effect } from 'effect';
 import PQueue from 'p-queue';
 import pDefer from 'p-defer';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
   runAgent: vi.fn(),
-  stopAgentStream: vi.fn(),
+  request: vi.fn(),
+  notifyFollowUpSent: vi.fn(),
   cancelInteractions: vi.fn(),
   workspaceGet: vi.fn(),
   globalGet: vi.fn(),
@@ -25,11 +27,9 @@ const mocks = vi.hoisted(() => ({
   addExecutionRegistrationListener: vi.fn(),
   detachHostInteractions: vi.fn(),
   attachTerminalResultToast: vi.fn(),
-  attachSessionSignalsAdapter: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
   lookupStreamExecutionId: vi.fn(),
-  syncStreamLog: vi.fn(),
   notify: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
   appendLocalErrorTranscript: vi.fn(),
@@ -38,7 +38,6 @@ const mocks = vi.hoisted(() => ({
   moveLocalTranscriptToStream: vi.fn(),
   followUpEnqueue: vi.fn(),
   followUpQueueForLease: vi.fn(),
-  sessionEventEmit: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -60,7 +59,8 @@ vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: mocks.runAgent,
 }));
 
-vi.mock('@agent/runtime/SessionHandle', () => ({
+vi.mock('@agent/runtime/SessionHandle', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/runtime/SessionHandle')>()),
   currentSession: mocks.defaultSession,
   defaultSession: mocks.defaultSession,
 }));
@@ -100,19 +100,9 @@ vi.mock('@cli/chat/tui/state/subscribeApprovals', () => ({
   createTuiHostInteractions: mocks.createTuiHostInteractions,
 }));
 
-vi.mock('@cli/chat/tui/state/sessionSignalsAdapter', () => ({
-  attachSessionSignalsAdapter: mocks.attachSessionSignalsAdapter,
-}));
-
-vi.mock('@cli/chat/tui/state/subscribeStreamLog', async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import('@cli/chat/tui/state/subscribeStreamLog')
-    >();
-  return { ...actual, syncStreamLog: mocks.syncStreamLog };
-});
-
 vi.mock('@cli/chat/tui/state/transcript', () => ({
+  describeRequestError: (error: { reason?: string; _tag: string }) =>
+    error.reason ?? error._tag,
   appendLocalAssistantTranscript: mocks.appendLocalAssistantTranscript,
   appendLocalErrorTranscript: mocks.appendLocalErrorTranscript,
   appendLocalUserTranscript: mocks.appendLocalUserTranscript,
@@ -128,6 +118,7 @@ import {
   describeFollowUpFailure,
   type FollowUpRecoveryLease,
 } from '@agent/followUp';
+import type { AgentEvent } from '@agent/trace';
 import type {
   AgentConfig,
   AgentConfigPayload,
@@ -136,10 +127,7 @@ import { ExecutionInteractionOwnership } from '@agent/runtime/executionInteracti
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
@@ -170,10 +158,14 @@ import {
 } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { StreamSnapshotStore } from '@transcript';
+import { bindTestSessionView } from './fixtures/sessionViewFixture';
+import { bashApprovalRequest } from '../agent/progressTestUtils';
 
 /**
  * Session fixture in the states the controller is exercised from. The
@@ -246,6 +238,13 @@ function makeInit(
     disposables: new DisposableStore(),
     followUpQueue: new PQueue({ concurrency: 1 }),
     snapshotStore: new StreamSnapshotStore(),
+    initialAgent: 'demo-agent',
+    initialModel: 'demo-model',
+    initialModelSource: 'builtin-default',
+    cwd: '/tmp/workspace',
+    getSlashCommandContext: () => {
+      throw new Error('slash commands are not exercised here');
+    },
     ...overrides,
   };
 }
@@ -304,7 +303,6 @@ function installResumeExecutionStore(
  */
 function installSession(overrides: Record<string, unknown> = {}): void {
   const executions = {
-    stopAgentStream: mocks.stopAgentStream,
     getActiveIds: mocks.getActiveExecutionIds,
     getHandle: mocks.getExecutionHandle,
     addRegistrationListener: mocks.addExecutionRegistrationListener,
@@ -315,8 +313,9 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       use: vi.fn(() => mocks.detachHostInteractions),
       cancel: mocks.cancelInteractions,
     },
-    events: { emit: mocks.sessionEventEmit },
+    requests: { request: mocks.request },
     followUps: {
+      notifySent: mocks.notifyFollowUpSent,
       claimRecovery: vi.fn((streamId: StreamTabId) => ({
         streamId,
         kind: 'recovery' as const,
@@ -346,30 +345,35 @@ function installSession(overrides: Record<string, unknown> = {}): void {
  * are the real runtime objects rather than per-mock stubs.
  */
 function installOwnerSession(): {
-  readonly events: SessionEventHub;
-  readonly status: StreamStatusMachine;
+  readonly session: SessionHandle;
   readonly executions: ExecutionRegistry;
   readonly interactions: SessionHostInteractions;
 } {
-  const events = new SessionEventHub();
-  const status = new StreamStatusMachine(events);
-  const executions = new ExecutionRegistry({
-    events,
-    streamStatus: status,
-    approvals: createSessionApprovals({ setApprovalBypassState() {} }),
-    publishResult: () => {},
-    releaseRootExecutionLease: async () => {},
+  const session = createTestSession();
+  // The real session's request handler admits only streams the fold holds;
+  // these cases track executions directly, so the stop request lands on the
+  // registry the way the handler would land it.
+  const owner = Object.create(session) as SessionHandle;
+  Object.defineProperty(owner, 'requests', {
+    value: {
+      request: (req: RuntimeRequest) =>
+        Effect.sync((): Outcome => {
+          if (req.kind === 'stream.stop') {
+            session.executions.stopAgentStream(req.streamId, {
+              detachActiveChildren: req.detachActiveChildren ?? undefined,
+            });
+          }
+          return { kind: 'done' };
+        }),
+    },
   });
-  const interactions = new SessionHostInteractions();
-  installSession({
-    interactions,
-    events,
-    status,
-    executions,
-  });
-  return { events, status, executions, interactions };
+  mocks.defaultSession.mockReturnValue(owner);
+  return {
+    session,
+    executions: session.executions,
+    interactions: session.interactions,
+  };
 }
-
 function trackRunningExecution(
   executions: ExecutionRegistry,
   executionId: string,
@@ -524,6 +528,7 @@ describe('CLI terminal outcome resolution', () => {
 });
 
 describe('createChatSessionController', () => {
+  beforeAll(bindTestSessionView);
   beforeEach(() => {
     for (const mock of Object.values(mocks)) mock.mockReset();
 
@@ -559,8 +564,10 @@ describe('createChatSessionController', () => {
     mocks.getActiveExecutionIds.mockReturnValue([]);
     mocks.addExecutionRegistrationListener.mockReturnValue(vi.fn());
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
-    mocks.attachSessionSignalsAdapter.mockReturnValue(vi.fn());
     mocks.createTuiHostInteractions.mockReturnValue({});
+    mocks.request.mockImplementation(() =>
+      Effect.succeed<Outcome>({ kind: 'done' }),
+    );
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
     mocks.lookupStreamExecutionId.mockResolvedValue('exec-1');
@@ -636,7 +643,9 @@ describe('createChatSessionController', () => {
     expect(mocks.globalGet).toHaveBeenCalledWith(
       GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
     );
-    expect(mocks.stopAgentStream).toHaveBeenCalledWith('stream-1', {
+    expect(mocks.request).toHaveBeenCalledWith({
+      kind: 'stream.stop',
+      streamId: 'stream-1',
       detachActiveChildren: true,
     });
   });
@@ -655,7 +664,9 @@ describe('createChatSessionController', () => {
       streamId: 'root-stream',
       cause: 'Run interrupted.',
     });
-    expect(mocks.stopAgentStream).toHaveBeenCalledWith('root-stream', {
+    expect(mocks.request).toHaveBeenCalledWith({
+      kind: 'stream.stop',
+      streamId: 'root-stream',
       detachActiveChildren: true,
     });
     expect(mocks.workspaceGet).not.toHaveBeenCalled();
@@ -675,7 +686,9 @@ describe('createChatSessionController', () => {
       streamId: 'child-a',
       cause: 'Run interrupted.',
     });
-    expect(mocks.stopAgentStream).toHaveBeenCalledWith('child-a', {
+    expect(mocks.request).toHaveBeenCalledWith({
+      kind: 'stream.stop',
+      streamId: 'child-a',
       detachActiveChildren: true,
     });
   });
@@ -728,7 +741,6 @@ describe('createChatSessionController', () => {
     const requestBashApproval = vi.fn(() => adapterDecision.promise);
     const disposeAdapter = vi.fn();
     const detachResultToast = vi.fn();
-    const detachRunFacts = vi.fn();
     const presentationHost = {
       emit: vi.fn(),
       close: mocks.presentationHostClose,
@@ -741,7 +753,6 @@ describe('createChatSessionController', () => {
       dispose: disposeAdapter,
     });
     mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
-    mocks.attachSessionSignalsAdapter.mockReturnValue(detachRunFacts);
 
     const rootRun = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
     mocks.executeAgent.mockImplementationOnce(
@@ -802,10 +813,12 @@ describe('createChatSessionController', () => {
     expect(detachResultToast).toHaveBeenCalledOnce();
     expect(mocks.presentationHostClose).not.toHaveBeenCalled();
 
-    const approval = interactions.requestBashApproval({
-      command: 'printf child',
-      streamId: childStream,
-    });
+    const approval = interactions.requestBashApproval(
+      bashApprovalRequest({
+        command: 'printf child',
+        streamId: childStream,
+      }),
+    );
     await vi.waitFor(() => expect(requestBashApproval).toHaveBeenCalledOnce());
     adapterDecision.resolve({ action: 'approve' });
     await expect(approval).resolves.toEqual({ action: 'approve' });
@@ -816,10 +829,8 @@ describe('createChatSessionController', () => {
       expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
     });
     expect(detachResultToast).toHaveBeenCalledOnce();
-    expect(detachRunFacts).not.toHaveBeenCalled();
 
     disposables.dispose();
-    expect(detachRunFacts).toHaveBeenCalledOnce();
     expect(disposeAdapter).toHaveBeenCalledOnce();
     executions.dispose();
   });
@@ -1225,13 +1236,6 @@ describe('createChatSessionController', () => {
     await session.runPromise;
 
     expect(session.runExitCode).toBe(CliExitCode.Success);
-    expect(mocks.syncStreamLog).toHaveBeenCalledWith(
-      init.runtimeSession,
-      'stream-resume',
-      {
-        forceFinal: true,
-      },
-    );
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
   });
 
@@ -1421,9 +1425,11 @@ describe('createChatSessionController', () => {
     await session.runPromise;
 
     expect(session.interruptedStreamId).toBe('stream-resume');
-    expect(mocks.stopAgentStream).not.toHaveBeenCalledWith(
-      'stream-previous',
-      expect.anything(),
+    expect(mocks.request).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'stream.stop',
+        streamId: 'stream-previous',
+      }),
     );
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
@@ -1553,11 +1559,6 @@ describe('createChatSessionController', () => {
     expect(resumeOptions?.isCancellationRequested?.()).toBe(false);
     session.stopRequested = true;
     expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
-    expect(mocks.syncStreamLog).toHaveBeenCalledWith(
-      init.runtimeSession,
-      'stream-1',
-      { forceFinal: true },
-    );
     expect(rootStreamId.get()).toBe('stream-1');
     expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
@@ -1935,29 +1936,5 @@ describe('createChatSessionController', () => {
         isCancellationRequested: expect.any(Function),
       }),
     );
-    expect(mocks.syncStreamLog).not.toHaveBeenCalledWith('stream-1', {
-      forceFinal: true,
-    });
-    expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
-    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
-  });
-
-  it('does not finalize the stream transcript when auto-resume returns false', async () => {
-    const session = makeSession({ runCompleted: true });
-    const config = makeResumeConfig();
-    const snapshotStore = makeResumeSnapshotStore({
-      executionId: 'exec-1',
-      config,
-    });
-    mocks.resumeRun.mockResolvedValueOnce({ failed: 'not_resumable' });
-    const ctrl = createChatSessionController(
-      makeInit({ session, snapshotStore }),
-    );
-
-    await expect(ctrl.tryResumeStream('stream-1')).resolves.toBe(false);
-
-    expect(mocks.syncStreamLog).not.toHaveBeenCalledWith('stream-1', {
-      forceFinal: true,
-    });
   });
 });

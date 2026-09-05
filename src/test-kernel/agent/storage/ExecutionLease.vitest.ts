@@ -24,7 +24,6 @@ import {
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -502,10 +501,12 @@ describe('cross-process execution leases', () => {
 
   it('starts a resume only after the previous generation has released its lease', async () => {
     const executionId = 'd8645a' as ExecutionId;
-    const events = new SessionEventHub();
     const registry = new ExecutionRegistry({
-      streamStatus: new StreamStatusMachine(events),
-      events,
+      streamStatus: new StreamStatusMachine(
+        () => {},
+        () => {},
+      ),
+      publish: () => {},
       approvals: createSessionApprovals({ setApprovalBypassState() {} }),
       publishResult: () => {},
       releaseRootExecutionLease: async () => undefined,

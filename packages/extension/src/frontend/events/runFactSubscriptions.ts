@@ -1,12 +1,27 @@
+import { Effect, Fiber, Stream } from 'effect';
+
 // Local imports
-import type { SessionEventHub } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
+import { effectRuntime } from '@platform/processRuntime';
 import type { AddOutputFilesPayload } from '@shared/schemas';
 
+/** Read a session's `addOutputFiles` facts from now on. */
 export function subscribeAddOutputFilesRunFact(
-  events: SessionEventHub,
+  session: Pick<SessionHandle, 'events' | 'now'>,
   listener: (payload: AddOutputFilesPayload) => void,
 ): () => void {
-  return events.subscribeRunFacts(({ event }) => listener(event), {
-    types: ['addOutputFiles'],
-  });
+  const fiber = effectRuntime().runFork(
+    Stream.runForEach(session.events.all(session.now()), (event) =>
+      Effect.sync(() => {
+        if (event.type !== 'addOutputFiles') return;
+        listener({
+          streamId: event.aggregateId,
+          filesByRound: event.filesByRound,
+        });
+      }),
+    ),
+  );
+  return () => {
+    effectRuntime().runFork(Fiber.interrupt(fiber));
+  };
 }

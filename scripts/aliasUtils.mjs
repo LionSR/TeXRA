@@ -77,7 +77,6 @@ export const BUILD_EXCLUDED_ALIASES = [
   '@openrouter/sdk',
   '@openrouter/sdk/models',
   '@openrouter/sdk/models/errors',
-  '@controllers/*',
   '@test/*',
   '@cli/*',
   '@desktop/*',

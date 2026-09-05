@@ -141,7 +141,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     const presentationHost = createAgentPresentationHost(this);
     const storageRoot = context.storageUri ?? context.globalStorageUri;
     this.toolEditApprovals = new ToolEditApprovalController({
-      session: runtimeSession,
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
       ),
@@ -153,7 +152,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     });
     const interactions = createExtensionHostInteractions({
       interactions: presentationHost,
-      session: runtimeSession,
       getApprovalHandlers: () => this.backend.approvalHandlers,
       getToolEditApprovals: () => this.toolEditApprovals,
       setApprovalBypassState: this.backend.setApprovalBypassState,

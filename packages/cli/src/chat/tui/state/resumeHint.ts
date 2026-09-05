@@ -1,11 +1,3 @@
-// Builds the "Resume this session with: …" hint printed to scrollback on exit.
-//
-// Lists the main session plus each resumable tool-use subagent so any route
-// can be continued by its own id. Workflows are excluded — they don't resume
-// (only tool-use agents do). Reads only the in-memory child rosters, which
-// still hold finished subagents for the session, so no exit-time disk I/O is
-// needed.
-
 import { quote } from 'shell-quote';
 
 import type { CliOutputFormat } from '@cli/schemas/cliSettings';
@@ -17,36 +9,31 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { usageCostLabel } from '@shared/copy/modelAccess';
+import type { SessionView } from '@shared/session/sessionView';
 
 import {
-  childExecutionLabel,
-  visibleSubagentRows,
-  type ChildRosters,
-} from './childExecutions';
-import { readStreamArtifacts } from './subscribeStreamArtifacts';
-import type { StreamSlice } from './cliState';
+  cumulativeUsageOf,
+  descendantStreamIds,
+  streamViewOf,
+} from './sessionView';
 
 export interface ResumeTarget {
   readonly executionId: string;
-  /** Human label for the route (agent name for subagents, "main" for root). */
   readonly label: string;
   readonly isRoot: boolean;
 }
 
 interface ResumeTargetsInput {
-  readonly childRosters: ChildRosters;
+  readonly view: SessionView;
+  readonly rootStreamId: StreamTabId | undefined;
   readonly rootExecutionId: string | undefined;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
 export interface ResumeCommandOptions {
-  /** Effective workspace for the session being resumed. */
   readonly cwd?: string;
-  /** Ambient shell cwd where the printed command will be copy-pasted. */
   readonly processCwd?: string;
   readonly approvalPolicy?: TexraApprovalPolicy;
   readonly outputFormat?: CliOutputFormat;
-  /** Preserve an effective non-interactive launch when pasted into a TTY. */
   readonly print?: boolean;
   readonly includeInteropSkills?: boolean;
   readonly skillSourcePaths?: readonly string[];
@@ -79,17 +66,16 @@ export function formatResumeCommand(
   return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }
 
+/** The session's metered usage: the root run and every descendant. */
 export function collectResumeUsage(
-  streams: ReadonlyMap<StreamTabId, StreamSlice>,
+  view: SessionView,
+  rootStreamId: StreamTabId | undefined,
 ): TokenUsageStats | undefined {
   const usages: TokenUsageStats[] = [];
-
-  for (const streamId of streams.keys()) {
-    const usage = readStreamArtifacts(streamId)?.cumulativeUsage;
-    if (!usage || isEmptyUsage(usage)) continue;
-    usages.push(usage);
+  for (const streamId of descendantStreamIds(view, rootStreamId)) {
+    const usage = cumulativeUsageOf(streamViewOf(view, streamId));
+    if (usage) usages.push(usage);
   }
-
   const total = sumUsageStats(usages);
   return isEmptyUsage(total) ? undefined : total;
 }
@@ -109,46 +95,38 @@ export function formatResumeUsage(
   lines.push(`output=${usage.outputTokens.toLocaleString('en-US')}`);
   if (reasoning > 0)
     lines.push(`(reasoning ${reasoning.toLocaleString('en-US')})`);
-  // Empty when there is no cost to report and no known route to attribute.
   const costLine = usageCostLabel(usage.cost, usage.usageRoute);
   return costLine
     ? `Token usage: ${lines.join(' ')}\nSession cost: ${costLine}`
     : `Token usage: ${lines.join(' ')}`;
 }
 
-/** The main session followed by each resume-eligible subagent (any depth),
- *  deduped by executionId. */
 export function collectResumeTargets({
-  childRosters,
+  view,
+  rootStreamId,
   rootExecutionId,
-  streams,
 }: ResumeTargetsInput): readonly ResumeTarget[] {
   const targets: ResumeTarget[] = [];
   const seen = new Set<string>();
-
   if (rootExecutionId) {
     targets.push({ executionId: rootExecutionId, label: 'main', isRoot: true });
     seen.add(rootExecutionId);
   }
-
-  for (const streamId of streams.keys()) {
-    for (const child of visibleSubagentRows(streamId, childRosters)) {
-      if (seen.has(child.executionId) || child.resumeEligible !== true) {
-        continue;
-      }
-      seen.add(child.executionId);
-      targets.push({
-        executionId: child.executionId,
-        label: childExecutionLabel(child),
-        isRoot: false,
-      });
-    }
+  for (const streamId of descendantStreamIds(view, rootStreamId)) {
+    if (streamId === rootStreamId) continue;
+    const stream = streamViewOf(view, streamId);
+    if (!stream || seen.has(stream.executionId)) continue;
+    if (!stream.resumeEligible) continue;
+    seen.add(stream.executionId);
+    targets.push({
+      executionId: stream.executionId,
+      label: stream.label,
+      isRoot: false,
+    });
   }
-
   return targets;
 }
 
-/** Multi-line reopen hint, or undefined when there's nothing to resume. */
 export function formatResumeHint(
   targets: readonly ResumeTarget[],
   usage?: TokenUsageStats,

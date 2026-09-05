@@ -1,24 +1,6 @@
 {
-  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip’s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
+  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip\u2019s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
   "findings": [
-    {
-      "file": "packages/cli/src/chat/tui/chatSubmitDriver.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "chatTuiFocusedChildFollowUpRoute"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/chatSubmitDriver.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "restorePendingSkillActivations"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/chatSubmitDriver.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "takePendingSkillActivations"
-    },
     {
       "file": "packages/cli/src/chat/tui/commands/SlashPalette.tsx",
       "category": "production-dead",
@@ -482,28 +464,10 @@
       "name": "TuiRepaintOptions"
     },
     {
-      "file": "packages/cli/src/chat/tui/state/cliState.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "emptySlice"
-    },
-    {
       "file": "packages/cli/src/chat/tui/state/resumeHint.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "formatResumeUsage"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/state/subscribeApprovals.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "enqueueTuiApproval"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/state/subscribeStreamLog.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "transcriptFoldCountersForTest"
     },
     {
       "file": "packages/cli/src/chat/tui/state/transcript.ts",

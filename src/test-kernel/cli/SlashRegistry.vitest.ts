@@ -3,7 +3,7 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   findSlashCommand,
@@ -28,11 +28,14 @@ import {
   formProgress,
   resetCliState,
   sessionMeta,
-  streams,
   transientNotice,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
-import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
+import {
+  CLI_LOCAL_STREAM_ID,
+  notices,
+  noticesFor,
+} from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { AgentCategory } from '@shared/schemas';
@@ -42,6 +45,7 @@ import {
   waitForCondition as waitFor,
 } from '@test/support/asyncTestUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const CHAT_SESSION: SessionMeta = {
   agent: 'chat',
@@ -78,6 +82,7 @@ afterEach(() => {
 });
 
 describe('slashRegistry', () => {
+  beforeAll(bindTestSessionView);
   function renderFormAdapter<TProps>(node: unknown): { props?: TProps } {
     const element = node as {
       type?: (props: unknown) => unknown;
@@ -535,10 +540,9 @@ describe('slashRegistry', () => {
         copyableMessageArchived: true,
       });
       expect(
-        streams
-          .get()
-          .get(CLI_LOCAL_STREAM_ID)
-          ?.entries.map((row) => transcriptRowHeadline(row)),
+        noticesFor(notices.get(), CLI_LOCAL_STREAM_ID).map(({ row }) =>
+          transcriptRowHeadline(row),
+        ),
       ).toEqual([instruction]);
     } finally {
       instance.unmount();

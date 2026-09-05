@@ -177,7 +177,7 @@ interface WorkflowRunModelInput {
    *  plan-only phase is its own skipped-empty-phase suppression. */
   readonly streamPhase: StreamLifecycleStatus | undefined;
   /** Whether the run is durably final: a terminal outcome with no producer
-   *  left anywhere (`SessionState.streamDurableOutcome`) — the same fact
+   *  left anywhere (the fold's `runDurablyFinal`), the same fact
    *  `taskGroupDisplayStatus` reads for an unclosed task group, as the bit
    *  alone, since an unsettled card is repainted with the producer's own
    *  interrupted vocabulary rather than with the run's outcome. A terminal

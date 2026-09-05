@@ -4,7 +4,6 @@ import {
   type AgentTrace,
   emitToolUseCard,
   logFileCategory,
-  RUN_FACT_EVENT_TYPES,
   type StageStartEvent,
   TraceEmitter,
 } from '@agent/trace';
@@ -19,12 +18,6 @@ function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
   act(trace);
   return events;
 }
-
-describe('run-fact event vocabulary', () => {
-  it('does not expose a mutable shared subscription list', () => {
-    expect(Object.isFrozen(RUN_FACT_EVENT_TYPES)).toBe(true);
-  });
-});
 
 describe('TraceEmitter stage metadata', () => {
   it('emits typed stage metadata for round stages', () => {

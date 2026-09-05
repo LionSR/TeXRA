@@ -83,6 +83,7 @@ export class ToolUseFollowUpQueue {
   private readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
   >();
+  private readonly sentObservers = new Set<(streamId: StreamTabId) => void>();
   private disposed = false;
 
   onRelease(observer: (streamId: StreamTabId) => void): () => void {
@@ -91,6 +92,24 @@ export class ToolUseFollowUpQueue {
     return () => {
       this.releaseObservers.delete(observer);
     };
+  }
+
+  /**
+   * Observe input reaching a stream's live consumer (a follow-up delivered
+   * live, a compaction request queued for the next model call). An
+   * occurrence, not state: it is what `executions wait` ends its wait on,
+   * and it lives in this process only, never on the session's event plane.
+   */
+  onSent(observer: (streamId: StreamTabId) => void): () => void {
+    if (this.disposed) return () => {};
+    this.sentObservers.add(observer);
+    return () => {
+      this.sentObservers.delete(observer);
+    };
+  }
+
+  notifySent(streamId: StreamTabId): void {
+    for (const observer of [...this.sentObservers]) observer(streamId);
   }
 
   /** Claim a live flow/child consumer. A competing owner is rejected. */

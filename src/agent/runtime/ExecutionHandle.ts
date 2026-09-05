@@ -117,7 +117,9 @@ export type LiveToolUseFlowContext = {
  * When `parentStreamId` differs from `childStreamId`, the handle represents
  * a subagent whose parent is an orchestrator.
  */
-export class AgentExecutionHandle {
+export class AgentExecutionHandle<
+  Trace extends AgentTrace | undefined = AgentTrace | undefined,
+> {
   /**
    * Epoch ms when this handle generation was created. The value remains on a
    * handle while it is parked at WAITING. Resume constructs and tracks a
@@ -159,8 +161,10 @@ export class AgentExecutionHandle {
      */
     readonly run: ExecutionRun,
     parentStreamId: StreamTabId,
-    /** The run's discriminated-event channel, for run-scoped subscribers. */
-    readonly trace?: AgentTrace,
+    /** The run's discriminated-event channel, for run-scoped subscribers:
+     *  present on every launched run, absent on a process or external-CLI
+     *  stream's handle, which the type parameter records. */
+    readonly trace: Trace = undefined as Trace,
   ) {
     this._parentStreamId = parentStreamId;
   }
@@ -339,8 +343,12 @@ export class AgentExecutionHandle {
   }
 }
 
+/**
+ * A launched run's handle as `onRun` hands it to the caller: every launch
+ * constructs it over the run's own trace, so the trace is present by type.
+ */
 export type AgentRunHandle = Pick<
-  AgentExecutionHandle,
+  AgentExecutionHandle<AgentTrace>,
   | 'executionId'
   | 'parentStreamId'
   | 'childStreamId'

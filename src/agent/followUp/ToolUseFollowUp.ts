@@ -109,10 +109,7 @@ export function notifyFollowUpSent(
   streamId: StreamTabId,
   session?: SessionHandle,
 ): void {
-  (session ?? currentSession()).events.emit({
-    scope: 'session',
-    event: { type: 'followUpSent', payload: { streamId } },
-  });
+  (session ?? currentSession()).followUps.notifySent(streamId);
 }
 
 interface PendingResume {
@@ -239,7 +236,7 @@ export function recordRunRefusal(
     case 'held_elsewhere':
       session.status.markUnavailableOrLog(
         streamId,
-        streamHeldMessage(classification.owner),
+        streamHeldMessage(classification.owner.pid),
         logger,
       );
       return 'owned_elsewhere';

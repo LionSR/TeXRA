@@ -3,16 +3,20 @@ import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import type { ProgressHostInteractionsOptions } from '@controllers/progressView/backend/progressHostInteractions';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
-import type { StreamTabId } from '@shared/schemas';
+import type { SessionEvent, StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
 import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
+import {
+  bashApprovalRequest,
+  recordSessionEvents,
+  toolEditApprovalRequest,
+} from '../agent/progressTestUtils';
 
 const mocks = vi.hoisted(() => ({
   getLinterMessages: vi.fn(async () => []),
@@ -91,7 +95,6 @@ function createInteractions(
     toolEditApprovals,
     interactions: createExtensionHostInteractions({
       interactions: options.presentationSink ?? createPresentationSink(),
-      session,
       getApprovalHandlers: () => handlers,
       getToolEditApprovals: () =>
         toolEditApprovals as unknown as ReturnType<
@@ -102,12 +105,24 @@ function createInteractions(
   };
 }
 
-function recordSessionEvents(session: SessionHandle): SessionEvent[] {
-  const events: SessionEvent[] = [];
-  session.events.subscribe((event) => events.push(event), {
-    scope: 'session',
+/** The session-scoped facts (never a run's approval facts) published from
+ *  this call on, read synchronously from the session's plane. */
+function recordSessionFacts(session: SessionHandle): SessionEvent[] {
+  const recorded = recordSessionEvents(session);
+  return new Proxy([] as SessionEvent[], {
+    get: (_target, property, receiver) =>
+      Reflect.get(
+        recorded.events.filter(
+          (event) =>
+            event.type === 'status' ||
+            event.type === 'setParentStream' ||
+            event.type === 'stream.removed' ||
+            event.type === 'updateStreamDescription',
+        ),
+        property,
+        receiver,
+      ),
   });
-  return events;
 }
 
 /** A deferred retry preparation that rejects when its AbortSignal fires. */
@@ -211,14 +226,18 @@ describe('createExtensionHostInteractions', () => {
       'proposal-parallel',
       'Check the calculation.',
     );
-    const parallelBash = interactions.requestBashApproval?.({
-      command: 'lake build',
-      streamId: STREAM_A,
-    });
-    const otherStream = interactions.requestBashApproval?.({
-      command: 'npm test',
-      streamId: STREAM_B,
-    });
+    const parallelBash = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'lake build',
+        streamId: STREAM_A,
+      }),
+    );
+    const otherStream = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'npm test',
+        streamId: STREAM_B,
+      }),
+    );
 
     // The approval also awaits the tool-edit controller: it must not report
     // completion while pending tool edits for the stream are still approving.
@@ -279,7 +298,7 @@ describe('createExtensionHostInteractions', () => {
     const { handlers, interactions, session } = createInteractions({
       presentationSink,
     });
-    const sessionEvents = recordSessionEvents(session);
+    const sessionEvents = recordSessionFacts(session);
 
     const resultPromise = interactions.requestPlanApproval?.({
       requestId: 'plan-a',
@@ -293,20 +312,8 @@ describe('createExtensionHostInteractions', () => {
       'requestEnsureProgressView',
       {},
     );
-    expect(presentationSink.emit).not.toHaveBeenCalledWith(
-      'setActiveStream',
-      expect.anything(),
-    );
-    expect(sessionEvents).toContainEqual({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: {
-          streamId: 'stream-a',
-          suppressViewSwitch: true,
-        },
-      },
-    });
+    // Revealing never moves the active tab: focus is the surface's own.
+    expect(sessionEvents).toEqual([]);
     expect(handlers.transport.planApproval.show).toHaveBeenCalledWith({
       requestId: 'plan-a',
       streamId: 'stream-a',
@@ -358,7 +365,7 @@ describe('createExtensionHostInteractions', () => {
 
   it('surfaces retry requests without stealing active-stream focus (#8246)', () => {
     const session = createTestSession();
-    const sessionEvents = recordSessionEvents(session);
+    const sessionEvents = recordSessionFacts(session);
     const { handlers, interactions } = createInteractions({ session });
 
     void interactions.requestRetry?.({
@@ -367,24 +374,10 @@ describe('createExtensionHostInteractions', () => {
       operation: 'Model invocation',
     });
 
-    // The stream is registered so its row can carry the pending badge, but
-    // the active tab must not switch — the user may be inspecting another
-    // stream while a failing subagent re-raises retry requests.
-    const activations = sessionEvents.filter(
-      (e) => e.scope === 'session' && e.event.type === 'setActiveStream',
-    );
-    expect(activations).toEqual([
-      {
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: 'failing-subagent',
-            suppressViewSwitch: true,
-          },
-        },
-      },
-    ]);
+    // The row exists from the stream's `run.start`; the active tab must not
+    // switch, since the user may be inspecting another stream while a
+    // failing subagent re-raises retry requests, and no fact carries focus.
+    expect(sessionEvents).toEqual([]);
     expect(handlers.transport.retry.show).toHaveBeenCalledWith(
       expect.objectContaining({ streamId: 'failing-subagent' }),
     );
@@ -712,13 +705,54 @@ describe('createExtensionHostInteractions', () => {
     expect(toolEditApprovals.cancel).toHaveBeenCalledWith(selector);
   });
 
+  it('publishes approval facts for the prepared permission the host shows', async () => {
+    const session = createTestSession();
+    const { handlers, interactions } = createInteractions({ session });
+    const runEvents = recordSessionEvents(session, { aggregateId: STREAM_A });
+    session.interactions.use(interactions);
+    const { permission } = bashApprovalRequest(
+      { command: 'lake build', streamId: STREAM_A },
+      session,
+    );
+
+    const resultPromise = session.interactions.requestBashApproval({
+      command: 'lake build',
+      streamId: STREAM_A,
+      permission,
+    });
+
+    // One requestId per request: the durable fact and the surface agree.
+    expect(runEvents.events).toMatchObject([
+      {
+        type: 'approval.requested',
+        requestId: permission.requestId,
+        payload: { kind: 'bash', data: permission },
+      },
+    ]);
+    expect(firstShowRequestId(handlers.transport.bash.show)).toBe(
+      permission.requestId,
+    );
+
+    session.interactions.cancel({ streamId: STREAM_A, cause: 'Run ended.' });
+    await expect(resultPromise).resolves.toEqual({
+      action: 'reject',
+      cause: 'Run ended.',
+    });
+    expect(runEvents.events.at(-1)).toMatchObject({
+      type: 'approval.resolved',
+      requestId: permission.requestId,
+    });
+  });
+
   it('forwards a bash cancellation cause without user provenance', async () => {
     const { handlers, interactions } = createInteractions();
 
-    const resultPromise = interactions.requestBashApproval?.({
-      command: 'rm -rf build',
-      streamId: STREAM_A,
-    });
+    const resultPromise = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'rm -rf build',
+        streamId: STREAM_A,
+      }),
+    );
 
     interactions.cancel({
       streamId: STREAM_A,
@@ -735,10 +769,12 @@ describe('createExtensionHostInteractions', () => {
   it('rejects a resolution whose kind does not match the pending request', async () => {
     const { handlers, interactions } = createInteractions();
 
-    const resultPromise = interactions.requestBashApproval?.({
-      command: 'echo hi',
-      streamId: STREAM_A,
-    });
+    const resultPromise = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'echo hi',
+        streamId: STREAM_A,
+      }),
+    );
     const requestId = firstShowRequestId(handlers.transport.bash.show);
 
     // A mismatched kind for the same requestId must not settle the pending
@@ -797,7 +833,7 @@ describe('createExtensionHostInteractions', () => {
       presentationSink,
       session,
     });
-    const sessionEvents = recordSessionEvents(session);
+    const sessionEvents = recordSessionFacts(session);
 
     await expect(
       interactions.openExternalInquiry?.({
@@ -809,20 +845,13 @@ describe('createExtensionHostInteractions', () => {
       }),
     ).resolves.toBeUndefined();
 
-    // The owning stream is revealed before the inquiry shows: the progress
-    // view is ensured and the stream registered without yanking the active
-    // tab (#8246).
+    // The progress view is ensured before the inquiry shows, without
+    // yanking the active tab (#8246).
     expect(presentationSink.emit).toHaveBeenCalledWith(
       'requestEnsureProgressView',
       {},
     );
-    expect(sessionEvents).toContainEqual({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: { streamId: 'stream-a', suppressViewSwitch: true },
-      },
-    });
+    expect(sessionEvents).toEqual([]);
     expect(handlers.transport.externalInquiry.show).toHaveBeenCalledWith({
       requestId: 'thread-a',
       threadId: 'thread-a',
@@ -900,13 +929,16 @@ describe('createExtensionHostInteractions', () => {
     const session = createTestSession();
     const { interactions, toolEditApprovals } = createInteractions({ session });
     toolEditApprovals.requestApproval.mockResolvedValue(approvalResult);
-    const request = {
-      path: 'paper.tex',
-      originalContent: 'A',
-      proposedContent: 'B',
-      sourceTool: 'edit',
-      streamId: STREAM_A,
-    };
+    const request = toolEditApprovalRequest(
+      {
+        path: 'paper.tex',
+        originalContent: 'A',
+        proposedContent: 'B',
+        sourceTool: 'edit',
+        streamId: STREAM_A,
+      },
+      session,
+    );
 
     await expect(interactions.requestToolEditApproval?.(request)).resolves.toBe(
       approvalResult,
@@ -924,10 +956,12 @@ describe('createExtensionHostInteractions', () => {
       });
     });
 
-    const result = interactions.requestBashApproval?.({
-      command: 'echo pending',
-      streamId: 'stream-sync' as StreamTabId,
-    });
+    const result = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'echo pending',
+        streamId: 'stream-sync' as StreamTabId,
+      }),
+    );
 
     await expect(result).resolves.toEqual({
       action: 'reject',
@@ -971,10 +1005,12 @@ describe('createExtensionHostInteractions', () => {
   it('cancels all pending requests on dispose with a stable cause', async () => {
     const { handlers, interactions, toolEditApprovals } = createInteractions();
 
-    const bashPromise = interactions.requestBashApproval?.({
-      command: 'echo hi',
-      streamId: STREAM_A,
-    });
+    const bashPromise = interactions.requestBashApproval?.(
+      bashApprovalRequest({
+        command: 'echo hi',
+        streamId: STREAM_A,
+      }),
+    );
     const planPromise = interactions.requestPlanApproval?.({
       requestId: 'plan-a',
       streamId: STREAM_B,

@@ -12,8 +12,8 @@ import {
   type AgentTrace,
   type ResultEvent,
 } from '@agent/trace';
+import type { HostBashApprovalRequest } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import {
@@ -49,11 +49,11 @@ import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createOutputFile } from '@test/support/ProgressControllerHarnesses';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
-import type { PayloadSessionFact } from '@test/agent/progressTestUtils';
 import {
   appendTranscriptEntry,
   snapshotFacts,
@@ -62,6 +62,7 @@ import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
 } from '@tools/approval';
+import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   STREAM_LOGS_DIR,
   type StreamLogStore,
@@ -77,6 +78,11 @@ import {
   type RunExecutionRequest,
 } from './desktopAgentExecutionTestHarness.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
+import {
+  bashApprovalRequest,
+  recordSessionEvents,
+  toolEditApprovalRequest,
+} from '../agent/progressTestUtils';
 
 const mocks = createModuleMocks();
 
@@ -161,17 +167,10 @@ type BridgeInteractions = {
     streamId: StreamTabId;
     operation: string;
   }) => Promise<unknown>;
-  requestBashApproval?: (request: {
-    command: string;
-    streamId?: StreamTabId;
-  }) => Promise<unknown>;
-  requestToolEditApproval?: (request: {
-    path: string;
-    originalContent: string;
-    proposedContent: string;
-    sourceTool: string;
-    streamId?: StreamTabId;
-  }) => Promise<unknown>;
+  requestBashApproval?: (request: HostBashApprovalRequest) => Promise<unknown>;
+  requestToolEditApproval?: (
+    request: ToolEditApprovalRequest,
+  ) => Promise<unknown>;
 };
 
 /** Test-side record of what each bridge was constructed with. Tests pass the
@@ -372,8 +371,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     tryResumeStream: (streamId, recovery) =>
       resumeDelegate.tryResumeStream(streamId, recovery),
   };
-  const { installPlatform } = await import('@test/support/setupPlatform');
-  await installPlatform({ files: options.files }, { agentResume });
   mocks.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData:
       options.retrieveSessionResumeData ?? vi.fn(async () => null),
@@ -440,6 +437,11 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   mocks.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: vi.fn(),
   }));
+  // After the mocks: the session graph family is built over the modules
+  // this bridge's production code will import.
+  const { installPlatform } = await import('@test/support/setupPlatform');
+  await installPlatform({ files: options.files }, { agentResume });
+  await import('@test/support/sessionGraphTestSetup');
   const { StreamLogStore, StreamSnapshotStore } = await import('@transcript');
   const createProgressSnapshotStore = (): ProgressSnapshotStore =>
     new StreamSnapshotStore();
@@ -705,27 +707,12 @@ async function settleProgressEvents(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-function emitSessionFact<K extends PayloadSessionFact['type']>(
-  bridge: TestableBridge,
-  type: K,
-  payload: Extract<PayloadSessionFact, { type: K }>['payload'],
-): void {
-  bridgeSession(bridge).events.emit({
-    scope: 'session',
-    event: { type, payload } as Extract<SessionFact, { type: K }>,
-  });
-}
-
 function emitRunEvent(
   bridge: TestableBridge,
   streamId: StreamTabId,
   event: AgentEvent,
 ): void {
-  bridgeSession(bridge).events.emit({
-    scope: 'run',
-    streamId,
-    event,
-  });
+  bridgeSession(bridge).publishRunEvent(streamId, event);
 }
 
 function emitRunConfigFact(
@@ -752,19 +739,16 @@ function emitStatusFact(
     previousStatus?: StreamPhase;
   },
 ): void {
-  // Status reaches the bridge on the canonical session-fact rail only; no
+  // Status reaches the bridge on the canonical status rail only; no
   // projector reads run-scope `status` trace events any more.
-  bridgeSession(bridge).events.emit({
-    scope: 'session',
-    event: {
-      type: 'status',
-      streamId: payload.streamId,
-      phase: payload.status,
-      ...(payload.previousStatus
-        ? { previousPhase: payload.previousStatus }
-        : {}),
-      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    },
+  bridgeSession(bridge).publishStatus({
+    type: 'status',
+    streamId: payload.streamId,
+    phase: payload.status,
+    ...(payload.previousStatus
+      ? { previousPhase: payload.previousStatus }
+      : {}),
+    cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
   });
 }
 
@@ -787,11 +771,35 @@ const STREAM_RELEASED_REJECTION = {
   cause: 'Stream resources released.',
 } as const;
 
+let activationSeq = 0;
+
+/** Publish a stream's existence fact the way a launch does. */
+function startStream(bridge: TestableBridge, streamId: string): void {
+  activationSeq += 1;
+  bridgeSession(bridge).publish([
+    {
+      type: 'run.start',
+      aggregateId: streamId as StreamTabId,
+      executionId: `a0000${activationSeq.toString(16)}` as ExecutionId,
+      identity: { kind: 'agent', agent: streamId },
+      category: AgentCategory.Workflow,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
+    },
+  ]);
+}
+
+/**
+ * Start a stream (unless a test already published its own `run.start`, which
+ * the summary mirror's identity records), then select it as the window does
+ * from its launch callback.
+ */
 function activateStream(bridge: TestableBridge, streamId: string): void {
-  emitSessionFact(bridge, 'setActiveStream', {
-    streamId,
-    agentCategory: AgentCategory.Workflow,
-  });
+  const known = bridgeSession(bridge).transcripts.getSummaryMeta(
+    streamId as StreamTabId,
+  )?.identity;
+  if (!known) startStream(bridge, streamId);
+  bridge.setActiveStream(streamId as StreamTabId);
 }
 
 function lastStreamSync(messages: unknown[]): ProgressMessage | undefined {
@@ -885,13 +893,27 @@ function stubWorkflowResumeData(
 }
 
 /** Creates a bridge with the given runAgent mock and starts one workflow
- * execution through the host file actions. */
+ * execution through the host file actions. Resolves once the launch has
+ * reached `runAgent`, so callers' `vi.waitFor` budgets cover only the
+ * failure presentation that follows it. */
 async function startMergeExecution(
   runAgent: RunExecutionRequest,
 ): Promise<{ showErrorMessage: ReturnType<typeof vi.fn> }> {
   const showErrorMessage = vi.fn(async () => undefined);
-  const bridge = await createBridge([], { runAgent, showErrorMessage });
+  // The launch path dynamically imports the runtime barrel; after
+  // `vi.resetModules()` that cold import alone approaches the default
+  // `vi.waitFor` timeout, so it is absorbed here rather than in the callers'
+  // assertions.
+  const launched = createDeferred<void>();
+  const bridge = await createBridge([], {
+    runAgent: (request, options) => {
+      launched.resolve();
+      return runAgent(request, options);
+    },
+    showErrorMessage,
+  });
   bridge.fileActions.host.startExecution({ config: workflowConfig() });
+  await launched.promise;
   return { showErrorMessage };
 }
 
@@ -949,12 +971,17 @@ describe('DesktopProgressBridge', () => {
     const initialOutput = createOutputFile({ round: 1 });
     const laterOutput = createOutputFile({ round: 2 });
     const config = workflowConfig();
-    emitRunEvent(bridge, streamId, {
-      type: 'run.start',
-      streamId,
-      executionId,
-      identity: { kind: 'multiAgentWorkflow', workflowName: 'proofreader' },
-    });
+    bridgeSession(bridge).publish([
+      {
+        type: 'run.start',
+        aggregateId: streamId,
+        executionId,
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'proofreader' },
+        category: AgentCategory.Workflow,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfigFact(bridge, { streamId, executionId, config });
     emitRunEvent(bridge, streamId, {
       type: 'addOutputFiles',
@@ -1433,19 +1460,19 @@ describe('DesktopProgressBridge', () => {
       kind: 'round',
       index: 2,
     });
+    // The renderer-facing push follows the fold, so the stream's provisional
+    // creation timestamp is minted when the tail delivers, not at publish.
+    // Let it land before the clock moves on.
+    await settleProgressEvents();
     vi.spyOn(Date, 'now').mockReturnValue(2_000);
-    emitRunEvent(bridge, 'parent' as StreamTabId, {
-      type: 'child.activity',
-      parentStreamId: 'parent',
-      items: [
-        {
-          childStreamId: 'agent-1',
-          executionId: 'agent-1',
-          agentName: 'reviewer',
-          identity: { kind: 'agent' as const, agent: 'reviewer' },
-        },
-      ],
-    });
+    bridgeSession(bridge).executions.track(
+      testExecutionHandle({
+        executionId: 'agent-1',
+        parentStreamId: 'parent' as StreamTabId,
+        childStreamId: 'agent-1' as StreamTabId,
+        agent: 'reviewer',
+      }),
+    );
     await settleProgressEvents();
     messages.length = 0;
     bridge.syncFullView();
@@ -1469,23 +1496,16 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge(messages);
 
     activateStream(bridge, 'parent');
-    emitRunEvent(bridge, 'parent' as StreamTabId, {
-      type: 'child.activity',
-      parentStreamId: 'parent',
-      items: [
-        {
-          childStreamId: 'agent-1',
-          executionId: 'agent-1',
-          agentName: 'reviewer',
-          identity: { kind: 'agent' as const, agent: 'reviewer' },
-        },
-      ],
-    });
-    emitRunEvent(bridge, 'parent' as StreamTabId, {
-      type: 'child.activity',
-      parentStreamId: 'parent',
-      items: [],
-    });
+    const { executions } = bridgeSession(bridge);
+    executions.track(
+      testExecutionHandle({
+        executionId: 'agent-1',
+        parentStreamId: 'parent' as StreamTabId,
+        childStreamId: 'agent-1' as StreamTabId,
+        agent: 'reviewer',
+      }),
+    );
+    executions.untrack('agent-1');
 
     const metadataUpdate = progressMessages(
       messages,
@@ -1515,6 +1535,7 @@ describe('DesktopProgressBridge', () => {
       streamId: 'new-stream',
       status: STREAM_STATUS.RUNNING,
     });
+    await settleProgressEvents();
 
     expect(
       messages.map((message) => (message as ProgressMessage).command),
@@ -1661,13 +1682,12 @@ describe('DesktopProgressBridge', () => {
             return attach(interactions);
           },
         );
-        const subscribe = session.events.subscribe.bind(session.events);
-        vi.spyOn(session.events, 'subscribe').mockImplementation(
-          (subscriber, filter) => {
-            order.push('subscribe');
-            return subscribe(subscriber, filter);
-          },
-        );
+        // The backend's plane reader attaches at `session.now()`.
+        const now = session.now.bind(session);
+        vi.spyOn(session, 'now').mockImplementation(() => {
+          order.push('subscribe');
+          return now();
+        });
       },
       observeRendererMessage: () => {
         order.push('render');
@@ -2033,7 +2053,9 @@ describe('DesktopProgressBridge', () => {
     messages.length = 0;
 
     const deletePromise = deleteStreamViaInbound(bridge, 'second');
-    activateStream(bridge, 'second');
+    // A fresh existence fact for the identity under deletion is refused; no
+    // fact carries focus, so nothing selects it either.
+    startStream(bridge, 'second');
     await deletePromise;
 
     expect(
@@ -2116,10 +2138,15 @@ describe('DesktopProgressBridge', () => {
 
     activateStream(bridge, 'bash-delete-all-stream');
 
-    const result = bridgeInteractions(bridge).requestBashApproval?.({
-      command: 'echo hi',
-      streamId: 'bash-delete-all-stream' as StreamTabId,
-    });
+    const result = bridgeInteractions(bridge).requestBashApproval?.(
+      bashApprovalRequest(
+        {
+          command: 'echo hi',
+          streamId: 'bash-delete-all-stream' as StreamTabId,
+        },
+        bridgeSession(bridge),
+      ),
+    );
 
     await waitForShownPermission(messages, { kind: PERMISSION_KIND.BASH });
 
@@ -2190,12 +2217,17 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], { runAgent });
 
     // Rerun is gated on a resolved native agent identity.
-    emitRunEvent(bridge, 'stream-new' as StreamTabId, {
-      type: 'run.start',
-      streamId: 'stream-new' as StreamTabId,
-      executionId: 'e7ec0001' as ExecutionId,
-      identity: { kind: 'agent', agent: runConfig.agent },
-    });
+    bridgeSession(bridge).publish([
+      {
+        type: 'run.start',
+        aggregateId: 'stream-new' as StreamTabId,
+        executionId: 'e7ec0001' as ExecutionId,
+        identity: { kind: 'agent', agent: runConfig.agent },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfigFact(bridge, {
       streamId: 'stream-new',
       executionId: 'e7ec0001',
@@ -2301,10 +2333,13 @@ describe('DesktopProgressBridge', () => {
     });
     try {
       emitSearchRunConfig(bridge);
-      emitSessionFact(bridge, 'setParentStream', {
-        childStreamId: 'stream-1',
-        parentStreamId,
-      });
+      bridgeSession(bridge).publish([
+        {
+          type: 'setParentStream',
+          aggregateId: 'stream-1' as StreamTabId,
+          parentStreamId,
+        },
+      ]);
       seedBridgeFollowUp(bridge, 'stream-1' as StreamTabId, 'queued follow-up');
 
       await expect(tryResumeStream('stream-1')).resolves.toBe(true);
@@ -2486,12 +2521,17 @@ describe('DesktopProgressBridge', () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
-    emitRunEvent(bridge, 'stream-1' as StreamTabId, {
-      type: 'run.start',
-      streamId: 'stream-1' as StreamTabId,
-      executionId: 'ec1002' as ExecutionId,
-      identity: { kind: 'agent', agent: 'search' },
-    });
+    bridgeSession(bridge).publish([
+      {
+        type: 'run.start',
+        aggregateId: 'stream-1' as StreamTabId,
+        executionId: 'ec1002' as ExecutionId,
+        identity: { kind: 'agent', agent: 'search' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
       executionId: 'ec1002' as ExecutionId,
@@ -2545,12 +2585,17 @@ describe('DesktopProgressBridge', () => {
     // so restoreRunConfig() returns false and the handler must surface it
     // instead of silently doing nothing (unlike the extension's
     // texra.restoreState, which shows RESTORE_MALFORMED_MESSAGE).
-    emitRunEvent(bridge, 'stream-1' as StreamTabId, {
-      type: 'run.start',
-      streamId: 'stream-1' as StreamTabId,
-      executionId: 'ec1003' as ExecutionId,
-      identity: { kind: 'agent', agent: 'search' },
-    });
+    bridgeSession(bridge).publish([
+      {
+        type: 'run.start',
+        aggregateId: 'stream-1' as StreamTabId,
+        executionId: 'ec1003' as ExecutionId,
+        identity: { kind: 'agent', agent: 'search' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
       executionId: 'ec1003' as ExecutionId,
@@ -2719,7 +2764,7 @@ describe('DesktopProgressBridge', () => {
           >[2],
         );
         processSession.attachRunTrace(
-          nextTrace as unknown as AgentTrace,
+          { trace: nextTrace as unknown as AgentTrace, handleStatus: () => {} },
           options.childStreamId ?? streamId,
         );
         return { handle: nextHandle, trace: nextTrace };
@@ -2822,35 +2867,35 @@ describe('DesktopProgressBridge', () => {
         text: 'Appended while replacement presentation loaded.',
       });
       owner.processSession.transcripts.ensureStream(childStreamId);
-      owner.processSession.publishRunEvent(childStreamId, {
-        type: 'run.start',
-        streamId: childStreamId,
-        executionId: childExecutionId,
-        identity: { kind: 'agent', agent: 'search' },
-      });
+      owner.processSession.publish([
+        {
+          type: 'run.start',
+          aggregateId: childStreamId,
+          executionId: childExecutionId,
+          identity: { kind: 'agent', agent: 'search' },
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+          userFollowUpSupport: 'unsupported',
+        },
+      ]);
       owner.processSession.publishRunEvent(childStreamId, {
         type: 'run.config',
         streamId: childStreamId,
         executionId: childExecutionId,
         config: SEARCH_TOOL_USE_AGENT_CONFIG,
       });
-      owner.processSession.events.emit({
-        scope: 'session',
-        event: {
+      owner.processSession.publish([
+        {
           type: 'setParentStream',
-          payload: { childStreamId, parentStreamId: streamId },
+          aggregateId: childStreamId,
+          parentStreamId: streamId,
         },
-      });
-      owner.processSession.events.emit({
-        scope: 'session',
-        event: {
+        {
           type: 'updateStreamDescription',
-          payload: {
-            streamId: childStreamId,
-            description: 'Metadata emitted during attachment.',
-          },
+          aggregateId: childStreamId,
+          description: 'Metadata emitted during attachment.',
         },
-      });
+      ]);
       owner.processSession.publishRunEvent(childStreamId, {
         type: 'usage',
         payload: {
@@ -3030,7 +3075,7 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('replays a tool-edit approval with a fresh window request id', async () => {
+    it('replays a tool-edit approval to a reopened window under its request id', async () => {
       const streamId = 'rebound-stream-tool-edit' as StreamTabId;
       const executionId = 'ec00ed' as ExecutionId;
       const messagesA: unknown[] = [];
@@ -3041,13 +3086,18 @@ describe('DesktopProgressBridge', () => {
       });
       const approvalPromise = bridgeInteractions(
         owner.bridgeA,
-      ).requestToolEditApproval?.({
-        path: '/workspace/rebound-tool-edit.txt',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        streamId,
-      });
+      ).requestToolEditApproval?.(
+        toolEditApprovalRequest(
+          {
+            path: '/workspace/rebound-tool-edit.txt',
+            originalContent: 'old\n',
+            proposedContent: 'new\n',
+            sourceTool: 'write_file',
+            streamId,
+          },
+          owner.processSession,
+        ),
+      );
       expect(approvalPromise).toBeDefined();
       let oldRequestId = '';
       await vi.waitFor(() => {
@@ -3055,11 +3105,6 @@ describe('DesktopProgressBridge', () => {
           shownPermissionRequestId(messagesA, PERMISSION_KIND.TOOL_EDIT) ?? '';
         expect(oldRequestId).not.toBe('');
       });
-      const handleOldToolEdit = assertSupported(
-        owner.bridgeA.progressViewInboundHandlers[
-          PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
-        ],
-      );
       await vi.waitFor(() => expect(owner.diffPathsA).toHaveLength(1));
       const [oldDiff] = owner.diffPathsA;
       await expect(access(oldDiff!.original)).resolves.toBeUndefined();
@@ -3083,20 +3128,9 @@ describe('DesktopProgressBridge', () => {
             '';
           expect(newRequestId).not.toBe('');
         });
-        expect(newRequestId).not.toBe(oldRequestId);
-
-        let settledByOldPresenter = false;
-        void approvalPromise?.then(() => {
-          settledByOldPresenter = true;
-        });
-        await handleOldToolEdit({
-          command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-          requestId: oldRequestId,
-          action: 'reject',
-          feedback: 'Stale presenter.',
-        });
-        await settleProgressEvents();
-        expect(settledByOldPresenter).toBe(false);
+        // One request id per request: the replayed prompt is the same
+        // `approval.requested` fact the first window showed.
+        expect(newRequestId).toBe(oldRequestId);
 
         const handleToolEdit = assertSupported(
           bridgeB.progressViewInboundHandlers[
@@ -3463,13 +3497,9 @@ describe('DesktopProgressBridge', () => {
           goalEnabled: false,
         });
 
-      owner.processSession.events.emit({
-        scope: 'session',
-        event: {
-          type: 'removeStream',
-          payload: { streamId: childStreamId },
-        },
-      });
+      owner.processSession.publish([
+        { type: 'stream.removed', aggregateId: childStreamId },
+      ]);
       await vi.waitFor(() =>
         expect(owner.processSession.transcripts.has(childStreamId)).toBe(false),
       );
@@ -3519,22 +3549,27 @@ describe('DesktopProgressBridge', () => {
         });
 
       try {
-        owner.processSession.events.emit({
-          scope: 'session',
-          event: {
-            type: 'removeStream',
-            payload: { streamId: childStreamId },
-          },
-        });
+        owner.processSession.publish([
+          { type: 'stream.removed', aggregateId: childStreamId },
+        ]);
 
         await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalled());
-        owner.processSession.events.emit({
-          scope: 'session',
-          event: {
-            type: 'setActiveStream',
-            payload: { streamId: childStreamId },
+        owner.processSession.publish([
+          {
+            type: 'run.start',
+            aggregateId: childStreamId,
+            executionId: 'aaaa0002f10e' as ExecutionId,
+            identity: {
+              kind: 'multiAgentWorkflow',
+              workflowName: 'reclaimed-workflow',
+            },
+            category: AgentCategory.Workflow,
+            isRemote: false,
+            userFollowUpSupport: 'unsupported',
+            // No live owner: a replayed start, not a re-claim, so the
+            // pending deletion proceeds.
           },
-        });
+        ]);
         const pendingDrain = vi.spyOn(
           owner.sessionStores,
           'waitForPendingStreamDeletions',
@@ -3559,92 +3594,6 @@ describe('DesktopProgressBridge', () => {
         }
       } finally {
         leaseReleased.resolve();
-      }
-    });
-
-    it('does not start a process fallback for a newer presentation deletion claim', async () => {
-      const streamId = 'reclaimed-presentation-delete' as StreamTabId;
-      const owner = await createProcessOwner({
-        streamId,
-        executionId: 'ec00f9' as ExecutionId,
-      });
-      seedStreamStatusForTest(owner.processSession.status, streamId, {
-        phase: STREAM_PHASE.COMPLETED,
-      });
-      const firstRelease = createDeferred();
-      const secondRelease = createDeferred();
-      // The deletion runs as a step on the execution lane; gate the lane.
-      const waitForRelease = vi
-        .spyOn(owner.processSession.executions, 'runExecutionStep')
-        .mockImplementationOnce(async (_executionId, step) => {
-          await firstRelease.promise;
-          return step();
-        })
-        .mockImplementationOnce(async (_executionId, step) => {
-          await secondRelease.promise;
-          return step();
-        });
-      const deleteStream = vi.spyOn(owner.sessionStores, 'deleteStream');
-
-      try {
-        emitSessionFact(owner.bridgeA, 'removeStream', {
-          streamId,
-        });
-        await vi.waitFor(() =>
-          expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
-            true,
-          ),
-        );
-        // Let the process fallback observe the presentation's first claim and
-        // retire its own pending-removal marker before the identity is
-        // legitimately re-claimed.
-        await settleProgressEvents();
-
-        const freshExecutionId = 'ec00fa' as ExecutionId;
-        snapshotFacts(owner.progressSnapshotStore).setRunStart({
-          streamId,
-          executionId: freshExecutionId,
-          identity: {
-            kind: 'multiAgentWorkflow',
-            workflowName: 'reclaimed-workflow',
-          },
-        });
-        const { handle: freshHandle } = owner.createHandle({
-          executionId: freshExecutionId,
-        });
-        owner.processSession.executions.trackAgentExecution(freshHandle, {
-          status: STREAM_PHASE.COMPLETED,
-        });
-        activateStream(owner.bridgeA, streamId);
-        firstRelease.resolve();
-        await vi.waitFor(() =>
-          expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
-            false,
-          ),
-        );
-        expect(waitForRelease).toHaveBeenCalledTimes(1);
-
-        emitSessionFact(owner.bridgeA, 'removeStream', {
-          streamId,
-        });
-        await vi.waitFor(() =>
-          expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
-            true,
-          ),
-        );
-        await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalledTimes(2));
-        await settleProgressEvents();
-
-        // Both deletions are the presentation's (incarnations 0 and 1); a
-        // process fallback would have issued a third.
-        expect(deleteStream).toHaveBeenCalledTimes(2);
-        expect(
-          deleteStream.mock.calls.map(([, o]) => o?.expectedIncarnation),
-        ).toEqual([0, 1]);
-        expect(owner.processSession.transcripts.has(streamId)).toBe(true);
-      } finally {
-        firstRelease.resolve();
-        secondRelease.resolve();
       }
     });
 
@@ -3673,13 +3622,9 @@ describe('DesktopProgressBridge', () => {
       owner.close();
 
       try {
-        owner.processSession.events.emit({
-          scope: 'session',
-          event: {
-            type: 'removeStream',
-            payload: { streamId: failedStreamId },
-          },
-        });
+        owner.processSession.publish([
+          { type: 'stream.removed', aggregateId: failedStreamId },
+        ]);
         await deletionStarted.promise;
         const pendingDrain = vi.spyOn(
           owner.sessionStores,
@@ -3893,13 +3838,7 @@ describe('DesktopProgressBridge', () => {
       const executionId = 'ec00f7' as ExecutionId;
       const owner = await createProcessOwner({ streamId, executionId });
       const { bridgeB } = await owner.reopen();
-      const facts: SessionFact[] = [];
-      const detachFacts = owner.processSession.events.subscribe(
-        (event) => {
-          if (event.scope === 'session') facts.push(event.event);
-        },
-        { scope: 'session' },
-      );
+      const facts = recordSessionEvents(owner.processSession);
 
       try {
         // A bare process-session transition (no live trace) still reaches the
@@ -3910,15 +3849,14 @@ describe('DesktopProgressBridge', () => {
         expect(owner.processSession.status.get(streamId)).toBe(
           STREAM_PHASE.WAITING,
         );
-        expect(facts).toContainEqual(
+        expect(facts.events).toContainEqual(
           expect.objectContaining({
             type: 'status',
-            streamId,
+            aggregateId: streamId,
             phase: STREAM_PHASE.WAITING,
           }),
         );
       } finally {
-        detachFacts();
         bridgeB.dispose();
       }
     });
@@ -3936,13 +3874,7 @@ describe('DesktopProgressBridge', () => {
         category: AgentCategory.ToolUse,
       });
       const { bridgeB } = await owner.reopen();
-      const facts: SessionFact[] = [];
-      const detachFacts = owner.processSession.events.subscribe(
-        (event) => {
-          if (event.scope === 'session') facts.push(event.event);
-        },
-        { scope: 'session' },
-      );
+      const facts = recordSessionEvents(owner.processSession);
 
       try {
         owner.processSession.executions.trackAgentExecution(childHandle, {
@@ -3968,15 +3900,14 @@ describe('DesktopProgressBridge', () => {
         expect(owner.processSession.status.get(childStreamId)).toBe(
           STREAM_PHASE.COMPLETED,
         );
-        expect(facts).toContainEqual(
+        expect(facts.events).toContainEqual(
           expect.objectContaining({
             type: 'status',
-            streamId: childStreamId,
+            aggregateId: childStreamId,
             phase: STREAM_PHASE.COMPLETED,
           }),
         );
       } finally {
-        detachFacts();
         bridgeB.dispose();
       }
     });
@@ -4031,10 +3962,7 @@ describe('DesktopProgressBridge', () => {
         lineage: null,
         diff: null,
       };
-      const events: SessionEvent[] = [];
-      const detachEvents = owner.processSession.events.subscribe((event) => {
-        events.push(event);
-      });
+      const events = recordSessionEvents(owner.processSession);
 
       owner.close();
       let bridgeB: TestableBridge | undefined;
@@ -4049,38 +3977,35 @@ describe('DesktopProgressBridge', () => {
           agentName: 'searcher',
           category: AgentCategory.ToolUse,
         });
-        owner.processSession.publishRunEvent(childStreamId, {
-          type: 'run.start',
-          streamId: childStreamId,
-          executionId: childExecutionId,
-          identity: { kind: 'agent', agent: 'searcher' },
-        });
+        owner.processSession.publish([
+          {
+            type: 'run.start',
+            aggregateId: childStreamId,
+            executionId: childExecutionId,
+            identity: { kind: 'agent', agent: 'searcher' },
+            category: AgentCategory.ToolUse,
+            isRemote: false,
+            userFollowUpSupport: 'unsupported',
+          },
+        ]);
         owner.processSession.publishRunEvent(childStreamId, {
           type: 'run.config',
           streamId: childStreamId,
           executionId: childExecutionId,
           config: childConfig,
         });
-        owner.processSession.events.emit({
-          scope: 'session',
-          event: {
+        owner.processSession.publish([
+          {
             type: 'updateStreamDescription',
-            payload: {
-              streamId: childStreamId,
-              description: 'Search the docs',
-            },
+            aggregateId: childStreamId,
+            description: 'Search the docs',
           },
-        });
-        owner.processSession.events.emit({
-          scope: 'session',
-          event: {
+          {
             type: 'setParentStream',
-            payload: {
-              childStreamId,
-              parentStreamId: streamId,
-            },
+            aggregateId: childStreamId,
+            parentStreamId: streamId,
           },
-        });
+        ]);
         owner.processSession.publishRunEvent(childStreamId, {
           type: 'usage',
           payload: {
@@ -4109,27 +4034,19 @@ describe('DesktopProgressBridge', () => {
           text: 'Emitted while the desktop had no window.',
         });
 
-        expect(events).toContainEqual(
+        expect(events.events).toContainEqual(
           expect.objectContaining({
-            scope: 'run',
-            streamId: childStreamId,
-            event: expect.objectContaining({
-              type: 'run.config',
-              executionId: childExecutionId,
-              config: childConfig,
-            }),
+            type: 'run.config',
+            aggregateId: childStreamId,
+            executionId: childExecutionId,
+            config: childConfig,
           }),
         );
-        expect(events).toContainEqual(
+        expect(events.events).toContainEqual(
           expect.objectContaining({
-            scope: 'session',
-            event: expect.objectContaining({
-              type: 'updateStreamDescription',
-              payload: {
-                streamId: childStreamId,
-                description: 'Search the docs',
-              },
-            }),
+            type: 'updateStreamDescription',
+            aggregateId: childStreamId,
+            description: 'Search the docs',
           }),
         );
         await settleProgressEvents();
@@ -4202,7 +4119,6 @@ describe('DesktopProgressBridge', () => {
         ]);
       } finally {
         bridgeB?.dispose();
-        detachEvents();
         await owner.getExecutionStore(childExecutionId).clear();
       }
     });

@@ -23,6 +23,8 @@ import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 
 import { snapshotFacts } from '@test/support/storeTestDrivers';
+
+import { sessionEventOf } from './progressBackendHarness';
 import {
   createIsolatedRecordingBackend,
   createRecordingBackend,
@@ -36,11 +38,7 @@ describe('retained finished children', () => {
     parent: StreamTabId,
     items: ActiveChildInfo[],
   ): void {
-    backend.applyRunFact(parent, {
-      type: 'child.activity',
-      parentStreamId: parent,
-      items,
-    });
+    backend.applyChildRoster(parent, items);
   }
 
   function subagent(
@@ -244,8 +242,10 @@ describe('retained finished children', () => {
       STREAM_PHASE.FAILED,
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
     );
-    expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
-      STREAM_PHASE.FAILED,
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
+        STREAM_PHASE.FAILED,
+      ),
     );
     messages.length = 0;
 
@@ -371,8 +371,10 @@ describe('retained finished children', () => {
       STREAM_PHASE.FAILED,
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
     );
-    expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
-      STREAM_PHASE.FAILED,
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
+        STREAM_PHASE.FAILED,
+      ),
     );
 
     applyRoster(backend, PARENT, rosterStampedWhileRunning);
@@ -405,10 +407,13 @@ describe('retained finished children', () => {
     // away and the roster drops the row, but the child keeps running and
     // finishes later. The row is found by its own childStreamId, so the phase
     // still lands.
-    backend.applySessionFact({
-      type: 'setParentStream',
-      payload: { childStreamId, parentStreamId: null },
-    });
+    backend.applySessionEvent(
+      sessionEventOf({
+        type: 'setParentStream',
+        aggregateId: childStreamId,
+        parentStreamId: null,
+      }),
+    );
     applyRoster(backend, PARENT, []);
 
     await backend.applyStreamStatus(childStreamId, STREAM_PHASE.COMPLETED);

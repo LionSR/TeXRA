@@ -1,6 +1,8 @@
-// Test harness: seed cliState with synthetic finalized entries, render <App />
-// to the real terminal. Used to verify the ConversationPane viewport without
-// needing API access. Exits on Ctrl-C.
+// Test harness: seed the session fold with synthetic streams and rows, render
+// <App /> to the real terminal. Every fixture is published through the
+// runtime session (`SessionHandle.publish`, the transcript store, the
+// interaction port), so the TUI under test renders the same `SessionView` a
+// live chat does. Used to verify the TUI without API access. Exits on Ctrl-C.
 
 import {
   mkdirSync,
@@ -23,7 +25,10 @@ import {
   loadAgents,
 } from '@agent/index';
 import { agentResponseTextConnector } from '@agent/runtime';
-import type { RetryResult } from '@agent/runtime/HostInteractions';
+import type {
+  PlanApprovalResult,
+  RetryResult,
+} from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
   initializeDefaultSession,
@@ -48,7 +53,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
   TOOL_USE_STATUS,
-  type ActiveChildInfo,
+  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type InquiryThreadId,
   type NormalizedToolUse,
@@ -59,27 +64,16 @@ import {
   type UserQuestionPermission,
   HISTORY_RUN_STATUS,
 } from '@shared/schemas';
-import {
-  toolRowModel,
-  transcriptText,
-  type TranscriptRow,
-} from '@shared/transcript';
+import { subscribeToSignalChanges } from '@shared/signals';
+import type { SessionEventDraft } from '@shared/schemas/sessionEvent';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  isActivePhase,
-  isInFlightPhase,
-  STREAM_TRANSITION_CAUSE,
-} from '@shared/streams/streamStatus';
-// The status machine stamps its own `Date.now()` run window and no production
-// fact lets a caller supply one, so a display fixture that needs a plausible
-// elapsed time reaches for the same seeding helper the kernel suites use.
-// Dev-harness only — this file is never part of the shipped CLI bundle.
-import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace, StreamLogStore } from '@transcript';
+import type { StreamLogAppendInput } from '@transcript/StreamLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -108,36 +102,30 @@ import {
   resetCliState,
   sessionMeta,
   setCliSessionModelOverride,
-  patchStream,
-  streams,
-  streamPhaseFor,
 } from '../src/chat/tui/state/cliState';
 import {
-  activeSubagentsFor,
-  childRosters,
-  invalidateChildStreams,
-  streamMetadataFor,
-  parentStream,
-  visibleSubagentRows,
-} from '../src/chat/tui/state/childExecutions';
-import { readStreamArtifacts } from '../src/chat/tui/state/subscribeStreamArtifacts';
-import { focusedChildFollowUpRoute } from '../src/chat/tui/state/focusedChildFollowUp';
+  bindSessionView,
+  cumulativeUsageOf,
+  currentView,
+  focusedChildAcceptsFollowUps,
+  runningChildCount,
+  sessionView,
+  streamViewOf,
+} from '../src/chat/tui/state/sessionView';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
-import {
-  approvalPayloadStreamId,
-  clearApprovals,
-  clearApprovalsWhere,
-  enqueueApproval,
-  type ApprovalDecision,
-  type ApprovalPayload,
-} from '../src/chat/tui/state/approvalQueue';
-import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
-import { attachSessionSignalsAdapter } from '../src/chat/tui/state/sessionSignalsAdapter';
 import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
-import { createTuiHostInteractions } from '../src/chat/tui/state/subscribeApprovals';
-import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
+import {
+  announceForegroundApprovals,
+  createTuiHostInteractions,
+} from '../src/chat/tui/state/subscribeApprovals';
+import {
+  appendLocalAssistantTranscript,
+  appendLocalErrorTranscript,
+  appendLocalUserTranscript,
+  resolveLocalTranscriptStreamId,
+} from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
@@ -168,6 +156,7 @@ import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const STREAM_ID = 'harness-stream-1';
+const HARNESS_MODEL = 'harness-model';
 const RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID =
   'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
@@ -277,40 +266,6 @@ const DISABLED_MODEL_SWITCH_REASON =
   'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
-// Opt-in fixture for the PTY ordering tests (issue #7972, follow-up from
-// #7967 / the "PTY ordering tests" section of
-// docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md): drives one child
-// stream through the real event-subscription path
-// (attachSessionSignalsAdapter, the single rail carrying status, roster,
-// edge, and removal facts, exactly as chatSessionController.ts wires a real
-// run — see `runChildEventOrderFixture` below) in each of the eight orderings the
-// design names, so validate-tui.mjs can assert both intermediate render
-// checkpoints and (for the four order-equivalent cases) a byte-identical
-// settled frame no matter which order the attachment/roster/edge/status
-// facts arrive in.
-const CHILD_EVENT_ORDER_VALUES = [
-  'canonical',
-  'roster-first',
-  'edge-first',
-  'status-first',
-  'promotion-late-roster',
-  'reattach-late-old-roster',
-  'parent-removal',
-  'completion-remove',
-] as const;
-type ChildEventOrder = (typeof CHILD_EVENT_ORDER_VALUES)[number];
-const CHILD_EVENT_ORDER_RAW = process.env.HARNESS_CHILD_EVENT_ORDER?.trim();
-if (
-  CHILD_EVENT_ORDER_RAW &&
-  !(CHILD_EVENT_ORDER_VALUES as readonly string[]).includes(
-    CHILD_EVENT_ORDER_RAW,
-  )
-) {
-  throw new Error(
-    `HARNESS_CHILD_EVENT_ORDER must be one of ${CHILD_EVENT_ORDER_VALUES.join(', ')}, got ${JSON.stringify(CHILD_EVENT_ORDER_RAW)}`,
-  );
-}
-const CHILD_EVENT_ORDER = CHILD_EVENT_ORDER_RAW as ChildEventOrder | undefined;
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
 const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
 const SHOW_COMPLETED_TODOS_ONLY = process.env.HARNESS_TODOS_COMPLETED === '1';
@@ -488,7 +443,7 @@ const HARNESS_ORCHESTRATION_HISTORY: readonly CliHistoryEntry[] =
           id: 'cccccccccccc' as ExecutionId,
           timestamp: '2026-06-06T00:02:00Z',
           agent: 'orchestrator',
-          model: 'harness-model',
+          model: HARNESS_MODEL,
           status: HISTORY_RUN_STATUS.RESUMABLE,
           resumable: true,
           inputBasename: '-',
@@ -640,46 +595,182 @@ if (SHOW_ORCHESTRATION) {
   process.exit(0);
 }
 
-/** A settled text row the way the fold hands one to the painter. `seqNo` and
- *  `settlementSeqNo` carry the transcript position the harness intends. */
+// =========================================================================
+// Fold seeding: every fixture is a session fact
+// =========================================================================
+
+const HARNESS_DISPOSERS: Array<() => void> = [];
+
+/** The session every fixture publishes into and the TUI renders. */
+function session() {
+  return defaultSession();
+}
+
+function publish(...drafts: SessionEventDraft[]): void {
+  session().publish(drafts);
+}
+
+// The TUI reads the session fold (PRD 10.1): bind it and subscribe every
+// stream's transcript tier the way `runChat` does.
+HARNESS_DISPOSERS.push(bindSessionView(session().view));
+{
+  let subscribed = '';
+  const syncTranscriptSubscriptions = (): void => {
+    const ids = [...currentView().streams.keys()];
+    const key = ids.join('\0');
+    if (key === subscribed) return;
+    subscribed = key;
+    session().setTranscriptSubscriptions(
+      'tui-harness',
+      ids.map((id) => ({ id, fromSeq: 0 })),
+    );
+  };
+  HARNESS_DISPOSERS.push(
+    subscribeToSignalChanges([sessionView()], syncTranscriptSubscriptions),
+  );
+  syncTranscriptSubscriptions();
+}
+// Approvals go through the session's interaction port with the TUI host
+// attached, exactly as `chatSessionController` wires a live chat.
+const harnessRuntimeHost: CliRuntimeHost =
+  createCliRuntimeHost(HARNESS_CLI_CONTEXT);
+HARNESS_DISPOSERS.push(
+  session().interactions.use(
+    createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT),
+  ),
+);
+HARNESS_DISPOSERS.push(announceForegroundApprovals());
+
+const harnessStreams = new Set<StreamTabId>();
+
+/** Mint a stream: its `run.start` existence fact (PRD 6, item 2), then the
+ *  `run.config` launch fact a real run publishes next, which names the model
+ *  an agent runs on (a child's scrollback header waits for it). */
+function seedStream(
+  streamId: StreamTabId,
+  options: {
+    readonly category?: AgentCategory;
+    readonly identity?: NonNullable<
+      Extract<SessionEventDraft, { type: 'run.start' }>['identity']
+    >;
+    readonly parentStreamId?: StreamTabId;
+    readonly executionId?: string;
+    readonly userFollowUpSupport?: Extract<
+      SessionEventDraft,
+      { type: 'run.start' }
+    >['userFollowUpSupport'];
+  } = {},
+): void {
+  if (harnessStreams.has(streamId)) return;
+  harnessStreams.add(streamId);
+  const executionId = (options.executionId ?? nanoid(12)) as ExecutionId;
+  const identity = options.identity ?? {
+    kind: 'agent' as const,
+    agent: streamId.split('#')[0] ?? streamId,
+  };
+  publish({
+    type: 'run.start',
+    aggregateId: streamId,
+    executionId,
+    identity,
+    category: options.category ?? AgentCategory.ToolUse,
+    isRemote: false,
+    userFollowUpSupport:
+      options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    ...(options.parentStreamId === undefined
+      ? {}
+      : { parentStreamId: options.parentStreamId }),
+  });
+  if (identity.kind === 'agent') {
+    publish({
+      type: 'run.config',
+      aggregateId: streamId,
+      executionId,
+      config: { model: HARNESS_MODEL },
+    });
+  }
+}
+
+/** Place a stream in a phase: the status fact every renderer folds. */
+function seedPhase(
+  streamId: StreamTabId,
+  phase: StreamPhase,
+  runStartedAt?: number,
+): void {
+  seedStream(streamId);
+  publish({
+    type: 'status',
+    aggregateId: streamId,
+    phase,
+    cause: 'harness',
+    ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+  });
+}
+
+function seedDescription(streamId: StreamTabId, description: string): void {
+  publish({
+    type: 'updateStreamDescription',
+    aggregateId: streamId,
+    description,
+  });
+}
+
+function removeStream(streamId: StreamTabId): void {
+  publish({ type: 'stream.removed', aggregateId: streamId });
+  harnessStreams.delete(streamId);
+}
+
+/** Append settled rows to a stream's transcript; the store's change feed
+ *  publishes them as `transcript.entry` facts the fold projects. */
+function seedRows(
+  streamId: StreamTabId,
+  entries: readonly StreamLogAppendInput[],
+): void {
+  seedStream(streamId);
+  const writer = session().transcripts.acquireWriter(streamId, 'tui-harness');
+  for (const entry of entries) writer.appendSettled(entry);
+  writer.close();
+}
+
+/** Every stream under `rootId`, the root first. */
+function descendantsOf(rootId: StreamTabId): StreamTabId[] {
+  const view = currentView();
+  const out: StreamTabId[] = [];
+  const pending = [rootId];
+  while (pending.length > 0) {
+    const id = pending.shift()!;
+    const stream = view.streams.get(id);
+    if (!stream) continue;
+    out.push(id);
+    pending.push(...stream.childIds);
+  }
+  return out;
+}
+
+/** A text entry the transcript store settles and the fold projects. */
 function harnessTextRow(
   id: string,
   kind: 'assistant' | 'error' | 'user',
   text: string,
   seqNo: number,
-  settled = true,
-): TranscriptRow {
-  const base = {
-    id,
-    timestamp: 0,
-    seqNo,
-    ...(settled ? { settlementSeqNo: seqNo } : {}),
-  } as const;
-  const body = transcriptText(text);
-  if (kind === 'error') {
-    return {
-      ...base,
-      level: 'error',
-      kind: 'error',
-      summary: body,
-      details: [],
-      detailText: transcriptText(''),
-    };
-  }
-  if (kind === 'user') {
-    return { ...base, level: 'info', kind: 'user', text: body, summary: body };
-  }
+): StreamLogAppendInput {
+  const messageType = {
+    user: MESSAGE_TYPES.USER_MESSAGE,
+    error: MESSAGE_TYPES.ERROR,
+    assistant: MESSAGE_TYPES.MODEL_RESPONSE,
+  }[kind];
   return {
-    ...base,
-    level: 'info',
-    kind: 'assistant',
-    text: body,
-    streaming: false,
+    id,
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: kind === 'error' ? LOG_LEVELS.ERROR : LOG_LEVELS.INFO,
+    timestamp: seqNo,
+    messageType,
+    text,
   };
 }
 
-function makeEntries(count: number): TranscriptRow[] {
-  const entries: TranscriptRow[] = [];
+function makeEntries(count: number): StreamLogAppendInput[] {
+  const entries: StreamLogAppendInput[] = [];
   for (let i = 1; i <= count; i += 1) {
     const kind = i % 3 === 0 ? 'assistant' : 'user';
     const text =
@@ -709,26 +800,30 @@ function makeLongToolOutput(): NormalizedToolUse {
   };
 }
 
-/** Build a tool row the way the fold does: a normalized payload plus the
- *  shared model the painter reads. */
+/** A tool entry the fold projects into a tool row. */
 function harnessToolEntry(
   id: string,
   toolUse: NormalizedToolUse,
   seqNo = 2,
-): TranscriptRow {
+): StreamLogAppendInput {
   return {
-    kind: 'tool',
     id,
-    timestamp: 0,
-    level: 'info',
-    seqNo,
-    settlementSeqNo: seqNo,
-    toolUse,
-    model: toolRowModel(toolUse),
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp: seqNo,
+    messageType: MESSAGE_TYPES.TOOL_USE,
+    data: {
+      toolName: toolUse.toolName,
+      input: toolUse.input,
+      output: toolUse.outputText,
+      summary: toolUse.headerSummary,
+      isError: toolUse.isError,
+      status: toolUse.status,
+    },
   };
 }
 
-function makeLongToolOutputEntries(): TranscriptRow[] {
+function makeLongToolOutputEntries(): StreamLogAppendInput[] {
   return [
     harnessTextRow(
       'long-tool-user',
@@ -740,7 +835,7 @@ function makeLongToolOutputEntries(): TranscriptRow[] {
   ];
 }
 
-function makeAssistantToolPreambleEntries(): TranscriptRow[] {
+function makeAssistantToolPreambleEntries(): StreamLogAppendInput[] {
   return [
     harnessTextRow('preamble-user', 'user', 'what is this repo about', 1),
     harnessTextRow(
@@ -814,10 +909,9 @@ function seedLiveToolOnlyTranscript(): void {
     });
   }
   writer.close();
-  syncStreamLog(defaultSession(), STREAM_ID);
 }
 
-function makeRejectedBashToolEntries(): TranscriptRow[] {
+function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
   const command = "printf 'approval-reject-live\\n'";
   const message = `User rejected command: ${command}`;
   return [
@@ -870,10 +964,12 @@ function seedSubagentFollowupTranscript(): void {
     });
   }
   writer.close();
-  syncStreamLog(defaultSession(), STREAM_ID);
 }
 
-function makeChildEntries(agent: string, action: string): TranscriptRow[] {
+function makeChildEntries(
+  agent: string,
+  action: string,
+): StreamLogAppendInput[] {
   const assistantText =
     SHOW_LONG_CHILD_OUTPUT && agent === 'strategy'
       ? Array.from({ length: 18 }, (_, index) =>
@@ -889,7 +985,7 @@ function makeChildEntries(agent: string, action: string): TranscriptRow[] {
       `Please handle the ${action} sub-workflow.`,
       1,
     ),
-    harnessTextRow(`${agent}-assistant`, 'assistant', assistantText, 2, false),
+    harnessTextRow(`${agent}-assistant`, 'assistant', assistantText, 2),
   ];
 }
 
@@ -954,7 +1050,7 @@ function makeRetryApprovalPayload(): RetryPermission {
     requestId: `harness-retry-${nanoid()}`,
     streamId: STREAM_ID,
     operation: 'Model request',
-    model: 'harness-model',
+    model: HARNESS_MODEL,
     errorMessage: RETRY_APPROVAL_CHATGPT
       ? 'ChatGPT subscription usage limit reached. Resets in 2h.'
       : 'HTTP 429 Too Many Requests',
@@ -1061,39 +1157,32 @@ function makeUserQuestionPayload(): UserQuestionPermission {
   };
 }
 
-function enqueueHarnessApproval(
-  payload: ApprovalPayload,
-  onDecision: (decision: ApprovalDecision) => void | Promise<void>,
+/** One request through the session's port: the runtime publishes its
+ *  `approval.requested`, the modal reads the fold, the decision settles it. */
+function requestHarnessApproval<T>(
+  request: () => Promise<T> | undefined,
+  onSettled: (result: T) => void | Promise<void>,
 ): void {
-  void enqueueApproval(payload, {
-    onPresent: () => notify('approvalNeeded'),
-  }).then(onDecision);
+  const result = request();
+  if (!result) return;
+  void result.then(onSettled).catch((error: unknown) => {
+    appendLocalErrorTranscript(
+      `Harness approval failed: ${toErrorMessage(error)}`,
+    );
+  });
 }
 
-function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
-  const bypass = decision.bypass;
-  if (!decision.accepted || bypass === undefined) return;
-  patchStream(STREAM_ID, (slice) => ({
-    ...slice,
-    bypass:
-      bypass === 'superYolo'
-        ? { bash: true, superYolo: true, toolEdit: true }
-        : { ...slice.bypass, [bypass]: true },
-  }));
-}
-
-function appendHarnessExternalInquiryDecision(
-  decision: ApprovalDecision,
+function appendHarnessExternalInquiryContinuation(
+  status: 'answered' | 'dropped',
+  answer?: string,
 ): void {
   appendHarnessTranscript(
     'user',
     buildContinuationText({
-      event: decision.accepted && decision.userMessage ? 'answered' : 'dropped',
+      event: status,
       threadId: EXTERNAL_INQUIRY_THREAD_ID,
       question: EXTERNAL_INQUIRY_QUESTION,
-      ...(decision.accepted && decision.userMessage
-        ? { answer: decision.userMessage }
-        : {}),
+      ...(answer ? { answer } : {}),
       stillOpen: [],
     }),
   );
@@ -1113,20 +1202,16 @@ function appendHarnessRetryResult(
 }
 
 async function appendHarnessPlanDecision(
-  decision: ApprovalDecision,
+  result: PlanApprovalResult,
 ): Promise<void> {
-  if (decision.planAction === 'approve_and_goal') {
+  if (result.action === 'approve_and_goal') {
     await GoalStore.start(STREAM_ID, PLAN_APPROVAL_OBJECTIVE);
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
-      bypass: { ...slice.bypass, bash: true },
-    }));
-    seedHarnessStreamPhase(STREAM_ID, STREAM_PHASE.RUNNING);
+    seedPhase(STREAM_ID, STREAM_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
   }
   appendHarnessAssistantTranscript(
-    decision.accepted ? 'PLAN-APPROVED' : 'PLAN-REJECTED',
+    result.action === 'approve' ? 'PLAN-APPROVED' : 'PLAN-REJECTED',
   );
 }
 
@@ -1142,7 +1227,7 @@ function harnessInitialStreamStatus(): StreamPhase | undefined {
   return undefined;
 }
 
-function harnessInitialEntries(): TranscriptRow[] {
+function harnessInitialEntries(): StreamLogAppendInput[] {
   if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
   if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
   if (SHOW_ASSISTANT_TOOL_PREAMBLE) return makeAssistantToolPreambleEntries();
@@ -1153,7 +1238,7 @@ function harnessInitialEntries(): TranscriptRow[] {
 sessionMeta.set({
   agent: 'chat',
   category: AgentCategory.ToolUse,
-  model: 'harness-model',
+  model: HARNESS_MODEL,
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
@@ -1162,18 +1247,21 @@ sessionMeta.set({
   teamName: TEAM_NAME,
   version: '0.0.0-harness',
 });
+// The harness root: minted before any fixture, like a real run's start.
+seedStream(STREAM_ID);
 activeStreamIdSignal.set(STREAM_ID);
-const HARNESS_INITIAL_ENTRIES = harnessInitialEntries();
-patchStream(STREAM_ID, (slice) => ({
-  ...slice,
-  entries: HARNESS_INITIAL_ENTRIES,
-  // The harness seeds settled rows directly; the promotion cursor covers them.
-  finalizedFrontier: HARNESS_INITIAL_ENTRIES.length,
-  queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
-}));
+rootStreamId.set(STREAM_ID);
+seedRows(STREAM_ID, harnessInitialEntries());
+if (QUEUED_FOLLOW_UPS.length > 0) {
+  publish({
+    type: 'updateQueuedFollowUps',
+    aggregateId: STREAM_ID,
+    messages: QUEUED_FOLLOW_UPS,
+  });
+}
 const HARNESS_INITIAL_STREAM_STATUS = harnessInitialStreamStatus();
 if (HARNESS_INITIAL_STREAM_STATUS) {
-  seedHarnessStreamPhase(
+  seedPhase(
     STREAM_ID,
     HARNESS_INITIAL_STREAM_STATUS,
     // Backdated so the status bar shows a plausible elapsed time.
@@ -1195,44 +1283,18 @@ function seedRunningWorkflow(): void {
   const firstAgentStreamId = RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID;
   const secondAgentStreamId =
     'correct@harness-model#harness-workflow-agent-b' as StreamTabId;
-
-  emitSetActiveStream(childStreamId, AgentCategory.Workflow);
-  emitChildRoster(STREAM_ID, [
-    {
-      executionId,
-      agentName: 'live-workflow-validation',
-      childStreamId,
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'live-workflow-validation',
-      },
+  seedStream(childStreamId, {
+    category: AgentCategory.Workflow,
+    identity: {
+      kind: 'multiAgentWorkflow',
+      workflowName: 'live-workflow-validation',
     },
-  ]);
-  emitParentStreamEdge(childStreamId, STREAM_ID);
-  transitionStreamRunning(childStreamId);
-
-  const runTrace = createRunTrace(childStreamId, defaultSession().transcripts);
-  // `runTrace.trace` only feeds the transcript recorder (see
-  // `createRunTrace`); a real launch also bridges it onto the session event
-  // hub via `session.attachRunTrace`, which is what lands a `run.start` in
-  // the durable summary mirror (`SessionHandle`'s `attachSessionEvents`) so
-  // `getStreamMetadata(...)` overlays `identity` regardless of the RUNNING
-  // transition's ephemeral metadata reset. Emit straight onto the hub here,
-  // the same way a real run's facts do — `App` reads that overlay to open
-  // the workflow popup instead of focusing the stream.
-  defaultSession().events.emit({
-    scope: 'run',
-    streamId: childStreamId,
-    event: {
-      type: 'run.start',
-      streamId: childStreamId,
-      executionId,
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'live-workflow-validation',
-      },
-    },
+    executionId,
+    parentStreamId: STREAM_ID,
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
+  seedPhase(childStreamId, STREAM_PHASE.RUNNING);
+  const runTrace = createRunTrace(childStreamId, session().transcripts);
   const runStage = runTrace.trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
@@ -1271,33 +1333,19 @@ function seedRunningWorkflow(): void {
     },
     stageId: phaseStage.id,
   });
-  // A workflow is never the focused stream: its slice keeps the compact
-  // operational rows the popup renders from.
-  syncStreamLog(defaultSession(), childStreamId);
-
-  const workflowChildren = [
-    {
-      executionId: 'harness-workflow-agent-a',
+  for (const [agentStreamId, agentExecutionId] of [
+    [firstAgentStreamId, 'harness-workflow-agent-a'],
+    [secondAgentStreamId, 'harness-workflow-agent-b'],
+  ] as const) {
+    seedStream(agentStreamId, {
+      category: AgentCategory.Workflow,
       identity: { kind: 'agent', agent: 'correct' },
-      agentName: 'correct',
-      childStreamId: firstAgentStreamId,
-      workflowPhase: 'Proofread',
-    },
-    {
-      executionId: 'harness-workflow-agent-b',
-      identity: { kind: 'agent', agent: 'correct' },
-      agentName: 'correct',
-      childStreamId: secondAgentStreamId,
-      workflowPhase: 'Proofread',
-    },
-  ] as const satisfies readonly ActiveChildInfo[];
-  for (const child of workflowChildren) {
-    emitSetActiveStream(child.childStreamId, AgentCategory.Workflow);
-    emitParentStreamEdge(child.childStreamId, childStreamId);
-    transitionStreamRunning(child.childStreamId);
+      executionId: agentExecutionId,
+      parentStreamId: childStreamId,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    });
+    seedPhase(agentStreamId, STREAM_PHASE.RUNNING);
   }
-  emitChildRoster(childStreamId, workflowChildren);
-
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
     runStage.end('cancelled');
@@ -1307,330 +1355,15 @@ function seedRunningWorkflow(): void {
 
 function seedRunningProcessChild(): void {
   const childStreamId = 'bash#aaaa0003f10e' as StreamTabId;
-  emitSetActiveStream(childStreamId, AgentCategory.ToolUse);
-  patchStream(childStreamId, (slice) => ({
-    ...slice,
+  seedStream(childStreamId, {
     identity: { kind: 'process', tool: 'bash' },
-    // Matches the synthetic run config emitted by background Bash.
-    category: AgentCategory.ToolUse,
-    description: 'sleep 30',
-  }));
-  seedHarnessStreamPhase(childStreamId, STREAM_PHASE.RUNNING);
-  emitChildRoster(STREAM_ID, [
-    {
-      executionId: 'aaaa0003f10e',
-      agentName: 'bash',
-      childStreamId,
-      identity: { kind: 'process', tool: 'bash' },
-      status: STREAM_PHASE.RUNNING,
-    },
-  ]);
-  emitParentStreamEdge(childStreamId, STREAM_ID);
+    executionId: 'aaaa0003f10e',
+    parentStreamId: STREAM_ID,
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+  });
+  seedDescription(childStreamId, 'sleep 30');
+  seedPhase(childStreamId, STREAM_PHASE.RUNNING);
   activeStreamIdSignal.set(childStreamId);
-}
-
-// One child stream, its attachment/roster/edge/status/removal facts driven
-// through the real production subscription path — the session adapter's
-// single rail, whose `SessionFactApplier` owns roster retention, parent
-// edges, removal tombstones, and the CLI status modality — so a regression
-// in `attachSessionSignalsAdapter` wiring must be able to fail these
-// scenarios, matching the "PTY ordering tests" section of
-// docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md.
-// No `startedAt` is set on the roster row, so `childElapsed` reports no
-// duration at all rather than a live-ticking one
-// (packages/cli/src/chat/tui/state/childControls.ts); `setActiveStream`
-// always sets `suppressViewSwitch: true` so the harness's own active/focused
-// stream (and its live wall-clock `runStartedAt` elapsed display) stays on
-// the root session throughout — required for the four order-equivalent
-// scenarios' settled frame to be byte-identical across separate process
-// launches, not just across orderings within one launch.
-const CHILD_EVENT_ORDER_STREAM_ID =
-  'harness-child-event-order-stream' as StreamTabId;
-const CHILD_EVENT_ORDER_EXECUTION_ID = 'harness-child-event-order-exec';
-const CHILD_EVENT_ORDER_AGENT_NAME = 'orderChecker';
-// Second, never-displayed parent identity used only by the promotion/
-// reattachment/parent-removal orderings (matrix scenarios 7/11 in
-// TuiStateAndFocus.vitest.mts) — reusing the harness's own root `STREAM_ID`
-// as a *removable* parent would tear down the harness's own active session.
-const CHILD_EVENT_ORDER_OTHER_PARENT_ID =
-  'harness-child-event-order-other-parent' as StreamTabId;
-const CHILD_EVENT_ORDER_MARKER_PREFIX =
-  '\u001b]777;texra-harness-child-event-order:';
-const CHILD_EVENT_ORDER_MARKER_SUFFIX = '\u0007';
-const HARNESS_DISPOSERS: Array<() => void> = [];
-
-function childEventOrderRosterRow(): ActiveChildInfo {
-  return {
-    executionId: CHILD_EVENT_ORDER_EXECUTION_ID,
-    identity: { kind: 'agent', agent: CHILD_EVENT_ORDER_AGENT_NAME },
-    agentName: CHILD_EVENT_ORDER_AGENT_NAME,
-    childStreamId: CHILD_EVENT_ORDER_STREAM_ID,
-  };
-}
-
-// `child.activity` run fact — the real roster wiring
-// (`ExecutionRegistry.emitChildActivity`, src/agent/runtime/executionRegistry.ts).
-function emitChildRoster(
-  parentStreamId: StreamTabId,
-  children: readonly ActiveChildInfo[],
-): void {
-  defaultSession().events.emit({
-    scope: 'run',
-    streamId: parentStreamId,
-    event: {
-      type: 'child.activity',
-      parentStreamId,
-      items: children,
-    },
-  });
-}
-
-// `setParentStream` session fact — the real edge wiring
-// (`ExecutionRegistry.emitParentStreamUpdate`).
-function emitParentStreamEdge(
-  childStreamId: StreamTabId,
-  parentStreamId: StreamTabId | null,
-): void {
-  defaultSession().events.emit({
-    scope: 'session',
-    event: {
-      type: 'setParentStream',
-      payload: { childStreamId, parentStreamId },
-    },
-  });
-}
-
-// `removeStream` session fact — the real removal wiring (src/tools/delegation/childStream.ts).
-function emitStreamRemoval(streamId: StreamTabId): void {
-  defaultSession().events.emit({
-    scope: 'session',
-    event: { type: 'removeStream', payload: { streamId } },
-  });
-}
-
-// `setActiveStream` session fact — the child-order fixture's "attachment"
-// step and every seeded stream's registration with the substrate's log
-// store: `childRosters`/`parentStream` only surface streams the session
-// knows, so a roster or edge under an unregistered stream stays invisible.
-// Always background-registers (`suppressViewSwitch: true`) so the harness's
-// own active/focused stream never becomes the child (see the wall-clock
-// note above).
-function emitSetActiveStream(
-  streamId: StreamTabId,
-  agentCategory?: AgentCategory,
-): void {
-  defaultSession().events.emit({
-    scope: 'session',
-    event: {
-      type: 'setActiveStream',
-      payload: { streamId, agentCategory, suppressViewSwitch: true },
-    },
-  });
-}
-
-/**
- * Place a stream in a phase for a *display* fixture: write the session status
- * machine — the single owner every renderer reads — the way a real transition
- * does before it publishes, but without the fact. These fixtures own their
- * synthetic transcript rows and their scenario's elapsed values, and a
- * published status would make the adapter re-fold the stream from a log that
- * has none of those rows and restamp the run window at `Date.now()`. Fixtures
- * that exercise the fact pipeline itself use the real transitions below.
- */
-function seedHarnessStreamPhase(
-  streamId: StreamTabId,
-  phase: StreamPhase,
-  runStartedAt?: number,
-): void {
-  seedStreamStatusForTest(defaultSession().status, streamId, {
-    phase,
-    ...(runStartedAt !== undefined ? { runStartedAt } : {}),
-  });
-  invalidateChildStreams();
-}
-
-// Real status-machine transitions on the default session — the session
-// adapter's status rail projects these into `cliState` (see
-// `runChildEventOrderFixture`), exactly as `chatSessionController.ts` wires
-// it for a real session.
-function transitionStreamRunning(streamId: StreamTabId): void {
-  defaultSession().status.transition(
-    streamId,
-    STREAM_PHASE.RUNNING,
-    STREAM_TRANSITION_CAUSE.LIFECYCLE,
-  );
-}
-
-function transitionStreamTerminal(streamId: StreamTabId): void {
-  defaultSession().status.transitionToTerminal(
-    streamId,
-    STREAM_PHASE.COMPLETED,
-    STREAM_TRANSITION_CAUSE.LIFECYCLE,
-  );
-}
-
-// Late resume-transition attempt for an already-removed stream: unlike a
-// repeated terminal transition (a same-value no-op the status machine drops
-// before it publishes anything), COMPLETED -> RUNNING via `resume` is a
-// transition the machine itself allows, so the fact reaches the CLI adapter
-// and actually exercises its `cliStreamAcceptsStatus` tombstone guard (see
-// `completion-remove` below).
-function attemptChildEventOrderLateResume(streamId: StreamTabId): void {
-  defaultSession().status.transition(
-    streamId,
-    STREAM_PHASE.RUNNING,
-    STREAM_TRANSITION_CAUSE.RESUME,
-  );
-}
-
-/**
- * The eight orderings named by the design doc's "PTY ordering tests"
- * section, expressed as ordered real-fact steps with a flushed-render marker
- * after each boundary. `canonical` through `status-first` are byte-identical
- * settled orderings of the same four facts (attachment, running status,
- * roster, edge) — see the vitest
- * "child-stream ordered transition matrix" (scenarios 1-4,
- * src/test-kernel/cli/TuiStateAndFocus.vitest.mts) this mirrors at the PTY
- * layer. The remaining four correct old ambiguous transients (promotion,
- * reattachment, parent removal, completion+removal — matrix scenarios 6, 7,
- * 11, and 5-then-8) get their own checkpoint expectations in
- * validate-tui.mjs rather than byte-equivalence.
- */
-function childEventOrderSteps(order: ChildEventOrder): readonly (() => void)[] {
-  const child = CHILD_EVENT_ORDER_STREAM_ID;
-  const root = STREAM_ID as StreamTabId;
-  const other = CHILD_EVENT_ORDER_OTHER_PARENT_ID;
-  const A = () => emitSetActiveStream(child);
-  const Srun = () => transitionStreamRunning(child);
-  const Sterm = () => transitionStreamTerminal(child);
-  const RPlus = (parent: StreamTabId) =>
-    emitChildRoster(parent, [childEventOrderRosterRow()]);
-  const RMinus = (parent: StreamTabId) => emitChildRoster(parent, []);
-  const EPlus = (parent: StreamTabId) => emitParentStreamEdge(child, parent);
-  const E0 = () => emitParentStreamEdge(child, null);
-  const X = (streamId: StreamTabId) => emitStreamRemoval(streamId);
-
-  switch (order) {
-    case 'canonical':
-      return [A, Srun, () => RPlus(root), () => EPlus(root)];
-    case 'roster-first':
-      return [() => RPlus(root), A, Srun, () => EPlus(root)];
-    case 'edge-first':
-      return [() => EPlus(root), A, Srun, () => RPlus(root)];
-    case 'status-first':
-      return [Srun, A, () => EPlus(root), () => RPlus(root)];
-    case 'promotion-late-roster':
-      // Matrix 6: A, S(running), R_P+, E_P+, E0, R_P+ — a stale roster from
-      // the former parent must not resurrect the edge or active membership.
-      return [
-        A,
-        Srun,
-        () => RPlus(root),
-        () => EPlus(root),
-        E0,
-        () => RPlus(root),
-      ];
-    case 'reattach-late-old-roster':
-      // Matrix 7 (relabeled so the *current* parent is the renderable root):
-      // attach/run/roster/edge under `other`, promote, a stale `other`
-      // roster, then an explicit edge+roster to `root`, and finally a late
-      // roster from `other` again — which must not erase active membership
-      // under `root`.
-      return [
-        A,
-        Srun,
-        () => RPlus(other),
-        () => EPlus(other),
-        E0,
-        () => RPlus(other),
-        () => EPlus(root),
-        () => RPlus(root),
-        () => RPlus(other),
-      ];
-    case 'parent-removal':
-      // Matrix 11: P -> child, X(P), R_P+, E_P+ — `other` stands in for the
-      // removed parent so the harness's own active root session is never
-      // torn down by the removal itself.
-      return [
-        Srun,
-        () => RPlus(other),
-        () => EPlus(other),
-        () => X(other),
-        () => RPlus(other),
-        () => EPlus(other),
-      ];
-    case 'completion-remove':
-      // Matrix 5 then 8: roster omission arrives before the terminal status,
-      // then the child itself is removed and every later fact for it —
-      // including a late attachment and a late resume attempt — must stay
-      // suppressed.
-      return [
-        A,
-        Srun,
-        () => RPlus(root),
-        () => EPlus(root),
-        () => RMinus(root),
-        Sterm,
-        () => X(child),
-        () => RPlus(root),
-        () => EPlus(root),
-        A,
-        () => attemptChildEventOrderLateResume(child),
-      ];
-  }
-}
-
-async function writeChildEventOrderMarker(label: string): Promise<void> {
-  const marker = `${CHILD_EVENT_ORDER_MARKER_PREFIX}${label}${CHILD_EVENT_ORDER_MARKER_SUFFIX}`;
-  await new Promise<void>((resolve, reject) => {
-    HARNESS_STDOUT.write(marker, (error) => {
-      if (error) reject(error);
-      else resolve();
-    });
-  });
-}
-
-async function runChildEventOrderFixture(
-  ink: ReturnType<typeof render>,
-  order: ChildEventOrder,
-): Promise<void> {
-  const steps = childEventOrderSteps(order);
-  // `render()` mounts synchronously, and this first flush establishes the
-  // single origin for the fixture protocol. No fixture step may precede it.
-  await ink.waitUntilRenderFlush();
-  await writeChildEventOrderMarker('mounted');
-
-  for (const [stepIndex, step] of steps.entries()) {
-    step();
-    ink.rerender(renderHarnessApp());
-    await ink.waitUntilRenderFlush();
-    await writeChildEventOrderMarker(`step-${stepIndex + 1}`);
-  }
-}
-
-// Mirror real CLI startup: `chatSessionController.ts` installs the session
-// adapter once per TUI session — the single rail that lands status, roster,
-// edge, and removal facts on the shared `SessionState` and projects them
-// into `cliState`. Attached before any seeding so every scenario below
-// drives child state through real facts; the harness keeps no side channel
-// into the roster or topology.
-HARNESS_DISPOSERS.push(attachSessionSignalsAdapter(defaultSession()));
-// Register the harness root with the substrate (a real run's attachment
-// fact does this at run start): rosters and edges are only derivable for
-// streams the session's log store knows.
-emitSetActiveStream(STREAM_ID);
-
-function emitStreamDescription(
-  streamId: StreamTabId,
-  description: string,
-): void {
-  defaultSession().events.emit({
-    scope: 'session',
-    event: {
-      type: 'updateStreamDescription',
-      payload: { streamId, description },
-    },
-  });
 }
 
 if (SHOW_CHILDREN) {
@@ -1678,57 +1411,34 @@ if (SHOW_CHILDREN) {
         }
       : child,
   );
-  const activeSubagents = childStreams.filter(
-    (child) => child.status !== STREAM_PHASE.FAILED,
-  );
-  // Seed through the real roster facts rather than poking StreamSlice
-  // fields directly: emit the complete roster first (so the errored
-  // child gets a retained row), then re-emit the roster with it omitted —
-  // mirroring the production sequence where a roster stops including a child
-  // once it leaves the runtime's active registry, while its retained history
-  // survives.
-  emitChildRoster(STREAM_ID, childStreams);
-  emitChildRoster(STREAM_ID, activeSubagents);
-  seedHarnessStreamPhase(
+  seedPhase(
     STREAM_ID,
     STREAM_PHASE.RUNNING,
-    // The status machine holds one run window across every later active
-    // phase, so a scenario that already seeded an initial RUNNING keeps that
-    // backdated start rather than restarting the clock here.
-    defaultSession().status.getStreamState(STREAM_ID)?.runStartedAt ??
-      startedAt,
+    // One run window across every later active phase: a scenario that
+    // already seeded an initial RUNNING keeps that backdated start.
+    streamViewOf(currentView(), STREAM_ID)?.runStartedAt ?? startedAt,
   );
   for (const child of childStreams) {
-    const streamId = child.childStreamId;
-    const addNestedChildren =
-      SHOW_NESTED_CHILDREN && child.agentName === 'strategy';
-    emitSetActiveStream(streamId, AgentCategory.ToolUse);
-    emitParentStreamEdge(streamId, STREAM_ID);
-    if (addNestedChildren) emitChildRoster(streamId, [nestedStrategyChild]);
-    emitStreamDescription(streamId, `${child.agentName} sub-workflow`);
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      entries: makeChildEntries(child.agentName, child.executionId),
-    }));
+    const streamId = child.childStreamId as StreamTabId;
+    seedStream(streamId, {
+      identity: child.identity,
+      executionId: child.executionId,
+      parentStreamId: STREAM_ID,
+    });
+    seedDescription(streamId, `${child.agentName} sub-workflow`);
+    seedRows(streamId, makeChildEntries(child.agentName, child.executionId));
     // One child carries usage so scenarios pin the row metadata column's
-    // generated-token figure (`↓40k`). Usage lives on the snapshot store, so
-    // it arrives as the run fact the store accumulates.
+    // generated-token figure (`↓40k`).
     if (child.agentName === 'reviewer') {
-      defaultSession().events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'usage',
-          payload: {
-            streamId,
-            storageKey: child.executionId as ExecutionId,
-            usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
-          },
-        },
+      publish({
+        type: 'usage',
+        aggregateId: streamId,
+        storageKey: child.executionId as ExecutionId,
+        usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
     }
     if (child.status !== undefined) {
-      seedHarnessStreamPhase(
+      seedPhase(
         streamId,
         child.status,
         child.status === STREAM_PHASE.RUNNING ? child.startedAt : undefined,
@@ -1736,27 +1446,18 @@ if (SHOW_CHILDREN) {
     }
   }
   if (SHOW_NESTED_CHILDREN) {
-    emitSetActiveStream(
-      'harness-nested-local-checker-stream',
-      AgentCategory.ToolUse,
+    const nestedStreamId = nestedStrategyChild.childStreamId as StreamTabId;
+    seedStream(nestedStreamId, {
+      identity: nestedStrategyChild.identity,
+      executionId: nestedStrategyChild.executionId,
+      parentStreamId: 'harness-child-strategy-stream' as StreamTabId,
+    });
+    seedDescription(nestedStreamId, 'localChecker nested proof check');
+    seedRows(
+      nestedStreamId,
+      makeChildEntries('localChecker', 'nested proof check'),
     );
-    emitParentStreamEdge(
-      'harness-nested-local-checker-stream',
-      'harness-child-strategy-stream',
-    );
-    emitStreamDescription(
-      'harness-nested-local-checker-stream',
-      'localChecker nested proof check',
-    );
-    patchStream('harness-nested-local-checker-stream', (slice) => ({
-      ...slice,
-      entries: makeChildEntries('localChecker', 'nested proof check'),
-    }));
-    seedHarnessStreamPhase(
-      'harness-nested-local-checker-stream',
-      STREAM_PHASE.RUNNING,
-      nestedStartedAt,
-    );
+    seedPhase(nestedStreamId, STREAM_PHASE.RUNNING, nestedStartedAt);
   }
 }
 
@@ -1791,43 +1492,26 @@ if (SHOW_TODOS) {
       ].join('\n'),
     },
   };
-  defaultSession().events.emit({
-    scope: 'run',
-    streamId: STREAM_ID,
-    event: {
-      type: 'updateTodos',
-      streamId: STREAM_ID,
-      todos: [...workPlan.todos],
-    },
-  });
-  defaultSession().events.emit({
-    scope: 'run',
-    streamId: STREAM_ID,
-    event: {
-      type: 'updatePlan',
-      streamId: STREAM_ID,
-      plan: workPlan.plan,
-    },
-  });
+  publish(
+    { type: 'updateTodos', aggregateId: STREAM_ID, todos: [...workPlan.todos] },
+    { type: 'updatePlan', aggregateId: STREAM_ID, plan: workPlan.plan },
+  );
 }
 
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
-    return enqueueHarnessApproval(
-      {
-        kind: 'toolEdit',
-        data: prepareToolEditApprovalPrompt(defaultSession(), {
-          requestId: 'harness-edit-approval',
-          request,
-          relativePath: request.path,
+    requestHarnessApproval(
+      () =>
+        session().interactions.requestToolEditApproval({
+          ...request,
+          permission: prepareToolEditApprovalPrompt(session(), {
+            requestId: 'harness-edit-approval',
+            request,
+            relativePath: request.path,
+          }),
         }),
-        tui: {
-          originalContent: request.originalContent,
-          proposedContent: request.proposedContent,
-        },
-      },
-      applyHarnessApprovalDecision,
+      () => undefined,
     );
   };
 
@@ -1838,23 +1522,30 @@ if (SHOW_EDIT_APPROVAL) {
   }
 }
 
+// The running workflow exists before its agent asks below: a request names
+// a stream the fold already holds, the way a real run's does.
+if (SHOW_WORKFLOW_RUNNING) {
+  seedRunningWorkflow();
+}
+
 if (SHOW_BASH_APPROVAL) {
-  const showApproval = (index = 1) =>
-    enqueueApproval(
-      {
-        kind: 'bash',
-        data: makeBashApprovalPayload(index),
-      },
-      { onPresent: () => notify('approvalNeeded') },
-    );
+  const showApproval = (index = 1) => {
+    const permission = makeBashApprovalPayload(index);
+    const streamId = permission.streamId as StreamTabId;
+    return session().interactions.requestBashApproval({
+      streamId,
+      command: permission.command,
+      permission,
+    });
+  };
   const showRepeatedApprovals = async (): Promise<void> => {
     const decision = await showApproval(1);
-    applyHarnessApprovalDecision(decision);
-    if (!decision.accepted) return;
+    if (decision.action !== 'approve') return;
     const secondDecision = await showApproval(2);
-    applyHarnessApprovalDecision(secondDecision);
     appendHarnessAssistantTranscript(
-      secondDecision.accepted ? 'SECOND-BASH-APPROVED' : 'SECOND-BASH-REJECTED',
+      secondDecision.action === 'approve'
+        ? 'SECOND-BASH-APPROVED'
+        : 'SECOND-BASH-REJECTED',
     );
   };
   const startApprovals = () => {
@@ -1862,7 +1553,7 @@ if (SHOW_BASH_APPROVAL) {
       void showRepeatedApprovals().catch(() => undefined);
       return;
     }
-    void showApproval(1).then(applyHarnessApprovalDecision);
+    void showApproval(1);
   };
 
   if (SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS) {
@@ -1883,109 +1574,101 @@ if (SHOW_BASH_APPROVAL) {
   }
 }
 
-let harnessRetryRuntimeHost: CliRuntimeHost | undefined;
 if (SHOW_RETRY_APPROVAL) {
   await saveProviderApiKey('openai', 'sk-harness-openai-key');
-  harnessRetryRuntimeHost = createCliRuntimeHost(HARNESS_CLI_CONTEXT);
-  HARNESS_DISPOSERS.push(
-    defaultSession().interactions.use(
-      createTuiHostInteractions(harnessRetryRuntimeHost, HARNESS_CLI_CONTEXT),
-    ),
-  );
   let credentialSelection: 'configured' | 'personal' | undefined;
-  void defaultSession()
-    .interactions.requestRetry(makeRetryApprovalPayload(), {
-      prepareRetry: async (selection) => {
-        credentialSelection = selection;
-      },
-    })
-    .then((result) => appendHarnessRetryResult(result, credentialSelection));
+  requestHarnessApproval(
+    () =>
+      session().interactions.requestRetry(makeRetryApprovalPayload(), {
+        prepareRetry: async (selection) => {
+          credentialSelection = selection;
+        },
+      }),
+    (result) => appendHarnessRetryResult(result, credentialSelection),
+  );
 }
-
 if (SHOW_EXTERNAL_INQUIRY) {
-  enqueueHarnessApproval(
-    {
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'harness-external-inquiry',
-        question: EXTERNAL_INQUIRY_QUESTION,
-        threadId: EXTERNAL_INQUIRY_THREAD_ID,
-        allowBypass: false,
-        streamId: STREAM_ID,
-      },
-    },
-    appendHarnessExternalInquiryDecision,
+  // The tool opens the thread with the host, then publishes its listing
+  // fact; the continuation the agent would receive is mirrored here once
+  // the thread settles in the fold.
+  void session().interactions.openExternalInquiry({
+    requestId: 'harness-external-inquiry',
+    question: EXTERNAL_INQUIRY_QUESTION,
+    threadId: EXTERNAL_INQUIRY_THREAD_ID,
+    allowBypass: false,
+    streamId: STREAM_ID,
+    sessionLinks: null,
+    draft: null,
+    transcript: null,
+  });
+  publish({
+    type: 'inquiryThreadUpdated',
+    aggregateId: EXTERNAL_INQUIRY_THREAD_ID,
+    threadId: EXTERNAL_INQUIRY_THREAD_ID,
+    parentStreamId: STREAM_ID,
+    status: 'open',
+    lastQuestionPreview: EXTERNAL_INQUIRY_QUESTION.slice(0, 80),
+    lastActivityIso: new Date().toISOString(),
+    turnCount: 1,
+  });
+  let reported = false;
+  HARNESS_DISPOSERS.push(
+    subscribeToSignalChanges([sessionView()], () => {
+      if (reported) return;
+      const thread = currentView().inquiries.find(
+        (entry) => entry.threadId === EXTERNAL_INQUIRY_THREAD_ID,
+      );
+      if (!thread || thread.status === 'open') return;
+      reported = true;
+      appendHarnessExternalInquiryContinuation(thread.status);
+    }),
   );
 }
-
 if (SHOW_USER_QUESTION) {
-  enqueueHarnessApproval(
-    { kind: 'userQuestion', data: makeUserQuestionPayload() },
-    applyHarnessApprovalDecision,
+  requestHarnessApproval(
+    () => session().interactions.askUserQuestion(makeUserQuestionPayload()),
+    () => undefined,
   );
 }
-
 if (SHOW_PLAN_APPROVAL) {
-  enqueueHarnessApproval(
-    { kind: 'planApproval', data: makePlanApprovalPayload() },
+  requestHarnessApproval(
+    () => session().interactions.requestPlanApproval(makePlanApprovalPayload()),
     appendHarnessPlanDecision,
   );
 }
 
 if (SHOW_AGENT_PROPOSAL) {
-  enqueueHarnessApproval(
-    { kind: 'proposal', data: makeAgentProposalPayload() },
-    applyHarnessApprovalDecision,
+  requestHarnessApproval(
+    () =>
+      session().interactions.requestAgentProposal(makeAgentProposalPayload()),
+    () => undefined,
   );
 }
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
   rootRunPending.set(false);
-  const childStreamIds = new Set(
-    visibleSubagentRows(STREAM_ID, childRosters.get()).map(
-      (child) => child.childStreamId,
-    ),
-  );
-  // Clear active roster membership through the real roster fact; the shared
-  // applier retains each vanished row, and its displayed status comes from
-  // the phase-merge of the real per-child transitions below.
-  emitChildRoster(STREAM_ID, []);
+  session().interactions.cancel({ cause: 'Session interrupted.' });
   appendHarnessAssistantTranscript('Harness interrupt requested.', STREAM_ID);
-  seedHarnessStreamPhase(STREAM_ID, STREAM_PHASE.CANCELLED);
-  for (const streamId of childStreamIds) {
-    defaultSession().status.transition(
-      streamId,
-      STREAM_PHASE.CANCELLED,
-      STREAM_TRANSITION_CAUSE.USER_STOP,
-    );
+  for (const streamId of descendantsOf(STREAM_ID)) {
+    const stream = streamViewOf(currentView(), streamId);
+    if (stream && isInFlightPhase(stream.status)) {
+      seedPhase(streamId, STREAM_PHASE.CANCELLED);
+    }
   }
 }
 
 function markHarnessStreamInterrupted(streamId: StreamTabId): void {
-  clearApprovalsWhere(
-    (payload) => approvalPayloadStreamId(payload) === streamId,
-  );
+  session().interactions.cancel({ streamId, cause: 'Run interrupted.' });
   if (streamId === STREAM_ID) {
     canInterrupt = false;
     rootRunPending.set(false);
-  } else {
-    emitChildRoster(
-      STREAM_ID,
-      activeSubagentsFor(STREAM_ID, childRosters.get()).filter(
-        (child) => child.childStreamId !== streamId,
-      ),
-    );
   }
   appendHarnessAssistantTranscript(
     `Harness focused interrupt requested for ${streamId}.`,
     streamId,
   );
-  defaultSession().status.transition(
-    streamId,
-    STREAM_PHASE.CANCELLED,
-    STREAM_TRANSITION_CAUSE.USER_STOP,
-  );
+  seedPhase(streamId, STREAM_PHASE.CANCELLED);
 }
 
 function appendHarnessAssistantTranscript(
@@ -1995,41 +1678,31 @@ function appendHarnessAssistantTranscript(
   appendHarnessTranscript('assistant', text, streamId);
 }
 
-function appendHarnessChildSubmitAck(
-  text: string,
-  streamId: StreamTabId,
-): void {
-  const isLive = isActivePhase(streamPhaseFor(streamId)?.phase);
-  appendHarnessTranscript('assistant', text, streamId, { finalized: !isLive });
-}
-
 function appendHarnessTranscript(
   role: 'assistant' | 'error' | 'user',
   text: string,
   explicitStreamId?: StreamTabId,
-  options: { readonly finalized?: boolean } = {},
 ): void {
+  const view = currentView();
   const streamId =
     explicitStreamId ??
     resolveLocalTranscriptStreamId({
       activeStreamId: activeStreamIdSignal.get(),
       fallbackStreamId: STREAM_ID,
-      parentStream: parentStream.get(),
+      parentOf: (id) => streamViewOf(view, id)?.parentId ?? undefined,
       rootStreamId: rootStreamId.get(),
     });
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    entries: [
-      ...slice.entries,
-      harnessTextRow(
-        `harness-local-${Date.now()}-${slice.entries.length}`,
-        role,
-        text,
-        slice.entries.length + 1,
-        options.finalized,
-      ),
-    ],
-  }));
+  switch (role) {
+    case 'assistant':
+      appendLocalAssistantTranscript(text, streamId);
+      return;
+    case 'user':
+      appendLocalUserTranscript(text);
+      return;
+    case 'error':
+      appendLocalErrorTranscript(text);
+      return;
+  }
 }
 
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
@@ -2062,62 +1735,35 @@ function applyHarnessApprovalPolicySelection(
 }
 
 function markHarnessExecutionStopped(executionId: string): void {
-  const parentSlice = streams.get().get(STREAM_ID);
-  if (!parentSlice) return;
-
-  const activeSubagentRows = activeSubagentsFor(STREAM_ID, childRosters.get());
-  const executionRows = [
-    ...activeSubagentRows,
-    ...visibleSubagentRows(STREAM_ID, childRosters.get()),
-  ];
-  const executionRow = executionRows.find(
-    (child) => child.executionId === executionId,
+  const view = currentView();
+  const child = [...view.streams.values()].find(
+    (stream) => stream.executionId === executionId,
   );
-  if (!executionRow) return;
-
-  emitChildRoster(
-    STREAM_ID,
-    activeSubagentRows.filter((child) => child.executionId !== executionId),
-  );
+  if (!child) return;
   appendHarnessAssistantTranscript(
     `Harness kill requested for ${executionId}.`,
     STREAM_ID,
   );
   appendHarnessAssistantTranscript(
     'Harness kill requested for this sub-workflow.',
-    executionRow.childStreamId,
+    child.id,
   );
-  // The real transition stamps CANCELLED onto the retained roster row via
-  // the adapter's phase-merge, and projects the slice status with it.
-  defaultSession().status.transition(
-    executionRow.childStreamId,
-    STREAM_PHASE.CANCELLED,
-    STREAM_TRANSITION_CAUSE.USER_STOP,
-  );
+  seedPhase(child.id, STREAM_PHASE.CANCELLED);
 }
 
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
-  const focusedActiveStreamId = activeStreamIdSignal.get();
-  const focusedChildRoute = focusedChildFollowUpRoute({
-    activeStreamId: focusedActiveStreamId,
-    parentStream: parentStream.get(),
-    metadata: focusedActiveStreamId
-      ? streamMetadataFor(focusedActiveStreamId)
-      : undefined,
-  });
-  if (focusedChildRoute.kind === 'reject') {
-    appendHarnessAssistantTranscript(
-      FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
-      focusedChildRoute.streamId,
-    );
-    return;
-  }
-  if (focusedChildRoute.kind === 'accept') {
-    appendHarnessChildSubmitAck(
-      `Harness received: ${line}`,
-      focusedChildRoute.streamId,
-    );
+  const view = currentView();
+  const focused = streamViewOf(view, activeStreamIdSignal.get());
+  if (focused && focused.parentId !== null) {
+    if (!focusedChildAcceptsFollowUps(focused)) {
+      appendHarnessAssistantTranscript(
+        FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
+        focused.id,
+      );
+      return;
+    }
+    appendHarnessAssistantTranscript(`Harness received: ${line}`, focused.id);
     return;
   }
   appendHarnessAssistantTranscript(`Harness received: ${line}`);
@@ -2125,37 +1771,36 @@ function handleHarnessSubmit(line: string): void {
 
 function appendHarnessStatus(): void {
   const meta = sessionMeta.get();
+  const view = currentView();
   const streamId = activeStreamIdSignal.get() ?? STREAM_ID;
-  const slice = streams.get().get(streamId);
+  const stream = streamViewOf(view, streamId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: readStreamArtifacts(streamId)?.cumulativeUsage?.usageRoute,
+        usageRoute: cumulativeUsageOf(stream)?.usageRoute,
       }),
       approvalPolicy: harnessRuntimeSession.approvalPolicy,
-      approvalBypasses: slice?.bypass,
-      status: streamPhaseFor(streamId)?.phase,
+      approvalBypasses: view.policy.get(streamId)?.bypasses,
+      statusLabel: stream?.statusLabel,
+      activeChildSessions: runningChildCount(view, stream),
       goal: GoalStore.getForStream(streamId),
       // The harness never emits an ACTIVE_SKILLS snapshot.
       activeSkills: [],
-      queuedFollowUpMessages: defaultSession().followUps.getAll(streamId),
+      queuedFollowUpMessages: view.queuedFollowUps.get(streamId) ?? [],
     }),
   );
 }
 
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
-  clearApprovals();
+  session().interactions.cancel({ cause: 'Session interrupted.' });
   harnessFollowUpQueue.drainItems();
   void GoalStore.forget(STREAM_ID);
-  const store = defaultSession().transcripts;
-  for (const streamId of streams.get().keys()) {
-    store.delete(streamId).catch(() => {
-      // The harness reset is best-effort; visible cliState is reset below.
-    });
+  for (const streamId of [...currentView().streams.keys()]) {
+    removeStream(streamId);
   }
   resetCliState(meta);
   activeStreamIdSignal.set(STREAM_ID);
@@ -2294,7 +1939,7 @@ function renderHarnessApp(): React.JSX.Element {
       onKillExecution={markHarnessExecutionStopped}
       onWorkflowControl={() => undefined}
       canInterruptStream={(streamId) =>
-        isInFlightPhase(streamPhaseFor(streamId)?.phase)
+        isInFlightPhase(streamViewOf(currentView(), streamId)?.status)
       }
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
@@ -2331,21 +1976,8 @@ if (SHOW_TERMINAL_RESUME_REPAINT) {
   });
 }
 
-if (SHOW_WORKFLOW_RUNNING) {
-  seedRunningWorkflow();
-}
-
 if (SHOW_PROCESS_CHILD) {
   seedRunningProcessChild();
-}
-
-if (CHILD_EVENT_ORDER) {
-  void runChildEventOrderFixture(ink, CHILD_EVENT_ORDER).catch((error) => {
-    process.stderr.write(
-      `[tui-harness] HARNESS_CHILD_EVENT_ORDER failed: ${toErrorMessage(error)}\n`,
-    );
-    void exitHarness(1);
-  });
 }
 
 let harnessExiting = false;
@@ -2357,7 +1989,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   }
   ink.unmount();
   try {
-    await harnessRetryRuntimeHost?.close();
+    await harnessRuntimeHost.close();
     await platform().lifecycle.runShutdown();
   } finally {
     process.exit(exitCode);

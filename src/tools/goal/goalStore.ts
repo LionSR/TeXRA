@@ -1,4 +1,5 @@
 import { Mutex } from 'async-mutex';
+import { Effect, Fiber, Stream } from 'effect';
 
 import {
   getRunContextSession,
@@ -8,12 +9,14 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { effectRuntime } from '@platform/processRuntime';
 import { tryWorkspaceRoots, workspaceRoots } from '@platform/workspaceRoots';
 import {
   GoalSchema,
   isGoalInFlight,
   type ExecutionId,
   type Goal,
+  type GoalState,
   type GoalStatus,
   type StreamTabId,
 } from '@shared/schemas';
@@ -40,6 +43,13 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+/** The fact's snapshot (PRD 6, item 7): the goal after the mutation. */
+function goalStateOf(goal: Goal | null): GoalState {
+  return goal && isGoalInFlight(goal)
+    ? { active: true, status: goal.status, objective: goal.objective }
+    : { active: false };
+}
+
 function emitGoalStateChanged(
   streamId: StreamTabId,
   session?: SessionHandle,
@@ -50,13 +60,13 @@ function emitGoalStateChanged(
   const target =
     session ?? getRunContextSession(tryUseRunContext()) ?? tryDefaultSession();
   if (!target) return;
-  target.events.emit({
-    scope: 'session',
-    event: {
+  target.publish([
+    {
       type: 'goalStateChanged',
-      payload: { streamId },
+      aggregateId: streamId,
+      state: goalStateOf(readRaw(streamId)),
     },
-  });
+  ]);
 }
 
 function readRaw(streamId: StreamTabId): Goal | null {
@@ -160,17 +170,26 @@ function requireNonEmpty(value: string, label: string): string {
 }
 
 /**
- * Subscribe to goal mutations in one explicitly-owned session.
+ * Subscribe to goal mutations in one explicitly-owned session, from now on.
  * Goal state is session-scoped: consumers must pass the session they render,
  * rather than listening on a process-wide compatibility event.
  */
 export function subscribeGoalStateChanges(
-  session: Pick<SessionHandle, 'events'>,
+  session: Pick<SessionHandle, 'events' | 'now'>,
   listener: GoalStateChangeListener,
 ): () => void {
-  return session.events.subscribeSessionFacts((fact) => {
-    if (fact.type === 'goalStateChanged') listener(fact.payload);
-  });
+  const fiber = effectRuntime().runFork(
+    Stream.runForEach(session.events.all(session.now()), (event) =>
+      Effect.sync(() => {
+        if (event.type === 'goalStateChanged') {
+          listener({ streamId: event.aggregateId });
+        }
+      }),
+    ),
+  );
+  return () => {
+    effectRuntime().runFork(Fiber.interrupt(fiber));
+  };
 }
 
 export const GoalStore = Object.freeze({

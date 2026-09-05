@@ -175,7 +175,7 @@ const PermissionKindSchema = z.enum(PERMISSION_KIND);
  */
 export type ProgressPermissionKind = z.infer<typeof PermissionKindSchema>;
 
-const PermissionPayloadSchema = z.discriminatedUnion('kind', [
+export const PermissionPayloadSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('toolEdit'),
     data: ToolEditPermissionSchema,

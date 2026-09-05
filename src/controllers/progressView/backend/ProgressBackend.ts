@@ -1,6 +1,7 @@
+import { Effect, Fiber, Stream } from 'effect';
+
 import PQueue from 'p-queue';
 
-import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import type { DeleteStreamResult, SessionStores } from '@agent/storage';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
@@ -22,10 +23,11 @@ import {
   type BuildApprovalRequestHandlerSetParams,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type {
+  ActiveChildInfo,
   ProgressViewOutboundMessage,
-  SetActiveStreamPayload,
   StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -149,8 +151,8 @@ export class ProgressBackend {
     });
     this.hasPendingPermissions = ui.hasPendingPermissions;
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
-      deleteStream: (stream, expectedIncarnation, beforeRetainedRepair) =>
-        this.deleteStream(stream, expectedIncarnation, beforeRetainedRepair),
+      deleteStream: (stream, beforeRetainedRepair) =>
+        this.deleteStream(stream, { beforeRetainedRepair }),
       // The committed selection, plus the target of an activation still in
       // flight: an activation preloads the sidecar before it selects, so a
       // terminal status landing in that window must not evict what the
@@ -321,14 +323,7 @@ export class ProgressBackend {
     this.inFlightActivationGenerations.add(generation);
     const hydration = await Promise.allSettled([
       leasePromise,
-      // Opening the row is the one moment this host reads the stream's
-      // durable run facts, and it rides the preload it already performs:
-      // chained after it because the preload backfills the summary mirror the
-      // execution FK comes from. There is no pass over the other rows —
-      // an unopened one renders from the always-resident summary tier.
-      this.state.snapshots
-        .preload([stream])
-        .then(() => this.state.hydrateRunFacts(stream)),
+      this.state.snapshots.preload([stream]),
     ]);
     this.inFlightActivationGenerations.delete(generation);
     const transcriptLeaseResult = hydration[0];
@@ -406,16 +401,13 @@ export class ProgressBackend {
     transcriptLease?.close();
   }
 
-  /** Apply presentation policy carried beside a stream attachment fact. */
-  private handleStreamPresentationRequest(
-    payload: SetActiveStreamPayload,
-  ): void {
-    const stream = payload.streamId;
-    if (!stream) {
-      void this.hydrateAndCommitSelection('', { notifyActivation: true });
-      return;
-    }
-    if (payload.suppressViewSwitch === true) return;
+  /**
+   * Select a stream this host just launched, from the launch's own stream
+   * callback (`onStreamResolved`). Host-local selection, never a fact: a
+   * background child appears without taking focus because nothing calls
+   * this for it, and a pending prompt on the current stream keeps it.
+   */
+  presentLaunchedStream(stream: StreamTabId): void {
     const current = this.presentation.activeStream;
     if (current && this.hasPendingPermissions(current)) return;
     void this.activateStream(stream);
@@ -429,27 +421,16 @@ export class ProgressBackend {
   }
 
   /**
-   * Admit one session fact through the applier, then apply presentation
-   * policy for an accepted attachment. A refused attachment (removed stream)
-   * must not activate or lease.
+   * Admit one session event through the applier.
    *
-   * Public so tests and rare host seeds can inject a fact directly;
-   * production reaches it through the hub subscription in
+   * Public so tests and rare host seeds can inject an event directly;
+   * production reaches it through the plane reader in
    * {@link setupEventListeners}.
    */
-  applySessionFact(
-    fact: Parameters<SessionFactApplier['handleSessionFact']>[0],
+  applySessionEvent(
+    event: Parameters<SessionFactApplier['apply']>[0],
   ): boolean {
-    const admitted = this.factApplier.handleSessionFact(fact);
-    if (admitted && fact.type === 'setActiveStream') {
-      this.handleStreamPresentationRequest(fact.payload);
-    }
-    return admitted;
-  }
-
-  /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
-  applyRunFact(...args: Parameters<SessionFactApplier['handleRunFact']>): void {
-    this.factApplier.handleRunFact(...args);
+    return this.factApplier.apply(event);
   }
 
   /**
@@ -493,21 +474,24 @@ export class ProgressBackend {
    */
   async deleteStream(
     stream: StreamTabId,
-    expectedIncarnation?: number,
-    beforeRetainedRepair?: (outcome: 'active' | 'failed') => void,
+    options: {
+      /** The fact path owns its removal barrier and passes its repair hook;
+       *  a host command (no options) owns its barrier through the applier. */
+      readonly beforeRetainedRepair?: (outcome: 'active' | 'failed') => void;
+    } = {},
   ): Promise<DeleteStreamResult | undefined> {
+    const { beforeRetainedRepair } = options;
     const wasActive = this.presentation.activeStream === stream;
     const activationGeneration = this.activationGeneration;
 
-    // A host command (no caller incarnation) owns its removal barrier and
-    // pending buffer through the applier, exactly like a `removeStream` fact.
-    // If a fact-path barrier already owns this identity, do not start a second
-    // deletion or touch that barrier.
-    let commandRemoval: { incarnation: number; created: boolean } | undefined;
-    if (expectedIncarnation === undefined) {
+    // A host command owns its removal barrier and pending buffer through the
+    // applier, exactly like a `removeStream` fact. If a fact-path barrier
+    // already owns this identity, do not start a second deletion or touch
+    // that barrier.
+    let commandRemoval: { created: boolean } | undefined;
+    if (!beforeRetainedRepair) {
       commandRemoval = this.factApplier.beginCommandRemoval(stream);
       if (!commandRemoval.created) return 'superseded';
-      expectedIncarnation = commandRemoval.incarnation;
     }
     const releaseDeletionClaim = this.state.stores.claimStreamDeletion(stream);
 
@@ -530,22 +514,13 @@ export class ProgressBackend {
           if (preparationRetained) {
             return Promise.resolve('failed' as const);
           }
-          return this.deleteStreamNow(
-            stream,
-            wasActive,
-            activationGeneration,
-            expectedIncarnation,
-          );
+          return this.deleteStreamNow(stream, wasActive, activationGeneration);
         },
       );
     } catch (error) {
       releaseDeletionClaim();
       if (commandRemoval) {
-        this.factApplier.abortCommandRemoval(
-          stream,
-          commandRemoval.incarnation,
-          commandRemoval.created,
-        );
+        this.factApplier.abortCommandRemoval(stream, commandRemoval.created);
       }
       throw error;
     }
@@ -560,7 +535,6 @@ export class ProgressBackend {
       // durable cleanup just reported as still live.
       this.factApplier.completeCommandRemoval(
         stream,
-        commandRemoval.incarnation,
         retained,
         commandRemoval.created,
       );
@@ -666,7 +640,6 @@ export class ProgressBackend {
     stream: StreamTabId,
     wasActive: boolean,
     activationGenerationAtStart: number,
-    expectedIncarnation?: number,
   ): Promise<DeleteStreamResult | undefined> {
     // `undefined` means the deletion never ran (reserved id / cannot-use data
     // dir), not "deleted": the command path relies on a committed deletion
@@ -677,11 +650,7 @@ export class ProgressBackend {
     // The renderer owns this: it sends both the full roster and the
     // incremental per-stream metadata a tab can first appear through.
     const wasRendered = this.renderer.hasRenderedStream(stream);
-    // An undefined expectedIncarnation falls back to the current incarnation
-    // inside `clearStream`, matching the no-options call this replaces.
-    const deletion = await this.state.clearStream(stream, {
-      expectedIncarnation,
-    });
+    const deletion = await this.state.clearStream(stream);
     if (deletion !== 'deleted') {
       return deletion;
     }
@@ -896,24 +865,49 @@ export class ProgressBackend {
   }
 
   /**
-   * Attach this backend's session-fact listeners. {@link dispose} detaches
-   * them, so a fact emitted afterwards reaches no handler and callers need no
+   * Attach this backend's reader of the session's event plane, from now on
+   * (PRD one-fold-three-renderers, 7.1): every event in commit order, applied
+   * to canonical state and the renderer. The reader is ordered after the
+   * fold (`session.folded`): the applier and the renderer read the view
+   * beside each event, and a row reaches them only once the view holds the
+   * state it produced. {@link dispose} interrupts it, so an
+   * event published afterwards reaches no handler and callers need no
    * subscription handle of their own. Attaching after disposal is a no-op:
    * a host can close its window while its presentation is still being built.
    */
   setupEventListeners(): void {
     if (this.disposed) return;
-    this.detachEventListeners.push(
-      this.session.events.subscribeSessionFacts((fact) => {
-        this.applySessionFact(fact);
-      }),
-      this.session.events.subscribeRunFacts(
-        (runFact) => {
-          this.factApplier.handleRunFact(runFact.streamId, runFact.event);
-        },
-        { types: RUN_FACT_EVENT_TYPES },
+    const { session } = this;
+    const reader = effectRuntime().runFork(
+      Stream.runForEach(session.folded(session.now()), (event) =>
+        Effect.sync(() => {
+          this.factApplier.apply(event);
+        }),
       ),
     );
+    this.detachEventListeners.push(() => {
+      effectRuntime().runFork(Fiber.interrupt(reader));
+    });
+    // The live child roster is presentation state the registry holds, never
+    // a plane row: listen, then seed every parent's current roster, after the
+    // plane reader so the first renderer output cannot precede either.
+    this.detachEventListeners.push(
+      session.executions.onChildActivity((parent, items) =>
+        this.applyChildRoster(parent, items),
+      ),
+    );
+    for (const streamId of this.state.streamLogs.keys()) {
+      const subagents = session.executions.getActiveChildren(streamId);
+      if (subagents.length > 0) this.applyChildRoster(streamId, subagents);
+    }
+  }
+
+  /** Apply one parent's live child roster, as the registry reports it. */
+  applyChildRoster(
+    parentStreamId: StreamTabId,
+    items: readonly ActiveChildInfo[],
+  ): void {
+    this.factApplier.applyChildRoster(parentStreamId, [...items]);
   }
 
   /** The backend's single teardown: no host holds a second disposal handle. */

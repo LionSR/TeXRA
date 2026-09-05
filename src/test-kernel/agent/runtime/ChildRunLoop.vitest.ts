@@ -518,6 +518,7 @@ describe('childRunLoop E2E fixtures', () => {
     const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
       streamPrefix: 'codex',
       run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+      userFollowUpSupport: 'terminalBacked',
       description: 'Keep a background child running',
       config: childStreamConfig,
     });
@@ -1055,6 +1056,7 @@ describe('childRunLoop E2E fixtures', () => {
     const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
       streamPrefix: 'codex',
       run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+      userFollowUpSupport: 'terminalBacked',
       description: 'Fail a turn, then take an interrupt',
       config: childStreamConfig,
     });

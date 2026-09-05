@@ -31,6 +31,8 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 import {
   appendTranscriptEntry,
@@ -40,10 +42,11 @@ import {
   createIsolatedRecordingBackend,
   createPersistentRecordingBackend,
   createRecordingBackend,
-  emitActiveStream,
+  emitRunStart,
   emitRunConfig,
   emitRunEvent,
   emitStreamDescription,
+  sessionEventOf,
   toolUseConfig,
 } from './progressBackendHarness';
 
@@ -90,10 +93,21 @@ function hasFullSync(messages: ProgressViewOutboundMessage[]): boolean {
 }
 
 /** An isolated recording backend already wired to its session events. */
+let windowCount = 0;
+
+/** A window's backend over its own paper: a session's plane is keyed by its
+ *  workspace root, so simultaneous windows get their own. */
 function createListeningBackend(): ReturnType<
   typeof createIsolatedRecordingBackend
 > {
-  const target = createIsolatedRecordingBackend();
+  windowCount += 1;
+  const target = createIsolatedRecordingBackend(
+    createTestSession({
+      roots: createFakeWorkspaceRoots({
+        storagePath: `/workspace/window-${windowCount}/.texra/storage`,
+      }),
+    }),
+  );
   target.backend.setupEventListeners();
   return target;
 }
@@ -153,19 +167,19 @@ describe('ProgressBackend', () => {
     const target = createListeningBackend();
     const { backend, messages } = target;
 
-    emitActiveStream(target, {
-      streamId: 'root',
+    emitRunStart(target, {
+      streamId: 'root' as StreamTabId,
       agentCategory: AgentCategory.Workflow,
     });
+    backend.presentLaunchedStream('root' as StreamTabId);
     await vi.waitFor(() =>
       expect(backend.presentation.activeStream).toBe('root'),
     );
     messages.length = 0;
 
-    emitActiveStream(target, {
-      streamId: 'hidden-approval',
+    emitRunStart(target, {
+      streamId: 'hidden-approval' as StreamTabId,
       agentCategory: AgentCategory.ToolUse,
-      suppressViewSwitch: true,
     });
 
     await vi.waitFor(() =>
@@ -174,11 +188,13 @@ describe('ProgressBackend', () => {
       ).toBe(true),
     );
     expect(backend.presentation.activeStream).toBe('root');
-    expect(messages).toContainEqual(
-      expect.objectContaining({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-        streamInfo: expect.objectContaining({ name: 'hidden-approval' }),
-      }),
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+          streamInfo: expect.objectContaining({ name: 'hidden-approval' }),
+        }),
+      ),
     );
   });
 
@@ -187,17 +203,17 @@ describe('ProgressBackend', () => {
     const { backend, messages } = target;
     const run = 'workflow-run' as StreamTabId;
 
-    emitActiveStream(target, {
-      streamId: 'root',
+    emitRunStart(target, {
+      streamId: 'root' as StreamTabId,
       agentCategory: AgentCategory.ToolUse,
     });
+    backend.presentLaunchedStream('root' as StreamTabId);
     await vi.waitFor(() =>
       expect(backend.presentation.activeStream).toBe('root'),
     );
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId: run,
       agentCategory: AgentCategory.Workflow,
-      suppressViewSwitch: true,
     });
     await vi.waitFor(() =>
       expect(backend.state.getStreamState(run)).toBeDefined(),
@@ -253,8 +269,8 @@ describe('ProgressBackend', () => {
 
     seedHistoryStreams(backend, 20);
 
-    emitActiveStream(target, {
-      streamId: 'root',
+    emitRunStart(target, {
+      streamId: 'root' as StreamTabId,
       agentCategory: AgentCategory.Workflow,
     });
     await vi.waitFor(() =>
@@ -267,10 +283,9 @@ describe('ProgressBackend', () => {
     );
     messages.length = 0;
 
-    emitActiveStream(target, {
-      streamId: 'child',
+    emitRunStart(target, {
+      streamId: 'child' as StreamTabId,
       agentCategory: AgentCategory.ToolUse,
-      suppressViewSwitch: true,
     });
     await vi.waitFor(() =>
       expect(
@@ -284,12 +299,17 @@ describe('ProgressBackend', () => {
     expect(hasFullSync(messages)).toBe(false);
     messages.length = 0;
 
-    emitRunEvent(target, 'child' as StreamTabId, {
-      type: 'run.start',
-      streamId: 'child' as StreamTabId,
-      executionId: 'c41111' as ExecutionId,
-      identity: { kind: 'agent', agent: 'search' },
-    });
+    target.session.publish([
+      {
+        type: 'run.start',
+        aggregateId: 'child' as StreamTabId,
+        executionId: 'c41111' as ExecutionId,
+        identity: { kind: 'agent', agent: 'search' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfig(
       target,
       'child' as StreamTabId,
@@ -411,14 +431,16 @@ describe('ProgressBackend', () => {
     await first.backend.state.snapshots.load([]);
     await second.backend.state.snapshots.load([]);
 
-    emitActiveStream(first, {
+    emitRunStart(first, {
       streamId: firstStream,
       agentCategory: AgentCategory.ToolUse,
     });
-    emitActiveStream(second, {
+    emitRunStart(second, {
       streamId: secondStream,
       agentCategory: AgentCategory.Workflow,
     });
+    first.backend.presentLaunchedStream(firstStream);
+    second.backend.presentLaunchedStream(secondStream);
 
     emitRunConfig(
       first,
@@ -553,10 +575,13 @@ describe('ProgressBackend', () => {
     };
 
     await backend.state.snapshots.load([]);
-    emitActiveStream(target, {
+    // A tool-use stream: todos and a plan are tool-use arms, and the fold
+    // refuses them on a workflow stream.
+    emitRunStart(target, {
       streamId,
-      agentCategory: AgentCategory.Workflow,
+      agentCategory: AgentCategory.ToolUse,
     });
+    backend.presentLaunchedStream(streamId);
     await vi.waitFor(() =>
       expect(backend.presentation.activeStream).toBe(streamId),
     );
@@ -601,6 +626,16 @@ describe('ProgressBackend', () => {
       streamId,
     });
 
+    // The reader is ordered after the fold: the facts land in commit order,
+    // so the usage push arriving means every earlier fact has been applied.
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
+        stream: streamId,
+        runId: storageKey,
+        usage: expectedUsage,
+      }),
+    );
     expect(
       messages.filter(
         (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
@@ -634,14 +669,6 @@ describe('ProgressBackend', () => {
       stream: streamId,
       plan,
     });
-    await vi.waitFor(() =>
-      expect(messages).toContainEqual({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
-        stream: streamId,
-        runId: storageKey,
-        usage: expectedUsage,
-      }),
-    );
     expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
       1: [outputFile],
     });
@@ -666,7 +693,7 @@ describe('ProgressBackend', () => {
     const streamId = 'session:malformed-todos-plan' as StreamTabId;
 
     await backend.state.snapshots.load([]);
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId,
       agentCategory: AgentCategory.Workflow,
     });
@@ -700,7 +727,7 @@ describe('ProgressBackend', () => {
     const outputFile = paperOutputFile();
 
     await backend.state.snapshots.load([]);
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId,
       agentCategory: AgentCategory.Workflow,
     });
@@ -748,18 +775,16 @@ describe('ProgressBackend', () => {
     } satisfies InquiryThreadUpdatedEvent;
 
     await backend.state.snapshots.load([]);
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId: parentStreamId,
       agentCategory: AgentCategory.ToolUse,
     });
-    target.session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'status',
-        streamId: parentStreamId,
-        phase: STREAM_PHASE.RUNNING,
-        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      },
+    backend.presentLaunchedStream(parentStreamId);
+    target.session.publishStatus({
+      type: 'status',
+      streamId: parentStreamId,
+      phase: STREAM_PHASE.RUNNING,
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
     });
     const followUpLease = target.session.followUps.claimLive(
       parentStreamId,
@@ -788,43 +813,32 @@ describe('ProgressBackend', () => {
       total: 4,
     });
 
-    emitRunEvent(target, parentStreamId, {
-      type: 'child.activity',
-      parentStreamId,
-      items: [child],
-    });
+    target.backend.applyChildRoster(parentStreamId, [child]);
 
-    target.session.events.emit({
-      scope: 'session',
-      event: {
+    target.session.publish([
+      {
         type: 'setParentStream',
-        payload: {
-          childStreamId,
-          parentStreamId,
-        },
+        aggregateId: childStreamId,
+        parentStreamId,
       },
-    });
-
-    target.session.events.emit({
-      scope: 'session',
-      event: {
+      {
         type: 'updateQueuedFollowUps',
-        payload: { streamId: parentStreamId },
+        aggregateId: parentStreamId,
+        messages: target.session.followUps.getAll(parentStreamId),
       },
-    });
-
-    target.session.events.emit({
-      scope: 'session',
-      event: {
+      {
         type: 'inquiryThreadUpdated',
-        payload: inquiryThread,
+        aggregateId: inquiryThread.threadId,
+        ...inquiryThread,
       },
-    });
+    ]);
 
-    expect(backend.state.getStreamState(parentStreamId)).toMatchObject({
-      stage: { kind: 'round', index: 2, total: 4 },
-      subagents: [child],
-    });
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamState(parentStreamId)).toMatchObject({
+        stage: { kind: 'round', index: 2, total: 4 },
+        subagents: [child],
+      }),
+    );
     expect(
       messages.some(
         (message) =>
@@ -1016,10 +1030,13 @@ describe('ProgressBackend', () => {
       });
       backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
 
-      backend.applyRunFact(stream, {
-        type: 'conversation.progress',
-        progress: { toolCallCount: 7 },
-      });
+      backend.applySessionEvent(
+        sessionEventOf({
+          type: 'conversation.progress',
+          aggregateId: stream,
+          progress: { toolCallCount: 7 },
+        }),
+      );
 
       await backend.applyStreamStatus(
         stream,
@@ -1075,12 +1092,14 @@ describe('ProgressBackend', () => {
         'setStreamStatus',
       ).mockRejectedValue(failure);
 
-      backend.applySessionFact({
-        type: 'status',
-        streamId: stream,
-        phase: STREAM_PHASE.RUNNING,
-        cause: 'lifecycle',
-      });
+      backend.applySessionEvent(
+        sessionEventOf({
+          type: 'status',
+          aggregateId: stream,
+          phase: STREAM_PHASE.RUNNING,
+          cause: 'lifecycle',
+        }),
+      );
 
       await vi.waitFor(() => {
         expect(
@@ -1103,7 +1122,7 @@ describe('ProgressBackend', () => {
 
     backend.state.streamLogs.ensureStream(stream);
     // Provisional patches only ever carry agentCategory/isRemote in
-    // production (see SessionFactApplier.handleSetActiveStream). Identity
+    // production (see SessionFactApplier.handleRunStart). Identity
     // comes from the immutable descriptor; input/model details come from
     // RunConfig, mirrored into the stream summary and overlaid at read time
     // by getStreamMetadata (#9947) — no refresh step exists anymore.
@@ -1159,15 +1178,20 @@ describe('ProgressBackend', () => {
     const stream = 'workflow-script#f10a11' as StreamTabId;
     const executionId = 'f10a11' as ExecutionId;
     backend.state.streamLogs.ensureStream(stream);
-    emitRunEvent(target, stream, {
-      type: 'run.start',
-      streamId: stream,
-      executionId,
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+    target.session.publish([
+      {
+        type: 'run.start',
+        aggregateId: stream,
+        executionId,
+        identity: {
+          kind: 'multiAgentWorkflow',
+          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        },
+        category: AgentCategory.Workflow,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
       },
-    });
+    ]);
     emitRunConfig(
       target,
       stream,

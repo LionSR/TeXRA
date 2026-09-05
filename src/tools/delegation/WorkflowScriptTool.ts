@@ -519,6 +519,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                 userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
                 description: meta.description,
                 config: runConfig,
+                checkpointId,
               },
             );
           },

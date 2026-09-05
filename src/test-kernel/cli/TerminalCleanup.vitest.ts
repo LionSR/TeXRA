@@ -2,24 +2,23 @@ import '@test/support/defaultSessionTestSetup';
 
 import { writeSync } from 'node:fs';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
-  bindChildStreamState,
-  invalidateChildStreams,
-  unbindChildStreamState,
-} from '@cli/chat/tui/state/childExecutions';
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
-import {
-  clearApprovals,
-  enqueueApproval,
-} from '@cli/chat/tui/state/approvalQueue';
+
 import {
   resetCliState,
   rootRunPending,
   rootRunStreamId,
+  rootStreamId,
 } from '@cli/chat/tui/state/cliState';
 import {
   installTerminalRestoreOnExit,
@@ -30,13 +29,18 @@ import {
   installTerminalTitleUpdates,
   terminalTitleText,
 } from '@cli/chat/tui/terminalTitle';
-import { SessionState } from '@controllers/session/SessionState';
-import { STREAM_PHASE } from '@shared/schemas';
 import {
-  clearAllStreamStatusesForTest,
-  seedStreamStatusForTest,
-} from '@test/support/streamStatusTestUtils';
-import { setCliStreamPhase } from '@test/support/cliStreamStatus';
+  STREAM_PHASE,
+  type StreamPhase,
+  type StreamTabId,
+} from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
+import {
+  bindTestSessionView,
+  makeStreamView,
+  seedView,
+  viewWith,
+} from './fixtures/sessionViewFixture';
 
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -48,19 +52,36 @@ const NO_TERMINAL_CAPABILITIES = {
   oscColorReports: false,
 };
 
-// The title projects stream phases, which live on the session status machine
-// and reach the CLI through the bound `SessionState`.
-let sessionState: SessionState;
-
+/** The fold's output the title reads: one root, every later stream its
+ *  child, and the session's pending approvals. */
+const phases = new Map<string, StreamPhase>();
+let approvals: SessionView['approvals'] = [];
+function syncView(): void {
+  const ids = [...phases.keys()] as StreamTabId[];
+  const rootId = ids[0];
+  const streams = [...phases].map(([id, status], index) =>
+    makeStreamView({
+      id,
+      status,
+      ...(index > 0 && rootId !== undefined
+        ? { parentId: rootId, ancestors: [{ id: rootId, label: rootId }] }
+        : {}),
+    }),
+  );
+  if (rootId !== undefined) rootStreamId.set(rootId);
+  seedView(viewWith(streams, { approvals }));
+}
+function setPhase(streamId: string, status: StreamPhase): void {
+  phases.set(streamId, status);
+  syncView();
+}
+beforeAll(bindTestSessionView);
 beforeEach(() => {
-  sessionState = new SessionState(defaultSession());
-  bindChildStreamState(sessionState);
+  phases.clear();
+  approvals = [];
+  syncView();
 });
-
 afterEach(() => {
-  unbindChildStreamState(sessionState);
-  clearAllStreamStatusesForTest(defaultSession().status);
-  clearApprovals();
   resetCliState();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -76,15 +97,27 @@ afterEach(() => {
 /** Put one real approval in the queue: the title reads the queue's own
  *  projection, so the test has to drive it through the queue. */
 function queueTitleApproval(streamId: string): void {
-  void enqueueApproval({
-    kind: 'bash',
-    data: {
+  approvals = [
+    ...approvals,
+    {
+      streamId: streamId as StreamTabId,
       requestId: `title-${streamId}`,
-      allowBypass: true,
-      streamId,
-      command: 'echo ok',
+      payload: {
+        kind: 'bash',
+        data: {
+          requestId: `title-${streamId}`,
+          allowBypass: true,
+          streamId,
+          command: 'echo ok',
+        },
+      },
     },
-  });
+  ];
+  syncView();
+}
+function clearTitleApprovals(): void {
+  approvals = [];
+  syncView();
 }
 
 describe('terminalTitleText', () => {
@@ -168,14 +201,8 @@ describe('installTerminalTitleUpdates', () => {
     const updates = installTerminalTitleUpdates('/work/coauthor');
     rootRunPending.set(true);
     rootRunStreamId.set('transition-root');
-    setCliStreamPhase({
-      streamId: 'transition-root',
-      status: STREAM_PHASE.WAITING,
-    });
-    setCliStreamPhase({
-      streamId: 'transition-child',
-      status: STREAM_PHASE.RUNNING,
-    });
+    setPhase('transition-root', STREAM_PHASE.WAITING);
+    setPhase('transition-child', STREAM_PHASE.RUNNING);
     await flushTitleUpdate();
     expectLastTitle('⠋ {T}·coauthor');
 
@@ -183,14 +210,11 @@ describe('installTerminalTitleUpdates', () => {
     await flushTitleUpdate();
     expectLastTitle('⚠ {T}·coauthor');
 
-    clearApprovals();
+    clearTitleApprovals();
     await flushTitleUpdate();
     expectLastTitle('⠋ {T}·coauthor');
 
-    setCliStreamPhase({
-      streamId: 'transition-child',
-      status: STREAM_PHASE.WAITING,
-    });
+    setPhase('transition-child', STREAM_PHASE.WAITING);
     await flushTitleUpdate();
     expectLastTitle('{T}·coauthor');
     updates.dispose();
@@ -201,10 +225,7 @@ describe('installTerminalTitleUpdates', () => {
     vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
-    setCliStreamPhase({
-      streamId: 'animated-root',
-      status: STREAM_PHASE.RUNNING,
-    });
+    setPhase('animated-root', STREAM_PHASE.RUNNING);
     await flushTitleUpdate();
 
     // Frame comes from `loadingFrameAt(Date.now(), TITLE_FRAMES)` on the
@@ -223,7 +244,7 @@ describe('installTerminalTitleUpdates', () => {
     expectLastTitle('⚠ {T}·coauthor');
     expectNoTitleWrites();
 
-    clearApprovals();
+    clearTitleApprovals();
     await flushTitleUpdate();
     expectLastTitle('⠦ {T}·coauthor');
     updates.suspend();
@@ -232,18 +253,12 @@ describe('installTerminalTitleUpdates', () => {
 
     updates.resume();
     expectLastTitle('⠹ {T}·coauthor');
-    setCliStreamPhase({
-      streamId: 'animated-root',
-      status: STREAM_PHASE.WAITING,
-    });
+    setPhase('animated-root', STREAM_PHASE.WAITING);
     await flushTitleUpdate();
     expectLastTitle('{T}·coauthor');
     expectNoTitleWrites();
 
-    setCliStreamPhase({
-      streamId: 'animated-root',
-      status: STREAM_PHASE.RUNNING,
-    });
+    setPhase('animated-root', STREAM_PHASE.RUNNING);
     await flushTitleUpdate();
     expectLastTitle('⠴ {T}·coauthor');
     updates.dispose();
@@ -255,20 +270,13 @@ describe('installTerminalTitleUpdates', () => {
     vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
-    setCliStreamPhase({
-      streamId: 'status-only-root',
-      status: STREAM_PHASE.RUNNING,
-    });
+    setPhase('status-only-root', STREAM_PHASE.RUNNING);
     await flushTitleUpdate();
     expectLastTitle('⠋ {T}·coauthor');
 
-    // Status is no longer mirrored into `streams`: production publishes this
-    // repaint revision after the machine changes, without rewriting the CLI
-    // slice. The title must subscribe to that same revision as the status bar.
-    seedStreamStatusForTest(defaultSession().status, 'status-only-root', {
-      phase: STREAM_PHASE.WAITING,
-    });
-    invalidateChildStreams();
+    // The canonical phase is the fold's: the title reads the view the status
+    // bar reads, and nothing else changes.
+    setPhase('status-only-root', STREAM_PHASE.WAITING);
     await flushTitleUpdate();
 
     expectLastTitle('{T}·coauthor');
@@ -282,15 +290,9 @@ describe('installTerminalTitleUpdates', () => {
     const off = vi.spyOn(process, 'off');
     const updates = installTerminalTitleUpdates('/work/coauthor');
     const exitListener = on.mock.calls.find(([event]) => event === 'exit')?.[1];
-    setCliStreamPhase({
-      streamId: 'dedup-root',
-      status: STREAM_PHASE.RUNNING,
-    });
+    setPhase('dedup-root', STREAM_PHASE.RUNNING);
     await flushTitleUpdate();
-    setCliStreamPhase({
-      streamId: 'dedup-child',
-      status: STREAM_PHASE.RUNNING,
-    });
+    setPhase('dedup-child', STREAM_PHASE.RUNNING);
     await flushTitleUpdate();
 
     expect(writeSync).toHaveBeenCalledTimes(2);
@@ -307,10 +309,7 @@ describe('installTerminalTitleUpdates', () => {
     const exitListener = on.mock.calls.find(
       ([event]) => event === 'exit',
     )?.[1] as ((code: number) => void) | undefined;
-    setCliStreamPhase({
-      streamId: 'exit-root',
-      status: STREAM_PHASE.RUNNING,
-    });
+    setPhase('exit-root', STREAM_PHASE.RUNNING);
     await flushTitleUpdate();
 
     exitListener?.(0);
@@ -324,10 +323,7 @@ describe('installTerminalTitleUpdates', () => {
   it('shows the idle title while suspended and re-projects live state on resume', async () => {
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
-    setCliStreamPhase({
-      streamId: 'suspend-root',
-      status: STREAM_PHASE.RUNNING,
-    });
+    setPhase('suspend-root', STREAM_PHASE.RUNNING);
     await flushTitleUpdate();
 
     updates.suspend();

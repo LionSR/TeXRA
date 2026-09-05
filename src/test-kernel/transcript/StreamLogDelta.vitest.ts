@@ -14,7 +14,7 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { StreamLogDeltaBuffer } from '@transcript';
+import { StreamLogDeltaBuffer } from '@transcript/StreamLog';
 import type { StreamLogDelta } from '@transcript/StreamLog';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 

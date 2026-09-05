@@ -15,6 +15,10 @@ import {
   setBashApprovalSessionBypass,
 } from '@tools/approval';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import {
+  bashApprovalRequest,
+  toolEditApprovalRequest,
+} from '../agent/progressTestUtils';
 
 const sid = (s: string): StreamTabId => s as StreamTabId;
 
@@ -25,13 +29,13 @@ function toolEditRequest(
   path: string,
   streamId?: StreamTabId,
 ): ToolEditApprovalRequest {
-  return {
+  return toolEditApprovalRequest({
     path,
     originalContent: 'old',
     proposedContent: 'new',
     sourceTool: 'edit_file',
     ...(streamId ? { streamId } : {}),
-  };
+  });
 }
 
 describe('approval cleanup scope', () => {
@@ -114,15 +118,19 @@ describe('approval cleanup scope', () => {
       const toolA = sessionA.interactions.requestToolEditApproval(
         toolEditRequest('a.tex'),
       );
-      const bashA = sessionA.interactions.requestBashApproval({
-        command: 'echo a',
-      });
+      const bashA = sessionA.interactions.requestBashApproval(
+        bashApprovalRequest({
+          command: 'echo a',
+        }),
+      );
       const toolB = sessionB.interactions.requestToolEditApproval(
         toolEditRequest('b.tex'),
       );
-      const bashB = sessionB.interactions.requestBashApproval({
-        command: 'echo b',
-      });
+      const bashB = sessionB.interactions.requestBashApproval(
+        bashApprovalRequest({
+          command: 'echo b',
+        }),
+      );
       let sessionBSettled = false;
       void Promise.all([toolB, bashB]).then(() => {
         sessionBSettled = true;

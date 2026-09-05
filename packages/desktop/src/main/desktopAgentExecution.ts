@@ -343,7 +343,6 @@ export class DesktopProgressBridge {
     if (this.disposed) return;
 
     this.toolEditApprovals = new ToolEditApprovalController({
-      session: this.session,
       host: new DesktopToolEditApprovalHost({ ui: this.options.host }),
       showToolEditPermission: (payload) =>
         this.backend.approvalHandlers.toolEdit.show(payload),
@@ -357,7 +356,6 @@ export class DesktopProgressBridge {
     // unimplemented.
     this.hostInteractions = createProgressHostInteractions({
       interactions: presentationHost,
-      session: this.session,
       getApprovalHandlers: () => this.backend.approvalHandlers,
       getToolEditApprovals: () => this.toolEditApprovals!,
       setApprovalBypassState: this.backend.setApprovalBypassState,
@@ -420,27 +418,12 @@ export class DesktopProgressBridge {
     if (this.disposed) return;
     // No metadata refresh loop: `getStreamMetadata` overlays the
     // always-resident summary mirror at read time, so canonical state is
-    // already visible (#9947).
-    //
-    // Child activity is live presentation state rather than durable history.
-    // Seed it only after attaching the presentation and every live-event
-    // subscription, so the first renderer output cannot precede either.
+    // already visible (#9947). The live child rosters are seeded by the
+    // backend's `setupEventListeners`, after every live subscription.
     for (const streamId of this.streamLogs.keys()) {
       const category = this.state.getStreamMetadata(streamId).agentCategory;
       if (category) {
         this.state.getOrCreateStreamState(streamId, category);
-      }
-      const subagents = this.session.executions.getActiveChildren(streamId);
-      if (subagents.length > 0) {
-        this.session.events.emit({
-          scope: 'run',
-          streamId,
-          event: {
-            type: 'child.activity',
-            parentStreamId: streamId,
-            items: subagents,
-          },
-        });
       }
     }
     this.presentationReady = true;
@@ -1165,6 +1148,14 @@ export class DesktopProgressBridge {
     return true;
   }
 
+  /**
+   * Select a stream this window launched, from the launch's own stream
+   * callback. The window's selection, never a fact.
+   */
+  presentLaunchedStream(streamId: StreamTabId): void {
+    this.backend.presentLaunchedStream(streamId);
+  }
+
   /** Internal launch path; every launch entry point funnels through it. */
   private runExecution(
     request: ValidatedExecutionRequest,
@@ -1175,7 +1166,10 @@ export class DesktopProgressBridge {
       {
         session: this.session,
       },
-      options,
+      {
+        onStreamResolved: (streamId) => this.presentLaunchedStream(streamId),
+        ...options,
+      },
     );
   }
 

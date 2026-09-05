@@ -821,12 +821,12 @@ describe('ProgressBackend cleanup', () => {
       // What the sweep's caller publishes for each swept shell. Its durable
       // state is already gone, so the removal is presentation-only — and the
       // stranded row is the whole reason the fact is published at all.
-      for (const streamId of swept) {
-        second.session.events.emit({
-          scope: 'session',
-          event: { type: 'removeStream', payload: { streamId } },
-        });
-      }
+      second.session.publish(
+        swept.map((streamId) => ({
+          type: 'stream.removed' as const,
+          aggregateId: streamId,
+        })),
+      );
 
       await vi.waitFor(() =>
         expect(second.messages).toContainEqual({

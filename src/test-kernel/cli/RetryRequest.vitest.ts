@@ -1,12 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ApprovalModal } from '@cli/chat/tui/modals/ApprovalModal';
 import { RetryRequest } from '@cli/chat/tui/modals/RetryRequest';
-import {
-  clearApprovals,
-  currentApproval,
-  enqueueApproval,
-  type RetryApprovalPayload,
+import type {
+  ApprovalDecision,
+  ApprovalPayload,
+  PendingApproval,
+  RetryApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import type { StreamTabId } from '@shared/schemas';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
@@ -16,9 +16,19 @@ import {
   renderOutputAtTerminalSize,
 } from '@test/support/inkTestHarness.ts';
 
-describe('CLI retry request', () => {
-  afterEach(() => clearApprovals());
+/** A foreground modal entry whose decision the test awaits. */
+function pendingFor(payload: ApprovalPayload): {
+  readonly pending: PendingApproval;
+  readonly decision: Promise<ApprovalDecision>;
+} {
+  let decide!: (decision: ApprovalDecision) => void;
+  const decision = new Promise<ApprovalDecision>((resolve) => {
+    decide = resolve;
+  });
+  return { pending: { payload, decide }, decision };
+}
 
+describe('CLI retry request', () => {
   function subscriptionLimitPayload(
     personalApiKeyAvailable: boolean,
   ): RetryApprovalPayload {
@@ -41,7 +51,7 @@ describe('CLI retry request', () => {
 
   it('dismisses immediately instead of asking for rejection feedback', async () => {
     const { ink, React } = await loadInk();
-    const decision = enqueueApproval({
+    const { pending, decision } = pendingFor({
       kind: 'retry',
       data: {
         requestId: 'retry-request',
@@ -53,7 +63,7 @@ describe('CLI retry request', () => {
     });
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, { pending: currentApproval.get() }),
+      React.createElement(ApprovalModal, { pending }),
       { columns: 100 },
     );
 
@@ -99,12 +109,10 @@ describe('CLI retry request', () => {
 
   it('settles the approval queue from a real terminal k input', async () => {
     const { ink, React } = await loadInk();
-    const decision = enqueueApproval(subscriptionLimitPayload(true));
+    const { pending, decision } = pendingFor(subscriptionLimitPayload(true));
     const { instance, stdin } = renderInteractive(
       ink,
-      React.createElement(ApprovalModal, {
-        pending: currentApproval.get(),
-      }),
+      React.createElement(ApprovalModal, { pending }),
       { columns: 100 },
     );
 
@@ -115,7 +123,6 @@ describe('CLI retry request', () => {
         accepted: true,
         disableQuotaRoute: 'chatgpt',
       });
-      expect(currentApproval.get()).toBeUndefined();
     } finally {
       instance.unmount();
     }

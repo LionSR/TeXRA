@@ -1,9 +1,12 @@
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { createLog } from '@logger/logUtils';
+import { redactSecrets } from '@logger/redaction';
 import type {
   AgentProposalPermission,
+  BashPermission,
   FileLocation,
+  PermissionPayload,
   PlanApprovalPermission,
   ProgressPermissionKind,
   RetryPermission,
@@ -25,6 +28,7 @@ import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
+import type { SessionHandle } from './SessionHandle';
 
 const logger = createLog('SessionHostInteractions');
 
@@ -181,6 +185,12 @@ export interface HostBashApprovalRequest {
   readonly command: string;
   readonly cwd?: string | null;
   readonly streamId?: StreamTabId | null;
+  /**
+   * What the UI shows for this request, built once at the tool boundary
+   * (`prepareBashApprovalPrompt`): the payload of the `approval.requested`
+   * fact, and what every host surface renders.
+   */
+  readonly permission: BashPermission;
 }
 
 /**
@@ -386,6 +396,13 @@ interface HostInteractionAttachment {
 interface PendingSessionInteraction {
   readonly kind: ProgressPermissionKind;
   readonly streamId?: StreamTabId;
+  /** The `approval.requested` fact this request published, so its
+   *  `approval.resolved` names the same request; absent while no session is
+   *  bound or the request names no stream. */
+  readonly fact?: {
+    readonly streamId: StreamTabId;
+    readonly requestId: string;
+  };
   readonly dispatch: (
     interactions: HostInteractions,
   ) => Promise<unknown> | undefined;
@@ -393,6 +410,52 @@ interface PendingSessionInteraction {
   readonly settle: (result: unknown) => void;
   readonly reject: (reason?: unknown) => void;
   cancellationRequested: boolean;
+}
+
+/**
+ * What the UI shows for one request (PRD one-fold-three-renderers, section
+ * 6, item 1): the same permission payload every host publishes to its
+ * approval surface, carried by the request itself. Never a host handle.
+ * Plans, proposals, retries, and questions are their own permission; bash
+ * and tool-edit requests carry the prompt the tool boundary prepared.
+ */
+type PermissionPayloadFor<K extends SettledInteractionKind> = Extract<
+  PermissionPayload,
+  { kind: K }
+>;
+
+/**
+ * The durable copy of a request payload. A retry carries the provider error,
+ * whose body can echo the request URL or an `Authorization` header: the
+ * transcript rail scrubs those fields at record time
+ * (`TexraTranscriptRecorder`), and the fact rail scrubs them here, at its one
+ * emission point, dropping the raw body outright. Bash commands and question
+ * text are what the user typed and stay as they are.
+ */
+function redactedForFact(payload: PermissionPayload): PermissionPayload {
+  if (payload.kind !== 'retry') return payload;
+  const { errorMessage, errorDetails, ...data } = payload.data;
+  const redactedDetails = (() => {
+    if (!errorDetails) return errorDetails;
+    const { rawErrorBody: _dropped, ...details } = errorDetails;
+    for (const key of ['message', 'statusText', 'partialText'] as const) {
+      const value = details[key];
+      if (typeof value === 'string') details[key] = redactSecrets(value);
+    }
+    return details;
+  })();
+  return {
+    kind: 'retry',
+    data: {
+      ...data,
+      ...(errorMessage === undefined
+        ? {}
+        : { errorMessage: redactSecrets(errorMessage) }),
+      ...(redactedDetails === undefined
+        ? {}
+        : { errorDetails: redactedDetails }),
+    },
+  };
 }
 
 /**
@@ -410,6 +473,14 @@ export class SessionHostInteractions implements HostInteractions {
   > = [];
   private attachmentVersion = 0;
   private disposed = false;
+
+  /**
+   * @param session The owning session: the run-scoped fact rail every
+   *   response-bearing request publishes `approval.requested` and
+   *   `approval.resolved` on, through `session.publishRunEvent`, never a bus.
+   *   `SessionHandle` constructs this surface with itself.
+   */
+  constructor(private readonly session: SessionHandle) {}
 
   /** Number of response-bearing requests awaiting a host decision. */
   get pendingCount(): number {
@@ -522,32 +593,44 @@ export class SessionHostInteractions implements HostInteractions {
   requestToolEditApproval(
     request: ToolEditApprovalRequest,
   ): Promise<ToolEditApprovalResult> {
-    return this.enqueue('toolEdit', request.streamId, (interactions) =>
-      interactions.requestToolEditApproval?.(request),
+    return this.enqueue(
+      'toolEdit',
+      request.streamId,
+      (interactions) => interactions.requestToolEditApproval?.(request),
+      { kind: 'toolEdit', data: request.permission },
     );
   }
 
   requestBashApproval(
     request: HostBashApprovalRequest,
   ): Promise<BashSettlement> {
-    return this.enqueue('bash', request.streamId, (interactions) =>
-      interactions.requestBashApproval?.(request),
+    return this.enqueue(
+      'bash',
+      request.streamId,
+      (interactions) => interactions.requestBashApproval?.(request),
+      { kind: 'bash', data: request.permission },
     );
   }
 
   requestPlanApproval(
     request: HostPlanApprovalRequest,
   ): Promise<PlanApprovalResult> {
-    return this.enqueue('planApproval', request.streamId, (interactions) =>
-      interactions.requestPlanApproval?.(request),
+    return this.enqueue(
+      'planApproval',
+      request.streamId,
+      (interactions) => interactions.requestPlanApproval?.(request),
+      { kind: 'planApproval', data: request },
     );
   }
 
   requestAgentProposal(
     request: HostAgentProposalRequest,
   ): Promise<ProposalResult> {
-    return this.enqueue('proposal', request.streamId, (interactions) =>
-      interactions.requestAgentProposal?.(request),
+    return this.enqueue(
+      'proposal',
+      request.streamId,
+      (interactions) => interactions.requestAgentProposal?.(request),
+      { kind: 'proposal', data: request },
     );
   }
 
@@ -555,8 +638,11 @@ export class SessionHostInteractions implements HostInteractions {
     request: HostRetryRequest,
     options?: HostRetryInteractionOptions,
   ): Promise<RetryResult> {
-    return this.enqueue('retry', request.streamId, (interactions) =>
-      interactions.requestRetry?.(request, options),
+    return this.enqueue(
+      'retry',
+      request.streamId,
+      (interactions) => interactions.requestRetry?.(request, options),
+      { kind: 'retry', data: request },
     );
   }
 
@@ -567,6 +653,7 @@ export class SessionHostInteractions implements HostInteractions {
       'userQuestion',
       request.streamId || undefined,
       (interactions) => interactions.askUserQuestion?.(request),
+      { kind: 'userQuestion', data: request },
     );
   }
 
@@ -582,6 +669,30 @@ export class SessionHostInteractions implements HostInteractions {
 
   setApprovalBypassState(update: HostApprovalBypassStateUpdate): void {
     this.activeAttachment?.interactions.setApprovalBypassState?.(update);
+  }
+
+  /**
+   * Settle the pending request `requestId` (the id its `approval.requested`
+   * carries) with a decision any surface reached through `runtime.request`
+   * (PRD one-fold-three-renderers, 8.2). The pending set is the one owner of
+   * outstanding requests, so a decision from a second surface lands on the
+   * same request the first one shows. Returns false when no request of that
+   * kind is pending under the id: it settled already, or was never made.
+   */
+  settleRequest<K extends SettledInteractionKind>(
+    kind: K,
+    requestId: string,
+    result: HostInteractionResultByKind[K],
+  ): boolean {
+    for (const pending of this.pending) {
+      if (pending.kind !== kind || pending.fact?.requestId !== requestId) {
+        continue;
+      }
+      if (!this.deletePending(pending)) return false;
+      pending.settle(result);
+      return true;
+    }
+    return false;
   }
 
   cancel(selector: HostInteractionCancelSelector = {}): void {
@@ -647,6 +758,11 @@ export class SessionHostInteractions implements HostInteractions {
    * derived from `kind` through {@link cancellationResultFor} rather than
    * supplied beside it, so a request can never be paired with another kind's
    * cancellation result, and the settled type follows the same key.
+   *
+   * A request for a stream is a run fact: `approval.requested` is published
+   * before the host sees it, and `approval.resolved` when it leaves the
+   * pending set, whichever way it settled (a host decision, a cancellation,
+   * a rejected dispatch, session disposal).
    */
   private enqueue<K extends SettledInteractionKind>(
     kind: K,
@@ -654,6 +770,7 @@ export class SessionHostInteractions implements HostInteractions {
     dispatch: (
       interactions: HostInteractions,
     ) => Promise<HostInteractionResultByKind[K]> | undefined,
+    permission: PermissionPayloadFor<K>,
   ): Promise<HostInteractionResultByKind[K]> {
     type TResult = HostInteractionResultByKind[K];
     if (this.disposed) {
@@ -661,9 +778,11 @@ export class SessionHostInteractions implements HostInteractions {
     }
 
     return new Promise<TResult>((resolve, reject) => {
+      const fact = this.publishRequested(streamId ?? undefined, permission);
       const pending: PendingSessionInteraction = {
         kind,
         streamId: streamId ?? undefined,
+        ...(fact ? { fact } : {}),
         dispatch,
         cancellationResult: (cause) => cancellationResultFor(kind, cause),
         settle: (result) => resolve(result as TResult),
@@ -674,6 +793,22 @@ export class SessionHostInteractions implements HostInteractions {
       if (this.pending.size === 1) this.notifyPendingCountChange();
       this.dispatch(pending);
     });
+  }
+
+  /** A request naming a stream is a run fact; a streamless one (an unscoped
+   *  question) has no aggregate to publish on. */
+  private publishRequested(
+    streamId: StreamTabId | undefined,
+    payload: PermissionPayload,
+  ): PendingSessionInteraction['fact'] {
+    if (!streamId) return undefined;
+    const requestId = payload.data.requestId;
+    this.session.publishRunEvent(streamId, {
+      type: 'approval.requested',
+      requestId,
+      payload: redactedForFact(payload),
+    });
+    return { streamId, requestId };
   }
 
   private activateCurrentAttachment(
@@ -799,6 +934,12 @@ export class SessionHostInteractions implements HostInteractions {
 
   private deletePending(pending: PendingSessionInteraction): boolean {
     if (!this.pending.delete(pending)) return false;
+    if (pending.fact) {
+      this.session.publishRunEvent(pending.fact.streamId, {
+        type: 'approval.resolved',
+        requestId: pending.fact.requestId,
+      });
+    }
     if (this.pending.size === 0) this.notifyPendingCountChange();
     return true;
   }

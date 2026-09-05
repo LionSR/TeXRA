@@ -61,8 +61,8 @@ export function isBashApprovalBypassedForStream(
  * the host owns one (extension, desktop); the CLI hosts run on the default
  * session.
  */
-export function prepareBashApprovalPrompt(
-  request: HostBashApprovalRequest,
+function prepareBashApprovalPrompt(
+  request: Omit<HostBashApprovalRequest, 'permission'>,
   session?: SessionHandle,
 ): BashPermission {
   const streamId = request.streamId ?? undefined;
@@ -80,7 +80,7 @@ export function prepareBashApprovalPrompt(
 }
 
 export async function requestBashApproval(
-  request: HostBashApprovalRequest,
+  request: Omit<HostBashApprovalRequest, 'permission'>,
 ): Promise<BashSettlement> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY);
 
@@ -108,12 +108,16 @@ export async function requestBashApproval(
 
   requireInteractions('bash approval', context);
 
+  const hostRequest: Omit<HostBashApprovalRequest, 'permission'> = {
+    command: request.command,
+    ...(request.cwd && { cwd: request.cwd }),
+    streamId,
+  };
   return session.approvals.bash.enqueue(streamId, {
     prompt: () =>
       session.interactions.requestBashApproval({
-        command: request.command,
-        ...(request.cwd && { cwd: request.cwd }),
-        streamId,
+        ...hostRequest,
+        permission: prepareBashApprovalPrompt(hostRequest, session),
       }),
     bypassed: () => ({ action: 'approve' }),
   });

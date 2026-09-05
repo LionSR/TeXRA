@@ -5,9 +5,10 @@
 // pinning the runtime's internal file layout — the same fold-in the three hosts
 // took in #10011. These never reach the emitted declarations, so they carry no
 // provider-type leak risk.
-import type { AgentEvent } from '@agent/trace';
+import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { loadAgents, resolveAgent } from '@agent/index';
 import {
+  processOwnerId,
   runAgent as runValidatedAgent,
   SessionHandle as RuntimeSessionHandle,
   type AgentRunHandle as RuntimeAgentRunHandle,
@@ -26,12 +27,14 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - config and host services
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { createLog } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -105,7 +108,9 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
   interrupt(): void;
 }
 
-let runtimeInitialized = false;
+/** The process-wide setup every run shares, done once: the node runtime
+ *  features and the Effect runtime the package session's graph runs on. */
+let runtimeInitialized: Promise<void> | undefined;
 const logger = createLog('agentPackage');
 
 function releaseOrWarn(message: string, release: () => void): void {
@@ -124,7 +129,6 @@ class AgentRunStream implements AgentRun {
   }> = [];
   private liveHandle: RuntimeAgentRunHandle | undefined;
   private detachEvents: (() => void) | undefined;
-  private streamId: string | undefined;
   private ended = false;
   private iteratorClosed = false;
   private iteratorStarted = false;
@@ -141,27 +145,22 @@ class AgentRunStream implements AgentRun {
     );
   }
 
+  /**
+   * The run's own trace is the event source: every trace event of the run,
+   * durable or not, in emission order. The launcher hands the trace over
+   * with the resolved stream, before the run's first trace event (the
+   * instruction log, the root stage, the launch warnings), so an iteration
+   * begun right after `runAgent()` misses none of them.
+   */
+  attachTrace(trace: AgentTrace): void {
+    this.detachEvents = trace.subscribe((event) => {
+      if (this.iteratorStarted) this.push(event);
+    });
+  }
+
+  /** The live handle once the run is tracked: what `interrupt()` targets. */
   attachHandle(handle: RuntimeAgentRunHandle): void {
     this.liveHandle = handle;
-  }
-
-  attachEvents(session: RuntimeSessionHandle): void {
-    this.detachEvents = session.events.subscribe(
-      (event) => {
-        if (
-          event.scope === 'run' &&
-          event.streamId === this.streamId &&
-          this.iteratorStarted
-        ) {
-          this.push(event.event);
-        }
-      },
-      { scope: 'run' },
-    );
-  }
-
-  selectStream(streamId: string): void {
-    this.streamId = streamId;
   }
 
   interrupt(): void {
@@ -259,15 +258,23 @@ export function runAgent(input: RunAgentInput): AgentRun {
       initPlatform(input.platform);
       initProcessWorkspaceRoots(input.platform.roots);
     }
-    if (!runtimeInitialized) {
+    runtimeInitialized ??= (async () => {
       initNodeAgentRuntime(input.platform.lifecycle);
-      runtimeInitialized = true;
-    }
+      // The one Effect runtime of the embedding process (PRD 7.7), for the
+      // package session's graph; disposed on the embedder's shutdown path
+      // after the runtime's own execution settlement.
+      const runtime = installProcessRuntime(
+        processOwnerId(await input.platform.processes.selfIdentity()),
+      );
+      input.platform.lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+        runtime.dispose(),
+      );
+    })();
+    await runtimeInitialized;
 
     const session = new RuntimeSessionHandle({
       transcripts: StreamLogStore.ephemeral('npm package consumer'),
     });
-    stream.attachEvents(session);
     const interactions: RuntimeHostInteractions = {
       cancel: (selector) => input.interactions.cancel(selector),
       requestRetry: async () => ({
@@ -306,7 +313,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
           approvalPromptsUnavailable: true,
           launchSignal: stream.launchSignal,
           onRun: (handle) => stream.attachHandle(handle),
-          onStreamResolved: (streamId) => stream.selectStream(streamId),
+          onStreamResolved: (_streamId, trace) => stream.attachTrace(trace),
           session,
           stopAfterCycle: true,
           tools: input.tools,

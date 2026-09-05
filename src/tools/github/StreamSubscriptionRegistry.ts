@@ -110,10 +110,13 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       })
         .then((result) => {
           if (result.status !== 'sent' && result.status !== 'queued') return;
-          owner.events.emit({
-            scope: 'session',
-            event: { type: 'updateQueuedFollowUps', payload: { streamId } },
-          });
+          owner.publish([
+            {
+              type: 'updateQueuedFollowUps',
+              aggregateId: streamId,
+              messages: owner.followUps.getAll(streamId),
+            },
+          ]);
         })
         .catch((err: unknown) => {
           this.logger.warn('Failed to deliver subscription follow-up', {

@@ -34,7 +34,6 @@ import type {
   AgentTraceSubscriber,
   StatusEvent,
 } from '@agent/trace';
-import { roundedUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import {
@@ -51,6 +50,7 @@ import {
   type WorkflowPlanMarker,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   createFlushableDebounce,
@@ -801,10 +801,12 @@ export function attachTranscriptRecorder(
           // and the transcript already reflects completion through `stage.end`.
           return;
 
-        case 'run.start':
         case 'run.config':
-          // Run identity/config facts drive host state through the session plane.
-          // They are not transcript rows.
+        case 'approval.requested':
+        case 'approval.resolved':
+        case 'approval.policy':
+          // Run identity/config and approval facts drive host state through
+          // the session plane. They are not transcript rows.
           return;
 
         case 'child.activity':

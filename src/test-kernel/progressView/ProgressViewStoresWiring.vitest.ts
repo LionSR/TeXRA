@@ -12,7 +12,7 @@ import type { StreamTabId } from '@shared/schemas';
 describe('SessionState session-store wiring', () => {
   it('clears session status for a stores-initiated canonical deletion', async () => {
     const session = defaultSession();
-    const state = new SessionState();
+    const state = new SessionState(session);
     const stream = 'swept-stream' as StreamTabId;
     session.transcripts.ensureStream(stream);
     expect(session.status.tryAcquire(stream)).toBe(true);

@@ -17,6 +17,8 @@ import http from 'node:http';
 
 import { Cause, Deferred, Duration, Effect, Exit } from 'effect';
 
+import { effectRuntime } from '@platform/processRuntime';
+
 import { AUTH_CALLBACK_TIMEOUT_MS } from '../config';
 import type { SubscriptionAuthorizeRequest } from './SubscriptionOAuthCoordinator';
 
@@ -237,8 +239,8 @@ function loginProgram<S>(options: OAuthLoopbackLoginOptions<S>) {
 }
 
 /**
- * Run the loopback sign-in flow end to end and persist the session via the
- * coordinator.
+ * Run the loopback sign-in flow end to end on the process runtime and
+ * persist the session via the coordinator.
  */
 export async function loginWithOAuthLoopback<S>(
   options: OAuthLoopbackLoginOptions<S>,
@@ -247,7 +249,9 @@ export async function loginWithOAuthLoopback<S>(
   signal?.throwIfAborted();
   let exit: Exit.Exit<S, unknown>;
   try {
-    exit = await Effect.runPromiseExit(loginProgram(options), { signal });
+    exit = await effectRuntime().runPromiseExit(loginProgram(options), {
+      signal,
+    });
   } catch (error) {
     if (signal?.aborted) throw signal.reason;
     throw error;

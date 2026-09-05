@@ -89,6 +89,11 @@
         "./src/platform/*",
         "./src/platform/*.ts",
         "./src/platform/*/index.ts"
+      ],
+      "@controllers/*": [
+        "./src/controllers/*",
+        "./src/controllers/*.ts",
+        "./src/controllers/*/index.ts"
       ]
     }
   },

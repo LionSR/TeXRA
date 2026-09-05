@@ -1093,7 +1093,7 @@ function createWindow(options: {
         // terminal result is eligible for replay. This await ends before the
         // process-owned run begins and therefore cannot retain the window for
         // the duration of the run.
-        await getAgentExecution();
+        const execution = await getAgentExecution();
         const { buildDesktopSetupExecuteMessage } =
           await import('@controllers/onboarding/setupLaunch');
         const message = await buildDesktopSetupExecuteMessage();
@@ -1117,6 +1117,10 @@ function createWindow(options: {
         return launchDesktopAgent(
           { kind: 'fresh', ...preparation.request },
           { session: paper.session },
+          {
+            onStreamResolved: (streamId) =>
+              execution.presentLaunchedStream(streamId),
+          },
         );
       },
       signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
@@ -1405,7 +1409,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         // quit lifecycle drains; awaiting idle keeps the process alive until
         // the directories are actually gone.
         afterFlushArtifacts: [() => diffHostDisposeQueue.onIdle()],
-        afterExecutionSettlement: [() => processResources.dispose()],
+        afterExecutionSettlement: [
+          () => processResources.dispose(),
+          // Last: every paper's session has released its graph above.
+          () => platformInit.runtime.dispose(),
+        ],
       });
 
       // Until the initial window is fully wired, any startup failure must run

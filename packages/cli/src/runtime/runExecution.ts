@@ -32,6 +32,7 @@ import {
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from './interruptedResumeHint';
+import { attachWorkflowPlainOutput } from './runProgressRenderer';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { initializeCliTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost } from './cliPresentationHost';
@@ -42,7 +43,6 @@ import {
   runOutcomeExitCode,
   type ExecuteAgentResult,
 } from './terminalStatus';
-import { attachWorkflowPlainOutput } from './workflowPlainOutput';
 import type { CliContext } from './cliContext';
 
 type RunAgentWorkflowOutput = NonNullable<
@@ -245,8 +245,12 @@ export async function executeCliRequest(
   let failurePresented = false;
   const renderWorkflowPlainProgress =
     runContext.outputFormat === 'text' && runContext.renderRunProgress === true;
-  const detachRunProgressRenderer =
-    presentationHost.attachRunProgressRenderer(session);
+  const detachRunProgressRenderer = presentationHost.attachRunProgressRenderer(
+    session,
+    {
+      executionId: request.executionId,
+    },
+  );
   const detachHostInteractions = session.interactions.use(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
@@ -271,10 +275,11 @@ export async function executeCliRequest(
   );
   const detachSessionProgressProjection =
     runContext.outputFormat === 'ndjson'
-      ? attachCliSessionProgressProjection(session.events)
-      : () => undefined;
+      ? attachCliSessionProgressProjection(session)
+      : async () => undefined;
   const detachWorkflowPlainOutput = renderWorkflowPlainProgress
-    ? attachWorkflowPlainOutput(session.events, {
+    ? attachWorkflowPlainOutput(session, {
+        executionId: request.executionId,
         beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
         writeLine: writeTextStderr,
       })
@@ -492,7 +497,7 @@ export async function executeCliRequest(
     detachResultToast();
     terminalResult.dispose();
     detachRunProgressRenderer();
-    detachSessionProgressProjection();
+    await detachSessionProgressProjection();
     detachWorkflowPlainOutput();
     detachHostInteractions();
     await presentationHost.close();

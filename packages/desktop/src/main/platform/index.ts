@@ -1,10 +1,12 @@
 import { join } from 'node:path';
 import { app } from 'electron';
-import { initializeBundledPrompts } from '@agent/runtime';
+import { initializeBundledPrompts, processOwnerId } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
-import { initPlatform } from '@platform/platform';
+import { initPlatform, platform } from '@platform/platform';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
@@ -64,6 +66,12 @@ export interface ElectronPlatformInitResult {
    * each re-resolve it.
    */
   resourcesPath: string;
+  /**
+   * The one Effect runtime of this process (PRD one-fold-three-renderers,
+   * 7.7): every paper's session graph runs on it. The entry disposes it last,
+   * after execution settlement and the papers' release of their graphs.
+   */
+  runtime: ProcessRuntime;
 }
 
 export async function initializeElectronPlatform(
@@ -121,6 +129,11 @@ export async function initializeElectronPlatform(
     workspaceState: workspaceStateStore,
   });
   initProcessWorkspaceRoots(processRoots);
+  // The one Effect runtime of this process (PRD 7.7): every paper's session
+  // graph and every Promise-facing fiber run on it.
+  const runtime = installProcessRuntime(
+    processOwnerId(await platform().processes.selfIdentity()),
+  );
   initProcessSettingHost('desktop');
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
@@ -179,5 +192,6 @@ export async function initializeElectronPlatform(
     lifecycle,
     dataRoot,
     resourcesPath,
+    runtime,
   };
 }

@@ -128,8 +128,8 @@ export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
   /**
    * Whether `status` is a terminal outcome that no producer can still move.
-   * `SessionState.streamDurablyFinal` produces it from
-   * `streamDurableOutcome`, which needs the terminal outcome plus one of two
+   * The fold's `runDurablyFinal` produces it from the stream's status and
+   * the local snapshot, which needs the terminal outcome plus one of two
    * ways to have no producer left: the phase came
    * from the durable facts (origin `derived`, so nothing is running this
    * stream anywhere), or it is this process's own `live` entry with no hold
@@ -200,15 +200,24 @@ const ToolUseUIStateSchema = z.object({
 
 // Tool-Use Stream State
 
+/** Which approval kinds a run bypasses; one definition for the persisted
+ *  stream state and the `approval.policy` snapshot event. */
+export const ApprovalBypassesSchema = z.record(
+  z.enum(APPROVAL_BYPASS_KINDS),
+  z.boolean(),
+);
+
 const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   category: z.literal(AgentCategory.ToolUse),
   // Frontend-owned fields updated by targeted progress-view messages
   todos: z.array(TodoItemSchema).prefault([]),
   plan: PlanSchema.nullable().prefault(null),
   queuedFollowUps: z.array(z.string()).prefault([]),
-  bypasses: z
-    .record(z.enum(APPROVAL_BYPASS_KINDS), z.boolean())
-    .prefault({ bash: false, toolEdit: false, superYolo: false }),
+  bypasses: ApprovalBypassesSchema.prefault({
+    bash: false,
+    toolEdit: false,
+    superYolo: false,
+  }),
   goal: GoalStateSchema.prefault({ active: false }),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),

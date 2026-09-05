@@ -1,3 +1,5 @@
+import { SubscriptionRef } from 'effect';
+
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
@@ -35,7 +37,7 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { STREAM_LIFECYCLE_UNAVAILABLE } from '@shared/schemas';
+import { STREAM_LIFECYCLE_UNAVAILABLE, STREAM_STATUS } from '@shared/schemas';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
@@ -444,33 +446,42 @@ export class LitSessionRenderer implements SessionRendererPort {
   /**
    * Immutable per-stream metadata for one already-built tab info.
    *
-   * `phaseOverride` is the one phase the rule cannot see yet: the status a
-   * caller is in the middle of applying, which has not reached the status
-   * machine. Everything else — live, derived, or unknown — comes from
-   * {@link SessionState.resolveStreamPhase}.
+   * `phaseOverride` is the one phase the view cannot see yet: the status a
+   * caller is in the middle of applying, which has not reached the fold.
+   * Everything else comes from the stream's `SessionView` arm.
    */
   private metadataFor(
     streamInfo: StreamTabInfo,
     phaseOverride?: StreamPhaseState,
   ): StreamMetadata {
     const current = this.state.getStreamState(streamInfo.name);
-    const resolved = this.state.resolveStreamPhase(streamInfo.name);
-    const status = phaseOverride ?? resolved.state;
-    // A stream held by another process, or one whose run state could not be
-    // read, has no phase in this session; the wire carries the sentinel so
-    // the view renders it read-only, with `statusDetail` saying why.
-    const statusDetail = phaseOverride ? undefined : resolved.detail;
+    const view = SubscriptionRef.getUnsafe(this.state.view).streams.get(
+      streamInfo.name,
+    );
+    const status: StreamPhaseState | undefined =
+      phaseOverride ??
+      (view && view.status !== STREAM_STATUS.READY
+        ? {
+            phase: view.status,
+            ...(view.substate ? { substate: view.substate } : {}),
+            ...(view.runStartedAt !== null
+              ? { runStartedAt: view.runStartedAt }
+              : {}),
+          }
+        : undefined);
+    // A stream this process cannot act on (held elsewhere, unreadable) has
+    // no phase here; the wire carries the sentinel so the view renders it
+    // read-only, with `statusDetail` saying why.
+    const statusDetail =
+      phaseOverride || !view?.readOnly
+        ? undefined
+        : (view.statusDetail ?? undefined);
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
       status: statusDetail ? STREAM_LIFECYCLE_UNAVAILABLE : status?.phase,
-      // A terminal outcome nothing can still move, through the session's one
-      // rule: an outcome published by a live run mid-teardown (a user stop) is
-      // not one. The view repaints an unclosed task group or an unsettled card
-      // only on this bit, and a phase this caller is still applying is not
-      // final by definition.
+      // A phase this caller is still applying is not final by definition.
       statusDurablyFinal:
-        phaseOverride === undefined &&
-        this.state.streamDurablyFinal(streamInfo.name),
+        phaseOverride === undefined && view?.durableOutcome != null,
       statusDetail,
       // The unavailable sentinel travels alone: a hold keeps the phase the
       // stream had, and shipping that phase's substate with the sentinel

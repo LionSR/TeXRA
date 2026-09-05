@@ -9,7 +9,6 @@ import {
   inspectExecutionLease,
   releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
@@ -48,9 +47,9 @@ import {
 import { withTranscriptWriter } from '@test/support/storeTestDrivers';
 
 import {
+  eventsOfType,
+  recordChildRosters,
   recordSessionEvents,
-  runEventsOfType,
-  sessionFactsOfType,
 } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
@@ -441,10 +440,13 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-run-config-before-running',
     );
     const trace = new TraceEmitter();
-    const detachTrace = ctx.runScope.session.attachRunTrace(trace, streamId);
-    // Record both scopes: run.config travels on the run rail while status is
-    // a session fact — the ordering assertion spans the two.
-    const recorded = recordSessionEvents(ctx.runScope.session.events);
+    const detachTrace = ctx.runScope.session.attachRunTrace(
+      { trace, handleStatus: () => {} },
+      streamId,
+    );
+    // One plane in commit order: run.config and the status fact both land
+    // on it, so the ordering assertion reads one log.
+    const recorded = recordSessionEvents(ctx.runScope.session);
     ctx.logger = trace;
     ctx.disposeTrace = detachTrace;
 
@@ -454,23 +456,19 @@ describe('runFlowWithLifecycle', () => {
       );
 
       const runConfigIndex = recorded.events.findIndex(
-        (event) => event.scope === 'run' && event.event.type === 'run.config',
+        (event) => event.type === 'run.config',
       );
-      const runningIndex = recorded.events.findIndex((event) => {
-        if (event.scope !== 'session' || event.event.type !== 'status') {
-          return false;
-        }
-        return (
-          event.event.streamId === streamId &&
-          event.event.phase === STREAM_PHASE.RUNNING
-        );
-      });
+      const runningIndex = recorded.events.findIndex(
+        (event) =>
+          event.type === 'status' &&
+          event.aggregateId === streamId &&
+          event.phase === STREAM_PHASE.RUNNING,
+      );
 
       expect(runConfigIndex).toBeGreaterThanOrEqual(0);
       expect(runningIndex).toBeGreaterThanOrEqual(0);
       expect(runConfigIndex).toBeLessThan(runningIndex);
     } finally {
-      recorded.detach();
       detachTrace();
       clearStreamStatusForTest(streamStatus, streamId);
     }
@@ -525,9 +523,7 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-steady-running-no-substate',
     );
 
-    const recorded = recordSessionEvents(ctx.runScope.session.events, {
-      scope: 'session',
-    });
+    const recorded = recordSessionEvents(ctx.runScope.session);
     try {
       seedStreamStatusForTest(streamStatus, streamId, {
         phase: STREAM_PHASE.RUNNING,
@@ -536,13 +532,12 @@ describe('runFlowWithLifecycle', () => {
       await runFlowWithLifecycle(ctx, async () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
         expect(streamStatus.getSubstate(streamId)).toBeUndefined();
-        expect(sessionFactsOfType(recorded.events, 'status')).toEqual([]);
+        expect(eventsOfType(recorded.events, 'status')).toEqual([]);
         return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
       });
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
-      recorded.detach();
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -678,11 +673,7 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-workflow-phase',
     );
     const parentStreamId = 'parent-lifecycle-workflow-phase' as StreamTabId;
-    const recorded = recordSessionEvents(ctx.runScope.session.events, {
-      scope: 'run',
-      streamId: parentStreamId,
-      types: ['child.activity'],
-    });
+    const rosters = recordChildRosters(ctx.runScope.session.executions);
     // `track()` emits the roster synchronously, so onRun — which fires after
     // tracking — is structurally too late to stamp a display field.
     let rosterEmissionsBeforeOnRun = -1;
@@ -696,15 +687,12 @@ describe('runFlowWithLifecycle', () => {
           parentStreamId,
           workflowPhase: 'Reduce',
           onRun: () => {
-            rosterEmissionsBeforeOnRun = runEventsOfType(
-              recorded.events,
-              'child.activity',
-            ).length;
+            rosterEmissionsBeforeOnRun = rosters.rosters.length;
           },
         },
       );
 
-      const [firstRoster] = runEventsOfType(recorded.events, 'child.activity');
+      const [firstRoster] = rosters.rosters;
       expect(firstRoster?.items).toEqual([
         expect.objectContaining({
           executionId,
@@ -714,7 +702,6 @@ describe('runFlowWithLifecycle', () => {
       ]);
       expect(rosterEmissionsBeforeOnRun).toBeGreaterThan(0);
     } finally {
-      recorded.detach();
       defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
     }
@@ -801,9 +788,15 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-early-stop-no-blip',
     );
     const changes: StatusEvent[] = [];
-    const detachStatus = defaultSession().events.subscribeStatus((event) => {
-      if (event.streamId === streamId) changes.push(event);
-    });
+    const detachStatus = defaultSession().attachRunTrace(
+      {
+        trace: new TraceEmitter(),
+        handleStatus: (event) => {
+          if (event.streamId === streamId) changes.push(event);
+        },
+      },
+      streamId,
+    );
 
     try {
       const result = await runFlowWithLifecycle(
@@ -1307,7 +1300,10 @@ function finalizeFixture(slug: string): {
   return {
     executionId,
     streamId,
-    streamStatus: new StreamStatusMachine(new SessionEventHub()),
+    streamStatus: new StreamStatusMachine(
+      () => {},
+      () => {},
+    ),
     handle: testExecutionHandle({
       executionId,
       parentStreamId: streamId,

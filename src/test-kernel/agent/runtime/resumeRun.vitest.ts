@@ -425,6 +425,6 @@ describe('resumeRun tool-use queue ownership', () => {
     ).resolves.toEqual({ failed: 'owned_elsewhere' });
     expect(onResumeResolved).not.toHaveBeenCalled();
     expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-    expect(session.status.holdState(STREAM)).toBe(streamHeldMessage(owner));
+    expect(session.status.holdState(STREAM)).toBe(streamHeldMessage(owner.pid));
   });
 });

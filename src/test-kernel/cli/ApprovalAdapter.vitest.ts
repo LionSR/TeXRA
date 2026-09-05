@@ -61,6 +61,7 @@ import {
 } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
+import { bashApprovalRequest } from '../agent/progressTestUtils';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   const ctx = createTestCliContext({
@@ -612,9 +613,11 @@ describe('buildToolEditApprovalContent', () => {
       }),
     );
 
-    const result = await defaultSession().interactions.requestBashApproval({
-      command: 'latexmk paper.tex',
-    });
+    const result = await defaultSession().interactions.requestBashApproval(
+      bashApprovalRequest({
+        command: 'latexmk paper.tex',
+      }),
+    );
 
     expect(result).toEqual({
       action: 'reject',

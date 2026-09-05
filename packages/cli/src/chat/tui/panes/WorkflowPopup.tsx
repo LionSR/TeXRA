@@ -57,19 +57,12 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 // Local imports - TUI state and policy
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { scrollableModalTextRowsBudget } from '../modals/ScrollableModalText';
+import { type WorkflowPopupView } from '../state/cliState';
 import {
-  sessionStateRevision,
-  streamMetadataFor,
-} from '../state/childExecutions';
-import {
-  streamPhaseFor,
-  type StreamSlice,
-  type WorkflowPopupView,
-} from '../state/cliState';
-import {
-  readStreamArtifacts,
-  streamArtifactRevision,
-} from '../state/subscribeStreamArtifacts';
+  cumulativeUsageOf,
+  sessionView,
+  streamViewOf,
+} from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 
 // Local imports - sibling panes
@@ -237,7 +230,6 @@ interface WorkflowPopupProps {
   readonly streamId: StreamTabId;
   readonly model: WorkflowRunModel;
   readonly view: WorkflowPopupView;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
   readonly pendingApprovals: ReadonlyMap<
     string,
@@ -266,12 +258,11 @@ export function WorkflowPopup({
   onWorkflowControl,
   pendingApprovals,
   streamId,
-  streams,
   view,
 }: WorkflowPopupProps): React.JSX.Element {
   const { columns } = useWindowSize();
-  useSignal(sessionStateRevision);
-  useSignal(streamArtifactRevision);
+  const sessionState = useSignal(sessionView());
+  const stream = streamViewOf(sessionState, streamId);
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
 
@@ -312,18 +303,19 @@ export function WorkflowPopup({
     row: WorkflowTaskRowModel,
   ): StreamTabId | undefined => {
     const childStreamId = model.childStreamOf.get(row.id);
-    return childStreamId !== undefined && streams.has(childStreamId)
+    return childStreamId !== undefined &&
+      sessionState.streams.has(childStreamId)
       ? childStreamId
       : undefined;
   };
-  const runStartedAt = streamPhaseFor(streamId)?.runStartedAt;
+  const runStartedAt = stream?.runStartedAt ?? undefined;
   // A card is live only while its workflow is, and the run's own origin is
   // set for every active phase, so it alone keys the clock.
   const nowMs = useLiveNowMsSince([runStartedAt]);
 
-  const identity = streamMetadataFor(streamId)?.identity;
+  const identity = stream?.identity ?? undefined;
   const name = identity ? runIdentityDisplayName(identity) : 'Workflow';
-  const cost = readStreamArtifacts(streamId)?.cumulativeUsage?.cost;
+  const cost = cumulativeUsageOf(stream)?.cost;
   const title = [
     name,
     formatWorkflowTally(model.tally),
@@ -350,7 +342,8 @@ export function WorkflowPopup({
   // hop, which excludes the run stream itself.
   const selectedChildIdentity =
     selectedChildStreamId !== undefined
-      ? streamMetadataFor(selectedChildStreamId)?.identity
+      ? (streamViewOf(sessionState, selectedChildStreamId)?.identity ??
+        undefined)
       : undefined;
   const controllable =
     selectedExecutionId !== undefined &&

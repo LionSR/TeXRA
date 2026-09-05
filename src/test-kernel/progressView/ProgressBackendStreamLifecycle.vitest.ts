@@ -42,9 +42,10 @@ import { GoalStore } from '@tools/goal';
 import {
   createIsolatedRecordingBackend,
   createRecordingBackend,
-  emitActiveStream,
+  emitRunStart,
   emitRunConfig,
   emitRunEvent,
+  sessionEventOf,
   stubStreamControls,
   toolUseConfig,
   track,
@@ -56,10 +57,7 @@ function emitRemoveStream(
   target: RecordingTarget,
   streamId: StreamTabId,
 ): void {
-  target.session.events.emit({
-    scope: 'session',
-    event: { type: 'removeStream', payload: { streamId } },
-  });
+  target.session.publish([{ type: 'stream.removed', aggregateId: streamId }]);
 }
 
 function childRosterRow(
@@ -128,9 +126,7 @@ async function beginGatedDeletion(
 }> {
   const deletion = backend.deleteStream(stream);
   await vi.waitFor(() =>
-    expect(backend.state.clearStream).toHaveBeenCalledWith(stream, {
-      expectedIncarnation: 0,
-    }),
+    expect(backend.state.clearStream).toHaveBeenCalledWith(stream),
   );
   return { deletion };
 }
@@ -164,10 +160,11 @@ describe('ProgressBackend', () => {
     backend.setupEventListeners();
     const streamId = 'desktop-local-stream' as StreamTabId;
 
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId,
       agentCategory: AgentCategory.Workflow,
     });
+    backend.presentLaunchedStream(streamId);
 
     await vi.waitFor(() =>
       expect(backend.presentation.activeStream).toBe(streamId),
@@ -196,13 +193,13 @@ describe('ProgressBackend', () => {
     expect(backend.state.getStreamMetadata(streamId).identity).toBeUndefined();
   });
 
-  it('clears an empty active-stream selection through the shared fact path', async () => {
+  it('clears an empty active-stream selection through the host selection', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, messages } = target;
     backend.setupEventListeners();
 
     backend.presentation.select('previous-stream');
-    emitActiveStream(target, { streamId: null });
+    void backend.activateStream('');
 
     await vi.waitFor(() => expect(backend.presentation.activeStream).toBe(''));
     expect(messages).toContainEqual({
@@ -223,10 +220,17 @@ describe('ProgressBackend', () => {
 
     try {
       await GoalStore.start(stream, 'Complete the proof');
-      session.events.emit({
-        scope: 'session',
-        event: { type: 'goalStateChanged', payload: { streamId: stream } },
-      });
+      session.publish([
+        {
+          type: 'goalStateChanged',
+          aggregateId: stream,
+          state: {
+            active: true,
+            status: 'active',
+            objective: 'Complete the proof',
+          },
+        },
+      ]);
 
       await vi.waitFor(() =>
         expect(messages).toContainEqual({
@@ -298,9 +302,9 @@ describe('ProgressBackend', () => {
       after,
     ]);
 
-    const activeRemoval = backend.state.beginStreamRemoval(activeStream);
-    const failedRemoval = backend.state.beginStreamRemoval(failedStream);
-    const deletedRemoval = backend.state.beginStreamRemoval(deletedStream);
+    backend.state.beginStreamRemoval(activeStream);
+    backend.state.beginStreamRemoval(failedStream);
+    backend.state.beginStreamRemoval(deletedStream);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([
       before,
       after,
@@ -309,124 +313,48 @@ describe('ProgressBackend', () => {
     const newestActive = { ...activeChild, agentName: 'reviewer' };
     const newestFailed = { ...failedChild, agentName: 'researcher' };
     const newestDeleted = { ...deletedChild, agentName: 'implementer' };
-    backend.applyRunFact(parent, {
-      type: 'child.activity',
-      parentStreamId: parent,
-      items: [after, newestFailed, newestDeleted, before, newestActive],
+    backend.applyChildRoster(parent, [
+      after,
+      newestFailed,
+      newestDeleted,
+      before,
+      newestActive,
+    ]);
+    expect(backend.state.getStreamState(parent)?.subagents).toEqual([
+      after,
+      before,
+    ]);
+
+    expect(backend.state.retireStreamTombstone(failedStream)).toEqual({
+      retired: true,
+      changedRosterParents: [parent],
     });
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([
       after,
+      newestFailed,
       before,
     ]);
 
-    expect(
-      backend.state.retireStreamTombstone(
-        failedStream,
-        failedRemoval.incarnation,
-      ),
-    ).toEqual({ retired: true, changedRosterParents: [parent] });
+    expect(backend.state.commitStreamTombstone(deletedStream)).toEqual({
+      committed: true,
+      changedRosterParents: [parent],
+    });
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([
       after,
       newestFailed,
       before,
     ]);
 
-    expect(
-      backend.state.commitStreamTombstone(
-        deletedStream,
-        deletedRemoval.incarnation,
-      ),
-    ).toEqual({ committed: true, changedRosterParents: [parent] });
-    expect(backend.state.getStreamState(parent)?.subagents).toEqual([
-      after,
-      newestFailed,
-      before,
-    ]);
-
-    expect(
-      backend.state.retireStreamTombstone(
-        activeStream,
-        activeRemoval.incarnation,
-      ),
-    ).toEqual({ retired: true, changedRosterParents: [parent] });
+    expect(backend.state.retireStreamTombstone(activeStream)).toEqual({
+      retired: true,
+      changedRosterParents: [parent],
+    });
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([
       after,
       newestFailed,
       before,
       newestActive,
     ]);
-  });
-
-  it('notifies a parent roster when a workflow attachment reclaims a child identity', () => {
-    const target = createIsolatedRecordingBackend();
-    const { backend, session } = target;
-    const parent = 'workflow-reclaim-parent' as StreamTabId;
-    const childStream = 'workflow-reclaimed-child' as StreamTabId;
-    const child = childRosterRow(childStream);
-    setChildRoster(backend, parent, [child]);
-    backend.state.beginStreamRemoval(childStream);
-    backend.setupEventListeners();
-
-    emitRunEvent(target, childStream, {
-      type: 'run.start',
-      streamId: childStream,
-      executionId: 'workflow-reclaim' as ExecutionId,
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'workflow-reclaim',
-      },
-    });
-    vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
-      {} as never,
-    );
-    const invalidate = vi.spyOn(backend.renderer, 'invalidate');
-
-    expect(
-      backend.applySessionFact({
-        type: 'setActiveStream',
-        payload: { streamId: childStream },
-      }),
-    ).toBe(true);
-    expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
-    expect(invalidate).toHaveBeenCalledWith(parent, 'subagents');
-  });
-
-  it('keeps superseded settlements from revealing rows across parent and child reclaims', () => {
-    const { backend } = createIsolatedRecordingBackend();
-    const parent = 'reclaimed-parent' as StreamTabId;
-    const childStream = 'reclaimed-child' as StreamTabId;
-    const oldChild = childRosterRow(
-      childStream,
-      'old-execution' as ExecutionId,
-    );
-    setChildRoster(backend, parent, [oldChild]);
-
-    const childRemoval = backend.state.beginStreamRemoval(childStream);
-    const parentRemoval = backend.state.beginStreamRemoval(parent);
-    expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
-
-    backend.state.claimStreamIdentity(parent);
-    backend.state.claimStreamIdentity(childStream);
-    const newChild = childRosterRow(
-      childStream,
-      'new-execution' as ExecutionId,
-    );
-    backend.applyRunFact(parent, {
-      type: 'child.activity',
-      parentStreamId: parent,
-      items: [newChild],
-    });
-
-    expect(
-      backend.state.retireStreamTombstone(
-        childStream,
-        childRemoval.incarnation,
-      ),
-    ).toEqual({ retired: false, changedRosterParents: [] });
-    expect(
-      backend.state.retireStreamTombstone(parent, parentRemoval.incarnation),
-    ).toEqual({ retired: false, changedRosterParents: [] });
-    expect(backend.state.getStreamState(parent)?.subagents).toEqual([newChild]);
   });
 
   it('handles removeStream session facts before backend load', async () => {
@@ -438,11 +366,7 @@ describe('ProgressBackend', () => {
 
     emitRemoveStream(target, streamId);
 
-    await vi.waitFor(() =>
-      expect(clearStream).toHaveBeenCalledWith(streamId, {
-        expectedIncarnation: 0,
-      }),
-    );
+    await vi.waitFor(() => expect(clearStream).toHaveBeenCalledWith(streamId));
   });
 
   it('refuses reserved stream identifiers before durable cleanup', async () => {
@@ -1341,9 +1265,7 @@ describe('ProgressBackend', () => {
 
     await backend.deleteStream(stream);
 
-    expect(clearStream).toHaveBeenCalledWith(stream, {
-      expectedIncarnation: 0,
-    });
+    expect(clearStream).toHaveBeenCalledWith(stream);
     expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
     expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
       syncActiveStream: true,
@@ -1432,7 +1354,7 @@ describe('ProgressBackend', () => {
     backend.dispose();
     messages.length = 0;
 
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId: stream,
       agentCategory: AgentCategory.Workflow,
     });
@@ -1450,7 +1372,7 @@ describe('ProgressBackend', () => {
     backend.dispose();
     backend.setupEventListeners();
 
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId: stream,
       agentCategory: AgentCategory.Workflow,
     });

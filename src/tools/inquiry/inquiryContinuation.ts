@@ -117,10 +117,9 @@ async function emitInquiryThreadUpdate(
   const summary = await getThreadSummary(threadId);
   if (!summary) return;
   const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
-  (session ?? currentSession()).events.emit({
-    scope: 'session',
-    event: { type: 'inquiryThreadUpdated', payload },
-  });
+  (session ?? currentSession()).publish([
+    { type: 'inquiryThreadUpdated', aggregateId: payload.threadId, ...payload },
+  ]);
 }
 
 /** Archive a thread that has nothing to continue: emit the summary update. */

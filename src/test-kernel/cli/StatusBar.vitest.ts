@@ -12,13 +12,15 @@ import {
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
-import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   STREAM_PHASE,
-  STREAM_SUBSTATE,
   type StreamPhase,
   type StreamTabId,
+  STREAM_STATUS,
 } from '@shared/schemas';
+import { streamStatusCopy } from '@shared/streams/streamStatusDisplay';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
 
 // The bar renders the short access-route label.
 const INCLUDED_ACCESS_LABEL = shortCliModelAccessRoute('included');
@@ -43,6 +45,8 @@ type StatusInputOverrides = Omit<
 };
 
 // Idle single-stream baseline; each test overrides only the fields it exercises.
+const NO_BYPASS = { bash: false, superYolo: false, toolEdit: false } as const;
+
 function statusInput(
   overrides: StatusInputOverrides = {},
 ): StatusBarDisplayInput {
@@ -50,6 +54,8 @@ function statusInput(
 
   return {
     status: STREAM_PHASE.WAITING,
+    statusLabel: streamStatusCopy(rest.status ?? STREAM_PHASE.WAITING)
+      .statusLabel,
     transientNotice: undefined,
     bypass: NO_BYPASS,
     queuedFollowUpMessages: [],
@@ -167,7 +173,7 @@ describe('CLI StatusBar display model', () => {
     const input = statusInput({ approvalPolicy: 'ask' });
     const ask = buildStatusBarDisplay(input);
 
-    expect(leftTexts(ask)).toEqual(['◆', 'idle', PERSONAL_API_MODE_LABEL]);
+    expect(leftTexts(ask)).toEqual(['◆', 'Idle', PERSONAL_API_MODE_LABEL]);
 
     const deny = buildStatusBarDisplay({
       ...input,
@@ -175,7 +181,7 @@ describe('CLI StatusBar display model', () => {
     });
     expect(leftTexts(deny)).toEqual([
       '◆',
-      'idle',
+      'Idle',
       PERSONAL_API_MODE_LABEL,
       'never',
     ]);
@@ -187,7 +193,7 @@ describe('CLI StatusBar display model', () => {
     });
     expect(leftTexts(yolo)).toEqual([
       '◆',
-      'idle',
+      'Idle',
       PERSONAL_API_MODE_LABEL,
       'yolo',
     ]);
@@ -204,7 +210,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(leftTexts(display)).toEqual([
       '◆',
-      'running',
+      'Running',
       PERSONAL_API_MODE_LABEL,
       'queued 1',
     ]);
@@ -214,7 +220,7 @@ describe('CLI StatusBar display model', () => {
   it('keeps idle state compact and omits static agent/model names', () => {
     const display = buildStatusBarDisplay(statusInput());
 
-    expect(leftTexts(display)).toEqual(['◆', 'idle', PERSONAL_API_MODE_LABEL]);
+    expect(leftTexts(display)).toEqual(['◆', 'Idle', PERSONAL_API_MODE_LABEL]);
     expect(display.bindings).toContain('/api api');
     expect(display.bindings).toContain('/model models');
     expect(display.bindings).not.toContain('/agent agents');
@@ -668,7 +674,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(leftTexts(display)).toEqual([
       '◆',
-      'running',
+      'Running',
       INCLUDED_ACCESS_LABEL,
       'r2',
       '80k/1.0M (8%)',
@@ -716,7 +722,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({ status: STREAM_PHASE.RUNNING, runningFrame: '/' }),
     );
 
-    expect(leftTexts(display)).toContain('/ running');
+    expect(leftTexts(display)).toContain('/ Running');
   });
 
   it('omits the spin prefix outside active phases', () => {
@@ -874,7 +880,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(leftTexts(display)).toEqual([
       '◆',
-      'running',
+      'Running',
       '1m 15s',
       PERSONAL_API_MODE_LABEL,
       '3 sub',
@@ -897,7 +903,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(leftTexts(display)).toEqual([
       '◆',
-      'running',
+      'Running',
       '1m 15s',
       PERSONAL_API_MODE_LABEL,
     ]);
@@ -916,7 +922,7 @@ describe('CLI StatusBar display model', () => {
     // At 16 columns even `◆ running API keys` (18 cols + gaps) cannot fit —
     // the fitting sweep now removes access mode too instead of returning an
     // over-wide row that soft-wraps the 1-row status line.
-    expect(leftTexts(display)).toEqual(['◆', 'running']);
+    expect(leftTexts(display)).toEqual(['◆', 'Running']);
   });
 
   it('drops the queued count segment before durable status on narrow bars', () => {
@@ -933,7 +939,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(leftTexts(display)).toEqual([
       '◆',
-      'running',
+      'Running',
       '1m 15s',
       PERSONAL_API_MODE_LABEL,
     ]);
@@ -951,7 +957,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(leftTexts(display)).toEqual([
       '◆',
-      'stopped',
+      'Stopped',
       'root active',
       PERSONAL_API_MODE_LABEL,
     ]);
@@ -974,7 +980,7 @@ describe('CLI StatusBar display model', () => {
     const rootDisplay = buildStatusBarDisplay(
       statusInput({ status: STREAM_PHASE.WAITING, isChildStream: false }),
     );
-    expect(leftTexts(rootDisplay)).toContain('idle');
+    expect(leftTexts(rootDisplay)).toContain('Idle');
 
     const childDisplay = buildStatusBarDisplay(
       statusInput({
@@ -984,12 +990,12 @@ describe('CLI StatusBar display model', () => {
         shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
-    expect(leftTexts(childDisplay)).toContain('idle');
+    expect(leftTexts(childDisplay)).toContain('Idle');
   });
 
   it.each([
-    [STREAM_PHASE.FAILED, 'error'],
-    [STREAM_PHASE.CANCELLED, 'stopped'],
+    [STREAM_PHASE.FAILED, 'Error'],
+    [STREAM_PHASE.CANCELLED, 'Stopped'],
   ] as const)(
     'uses the canonical %s label for a focused child',
     (status, label) => {
@@ -1007,176 +1013,159 @@ describe('CLI StatusBar display model', () => {
   // `displaySlice` by identity so the live-ancestor fallback stays
   // distinguishable from a structurally equal slice.
   describe('statusBarStreamTarget', () => {
-    // Lifecycle phase is the session status machine's, not the slice's, so a
-    // fixture tags its intended phase here and the injected `phaseOf` answers
-    // from the same map the case already declares.
-    type PhasedSlice = StreamSlice & { readonly testPhase?: StreamPhase };
+    // Lifecycle phase is the fold's: a fixture states each stream's status
+    // and the target reads the view it is given.
+    type Status = StreamView['status'];
+    const rootView = (status: Status): StreamView =>
+      makeStreamView({ id: 'root', status });
+    const childView = (status: Status): StreamView =>
+      makeStreamView({
+        id: 'child',
+        status,
+        parentId: 'root' as StreamTabId,
+        ancestors: [{ id: 'root' as StreamTabId, label: 'root' }],
+      });
+    const grandchildView = (status: Status): StreamView =>
+      makeStreamView({
+        id: 'grandchild',
+        status,
+        parentId: 'child' as StreamTabId,
+        ancestors: [
+          { id: 'root' as StreamTabId, label: 'root' },
+          { id: 'child' as StreamTabId, label: 'child' },
+        ],
+      });
+    const treeOf = (
+      ...streams: readonly StreamView[]
+    ): { view: SessionView; ownedStreamIds: readonly StreamTabId[] } => ({
+      view: viewWith(streams),
+      ownedStreamIds: streams.map((stream) => stream.id),
+    });
 
-    function streamSlice(
-      _streamId: string,
-      testPhase: StreamPhase | undefined,
-    ): PhasedSlice {
-      return { testPhase } as PhasedSlice;
-    }
-
-    function streamMap(
-      entries: ReadonlyArray<readonly [string, StreamSlice]>,
-    ): ReadonlyMap<StreamTabId, StreamSlice> {
-      return new Map<StreamTabId, StreamSlice>(
-        entries.map(([id, slice]) => [id as StreamTabId, slice] as const),
-      );
-    }
-
-    const parentOfChild = new Map([['child', 'root']]);
-    const parentOfGrandchild = new Map([
-      ['child', 'root'],
-      ['grandchild', 'child'],
-    ]);
-
-    const rootRunning = streamSlice('root', STREAM_PHASE.RUNNING);
-    const rootPending = streamSlice('root', undefined);
-    const rootWaiting = streamSlice('root', STREAM_PHASE.WAITING);
-    const rootCancelled = streamSlice('root', STREAM_PHASE.CANCELLED);
-    const childWaiting = streamSlice('child', STREAM_PHASE.WAITING);
-    const childCancelled = streamSlice('child', STREAM_PHASE.CANCELLED);
-    const grandchildCancelled = streamSlice(
-      'grandchild',
-      STREAM_PHASE.CANCELLED,
+    const liveRootTree = treeOf(
+      rootView(STREAM_PHASE.RUNNING),
+      childView(STREAM_PHASE.CANCELLED),
+      grandchildView(STREAM_PHASE.CANCELLED),
     );
-
-    const liveRootTree = streamMap([
-      ['root', rootRunning],
-      ['child', childCancelled],
-      ['grandchild', grandchildCancelled],
-    ]);
-    const liveRootWaitingChild = streamMap([
-      ['root', rootRunning],
-      ['child', childWaiting],
-    ]);
-    const waitingChildOnly = streamMap([['child', childWaiting]]);
-    const stoppedTree = streamMap([
-      ['root', rootCancelled],
-      ['child', childCancelled],
-    ]);
+    const liveRootWaitingChild = treeOf(
+      rootView(STREAM_PHASE.RUNNING),
+      childView(STREAM_PHASE.WAITING),
+    );
+    const waitingChildOnly = treeOf(childView(STREAM_PHASE.WAITING));
+    const stoppedTree = treeOf(
+      rootView(STREAM_PHASE.CANCELLED),
+      childView(STREAM_PHASE.CANCELLED),
+    );
+    const pendingRoot = treeOf(rootView(STREAM_STATUS.READY));
+    const waitingRoot = treeOf(rootView(STREAM_PHASE.WAITING));
+    const empty = treeOf();
 
     const cases: ReadonlyArray<{
       readonly name: string;
-      readonly input: Omit<
-        Parameters<typeof statusBarStreamTarget>[0],
-        'phaseOf'
-      >;
+      readonly input: Parameters<typeof statusBarStreamTarget>[0];
       readonly ctrlCAction: ReturnType<
         typeof statusBarStreamTarget
       >['ctrlCAction'];
-      readonly displaySlice: StreamSlice | undefined;
+      readonly displayStreamId: string | undefined;
       readonly isChildStream: boolean;
     }> = [
       {
         name: 'focused waiting child with nothing pending or live to stop',
         input: {
-          activeStreamId: 'child',
+          activeStreamId: 'child' as StreamTabId,
           canStopActiveRun: true,
-          parentStream: parentOfChild,
-          streams: waitingChildOnly,
+          ...waitingChildOnly,
         },
         ctrlCAction: 'exit',
-        displaySlice: childWaiting,
+        displayStreamId: 'child',
         isChildStream: true,
       },
       {
-        name: 'focused root that has no slice and no live ancestor',
+        name: 'focused root that is not in the view and has no live ancestor',
         input: {
-          activeStreamId: 'root',
+          activeStreamId: 'root' as StreamTabId,
           canStopActiveRun: true,
-          parentStream: parentOfChild,
-          streams: waitingChildOnly,
+          ...waitingChildOnly,
         },
         ctrlCAction: 'exit',
-        displaySlice: undefined,
+        displayStreamId: undefined,
         isChildStream: false,
       },
       {
         name: 'focused live root without stop capability',
         input: {
-          activeStreamId: 'root',
+          activeStreamId: 'root' as StreamTabId,
           canStopActiveRun: false,
-          parentStream: parentOfChild,
-          streams: liveRootTree,
+          ...liveRootTree,
         },
         ctrlCAction: 'exit',
-        displaySlice: rootRunning,
+        displayStreamId: 'root',
         isChildStream: false,
       },
       {
         name: 'focused live root with stop capability',
         input: {
-          activeStreamId: 'root',
+          activeStreamId: 'root' as StreamTabId,
           canStopActiveRun: true,
-          parentStream: parentOfChild,
-          streams: liveRootTree,
+          ...liveRootTree,
         },
         ctrlCAction: 'stop',
-        displaySlice: rootRunning,
+        displayStreamId: 'root',
         isChildStream: false,
       },
       {
         name: 'focused stopped child without stop capability',
         input: {
-          activeStreamId: 'child',
+          activeStreamId: 'child' as StreamTabId,
           canStopActiveRun: false,
-          parentStream: parentOfChild,
-          streams: liveRootTree,
+          ...liveRootTree,
         },
         ctrlCAction: 'exit',
-        displaySlice: childCancelled,
+        displayStreamId: 'child',
         isChildStream: true,
       },
       {
         name: 'focused stopped child with stop capability',
         input: {
-          activeStreamId: 'child',
+          activeStreamId: 'child' as StreamTabId,
           canStopActiveRun: true,
-          parentStream: parentOfChild,
-          streams: liveRootTree,
+          ...liveRootTree,
         },
         ctrlCAction: 'stop root',
-        displaySlice: childCancelled,
+        displayStreamId: 'child',
         isChildStream: true,
       },
       {
         name: 'focused waiting child while the root is still live',
         input: {
-          activeStreamId: 'child',
+          activeStreamId: 'child' as StreamTabId,
           canStopActiveRun: false,
-          parentStream: parentOfChild,
-          streams: liveRootWaitingChild,
+          ...liveRootWaitingChild,
         },
         ctrlCAction: 'exit',
-        displaySlice: childWaiting,
+        displayStreamId: 'child',
         isChildStream: true,
       },
       {
         name: 'focused stopped grandchild without stop capability',
         input: {
-          activeStreamId: 'grandchild',
+          activeStreamId: 'grandchild' as StreamTabId,
           canStopActiveRun: false,
-          parentStream: parentOfGrandchild,
-          streams: liveRootTree,
+          ...liveRootTree,
         },
         ctrlCAction: 'exit',
-        displaySlice: grandchildCancelled,
+        displayStreamId: 'grandchild',
         isChildStream: true,
       },
       {
         name: 'focused stopped grandchild with stop capability',
         input: {
-          activeStreamId: 'grandchild',
+          activeStreamId: 'grandchild' as StreamTabId,
           canStopActiveRun: true,
-          parentStream: parentOfGrandchild,
-          streams: liveRootTree,
+          ...liveRootTree,
         },
         ctrlCAction: 'stop root',
-        displaySlice: grandchildCancelled,
+        displayStreamId: 'grandchild',
         isChildStream: true,
       },
       {
@@ -1185,11 +1174,10 @@ describe('CLI StatusBar display model', () => {
           activeStreamId: undefined,
           canStopActiveRun: true,
           canStopPendingRun: false,
-          parentStream: parentOfChild,
-          streams: streamMap([]),
+          ...empty,
         },
         ctrlCAction: 'exit',
-        displaySlice: undefined,
+        displayStreamId: undefined,
         isChildStream: false,
       },
       {
@@ -1198,11 +1186,10 @@ describe('CLI StatusBar display model', () => {
           activeStreamId: undefined,
           canStopActiveRun: true,
           canStopPendingRun: true,
-          parentStream: parentOfChild,
-          streams: streamMap([]),
+          ...empty,
         },
         ctrlCAction: 'stop',
-        displaySlice: undefined,
+        displayStreamId: undefined,
         isChildStream: false,
       },
       {
@@ -1211,54 +1198,50 @@ describe('CLI StatusBar display model', () => {
         // offer to stop a run that is not there.
         name: 'focused root whose stream has no phase and no pending run',
         input: {
-          activeStreamId: 'root',
+          activeStreamId: 'root' as StreamTabId,
           canStopActiveRun: true,
-          parentStream: parentOfChild,
-          streams: streamMap([['root', rootPending]]),
+          ...pendingRoot,
         },
         ctrlCAction: 'exit',
-        displaySlice: rootPending,
+        displayStreamId: 'root',
         isChildStream: false,
       },
       {
         // The pending-run capability covers the whole launch window,
         // including the part where the run's stream id exists but its phase
-        // does not — never an absent phase read as live.
+        // does not; never an absent phase read as live.
         name: 'focused phaseless root while a pending run is stoppable',
         input: {
-          activeStreamId: 'root',
+          activeStreamId: 'root' as StreamTabId,
           canStopActiveRun: true,
           canStopPendingRun: true,
-          parentStream: parentOfChild,
-          streams: streamMap([['root', rootPending]]),
+          ...pendingRoot,
         },
         ctrlCAction: 'stop',
-        displaySlice: rootPending,
+        displayStreamId: 'root',
         isChildStream: false,
       },
       {
         name: 'focused waiting root while a pending run is stoppable',
         input: {
-          activeStreamId: 'root',
+          activeStreamId: 'root' as StreamTabId,
           canStopActiveRun: true,
           canStopPendingRun: true,
-          parentStream: parentOfChild,
-          streams: streamMap([['root', rootWaiting]]),
+          ...waitingRoot,
         },
         ctrlCAction: 'stop',
-        displaySlice: rootWaiting,
+        displayStreamId: 'root',
         isChildStream: false,
       },
       {
         name: 'focused waiting root without stop capability',
         input: {
-          activeStreamId: 'root',
+          activeStreamId: 'root' as StreamTabId,
           canStopActiveRun: false,
-          parentStream: parentOfChild,
-          streams: streamMap([['root', rootWaiting]]),
+          ...waitingRoot,
         },
         ctrlCAction: 'exit',
-        displaySlice: rootWaiting,
+        displayStreamId: 'root',
         isChildStream: false,
       },
       {
@@ -1266,38 +1249,30 @@ describe('CLI StatusBar display model', () => {
         // after the visible stream tree has already become terminal.
         name: 'stale stop capability over a fully terminal root',
         input: {
-          activeStreamId: 'root',
+          activeStreamId: 'root' as StreamTabId,
           canStopActiveRun: true,
-          parentStream: parentOfChild,
-          streams: stoppedTree,
+          ...stoppedTree,
         },
         ctrlCAction: 'exit',
-        displaySlice: rootCancelled,
+        displayStreamId: 'root',
         isChildStream: false,
       },
       {
         name: 'stale stop capability over a fully terminal child',
         input: {
-          activeStreamId: 'child',
+          activeStreamId: 'child' as StreamTabId,
           canStopActiveRun: true,
-          parentStream: parentOfChild,
-          streams: stoppedTree,
+          ...stoppedTree,
         },
         ctrlCAction: 'exit',
-        displaySlice: childCancelled,
+        displayStreamId: 'child',
         isChildStream: true,
       },
     ];
-
     it.each(cases)('$name', ({ input, ...expected }) => {
-      const target = statusBarStreamTarget({
-        ...input,
-        phaseOf: (streamId) =>
-          (input.streams.get(streamId) as PhasedSlice | undefined)?.testPhase,
-      });
-
+      const target = statusBarStreamTarget(input);
       expect(target.ctrlCAction).toBe(expected.ctrlCAction);
-      expect(target.displaySlice).toBe(expected.displaySlice);
+      expect(target.displayStreamId).toBe(expected.displayStreamId);
       expect(target.isChildStream).toBe(expected.isChildStream);
     });
   });
@@ -1392,18 +1367,18 @@ describe('CLI StatusBar display model', () => {
 
     expect(leftTexts(running)).toEqual([
       '◆',
-      'running',
+      'Running',
       '1m 50s',
       PERSONAL_API_MODE_LABEL,
     ]);
 
     const resuming = buildStatusBarDisplay({
       ...runningInput,
-      substate: STREAM_SUBSTATE.RESUMING,
+      statusLabel: 'Resuming',
     });
     expect(leftTexts(resuming)).toEqual([
       '◆',
-      'resuming',
+      'Resuming',
       '1m 50s',
       PERSONAL_API_MODE_LABEL,
     ]);
@@ -1414,7 +1389,7 @@ describe('CLI StatusBar display model', () => {
     });
     expect(leftTexts(justStarted)).toEqual([
       '◆',
-      'running',
+      'Running',
       '0s',
       PERSONAL_API_MODE_LABEL,
     ]);
@@ -1425,7 +1400,7 @@ describe('CLI StatusBar display model', () => {
     });
     expect(leftTexts(thinking)).toEqual([
       '◆',
-      'running',
+      'Running',
       '1m 50s',
       'thinking...',
       PERSONAL_API_MODE_LABEL,
@@ -1438,7 +1413,7 @@ describe('CLI StatusBar display model', () => {
     });
     expect(leftTexts(compacting)).toEqual([
       '◆',
-      'running',
+      'Running',
       '1m 50s',
       'compacting...',
       PERSONAL_API_MODE_LABEL,
@@ -1453,7 +1428,7 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(leftTexts(idle)).toEqual(['◆', 'idle', PERSONAL_API_MODE_LABEL]);
+    expect(leftTexts(idle)).toEqual(['◆', 'Idle', PERSONAL_API_MODE_LABEL]);
   });
 
   it('preserves distinct agent-task, bash, and edit bypass badges', () => {
@@ -1466,7 +1441,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(leftTexts(display)).toEqual([
       '◆',
-      'running',
+      'Running',
       PERSONAL_API_MODE_LABEL,
       'AUTO-TASK',
       'AUTO-BASH',
@@ -1496,7 +1471,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(leftTexts(display)).toEqual([
       '◆',
-      'running',
+      'Running',
       'Press Ctrl-C again to exit',
       PERSONAL_API_MODE_LABEL,
     ]);
@@ -1585,7 +1560,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(leftTexts(display)).toEqual(
-      expect.arrayContaining(['/ running 45s', 'thinking...']),
+      expect.arrayContaining(['/ Running 45s', 'thinking...']),
     );
   });
 
@@ -1746,6 +1721,6 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(leftTexts(display)).toEqual(['◆', 'idle', 'subscription']);
+    expect(leftTexts(display)).toEqual(['◆', 'Idle', 'subscription']);
   });
 });

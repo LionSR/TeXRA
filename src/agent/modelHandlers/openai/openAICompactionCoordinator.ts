@@ -10,10 +10,10 @@ import {
   buildErrorLogData,
   getSdkErrorMessage,
 } from '@common/errors/sdkError/providerErrorFormat';
+import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
 import { clamp } from '@utils/core';
 
 // Local file imports
-import { roundedUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import {

@@ -11,7 +11,7 @@
  */
 
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { StreamTabId } from '@shared/schemas';
+import type { ApprovalPolicySnapshot, StreamTabId } from '@shared/schemas';
 import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
 
 import type { SessionHostInteractions } from './HostInteractions';
@@ -60,6 +60,7 @@ function createStreamApprovalBypass(
   interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>,
   resolveParent: (streamId: StreamTabId) => StreamTabId | undefined,
   resolveDescendants: (streamId: StreamTabId) => readonly StreamTabId[],
+  onEffectiveChange: (streamId: StreamTabId) => void,
 ): StreamApprovalBypassState {
   const byStream = new Map<StreamTabId, boolean>();
 
@@ -95,6 +96,7 @@ function createStreamApprovalBypass(
       kind,
       bypassActive: enabled,
     });
+    onEffectiveChange(streamId);
     for (const descendant of descendants) {
       const bypassActive = resolve(descendant);
       if (previousDescendantStates.get(descendant) !== bypassActive) {
@@ -103,6 +105,7 @@ function createStreamApprovalBypass(
           kind,
           bypassActive,
         });
+        onEffectiveChange(descendant);
       }
     }
   };
@@ -189,6 +192,9 @@ export interface SessionApprovals {
    * another CLI, extension, or desktop session.
    */
   setDelegatedWorkBypasses(streamId: StreamTabId, enabled: boolean): void;
+  /** Every kind's effective bypass for one stream: the `bypasses` half of
+   *  the stream's `approval.policy` snapshot. */
+  bypassesFor(streamId: StreamTabId): ApprovalPolicySnapshot['bypasses'];
   /**
    * Record that `childStreamId` descends from `parentStreamId` for bypass
    * resolution purposes: every bypass kind defers to the parent's bypass
@@ -226,8 +232,18 @@ export interface SessionApprovals {
   clearAll(): void;
 }
 
+/**
+ * `onPolicyChanged` fires for every stream whose effective bypass state
+ * moved, after the values are written: a non-silent `setBypass` reports the
+ * stream and each affected descendant, and `registerStreamParent` reports
+ * the child and each of its descendants whose inherited value the new edge
+ * changed. The session publishes that stream's `approval.policy` snapshot
+ * from it. Silent writes are pre-activation setup for a stream no host shows
+ * yet and publish nothing, exactly as they notify no host.
+ */
 export function createSessionApprovals(
   interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>,
+  onPolicyChanged: (streamId: StreamTabId) => void = () => {},
 ): SessionApprovals {
   // One ancestry graph: "who is this stream's parent" is kind-independent.
   // The per-kind split lives in the bypass *values* — each
@@ -259,12 +275,14 @@ export function createSessionApprovals(
     interactions,
     resolveParent,
     resolveDescendants,
+    onPolicyChanged,
   );
   const bashBypass = createStreamApprovalBypass(
     'bash',
     interactions,
     resolveParent,
     resolveDescendants,
+    onPolicyChanged,
   );
   const toolEdit = createStreamApprovalController(toolEditBypass);
   const bash = createStreamApprovalController(bashBypass);
@@ -273,6 +291,7 @@ export function createSessionApprovals(
     interactions,
     resolveParent,
     resolveDescendants,
+    onPolicyChanged,
   );
   const bypasses: readonly StreamApprovalBypassState[] = [
     toolEditBypass,
@@ -295,10 +314,19 @@ export function createSessionApprovals(
     }
   }
 
+  const bypassesFor = (
+    streamId: StreamTabId,
+  ): ApprovalPolicySnapshot['bypasses'] => ({
+    bash: bashBypass.isBypassed(streamId),
+    toolEdit: toolEditBypass.isBypassed(streamId),
+    superYolo: proposal.isBypassed(streamId),
+  });
+
   return {
     toolEdit,
     bash,
     proposal,
+    bypassesFor,
     setDelegatedWorkBypasses(streamId, enabled) {
       proposal.setBypass(streamId, enabled);
       // Unconditional: write the stream's own explicit tool-edit entry even
@@ -309,7 +337,24 @@ export function createSessionApprovals(
       bash.bypass.setBypass(streamId, enabled);
     },
     registerStreamParent(childStreamId, parentStreamId) {
+      // The child's `run.start` already carried its snapshot without this
+      // edge, so every stream the inheritance moves publishes a fresh one.
+      const affected = [childStreamId, ...resolveDescendants(childStreamId)];
+      const before = new Map(
+        affected.map((streamId) => [streamId, bypassesFor(streamId)]),
+      );
       parentOf.set(childStreamId, parentStreamId);
+      for (const streamId of affected) {
+        const previous = before.get(streamId);
+        const current = bypassesFor(streamId);
+        if (
+          previous?.bash !== current.bash ||
+          previous?.toolEdit !== current.toolEdit ||
+          previous?.superYolo !== current.superYolo
+        ) {
+          onPolicyChanged(streamId);
+        }
+      }
     },
     detachStreamFromParent,
     forgetStreamAncestry(streamId) {

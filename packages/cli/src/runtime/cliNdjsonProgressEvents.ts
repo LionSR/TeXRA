@@ -1,12 +1,12 @@
 import type { agentConfigToTaskState } from '@agent/runtime';
 import type {
   AddOutputFilesPayload,
+  AgentCategory,
   ExecutionId,
   GoalPausedPayload,
   GoalStateChangedPayload,
   InquiryThreadUpdatedEvent,
   RemoveStreamPayload,
-  SetActiveStreamPayload,
   SetParentStreamPayload,
   StreamPhase,
   StreamTabId,
@@ -50,9 +50,23 @@ export interface CliNdjsonActiveChildRow {
 }
 
 /**
+ * Frozen public `setActiveStream` record: the pre-fold stream attachment
+ * shape, now projected from the stream's `run.start`. The internal fact that
+ * carried it is gone (existence is `run.start`; focus is never a fact), and
+ * the NDJSON boundary alone keeps the record name and fields.
+ */
+interface CliNdjsonSetActiveStreamPayload {
+  readonly streamId: StreamTabId;
+  readonly agentCategory?: AgentCategory;
+  readonly isRemote?: boolean;
+  /** Present, and true, only on a background (delegated child) launch. */
+  readonly suppressViewSwitch?: true;
+}
+
+/**
  * Progress payloads retained only for CLI NDJSON public-output compatibility.
  *
- * Session- and run-scoped state changes are owned by `SessionEventHub` and
+ * Session- and run-scoped state changes are owned by `SessionEvent` and
  * `AgentEvent`; this table only types the remaining `kind: "progress"` record
  * names in `--output-format ndjson`. It is not a runtime-host event bus. Do
  * not add new fact keys here. New durable state should extend the session/run
@@ -61,7 +75,7 @@ export interface CliNdjsonActiveChildRow {
  */
 export interface CliNdjsonProgressEventPayloads {
   // Run/stream progress.
-  setActiveStream: SetActiveStreamPayload;
+  setActiveStream: CliNdjsonSetActiveStreamPayload;
   updateStreamStatus: UpdateStreamStatusPayload;
   addOutputFiles: AddOutputFilesPayload;
   updateMissingOutputs: UpdateMissingOutputsPayload;

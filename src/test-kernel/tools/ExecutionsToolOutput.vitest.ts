@@ -75,23 +75,18 @@ async function launchBackgroundRun(
     .mockResolvedValue({ status: 'sent' });
 
   const { host } = createRecordingHost();
-  const recorded = recordSessionEvents(defaultSession().events);
-  let launched;
-  try {
-    launched = await withToolEnvironment(
-      {
-        run: { streamId: PARENT_STREAM_ID, session: defaultSession() },
-        call: { tracker: new FileInteractionState() },
-      },
-      () =>
-        new BashTool().call({
-          command: 'make build',
-          run_in_background: true,
-        }),
-    );
-  } finally {
-    recorded.detach();
-  }
+  const recorded = recordSessionEvents(defaultSession());
+  const launched = await withToolEnvironment(
+    {
+      run: { streamId: PARENT_STREAM_ID, session: defaultSession() },
+      call: { tracker: new FileInteractionState() },
+    },
+    () =>
+      new BashTool().call({
+        command: 'make build',
+        run_in_background: true,
+      }),
+  );
 
   assert.equal(launched.status, 'executed');
   const executionId = /Execution ID: (\S+)/.exec(launched.output ?? '')?.[1];

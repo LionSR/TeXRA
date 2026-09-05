@@ -691,6 +691,32 @@ export default tseslint.config(
     },
   },
 
+  // The session graph takes its session as an explicit argument and its roots
+  // from context (`WorkspaceRoots`), never from the async-local `currentSession()` or the
+  // process default: Effect's scheduler drains many fibers' continuations in
+  // one turn, so async-local state bleeds across fibers (PRD
+  // one-fold-three-renderers, 7.3).
+  {
+    files: ['src/controllers/session/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
+          patterns: [
+            ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+            {
+              group: ['@agent/runtime', '@agent/runtime/SessionHandle'],
+              importNames: ['currentSession', 'defaultSession'],
+              message:
+                'Session code takes its session as an explicit argument and its roots from context (WorkspaceRoots), never from currentSession() or defaultSession().',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Authentication owns credentials, sessions, and preferences. Model policy
   // may consume that state, but auth must not depend back on the model layer.
   {

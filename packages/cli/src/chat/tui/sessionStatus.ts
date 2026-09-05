@@ -6,15 +6,13 @@ import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { StreamPhase, StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
-import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
-import type { BypassState } from './state/cliState';
+import type { BypassState } from './panes/statusBarDisplay';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
 const GOAL_OBJECTIVE_STATUS_LENGTH = 160;
@@ -30,8 +28,8 @@ export interface CliSessionStatusInput {
   readonly teamName?: string;
   readonly modelAccess: CliModelAccessRoute;
   readonly approvalBypasses?: Partial<BypassState>;
-  readonly status: StreamPhase | undefined;
-  readonly substate?: StreamSubstate;
+  /** The fold's status label for the reported stream; undefined before a run. */
+  readonly statusLabel: string | undefined;
   readonly activeChildSessions?: number;
   readonly goal?: CliSessionGoalStatus | null;
   /** Skill names in effect for the focused tool-use stream, newest snapshot. */
@@ -44,23 +42,6 @@ export interface CliSessionStatusInput {
   readonly cwd?: string;
   readonly processCwd?: string;
   readonly approvalPolicy: TexraApprovalPolicy;
-}
-
-export function formatCliStatusLabel(
-  status: StreamPhase | undefined,
-  substate?: StreamSubstate,
-  isChildStream?: boolean,
-): string {
-  // `formatStreamStatusLabel`'s 'cli' style covers the child-stream
-  // vocabulary end to end, including WAITING -> "idle" — no separate probe is
-  // needed here. A blank status renders as '' for a child row (no status
-  // column yet) and as '—' for the root session (an established placeholder
-  // slot).
-  return formatStreamStatusLabel(status, {
-    style: 'cli',
-    missingLabel: isChildStream ? '' : '—',
-    ...(substate ? { substate } : {}),
-  });
 }
 
 function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
@@ -100,11 +81,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),
-    `status: ${
-      input.status === undefined
-        ? 'not started'
-        : formatCliStatusLabel(input.status, input.substate)
-    }`,
+    `status: ${input.statusLabel ?? 'not started'}`,
     ...((input.activeChildSessions ?? 0) > 0
       ? [`active ${BACKGROUND_TASK.inlinePlural}: ${input.activeChildSessions}`]
       : []),
