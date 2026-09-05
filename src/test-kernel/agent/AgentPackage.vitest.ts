@@ -92,8 +92,7 @@ vi.mock('@agent/runtime', async () => {
       );
 
       /** The level stream, ending as the fold does (`SessionViewService`);
-       *  the fold's fate is the test's, so a session outliving a test does
-       *  not carry one test's dead fold into the next. */
+       *  the fold's fate is the test's. */
       readonly viewChanges = Stream.unwrap(
         Effect.sync(() =>
           Stream.merge(
@@ -236,6 +235,13 @@ async function driveRun(options: RunAgentOptions): Promise<typeof RESULT> {
 
 describe('agent package run lifecycle', () => {
   beforeEach(async () => {
+    // The package's sessions go with its runtime on the embedder's shutdown
+    // path, as the package registered it: each test starts with none.
+    for (const handler of mocks.shutdownHooks?.afterExecutionSettlement ?? []) {
+      await handler();
+    }
+    mocks.shutdownHooks = undefined;
+    mocks.sessionInits.splice(0);
     vi.clearAllMocks();
     mocks.activePlatform = null;
     mocks.agentCategory = 'toolUse';
@@ -248,15 +254,6 @@ describe('agent package run lifecycle', () => {
     mocks.runValidatedAgent.mockImplementation(
       (_input: unknown, options: RunAgentOptions) => driveRun(options),
     );
-    // The package session outlives a run: each test starts it pre-launch.
-    if (mocks.sessionView) {
-      await Effect.runPromise(
-        SubscriptionRef.update(sessionView(), (current) => ({
-          ...current,
-          streams: new Map(),
-        })),
-      );
-    }
   });
 
   it('initializes standard runtime features once for concurrent first runs', async () => {
@@ -357,14 +354,15 @@ describe('agent package run lifecycle', () => {
   });
 
   it('shares one session per storage root across runs and disposes it before the runtime on shutdown', async () => {
-    mocks.sessionInits.splice(0);
     await runAgent(INPUT).result;
     await runAgent(INPUT).result;
 
-    // Both runs folded into the one session over the platform's roots: the
-    // graph `Sessions` keys by storage root and the transcript store it
-    // bridges are then the same for every run on that root.
-    expect(mocks.sessionInits).toHaveLength(0);
+    // Both runs folded into the one session over the platform's roots, the
+    // first run's: the graph `Sessions` keys by storage root and the
+    // transcript store it bridges are then the same for every run on that
+    // root.
+    expect(mocks.sessionInits).toHaveLength(1);
+    expect(mocks.sessionInits[0]).toMatchObject({ roots: PLATFORM.roots });
     expect(mocks.disposeSession).not.toHaveBeenCalled();
 
     const hooks = mocks.shutdownHooks;
@@ -380,14 +378,12 @@ describe('agent package run lifecycle', () => {
     const [runtimeOrder] = mocks.disposeRuntime.mock.invocationCallOrder;
     expect(disposeOrder).toBeLessThan(runtimeOrder);
 
-    // Shutdown cleared the module-level sessions map: a later call finds no
-    // entry for the root and constructs one. Whether such a run works is out
-    // of contract (the README scopes the session to the process, and the
-    // runtime the graph would open on is disposed); only the cleared map is
-    // observed here.
+    // Shutdown took the package's sessions down with their owner: a later
+    // call finds none and builds the package state anew. Whether such a run
+    // works is out of contract (the README scopes the session to the
+    // process); only the reset owner is observed here.
     await runAgent(INPUT).result;
-    expect(mocks.sessionInits).toHaveLength(1);
-    expect(mocks.sessionInits[0]).toMatchObject({ roots: PLATFORM.roots });
+    expect(mocks.sessionInits).toHaveLength(2);
   });
 
   it('fails the run instead of hanging when the session fold dies before the final view', async () => {

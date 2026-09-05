@@ -151,20 +151,22 @@ interface EnteredRun {
   readonly view: RuntimeSessionHandle['viewChanges'];
 }
 
-/** The process-wide setup every run shares, done once: the node runtime
- *  features and the Effect runtime the package sessions' graphs run on. */
-let runtimeInitialized: Promise<void> | undefined;
-
 /**
- * The package sessions, one per storage root (PRD 7.3, 11). `Sessions` keys
- * a root's graph by its storage root and bridges the transcript store the
- * root's first handle opened, so every run on a root shares one handle, or a
- * later run's rows would land in a store no graph reads. Built on first
- * use, disposed on the embedder's shutdown path with the runtime.
+ * The package's one process-wide state, made on the first run and torn down
+ * on the embedder's shutdown path: the node runtime features, the Effect
+ * runtime the package sessions' graphs run on, and the sessions themselves,
+ * one per storage root (PRD 7.3, 11). `Sessions` keys a root's graph by its
+ * storage root and bridges the transcript store the root's first handle
+ * opened, so every run on a root shares one handle, or a later run's rows
+ * would land in a store no graph reads. The shutdown path resets this owner,
+ * so the sessions have no life of their own past it.
  */
-const sessions = new Map<string, RuntimeSessionHandle>();
+let packageSessions: Promise<Map<string, RuntimeSessionHandle>> | undefined;
 
-function sessionFor(platform: AgentPlatform): RuntimeSessionHandle {
+function sessionFor(
+  sessions: Map<string, RuntimeSessionHandle>,
+  platform: AgentPlatform,
+): RuntimeSessionHandle {
   let session = sessions.get(platform.roots.storage);
   if (!session) {
     session = new RuntimeSessionHandle({
@@ -425,17 +427,18 @@ export function runAgent(input: RunAgentInput): AgentRun {
       initPlatform(input.platform);
       initProcessWorkspaceRoots(input.platform.roots);
     }
-    runtimeInitialized ??= (async () => {
+    packageSessions ??= (async () => {
       initNodeAgentRuntime(input.platform.lifecycle);
       // The one Effect runtime of the embedding process (PRD 7.7), for the
       // package sessions' graphs.
       const runtime = installProcessRuntime(
         processOwnerId(await input.platform.processes.selfIdentity()),
       );
+      const sessions = new Map<string, RuntimeSessionHandle>();
       // The hosts' shutdown order, on the embedder's shutdown path: the
       // sessions' agent-spawned children and agent-CLI sessions are stopped
-      // and their live executions settled, then each session goes, then the
-      // runtime its graph ran on.
+      // and their live executions settled, then each session goes with the
+      // owner that held it, then the runtime its graph ran on.
       registerRuntimeShutdownHandlers(input.platform.lifecycle, {
         flushArtifacts: async () => {
           for (const session of sessions.values()) {
@@ -445,15 +448,14 @@ export function runAgent(input: RunAgentInput): AgentRun {
         afterExecutionSettlement: [
           () => {
             for (const session of sessions.values()) session.dispose();
-            sessions.clear();
+            packageSessions = undefined;
           },
           () => runtime.dispose(),
         ],
       });
+      return sessions;
     })();
-    await runtimeInitialized;
-
-    const session = sessionFor(input.platform);
+    const session = sessionFor(await packageSessions, input.platform);
     await loadAgents({ includeRemote: false });
     const resolved = resolveAgent(input.agent);
     if (!resolved) {
@@ -477,7 +479,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
       instruction: input.instruction,
       ...(input.model ? { model: input.model } : {}),
     });
-    return await runValidatedAgent(
+    const result = await runValidatedAgent(
       { kind: 'fresh', config },
       {
         approvalPromptsUnavailable: true,
@@ -489,10 +491,11 @@ export function runAgent(input: RunAgentInput): AgentRun {
         stopAfterCycle: true,
         tools: input.tools,
       },
-    ).finally(() => {
-      // The run settles only once the asynchronous fold holds its final
-      // view, or has died trying.
-      return effectRuntime().runPromise(stream.finalView());
-    });
+    );
+    // A run that completed settles only once the asynchronous fold holds its
+    // final view, or has died trying. A run that failed on its own settled
+    // above, with its own error: the fold's fate never replaces it.
+    await effectRuntime().runPromise(stream.finalView());
+    return result;
   });
 }

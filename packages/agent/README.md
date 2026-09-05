@@ -63,7 +63,9 @@ durable outcome. That final view is included even when iteration starts after
 `result` settles, and the first view yielded always holds the run's stream.
 `result` settles only once the final view has folded, independently of whether
 the caller reads it; if the session's fold dies first, `result` and every
-`view` iteration fail with its defect instead of waiting. Breaking the loop
+`view` iteration fail with its defect instead of waiting. A run that fails on
+its own settles `result` with its own error without waiting for the fold; the
+fold's defect then reaches `view` iterations only. Breaking the loop
 stops that reader while the run continues. If launch fails before the run
 enters the session, `view` ends without a value and `result` carries the
 failure.
