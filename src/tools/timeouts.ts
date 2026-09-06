@@ -162,7 +162,12 @@ interface RetryTransientFetchOptions {
   /** Deadline for each attempt, connection and body read included. */
   readonly timeoutMs: number;
   readonly cancelSignal?: AbortSignal;
-  /** Observes every failed attempt with the error the edge would throw. */
+  /**
+   * Observes each transient failure with the error the edge would throw —
+   * the attempts the schedule may retry, the last exhausted one included. A
+   * permanent failure ends the retry unobserved, since it never had retries
+   * left to report.
+   */
   readonly onFailedAttempt?: (error: unknown, retriesLeft: number) => void;
 }
 
@@ -174,6 +179,7 @@ const retryingRequest = Effect.fn('timeouts.retryTransientFetch')(
     requestAttempt(options.timeoutMs, fetchOnce).pipe(
       Effect.tapError((error) =>
         Effect.gen(function* () {
+          if (!isTransientRequestError(error)) return;
           const { attempt } = yield* Schedule.CurrentMetadata;
           options.onFailedAttempt?.(
             toThrowable(error),
