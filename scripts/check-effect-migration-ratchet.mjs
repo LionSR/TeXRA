@@ -20,11 +20,14 @@
 // boundary kinds (a host entry under packages/extension, packages/desktop,
 // or packages/cli; a tool `execute()` contract, until lane D; the SDK's
 // public API under packages/agent/src) from runs below them. A run below the
-// boundary is not refused — a refusal made the base branch un-greenable once
-// the first wave landed — but it is never anonymous: `--update` records it in
-// `debtLanes` as UNASSIGNED and the check fails on UNASSIGNED, so admitting
-// one is a deliberate act that names the lane deleting it, in the same PR.
-// The count stays shrink-only like every other row. Neither
+// register is CLOSED: `--update` refuses a below-boundary file the committed
+// `debtLanes` does not already name, and refuses any count that would grow
+// (except `Effect.run*` at a boundary path, where a rise means runs moved up
+// out of the debt below). The map records the debt that existed when it was
+// written, names the lane deleting each file, and only ever shrinks — an
+// entry whose debt is gone is rejected as stale. Naming future work does not
+// admit new debt (owner ruling 2026-09-06: never widen a ratchet in
+// config/ratchets/). Neither
 // check can recognize an adapter written without a marker, since "adapter"
 // is not mechanically recognizable; that stays a review obligation.
 //
@@ -100,7 +103,7 @@ function isBoundaryPath(file, toolExecuteFiles) {
   );
 }
 
-const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them, or — when this PR deliberately leaves the run here — name the lane that deletes it in the baseline's debtLanes map`;
+const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them. The debtLanes register is closed: it names the debt that already existed and shrinks as lanes land, and --update will not admit a file it does not already name`;
 
 const ROW_PLATFORM = 'platform()';
 const ROW_SET_SERVICES = 'setServices()';
@@ -148,7 +151,7 @@ const SEMANTICS =
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
   "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to — `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback (PRD rule R1 as amended 2026-09-06: a run belongs at one of the three boundary kinds — packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts). A run site outside those paths is recorded in 'debtLanes' with the name of the lane that deletes it: --update writes UNASSIGNED there and the check fails on UNASSIGNED, so admitting one is a deliberate act that names an owner in the same PR, never a silent allowlist; the count stays shrink-only like every other row); " +
+  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback (PRD rule R1 as amended 2026-09-06: a run belongs at one of the three boundary kinds — packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts). A run site outside those paths belongs to the lane named for it in the closed 'debtLanes' register: --update refuses a below-boundary file the register does not already name, and refuses any count that would grow except an 'Effect.run*' at a boundary path, where a rise means runs moved up out of the debt below); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator. " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   "'debtLanes' maps each below-boundary 'Effect.run*' file to the lane that removes it; an entry whose file leaves the row is stale and --update drops it. " +
@@ -910,6 +913,43 @@ function readBaseline() {
   return parsed;
 }
 
+/**
+ * The committed counts and lane keys, read for `--update`'s own gates.
+ *
+ * Deliberately looser than {@link readBaseline}: that one rejects a baseline
+ * whose `semantics` text or row set has drifted from the script and tells the
+ * reader to run `--update` — which would then call it and hit the same
+ * rejection, so a legitimate script edit could never be recorded. The gates
+ * need only the previous per-file counts and which files the register already
+ * names; a row the script has since added simply has nothing committed yet.
+ */
+function readCommittedCounts() {
+  if (!existsSync(baselinePath)) throw new Error(BASELINE_MISSING);
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(baselinePath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Baseline unreadable: ${baselinePath}: ${error.message}`, {
+      cause: error,
+    });
+  }
+  const committed = parsed?.rows ?? {};
+  return {
+    rows: Object.fromEntries(
+      ROWS.map((row) => [
+        row.id,
+        typeof committed[row.id] === 'object' && committed[row.id] !== null
+          ? committed[row.id]
+          : {},
+      ]),
+    ),
+    debtLanes:
+      typeof parsed?.debtLanes === 'object' && parsed.debtLanes !== null
+        ? parsed.debtLanes
+        : {},
+  };
+}
+
 function writeBaseline(rows, debtLanes) {
   const sortedRows = Object.fromEntries(
     ROWS.map((row) => [row.id, sortObject(rows[row.id])]),
@@ -984,7 +1024,7 @@ function main() {
     // written. Writing first and comparing after is how `--update` came to
     // accept both kinds of widening: the comparison below `--update` reads
     // back the file it had already replaced, so every count matched itself.
-    const committed = readBaseline();
+    const committed = readCommittedCounts();
 
     // Growth is refused everywhere except one place: `Effect.run*` at a legal
     // boundary path. That exception is the migration itself working -- a lane
