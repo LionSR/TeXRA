@@ -736,6 +736,13 @@ function createWindow(options: {
       workspacePath: paper.root,
       showOpenFileDialog: openFileDialog,
     });
+    // Install the recipient before host requests publish the recorder's state.
+    const bridge = new SessionBridge({
+      session: paper.session,
+      handleHostRequest: (request, portId) =>
+        hostRequests.handle(request, portId),
+      onPortClosed: (portId) => hostRequests.closePort(portId),
+    });
     const snapshot = createHostSnapshotSource({
       paper: paperDisplayOf(paper.key, paper.root),
       globalState: platform().globalState,
@@ -743,6 +750,7 @@ function createWindow(options: {
       readRecentCommits: () => recentCommitsOf(paper.root),
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
       onError: reportBackgroundError,
+      publish: (next) => bridge.setHost(next),
     });
     const funnel = onboardingIpcRef.current?.funnelState();
     if (funnel) snapshot.setOnboarding(funnel);
@@ -785,16 +793,6 @@ function createWindow(options: {
       },
       logger: console,
     });
-    // The paper's bridge and this window's port on it: the framer cuts
-    // frames from the paper's session graph, and the host snapshot rides
-    // them (PRD 8.1).
-    const bridge = new SessionBridge({
-      session: paper.session,
-      handleHostRequest: (request, portId) =>
-        hostRequests.handle(request, portId),
-      onPortClosed: hostRequests.closePort,
-    });
-    const detachSnapshot = snapshot.onChange((next) => bridge.setHost(next));
     const port = bridge.attach({
       id: `window:${window.id}`,
       send: (message) => {
@@ -813,7 +811,6 @@ function createWindow(options: {
       dispose() {
         workspace.disposeRendererResources();
         workspace.dispose();
-        detachSnapshot();
         bridge.dispose();
         hostRequests.dispose();
         execution.dispose();

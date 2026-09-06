@@ -158,6 +158,7 @@ describe('desktop preview host', () => {
           fileOptions: () => files.fileOptions(),
           readRecentCommits: async () => ({ commits: [], isGitRepo: false }),
           isAuthenticated: async () => false,
+          publish: () => {},
           onError: () => {},
         }),
         draftRequests,
