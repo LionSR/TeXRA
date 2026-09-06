@@ -24,7 +24,6 @@ export function createStubDesktopAgentExecutionHost(
     showInfoMessage: async () => undefined,
     showInstructionDialog: async () => undefined,
     pickTranscriptExportFormat: async () => undefined,
-    onRunCompleted: () => undefined,
     ...overrides,
   };
 }

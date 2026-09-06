@@ -217,15 +217,15 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   await dismissStartupPanel(page);
 
   // A fresh profile can also show the credential welcome card inside
-  // <main-app>'s shadow tree. Skipping it is separate from dismissing the shell
+  // <progress-app>'s shadow tree. Skipping it is separate from dismissing the shell
   // startup panel above; without both, E2E tests exercise onboarding instead of
   // the launcher and can miss task-composer regressions.
   await page
     .waitForFunction(
       () => {
-        const root = document.querySelector('main-app')?.shadowRoot;
+        const root = document.querySelector('progress-app')?.shadowRoot;
         return (
-          root?.querySelector('onboarding-welcome-card, instruction-panel') !=
+          root?.querySelector('onboarding-welcome-card, session-composer') !=
           null
         );
       },
@@ -258,10 +258,12 @@ export async function showLauncher(launched: LaunchedApp): Promise<void> {
   });
   await launched.page.waitForFunction(
     () => {
-      const pane = document.querySelector<HTMLElement>(
-        '.task-conversation-pane[data-pane="launcher"]',
+      return (
+        document
+          .querySelector('progress-app')
+          ?.shadowRoot?.querySelector('session-composer.launch-composer') !=
+        null
       );
-      return pane != null && pane.hidden === false;
     },
     undefined,
     { timeout: 5000 },

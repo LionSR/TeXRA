@@ -393,12 +393,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     agentName: string,
     sessionType: SessionType,
   ): void {
-    this.snapshot.setAgentConfigBanner({
-      visible: true,
-      agentName,
-      sessionType,
-      customDirSet: true,
-    });
+    this.snapshot.showAgentConfigBanner(agentName, sessionType);
   }
 
   /**

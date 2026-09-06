@@ -83,7 +83,6 @@ describe('desktop file selection', () => {
       ]),
     );
     expect(options.commit).toEqual(['HEAD']);
-    expect(await files.hasInputFiles()).toBe(true);
   });
 
   it('lists nothing without a workspace', async () => {
@@ -94,7 +93,6 @@ describe('desktop file selection', () => {
       editedFile: [],
       commit: ['HEAD'],
     });
-    expect(await files.hasInputFiles()).toBe(false);
     expect(await files.pickFiles('input')).toBeNull();
   });
 

@@ -3,47 +3,14 @@ import type { z } from 'zod';
 import type { AgentCategory } from './agent';
 import type { ExecutionId, StreamTabId } from './identifiers';
 import type { FileLocation } from './output';
-import type { StreamPhase, StreamSubstate } from './stream';
-import type {
-  ConversationProgress,
-  RoundKeyedOutputSidecarValueSchemas,
-  RoundStage,
-} from './streamState';
+import type { RoundKeyedOutputSidecarValueSchemas } from './streamState';
 import type { ExtendedTokenUsageStats } from './usage';
 
 /**
- * Fact-native payload vocabulary for session- and run-scoped runtime facts.
- *
- * These named types are the single source for the payloads carried by
- * `SessionFact` arms, typed run-fact trace events, and retained
- * runtime-host progress projections. New facts get a named payload here —
- * never a new key on a host compatibility map.
+ * Shared output-file, usage, goal-pause, and host-presentation payloads.
+ * Session state is defined by SessionEvent; payload shapes retained only for
+ * public CLI NDJSON output belong to the CLI's compatibility table.
  */
-
-export interface UpdateStreamDescriptionPayload {
-  streamId: StreamTabId;
-  description: string;
-}
-
-export interface SetParentStreamPayload {
-  childStreamId: StreamTabId;
-  parentStreamId: StreamTabId | null;
-}
-
-export interface RemoveStreamPayload {
-  streamId: StreamTabId;
-}
-
-export interface UpdateStreamStatusPayload {
-  streamId: StreamTabId;
-  status: StreamPhase;
-  /** Diagnostic transition cause retained for legacy host/public output. */
-  cause?: string;
-  /** Previous phase before this update, for detecting transitions. */
-  previousStatus?: StreamPhase;
-  /** Narrower in-flight display state for launch/resume overlays. */
-  substate?: StreamSubstate;
-}
 
 export interface AddOutputFilesPayload {
   streamId: StreamTabId;
@@ -72,37 +39,11 @@ export interface UpdateStreamUsagePayload {
   usage: ExtendedTokenUsageStats;
 }
 
-export interface UpdateConversationProgressPayload {
-  streamId: StreamTabId;
-  progress: ConversationProgress;
-}
-
-/** Round advance within a run, projected from `stage.start` (kind 'round').
- *  Kept for the frozen public NDJSON vocabulary (`updateRoundStage`); internal
- *  state and the webview wire carry the discriminated `StreamStage` slot. */
-export interface UpdateRoundStagePayload {
-  streamId: StreamTabId;
-  roundStage: RoundStage;
-}
-
 /**
  * An autonomous goal auto-paused after a failed cycle ended the autonomous
  * leg. Hosts surface this so a paused goal is distinguishable from a hang.
  */
 export interface GoalPausedPayload {
-  streamId: StreamTabId;
-}
-
-/**
- * A Goal record mutated (start/pause/resume/complete/abandon/edit-objective/
- * cap-reached) so UI surfaces (header chip, settings tab, progress board)
- * can refresh. The agent owns state transitions through the plan tool.
- */
-export interface GoalStateChangedPayload {
-  streamId: StreamTabId;
-}
-
-export interface UpdateQueuedFollowUpsPayload {
   streamId: StreamTabId;
 }
 
