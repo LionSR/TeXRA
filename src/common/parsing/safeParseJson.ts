@@ -14,11 +14,10 @@ import { ensureError } from '@utils/errors/errorMessage';
  * `Result.flatMap` / `Result.getOrElse`.
  */
 export function safeParseJson(text: string): Result.Result<unknown, Error> {
-  try {
-    return Result.succeed(JSON.parse(text) as unknown);
-  } catch (error) {
-    return Result.fail(ensureError(error));
-  }
+  return Result.try({
+    try: () => JSON.parse(text) as unknown,
+    catch: ensureError,
+  });
 }
 
 /**

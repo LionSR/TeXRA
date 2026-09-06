@@ -55,7 +55,8 @@ function dirModeFor(fileMode: number): number {
 /**
  * Read the store file as a JSON object. A missing file reads as a copy of
  * `missingFallback`; unreadable or non-object content fails with the
- * original error (`SyntaxError`, `TypeError`, or the fs error).
+ * original error (`SyntaxError`, `TypeError`, or the fs error). The mappers
+ * only name those types: `JsonStore.open` rethrows the same instances.
  */
 const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
   filePath: string,
@@ -63,12 +64,12 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
 ) {
   const content = yield* Effect.tryPromise({
     try: () => readFile(filePath, 'utf8'),
-    catch: (cause) => cause,
+    catch: (cause) => cause as NodeJS.ErrnoException,
   }).pipe(Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)));
   if (content === undefined) return { ...missingFallback };
   const parsed = yield* Effect.try({
     try: () => JSON.parse(content) as unknown,
-    catch: (cause) => cause,
+    catch: (cause) => cause as SyntaxError,
   });
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
     return parsed as JsonRecord;
@@ -91,12 +92,12 @@ const ensureDir = Effect.fn('JsonStore.ensureDir')(function* (
   const dirMode = fileMode === undefined ? undefined : dirModeFor(fileMode);
   yield* Effect.tryPromise({
     try: () => mkdir(dir, { recursive: true, mode: dirMode }),
-    catch: (cause) => cause,
+    catch: (cause) => cause as NodeJS.ErrnoException,
   });
   if (dirMode !== undefined) {
     yield* Effect.tryPromise({
       try: () => chmod(dir, dirMode),
-      catch: (cause) => cause,
+      catch: (cause) => cause as NodeJS.ErrnoException,
     });
   }
 });
@@ -141,7 +142,7 @@ const flush = Effect.fn('JsonStore.flush')(function* (
             `${JSON.stringify(record, null, 2)}\n`,
             mode === undefined ? undefined : { mode },
           ),
-        catch: (cause) => cause,
+        catch: (cause) => cause as NodeJS.ErrnoException,
       });
     }),
   );
@@ -184,6 +185,12 @@ export class JsonStore implements StateStore {
     options: JsonStoreOptions = {},
   ): Promise<JsonStore> {
     const storePath = resolve(filePath);
+    // Runs on Effect's default runtime, not `effectRuntime()`: the CLI and
+    // desktop hosts open their stores before `installProcessRuntime` — the
+    // CLI's `initPlatform` calls `createCliStateStores` and
+    // `openTexraConfigStores` first — so the process runtime does not exist
+    // yet. Pinned by the "Effect run boundaries" ratchet in
+    // src/test-kernel/architecture/dependencyDirection.vitest.ts.
     const exit = await Effect.runPromiseExit(readJsonRecord(storePath));
     if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
     return new JsonStore(storePath, exit.value, options);
@@ -211,6 +218,11 @@ export class JsonStore implements StateStore {
     } else {
       this.data[key] = value;
     }
+    // Default runtime for the same reason as `open`: a store opened during
+    // host bootstrap is written through this same entry, and this module
+    // sits below the runtime install, so no entry here may assume
+    // `installProcessRuntime` has run. Pinned by the same "Effect run
+    // boundaries" ratchet.
     const exit = await Effect.runPromiseExit(
       withPerKeyPermit(
         writeLanes,

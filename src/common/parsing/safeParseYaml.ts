@@ -15,11 +15,10 @@ import { ensureError } from '@utils/errors/errorMessage';
  * `Result.getOrElse`.
  */
 export function safeParseYaml(text: string): Result.Result<unknown, Error> {
-  try {
-    return Result.succeed(yaml.parse(text) as unknown);
-  } catch (error) {
-    return Result.fail(ensureError(error));
-  }
+  return Result.try({
+    try: () => yaml.parse(text) as unknown,
+    catch: ensureError,
+  });
 }
 
 /**
