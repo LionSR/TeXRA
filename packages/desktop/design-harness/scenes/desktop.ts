@@ -156,6 +156,7 @@ const sidebarCallbacks = {
   onOpenBrowser: noop,
   onOpenSettings: noop,
   onOpenLogs: noop,
+  onOpenSubagents: noop,
 };
 const workbenchCallbacks = {
   onActivate: noop,

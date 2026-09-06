@@ -1193,6 +1193,27 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   font-size: var(--font-size-sm);
 }
 
+/* Opens the Subagents tab on the selected family: the way into a tree the
+   rail no longer nests. */
+.task-subagents-open {
+  display: block;
+  width: 100%;
+  margin: 2px 0 4px;
+  color: var(--wa-color-text-quiet);
+}
+
+.task-subagents-open::part(base) {
+  justify-content: flex-start;
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: var(--font-size-sm);
+}
+
+.task-subagents-open-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--wa-color-text-quiet);
+}
+
 /* The conversation pane's paper chip and dock. */
 .task-paper-chip {
   flex: 0 0 auto;

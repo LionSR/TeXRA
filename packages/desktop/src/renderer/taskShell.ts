@@ -59,6 +59,8 @@ interface TaskSidebarCallbacks {
   onOpenBrowser(): void;
   onOpenSettings(): void;
   onOpenLogs(): void;
+  /** Opens the Subagents tab on the active paper's selected family. */
+  onOpenSubagents(): void;
 }
 
 function sidebarAction(options: {
@@ -127,26 +129,46 @@ function streamTabsTemplate(
 }
 
 /**
- * Under a selected workflow run the list shows the root alone (W2): its
- * calls are child streams the run board lists, and the note says so. The
- * selection may sit on one of those calls; the note is the family root's.
+ * Where the selected stream's children are, now that the rail shows the
+ * family root alone (W2). The Subagents tab is that tree's home on the
+ * desktop and this control opens it; a workflow run's calls are the run
+ * board's as well, and the note says so. Nothing at all when the selection
+ * has no children, since there would be no tree to reach.
  */
-function workflowCallsNote(
+function childStreamsAccess(
   view: SessionView,
   surface: Surface,
+  callbacks: TaskSidebarCallbacks,
 ): TemplateResult | typeof nothing {
   const selected = resolveSelected(view, surface);
   const stream = selected === null ? undefined : view.streams.get(selected);
   const rootId = stream?.ancestors[0]?.id ?? stream?.id;
   const root = rootId === undefined ? undefined : view.streams.get(rootId);
-  if (root?.category !== 'workflow' || root.rollup.total === 0) {
-    return nothing;
-  }
+  if (root === undefined || root.rollup.total === 0) return nothing;
   const { total } = root.rollup;
-  return html`<div class="task-workflow-calls-note">
-    ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child streams`},
-    reachable from the board. They never appear here.
-  </div>`;
+  const { icon, label } = WORKBENCH_KIND_META.subagents;
+  return html`
+    ${
+      root.category === 'workflow'
+        ? html`<div class="task-workflow-calls-note">
+            ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child streams`},
+            reachable from the board. They never appear here.
+          </div>`
+        : nothing
+    }
+    <wa-button
+      type="button"
+      class="task-subagents-open btn-ghost"
+      appearance="plain"
+      size="s"
+      title="Open the ${label} tab on this task's tree"
+      @click=${callbacks.onOpenSubagents}
+    >
+      ${waIcon(icon, { slot: 'start' })}
+      <span>${label}</span>
+      <span class="task-subagents-open-count" slot="end">${total}</span>
+    </wa-button>
+  `;
 }
 
 /**
@@ -210,7 +232,7 @@ function paperSection(
         ? html`
             <div class="task-sidebar-sessions task-paper-streams">
               ${streamTabsTemplate(paper)}
-              ${workflowCallsNote(paper.view, paper.surface)}
+              ${childStreamsAccess(paper.view, paper.surface, callbacks)}
             </div>
             <wa-button
               type="button"
@@ -309,6 +331,7 @@ function papersFocusTemplate(
         active
           ? html`<div class="task-sidebar-sessions">
               ${streamTabsTemplate(active)}
+              ${childStreamsAccess(active.view, active.surface, callbacks)}
             </div>`
           : nothing
       }

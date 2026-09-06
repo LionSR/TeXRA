@@ -715,6 +715,8 @@ function shellTemplate(): TemplateResult {
             onOpenSettings: () =>
               currentWorkbench().workbench.openKind('settings'),
             onOpenLogs: () => currentWorkbench().workbench.openKind('logs'),
+            onOpenSubagents: () =>
+              currentWorkbench().workbench.openKind('subagents'),
           },
         )}
       </div>
