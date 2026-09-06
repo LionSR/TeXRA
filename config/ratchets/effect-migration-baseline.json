@@ -224,6 +224,7 @@
   },
   "debtLanes": {
     "src/agent/runtime/SessionHandle.ts": "Phase 3 — run lifecycle and cancellation",
+    "src/auth/authProgram.ts": "AuthTokenProvider lane — src/auth ports become Effect-typed, retiring runAuthProgram and the SupabaseClient @adapter-until",
     "src/controllers/onboarding/OnboardingRefreshQueue.ts": "wave-1 rebuild — controllers, telemetry and session drafts",
     "src/controllers/progressView/ProgressApiKeyRetryController.ts": "wave-1 rebuild — controllers, telemetry and session drafts",
     "src/controllers/session/SessionBridge.ts": "lane D — host composition root and session graph",

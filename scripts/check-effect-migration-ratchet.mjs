@@ -1104,8 +1104,14 @@ function main() {
         ),
       ]),
     );
+    // The register is built from the SURVEY, not from `tightened`. The row
+    // holds ceilings and refuses a file it does not already carry; the
+    // register holds the debt that exists right now and who deletes it. Those
+    // are different things, and building the register from the row dropped
+    // the lane name of any file the row had refused -- leaving the check
+    // demanding a name that --update would wipe on its next run.
     const lanes = runBoundaryDebtLanes(
-      tightened[ROW_RUN_BOUNDARY],
+      rows[ROW_RUN_BOUNDARY],
       committed.debtLanes ?? {},
       toolExecuteFiles,
     );
