@@ -76,9 +76,7 @@ describe('desktop composition root and launch environment', () => {
     // the process's session owner.
     expect(source).not.toMatch(/openSession\(/u);
     expect(papersSource.match(/openSession\(/gu)).toHaveLength(1);
-    expect(
-      papersSource.match(/StreamLogStore\.openOrEphemeral\(\)/gu),
-    ).toHaveLength(1);
+    expect(papersSource.match(/StreamLogStore\.open\(\)/gu)).toHaveLength(1);
     expect(source).toMatch(/createWindow\(\{[\s\S]*?\bpapers,[\s\S]*?\}\)/u);
     // Every open paper is bound to the window: one backend with this
     // window's port (the framer's), one host snapshot, one presentation each.

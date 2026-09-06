@@ -427,29 +427,6 @@ export class StreamLogStore {
     return store;
   }
 
-  /**
-   * Open the persistent transcript store, degrading to an in-memory store
-   * when the open fails.
-   *
-   * Interactive hosts (VS Code extension, desktop app, CLI TUI) use this so a
-   * broken transcript directory warns instead of aborting startup. The
-   * degradation is loud: the cause is logged here and recorded in
-   * `mode.reason`, which callers render through
-   * {@link ephemeralTranscriptWarning}. A non-persistent store also disables
-   * resume — nothing was persisted to resume from.
-   */
-  static async openOrEphemeral(
-    open: () => Promise<StreamLogStore> = () => StreamLogStore.open(),
-  ): Promise<StreamLogStore> {
-    try {
-      return await open();
-    } catch (error) {
-      const reason = `Persistent transcript opening failed: ${toErrorMessage(error)}`;
-      log.warn(reason);
-      return StreamLogStore.ephemeral(reason);
-    }
-  }
-
   /** Create an explicitly non-persistent transcript store. */
   static ephemeral(reason: string): StreamLogStore {
     const normalizedReason = reason.trim();

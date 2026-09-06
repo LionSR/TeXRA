@@ -174,9 +174,9 @@ export async function runChat(
   const initialResume = init.initialResume;
   const transcriptLifecycle = await initializeCliTranscriptSession(
     initialResume
-      ? { onPersistentOpenFailure: 'fail' }
+      ? { ephemeral: 'reject' }
       : {
-          onPersistentOpenFailure: 'use-ephemeral',
+          ephemeral: 'use-existing',
           showPersistentWarning: writeTextStderr,
         },
   );

@@ -13,9 +13,9 @@ const responseTextProcessing = createTexraResponseTextProcessing(
 );
 
 type InteractiveTranscriptPolicy =
-  | { readonly onPersistentOpenFailure: 'fail' }
+  | { readonly ephemeral: 'reject' }
   | {
-      readonly onPersistentOpenFailure: 'use-ephemeral';
+      readonly ephemeral: 'use-existing';
       readonly showPersistentWarning: (message: string) => void;
     };
 
@@ -71,20 +71,16 @@ function ephemeralSession(
   return { session, canResume: false, warning };
 }
 
-/**
- * Prepare the process session under an explicit persistence policy. The
- * default `fail` policy is what every noninteractive run needs; only the
- * `use-ephemeral` arm permits an in-memory session after open failure.
- */
+/** Open persistent storage, or use an explicitly supplied session under the caller's policy. */
 export async function initializeCliTranscriptSession(
-  policy: InteractiveTranscriptPolicy = { onPersistentOpenFailure: 'fail' },
+  policy: InteractiveTranscriptPolicy = { ephemeral: 'reject' },
   openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
 ): Promise<CliTranscriptSession> {
   const existing = tryDefaultSession();
   if (existing) {
     if (
       existing.transcripts.mode.kind !== 'ephemeral' ||
-      policy.onPersistentOpenFailure === 'fail'
+      policy.ephemeral === 'reject'
     ) {
       return persistentSession(existing);
     }
@@ -95,25 +91,8 @@ export async function initializeCliTranscriptSession(
     );
   }
 
-  if (policy.onPersistentOpenFailure === 'fail') {
-    // The headless shape: no interactive paint to defer the sweep behind.
-    return initializePersistentSession(await openPersistentStore(), {
-      delayMs: 0,
-    });
-  }
-
-  const transcripts = await StreamLogStore.openOrEphemeral(openPersistentStore);
-  if (transcripts.mode.kind !== 'ephemeral') {
-    return initializePersistentSession(transcripts);
-  }
-
-  const session = initializeDefaultSession({
-    transcripts,
-    responseTextProcessing,
-  });
-  return ephemeralSession(
-    session,
-    transcripts.mode.reason,
-    policy.showPersistentWarning,
+  return initializePersistentSession(
+    await openPersistentStore(),
+    policy.ephemeral === 'reject' ? { delayMs: 0 } : {},
   );
 }

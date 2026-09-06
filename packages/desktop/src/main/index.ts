@@ -61,7 +61,6 @@ import {
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
-import { ephemeralTranscriptWarning } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   readGitEnvironmentSummary,
@@ -269,15 +268,6 @@ const SessionMessageEnvelopeSchema = z.object({ session: z.string() });
 
 // Recording has one process owner, shared by every paper and window.
 const hostDraftRequests = new HostDraftRequests();
-
-/** Warn once a window exists when a paper's transcripts could not persist. */
-function warnIfEphemeral(paper: DesktopPaper): void {
-  const { mode } = paper.session.transcripts;
-  if (mode.kind !== 'ephemeral') return;
-  void showDesktopWarningDialog(ephemeralTranscriptWarning(mode.reason)).catch(
-    (error: unknown) => console.error(error),
-  );
-}
 
 function createWindow(options: {
   papers: DesktopPaperRegistry;
@@ -634,7 +624,6 @@ function createWindow(options: {
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
     if (!selectedPath) return;
     const paper = await options.papers.open(selectedPath);
-    warnIfEphemeral(paper);
     if (paper.root !== undefined) selectPaper(paper.key);
   };
   attachRendererConsoleLog(window.webContents);
@@ -1632,11 +1621,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             resourcesPath: platformInit.resourcesPath,
           });
         reopenMainWindow();
-        // The active paper is in the list unless it is the no-workspace
-        // session; the set keeps it to one dialog either way.
-        for (const paper of new Set([papers.active(), ...papers.list()])) {
-          warnIfEphemeral(paper);
-        }
         if (unopenedPapers.length > 0) {
           void showDesktopWarningDialog(
             `Some papers could not be reopened:\n${unopenedPapers.join('\n')}`,

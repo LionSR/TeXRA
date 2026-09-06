@@ -21,7 +21,6 @@ import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import { createDeferred, waitForCondition } from '@test/support/asyncTestUtils';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import {
-  ephemeralTranscriptWarning,
   StreamLogStore,
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
@@ -679,30 +678,6 @@ describe('StreamLogStore load', () => {
 
     await expect(StreamLogStore.open()).rejects.toThrow(
       'storage permission denied',
-    );
-  });
-
-  it('degrades to an ephemeral store instead of failing an interactive host startup', async () => {
-    vi.spyOn(StorageFS, 'ensureDir').mockRejectedValue(
-      new Error('storage permission denied'),
-    );
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-
-    const { mode } = await StreamLogStore.openOrEphemeral();
-
-    expect(mode).toEqual({
-      kind: 'ephemeral',
-      reason: 'Persistent transcript opening failed: storage permission denied',
-    });
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      'Persistent transcript opening failed: storage permission denied',
-    );
-    if (mode.kind !== 'ephemeral') throw new Error('expected ephemeral mode');
-    // The warning an interactive host shows is the one that tells the user
-    // this session cannot be resumed.
-    expect(ephemeralTranscriptWarning(mode.reason)).toContain(
-      'cannot be resumed',
     );
   });
 

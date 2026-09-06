@@ -109,7 +109,7 @@ import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
-import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
+import { StreamLogStore } from '@transcript';
 import {
   initProcessSettingHost,
   readPlatformSetting,
@@ -493,16 +493,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     languageModel.onDidChange(invalidateLanguageModels),
   );
-  // A broken transcript directory must not abort activation: degrade to an
-  // in-memory store and say so, exactly as the CLI TUI does. The degraded
-  // session also cannot resume — nothing is persisted for a later run to pick
-  // up, and nothing a later launch could pick up is persisted.
-  const transcripts = await StreamLogStore.openOrEphemeral();
-  if (transcripts.mode.kind === 'ephemeral') {
-    void vscode.window.showWarningMessage(
-      ephemeralTranscriptWarning(transcripts.mode.reason),
-    );
-  }
+  const transcripts = await StreamLogStore.open();
   const runtimeSession = initializeDefaultSession({
     transcripts,
     responseTextProcessing: createTexraResponseTextProcessing(
