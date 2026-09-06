@@ -115,13 +115,21 @@ initPlatform(
   }),
 );
 
+// The process runtime comes first: `bootstrapNodeAgentDirectories` is an
+// Effect, so it does nothing until something runs it. `await` on an Effect is
+// a silent no-op — the bundle is never copied and `loadAgents` below then
+// finds nothing.
+installProcessRuntime(await nodeProcesses.selfIdentity());
+
 // src/platform/defaults/nodeHost.ts:178-199
-await bootstrapNodeAgentDirectories({
-  channel: 'my-embedder',
-  resourcesPath, // dir containing agents/, tool_use_agents/, goal/
-  currentVersion,
-  versionStateKey, // your own globalState key
-});
+await effectRuntime().runPromise(
+  bootstrapNodeAgentDirectories({
+    channel: 'my-embedder',
+    resourcesPath, // dir containing agents/, tool_use_agents/, goal/
+    currentVersion,
+    versionStateKey, // your own globalState key
+  }),
+);
 ```
 
 Alternatively, skip the bundle entirely and hand `createNodePlatform` an
@@ -195,6 +203,9 @@ import {
   bootstrapNodeAgentDirectories,
 } from '@platform/defaults/nodeHost';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import { effectRuntime } from '@platform/processRuntime';
 import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
 import { StreamLogStore } from '@transcript';
@@ -213,7 +224,8 @@ initPlatform(
   }),
 ); // Step 1
 initNodeAgentRuntime(lifecycle); // Optional shipped-feature parity
-await bootstrapNodeAgentDirectories({/* … */}); // Step 3
+installProcessRuntime(await nodeProcesses.selfIdentity()); // Step 3 needs it
+await effectRuntime().runPromise(bootstrapNodeAgentDirectories({/* … */})); // Step 3
 
 // Use StreamLogStore.ephemeral('embedder') here for memory-only transcripts.
 const session = initializeDefaultSession({

@@ -59,8 +59,8 @@ import {
 import { createLog } from '@logger/logUtils';
 import {
   clearProcessRuntime,
-  effectRuntime,
   initProcessRuntime,
+  tryProcessRuntime,
 } from '@platform/processRuntime';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
@@ -579,17 +579,37 @@ export function installProcessRuntime(
 
 /**
  * Uninstall the session owner and dispose the runtime it ran on, releasing
- * every session still open there: the one shutdown step for both, so a
- * close issued after it answers as a process with no owner does instead of
- * reaching the disposed runtime. The reference goes before the disposal
- * rather than after, so nothing that arrives while the disposal is in
- * flight is handed the runtime that is going away; a process that installs
- * again afterwards -- the CLI re-initializing its platform -- gets a fresh
- * one, because there is no longer one to reuse.
+ * every session still open there: the one shutdown step for both, so a close
+ * issued after it answers as a process with no owner does instead of reaching
+ * the disposed runtime.
+ *
+ * The runtime stays reachable for the whole of its own disposal. Its layer
+ * finalizers are what release the open sessions, and they still publish
+ * through `effectRuntime()` while they unwind -- `SessionHandle.unwind()`
+ * disposes pending host interactions, whose `approval.resolved` facts go out
+ * through `SessionHandle.publish`, which forks on this very runtime. Clearing
+ * the reference first made those finalizers throw "not initialized" mid
+ * shutdown. It is cleared afterwards, and only if this runtime is still the
+ * installed one, so a replacement installed while this one unwound survives.
+ *
+ * Idempotent and safe to race: an absent runtime needs no disposal, and a
+ * second call joins the disposal already in flight rather than reaching a
+ * throwing accessor. The extension's shutdown path calls it from a `finally`
+ * and permits a later shutdown, so both happen.
  */
-export async function disposeProcessRuntime(): Promise<void> {
+let disposal: Promise<void> | null = null;
+
+export function disposeProcessRuntime(): Promise<void> {
+  if (disposal) return disposal;
+  const runtime = tryProcessRuntime();
+  if (!runtime) return Promise.resolve();
   initSessionOwner(undefined);
-  const runtime = effectRuntime();
-  clearProcessRuntime();
-  await runtime.dispose();
+  disposal = runtime
+    .dispose()
+    .finally(() => {
+      clearProcessRuntime(runtime);
+      disposal = null;
+    })
+    .then(() => undefined);
+  return disposal;
 }

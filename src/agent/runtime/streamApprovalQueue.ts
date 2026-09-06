@@ -10,13 +10,12 @@
  * sessions queue, resolve, and clean up approvals independently.
  */
 
-import { Effect } from 'effect';
-
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { ApprovalPolicySnapshot, StreamTabId } from '@shared/schemas';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
 
 import type { SessionHostInteractions } from './HostInteractions';
+import type PQueue from 'p-queue';
 
 /**
  * Per-stream bypass state bound to the host interaction that announces it.
@@ -141,34 +140,29 @@ interface StreamApprovalController {
   bypass: StreamApprovalBypass;
   /**
    * Serialize one prompt at a time per stream, re-checking the stream's bypass
-   * at dispatch rather than at enqueue. `prompt` and `bypassed` reach the
-   * Promise-shaped host-interaction port, so they are wrapped once here.
+   * at dispatch rather than at enqueue.
    */
   enqueue<T>(
     streamId: StreamTabId | undefined,
     approval: QueuedApproval<T>,
-  ): Effect.Effect<T, Error>;
+  ): Promise<T>;
 }
 
 function createStreamApprovalController(
   bypass: StreamApprovalBypass,
 ): StreamApprovalController {
-  const lanes = new Map<StreamTabId | undefined, PerKeyLane>();
+  const queues = new Map<StreamTabId | undefined, PQueue>();
 
   return {
     bypass,
-    enqueue<T>(streamId: StreamTabId | undefined, approval: QueuedApproval<T>) {
-      return withPerKeyLane(
-        lanes,
-        streamId,
-      )(
-        Effect.tryPromise({
-          try: async () =>
-            streamId && bypass.isBypassed(streamId)
-              ? approval.bypassed()
-              : approval.prompt(),
-          catch: (cause) => cause as Error,
-        }),
+    enqueue<T>(
+      streamId: StreamTabId | undefined,
+      approval: QueuedApproval<T>,
+    ): Promise<T> {
+      return runOnPerKeyQueue(queues, streamId, async () =>
+        streamId && bypass.isBypassed(streamId)
+          ? approval.bypassed()
+          : approval.prompt(),
       );
     },
   };

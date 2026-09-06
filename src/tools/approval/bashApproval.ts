@@ -11,7 +11,6 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
@@ -95,18 +94,14 @@ export async function requestBashApproval(
     ...(request.cwd && { cwd: request.cwd }),
     streamId,
   };
-  // The approval lane is an Effect program; the tool-facing contract here is
-  // still a Promise, so it runs on the process runtime at this boundary.
-  return effectRuntime().runPromise(
-    session.approvals.bash.enqueue(streamId, {
-      prompt: () =>
-        session.interactions.requestBashApproval({
-          ...hostRequest,
-          permission: prepareBashApprovalPrompt(hostRequest, session),
-        }),
-      bypassed: () => ({ action: 'approve' }),
-    }),
-  );
+  return session.approvals.bash.enqueue(streamId, {
+    prompt: () =>
+      session.interactions.requestBashApproval({
+        ...hostRequest,
+        permission: prepareBashApprovalPrompt(hostRequest, session),
+      }),
+    bypassed: () => ({ action: 'approve' }),
+  });
 }
 
 export function buildBashApprovalRejectedResult(

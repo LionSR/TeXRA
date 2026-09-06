@@ -25,13 +25,13 @@
  * into an asynchronous layer build.
  */
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { hasProcessRuntime } from '@platform/processRuntime';
+import { tryProcessRuntime } from '@platform/processRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 
 let pending: Promise<void> | null = null;
 
 export function installCliProcessRuntime(): Promise<void> {
-  if (hasProcessRuntime()) return Promise.resolve();
+  if (tryProcessRuntime()) return Promise.resolve();
   if (pending) return pending;
   pending = (async () => {
     installProcessRuntime(await nodeProcesses.selfIdentity());
