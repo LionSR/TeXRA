@@ -1,46 +1,38 @@
 /**
- * Shared timeout and HTTP-error helpers for tool implementations.
+ * Shared request programs for tool implementations: one attempt under a
+ * deadline ({@link withRequestTimeout}), the transient-failure retry every
+ * network-boundary tool repeats ({@link retryTransientFetch}), and the
+ * classification of a failed request into a `ToolError`
+ * ({@link toFetchToolError}). Each tool defines its own timeout constant
+ * locally; the failure policy is consistent here (built around the `ky`
+ * HTTP client).
  *
- * Each tool defines its own timeout constant locally. This module provides
- * the retry scaffolding and error-classification helpers that enforce a
- * consistent failure policy across tools (built around the `ky` HTTP client).
+ * A deadline is `Effect.timeoutOrElse`, the retry is an exponential
+ * `Schedule` with the [1, 2) jitter window the tools were tuned to
+ * ({@link transientBackoff}), and cancellation is fiber interruption:
+ * `Effect.tryPromise` hands the attempt's own `AbortSignal` to the request,
+ * so an interrupted run aborts the in-flight fetch instead of waiting out the
+ * deadline or the next backoff. The caller's signal enters once, as the
+ * `{ signal }` of the tool's run edge.
  */
 
+import { Data, Duration, Effect, Random, Schedule } from 'effect';
 import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
-import pRetry, { AbortError, type Options as PRetryOptions } from 'p-retry';
 
 import { ToolError } from '@shared/schemas';
-import { linkAbortSignals } from '@utils/core';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
- * Unwrap a p-retry {@link AbortError} to the original error it carried.
- *
- * Non-transient HTTP errors are wrapped in `new AbortError(error)` inside a
- * retry callback to stop retries. p-retry v8 already unwraps these — its
- * `onAttemptFailure` rethrows `error.originalError` — so the outer `catch`
- * normally receives the original error directly. This is a defensive safeguard
- * at the error-classification boundary so the specific `instanceof` checks stay
- * correct even if an `AbortError` wrapper ever does reach the catch (a future
- * p-retry change, or an `AbortError` thrown outside the retry callback).
+ * Whether a request's own error is a timeout the client raised: ky's
+ * `TimeoutError` (the `timeout:` option), a `DOMException`/`Error` named
+ * `TimeoutError` (`AbortSignal.timeout()` in Node.js 20+ / undici v6+), or
+ * an `AbortError` whose `cause` is one (the shape some undici versions
+ * produce when `AbortSignal.timeout()` fires mid-request). This module's own
+ * deadline is the {@link RequestTimedOut} tag, never one of these.
  */
-export function unwrapAbortError(error: unknown): unknown {
-  return (error instanceof AbortError && error.originalError) || error;
-}
-
-/**
- * Whether an error is a request timeout.
- *
- * Covers three sources:
- * - ky's own `TimeoutError` (thrown when the `timeout:` option fires)
- * - `DOMException`/`Error` with `name === 'TimeoutError'` (thrown when
- *   `AbortSignal.timeout()` fires in Node.js 20+ / undici v6+)
- * - `AbortError` whose `cause` is a `TimeoutError` — the shape some undici
- *   versions produce when `AbortSignal.timeout()` fires mid-request
- */
-export function isTimeoutError(error: unknown): boolean {
+function isTimeoutError(error: unknown): boolean {
   if (error instanceof TimeoutError) return true;
   if (!(error instanceof Error)) return false;
   if (error.name === 'TimeoutError') return true;
@@ -71,85 +63,120 @@ export function isTransientHttpError(error: unknown): boolean {
   return isNetworkError(error);
 }
 
-/**
- * Run one request under a signal that aborts after `timeoutMs` or when the
- * run's cancellation signal fires, whichever comes first.
- *
- * The timeout spans the whole of `request` — connection and body read — where
- * a client's own `timeout` option (e.g. ky's) only clears once headers arrive.
- * The run's cancellation signal is linked in so an interrupted run aborts
- * in-flight requests instead of waiting out the timeout. The timeout reason is
- * the same `TimeoutError` DOMException `AbortSignal.timeout()` produces, so
- * {@link isTimeoutError} classifies it. Timer and link are released once
- * `request` settles: an `AbortSignal.any` composite on the run signal would
- * instead stay reachable from that signal for the rest of the run, one per
- * tool call (see `linkAbortSignals`).
- */
-export async function withRequestTimeout<T>(
-  timeoutMs: number,
-  cancelSignal: AbortSignal | undefined,
-  request: (signal: AbortSignal) => Promise<T>,
-): Promise<T> {
-  const controller = new AbortController();
-  const detachCancel = linkAbortSignals([cancelSignal], controller);
-  const timer = setTimeout(() => {
-    controller.abort(
-      new DOMException(
-        `Request timed out after ${timeoutMs} ms`,
-        'TimeoutError',
-      ),
-    );
-  }, timeoutMs);
-  try {
-    return await request(controller.signal);
-  } finally {
-    clearTimeout(timer);
-    detachCancel();
-  }
+/** A request attempt rejected; `cause` is the request's own error. */
+class RequestFailed extends Data.TaggedError('RequestFailed')<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/** A request attempt outlived its deadline. */
+class RequestTimedOut extends Data.TaggedError('RequestTimedOut')<{
+  readonly message: string;
+  readonly timeoutMs: number;
+}> {}
+
+export type RequestError = RequestFailed | RequestTimedOut;
+
+function isTransientRequestError(error: RequestError): boolean {
+  return error._tag === 'RequestTimedOut' || isTransientHttpError(error.cause);
 }
 
 /**
- * Run `fetchOnce` under p-retry, retrying only transient failures (timeout,
- * network error, 429, 5xx) with jittered backoff — the pattern every
- * network-boundary tool (web fetch/search, Loogle) repeats: classify the
- * error, retry if transient, otherwise abort immediately. Zotero's
- * `bbtClient.ts` shares only this module's abort-signal join, not the retry
- * classification — it has no retry loop of its own.
- *
- * `fetchOnce` may itself throw an {@link AbortError} (e.g. a response-shape
- * or size-limit check) to abort retries without going through the
- * transient-error classification; that error passes through unwrapped.
+ * One request under a deadline of `timeoutMs` that spans the whole of
+ * `request` — connection and body read — where a client's own `timeout`
+ * option (e.g. ky's) only clears once headers arrive. The signal handed to
+ * `request` aborts when the attempt is interrupted, by the deadline or by
+ * the caller. Fails with {@link RequestTimedOut} on the deadline and with
+ * {@link RequestFailed} carrying the request's own error otherwise.
  */
-export async function retryTransientFetch<T>(
-  fetchOnce: () => Promise<T>,
-  options: {
-    retries: number;
-    minTimeout: number;
-    cancelSignal?: AbortSignal;
-    onFailedAttempt?: PRetryOptions['onFailedAttempt'];
-  },
-): Promise<T> {
-  return pRetry(
-    async () => {
-      try {
-        return await fetchOnce();
-      } catch (error: unknown) {
-        if (error instanceof AbortError || isTransientHttpError(error)) {
-          throw error;
-        }
-        throw new AbortError(ensureError(error));
-      }
-    },
-    {
-      retries: options.retries,
-      minTimeout: options.minTimeout,
-      randomize: true,
-      // Stop retrying (and skip inter-retry delays) once the run is cancelled.
-      signal: options.cancelSignal,
-      onFailedAttempt: options.onFailedAttempt,
-    },
+export const withRequestTimeout = Effect.fn('timeouts.withRequestTimeout')(
+  <T>(timeoutMs: number, request: (signal: AbortSignal) => Promise<T>) =>
+    Effect.tryPromise({
+      try: request,
+      catch: (cause) =>
+        new RequestFailed({ message: toErrorMessage(cause), cause }),
+    }).pipe(
+      Effect.timeoutOrElse({
+        duration: Duration.millis(timeoutMs),
+        orElse: () =>
+          Effect.fail(
+            new RequestTimedOut({
+              message: `Request timed out after ${timeoutMs} ms`,
+              timeoutMs,
+            }),
+          ),
+      }),
+    ),
+);
+
+interface RetryTransientFetchOptions {
+  /** Retries after the first attempt. */
+  readonly retries: number;
+  /**
+   * Base backoff before the first retry; doubles per retry, then scaled by
+   * a uniform factor in [1, 2) — see {@link transientBackoff}.
+   */
+  readonly minTimeout: number;
+  /** Deadline for each attempt, connection and body read included. */
+  readonly timeoutMs: number;
+  /**
+   * Observes each transient failure — the attempts the schedule may retry,
+   * the last exhausted one included. A permanent failure ends the retry
+   * unobserved, since it never had retries left to report.
+   */
+  readonly onFailedAttempt?: (
+    error: RequestError,
+    retriesLeft: number,
+  ) => Effect.Effect<void>;
+}
+
+/**
+ * Backoff before retry `n` (1-based): `minTimeout * 2^(n-1)` scaled by a
+ * uniform factor in [1, 2). This is the window the tools were tuned to under
+ * p-retry's `randomize: true`; `Schedule.jittered` scales by [0.8, 1.2]
+ * instead, which would cut the mean wait before a 429/5xx retry by a third.
+ */
+function transientBackoff(minTimeout: number) {
+  return Schedule.exponential(Duration.millis(minTimeout)).pipe(
+    Schedule.modifyDelay(({ duration }) =>
+      Effect.map(Random.next, (random) =>
+        Duration.millis(Duration.toMillis(duration) * (1 + random)),
+      ),
+    ),
   );
 }
+
+/**
+ * Run `fetchOnce` under a per-attempt deadline, retrying only transient
+ * failures (timeout, network error, 429, 5xx) with exponential backoff and
+ * full jitter — the pattern every network-boundary tool (web fetch/search,
+ * Loogle) repeats. Any other failure — a non-transient HTTP status, a
+ * response-shape or size-limit check `fetchOnce` throws itself — ends the
+ * retry immediately and is the program's failure. Interruption stops both
+ * the active attempt and the backoff sleep.
+ */
+export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')(
+  <T>(
+    fetchOnce: (signal: AbortSignal) => Promise<T>,
+    options: RetryTransientFetchOptions,
+  ) =>
+    withRequestTimeout(options.timeoutMs, fetchOnce).pipe(
+      Effect.tapError((error) =>
+        Effect.gen(function* () {
+          if (!options.onFailedAttempt || !isTransientRequestError(error)) {
+            return;
+          }
+          const { attempt } = yield* Schedule.CurrentMetadata;
+          yield* options.onFailedAttempt(error, options.retries - attempt);
+        }),
+      ),
+      Effect.retry({
+        schedule: transientBackoff(options.minTimeout),
+        times: options.retries,
+        while: isTransientRequestError,
+      }),
+    ),
+);
 
 /** Tool-facing message for each failure class of a retried fetch. */
 interface FetchToolErrorMessages {
@@ -160,7 +187,7 @@ interface FetchToolErrorMessages {
 }
 
 /**
- * Classify the error from a failed {@link retryTransientFetch} call into a
+ * Classify the failure of a {@link retryTransientFetch} program into a
  * {@link ToolError}: timeout, HTTP status, network failure, or fallback.
  *
  * The network predicate here is the same one `isTransientHttpError` uses for
@@ -169,25 +196,21 @@ interface FetchToolErrorMessages {
  * (e.g. reading a property of `undefined`) as a network failure, contradicting
  * this module's own guidance; `is-network-error` matches only the known
  * fetch/undici network-failure shapes. Because the retry loop and the final
- * user-facing label now share one predicate, an error cannot be retried as
+ * user-facing label share one predicate, an error cannot be retried as
  * transient and then mislabeled as a network failure, or vice versa.
  */
 export function toFetchToolError(
-  error: unknown,
+  error: RequestError,
   messages: FetchToolErrorMessages,
 ): ToolError {
-  // Defensive: ensure the specific type checks below see the real error
-  // even if a p-retry AbortError wrapper reaches here (p-retry v8 already
-  // unwraps it to .originalError, so this is normally a no-op).
-  const err = unwrapAbortError(error);
-  if (isTimeoutError(err)) {
+  if (error._tag === 'RequestTimedOut' || isTimeoutError(error.cause)) {
     return new ToolError(messages.timeout);
   }
-  if (err instanceof HTTPError) {
-    return new ToolError(messages.http(err.response.status));
+  if (error.cause instanceof HTTPError) {
+    return new ToolError(messages.http(error.cause.response.status));
   }
-  if (isNetworkError(err)) {
-    return new ToolError(messages.network(toErrorMessage(err)));
+  if (isNetworkError(error.cause)) {
+    return new ToolError(messages.network(error.message));
   }
-  return new ToolError(messages.fallback(toErrorMessage(err)));
+  return new ToolError(messages.fallback(error.message));
 }

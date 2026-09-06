@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
@@ -16,11 +19,13 @@ import {
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { openBrowser } from './browser';
 import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
 import {
+  DeviceSignInError,
   pollForDeviceSession,
   requestDeviceAuthorization,
   type DeviceAuthorization,
@@ -148,32 +153,32 @@ function buildOAuthQueryParams(
 interface CliDeviceLoginOptions {
   /** Called once with the code and verification URL the user must open. */
   onDeviceCode?: (authorization: DeviceAuthorization) => void;
-  signal?: AbortSignal;
 }
 
 /**
  * Device-code sign-in for headless terminals (SSH, WSL2, containers) where
  * the loopback callback server can't be reached. The user approves a short
  * code from a browser on any device; no callback port is needed here.
+ * Interrupting the program (the command's cancellation) stops the poll, and
+ * no session is stored.
  */
-export async function signInCliSupabaseDeviceCode(
-  options: CliDeviceLoginOptions = {},
-): Promise<SupabaseSession> {
+export const signInCliSupabaseDeviceCode = Effect.fn(
+  'supabaseAuth.signInCliSupabaseDeviceCode',
+)(function* (options: CliDeviceLoginOptions = {}) {
   const authCoordinator = initializeCliSupabaseAuth();
-  const authorization = await requestDeviceAuthorization({
-    signal: options.signal,
-  });
+  const authorization = yield* requestDeviceAuthorization();
   options.onDeviceCode?.(authorization);
-  const exchange = await pollForDeviceSession(authorization, {
-    signal: options.signal,
-  });
-  options.signal?.throwIfAborted();
+  const exchange = yield* pollForDeviceSession(authorization);
   // The token endpoint mints a native GoTrue session (auth-github shape), so
   // standard Supabase refresh applies — no custom refresh flag.
   const session = toStorableSupabaseSession(exchange);
-  await authCoordinator.storeSession(session);
+  yield* Effect.tryPromise({
+    try: () => authCoordinator.storeSession(session),
+    catch: (cause) =>
+      new DeviceSignInError({ message: toErrorMessage(cause), cause }),
+  });
   return session;
-}
+});
 
 export async function signOutCliSupabase(): Promise<void> {
   const authCoordinator = initializeCliSupabaseAuth();

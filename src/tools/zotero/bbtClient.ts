@@ -12,15 +12,14 @@
  */
 
 // Third-party imports
+import { Effect } from 'effect';
 import ky, { HTTPError } from 'ky';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError } from '@shared/schemas';
-import { isTimeoutError, withRequestTimeout } from '@tools/timeouts';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { withRequestTimeout, type RequestError } from '@tools/timeouts';
 import { getConfig } from '@utils/config/configUtils';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
@@ -150,31 +149,61 @@ export const BbtSearchResultItemSchema = z.object({
 export type BbtSearchResultItem = z.infer<typeof BbtSearchResultItemSchema>;
 
 /**
- * Call Better BibTeX JSON-RPC endpoint.
+ * The `ToolError` for a Better BibTeX request that did not produce a body:
+ * the deadline, a 404 (the plugin is not installed), a refused connection,
+ * or any other transport failure.
+ */
+function bbtRequestError(
+  error: RequestError,
+  port: number,
+  timeout: number,
+): ToolError {
+  if (error._tag === 'RequestTimedOut') {
+    return new ToolError(
+      `Zotero API request timed out after ${timeout / 1000}s. ` +
+        `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
+    );
+  }
+  if (
+    error.cause instanceof HTTPError &&
+    error.cause.response.status === StatusCodes.NOT_FOUND
+  ) {
+    return new ToolError(
+      'Better BibTeX plugin is not installed in Zotero. ' +
+        'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
+    );
+  }
+  // TypeError from fetch (ECONNREFUSED → TypeError in native fetch): for a
+  // localhost endpoint this is always a connection failure. The request wraps
+  // only the ky.post call, so no programmer TypeError can reach here.
+  if (error.cause instanceof TypeError) {
+    return zoteroUnreachableError(port);
+  }
+  return new ToolError(`Better BibTeX API error: ${error.message}`);
+}
+
+/**
+ * Call the Better BibTeX JSON-RPC endpoint.
  *
  * @param method - JSON-RPC method name (e.g., 'item.search', 'item.export')
  * @param params - Method parameters
  * @param port - Zotero Connector port (default: 23119)
  * @param resultSchema - Zod schema for the method's `result`, validated at the boundary
  * @param timeout - Request timeout in milliseconds
- * @returns Promise resolving to the validated result
- * @throws ToolError if Zotero is not running, BBT is not installed, or the response is malformed
+ * @returns The validated result; fails with a ToolError if Zotero is not
+ *   running, BBT is not installed, or the response is malformed
  */
-export async function callBetterBibTeX<T>(
-  method: string,
-  params: unknown[],
-  port: number,
-  resultSchema: z.ZodType<T>,
-  timeout: number = ZOTERO_BBT_TIMEOUT_MS,
-): Promise<T> {
-  const url = zoteroUrl(port, '/better-bibtex/json-rpc');
+export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
+  function* <T>(
+    method: string,
+    params: unknown[],
+    port: number,
+    resultSchema: z.ZodType<T>,
+    timeout: number = ZOTERO_BBT_TIMEOUT_MS,
+  ) {
+    const url = zoteroUrl(port, '/better-bibtex/json-rpc');
 
-  // Cancellation for the owning agent run — a cancelled parallel batch must
-  // abort a hung Zotero request instead of waiting out its timeout.
-  const cancelSignal = getCurrentToolCallContext()?.signal;
-  let raw: unknown;
-  try {
-    raw = await withRequestTimeout(timeout, cancelSignal, (signal) =>
+    const raw = yield* withRequestTimeout(timeout, (signal) =>
       ky
         .post(url, {
           json: { jsonrpc: '2.0', method, params, id: 1 },
@@ -183,56 +212,37 @@ export async function callBetterBibTeX<T>(
           retry: 0,
         })
         .json<unknown>(),
-    );
-  } catch (error: unknown) {
-    if (isTimeoutError(error)) {
-      throw new ToolError(
-        `Zotero API request timed out after ${timeout / 1000}s. ` +
-          `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
-      );
-    }
-    if (
-      error instanceof HTTPError &&
-      error.response.status === StatusCodes.NOT_FOUND
-    ) {
-      throw new ToolError(
-        'Better BibTeX plugin is not installed in Zotero. ' +
-          'Ask the user to install it from https://retorque.re/zotero-better-bibtex/',
-      );
-    }
-    // TypeError from fetch (ECONNREFUSED → TypeError in native fetch): for a
-    // localhost endpoint this is always a connection failure. This try block
-    // wraps only the ky.post call, so no programmer TypeError can reach here.
-    if (error instanceof TypeError) {
-      throw zoteroUnreachableError(port);
-    }
-    throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
-  }
+    ).pipe(Effect.mapError((error) => bbtRequestError(error, port, timeout)));
 
-  const responseSchema = z.object({
-    jsonrpc: z.string(),
-    id: z.number().nullish(),
-    result: resultSchema.optional(),
-    error: JsonRpcErrorSchema.optional(),
-  });
-  const parsed = responseSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new ToolError(
-      `Better BibTeX returned an unexpected response for ${method}: ${z.prettifyError(parsed.error)}`,
-    );
-  }
-  if (parsed.data.error) {
-    throw new ToolError(
-      `Better BibTeX API error: ${parsed.data.error.message}`,
-    );
-  }
-  if (parsed.data.result === undefined) {
-    throw new ToolError(
-      `Better BibTeX returned an empty response for ${method}.`,
-    );
-  }
-  return parsed.data.result;
-}
+    const responseSchema = z.object({
+      jsonrpc: z.string(),
+      id: z.number().nullish(),
+      result: resultSchema.optional(),
+      error: JsonRpcErrorSchema.optional(),
+    });
+    const parsed = responseSchema.safeParse(raw);
+    if (!parsed.success) {
+      return yield* Effect.fail(
+        new ToolError(
+          `Better BibTeX returned an unexpected response for ${method}: ${z.prettifyError(parsed.error)}`,
+        ),
+      );
+    }
+    if (parsed.data.error) {
+      return yield* Effect.fail(
+        new ToolError(`Better BibTeX API error: ${parsed.data.error.message}`),
+      );
+    }
+    if (parsed.data.result === undefined) {
+      return yield* Effect.fail(
+        new ToolError(
+          `Better BibTeX returned an empty response for ${method}.`,
+        ),
+      );
+    }
+    return parsed.data.result;
+  },
+);
 
 // ============================================================================
 // Zotero Connector API — the endpoints `zotero_add` writes through. Requires
@@ -245,71 +255,85 @@ export interface ConnectorResult {
 }
 
 /**
- * Check if Zotero is running by pinging the connector.
- * Throws a user-friendly ToolError if not reachable.
+ * Check that Zotero is running by pinging the connector. Fails with a
+ * user-friendly ToolError if it is not reachable within the ping deadline.
  */
-export async function checkZoteroRunning(port: number): Promise<void> {
-  try {
-    await ky.get(zoteroUrl(port, '/connector/ping'), {
-      timeout: false,
-      signal: AbortSignal.timeout(ZOTERO_PING_TIMEOUT_MS),
-      retry: 0,
-    });
-  } catch {
-    throw zoteroUnreachableError(port);
+export const checkZoteroRunning = Effect.fn('bbtClient.checkZoteroRunning')(
+  (port: number) =>
+    withRequestTimeout(ZOTERO_PING_TIMEOUT_MS, (signal) =>
+      ky.get(zoteroUrl(port, '/connector/ping'), {
+        timeout: false,
+        signal,
+        retry: 0,
+      }),
+    ).pipe(
+      Effect.mapError(() => zoteroUnreachableError(port)),
+      Effect.asVoid,
+    ),
+);
+
+/** The `ConnectorResult` for a request that produced no response. */
+function connectorRequestFailure(
+  error: RequestError,
+  port: number,
+): ConnectorResult {
+  if (error._tag === 'RequestTimedOut') {
+    return {
+      status: 'error',
+      message:
+        `Zotero Connector request timed out after ${ZOTERO_CONNECTOR_TIMEOUT_MS / 1000}s. ` +
+        `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
+    };
   }
+  // TypeError from fetch (ECONNREFUSED → TypeError in native fetch): for a
+  // localhost endpoint this is always a connection failure, so present the
+  // same reachability guidance as checkZoteroRunning and callBetterBibTeX
+  // instead of surfacing a raw 'TypeError: fetch failed'.
+  if (error.cause instanceof TypeError) {
+    return { status: 'error', message: zoteroUnreachableError(port).message };
+  }
+  return { status: 'error', message: error.message };
 }
 
 /**
- * Call a Zotero Connector endpoint with unified error handling.
+ * Call a Zotero Connector endpoint. Never fails: every outcome, the
+ * transport's included, is a `ConnectorResult` the tool reports per item.
  */
-export async function callZoteroConnector(
-  endpoint: string,
-  body: object,
-  port: number,
-): Promise<ConnectorResult> {
-  let response: Response;
-  try {
-    response = await ky.post(zoteroUrl(port, `/connector/${endpoint}`), {
-      json: body,
-      timeout: false,
-      signal: AbortSignal.timeout(ZOTERO_CONNECTOR_TIMEOUT_MS),
-      retry: 0,
-      throwHttpErrors: false,
-    });
-  } catch (error: unknown) {
-    if (isTimeoutError(error)) {
-      return {
-        status: 'error',
-        message:
-          `Zotero Connector request timed out after ${ZOTERO_CONNECTOR_TIMEOUT_MS / 1000}s. ` +
-          `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
-      };
-    }
-    // TypeError from fetch (ECONNREFUSED → TypeError in native fetch): for a
-    // localhost endpoint this is always a connection failure, so present the
-    // same reachability guidance as checkZoteroRunning and callBetterBibTeX
-    // instead of surfacing a raw 'TypeError: fetch failed'.
-    if (error instanceof TypeError) {
-      return { status: 'error', message: zoteroUnreachableError(port).message };
-    }
-    return { status: 'error', message: toErrorMessage(error) };
-  }
-
-  if (
-    response.status === StatusCodes.OK ||
-    response.status === StatusCodes.CREATED
-  ) {
-    return { status: 'success' };
-  }
-
-  // Try to extract a machine-readable error message from the response body.
-  let errorMessage = `Unexpected response status: ${response.status}`;
-  try {
-    const data = (await response.json()) as { error?: string };
-    if (data?.error) errorMessage = String(data.error);
-  } catch {
-    // Body is not JSON or is empty; use the generic status message.
-  }
-  return { status: 'error', message: errorMessage };
-}
+export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
+  (endpoint: string, body: object, port: number) =>
+    withRequestTimeout(
+      ZOTERO_CONNECTOR_TIMEOUT_MS,
+      async (signal): Promise<ConnectorResult> => {
+        const response = await ky.post(
+          zoteroUrl(port, `/connector/${endpoint}`),
+          {
+            json: body,
+            timeout: false,
+            signal,
+            retry: 0,
+            throwHttpErrors: false,
+          },
+        );
+        if (
+          response.status === StatusCodes.OK ||
+          response.status === StatusCodes.CREATED
+        ) {
+          return { status: 'success' };
+        }
+        // Try to extract a machine-readable error message from the response
+        // body; it is read under the same deadline as the headers.
+        let errorMessage = `Unexpected response status: ${response.status}`;
+        try {
+          const data = (await response.json()) as { error?: string };
+          if (data?.error) errorMessage = String(data.error);
+        } catch {
+          // Body is not JSON or is empty; use the generic status message.
+        }
+        return { status: 'error', message: errorMessage };
+      },
+    ).pipe(
+      Effect.catch((error) =>
+        Effect.succeed(connectorRequestFailure(error, port)),
+      ),
+    ),
+);
