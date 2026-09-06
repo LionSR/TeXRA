@@ -9,6 +9,7 @@ import {
   aggregateId as qualifyAggregateId,
   referencedAggregates,
   AgentCategory,
+  AgentConfigFieldsSchema,
   END_GROUP_STATUS,
   runIdentityDisplayName,
   STREAM_LOG_ENTRY_TYPES,
@@ -164,6 +165,27 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
       aggregateId: qualifyAggregateId('stream', trace.streamId),
       executionId,
       config: agentConfig,
+    });
+  } else {
+    // Process and workflow-container exports persist a non-agent RunRecord
+    // (name/instruction/model, no agentCategory). Project that into the
+    // durable config arm the fold already reads for `command` / `model`.
+    const processConfig = trace.config;
+    bodies.push({
+      type: 'run.config',
+      aggregateId: qualifyAggregateId('stream', trace.streamId),
+      executionId,
+      config: AgentConfigFieldsSchema.parse({
+        agentCategory: AgentCategory.ToolUse,
+        agent: processConfig.name,
+        instruction: processConfig.instruction,
+        ...(processConfig.model === undefined
+          ? {}
+          : { model: processConfig.model }),
+        ...(processConfig.workingDirectory === undefined
+          ? {}
+          : { workingDirectory: processConfig.workingDirectory }),
+      }),
     });
   }
   if (trace.meta?.description) {

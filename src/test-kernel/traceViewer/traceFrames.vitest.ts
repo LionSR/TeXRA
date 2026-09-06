@@ -358,4 +358,18 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     // interrupted run, never as a finished one.
     expect(foldTrace(trace)?.durableOutcome).toBeNull();
   });
+
+  it('projects a process export instruction into the fold command', () => {
+    const streamId = 'bash@stream:process-trace' as StreamTabId;
+    const trace: TraceDocument = {
+      executionId: 'abc125' as ExecutionId,
+      streamId,
+      config: { name: 'bash', instruction: 'ls -la' },
+      meta: null,
+      entries: [],
+      snapshot: StreamSnapshotSchema.parse({ streamId }),
+    };
+
+    expect(foldTrace(trace)?.command).toBe('ls -la');
+  });
 });
