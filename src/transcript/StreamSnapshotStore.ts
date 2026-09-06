@@ -749,9 +749,9 @@ export class StreamSnapshotStore {
           return;
         // `status`, `run.activate`, `stage.start`, `result`, and
         // `stream.removed` carry liveness and lifecycle, which the class doc
-        // above says this store deliberately does not persist; the approval
-        // pair, `context.state`, and `conversation.progress` are run-scoped
-        // session facts the fold owns; `transcript.entry` is the transcript
+        // above says this store deliberately does not persist; the three
+        // approval facts, `context.state`, and `conversation.progress` are
+        // run-scoped session facts the fold owns; `transcript.entry` is the transcript
         // tier; goal, inquiry, and follow-up facts are session/render state
         // owned by SessionFactApplier/SessionState, not by this sidecar.
         // Every arm is listed explicitly so a newly added SessionEvent type
