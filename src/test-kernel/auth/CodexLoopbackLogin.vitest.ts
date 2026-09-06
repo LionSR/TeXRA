@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { FetchHttpClient } from 'effect/unstable/http';
 import { describe, expect, it, vi } from 'vitest';
 
 import { loginWithLoopback } from '@auth/codex';
@@ -38,7 +39,10 @@ function runLogin(
   options: Parameters<typeof loginWithLoopback>[0],
   signal?: AbortSignal,
 ): Promise<CodexSession> {
-  return Effect.runPromise(loginWithLoopback(options), { signal });
+  return Effect.runPromise(
+    loginWithLoopback(options).pipe(Effect.provide(FetchHttpClient.layer)),
+    { signal },
+  );
 }
 
 describe('Codex loopback login', () => {

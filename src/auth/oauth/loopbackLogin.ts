@@ -14,8 +14,9 @@
 import http from 'node:http';
 
 import { Deferred, Duration, Effect } from 'effect';
-
 import { AUTH_CALLBACK_TIMEOUT_MS } from '../config';
+import type { HttpClient } from 'effect/unstable/http';
+
 import type { SubscriptionAuthorizeRequest } from './SubscriptionOAuthCoordinator';
 
 /**
@@ -42,7 +43,7 @@ export interface LoopbackOAuthCoordinator<S> {
     code: string;
     verifier: string;
     redirectUri: string;
-  }): Effect.Effect<S, unknown>;
+  }): Effect.Effect<S, unknown, HttpClient.HttpClient>;
 }
 
 export interface OAuthLoopbackLoginOptions<S> {
@@ -130,7 +131,7 @@ function bindLoopbackServer(
  */
 export function loginWithOAuthLoopback<S>(
   options: OAuthLoopbackLoginOptions<S>,
-): Effect.Effect<S, unknown> {
+): Effect.Effect<S, unknown, HttpClient.HttpClient> {
   const { coordinator, openBrowser, ports, callbackPath, displayName } =
     options;
   // The setup prefix is uninterruptible to preserve the Promise

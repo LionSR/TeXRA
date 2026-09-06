@@ -1,5 +1,6 @@
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Fiber } from 'effect';
+import { FetchHttpClient } from 'effect/unstable/http';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, vi } from 'vitest';
 
@@ -24,7 +25,10 @@ function stubDeviceEndpoints(
     'fetch',
     vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input);
-      if (url === CODEX_DEVICE_USERCODE_URL) {
+      if (String(url) === CODEX_DEVICE_USERCODE_URL) {
+        expect(new Headers(init?.headers).get('content-type')).toBe(
+          'application/json',
+        );
         return jsonResponse({
           device_auth_id: 'device-auth-id',
           user_code: 'ABCD-EFGH',
@@ -32,7 +36,7 @@ function stubDeviceEndpoints(
           ...userCode,
         });
       }
-      if (url === CODEX_DEVICE_TOKEN_URL) return onPoll(init);
+      if (String(url) === CODEX_DEVICE_TOKEN_URL) return onPoll(init);
       throw new Error(`Unexpected fetch: ${url}`);
     }),
   );
@@ -67,7 +71,10 @@ describe('Codex device login', () => {
         const coordinator = coordinatorStub();
         const onPrompt = vi.fn();
         const fiber = yield* Effect.forkChild(
-          loginWithDeviceCode({ coordinator, onPrompt }),
+          loginWithDeviceCode({ coordinator, onPrompt }).pipe(
+            Effect.provide(FetchHttpClient.layer),
+            Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+          ),
         );
         yield* prompted(onPrompt);
         yield* TestClock.adjust('5 seconds');
@@ -106,7 +113,10 @@ describe('Codex device login', () => {
         );
         const onPrompt = vi.fn();
         const fiber = yield* Effect.forkChild(
-          loginWithDeviceCode({ coordinator, onPrompt }),
+          loginWithDeviceCode({ coordinator, onPrompt }).pipe(
+            Effect.provide(FetchHttpClient.layer),
+            Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+          ),
         );
         yield* prompted(onPrompt);
         yield* TestClock.adjust('5 seconds');
@@ -141,7 +151,13 @@ describe('Codex device login', () => {
         });
         const onPrompt = vi.fn();
         const fiber = yield* Effect.forkChild(
-          loginWithDeviceCode({ coordinator: coordinatorStub(), onPrompt }),
+          loginWithDeviceCode({
+            coordinator: coordinatorStub(),
+            onPrompt,
+          }).pipe(
+            Effect.provide(FetchHttpClient.layer),
+            Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+          ),
         );
         yield* prompted(onPrompt);
 

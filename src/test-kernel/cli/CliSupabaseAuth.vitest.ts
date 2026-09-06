@@ -1,5 +1,6 @@
 import { Effect, Exit } from 'effect';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 const mocks = vi.hoisted(() => {
   const authCoordinator = {
@@ -74,10 +75,11 @@ async function loadSupabaseAuth() {
   // `vi.resetModules()` gives the module graph a fresh `@platform/processRuntime`
   // whose runtime the shared fake-host install never reached; the module's own
   // `initializeCliSupabaseAuth` installs the auth run edge from it.
-  const [{ initProcessRuntime }, { Layer, ManagedRuntime }] = await Promise.all(
-    [import('@platform/processRuntime'), import('effect')],
-  );
-  initProcessRuntime(ManagedRuntime.make(Layer.empty));
+  const [{ initProcessRuntime }, { ManagedRuntime }] = await Promise.all([
+    import('@platform/processRuntime'),
+    import('effect'),
+  ]);
+  initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
   return import('@cli/runtime/supabaseAuth');
 }
 
@@ -165,9 +167,12 @@ describe('CLI Supabase auth', () => {
     );
     const { signInCliSupabaseDeviceCode } = await loadSupabaseAuth();
 
-    const exit = await Effect.runPromiseExit(signInCliSupabaseDeviceCode(), {
-      signal: controller.signal,
-    });
+    const exit = await Effect.runPromiseExit(
+      signInCliSupabaseDeviceCode().pipe(Effect.provide(testHttpClientLayer)),
+      {
+        signal: controller.signal,
+      },
+    );
 
     expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
     expect(mocks.authCoordinator.storeSession).not.toHaveBeenCalled();
@@ -192,9 +197,12 @@ describe('CLI Supabase auth', () => {
       openBrowser: false,
       signal: controller.signal,
     });
-    const deviceSignIn = Effect.runPromise(signInCliSupabaseDeviceCode(), {
-      signal: controller.signal,
-    });
+    const deviceSignIn = Effect.runPromise(
+      signInCliSupabaseDeviceCode().pipe(Effect.provide(testHttpClientLayer)),
+      {
+        signal: controller.signal,
+      },
+    );
     controller.abort();
     await expect(deviceSignIn).rejects.toThrow(/interrupted/);
 
