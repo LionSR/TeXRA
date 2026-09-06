@@ -101,13 +101,18 @@ export class SettingsViewHost {
       } = {},
     ) {
       const posted = yield* Effect.exit(
-        this.memoryController
-          .getMemoryPreviewMessage(data.storagePath)
-          .pipe(
-            Effect.flatMap((message) =>
-              this.postToRespond(message, options.respond),
-            ),
+        this.memoryController.getMemoryPreviewMessage(data.storagePath).pipe(
+          Effect.flatMap((message) =>
+            this.postToRespond(message, options.respond),
           ),
+          // Report the filesystem or post error itself, not the tag that
+          // carried it: `Data.TaggedError`'s `message` is the tag string,
+          // and the extension formats whatever reaches `onError` with
+          // `toErrorMessage`. Unwrapping in the failure channel (rather
+          // than after `Cause.squash`) keeps a defect untouched, and is
+          // the same contract `raiseCause` gives the sibling methods.
+          Effect.catch((error) => Effect.fail(error.cause)),
+        ),
       );
       if (Exit.isSuccess(posted)) return;
       yield* raiseCause(

@@ -727,7 +727,11 @@ export class PRPollingSource extends PollingSourceBase<
           ),
         );
         if (!drained.ok) {
-          this.handleFailure(key, state, drained.failure.cause, at);
+          // The failure time, not the round's start: draining can run a slow
+          // poll and several annotation pages, and timing the backoff from
+          // `at` would put skipPollUntilMs in the past and retry at once.
+          const failedAt = yield* Clock.currentTimeMillis;
+          this.handleFailure(key, state, drained.failure.cause, failedAt);
           if (drained.failure.cause instanceof GitHubRateLimitError) {
             this.nextAnnotationDrainKey = key;
             return;

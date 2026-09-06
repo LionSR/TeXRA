@@ -364,7 +364,7 @@ export abstract class PollingSourceBase<
   /**
    * Validate a 200-path payload without ever throwing. The policy behind every
    * poller's use of this helper: a throw on the 200 path is a defect — pollOne
-   * runs inside pollEntry's try/catch, where a throw routes to handleFailure
+   * runs inside pollEntry, whose catchDefect routes a throw to handleFailure
    * and bumps consecutiveFailures every tick without advancing lastSuccessAt,
    * so a persistently-odd-but-200 payload would trip the 24 h detach gate and
    * unilaterally detach a live subscription. Validation is therefore always
@@ -601,7 +601,20 @@ export abstract class PollingSourceBase<
     },
   );
 
-  /** Poll one subscription, routing any failure through handleFailure. */
+  /**
+   * Poll one subscription, routing every failure of that subscription through
+   * handleFailure and never past this entry.
+   *
+   * A defect is contained here, not propagated. When `pollOne` was a Promise
+   * its synchronous throws were caught by `Effect.tryPromise` and classified
+   * per subscription; now that it is an Effect they would be defects, and
+   * `pollRound` re-raises a failed entry before `afterTick`, so one
+   * subclass's bug would skip annotation draining for every subscription in
+   * the round and leave the offending one with no backoff and no path to the
+   * 24 h detach gate. Interruption is not caught (`catchDefect`, not
+   * `catchCause`), so stopping the loop still stops it, and the defect is
+   * logged rather than silently folded into the backoff.
+   */
   private readonly pollEntry = Effect.fn('PollingSourceBase.pollEntry')(
     function* (this: PollingSourceBase<K, S>, key: K, state: S, now: number) {
       if (state.skipPollUntilMs > now) return;
@@ -617,6 +630,14 @@ export abstract class PollingSourceBase<
             Effect.sync(() =>
               this.handleFailure(key, state, rejection.cause, failedAt),
             ),
+          ),
+        ),
+        Effect.catchDefect((defect) =>
+          Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
+            Effect.sync(() => {
+              this.logger.warn('Poll threw a defect', { data: defect });
+              this.handleFailure(key, state, defect, failedAt);
+            }),
           ),
         ),
       );
