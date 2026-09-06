@@ -2,7 +2,7 @@
 import { isIP } from 'node:net';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 import ky from 'ky';
 import { z } from 'zod';
 
@@ -19,51 +19,6 @@ import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 const WEB_FETCH_RETRIES = 2;
 const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MB
-
-/**
- * Read a response body into a string, failing once accumulated bytes exceed
- * `maxBytes` (a permanent failure: `retryTransientFetch` does not retry it).
- * Enforces the cap on received data rather than trusting the Content-Length
- * header (chunked responses omit it entirely). Respects the charset from the
- * Content-Type header (falls back to UTF-8).
- */
-async function readBodyWithLimit(
-  response: Response,
-  maxBytes: number,
-): Promise<string> {
-  const reader = response.body?.getReader();
-  if (!reader) {
-    return '';
-  }
-  const ct = response.headers.get('content-type') ?? '';
-  const charsetMatch = /charset=([^\s;]+)/i.exec(ct);
-  const charset = charsetMatch?.[1]?.replaceAll(/^["']|["']$/gu, '');
-  let decoder: TextDecoder;
-  try {
-    decoder = new TextDecoder(charset || 'utf-8');
-  } catch {
-    decoder = new TextDecoder();
-  }
-  const parts: string[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        throw new Error(
-          `Response too large (exceeds ${maxBytes / (1024 * 1024)} MB maximum).`,
-        );
-      }
-      parts.push(decoder.decode(value, { stream: true }));
-    }
-    parts.push(decoder.decode());
-  } finally {
-    reader.releaseLock();
-  }
-  return parts.join('');
-}
 
 const WebFetchInputSchema = z.strictObject({
   url: z
@@ -94,25 +49,68 @@ const PRIVATE_IPV6_PREFIXES = ['fc', 'fd', 'fe80'];
 /** Fetch `url` with transient retries, as text plus its content type. */
 const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
   retryTransientFetch(
-    async (signal): Promise<{ rawBody: string; contentType: string }> => {
-      const response = await ky.get(url, {
-        timeout: false,
-        signal,
-        retry: 0,
+    Effect.gen(function* () {
+      // One attempt owns headers and body together; its signal must remain
+      // live after ky resolves the response headers.
+      const signal = yield* Effect.abortSignal;
+      const response = yield* Effect.tryPromise({
+        try: () => ky.get(url, { timeout: false, signal, retry: 0 }),
+        catch: (error) => error,
       });
 
       const lengthHeader = response.headers.get('content-length');
       if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
         // Permanent: not retried.
-        throw new Error(
-          `Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES / (1024 * 1024)} MB.`,
+        return yield* Effect.fail(
+          new Error(
+            `Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES / (1024 * 1024)} MB.`,
+          ),
         );
       }
 
-      const ct = response.headers.get('content-type') ?? '';
-      const text = await readBodyWithLimit(response, MAX_CONTENT_BYTES);
-      return { rawBody: text, contentType: ct };
-    },
+      const contentType = response.headers.get('content-type') ?? '';
+      const body = response.body;
+      if (!body) return { rawBody: '', contentType };
+      const charset = /charset=([^\s;]+)/i
+        .exec(contentType)?.[1]
+        ?.replaceAll(/^["']|["']$/gu, '');
+      // Unsupported labels fall back to UTF-8, as for an absent charset.
+      const decoder = yield* Effect.try(
+        () => new TextDecoder(charset || 'utf-8'),
+      ).pipe(Effect.orElseSucceed(() => new TextDecoder()));
+      let total = 0;
+      const parts = yield* Stream.fromReadableStream({
+        evaluate: () => body,
+        onError: (error) => error,
+        releaseLockOnEnd: true,
+      }).pipe(
+        Stream.mapEffect((chunk) => {
+          // Count received bytes even when Content-Length is absent or wrong.
+          total += chunk.byteLength;
+          if (total > MAX_CONTENT_BYTES) {
+            return Effect.fail(
+              new Error(
+                `Response too large (exceeds ${MAX_CONTENT_BYTES / (1024 * 1024)} MB maximum).`,
+              ),
+            );
+          }
+          return Effect.try({
+            try: () => decoder.decode(chunk, { stream: true }),
+            catch: (error) => error,
+          });
+        }),
+        Stream.runCollect,
+      );
+      // Flush incomplete trailing code units too; streaming decode alone
+      // would silently omit their replacement characters.
+      parts.push(
+        yield* Effect.try({
+          try: () => decoder.decode(),
+          catch: (error) => error,
+        }),
+      );
+      return { rawBody: parts.join(''), contentType };
+    }),
     {
       retries: WEB_FETCH_RETRIES,
       minTimeout: 500,
@@ -180,15 +178,13 @@ export class WebFetchTool extends defineTool({
 
       let markdown: string;
       if (isMarkupContent) {
-        try {
-          markdown = this.turndown.turndown(rawBody);
-        } catch (error) {
-          return yield* Effect.fail(
+        markdown = yield* Effect.try({
+          try: () => this.turndown.turndown(rawBody),
+          catch: (error) =>
             new ToolError(
               `Failed to convert HTML to Markdown: ${toErrorMessage(error)}`,
             ),
-          );
-        }
+        });
       } else {
         markdown = rawBody;
       }

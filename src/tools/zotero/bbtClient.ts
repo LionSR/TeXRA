@@ -203,15 +203,20 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
   ) {
     const url = zoteroUrl(port, '/better-bibtex/json-rpc');
 
-    const raw = yield* withRequestTimeout(timeout, (signal) =>
-      ky
-        .post(url, {
-          json: { jsonrpc: '2.0', method, params, id: 1 },
-          timeout: false,
-          signal,
-          retry: 0,
-        })
-        .json<unknown>(),
+    const raw = yield* withRequestTimeout(
+      timeout,
+      Effect.tryPromise({
+        try: (signal) =>
+          ky
+            .post(url, {
+              json: { jsonrpc: '2.0', method, params, id: 1 },
+              timeout: false,
+              signal,
+              retry: 0,
+            })
+            .json<unknown>(),
+        catch: (cause) => cause,
+      }),
     ).pipe(Effect.mapError((error) => bbtRequestError(error, port, timeout)));
 
     const responseSchema = z.object({
@@ -258,11 +263,16 @@ export type ConnectorResult =
  */
 export const checkZoteroRunning = Effect.fn('bbtClient.checkZoteroRunning')(
   (port: number) =>
-    withRequestTimeout(ZOTERO_PING_TIMEOUT_MS, (signal) =>
-      ky.get(zoteroUrl(port, '/connector/ping'), {
-        timeout: false,
-        signal,
-        retry: 0,
+    withRequestTimeout(
+      ZOTERO_PING_TIMEOUT_MS,
+      Effect.tryPromise({
+        try: (signal) =>
+          ky.get(zoteroUrl(port, '/connector/ping'), {
+            timeout: false,
+            signal,
+            retry: 0,
+          }),
+        catch: (cause) => cause,
       }),
     ).pipe(
       Effect.mapError(() => zoteroUnreachableError(port)),
@@ -301,34 +311,43 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
   (endpoint: string, body: object, port: number) =>
     withRequestTimeout(
       ZOTERO_CONNECTOR_TIMEOUT_MS,
-      async (signal): Promise<ConnectorResult> => {
-        const response = await ky.post(
-          zoteroUrl(port, `/connector/${endpoint}`),
-          {
-            json: body,
-            timeout: false,
-            signal,
-            retry: 0,
-            throwHttpErrors: false,
-          },
-        );
+      Effect.gen(function* () {
+        // The request scope keeps this signal live through the body read,
+        // after the header request has already settled.
+        const signal = yield* Effect.abortSignal;
+        const response = yield* Effect.tryPromise({
+          try: () =>
+            ky.post(zoteroUrl(port, `/connector/${endpoint}`), {
+              json: body,
+              timeout: false,
+              signal,
+              retry: 0,
+              throwHttpErrors: false,
+            }),
+          catch: (cause) => cause,
+        });
         if (
           response.status === StatusCodes.OK ||
           response.status === StatusCodes.CREATED
         ) {
-          return { status: 'success' };
+          return { status: 'success' } satisfies ConnectorResult;
         }
         // Try to extract a machine-readable error message from the response
         // body; it is read under the same deadline as the headers.
-        let errorMessage = `Unexpected response status: ${response.status}`;
-        try {
-          const data = (await response.json()) as { error?: string };
-          if (data?.error) errorMessage = String(data.error);
-        } catch {
+        const data = yield* Effect.tryPromise({
+          try: () => response.json<{ error?: string }>(),
+          catch: (cause) => cause,
+        }).pipe(
           // Body is not JSON or is empty; use the generic status message.
-        }
-        return { status: 'error', message: errorMessage };
-      },
+          Effect.catch(() => Effect.succeed(undefined)),
+        );
+        return {
+          status: 'error',
+          message: data?.error
+            ? String(data.error)
+            : `Unexpected response status: ${response.status}`,
+        } satisfies ConnectorResult;
+      }),
     ).pipe(
       Effect.catch((error) =>
         Effect.succeed(connectorRequestFailure(error, port)),
