@@ -30,10 +30,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import {
-  isInFlightPhase,
-  isTerminalOutcomePhase,
-} from '@shared/streams/streamStatus';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { taskGroupDisplayStatus } from '@shared/streams/taskGroupProjection';
 import {
   formatRoundStageLabel,
@@ -190,22 +187,8 @@ export class TaskGroupList extends LitElement {
   @property({ attribute: false }) streamStatus:
     StreamLifecycleStatus | undefined = undefined;
 
-  /** Whether that status is durably final — terminal with no producer left
-   *  anywhere. A group the run never closed paints as interrupted only on
-   *  this bit; a terminal phase alone still has a run unwinding behind it. */
-  @property({ attribute: false }) streamDurablyFinal = false;
-
-  /** The outcome an unclosed group renders as: the run's own, once nothing
-   *  can still close the group. The two properties above are the same pair
-   *  the backend resolved together (`StreamMetadata.status` /
-   *  `statusDurablyFinal`), so a durably final status is always one of the
-   *  three outcomes — and it is the one the host-exit drain would write into
-   *  that group's `GROUP_END`. */
-  private get runDurableOutcome(): RunOutcome | undefined {
-    return this.streamDurablyFinal && isTerminalOutcomePhase(this.streamStatus)
-      ? this.streamStatus
-      : undefined;
-  }
+  /** The fold's final outcome once no producer can close another group. */
+  @property({ attribute: false }) durableOutcome: RunOutcome | null = null;
 
   /** `Surface.groups` for this stream: true is expanded, false collapsed,
    *  a missing key expanded. Toggles go out as surface actions. */
@@ -439,7 +422,10 @@ export class TaskGroupList extends LitElement {
       ? formatDuration(group.endTime - group.startTime)
       : '';
 
-    const status = taskGroupDisplayStatus(group, this.runDurableOutcome);
+    const status = taskGroupDisplayStatus(
+      group,
+      this.durableOutcome ?? undefined,
+    );
     const statusIcon = terminalStatusIcon(status);
     const title =
       group.kind === 'round' && group.index !== undefined
@@ -528,7 +514,7 @@ export class TaskGroupList extends LitElement {
           id="${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}"
           class=${classMap({
             'log-group-header': true,
-            [`is-${taskGroupDisplayStatus(group, this.runDurableOutcome)}`]: true,
+            [`is-${taskGroupDisplayStatus(group, this.durableOutcome ?? undefined)}`]: true,
           })}
         >
           ${this.renderGroupHeader(node)}

@@ -9,7 +9,11 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { PaperDisplay } from '@shared/session/hostSnapshot';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import {
+  emptySessionView,
+  type SessionView,
+  type StreamView,
+} from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import { emptySurface, type Surface } from '@shared/session/surface';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -26,10 +30,7 @@ import {
   withWaitingCall,
 } from '@test/shared/session/fanOutScenario';
 
-import type {
-  PapersLayout,
-  WorkbenchTab,
-} from '../../src/shared/desktopTaskShell.js';
+import type { WorkbenchTab } from '../../src/shared/desktopTaskShell.js';
 import { createPdfPane } from '../../src/renderer/pdfPane.js';
 import { subagentsPaneTemplate } from '../../src/renderer/subagentsPane.js';
 import {
@@ -140,7 +141,7 @@ const shellOf = (
   active: string,
   open: readonly string[],
   collapsed: readonly string[] = open.filter((key) => key !== active),
-): Shell => ({ active, open, collapsed, search: '' });
+): Shell => ({ active, open, collapsed });
 
 const noop = () => {};
 const sidebarCallbacks = {
@@ -151,11 +152,11 @@ const sidebarCallbacks = {
   onSelectPaper: noop,
   onClosePaper: noop,
   onTogglePaperCollapsed: noop,
-  onTogglePapersLayout: noop,
   onOpenTerminal: noop,
   onOpenBrowser: noop,
   onOpenSettings: noop,
   onOpenLogs: noop,
+  onOpenSubagents: noop,
 };
 const workbenchCallbacks = {
   onActivate: noop,
@@ -170,7 +171,7 @@ const filesPlaceholder = document.createElement('div');
 const rail = (
   papers: readonly RailPaper[],
   shell: Shell,
-  options: { layout?: PapersLayout; subagentsOpen?: boolean } = {},
+  options: { subagentsOpen?: boolean } = {},
 ) =>
   taskSidebarTemplate(
     {
@@ -178,7 +179,6 @@ const rail = (
       filesExpanded: false,
       papers,
       shell,
-      papersLayout: options.layout ?? 'sections',
       subagentsOpen: options.subagentsOpen ?? false,
       commandsLabel: 'Commands',
     },
@@ -224,12 +224,12 @@ const conversationPane = (
           options.dock === false
             ? nothing
             : html`<div class="h-dock">
-                ${conversationDockTemplate()}
                 <session-composer
                   compact
                   .stream=${stream ?? null}
                   .surface=${active.surface}
                 ></session-composer>
+                ${conversationDockTemplate()}
               </div>`
         }
       </section>
@@ -300,23 +300,65 @@ function sceneDesktopPapers(): TemplateResult {
   );
 }
 
-/** Plan 2: the active paper in focus; the other papers' live streams in
- *  one card under it. */
-function sceneDesktopSwitcher(): TemplateResult {
+/** The rail with one paper open: the sections layout already reads as the
+ *  Plan 2 switcher card (mark, name, folder, badge, Add paper). */
+function sceneDesktopOnePaper(): TemplateResult {
   const lp = paper(LP, withConversation(), CHILD);
-  const papers = [lp, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
+  const papers = [lp];
   const stream = lp.view.streams.get(CHILD);
   return desktopFrame(
     '288px minmax(0,1fr)',
-    rail(papers, shellOf('LP', ['LP', 'CT', 'TN'], []), { layout: 'focus' }),
+    rail(papers, shellOf('LP', ['LP'])),
     conversationPane(
       papers,
       lp,
       stream,
       stream ? transcriptBody(lp, stream) : nothing,
-      { chip: false },
     ),
   );
+}
+
+/** A paper with no streams is a distinct Surface with its own composer
+ *  (PRD 9): its section is empty, the conversation is the launch state, and
+ *  the other papers keep their badges. The running paper's row is folded so
+ *  its badge shows beside the waiting paper's amber one. */
+function sceneDesktopEmptyPaper(): TemplateResult {
+  const co = paper(CO, emptySessionView(CO.key));
+  const papers = [co, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
+  return desktopFrame(
+    '288px minmax(0,1fr)',
+    rail(papers, shellOf('CO', ['CO', 'CT', 'TN'])),
+    conversationPane(
+      papers,
+      co,
+      undefined,
+      html`<div class="h-hero">
+        <h1>What are you working on?</h1>
+        <p>${co.display.name} has no tasks yet.</p>
+      </div>`,
+    ),
+  );
+}
+
+/** The window at 900 px: the rail keeps its 288 px and the conversation
+ *  column takes what is left; the workbench is closed. */
+function sceneDesktopNarrow(): TemplateResult {
+  const lp = paper(LP, withConversation(), CHILD);
+  const papers = [lp, paper(CT, runningOnlyView()), paper(TN, fanOutView())];
+  const stream = lp.view.streams.get(CHILD);
+  return html`<div
+    class="h-desktop"
+    id="frame"
+    style="grid-template-columns:288px minmax(0,1fr);width:900px"
+  >
+    ${rail(papers, shellOf('LP', ['LP', 'CT', 'TN']))}
+    ${conversationPane(
+      papers,
+      lp,
+      stream,
+      stream ? transcriptBody(lp, stream) : nothing,
+    )}
+  </div>`;
 }
 
 /** Desktop 5: the rail lists top-level streams only while the Subagents
@@ -384,7 +426,9 @@ function sceneDesktopRun(): TemplateResult {
 
 export const desktopScenes: Record<string, () => TemplateResult> = {
   'desktop-papers': sceneDesktopPapers,
-  'desktop-switcher': sceneDesktopSwitcher,
+  'desktop-one-paper': sceneDesktopOnePaper,
+  'desktop-empty-paper': sceneDesktopEmptyPaper,
+  'desktop-narrow': sceneDesktopNarrow,
   'desktop-subagents': sceneDesktopSubagents,
   'desktop-run': sceneDesktopRun,
 };

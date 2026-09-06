@@ -35,6 +35,7 @@ import { inputBarContentRows } from '../state/cliState';
 import { sessionView, streamViewOf } from '../state/sessionView';
 import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
 import { useSignal } from '../state/useSignal';
+import type { SessionListRow } from '../state/cliState';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
@@ -52,10 +53,9 @@ interface ConversationRegionSnapshot {
   readonly slashPaletteOpen: boolean;
   readonly selectedChildValue: StreamTabId | undefined;
   readonly childListFocused: boolean;
-  /** The child-list rows: the list root, then its descendants newest first. */
-  readonly sessions: readonly StreamTabId[];
+  /** The visible stream tree and its section headings. */
+  readonly sessionRows: readonly SessionListRow[];
   readonly subagentExecutionLabels: ExecutionLabels;
-  readonly listRootStreamId: StreamTabId | undefined;
   readonly pendingApprovals: ReadonlyMap<
     string,
     readonly PendingApprovalKind[]
@@ -164,7 +164,7 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeStream
       ? todosPlanPanelRowCount(activeTodos, activePlan)
       : 0;
-  const sessionPanelItemCount = snapshot.sessions.length;
+  const sessionPanelItemCount = snapshot.sessionRows.length;
   const minimumSessionPanelRows = 2;
   const {
     bottomPanelRows: bottomPanelBudget,
@@ -249,9 +249,9 @@ export function ConversationRegion({
               onKillExecution={onKillExecution}
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
-              listRootStreamId={snapshot.listRootStreamId}
               selectedValue={snapshot.selectedChildValue}
-              sessions={snapshot.sessions}
+              rows={snapshot.sessionRows}
+              activeStreamId={snapshot.activeStreamId}
             />
             <TodosPlanPanel
               maxRows={todosPlanRows}

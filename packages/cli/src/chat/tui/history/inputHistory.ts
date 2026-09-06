@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 
+import { Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
@@ -48,8 +49,8 @@ export async function loadInputHistory(): Promise<InputHistory> {
     try {
       const raw = await GlobalStorageFS.read(HISTORY_PATH);
       for (const line of raw.split('\n')) {
-        const rec = parseJsonWith(line, HistoryRecordSchema).unwrapOr(
-          undefined,
+        const rec = Result.getOrUndefined(
+          parseJsonWith(line, HistoryRecordSchema),
         );
         if (rec && rec.v.length > 0) records.push(rec);
       }

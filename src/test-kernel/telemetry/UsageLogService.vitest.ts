@@ -120,6 +120,36 @@ describe('UsageLogService', () => {
     expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
   });
 
+  it('shares a rejection with a flush that arrives while it is in flight', async () => {
+    stubAccessToken();
+
+    const { promise: rejectionReleased, resolve: releaseRejection } =
+      createDeferred();
+    const { fetchMock } = stubBatchFetch(async (callCount) => {
+      if (callCount !== 1) return;
+      await rejectionReleased;
+      return jsonResponse({
+        success: false,
+        accepted: 0,
+        error: 'invalid batch',
+        retryable: false,
+      });
+    });
+
+    UsageLogService.log(usageEntry('invalid'));
+    const firstFlush = UsageLogService.flush();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    UsageLogService.log(usageEntry('valid'));
+    const secondFlush = UsageLogService.flush();
+
+    releaseRejection();
+    await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
+      USAGE_LOG_FLUSH_OUTCOME.REJECTED,
+      USAGE_LOG_FLUSH_OUTCOME.REJECTED,
+    ]);
+  });
+
   it('waits for successive active batches during disposal', async () => {
     stubAccessToken();
 
@@ -159,6 +189,61 @@ describe('UsageLogService', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
+  });
+
+  // The ticker only schedules; each flush runs on a fiber of its own.
+  // Interrupting the ticker on dispose must leave a send already in flight
+  // alone and wait behind it, not abort the request and lose the batch it
+  // had already taken from the queue.
+  it('waits for a timer-driven flush during disposal instead of aborting it', async () => {
+    stubAccessToken();
+    UsageLogService.initialize({
+      batchSize: 100,
+      flushIntervalMs: 20,
+      enabled: true,
+    });
+
+    const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
+    const { batches, fetchMock } = stubBatchFetch(async () => {
+      await fetchReleased;
+    });
+
+    UsageLogService.log(usageEntry('timer'));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const request = fetchMock.mock.calls[0]?.[0] as Request;
+
+    const disposal = UsageLogService.dispose();
+    let disposed = false;
+    void disposal.then(() => {
+      disposed = true;
+    });
+    // Long enough for a dispose that abandons the send to have resolved.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(request.signal.aborted).toBe(false);
+    expect(disposed).toBe(false);
+
+    releaseFetch();
+    await expect(disposal).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(batches.map(batchModels)).toEqual([['timer']]);
+  });
+
+  // The ticker must not keep a short-lived host alive by itself: a process
+  // that reaches initialize() and exits without dispose() still exits on an
+  // empty loop, so the ticker's timer is unref'd while the request a flush
+  // sends holds the loop on its own.
+  it('schedules the ticker on a timer that does not hold the event loop', () => {
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    UsageLogService.initialize({
+      batchSize: 100,
+      flushIntervalMs: 12_345,
+      enabled: true,
+    });
+
+    const tick = timers.mock.calls.findIndex(([, delay]) => delay === 12_345);
+    expect(tick).toBeGreaterThanOrEqual(0);
+    const handle = timers.mock.results[tick]?.value as NodeJS.Timeout;
+    expect(handle.hasRef()).toBe(false);
   });
 
   it('warns after five seconds without bounding disposal', async () => {

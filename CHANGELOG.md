@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.10] - 2026-09-06
+
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Google image uploads fail visibly** — a missing or failed Gemini
+  attachment now stops the request instead of sending it without the file.
+- **Finished and crashed runs are no longer treated as still running** — TeXRA
+  no longer infers that a run is live just because it has no stored outcome, so
+  a run another process owns or one that died is reported accurately.
+- **Workflows cannot read storage files by raw path** — a workflow step that
+  names a workspace-storage file that is not a declared child-run output is
+  refused.
+
+### Extension (VS Code) and Desktop
+
+#### Bug Fixes
+
+- **The session transcript uses the full panel width.**
+- **Selected conversation tabs and settings cards are readable** — selected-row
+  text now contrasts against the highlight instead of blending into it.
+- **The follow-up composer is easier to use** — extra empty space above the
+  placeholder is gone, and focus stays on the composer card.
+
+## [0.40.9] - 2026-09-06
+
 ### Shared (all surfaces)
 
 #### Features

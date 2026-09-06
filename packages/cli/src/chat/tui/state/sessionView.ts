@@ -9,7 +9,7 @@
  * case to paper over with an empty view.
  */
 import { signal, type Signal } from '@lit-labs/signals';
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { SubscriptionRef } from 'effect';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
@@ -22,40 +22,27 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { toSignal, type StreamSignal } from '@shared/signals';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */
-const bound = signal<
-  (Signal.State<SessionView> & { dispose: () => void }) | undefined
->(undefined);
+const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
 
 /**
- * The only meeting point between Effect and the components (PRD 7.5): a
- * signal fed by the view's change stream on the process runtime. Coalescing
- * is here, by draining arrays and assigning the last element; `dispose`
- * interrupts the feeding fiber.
+ * The only meeting point between Effect and the components (PRD 7.5): the
+ * view's change stream bridged onto the process runtime by `toSignal`.
  */
 function viewSignal(
   view: SubscriptionRef.SubscriptionRef<SessionView>,
-): Signal.State<SessionView> & { dispose: () => void } {
-  const runtime = effectRuntime();
-  const s = signal(SubscriptionRef.getUnsafe(view));
-  const fiber = runtime.runFork(
-    Stream.runForEachArray(SubscriptionRef.changes(view), (values) =>
-      Effect.sync(() => {
-        const last = values.at(-1);
-        if (last !== undefined) s.set(last);
-      }),
-    ),
+): StreamSignal<SessionView> {
+  return toSignal(
+    effectRuntime(),
+    SubscriptionRef.changes(view),
+    SubscriptionRef.getUnsafe(view),
   );
-  return Object.assign(s, {
-    dispose: () => {
-      runtime.runFork(Fiber.interrupt(fiber));
-    },
-  });
 }
 
 /** Bridge a session's view level into the TUI's signal; returns the unbind. */
@@ -120,21 +107,6 @@ export function focusedChildAcceptsFollowUps(stream: StreamView): boolean {
  *  fold's label below it. */
 export function streamLabelOf(stream: StreamView): string {
   return stream.parentId === null ? 'main' : stream.label;
-}
-
-/**
- * The focus tree of one root: the root, then its children in the fold's
- * `childIds` order (newest creation first, PRD 5.2 `streamOrdering`), so
- * Alt+1 names the newest child (the Surface's Alt-index rule, PRD 9). A
- * grandchild is reached through its own parent's list.
- */
-export function focusTreeOf(
-  view: SessionView,
-  rootStreamId: StreamTabId | undefined,
-): readonly StreamTabId[] {
-  const root = streamViewOf(view, rootStreamId);
-  if (!root) return [];
-  return [root.id, ...root.childIds];
 }
 
 /** The stream's phase: undefined before the first `status` folds. */

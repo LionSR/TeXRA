@@ -9,6 +9,7 @@
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
+import { Result } from 'effect';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 
 /**
@@ -65,12 +66,12 @@ export function parseFrontmatter(raw: string): {
 
   const block = raw.slice(FRONTMATTER_FENCE.length + 1, endIdx);
   const parsed = parseYamlWith(block, MemoryFileMetaSchema);
-  if (parsed.isErr()) {
+  if (Result.isFailure(parsed)) {
     return { meta: null, content: raw };
   }
 
   return {
-    meta: parsed.value,
+    meta: parsed.success,
     content: raw.slice(endIdx + FRONTMATTER_FENCE.length + 2), // skip "\n---\n"
   };
 }

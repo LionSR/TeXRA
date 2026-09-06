@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   renderWebviewHtml,
+  renderSessionHarnessBridge,
   runElectronWebviewHarness,
 } from './webview-electron-harness.mjs';
 
@@ -277,78 +278,17 @@ function fileUri(relativePath) {
   return pathToFileURL(join(repoRoot, relativePath)).toString();
 }
 
-/**
- * The host bridge a webview acquires, playing the host for one session:
- * the persisted surface (so a selected stream reopens selected), and an
- * events frame in answer to every `subscribe`, cut like `SessionFramer`
- * cuts one. Every request is answered as done.
- */
-function hostBridgeShim(session) {
-  const state = session
-    ? { [`surface:${SESSION_KEY}`]: { selected: session.selected } }
-    : undefined;
-  const shim = `
-    const smokeSession = ${JSON.stringify(session ?? null)};
-    const smokeLocal = { self: [${JSON.stringify(OWNER)}], heldBy: [], unreadable: [] };
-    function smokeFrame(subscribe) {
-      const named = new Set(subscribe.aggregates.map((aggregate) => aggregate.id));
-      const events = smokeSession.events.flatMap((event) => {
-        if (event.type !== 'transcript.entry') {
-          return [{ _tag: 'event', read: 'listing', event }];
-        }
-        return named.has(event.aggregateId)
-          ? [{ _tag: 'event', read: 'aggregate', event }]
-          : [];
-      });
-      return {
-        kind: 'events',
-        session: subscribe.session,
-        generation: subscribe.generation,
-        cursor: smokeSession.events.reduce((max, event) => Math.max(max, event.commit), 0),
-        events,
-        chunks: [],
-        local: smokeLocal,
-        host: smokeSession.host,
-        replayComplete: true,
-      };
-    }
-    const texraSmokeBridge = {
-      _state: ${JSON.stringify(state)},
-      postMessage(message) {
-        window.__texraSmokeMessages = [...(window.__texraSmokeMessages ?? []), message];
-        if (!smokeSession) return;
-        if (message.kind === 'subscribe') {
-          window.postMessage(smokeFrame(message), '*');
-        } else if (message.kind === 'runtime.request' || message.kind === 'host.request') {
-          window.postMessage(
-            {
-              kind: 'response',
-              session: message.session,
-              requestId: message.requestId,
-              result: { ok: true, outcome: { kind: 'done' } },
-            },
-            '*',
-          );
-        }
-      },
-      getState() {
-        return this._state;
-      },
-      setState(state) {
-        this._state = state;
-      },
-    };
-    window.__texraHostBridgeApi = texraSmokeBridge;
-    window.acquireVsCodeApi = () => texraSmokeBridge;
-  `;
-  return `<script nonce="${nonce}">${shim}</script>`;
-}
-
 async function prepareViewHtml(view) {
   const template = await readFile(view.templatePath, 'utf8');
   const html = renderWebviewHtml(template, {
     attributeLabel: 'smoke',
-    bridgeScript: hostBridgeShim(view.session),
+    bridgeScript: renderSessionHarnessBridge({
+      nonce,
+      sessionKey: SESSION_KEY,
+      owner: OWNER,
+      session: view.session,
+      messagesKey: '__texraSmokeMessages',
+    }),
     replacements: { ...commonReplacements, ...view.replacements },
     view,
   });

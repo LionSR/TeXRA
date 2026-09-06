@@ -30,12 +30,13 @@ import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/Ma
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
+  AgentCategory,
   MainViewExecuteMessage,
   RequestOpenFilePayload,
   StreamTabId,
 } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
-import { Rejected } from '@shared/session/requestErrors';
+import { Cancelled, Rejected } from '@shared/session/requestErrors';
 
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
 import { toLogData } from './desktopLogUtils.js';
@@ -50,7 +51,12 @@ export interface DesktopAgentExecutionOptions {
   session: SessionHandle;
   /** A run loaded an agent from the custom directory: the New-task
    *  state's agent-config banner (`HostSnapshot.banners`). */
-  showAgentConfigBanner(data: { agentName: string }): void;
+  showAgentConfigBanner(data: {
+    agentName: string;
+    category: AgentCategory;
+  }): void;
+  /** Select the stream launched by this window. */
+  onLaunched?: (streamId: StreamTabId) => void;
   logger?: AgentTrace;
 }
 
@@ -66,8 +72,6 @@ export interface DesktopAgentExecution {
     request: ValidatedExecutionRequest,
     options?: DesktopRunExecutionOptions,
   ): Promise<void>;
-  /** The stream a launch from this window resolved to, if one is pending. */
-  onLaunched(listener: (streamId: StreamTabId) => void): () => void;
   /** A tool-edit prompt's verbs over its staged preview: the approval
    *  applies the proposed file as the user left it. */
   toolEditAction(
@@ -84,7 +88,6 @@ export function createDesktopAgentExecution(
 ): DesktopAgentExecution {
   const { session, host } = options;
   const logger = options.logger ?? createChannelTrace('DesktopAgentExecution');
-  const launchListeners = new Set<(streamId: StreamTabId) => void>();
   let disposed = false;
 
   /**
@@ -123,8 +126,8 @@ export function createDesktopAgentExecution(
           host.showInstructionDialog(instruction.message, instruction.actions),
           'Failed to present the instruction dialog',
         ),
-      showAgentConfigBanner: ({ agentName }) => {
-        options.showAgentConfigBanner({ agentName });
+      showAgentConfigBanner: ({ agentName, category }) => {
+        options.showAgentConfigBanner({ agentName, category });
         return true;
       },
       requestOpenFile: (data: RequestOpenFilePayload) =>
@@ -186,9 +189,7 @@ export function createDesktopAgentExecution(
       { kind: 'fresh', ...request },
       { session },
       {
-        onStreamResolved: (streamId) => {
-          for (const listener of [...launchListeners]) listener(streamId);
-        },
+        onStreamResolved: options.onLaunched,
         ...runOptions,
       },
     );
@@ -196,23 +197,18 @@ export function createDesktopAgentExecution(
 
   return {
     async handleExecute(message) {
-      const launch = await prepareMainViewExecutionLaunch(message, host);
-      // A refused launch is a Rejected response, as on the extension: the
-      // surface's settle path early-returns and keeps the composer's text.
-      if (launch.status === 'cancelled') {
-        throw new Rejected({ reason: 'The launch was cancelled.' });
+      // Setup kickoff has no requesting surface. Its message-level entry
+      // presents preparation failures before the detached kickoff settles.
+      let request: ValidatedExecutionRequest;
+      try {
+        request = await prepareMainViewExecutionLaunch(message, host);
+      } catch (error) {
+        if (error instanceof Cancelled) return;
+        if (!(error instanceof Rejected)) throw error;
+        await host.showErrorMessage(error.reason);
+        return;
       }
-      if (launch.status === 'error') {
-        void host.showErrorMessage(launch.message);
-        throw new Rejected({ reason: launch.message });
-      }
-      if (launch.infoMessage) {
-        void settleHostDialog(
-          host.showInfoMessage(launch.infoMessage),
-          'Failed to present the launch information dialog',
-        );
-      }
-      return runValidated(launch.request);
+      return runValidated(request);
     },
     async runExecutionRequest(request, runOptions) {
       const validated = validateExecutionRequest(request);
@@ -220,18 +216,11 @@ export function createDesktopAgentExecution(
         logger.error('Invalid desktop execution request', {
           data: validated.issue,
         });
-        await host.showErrorMessage(validated.message);
-        return;
+        throw new Rejected({ reason: validated.message });
       }
       await runValidated(validated.request, runOptions);
     },
     runValidated,
-    onLaunched(listener) {
-      launchListeners.add(listener);
-      return () => {
-        launchListeners.delete(listener);
-      };
-    },
     toolEditAction(requestId, action, feedback) {
       toolEditApprovals.handleAction({
         requestId,
@@ -245,7 +234,6 @@ export function createDesktopAgentExecution(
       detachHostInteractions();
       effectRuntime().runFork(Fiber.interrupt(resolvedApprovals));
       toolEditApprovals.dispose();
-      launchListeners.clear();
     },
   };
 }

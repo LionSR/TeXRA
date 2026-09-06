@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { z } from 'zod';
 
+import { Result } from 'effect';
 import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -339,13 +340,13 @@ async function readJsonConfigFile(
   }
 
   const parseResult = safeParseJson(raw);
-  if (parseResult.isErr()) {
+  if (Result.isFailure(parseResult)) {
     return {
       status: 'warning',
-      warning: `Could not parse ${filePath}: ${toErrorMessage(parseResult.error)}`,
+      warning: `Could not parse ${filePath}: ${toErrorMessage(parseResult.failure)}`,
     };
   }
-  const parsed = parseResult.value;
+  const parsed = parseResult.success;
   if (!isObject(parsed)) {
     return {
       status: 'warning',

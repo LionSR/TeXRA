@@ -2,6 +2,7 @@ import stableStringify from 'safe-stable-stringify';
 import { StatusCodes } from 'http-status-codes';
 import prettyMilliseconds from 'pretty-ms';
 
+import { Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   type QuotaFallbackExhaustionReason,
@@ -187,9 +188,9 @@ function describeHttpError(
         const start = extractedMessage.indexOf(opening);
         const end = extractedMessage.lastIndexOf(closing);
         if (start >= 0 && end > start) {
-          const embeddedBody = safeParseJson(
-            extractedMessage.slice(start, end + 1),
-          ).unwrapOr(undefined);
+          const embeddedBody = Result.getOrUndefined(
+            safeParseJson(extractedMessage.slice(start, end + 1)),
+          );
           try {
             wrapperMessageContainsRawBody =
               stableStringify(embeddedBody) === stableStringify(rawErrorBody);

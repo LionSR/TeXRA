@@ -83,19 +83,23 @@ function control(row: HTMLElement, action: string): HTMLElement {
 }
 
 describe('stream-tabs over the fold', () => {
-  it("renders one row per top-level stream and keeps a workflow run's calls on its board", async () => {
+  it("renders every top-level stream with a workflow run's calls beneath it, and the rail without them", async () => {
     const view = fanOutView();
     const { element } = await mountTabs(view, emptySurface(view.key));
 
-    const rows = [
-      ...(element.shadowRoot?.querySelectorAll('stream-tab') ?? []),
-    ];
-    expect(rows.length).toBe(view.order.length);
     for (const id of view.order) expect(rowOf(element, id)).toBeTruthy();
-    // The root is a workflow run: its calls live on the run board, never
-    // in the list (W2), so the row alone carries their rollup.
+    // The root is a workflow run: its calls are reachable under it in the
+    // tree (the issue's decision), so the child's own subagent is a row.
     expect(view.streams.get(ROOT)?.category).toBe('workflow');
-    expect(element.shadowRoot?.querySelector('.child-streams')).toBeNull();
+    expect(rowOf(element, CHILD)).toBeTruthy();
+    expect(rowOf(element, GRANDCHILD)).toBeTruthy();
+
+    // The rail carries the rollup alone (W2): no tree at all.
+    const { element: rail } = await mountTabs(view, emptySurface(view.key), {
+      topLevelOnly: true,
+    });
+    expect(rail.shadowRoot?.querySelector('.child-streams')).toBeNull();
+    expect(() => rowOf(rail, CHILD)).toThrow();
   });
 
   it('renders a subtree from its root with the children beneath the parent', async () => {

@@ -388,14 +388,15 @@ export async function runWorkflowScript(
   snapshotWriter.throwIfFailed();
 
   const control: WorkflowScriptControl = (childExecutionId, action) => {
-    // No-op when the id belongs to no live attempt of this run (already
-    // settled, or never registered).
+    // False when the id belongs to no live attempt of this run (already
+    // settled, or never registered): the caller hears that nothing acted.
     const call = inFlightCalls.get(childExecutionId);
-    if (!call) return;
+    if (!call) return false;
     call.action = action;
     call.controller.abort(
       new Error(`Workflow agent() call ${call.index} ${action}.`),
     );
+    return true;
   };
   onControl?.(control);
 

@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - tools
 import * as arxivShared from '@tools/arxiv/arxivShared';
-import * as rateLimiter from '@tools/support/rateLimiter';
 import { ArxivSearchTool } from '@tools/arxiv/ArxivSearchTool';
 
 const sampleEntries = [
@@ -26,8 +25,6 @@ describe('ArxivSearchTool', () => {
 
   it('builds keyword queries for multi-word input', async () => {
     const captured: Record<string, unknown> = {};
-
-    vi.spyOn(rateLimiter, 'waitForRateLimit').mockResolvedValue(undefined);
 
     vi.spyOn(arxivShared, 'createArxivClient').mockImplementation(
       () =>

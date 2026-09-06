@@ -1,5 +1,5 @@
 /**
- * Tool configuration schema - shared between AgentConfig and MainViewPersistedState.
+ * Tool configuration schema - shared between AgentConfig and LaunchSurface.
  */
 import { z } from 'zod';
 

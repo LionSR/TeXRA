@@ -1,11 +1,7 @@
 /** Webview IPC command-name constants, grouped per view. */
 
 export const COMMON_COMMANDS = {
-  THEME_SET: 'setTheme',
-  DEBUG_MODE_SET: 'setDebugMode',
-  STATE_RESTORE: 'restoreState',
   WEBVIEW_READY: 'webviewReady',
-  SWITCH_VIEW: 'switchView',
 } as const;
 
 export const PROFILE_VIEW_COMMANDS = {

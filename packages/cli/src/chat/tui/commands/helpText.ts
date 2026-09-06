@@ -75,7 +75,8 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     '- `Esc` returns to the parent session, or stops the focused agent when there is no parent · `Ctrl-C` exits idle chats; stops active responses',
     "- `Ctrl-T` opens the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
     `- \`Tab\` ${SESSION_LIST.openHelp}`,
-    `- \`${focusChord}\` focuses a stream directly`,
+    '- In the session list, `←`/`→` collapse or expand children; `Enter` or `r` resumes an interrupted run',
+    `- \`${focusChord}\` focuses a stream in the visible session-list order`,
   ].join('\n');
 }
 

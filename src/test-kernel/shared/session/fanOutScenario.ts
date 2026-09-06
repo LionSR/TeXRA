@@ -294,8 +294,20 @@ export function buildScenario({ proposal = false } = {}) {
     },
   });
 
-  // The child's own delegate: a grandchild that starts and finishes while the
-  // child waits, and one empty-round file fact the tab must not show.
+  // The child's own delegate: the dispatching tool row, then a grandchild
+  // that starts and finishes while the child waits, and one empty-round file
+  // fact the tab must not show.
+  const dispatchData = {
+    toolName: 'delegate_agent',
+    input: { agent: 'lint', instruction: 'lint appendix B' },
+  };
+  const dispatched = log.entry(CHILD, T.grandchild - 1, {
+    id: 'dispatch-lint',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    messageType: MESSAGE_TYPES.TOOL_USE,
+    text: 'delegate_agent',
+    data: { ...dispatchData, status: 'in_progress' },
+  });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
     executionId: 'dddddddddddd',
@@ -327,6 +339,26 @@ export function buildScenario({ proposal = false } = {}) {
     phase: STREAM_PHASE.COMPLETED,
     previousPhase: STREAM_PHASE.RUNNING,
     cause: 'lifecycle',
+  });
+  // The tool's result lands the way the recorder's `update` lands it: the
+  // patch merged over the stored entry, so the row keeps its id, seqNo, and
+  // timestamp under a later commit.
+  log.emit(CHILD, T.grandchildDone + 1, {
+    type: 'transcript.entry',
+    entry: {
+      id: 'dispatch-lint',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      text: 'delegate_agent',
+      seqNo: dispatched.seqNo,
+      timestamp: dispatched.timestamp,
+      level: dispatched.level,
+      data: {
+        ...dispatchData,
+        output: 'Appendix B: no findings.',
+        status: 'completed',
+      },
+    },
   });
 
   // A background process stream, newer than the root: leads the order.
@@ -476,6 +508,77 @@ export function buildScenario({ proposal = false } = {}) {
  */
 export function fanOutView(): SessionView {
   return foldAll([...buildScenario().pending, local({ self: [OWNER] })]);
+}
+
+/** Every recorded event of one aggregate re-owned: what the log holds when
+ *  another process ran that stream. */
+function ownedBy(
+  inputs: readonly FoldInput[],
+  aggregateId: StreamTabId,
+  ownerId: string,
+): FoldInput[] {
+  return inputs.map((input) =>
+    input._tag === 'event' && input.event.aggregateId === aggregateId
+      ? { ...input, event: { ...input.event, ownerId } }
+      : input,
+  );
+}
+
+/** `fanOutView` with no approval pending: nothing forces the tree open, so
+ *  a collapsed parent shows its rollup. */
+export function withoutApproval(): SessionView {
+  return foldAll([
+    ...buildScenario().pending.filter(
+      (input) =>
+        !(input._tag === 'event' && input.event.type === 'approval.requested'),
+    ),
+    local({ self: [OWNER] }),
+  ]);
+}
+
+/** `fanOutView` with `search` run by a process nobody holds any more: an
+ *  in-flight run whose owner is gone reads as interrupted. */
+export function withInterruptedChild(): SessionView {
+  return foldAll([
+    ...ownedBy(buildScenario().pending, CHILD, OTHER_OWNER),
+    local({ self: [OWNER] }),
+  ]);
+}
+
+/** `fanOutView` with the approval on `lint`, still running under `search`:
+ *  the waiting row is a grandchild of the root. */
+export function withWaitingGrandchild(): SessionView {
+  const { pending } = buildScenario();
+  const settled = new Set(['result', 'status']);
+  const inputs = pending.filter(
+    (input) =>
+      !(
+        input._tag === 'event' &&
+        ((input.event.aggregateId === GRANDCHILD &&
+          settled.has(input.event.type) &&
+          input.event.at === T.grandchildDone) ||
+          input.event.type === 'approval.requested')
+      ),
+  );
+  const log = new Log();
+  log.emit(GRANDCHILD, T.grandchildDone, {
+    type: 'approval.requested',
+    requestId: 'req-lint',
+    payload: {
+      kind: 'bash',
+      data: {
+        requestId: 'req-lint',
+        allowBypass: true,
+        streamId: GRANDCHILD,
+        command: 'latexmk -pdf appendixB.tex',
+      },
+    },
+  });
+  return foldAll([
+    ...inputs,
+    ...log.events.map(tail),
+    local({ self: [OWNER] }),
+  ]);
 }
 
 /** `fanOutView` plus a workflow-script proposal pending on the root. */
@@ -678,6 +781,47 @@ function boardProgress(entry: BoardCall): WorkflowCallProgress {
  * latest line); the waiting call's child holds a bash approval.
  */
 export function withWaitingCall(): SessionView {
+  return boardView({});
+}
+
+/** The same run with every call finished or failed and the root failed:
+ *  a settled board, whose per-call controls have nothing left to act on. */
+export function withSettledRun(): SessionView {
+  return boardView({ settled: true });
+}
+
+/** The same run with `review:model` finished instead of failed: a board
+ *  with no failed row and nothing for Next failed to reach. */
+export function withNoFailedCalls(): SessionView {
+  return boardView({ failed: false });
+}
+
+/** The same run held by another live process: every row read-only. */
+export function withForeignOwner(): SessionView {
+  return boardView({ foreign: true });
+}
+
+interface BoardOptions {
+  /** Keep the failed call (default) or finish it. */
+  readonly failed?: boolean;
+  /** Close every open call and the run. */
+  readonly settled?: boolean;
+  /** Another live process holds the run. */
+  readonly foreign?: boolean;
+}
+
+function boardView({
+  failed = true,
+  settled = false,
+  foreign = false,
+}: BoardOptions): SessionView {
+  const calls: readonly BoardCall[] = failed
+    ? BOARD_CALLS
+    : BOARD_CALLS.map((entry) =>
+        entry.status === 'failed'
+          ? { ...entry, status: 'completed', durationMs: min(3), costUsd: 0.2 }
+          : entry,
+      );
   const log = new Log();
   const startedAt = BOARD_NOW - min(38);
   log.emit(ROOT, startedAt, {
@@ -729,7 +873,7 @@ export function withWaitingCall(): SessionView {
       attemptId: 'attempt-1',
       phases: phases.map((title) => ({ title })),
       tasks: [
-        ...BOARD_CALLS.map((entry) => ({
+        ...calls.map((entry) => ({
           id: entry.id,
           label: entry.id,
           phase: entry.phase,
@@ -782,13 +926,13 @@ export function withWaitingCall(): SessionView {
   };
 
   openPhase('Scout', startedAt + 2);
-  for (const entry of BOARD_CALLS.filter((c) => c.phase === 'Scout')) {
+  for (const entry of calls.filter((c) => c.phase === 'Scout')) {
     card(entry, startedAt + 3);
   }
   closePhase('Scout', startedAt + min(5));
   openPhase('Review', startedAt + min(5) + 1);
   let at = startedAt + min(5) + 2;
-  for (const entry of BOARD_CALLS.filter((c) => c.phase === 'Review')) {
+  for (const entry of calls.filter((c) => c.phase === 'Review')) {
     at += 1;
     if (entry.child) {
       const { child: kid } = entry;
@@ -852,17 +996,21 @@ export function withWaitingCall(): SessionView {
           },
         });
       }
-      if (entry.status === 'failed') {
+      // A call already terminal when the board opens carries its child's
+      // outcome too: the row's status and the child stream's phase are one
+      // fact, so the tree never reads "Running" under a finished call.
+      if (entry.status === 'failed' || entry.status === 'completed') {
+        const done = entry.status === 'completed';
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'result',
-          outcome: 'failed',
+          outcome: done ? 'completed' : 'failed',
           executionId: kid.executionId,
           category: AgentCategory.ToolUse,
           isSubagent: true,
         });
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'status',
-          phase: STREAM_PHASE.FAILED,
+          phase: done ? STREAM_PHASE.COMPLETED : STREAM_PHASE.FAILED,
           previousPhase: STREAM_PHASE.RUNNING,
           cause: 'lifecycle',
         });
@@ -870,10 +1018,71 @@ export function withWaitingCall(): SessionView {
     }
     card(entry, at);
   }
-  const ids = [ROOT, ...BOARD_CALLS.flatMap((c) => c.child?.id ?? [])];
+  if (settled) {
+    // Every open call closes: the running children finish, the waiting one
+    // gets its answer, the planned calls never issue; the failed call stays
+    // failed and takes the run down with it.
+    const closedAt = BOARD_NOW - sec(30);
+    for (const entry of calls.filter((c) => c.phase === 'Review')) {
+      if (entry.status === 'running' && entry.child) {
+        const { child: kid } = entry;
+        if (kid.wantsBash) {
+          log.emit(kid.id, closedAt - 2, {
+            type: 'approval.resolved',
+            requestId: `req-${entry.id}`,
+          });
+        }
+        log.emit(kid.id, closedAt - 1, {
+          type: 'result',
+          outcome: 'completed',
+          executionId: kid.executionId,
+          category: AgentCategory.ToolUse,
+          isSubagent: true,
+        });
+        log.emit(kid.id, closedAt - 1, {
+          type: 'status',
+          phase: STREAM_PHASE.COMPLETED,
+          previousPhase: STREAM_PHASE.RUNNING,
+          cause: 'lifecycle',
+        });
+        card(
+          {
+            ...entry,
+            status: 'completed',
+            durationMs: closedAt - kid.startedAt,
+            costUsd: (kid.outputTokens ?? 500) / 20_000,
+          },
+          closedAt,
+        );
+      } else if (entry.status === 'planned') {
+        card({ ...entry, status: 'cancelled' }, closedAt);
+      }
+    }
+    const outcome = failed ? 'failed' : 'completed';
+    log.entry(ROOT, closedAt + 1, {
+      id: 'phase-Review',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      text: 'Review',
+      data: { kind: 'phase', status: outcome, endTime: closedAt + 1 },
+    });
+    log.emit(ROOT, closedAt + 2, {
+      type: 'result',
+      outcome,
+      executionId: 'aaaaaaaaaaaa',
+      category: AgentCategory.Workflow,
+      isSubagent: false,
+    });
+    log.emit(ROOT, closedAt + 2, {
+      type: 'status',
+      phase: failed ? STREAM_PHASE.FAILED : STREAM_PHASE.COMPLETED,
+      previousPhase: STREAM_PHASE.RUNNING,
+      cause: 'lifecycle',
+    });
+  }
+  const ids = [ROOT, ...calls.flatMap((c) => c.child?.id ?? [])];
   return foldAll([
     subscribe(...ids),
     ...log.events.map(tail),
-    local({ self: [OWNER] }),
+    local(foreign ? { self: [], heldBy: [OWNER] } : { self: [OWNER] }),
   ]);
 }
