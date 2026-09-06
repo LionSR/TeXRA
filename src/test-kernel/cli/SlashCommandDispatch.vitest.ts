@@ -5,7 +5,6 @@ import { Effect } from 'effect';
 
 // Slash command execution dispatch.
 
-import { Effect } from 'effect';
 import {
   afterEach,
   beforeAll,

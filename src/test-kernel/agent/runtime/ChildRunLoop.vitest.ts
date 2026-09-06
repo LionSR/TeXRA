@@ -83,7 +83,7 @@ import {
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
-import { makeAgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
+import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
   claudeAgentSessionsFor,
   codexThreadsFor,
@@ -316,7 +316,7 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('unwinds provider ownership and loop resources when synchronous setup fails', () => {
     const { childStreamId, executionId } = loopIds('setup-failure');
-    const registry = makeAgentCliSessionRegistry(
+    const registry = new AgentCliSessionRegistry(
       'test_session_id',
       session.executions,
     );

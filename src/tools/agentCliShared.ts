@@ -1,8 +1,6 @@
 // Shared helpers for the agent-CLI tool modules (codex.ts, claudeAgent.ts).
 // Host-agnostic, VS Code-free.
 
-import { Data, Effect } from 'effect';
-
 import { registerExecution } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
 import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
@@ -55,35 +53,16 @@ import {
   createChildStream,
   type ChildStream,
 } from './delegation/childStream';
-import {
+import type {
+  AgentCliSessionEntry,
   AgentCliSessionRegistry,
-  type AgentCliSessionEntry,
-  type AgentCliSessions,
 } from './agentCliSessionRegistry';
 
 /** Session-keyed registry accessor (`codexThreadsFor`/`claudeAgentSessionsFor`);
  * dispatch and loop resolve it once against the ambient session. */
 export type AgentCliSessionStoreAccessor = (
   session: SessionHandle,
-) => AgentCliSessions;
-
-/**
- * A call this module makes into a still-Promise collaborator — the approval
- * prompt, the follow-up submission, the provider's own launch — rejected.
- * Each site re-raises `cause` once it has done its own cleanup, so the tool
- * surfaces the error the collaborator raised and not a wrapper.
- */
-class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
-  readonly cause: unknown;
-}> {}
-
-const agentCliCall = <A>(
-  call: () => Promise<A>,
-): Effect.Effect<A, AgentCliCallFailed> =>
-  Effect.tryPromise({
-    try: call,
-    catch: (cause) => new AgentCliCallFailed({ cause }),
-  });
+) => AgentCliSessionRegistry;
 
 /**
  * Publish a turn's token usage to the progress UI for an agent-CLI child stream.
@@ -117,18 +96,15 @@ function requireCallerOwnership(
   callerStreamId: StreamTabId | undefined,
   handle: AgentExecutionHandle | undefined,
   labels: AgentCliResumeLabels,
-): Effect.Effect<void, ToolError> {
-  if (!callerStreamId || !handle || handle.isOwnedBy(callerStreamId)) {
-    return Effect.void;
-  }
-  return Effect.fail(
-    new ToolError(
-      `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
-    ),
+): void {
+  if (!callerStreamId || !handle || handle.isOwnedBy(callerStreamId)) return;
+  throw new ToolError(
+    `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
   );
 }
 
-const queueAgentCliFollowUp = Effect.fn('agentCli.queueFollowUp')(function* (
+async function queueAgentCliFollowUp(
+  registry: AgentCliSessionRegistry,
   stored: AgentCliSessionEntry,
   params: {
     id: string;
@@ -136,29 +112,24 @@ const queueAgentCliFollowUp = Effect.fn('agentCli.queueFollowUp')(function* (
     callerStreamId: StreamTabId | undefined;
     labels: AgentCliResumeLabels;
   },
-) {
-  const registry = yield* AgentCliSessionRegistry;
+): Promise<ToolResult> {
   const { id, prompt, callerStreamId, labels } = params;
   // Ownership is a live-handle fact: a detached or re-parented child must not
   // accept follow-ups from its former orchestrator. A missing handle falls
   // through to submitFollowUp's no-session outcome below.
-  yield* requireCallerOwnership(
+  requireCallerOwnership(
     id,
     callerStreamId,
     registry.getHandle(stored),
     labels,
   );
 
-  const result = yield* agentCliCall(() =>
-    submitFollowUp(stored.childStreamId, prompt, {
-      session: currentSession(),
-    }),
-  );
+  const result = await submitFollowUp(stored.childStreamId, prompt, {
+    session: currentSession(),
+  });
   if (result.status === 'failed') {
-    return yield* Effect.fail(
-      new ToolError(
-        `${labels.notActiveLabel} '${id}' did not accept the follow-up (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
-      ),
+    throw new ToolError(
+      `${labels.notActiveLabel} '${id}' did not accept the follow-up (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
     );
   }
 
@@ -173,7 +144,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCli.queueFollowUp')(function* (
     [followUpLine, `Execution ID: ${stored.executionId}`].join('\n'),
     `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
   );
-});
+}
 
 /**
  * Atomically choose between queueing onto an owned session id and launching a
@@ -184,40 +155,40 @@ const queueAgentCliFollowUp = Effect.fn('agentCli.queueFollowUp')(function* (
  * cleanup so an acknowledged follow-up can never be stranded behind a failed
  * initial turn.
  */
-const resumeOrLaunchAgentCliSession = Effect.fn('agentCli.resumeOrLaunch')(
-  function* (params: {
+async function resumeOrLaunchAgentCliSession(
+  store: AgentCliSessionRegistry,
+  params: {
     id: string | undefined;
     prompt: string;
     callerStreamId: StreamTabId | undefined;
     labels: AgentCliResumeLabels;
     launch: (releaseClaim?: () => void) => Promise<ToolResult>;
-  }) {
-    const store = yield* AgentCliSessionRegistry;
-    const { id } = params;
-    if (!id) return yield* agentCliCall(() => params.launch());
-
-    while (true) {
-      const releaseClaim = store.claim(id);
-      if (releaseClaim) {
-        return yield* agentCliCall(() => params.launch(releaseClaim)).pipe(
-          Effect.catchTag('AgentCliCallFailed', (failure) => {
-            releaseClaim();
-            return Effect.die(failure.cause);
-          }),
-        );
-      }
-
-      const stored = yield* store.waitForActive(id);
-      if (!stored) continue;
-      return yield* queueAgentCliFollowUp(stored, {
-        id,
-        prompt: params.prompt,
-        callerStreamId: params.callerStreamId,
-        labels: params.labels,
-      });
-    }
   },
-);
+): Promise<ToolResult> {
+  const { id } = params;
+  if (!id) return params.launch();
+
+  while (true) {
+    const releaseClaim = store.claim(id);
+    if (releaseClaim) {
+      try {
+        return await params.launch(releaseClaim);
+      } catch (error) {
+        releaseClaim();
+        throw error;
+      }
+    }
+
+    const stored = await store.waitForActive(id);
+    if (!stored) continue;
+    return queueAgentCliFollowUp(store, stored, {
+      id,
+      prompt: params.prompt,
+      callerStreamId: params.callerStreamId,
+      labels: params.labels,
+    });
+  }
+}
 
 interface AgentCliLaunchParams {
   parentStreamId: StreamTabId;
@@ -328,33 +299,26 @@ export async function launchAgentCliSession(
  * in a turn that never happens and the child's result is stranded. Fail before
  * prompting for approval rather than launching work nobody collects.
  */
-const withAgentCliApproval = Effect.fn('agentCli.withApproval')(function* <
-  E,
-  R,
->(
+async function withAgentCliApproval(
   toolName: string,
   approvalLabel: string,
-  run: (runContext: RunContext | undefined) => Effect.Effect<ToolResult, E, R>,
-) {
+  run: (runContext: RunContext | undefined) => ToolResult | Promise<ToolResult>,
+): Promise<ToolResult> {
   const contexts = getCurrentToolContexts();
   if (contexts?.runContext?.stopAfterCycle) {
-    return yield* Effect.fail(
-      new ToolError(
-        `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,
-      ),
+    throw new ToolError(
+      `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,
     );
   }
 
-  const approval = yield* agentCliCall(() =>
-    requestBashApproval({ command: approvalLabel }),
-  );
+  const approval = await requestBashApproval({ command: approvalLabel });
   if (approval.action !== 'approve') {
     return buildBashApprovalRejectedResult(approvalLabel, approval);
   }
 
   contexts?.callContext?.hooks?.onExecutionReady?.();
-  return yield* run(contexts?.runContext);
-});
+  return run(contexts?.runContext);
+}
 
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */
@@ -388,7 +352,7 @@ export function dispatchAgentCliTool(params: {
   prompt: string;
   labels: AgentCliResumeLabels;
   launch: (context: AgentCliLaunchContext) => Promise<ToolResult>;
-}): Effect.Effect<ToolResult, ToolError> {
+}): Promise<ToolResult> {
   const {
     agentName,
     approvalLabel,
@@ -399,47 +363,34 @@ export function dispatchAgentCliTool(params: {
     labels,
     launch,
   } = params;
-  return withAgentCliApproval(agentName, approvalLabel, (runContext) =>
-    Effect.gen(function* () {
-      const registry = yield* AgentCliSessionRegistry;
-      const callerStreamId = getRunContextStreamId(runContext);
-      if (sourceId) {
-        yield* requireCallerOwnership(
-          sourceId,
-          callerStreamId,
-          registry.getHandle(registry.lookup(sourceId)),
-          labels,
-        );
-      }
-      return yield* resumeOrLaunchAgentCliSession({
-        id: resumeId,
-        prompt,
+  return withAgentCliApproval(agentName, approvalLabel, (runContext) => {
+    const registry = store(currentSession());
+    const callerStreamId = getRunContextStreamId(runContext);
+    if (sourceId) {
+      requireCallerOwnership(
+        sourceId,
         callerStreamId,
+        registry.getHandle(registry.lookup(sourceId)),
         labels,
-        launch: (releaseFallbackClaim) => {
-          // A missing in-memory entry denotes a disk-based SDK fallback.
-          const { streamId } = requireRunStream(agentName, runContext);
-          return launch({
-            parentStreamId: streamId,
-            parentExecutionId: getRunContextExecutionId(runContext),
-            parentWorkingDirectory: getRunContextWorkingDirectory(runContext),
-            releaseFallbackClaim,
-          });
-        },
-      });
-      // The registry is the ambient session's, resolved once here — after the
-      // approval gate, as the previous `store(currentSession())` call site
-      // was; every program below reads it from context.
-    }).pipe(
-      Effect.provide(AgentCliSessionRegistry.layer(store(currentSession()))),
-    ),
-  ).pipe(
-    // A collaborator that rejected has already done its own cleanup; the
-    // tool surfaces the error it raised, as the previous `await` chain did.
-    Effect.catchTag('AgentCliCallFailed', (failure) =>
-      Effect.die(failure.cause),
-    ),
-  );
+      );
+    }
+    return resumeOrLaunchAgentCliSession(registry, {
+      id: resumeId,
+      prompt,
+      callerStreamId,
+      labels,
+      launch: (releaseFallbackClaim) => {
+        // A missing in-memory entry denotes a disk-based SDK fallback.
+        const { streamId } = requireRunStream(agentName, runContext);
+        return launch({
+          parentStreamId: streamId,
+          parentExecutionId: getRunContextExecutionId(runContext),
+          parentWorkingDirectory: getRunContextWorkingDirectory(runContext),
+          releaseFallbackClaim,
+        });
+      },
+    });
+  });
 }
 
 // ============================================================================

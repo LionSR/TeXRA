@@ -1,4 +1,3 @@
-import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
@@ -7,7 +6,7 @@ import {
   testExecutionHandle,
   testExecutionRegistry,
 } from '@test/support/executionHandleFixtures';
-import { makeAgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
+import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
 describe('AgentCliSessionRegistry', () => {
   it.each([
@@ -30,7 +29,7 @@ describe('AgentCliSessionRegistry', () => {
       const persistSessionId = makePersist(writeError);
       const reportPersistenceFailure = vi.fn();
       const executions = testExecutionRegistry();
-      const registry = makeAgentCliSessionRegistry(
+      const registry = new AgentCliSessionRegistry(
         'test_session_id',
         executions,
         {
@@ -68,7 +67,7 @@ describe('AgentCliSessionRegistry', () => {
       .fn()
       .mockRejectedValueOnce(new Error('storage unavailable'));
     const executions = testExecutionRegistry();
-    const registry = makeAgentCliSessionRegistry(
+    const registry = new AgentCliSessionRegistry(
       'test_session_id',
       executions,
       {
@@ -93,7 +92,7 @@ describe('AgentCliSessionRegistry', () => {
 
   it('atomically claims a session id and wakes waiters when it becomes active', async () => {
     const executions = testExecutionRegistry();
-    const registry = makeAgentCliSessionRegistry('test_session_id', executions);
+    const registry = new AgentCliSessionRegistry('test_session_id', executions);
     const entry = {
       childStreamId: 'child-a' as StreamTabId,
       executionId: 'execution-a' as ExecutionId,
@@ -105,7 +104,7 @@ describe('AgentCliSessionRegistry', () => {
       expect(registry.claim('session-a')).toBeUndefined();
       expect(registry.lookup('session-a')).toBeUndefined();
 
-      const active = Effect.runPromise(registry.waitForActive('session-a'));
+      const active = registry.waitForActive('session-a');
       registry.register('session-a', entry);
 
       await expect(active).resolves.toBe(entry);
@@ -132,12 +131,12 @@ describe('AgentCliSessionRegistry', () => {
 
   it('releases pending waiters and permits a new claim after cleanup', async () => {
     const executions = testExecutionRegistry();
-    const registry = makeAgentCliSessionRegistry('test_session_id', executions);
+    const registry = new AgentCliSessionRegistry('test_session_id', executions);
 
     try {
       const releaseClaim = registry.claim('session-a');
       expect(releaseClaim).toBeTypeOf('function');
-      const active = Effect.runPromise(registry.waitForActive('session-a'));
+      const active = registry.waitForActive('session-a');
 
       releaseClaim?.();
 
@@ -147,7 +146,7 @@ describe('AgentCliSessionRegistry', () => {
 
       releaseNextClaim?.();
       await expect(
-        Effect.runPromise(registry.waitForActive('session-a')),
+        registry.waitForActive('session-a'),
       ).resolves.toBeUndefined();
     } finally {
       executions.dispose();
@@ -156,7 +155,7 @@ describe('AgentCliSessionRegistry', () => {
 
   it('releases every active alias owned by one execution', () => {
     const executions = testExecutionRegistry();
-    const registry = makeAgentCliSessionRegistry('test_session_id', executions);
+    const registry = new AgentCliSessionRegistry('test_session_id', executions);
     const executionA = 'execution-a' as ExecutionId;
     const executionB = 'execution-b' as ExecutionId;
     const entry = (executionId: ExecutionId, childStreamId: StreamTabId) => ({
@@ -195,7 +194,7 @@ describe('AgentCliSessionRegistry', () => {
   it('interrupts an in-flight loop without promoting its reserved resume id', () => {
     const executionId = 'execution-in-flight' as ExecutionId;
     const interrupt = vi.fn();
-    const registry = makeAgentCliSessionRegistry('test_session_id', {
+    const registry = new AgentCliSessionRegistry('test_session_id', {
       getAgentHandleByStream: () => ({ interrupt }),
     } as unknown as ExecutionRegistry);
     const releaseClaim = registry.claim('reserved-session');
@@ -217,7 +216,7 @@ describe('AgentCliSessionRegistry', () => {
 
   it('interrupts each child through the session execution registry', () => {
     const executions = testExecutionRegistry();
-    const registry = makeAgentCliSessionRegistry('test_session_id', executions);
+    const registry = new AgentCliSessionRegistry('test_session_id', executions);
     const interruptA = vi.fn();
     const interruptB = vi.fn();
 

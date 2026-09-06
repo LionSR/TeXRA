@@ -24,7 +24,6 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -34,7 +33,6 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
@@ -513,15 +511,8 @@ export class ClaudeAgentTool extends defineTool({
     'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
 }) {
-  /** The one run edge of this tool (PRD run-edge category b). */
-  protected execute(input: ClaudeAgentInput): Promise<ToolResult> {
-    return effectRuntime().runPromise(this.run(input));
-  }
-
-  private readonly run = Effect.fn('ClaudeAgentTool.run')(function* (
-    input: ClaudeAgentInput,
-  ) {
-    const config = yield* Effect.promise(() => getClaudeAgentConfig());
+  protected async execute(input: ClaudeAgentInput): Promise<ToolResult> {
+    const config = await getClaudeAgentConfig();
     const permissionMode =
       input.permission_mode ?? config.getClaudeAgentPermissionMode();
     const model = input.model ?? config.getClaudeAgentModel();
@@ -529,7 +520,7 @@ export class ClaudeAgentTool extends defineTool({
     const sessionId = input.session_id ?? undefined;
     const isFork = input.fork_session === true;
 
-    return yield* dispatchAgentCliTool({
+    return dispatchAgentCliTool({
       agentName: CLAUDE_AGENT_NAME,
       approvalLabel: `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       store: claudeAgentSessionsFor,
@@ -556,7 +547,7 @@ export class ClaudeAgentTool extends defineTool({
           context.releaseFallbackClaim,
         ),
     });
-  });
+  }
 }
 
 async function launchClaudeAgentSession(

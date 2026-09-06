@@ -1,4 +1,4 @@
-import { Context, Data, Deferred, Effect, Layer } from 'effect';
+import { Data, Deferred, Effect } from 'effect';
 
 import { getExecutionStore } from '@agent/storage';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
@@ -63,84 +63,14 @@ const persistSessionMapping = Effect.fn(
 /**
  * What the registry tracks about one live agent-CLI session: the child run's
  * identity and its follow-up address. Live handles are resolved on demand
- * through the session's own {@link ExecutionRegistry}, injected once when the
- * registry is made — entries carry no registry pointer of their own, so an
- * entry can never point across sessions. Provider specifics (codex thread,
- * claude model/permission mode/…) stay with the provider's own loop closure.
+ * through the session's own {@link ExecutionRegistry}, injected once at
+ * construction — entries carry no registry pointer of their own, so an entry
+ * can never point across sessions. Provider specifics (codex thread, claude
+ * model/permission mode/…) stay with the provider's own loop closure.
  */
 export interface AgentCliSessionEntry {
   childStreamId: StreamTabId;
   executionId: ExecutionId;
-}
-
-/**
- * One session's live agent-CLI sessions.
- *
- * `waitForActive` is the only operation with anything to await, and it is an
- * Effect: a waiter is interrupted with the program that is waiting instead of
- * holding a promise nobody can cancel. Everything else is a map read or write
- * plus a `Deferred` settle — synchronous by construction, and reached from
- * `ChildRunStrategy`'s synchronous loop callbacks, which is why wrapping them
- * in Effect would only push a run boundary into that callback.
- */
-export interface AgentCliSessions {
-  /**
-   * Atomically reserve an unowned SDK session id. Returns a release handle
-   * bound to this exact reservation, or undefined when another owner exists.
-   * Registration promotes the reservation and makes that handle a no-op. The
-   * handle stays a plain callback: it is handed to
-   * `ChildRunStrategy.releaseSessionOwnership`, a synchronous contract.
-   */
-  readonly claim: (sessionId: string) => (() => void) | undefined;
-  /**
-   * Register an active external-agent session and persist its SDK id for
-   * later display or cross-reference after an extension reload clears
-   * memory. When the id was reserved, registration also wakes callers
-   * waiting to enqueue a follow-up on the new loop.
-   */
-  readonly register: (sessionId: string, entry: AgentCliSessionEntry) => void;
-  /** Track a launched loop before its SDK session id is safe to publish. */
-  readonly trackInFlight: (entry: AgentCliSessionEntry) => void;
-  readonly lookup: (sessionId: string) => AgentCliSessionEntry | undefined;
-  /**
-   * Live handle for an entry, resolved through the one execution registry
-   * this session's agent-CLI children run under. Ownership and follow-up
-   * checks read the live handle rather than a stored pointer, so a detached
-   * or re-parented child answers with its current state.
-   */
-  readonly getHandle: (
-    entry: AgentCliSessionEntry | undefined,
-  ) => AgentExecutionHandle | undefined;
-  /** Wait for a reserved id to become active, or for its owner to release it. */
-  readonly waitForActive: (
-    sessionId: string,
-  ) => Effect.Effect<AgentCliSessionEntry | undefined>;
-  readonly release: (sessionId: string) => void;
-  /** Release every alias and in-flight handle owned by one child execution. */
-  readonly releaseByExecutionId: (executionId: ExecutionId) => void;
-  /**
-   * Interrupt every registered CLI-backed session. Registries are keyed by
-   * runtime session (`agentCliSessionStores`), so "every" is already scoped
-   * to one session's own agent-CLI children.
-   */
-  readonly interruptAll: () => void;
-}
-
-/**
- * The ambient session's agent-CLI registry. The tool dispatch boundary
- * resolves it once from the session-keyed store and provides it with
- * {@link AgentCliSessionRegistry.layer}; every program below reads it from
- * context instead of threading a parameter.
- */
-export class AgentCliSessionRegistry extends Context.Service<
-  AgentCliSessionRegistry,
-  AgentCliSessions
->()('@texra/tools/AgentCliSessionRegistry') {
-  static layer(
-    sessions: AgentCliSessions,
-  ): Layer.Layer<AgentCliSessionRegistry> {
-    return Layer.succeed(AgentCliSessionRegistry)(sessions);
-  }
 }
 
 type AgentCliSessionState =
@@ -159,111 +89,125 @@ function settleReservation(
   }
 }
 
-/**
- * Make one session's registry. The session-keyed store
- * (`agentCliSessionStores`) owns the instance for the life of its session and
- * hands it to {@link AgentCliSessionRegistry.layer}.
- */
-export function makeAgentCliSessionRegistry(
-  persistedSessionKey: string,
-  executions: ExecutionRegistry,
-  dependencies: AgentCliSessionRegistryDependencies = DEFAULT_DEPENDENCIES,
-): AgentCliSessions {
-  const sessions = new Map<string, AgentCliSessionState>();
-  const inFlight = new Map<ExecutionId, AgentCliSessionEntry>();
+export class AgentCliSessionRegistry {
+  private readonly sessions = new Map<string, AgentCliSessionState>();
+  private readonly inFlight = new Map<ExecutionId, AgentCliSessionEntry>();
 
-  const lookup = (sessionId: string): AgentCliSessionEntry | undefined => {
-    const state = sessions.get(sessionId);
+  constructor(
+    private readonly persistedSessionKey: string,
+    private readonly executions: ExecutionRegistry,
+    private readonly dependencies: AgentCliSessionRegistryDependencies = DEFAULT_DEPENDENCIES,
+  ) {}
+
+  /**
+   * Atomically reserve an unowned SDK session id. Returns a release handle
+   * bound to this exact reservation, or undefined when another owner exists.
+   * Registration promotes the reservation and makes that handle a no-op.
+   */
+  claim(sessionId: string): (() => void) | undefined {
+    if (this.sessions.has(sessionId)) return undefined;
+
+    const reservation: AgentCliSessionState = {
+      kind: 'reserved',
+      ready: Deferred.makeUnsafe<AgentCliSessionEntry | undefined>(),
+    };
+    this.sessions.set(sessionId, reservation);
+    return () => {
+      if (this.sessions.get(sessionId) !== reservation) return;
+      this.sessions.delete(sessionId);
+      settleReservation(reservation, undefined);
+    };
+  }
+
+  /**
+   * Register an active external-agent session and persist its SDK id for later
+   * display or cross-reference after an extension reload clears memory. When
+   * the id was reserved, registration also wakes callers waiting to enqueue a
+   * follow-up on the new loop. The persistence write runs on a detached fiber
+   * owned by this registry's process runtime; see {@link persistSessionMapping}.
+   */
+  register(sessionId: string, entry: AgentCliSessionEntry): void {
+    const previous = this.sessions.get(sessionId);
+    this.sessions.set(sessionId, { kind: 'active', entry });
+    settleReservation(previous, entry);
+    effectRuntime().runFork(
+      persistSessionMapping(
+        this.dependencies,
+        entry.executionId,
+        this.persistedSessionKey,
+        sessionId,
+      ),
+    );
+  }
+
+  /** Track a launched loop before its SDK session id is safe to publish. */
+  trackInFlight(entry: AgentCliSessionEntry): void {
+    this.inFlight.set(entry.executionId, entry);
+  }
+
+  lookup(sessionId: string): AgentCliSessionEntry | undefined {
+    const state = this.sessions.get(sessionId);
     return state?.kind === 'active' ? state.entry : undefined;
-  };
+  }
 
-  const getHandle = (
+  /**
+   * Live handle for an entry, resolved through the one execution registry
+   * this session's agent-CLI children run under. Ownership and follow-up
+   * checks read the live handle rather than a stored pointer, so a detached
+   * or re-parented child answers with its current state.
+   */
+  getHandle(
     entry: AgentCliSessionEntry | undefined,
-  ): AgentExecutionHandle | undefined =>
-    entry && executions.getHandle(entry.executionId);
+  ): AgentExecutionHandle | undefined {
+    return entry && this.executions.getHandle(entry.executionId);
+  }
 
-  return {
-    claim: (sessionId) => {
-      if (sessions.has(sessionId)) return undefined;
+  /** Wait for a reserved id to become active, or for its owner to release it. */
+  async waitForActive(
+    sessionId: string,
+  ): Promise<AgentCliSessionEntry | undefined> {
+    const state = this.sessions.get(sessionId);
+    if (!state) return undefined;
+    if (state.kind === 'active') return state.entry;
+    return effectRuntime().runPromise(Deferred.await(state.ready));
+  }
 
-      const reservation: AgentCliSessionState = {
-        kind: 'reserved',
-        ready: Deferred.makeUnsafe<AgentCliSessionEntry | undefined>(),
-      };
-      sessions.set(sessionId, reservation);
-      return () => {
-        if (sessions.get(sessionId) !== reservation) return;
-        sessions.delete(sessionId);
-        settleReservation(reservation, undefined);
-      };
-    },
+  release(sessionId: string): void {
+    const state = this.sessions.get(sessionId);
+    this.sessions.delete(sessionId);
+    settleReservation(state, undefined);
+  }
 
-    register: (sessionId, entry) => {
-      const previous = sessions.get(sessionId);
-      sessions.set(sessionId, { kind: 'active', entry });
-      settleReservation(previous, entry);
-      // A detached best-effort write, not a run boundary for any caller: the
-      // only caller is `ChildRunStrategy.onTurnSuccess`, a synchronous
-      // callback, and nothing observes the write's outcome except the
-      // diagnostics sink inside {@link persistSessionMapping}.
-      effectRuntime().runFork(
-        persistSessionMapping(
-          dependencies,
-          entry.executionId,
-          persistedSessionKey,
-          sessionId,
-        ),
+  /** Release every alias and in-flight handle owned by one child execution. */
+  releaseByExecutionId(executionId: ExecutionId): void {
+    this.inFlight.delete(executionId);
+    for (const [sessionId, state] of this.sessions) {
+      if (state.kind === 'active' && state.entry.executionId === executionId) {
+        this.sessions.delete(sessionId);
+      }
+    }
+  }
+
+  /**
+   * Interrupt every registered CLI-backed session. Registries are keyed by
+   * runtime session (`agentCliSessionStores`), so "every" is already scoped
+   * to one session's own agent-CLI children.
+   */
+  interruptAll(): void {
+    const interrupted = new Set<ExecutionId>();
+    const interrupt = (entry: AgentCliSessionEntry): void => {
+      if (interrupted.has(entry.executionId)) return;
+      const handle = this.executions.getAgentHandleByStream(
+        entry.childStreamId,
       );
-    },
+      if (!handle) return;
+      interrupted.add(entry.executionId);
+      handle.interrupt();
+    };
 
-    trackInFlight: (entry) => {
-      inFlight.set(entry.executionId, entry);
-    },
-
-    lookup,
-    getHandle,
-
-    waitForActive: Effect.fn('AgentCliSessionRegistry.waitForActive')(
-      function* (sessionId: string) {
-        const state = sessions.get(sessionId);
-        if (!state) return undefined;
-        if (state.kind === 'active') return state.entry;
-        return yield* Deferred.await(state.ready);
-      },
-    ),
-
-    release: (sessionId) => {
-      const state = sessions.get(sessionId);
-      sessions.delete(sessionId);
-      settleReservation(state, undefined);
-    },
-
-    releaseByExecutionId: (executionId) => {
-      inFlight.delete(executionId);
-      for (const [sessionId, state] of sessions) {
-        if (
-          state.kind === 'active' &&
-          state.entry.executionId === executionId
-        ) {
-          sessions.delete(sessionId);
-        }
-      }
-    },
-
-    interruptAll: () => {
-      const interrupted = new Set<ExecutionId>();
-      const interrupt = (entry: AgentCliSessionEntry): void => {
-        if (interrupted.has(entry.executionId)) return;
-        const handle = executions.getAgentHandleByStream(entry.childStreamId);
-        if (!handle) return;
-        interrupted.add(entry.executionId);
-        handle.interrupt();
-      };
-
-      for (const entry of inFlight.values()) interrupt(entry);
-      for (const state of sessions.values()) {
-        if (state.kind === 'active') interrupt(state.entry);
-      }
-    },
-  };
+    for (const entry of this.inFlight.values()) interrupt(entry);
+    for (const state of this.sessions.values()) {
+      if (state.kind === 'active') interrupt(state.entry);
+    }
+  }
 }

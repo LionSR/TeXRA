@@ -218,12 +218,16 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     input: MemoryToolInput,
   ) {
     // Normalize a raw display path into a `{ display, storage }` pair at the
-    // dispatch boundary so ops never need to call `resolveMemoryPath`
-    // themselves. Fails with a ToolError if the path is outside `/memories`.
-    const locate = (raw: string): MemoryLocation => {
-      const storage = this.resolveMemoryPath(raw);
-      return { display: toDisplayPath(storage), storage };
-    };
+    // dispatch boundary. Fails with a ToolError if the path is outside
+    // `/memories`.
+    const locate = (raw: string): Effect.Effect<MemoryLocation, ToolError> =>
+      Effect.try({
+        try: () => {
+          const storage = displayToStoragePath(raw);
+          return { display: toDisplayPath(storage), storage };
+        },
+        catch: (cause) => new ToolError(toErrorMessage(cause), { cause }),
+      });
 
     switch (input.command) {
       case 'view':
@@ -231,16 +235,16 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         // /memories instead of erroring - the model's first call in a
         // fresh session is reliably a bare `view` with no path.
         return yield* this.view(
-          locate(input.path ?? MEMORY_DISPLAY_ROOT),
+          yield* locate(input.path ?? MEMORY_DISPLAY_ROOT),
           input.view_range ?? undefined,
           input.offset ?? 0,
           input.limit ?? 100,
         );
       case 'create':
-        return yield* this.create(locate(input.path), input.file_text);
+        return yield* this.create(yield* locate(input.path), input.file_text);
       case 'str_replace':
         return yield* this.strReplace(
-          locate(input.path),
+          yield* locate(input.path),
           input.old_str,
           input.new_str,
         );
@@ -249,22 +253,22 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         // new_str both being absent before execute() is ever reached.
         const insertText = (input.insert_text ?? input.new_str)!;
         return yield* this.insert(
-          locate(input.path),
+          yield* locate(input.path),
           input.insert_line,
           insertText,
         );
       }
       case 'delete':
-        return yield* this.delete(locate(input.path));
+        return yield* this.delete(yield* locate(input.path));
       case 'rename':
         return yield* this.rename(
-          locate(input.old_path),
-          locate(input.new_path),
+          yield* locate(input.old_path),
+          yield* locate(input.new_path),
         );
       case 'pin':
-        return yield* this.pin(locate(input.path));
+        return yield* this.pin(yield* locate(input.path));
       case 'unpin':
-        return yield* this.unpin(locate(input.path));
+        return yield* this.unpin(yield* locate(input.path));
     }
   });
 
@@ -303,14 +307,6 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         });
       }),
   );
-
-  private resolveMemoryPath(inputPath: string): string {
-    try {
-      return displayToStoragePath(inputPath);
-    } catch (error) {
-      throw new ToolError(toErrorMessage(error), { cause: error });
-    }
-  }
 
   /** Return early result if the file hasn't been viewed yet. */
   private requireViewBeforeModify(

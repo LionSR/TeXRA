@@ -15,10 +15,10 @@ import {
   Cause,
   Clock,
   Data,
+  Deferred,
   Duration,
   Effect,
   Exit,
-  Fiber,
   Schedule,
 } from 'effect';
 
@@ -250,8 +250,8 @@ export abstract class PollingSourceBase<
   private readonly keysChangedListeners = new Set<
     (keys: readonly K[]) => void
   >();
-  /** The one fiber that polls; undefined while nothing is subscribed. */
-  private pollLoop: Fiber.Fiber<void> | undefined;
+  /** The stop request for the owned poll loop; absent while it is stopped. */
+  private pollLoopStop: Deferred.Deferred<void> | undefined;
   private shutdownRegistration: Disposable | undefined;
   private shutdownLifecycle: LifecycleHost | undefined;
 
@@ -487,8 +487,19 @@ export abstract class PollingSourceBase<
    */
   private ensurePolling(): void {
     this.registerShutdownIfNeeded();
-    if (this.pollLoop) return;
-    this.pollLoop = effectRuntime().runFork(this.pollLoopProgram());
+    if (this.pollLoopStop) return;
+    const stop = Deferred.makeUnsafe<void>();
+    this.pollLoopStop = stop;
+    effectRuntime().runFork(
+      Effect.raceFirst(this.pollLoopProgram(), Deferred.await(stop)).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            // A stopped loop may finish after a new subscription has started.
+            if (this.pollLoopStop === stop) this.pollLoopStop = undefined;
+          }),
+        ),
+      ),
+    );
   }
 
   private readonly pollLoopProgram = Effect.fn('PollingSourceBase.pollLoop')(
@@ -498,10 +509,8 @@ export abstract class PollingSourceBase<
         schedule: Schedule.fixed(Duration.millis(this.config.pollIntervalMs)),
         while: () => {
           if (this.subscriptions.size > 0) return true;
-          // The loop is ending of its own accord (the last subscription went
-          // while a round was in flight); release the slot here, before the
-          // fiber completes, so the next subscribe starts a fresh loop.
-          this.pollLoop = undefined;
+          // Retire before yielding so a new subscription starts a fresh loop.
+          this.stopPolling();
           return false;
         },
       }).pipe(Effect.provideService(Clock.Clock, unrefSleepClock(clock)));
@@ -509,10 +518,10 @@ export abstract class PollingSourceBase<
   );
 
   private stopPolling(): void {
-    const loop = this.pollLoop;
-    if (!loop) return;
-    this.pollLoop = undefined;
-    effectRuntime().runFork(Fiber.interrupt(loop));
+    const stop = this.pollLoopStop;
+    if (!stop) return;
+    this.pollLoopStop = undefined;
+    Deferred.doneUnsafe(stop, Effect.void);
   }
 
   /**
