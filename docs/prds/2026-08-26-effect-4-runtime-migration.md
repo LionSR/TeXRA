@@ -9,11 +9,18 @@ updated: 2026-09-06
 Effect to Effect's best practice, and PocketFlow is not retained. That ruling
 amends R4, 8.4, Phase 2, and alternative 13.C below, in the form
 `docs/proposals/2026-09-04-agent-runtime-on-effect.md` §6 specifies, and
-closes open decisions 6 and 7 of section 15. The remaining items of section
-15 stay open; the governing rules R1 to R3 and R5 to R10 are unchanged. That
-proposal is in flight as pull request #11843 and merges before this
-amendment; until it lands, every section reference to it below resolves in
-that pull request's branch.
+closes open decisions 6 and 7 of section 15. That proposal is in flight as
+pull request #11843 and merges before this amendment; until it lands, every
+section reference to it below resolves in that pull request's branch.
+
+A second owner ruling, later on 2026-09-06 on the first wave of conversion
+pull requests (#11922 to #11928): "we should fully embrace Effect. No more
+pass-throughs nor adapters." That ruling amends R1 and execution-strategy
+rules 1 and 3 below: a converted subsystem's public surface is Effect-typed,
+its consumers convert upward until a host entry, the tool `execute()`
+contract, or the SDK's public API, and no temporary adapter exists, so the
+`@adapter-until` marker is retired before it was ever merged. The remaining
+items of section 15 stay open; R2, R3, and R5 to R10 are unchanged.
 
 **Decision in one sentence:** TeXRA will adopt Effect 4 RC as the execution
 model for host-neutral asynchronous backend work, with the two agent flow
@@ -495,6 +502,27 @@ Host callbacks, IPC handlers, VS Code commands, Electron entry points, CLI
 commands, and the published SDK continue to speak Promises. They enter Effect
 through a host-owned runtime. Calls to `Effect.runPromise`, `runSync`, or
 `runFork` are forbidden below named boundary modules.
+
+_Amended 2026-09-06 (second ruling):_ "the boundary" is exactly three kinds
+of place, and nothing inside the tree is one. (a) A host entry that a host
+framework invokes: a VS Code command or webview message handler, an Electron
+IPC handler, a CLI command action, a React or Ink event handler, an activate
+or deactivate hook. (b) The agent tool `execute()` contract in `src/tools`,
+until lane D converts the tool runner; a tool's `execute` body is one
+`runPromise` of a program that holds every line of logic. (c) The SDK's
+public Promise API in `packages/agent/src`. Everything below those three is
+Effect-typed: exported functions return `Effect` or `Stream`, stateful
+objects are `Context.Service` classes with layers, and no class below the
+boundary exposes a Promise method. A Promise-returning function whose body
+only runs an Effect is a pass-through and is deleted by converting its
+callers; a Promise-native method kept "because its port is Promise" is an
+adapter and is deleted by converting the port and the host code on the other
+side of it. A foreign boundary (Node's `fs` and `child_process`, `fetch`, a
+third-party SDK, the VS Code or Electron API) is wrapped exactly once, at the
+foreign edge, with `Effect.tryPromise`, `Effect.try`,
+`effect/unstable/process`, or `Stream.fromAsyncIterable`; that single wrap is
+the R1 boundary crossing, not an adapter. Consequences for the first wave
+are recorded on each of #11922 to #11928.
 
 ### R2. Services follow semantic boundaries
 
@@ -1228,10 +1256,16 @@ impossible rather than a matter of reviewer memory:
 
 1. **Boundary inversion, once.** From Phase 1, each host enters Effect at its
    process entry, and unmigrated Promise code runs inside the runtime through
-   adapters. Adaptation is therefore one-directional. No chain may take the
-   shape Promise → Effect → Promise: a function converts together with its
-   whole call chain, leaf to root, or its subsystem waits. Sandwich layers
-   are where adapters accumulate and stay.
+   ~~adapters~~ _Amended 2026-09-06:_ a single foreign-boundary wrap at each
+   Promise leaf, never a Promise-facing layer of its own. Adaptation is
+   therefore one-directional. No chain may take the shape
+   Promise → Effect → Promise: a function converts together with its whole
+   call chain, leaf to root, or its subsystem waits. Sandwich layers are
+   where adapters accumulate and stay. _Amended 2026-09-06 (second ruling):_
+   "leaf to root" is binding on every conversion PR, not a preference: the
+   PR that converts a file converts that file's callers up to a boundary of
+   R1's three kinds, and a conversion that stops short by keeping the old
+   Promise signature is rejected in review as a pass-through.
 2. **One pass per file.** When a phase converts a file, every §2.5 mechanism
    in that file converts in the same PR — its deferreds, timers, queues, and
    cancellation races together. A file is not revisited once per family;
@@ -1240,9 +1274,13 @@ impossible rather than a matter of reviewer memory:
 3. **Leftovers fail CI, not review.** Phase 1 lands counting ratchets beside
    the existing ratchet machinery: `platform()`, `setServices()`,
    `new AbortController(`, superseded package imports, and raw catch clauses
-   in migrated zones, as baselines that may only shrink. Every temporary
-   adapter carries an `@adapter-until <date>` marker enforced by a check.
-   The PR that zeroes a ratchet deletes the ratchet.
+   in migrated zones, as baselines that may only shrink. ~~Every temporary
+   adapter carries an `@adapter-until <date>` marker enforced by a check.~~
+   _Amended 2026-09-06 (second ruling):_ there are no temporary adapters, so
+   there is no marker to date; the Phase 1 check (#11920) fails on the
+   presence of any `@adapter-until` marker rather than on its expiry, and
+   the `Effect.run*` row's allowlist admits only files of R1's three
+   boundary kinds. The PR that zeroes a ratchet deletes the ratchet.
 
 Phases land complete on `main` as short, dense PR trains; the migration has
 no long-lived integration branch to rot against the tree's churn. The
@@ -1377,8 +1415,10 @@ lane D of the persistence cutover branch, sequenced and sized by
    records beside itself its introduction date (the cutover release) and
    its retirement condition: it is deleted three months after that release
    ships, once every session root's C9 retention window has passed, so no
-   readable run can still lack a `flow.snapshot`; the ratchet from Phase 1
-   carries an `@adapter-until` marker for it.
+   readable run can still lack a `flow.snapshot`; ~~the ratchet from Phase 1
+   carries an `@adapter-until` marker for it~~ _Amended 2026-09-06:_ it is
+   a compatibility reader under AGENTS.md's rule, not an adapter, and its
+   retirement is dated in its own header, since the marker is retired.
    Deletes `src/agent/node/`, `ModelInvocationNode`, `RoundPersistedFlow`,
    `ResponseCycleFlow`, `ToolUseRoundFlow`, all sixteen node classes, the
    disposition ladder, the flow-local uses of `linkAbortSignals` and
@@ -1865,6 +1905,16 @@ unless the repository owner explicitly amends it.
    Effect Schema stays out: Zod remains the one data-contract system, so the
    guides' `Schema.TaggedError` reads as `Data.TaggedError` here. This closes
    the R4 question; decisions 1 to 5 above are untouched by it.
+9. **Recorded 2026-09-06.** On the first wave of conversion pull requests
+   (#11922 to #11928) the owner ruled: "we should fully embrace Effect. No
+   more pass-throughs nor adapters." R1 now names the only three boundary
+   kinds (host entries, the tool `execute()` contract until lane D, the SDK's
+   public API); execution-strategy rule 1 makes leaf-to-root conversion
+   binding on every PR; rule 3 retires the `@adapter-until` marker before it
+   merged, so #11920's check fails on any marker's presence. Decision 2
+   above is narrowed by it: whatever hosts the managed runtime, it is not an
+   adapter layer between Promise code and Effect code, because no such
+   layer may exist.
 
 None of these decisions blocks the read-only feasibility measurements.
 
