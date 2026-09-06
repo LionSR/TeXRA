@@ -1255,7 +1255,6 @@ sessionMeta.set({
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
-  transcriptMode: 'persistent',
   teamName: TEAM_NAME,
   version: '0.0.0-harness',
 });

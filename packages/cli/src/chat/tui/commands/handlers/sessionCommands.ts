@@ -187,10 +187,7 @@ export async function showCliSessionStatus(
       activeChildSessions,
       goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,
       activeSkills: activeSkillNamesFor(activeStreamId),
-      sessionId:
-        stream && meta.transcriptMode === 'persistent'
-          ? context.session.executionId
-          : undefined,
+      sessionId: stream ? context.session.executionId : undefined,
       commandName: context.cliContext.commandName,
       cwd: context.cliContext.cwd,
       processCwd: context.processCwd,

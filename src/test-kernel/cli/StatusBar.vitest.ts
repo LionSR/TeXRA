@@ -157,18 +157,6 @@ describe('CLI StatusBar display model', () => {
     expect(shortCliModelAccessRoute('personal')).toBe('API keys');
   });
 
-  it('keeps an ephemeral transcript warning in the durable status row', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({ transcriptMode: 'ephemeral' }),
-    );
-
-    expect(leftTexts(display)).toContain('EPHEMERAL TRANSCRIPT');
-    expect(
-      display.left.find((segment) => segment.text === 'EPHEMERAL TRANSCRIPT'),
-    ).toMatchObject({ badge: true, badgeColor: 'yellow' });
-    expect(display.bindings).not.toContain('Resume this session');
-  });
-
   it('surfaces non-default approval policies in the durable status row', () => {
     const input = statusInput({ approvalPolicy: 'ask' });
     const ask = buildStatusBarDisplay(input);
@@ -1643,22 +1631,6 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toBe(
       'Resume this session with: texra resume abc123',
     );
-  });
-
-  it('keeps a transient notice visible beside an ephemeral badge', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        transcriptMode: 'ephemeral',
-        transientNotice: {
-          kind: 'message',
-          text: 'Sign-in failed; try again',
-          expiresAt: 1,
-        },
-        width: 29,
-      }),
-    );
-
-    expect(leftTexts(display)).toEqual(['◆', 'Sign-in failed; try again']);
   });
 
   it('uses portable Esc labels for meta shortcuts on macOS', () => {

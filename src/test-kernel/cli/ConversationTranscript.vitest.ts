@@ -78,7 +78,6 @@ const SESSION_META = {
   cwd: '/tmp/project',
   apiMode: 'personal',
   approvalPolicy: 'ask',
-  transcriptMode: 'persistent',
   version: '0.38.0',
 } as const;
 

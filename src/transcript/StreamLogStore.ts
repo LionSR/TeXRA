@@ -82,14 +82,6 @@ type StreamLogStoreMode =
   | { readonly kind: 'ephemeral'; readonly reason: string };
 
 /**
- * The user-facing warning an interactive host shows once it is running on an
- * ephemeral transcript store, built from that store's `mode.reason`.
- */
-export function ephemeralTranscriptWarning(reason: string): string {
-  return `Transcript persistence is unavailable for this session. Its conversation cannot be resumed. ${reason}`;
-}
-
-/**
  * Delete one known persisted transcript without opening or parsing the
  * transcript registry. History cleanup already resolved the stream from the
  * execution metadata, so hydrating every unrelated transcript would add work

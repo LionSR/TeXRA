@@ -84,7 +84,6 @@ describe('chat TUI session exit controller', () => {
       session,
       commandName: 'texra',
       cwd: '/tmp/project',
-      canResume: true,
       disposables: new DisposableStore(),
       disposeTerminalRestoreOnExit: vi.fn(),
       followUpQueue: new PQueue(),
