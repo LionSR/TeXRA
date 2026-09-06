@@ -505,8 +505,10 @@ export function createDesktopHostRequests(
       await host.openBuildDisplay(createExternalLocation(result.diffPath));
       return;
     }
+    // The workspace-relative base, as the extension passes: the collector
+    // resolves it from the workspace root.
     const packed = await runPackLatexdiffvc(
-      base.absolutePath,
+      baseFile,
       commit,
       action === 'cleanLatexdiffvc',
     );
