@@ -23,7 +23,7 @@ import {
 const docsDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMESTAMP_PREFIX = /^\d{4}-\d{2}-\d{2}-/;
 const TRAILING_DATE_SUFFIX = /-20\d{2}(?:-\d{2}(?:-\d{2})?)?\.md$/;
-// The former prds/ and proposals/ trees moved to the repo-root agents/docs/
+// The former prds/ and proposals/ trees moved to the repo-root .agents/docs/
 // note tree, which is outside docs/ and therefore outside this gate's scope.
 const TIMESTAMPED_DIRS = ['architecture', 'design', 'dev/audits'];
 const INTERNAL_DOC_MARKER = /(?:^|[-_])(audit|prd|proposal)(?:[-_.]|$)/i;
