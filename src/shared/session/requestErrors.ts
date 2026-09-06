@@ -23,9 +23,13 @@ export class Unavailable extends Data.TaggedError('Unavailable')<{
   readonly reason: string;
 }> {}
 
+/** The user cancelled the operation. No refusal notice is needed. */
+export class Cancelled extends Data.TaggedError('Cancelled') {}
+
 /** The runtime refused the request for a worded reason. */
 export class Rejected extends Data.TaggedError('Rejected')<{
   readonly reason: string;
+  readonly docsCommand?: string;
 }> {}
 
 /** A handler died. The cause is in the host log under `ref` (the request
@@ -34,4 +38,5 @@ export class Internal extends Data.TaggedError('Internal')<{
   readonly ref: string;
 }> {}
 
-export type RequestError = NotOwner | Unavailable | Rejected | Internal;
+export type RequestError =
+  NotOwner | Unavailable | Cancelled | Rejected | Internal;

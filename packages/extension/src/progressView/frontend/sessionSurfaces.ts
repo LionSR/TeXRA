@@ -55,7 +55,6 @@ export interface SessionSurfaces {
   /** Open the sessions the host names and close the rest. */
   sync(keys: readonly string[]): void;
   get(key: string): SessionSurface | undefined;
-  list(): readonly SessionSurface[];
   /** Apply a surface action to one session's surface. */
   act(key: string, action: SurfaceAction): void;
   runtimeRequest(key: string, request: RuntimeRequest): void;
@@ -213,6 +212,15 @@ export function createSessionSurfaces(options: {
     });
   }
 
+  function presentResult(entry: Held, result: Response['result']): void {
+    if (!result.ok && result.error._tag !== 'Cancelled') {
+      setSurface(entry, {
+        ...entry.surface$.get(),
+        requestError: result.error,
+      });
+    }
+  }
+
   /** The response of a `host.request`, folded onto the surface. */
   function settleHost(
     entry: Held,
@@ -335,6 +343,7 @@ export function createSessionSurfaces(options: {
           polishing.delete(target);
           setSurface(entry, { ...current, polishing });
         }
+        presentResult(entry, result);
         settleHost(entry, request, origin, result);
       });
   }
@@ -372,9 +381,15 @@ export function createSessionSurfaces(options: {
       })
       .then((result) => {
         if (held.get(key) !== entry) return;
-        // The runtime's refusal reaches the surface (7.6): the stream's
-        // controls paint it, and nothing here swallows it.
-        if (!result.ok && streamId !== null) {
+        presentResult(entry, result);
+        // The runtime's refusal also reaches the stream it was made on
+        // (7.6): that stream's controls paint it, and nothing here
+        // swallows it.
+        if (
+          !result.ok &&
+          result.error._tag !== 'Cancelled' &&
+          streamId !== null
+        ) {
           const current = entry.surface$.get();
           setSurface(entry, {
             ...current,
@@ -459,7 +474,6 @@ export function createSessionSurfaces(options: {
       notify();
     },
     get: (key) => held.get(key),
-    list: () => [...held.values()],
     act(key, action) {
       const entry = held.get(key);
       if (entry) act(entry, action);

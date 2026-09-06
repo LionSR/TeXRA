@@ -601,14 +601,14 @@ interface WorkbenchTabsCallbacks {
 }
 
 /** DOM id of one tab's activate button; the tabpanel references it via aria-labelledby. */
-export function workbenchTabDomId(tabId: string, session = ''): string {
+export function workbenchTabDomId(tabId: string, session: string): string {
   return `task-workbench-tab-${session}-${tabId}`;
 }
 
 /** DOM id of the single pane a placement's tab strip switches. */
 export function workbenchPanelDomId(
   placement: WorkbenchPlacement,
-  session = '',
+  session: string,
 ): string {
   return `task-workbench-panel-${session}-${placement}`;
 }
@@ -716,7 +716,7 @@ export function workbenchTabsTemplate(
   activeTabId: string | undefined,
   placement: WorkbenchPlacement,
   callbacks: WorkbenchTabsCallbacks,
-  session = '',
+  session: string,
 ): TemplateResult {
   const hideDirection =
     placement === 'right' ? 'chevron-right' : 'chevron-down';

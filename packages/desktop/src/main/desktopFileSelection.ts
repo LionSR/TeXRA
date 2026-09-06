@@ -12,10 +12,7 @@ import {
   attachedDroppedPaths,
   planMainViewDroppedFileAttachments,
 } from '@controllers/mainView/MainViewDroppedFilesController';
-import {
-  listWorkspaceFilesOfType,
-  workspaceFileOptions,
-} from '@controllers/session/workspaceFileOptions';
+import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { DocumentFileType, FileOptions } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
@@ -44,8 +41,6 @@ export interface DesktopFileSelection {
   /** The launcher's single-slot catalogs: base candidates, edited
    *  candidates, and the commit list's fixed head. */
   fileOptions(): Promise<FileOptions>;
-  /** Whether the paper has any input file at all (the empty-workspace cue). */
-  hasInputFiles(): Promise<boolean>;
   /**
    * The native picker for one multi-file list. Resolves to the chosen
    * files, workspace-relative where they are inside the paper, or null when
@@ -92,11 +87,6 @@ export function createDesktopFileSelection(
   const { workspacePath } = options;
   return {
     fileOptions: () => workspaceFileOptions(workspacePath),
-    async hasInputFiles() {
-      return (
-        (await listWorkspaceFilesOfType('input', workspacePath)).length > 0
-      );
-    },
     async pickFiles(fileType, currentFile) {
       if (!workspacePath) return null;
       const listConfig = getFileListConfig(fileType, loadFileListSettings());

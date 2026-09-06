@@ -26,6 +26,7 @@ import {
   activeStreamId,
   closeForegroundReader,
   focusStream,
+  expandedStreams,
   foregroundReader,
   infoPane,
   openInfoPane,
@@ -412,6 +413,7 @@ describe('App foreground Escape ownership', () => {
     const emit = vi.spyOn(defaultSession(), 'publish');
 
     try {
+      expandedStreams.set(new Map([[ROOT, true]]));
       stdin.write('\t');
       await waitFor(() => stdout.output.includes('workflow Running'));
       stdin.write(ARROW_KEYS.Down);
@@ -788,12 +790,18 @@ describe('App foreground Escape ownership', () => {
   it('keeps an Esc-digit focus target after the bare-Escape window expires', async () => {
     seedChildHierarchy();
     focusStream(CHILD);
+    expandedStreams.set(
+      new Map([
+        [ROOT, true],
+        [CHILD, true],
+      ]),
+    );
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt();
 
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
-      stdin.write('1');
+      stdin.write('3');
       await waitFor(() => activeStreamId.get() === GRANDCHILD);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 

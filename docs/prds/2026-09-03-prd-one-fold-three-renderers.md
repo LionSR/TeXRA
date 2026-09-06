@@ -191,8 +191,12 @@ SessionView = {
   inquiries: InquiryThread[],
   // this process's local truth: a fold input, never durable, never persisted
   // wire type (8.1): arrays, never Maps - see the note under 5.1
-  local: { self: OwnerId[], heldBy: OwnerId[],
+  local: { self: OwnerId[],
+           owners: { ownerId: OwnerId, verdict: 'alive' | 'dead' | 'unprovable' }[],
            unreadable: { streamId: StreamTabId, detail: string }[] },
+  // Current sequence claims from Drained, never from event provenance.
+  // Missing entry = not sampled; explicit null = released.
+  claims: Map<AggregateId, OwnerId | null>,
   queuedFollowUps: Map<StreamTabId, string[]>,
 }
 
@@ -203,7 +207,7 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   identity: RunIdentity | null              // null only for legacy imports
   // launch facts from the run.start payload, never derived (5.2)
   isRemote: boolean
-  ownerId: OwnerId | null                    // owner of the latest durable event
+  ownerId: OwnerId | null                    // current stream-aggregate claim, from claims
   // agent name or fallback from id prefix
   label: string
   // the AI one-liner; title when present
@@ -254,12 +258,22 @@ chunks, and `local` do (8.1). Every type that _is_ on the wire uses arrays
 and records, so nothing depends on a `Map` surviving `JSON.stringify`; the
 same rule governs the persisted `Surface` (9).
 
-Four aggregate kinds, one key shape, one placement rule (contract C2). The
-event key is `(aggregate_id, seq)`, and **every fact lives on the aggregate
+Aggregate kinds share one key shape and one placement rule (contract C2).
+`AggregateId` is a kind-qualified storage key, encoded only through
+`aggregateId(kind, logicalId) = JSON.stringify([kind, logicalId])`. Thus
+`aggregateId('stream', id)` and `aggregateId('execution', id)` are distinct
+even when their logical ids are equal. The same encoding applies to inquiry,
+`workflow-checkpoint`, and singleton-session ids. C2 fixes the session logical id as `singleton`
+and the reserved migration logical id as `cutover`, in their distinct kinds. Event envelopes, read/claim arguments, `parent_id`,
+`folded`, `claims`, `latest`, subscription entries, and reconciliation scopes
+all use this qualified key. Payload `streamId`, `executionId`, `checkpointId`,
+and thread ids retain their logical values; consumers qualify them from the edge's
+known kind, and the importer does so before assigning sequences. No reader
+infers kind from an id's spelling. The event key is `(aggregate_id, seq)`, and **every fact lives on the aggregate
 of its logical target**, so a latest-of-type lookup never has to
 disambiguate targets and no key column exists. Run-scoped trace facts and
 the stream's own lifecycle facts use the stream as their aggregate:
-`run.start` (seq 1), the trace `AgentEvent`s, the status fact, `goal`
+`run.start` (seq 1), the trace `AgentEvent`s, the status fact, `flow.step`, `goal`
 (`GoalStore.getForStream` is keyed by stream), the queued-follow-ups
 snapshot (`UpdateQueuedFollowUpsPayload` and `FollowUpSentPayload` carry
 `streamId`, `progressEvents.ts:133-139`, and `queuedFollowUps` above is
@@ -269,15 +283,22 @@ aggregate** and, in the same transaction, sets `event_sequence.closed = 1`
 on that aggregate and on every dependent reachable through
 `event_sequence.parent_id`, which records only the owning lifecycle (C9;
 the closing rule is stated in 5.2). The
-agent runtime's flow rows, named by
+agent runtime's five execution flow rows, named by
 `2026-09-04-agent-runtime-on-effect.md` section 2.1 (`model.message`,
-`model.compaction`, `tool.intent`, `tool.result`, `flow.step`,
-`flow.snapshot`; that section also says which of a run's two aggregates each
-row lives on), use the execution as their aggregate, with the
-execution-to-stream edge on `run.start`. An inquiry thread's facts
-(`inquiryThreadUpdated`, parented or not) use an aggregate whose id is the
-thread id. The **one session aggregate** per paper carries singleton session
-facts only (C2 names a session-level goal as its example); a fact that can
+`model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`), use the
+execution as their aggregate. `flow.step` shares the scrubbed stream
+aggregate with trace rows; its sequence is the stream sequence. The runtime
+proposal owns this placement and the substrate contract owns the schema, with the
+execution-to-stream edge on `run.start`: consumers qualify its logical
+`executionId` with kind `execution` and its logical `streamId` with kind
+`stream`. An inquiry thread's facts (`inquiryThreadUpdated`, parented or not)
+use `aggregateId('inquiry', threadId)`. A workflow's shared journal uses
+`aggregateId('workflow-checkpoint', checkpointId)`, an independently claimed
+root named by its `run.start.checkpointId` edge (decision 9, C5). Deleting
+one execution does not cascade that journal. Explicit deletion of its last
+referring run may collect it under C9 only after acquiring a reclaimable
+checkpoint claim and verifying that no retained history still references it. The **one session aggregate** per paper carries singleton session
+facts only; `goal` is per stream and never a singleton session fact. A fact that can
 have more than one live instance never goes there, because after two
 deletions a latest-of-type read of one aggregate would see only the newer
 tombstone and resurrect the older stream. `SessionView` reads each
@@ -304,12 +325,35 @@ TranscriptSubscriptionSet | ReplayComplete | Drained`, where `Event` is
 `{ read: 'listing' | 'aggregate' | 'all', event: SessionEvent }`: the row
 carries the read that delivered it (7.1; a frame tags its rows the same
 way, 7.4) because one rule below depends on it. `ReplayComplete` is the one
-marker of 7.2: transient, never durable, carrying no fact; the fold uses it
-to close the listing ahead of it. The input reader delivers a replay only
-when that marker has arrived. `Drained` carries the existing commit ordinal
-through which a finite tail read has completed, including rows no longer
-materializable; it advances the cursor without creating a durable fact.
-Three rules govern the event arm before any fact below applies.
+marker of 7.2: transient, never durable; the fold uses it to close the
+listing ahead of it and apply the replay transaction's current reconciliation
+without advancing the tail cursor. The input reader delivers a replay only
+when that marker has arrived. `Drained` completes a finite live read and
+carries its existing commit ordinal and existence reconciliation:
+
+```ts
+ExistenceReconciliation = { checkedAggregateIds: AggregateId[], removedAggregateIds: AggregateId[], claims: { aggregateId: AggregateId, ownerId: OwnerId | null }[] }
+ReplayComplete = { _tag: 'replay.complete', existence: ExistenceReconciliation }
+Drained = { _tag: 'drained', cursor: SessionCursor, existence: ExistenceReconciliation }
+```
+
+The removed ids must be a subset of the checked scope. C7's
+`aggregateState(checkedAggregateIds)` is read in the same transaction as the
+bounded event prefix. The reconciliation names every surviving checked key
+in `claims`, including an explicit null owner after release; omitted checked
+keys are removed. It applies those current claims in `Drained`, after the
+captured local liveness input, so process observations cannot overwrite a
+new claim or release. Event `owner_id` is historical provenance only. The reader emits that prefix, then the
+captured text/local inputs, then `Drained` as one ordered input batch (7.2).
+The fold removes the named aggregates through the same rule as
+`stream.removed`, including dependent state and re-rooting surviving child
+streams, replaces the checked claims, and advances the cursor when applying
+`Drained`. The entire batch
+produces one new immutable view; neither partial rows nor a cursor beyond
+unapplied inputs are published. This records a read result, never a durable
+event. An absence or claim-only batch changes the view even when its cursor is
+unchanged. A released claim is not inferred from process death, and an
+alive process does not imply a claim on every run it once wrote. Three rules govern the event arm before any fact below applies.
 
 **Duplicates.** The three reads of 7.1 overlap by construction - `run.start` is a
 listing fact and row seq 1 of its aggregate, so `aggregate(id, 0)` replays
@@ -359,67 +403,51 @@ creates its `folded` entry, and when it leaves the fold drops that stream's
 belongs to the evicted aggregate and is dropped by this rule - keeping
 every listing fact.
 
-**Cursor.** `view.cursor` is the tail position, and it advances to the
-position the tail has drained: in the runtime, the commit of each row
-delivered by `all`, whether or not the residency rule kept that row's
-content; in a webview, the `cursor` each `EventsFrame` carries (8.1), the
-commit ordinal the framer had drained when it cut the frame, which moves
-past the tail rows the framer left out for aggregates the subscriber did
-not name. It never advances from a history or listing row. A
-history row can carry a commit the tail has not reached yet - the read ran
-after the tail's anchor was captured - and a cursor advanced by it would
-make the next `all(cursor)` (a resubscribe, 8.1, or the reopened tail of
-7.2) skip every other aggregate's rows in between.
-Every fact below derives from the durable events of section 6 except owner
-liveness, which is process state and not an event: the runtime's lease
-reader (`executionLease.ts`, a pid probe on the lease owner) emits an
-`LocalRuntimeState` snapshot - the owner ids whose lease this process may
-not touch, and the streams it could not read (see "Unavailable" below) - on
-every change and on every subscribe, and the fold keeps the latest snapshot
-in `local`. A foreign process dying produces no event and no lease-file
-change - its claim stays on disk, and `proveOwnerLiveness` runs only when
-something inspects or claims (`executionLease.ts:369-373`) - so the runtime's
-lease reader **re-probes held foreign owners on an interval** and emits a
-new snapshot when a verdict changes. Without that wake, `heldBy` never
-moves in an already-open process and the dead owner's run stays read-only
-and running forever, which is the state Resume exists to leave. `self` holds this
-process's owner id and never a lease token: `claimLease` mints a fresh UUID
-per claim (`executionLease.ts:519-525`), and that token is the lease's
-internal fencing token, compared only inside the lease against the claim it
-fenced; it is not an owner id and never reaches an event envelope, `self`,
-or `heldBy`. A process running two executions stamps one owner id on both
-runs' events, and both fold as its own. `heldBy` is the lease's own
-predicate, not "alive": a lease is
-`held` when its owner is alive **or unprovable**, and nothing automatic
-reaps an unprovable one - only an explicit deletion does
-(`executionLease.ts:38-41, 164-172`). Defining it as known-alive would label
-a stream on another host `interrupted` and offer a Resume that cannot
-acquire the lease. The snapshot is transient like a text chunk: never
-durable,
-never a seq. A replay with no snapshot folds with `local` empty, so
-every pending approval reads as interrupted until the runtime says
-otherwise, which is the safe direction. Agreed with the substrate owner on
-2026-09-03 (the companion proposal, in flight).
+**Cursor.** `view.cursor` is the durable prefix completed by the last
+`Drained` input, whether or not every row in that prefix still exists or
+passes the residency filter. The runtime and webview apply it with the
+complete finite-read batch, never on receipt of a partial frame (7.2, 8.1).
+It never advances from a listing/history row or a wake value. A history row
+can carry a commit above the current tail position, so advancing from it
+would skip other aggregates' intervening events on the next forward read.
 
-**Liveness is probed per owner process, never per run.** An owner id
-names a process (pid plus process start time, the cutover's
-`event_sequence.owner_id`), and one process owns every run it launched, so
-the lease reader probes the distinct owner ids present in the session's
-tail - a handful - and never one lease per run. `local.self` and
-`local.heldBy` are therefore sets of owner-process ids, and the waiting
-group (below) reads liveness through them; a fold input computed any other
-way is wrong, not slow. This reconciles the startup-repair proposal's S3
-with the waiting rule (substrate owner, 2026-09-04). The value is derived by
-the substrate at insert time from the process, never supplied by the
-emitter, so it cannot be forged or forgotten by a new emit site; there is
-no per-handle owner token, because the only question asked of an owner id
-is "is this owner alive" and a token could not be probed without a second
-table mapping tokens to processes. With one database per root and one
-session per paper (11) there is at most one handle per process per
-database, so a token would distinguish nothing; two handles on one root in
-one process is a guard at handle construction, not an owner-id axis. Until
-the cutover, the runtime stamps the same process identity on the envelope
-it hands the fold.
+The events describe history; current write ownership comes from the sequence
+rows sampled by `Drained`. `LocalRuntimeState` supplies this process's id,
+explicit owner-process liveness verdicts, and unreadable streams. The input
+reader captures this local sample before its database transaction (7.2),
+then applies the transaction's current claims after it. A claim acquired by
+a newly observed owner may therefore have no liveness verdict yet: that
+means **unprovable and held**, never dead. A missing claim sample is likewise
+unknown and read-only until a finite read supplies it; cold replay cannot
+expose Resume on the strength of an absent sample. Explicit null means the
+claim is released, while only an explicit dead verdict makes a non-null
+foreign claim reclaimable. The runtime still rechecks C5 atomically before
+any action.
+
+`OwnerId` preserves the full existing `LeaseOwnerSchema` identity: `pid`,
+nullable `processStart`, and `hostname` (`leaseOwnerLiveness.ts:17-21`), using
+C5's `JSON.stringify([hostname.toLowerCase(), pid, processStart])` encoding.
+`self` and claim comparisons use that whole
+identity. The liveness source compares hostnames case-insensitively before
+any local PID or process-start probe. An owner on another host is
+unprovable: local process absence says nothing about it, and its recorded
+PID must never be used for a local signal or automatic takeover. The same
+rule governs imported lease evidence and decoded transport claims.
+
+Liveness probes remain per distinct **current** owner process, not per run
+or historical event writer. The source periodically re-probes those owners
+and emits explicit `alive`, `dead`, or `unprovable` verdicts; lookup absence
+has the last meaning. Claim, takeover, and release transactions wake the
+ordinary finite reader even when they append no event. One live process can
+release a waiting run while continuing another, so `event.owner_id` and a
+process-wide alive set cannot determine whether the waiting aggregate is
+held. `local.self` identifies this process only; it grants no ownership
+without the matching current aggregate claim. Run launch/resume claims the
+stream and execution together, and actions verify the relevant pair.
+Workflow launch/resume also acquires the checkpoint claim in that same
+transaction before journal or run mutation. Its runtime scope releases
+only the run and checkpoint claims that scope acquired; deleting or closing
+a different saved run cannot release an active run's checkpoint claim.
 
 - **Existence** is decided by the stream's own aggregate (contract C2, C9):
   `run.start` and `stream.removed` are the first and the last row of one
@@ -432,12 +460,17 @@ it hands the fold.
   transaction sets `event_sequence.closed = 1` on that aggregate and,
   transitively over `event_sequence.parent_id`, on every dependent
   aggregate, in one recursive `UPDATE` (C9). `parent_id` records the
-  **owning lifecycle** and only that, set at creation: an execution's
-  parent is its stream (the `run.start` edge), an inquiry aggregate's
-  parent is the stream that opened it, and a child stream's `parent_id` is
+  **current owning lifecycle**: an execution's parent is its stream (the
+  qualified `run.start` edge). An inquiry's parent is its current
+  `inquiryThreadUpdated.parentStreamId`, qualified as a stream key, or null.
+  Opening or reopening that inquiry atomically changes `parent_id` and
+  publishes the matching current manifest under C9's ownership checks, so
+  deletion follows its present owner rather than its original caller. A
+  child stream's `parent_id` is
   NULL, because a child stream is its own lifecycle that survives its
-  parent's deletion; the parent-child edge stays on `run.start`'s
-  `parentStreamId` payload, where the `parentId` rule below reads it.
+  parent's deletion; the historical parent-child edge stays on `run.start`'s
+  `parentStreamId` and `parentStartCommit` payload, where the rule below
+  derives its effective current attachment.
   `parent_id` and `closed` are the two columns C1 adds to `event_sequence`
   over the base contract. So closure over `parent_id` covers exactly what
   the removed run owns: its execution and its inquiries close with it in
@@ -456,8 +489,9 @@ it hands the fold.
   `stream.removed`, in commit order after the `run.start` it closes (C7;
   the fold keeps no tombstone set, so this rule relies on that order: a
   tombstone folded first would be forgotten and the later `run.start` would
-  recreate the stream), and `all()` carries it in the tail, so it reaches
-  every process (7.1) - and **a tombstone is final**. Nothing supersedes it:
+  recreate the stream), and the tail carries it while it remains stored. If retention has already
+  removed it, `Drained.existence` carries the same removal to every reader,
+  including remote folds (7.2, 8.1). **A tombstone is final**. Nothing supersedes it:
   a relaunch after a deletion mints a fresh `StreamTabId` and carries the
   deterministic workflow name as a label (decision 9), so it is a different
   stream, no later event can target the closed one, and nothing has to tell
@@ -466,10 +500,12 @@ it hands the fold.
   compare-on-remove exist for today (`SessionState.ts:133-148`), and both go
   with it - as does every `{ streamId, executionId }` pairing successive
   review rounds added to this document before the id itself was fixed.
-  Physical removal is retention's business and takes a stream's rows only
-  together with its tombstone. The event table has two coordinates and they do different
-  jobs. `seq` is per **aggregate** - a stream id, an execution id, an inquiry
-  thread id, or the one session aggregate for singleton facts (5.1, C2); an
+  Physical collection takes only explicitly deleted streams and their
+  closed dependents, together with the tombstone. User history, conversation,
+  and resume data do not expire by age or terminal outcome (C9).
+  The event table has two coordinates and they do different
+  jobs. `seq` is per **qualified aggregate key** - stream, execution, inquiry,
+  or the singleton session key (5.1, C2); an
   `inquiryThreadUpdated` with a null `parentStreamId` rides its thread
   aggregate, so no sentinel stream id exists. `commit` is a single
   session-wide ordinal assigned under the publish permit (7.1): it is the
@@ -481,45 +517,35 @@ it hands the fold.
   is a commit ordinal, not a `seq`, because a stream's transcript spans two
   aggregates whose seqs are not comparable. Every stream kind gets one:
   agent, process (`bash@tool`), workflow script, through `RunIdentity.kind`.
-- **Category, remote-ness, and owner** are launch facts on the `run.start`
-  payload (section 6, item 6). `RunIdentity` deliberately does not encode
-  `AgentCategory` (its header comment in `runIdentity.ts` says so), and
-  remoteness is a registry lookup (`isRemoteAgent` at
-  `streamTabInfo.ts:57-63`) that a browser fold cannot make, so the fold
-  reads both from the payload and derives neither. `ownerId` is the
-  process identity of the writer (pid plus process start, the `owner_id`
-  the substrate stamps at insert, contract C5), never a lease token; it
-  rides on every durable event's envelope and `StreamView.ownerId` is the
-  latest one, so a resume in another process moves ownership without a new
-  fact kind.
-- **`group === 'interrupted'`** iff the stream is non-terminal and
-  `stream.ownerId` is in neither `local.self` nor `local.heldBy` - whether or
-  not an approval is pending. Both sets, because the lease model calls this
-  process's own claim `owned` and only another process's `held`
-  (`executionLease.ts:164-172`): testing `heldBy` alone would fold every run
-  this process is currently executing to `interrupted`. `self` and `heldBy`
-  together are "somebody holds this"; the two stay separate only so
-  `readOnly` can ask the narrower question of _who_. Owner loss is the whole condition: a process that crashes
-  mid-generation commits no terminal status, so conditioning this on a
-  pending approval (as an earlier draft did) would leave every ownerless run
-  reading `running` forever, with no Resume offered and no repair until some
-  later restart. A pending approval is then simply the case where the loss is
-  most visible, not a separate rule.
-- **`group === 'waiting'`** iff an `approval.requested` exists without its
-  `approval.resolved` AND `stream.ownerId` is in `local.self` or
-  `local.heldBy`. Without a
-  live owner it is `'interrupted'` by the rule above, never `'waiting'`,
-  because nothing is listening for the answer; `'interrupted'` is the fourth
-  arm of the union (5.1) and the group a host offers `resume` on. Resume appends `approval.resolved` (cause: interrupted) for every
-  unresolved request on the stream **before** it starts, on the same path
-  that clears the previous run's terminal state
-  (`clearTerminalExecutionState`, `executeAgent.ts:541`). Without that, the
-  resumed owner reappears in `local.heldBy` and the orphaned request
-  folds the stream back to `waiting` for an answer no runtime is listening
-  for - and, because resume keeps the stream and the execution id, nothing
-  later retires it. Compensating at the boundary is the same shape as the
-  failed reservation's terminal status in section 6; scoping approvals to a
-  generation the fold retires would add a concept to carry the same fact.
+- **Category and remote-ness** are launch facts on `run.start` (section 6,
+  item 6). `RunIdentity` does not encode `AgentCategory`, and the runtime
+  supplies `isRemote`; the fold does not query a registry. The event
+  envelope's `ownerId` records who wrote that event. `StreamView.ownerId`
+  instead reads `claims[aggregateId('stream', stream.id)]`; it never changes
+  merely because an event with a different writer was replayed.
+- **Current ownership** is held when that aggregate has a non-null claim
+  whose process is self, alive, or unprovable. A null claim is released;
+  a non-null foreign claim with an explicit dead verdict is reclaimable.
+  An unsampled claim or missing owner verdict is read-only uncertainty,
+  not evidence that Resume is available.
+- **`group === 'interrupted'`** iff the stream is non-terminal and its
+  current claim is known released or held by a proven-dead process,
+  independently of whether an approval is pending. A historical writer
+  that remains alive after releasing this aggregate cannot keep it running.
+- **`group === 'waiting'`** requires an unresolved `approval.requested`
+  and a currently held claim. Resume acquires the run's claims and loads
+  durable recovery state before handling old approvals. A validated
+  model-retry or tool-outcome recovery binding (runtime proposal §2.3)
+  reattaches the same request id to the resumed listener and re-asks it;
+  it is exempt from generic `approval.resolved { cause: 'interrupted' }`
+  cleanup. Ordinary process-local requests with no recovery binding are
+  resolved by that cleanup. Invalid or unsupported recovery bindings stop
+  resume rather than becoming fresh model/tool activity. In particular,
+  a saved `pendingRetry` gate prevents model invocation until an explicit
+  decision authorizes its named attempt; owner replacement alone is not
+  authorization. The runtime admits replies only after attaching that
+  listener. The UI reads these facts and never invents a retry decision.
+
 - **`goal`** is per stream, on the toolUse arm. Today's
   `GoalStore.getForStream` and the `goalStateChanged` fact are keyed by
   stream id, and concurrent streams hold independent goals; one session
@@ -548,23 +574,23 @@ it hands the fold.
   things that need one are a pending approval and an interrupted,
   resumable run. Expansion is forced for either, over any collapsed override
   (see `approval`), which is why neither needs a count to stand in for it.
-- **`ancestors`** walks `parent`; an evicted parent contributes its last
-  known label. A bare id suffices because ids are never reused (decision 9):
-  a relaunched deterministic parent is a different stream and cannot adopt
-  the previous run's children. A child whose `parentId` names a stream the
-  view does not have - a tombstoned parent, most often - is **top-level**: the fold sets its
-  `parentId` to null, so it joins `order`, shows no ancestors, and the
-  composer's "reply to parent instead" (12.1) cannot address a stream that
-  no longer exists. Leaving the link dangling would keep that action
-  pointing at a permanently unavailable target. Deleting a parent therefore cannot hide
-  its children **in the view**. The runtime side of detachment stays: the
-  deletion path still calls `session.executions.detachActiveChildren(parent)`
-  (`createSessionStores.ts:30-44`), which performs `activation.detach()`,
-  `handle.detach()`, and approval detachment
-  (`executionRegistry.ts:580-603`) - live handles and approval ownership do
-  not re-root by rule. What the fold's rule replaces is only the durable
-  `setParentStream` **event** that path emits afterwards to project the
-  edge, which a tombstone now makes unnecessary.
+- **`ancestors`** walks the effective parent relationship. A child's
+  historical `run.start` names `parentStreamId` and `parentStartCommit`.
+  It has a current parent only if that stream is present and open and its
+  current `run.start` commit matches the saved parent commit. Otherwise its
+  `parentId` is null: it is top-level, has no parent reply action, and no
+  reused name can adopt it. The same derivation governs runtime attachment,
+  resume reconstruction, waiting-child continuation, and reply/approval
+  routing (runtime proposal §2.4), not merely display. A checkpoint or
+  caller-supplied resume parent cannot restore an absent, closed, or
+  mismatched parent. Readers resolve this edge from canonical current
+  lifecycle state when attaching and recheck before a parent-directed action.
+  The deletion path still calls `detachActiveChildren` to release live
+  handles immediately; after restart the canonical derivation gives the
+  same detached result without depending on that lost in-memory call.
+  Inquiry custody is separate: its current manifest and atomically updated
+  `parent_id` determine its owner, as stated above.
+
 - **`order`** and `childIds` use `streamOrdering` (newest creation first,
   ties by name), keyed on `createdAt` - the commit ordinal of the stream's
   `run.start`, which is immutable and already monotone. `runStartedAt` goes
@@ -581,19 +607,19 @@ it hands the fold.
   under it. The fold carries it only because `RunIdentity` deliberately does
   not, and the execution-scoped requests of 8.2 (`skip`, `retry`, `kill`)
   name it.
-- **Unavailable.** Two conditions read as unavailable today and they are
-  not the same kind of fact. A stream whose lease is held by another live
-  process is now _derivable_: `ownerId` is not this process and is in
-  `local.heldBy`. Either way the stream is **read-only here**, and the
-  fold says so in one field: `readOnly` is true when `ownerId` is in
-  `local.heldBy` and **not** in `local.self`, or when the stream is in
-  `local.unreadable`. The held test matters: once the previous owner exits,
-  its lease is reclaimable, so the stream is `interrupted` **and
-  actionable** - marking every foreign `ownerId` read-only would hide the
-  Resume on exactly the runs a restart is meant to recover. Without it a
-  second process renders the ordinary approval panel for a decision only
-  the owning process can deliver, and every action comes back `NotOwner`
-  (7.6) - an invitation to act that cannot work. A stream whose run state
+- **Unavailable.** A workflow's required claim set includes its
+  `workflow-checkpoint` aggregate as well as its stream and execution. A
+  saved workflow whose own run claims are released cannot offer Resume
+  while that checkpoint is held, even by another run in the same process;
+  the local admission guard and the atomic C5 acquisition enforce the same
+  rule. This affects action availability, not the saved run's execution
+  category or status. `readOnly` is true for an unsampled required claim,
+  for a current foreign claim whose owner is alive or unprovable (including
+  no verdict yet), or for a stream in `local.unreadable`. It is false for
+  an explicitly released or proven-dead claim unless the unreadable overlay
+  applies. The historical event writer is irrelevant. Thus another process
+  holding this aggregate blocks its controls, while a living process that
+  released it does not. A stream whose run state
   this process could not read at
   startup (`markUnavailable` with `streamUnreadableMessage`,
   `restartRepair.ts:232-240`) is genuinely local - another process may read
@@ -614,6 +640,12 @@ it hands the fold.
   `StreamStatusService`'s process-local map and reaches the UI through
   `holdState` (`LitSessionRenderer.ts:429`, `childExecutions.ts:98`), which
   no webview fold can call.
+  `readOnly` disables execution and approval controls; explicit single-run
+  Delete is a separate C5/C9 operation. A user-confirmed deletion may remove
+  a run with an unprovable owner, but must still refuse a known-alive owner.
+  It does not authorize resume, tool execution, or signalling an unverified
+  process. Bulk deletion and automatic cleanup retain the strict ownership
+  rule; missing liveness is never an automatic deletion permission.
 - **`context`** is latest-of-type over `context.state`, already a canonical
   run fact. Both renderers show it live today - `UsagePanel` through
   `ToolUseStreamContent` and `WorkflowStreamContent`, and the TUI status
@@ -662,44 +694,34 @@ it hands the fold.
   append-only scrollback (12.3). Using `settledSeq` would print a row its
   finalizing event (`stream.end`) still changes; using a count would print
   a still-streaming row 1 the moment row 2 finalized.
-- **Incremental.** One rule, keyed on what a change _names_. A durable event names the
-  streams its _type_ declares - not `event.streamId`, which an inquiry
-  fact does not have: `setParentStream` names its `childStreamId` and its new
-  parent, an unparented `inquiryThreadUpdated` names none. That mapping is
-  exhaustive and already written: `sessionFactStreamIds`
-  (`SessionFactApplier.ts:116-125`) is the function, and the fold takes it
-  over rather than reinventing it - with one addition it cannot make, since
-  the payload does not carry it: on a `setParentStream` the fold also names
-  the child's **prior** parent, read from the view before the event applies.
-  A `stream.removed` names its prior parent for the same reason: the fold
-  recomputes the deleted stream's arm first, after which the edge is gone,
-  so the old parent would keep the deleted child in its `childIds`,
-  `rollup`, and memoized run model forever. Without both, the walk starts
-  at the new relationship - or at none - which is the two-chain requirement
-  below. A fact naming no stream still folds - it
-  updates session-level state such as `inquiries` - it simply names no arm.
-  A **lifecycle** event (`run.start`, `stream.removed`) additionally names its
-  stream's subtree: a child's
-  placement is derived from whether its parent exists, so deleting a parent
-  re-roots its children and shortens every descendant's `ancestors` (see
-  `ancestors` above). That walk is O(subtree) and happens only when a parent
-  appears or is tombstoned. A `LocalRuntimeState` snapshot names the symmetric
-  difference against the previous one: the streams whose `ownerId` entered or
-  left `heldBy`, and those entering or leaving `unreadable` - so an owner
-  exiting recomputes exactly the streams it owned, not the view. A
-  `TextChunk` names its row's stream. For each named stream the fold
-  recomputes its arm, then
-  walks `parent` to the root updating each ancestor's `childIds`,
-  `rollup`, `approval`, and `group`, then `order` when a top-level stream
-  appeared or changed status. An event that _changes_ `parent` walks two
-  chains, the old and the new: detach is a real runtime transition
-  (`onChildrenDetached` emits `setParentStream` with a null parent,
-  `createSessionStores.ts:30-44`), so a child's parent genuinely moves and
-  the abandoned branch would otherwise keep the child in its `childIds` and
-  its `rollup` forever. The old parent needs no extra bookkeeping: the fold
-  holds it in the view until the event applies. Cost is O(depth) per named
-  stream and the named set is bounded by what actually changed, never a
-  whole-view pass. `transcript.run` is memoized on
+- **Incremental.** One rule, keyed on what a change _names_. An exhaustive
+  mapping from durable event type and payload names its affected streams;
+  an unparented `inquiryThreadUpdated` names none but still updates the
+  session's inquiry state. Before applying a lifecycle change, the fold
+  retains the affected streams' prior effective parent links. `run.start`,
+  `stream.removed`, and current-lifecycle reconciliation from
+  `ReplayComplete` or `Drained` recompute the affected subtree against the
+  canonical existence/open-state and `parentStartCommit` rule above.
+  Removing a parent re-roots surviving children and shortens every
+  descendant's `ancestors`; a changed lifecycle can likewise change whether
+  a declared parent is effective. These changes require O(subtree) work,
+  including when retention removed the tombstone before this reader saw it.
+  No separate parent-assignment event is required.
+
+  A `LocalRuntimeState` snapshot names the symmetric difference in explicit
+  liveness verdicts and unreadable streams, affecting only streams whose
+  current claims refer to those owners. Reconciliation also names streams
+  whose checked claims changed or disappeared, including a release with
+  no new event. A `TextChunk` names its row's stream. For each named stream,
+  the fold recomputes its arm and walks the effective parent chain to update
+  each ancestor's `childIds`, `rollup`, `approval`, and `group`, then `order`
+  when top-level membership or status changes. When the effective parent
+  changes, it updates both the saved old chain and the new chain; otherwise
+  an abandoned ancestor would retain the child in its rollup and memoized
+  run model. Lifecycle removal likewise updates the deleted stream's prior
+  chain after its own arm disappears. Ordinary updates cost O(depth) per
+  named stream; the larger subtree pass is confined to lifecycle changes,
+  never a whole-view pass. `transcript.run` is memoized on
   `(streamId, commitOrdinal, childRevision)` - the **session** ordinal, not
   `settledSeq`: `seq` is per aggregate (above) and a transcript spans two,
   so a per-aggregate key can stay unchanged or repeat across the two and
@@ -715,6 +737,7 @@ it hands the fold.
   walk that has to bump it is already visiting every ancestor.
   Recomputing `workflowRunModel` over a whole transcript per event would be
   quadratic.
+
 - **Legacy.** The fold has no legacy arm and no event carries a
   `StreamLogEntry`. The importer normalizes each old entry into the
   canonical events of section 6 at the import boundary, where
@@ -829,7 +852,11 @@ Agreed additions and changes (substrate owner, 2026-09-03):
 1. **`approval.requested` and `approval.resolved`**, run-scoped session
    facts `SessionHostInteractions` publishes directly as drafts (they are
    not trace `AgentEvent`s); resolved carries the request id. Payload is what the UI
-   shows (diff, command, question), never host handles. Today these travel
+   shows (diff, command, question), never host handles. Recoverable model
+   retry and tool-outcome requests also carry the runtime proposal's narrow
+   recovery binding; resume preserves and reattaches validated bindings
+   instead of resolving them as abandoned process-local requests (5.2).
+   Today these travel
    only on the `HostInteractions` port, so a pending approval does not
    survive a restart.
 2. **`approval.policy`**, run-scoped, carrying the full policy snapshot
@@ -880,7 +907,8 @@ Agreed additions and changes (substrate owner, 2026-09-03):
 6. **`category`** and **`isRemote`** are fields on the `run.start`
    payload, and **`ownerId`** is on every durable event's envelope,
    `run.start` included: stamped by the substrate at insert from the
-   writing process (contract C5), never passed by the emitter (5.2). `category` is
+   writing process (contract C5), never passed by the emitter (5.2). It is
+   provenance; current ownership is the claim read carried by `Drained`. `category` is
    on **every** run, not only agent runs: it is the discriminant of
    `StreamView` (5.1), and `AGENT_CATEGORIES` is exactly the two arms
    (`agent.ts:19-22`), so an agent-only field would leave a `process`
@@ -981,8 +1009,12 @@ class SessionEvents extends Context.Service<
   SessionEvents,
   {
     // an ordered batch, committed in one transaction (see run.start, 6.8)
-    readonly publish: (events: readonly SessionEvent[]) => Effect.Effect<void>;
-    // Three reads (C7), nothing else.
+    readonly publishBatch: (
+      events: readonly SessionEvent[],
+    ) => Effect.Effect<void>;
+    readonly publish: (event: SessionEvent) => Effect.Effect<void>;
+    // These three event reads are a subset of C7. SessionInputs also uses
+    // its bounded prefix and existence queries in one read transaction.
     // the cold listing hydrate (C8): the latest-of-type row per aggregate
     // for the listing fact types plus the outstanding-approval set, one
     // indexed query; never a transcript row; completes, no tail. Rows are
@@ -992,12 +1024,16 @@ class SessionEvents extends Context.Service<
     readonly listing: () => Stream.Stream<SessionEvent>;
     // every event with commit > fromCommit, in commit order across
     // aggregates, then the tail. Transcript rows of unsubscribed aggregates
-    // included: the live tail, and the frozen NDJSON projection's read (10.3)
-    readonly all: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>;
+    // included: the live tail, and the frozen NDJSON projection's read (10.3).
+    // With throughCommit, completes at that inclusive bound (SessionInputs).
+    readonly all: (
+      fromCommit: SessionCursor,
+      throughCommit?: SessionCursor,
+    ) => Stream.Stream<SessionEvent>;
     // one aggregate's rows from `fromSeq`, in seq order; completes. A
     // history read, never a tail: a subscribed aggregate's live rows come
-    // from `all`. An AggregateId is a stream id, an execution id, an
-    // inquiry thread id, or the session aggregate (5.1); the fold fiber
+    // from `all`. AggregateId is the canonical kind-qualified key (5.1),
+    // never a bare payload stream/execution/thread id; the fold fiber
     // opens one per aggregate in its subscription set (7.2, 8.1)
     readonly aggregate: (
       aggregateId: AggregateId,
@@ -1009,62 +1045,45 @@ class SessionEvents extends Context.Service<
   static readonly durableLayer = Layer.effect(
     SessionEvents,
     Effect.gen(function* () {
-      // a LEVEL, not an edge: the last commit ordinal THIS process appended.
-      // It is the AUTOINCREMENT `commit` ordinal (C1), the only number space
-      // a cursor lives in; nothing else is ever compared against it.
-      const ticks = yield* SubscriptionRef.make(0 as CommitOrdinal);
       const gate = yield* Semaphore.make(1);
-      // provided by the persistence cutover
       const durable = yield* DurableWrite;
-      const publish = Effect.fn('SessionEvents.publish')(function* (events) {
-        // uninterruptible: a commit that wakes nobody is a stall every live
-        // subscriber carries until something else commits
-        yield* gate.withPermit(
-          Effect.uninterruptible(
-            Effect.gen(function* () {
-              // assigns seq, INSERT under BEGIN IMMEDIATE
-              const at = yield* durable.appendAll(events); // last ordinal
-              yield* SubscriptionRef.set(ticks, at);
-            }),
-          ),
-        );
-      });
-      // cross-process wake (C7): `PRAGMA data_version` is connection-local,
-      // moves only when ANOTHER connection commits, and resets on reconnect.
-      // It is a TRIGGER, never a level in the commit space: compared only
-      // with its own previous sample, and a change means "read forward",
-      // nothing more. ONE poll per database, forked once here in the
-      // layer's scope, never one per drain: it fans out through one
-      // SubscriptionRef that counts observed foreign changes, and every
-      // drain subscribes to that. A SubscriptionRef replays its current
-      // value on subscribe, so a drain's first wake is an unconditional
-      // forward read and no foreign commit can land between the sample and
-      // the read
-      const foreignChanges = yield* SubscriptionRef.make(0);
+      // Database-owned replaying counter (C7), never a commit ordinal.
+      // Every successful local write transaction advances it in the
+      // uninterruptible post-commit path, including retention with no
+      // appended event. Publication is not its only writer.
+      const wakeLevel = durable.wakeLevel;
+      const publishBatch = Effect.fn('SessionEvents.publishBatch')(
+        function* (events) {
+          yield* gate.withPermit(
+            Effect.uninterruptible(durable.publishBatch(events)),
+          );
+        },
+      );
+      const publish = (event: SessionEvent) => publishBatch([event]);
+      // One foreign-connection poll per database updates the same wake.
+      // data_version is compared only with its previous sample, never a
+      // cursor. Replaying the level makes a new reader read immediately.
       yield* Effect.forkScoped(
         Stream.tick(dataVersionPollInterval).pipe(
           Stream.mapEffect(() => durable.dataVersion),
           Stream.changes,
           Stream.runForEach(() =>
-            SubscriptionRef.update(foreignChanges, (n) => n + 1),
+            SubscriptionRef.update(wakeLevel, (n) => n + 1),
           ),
         ),
       );
-      const foreign = SubscriptionRef.changes(foreignChanges).pipe(
-        Stream.map(() => 'foreign' as const),
-      );
-      // "the table moved": this process's commit level and the foreign
-      // trigger. Neither carries events, and subscribing to either replays
-      // its current value immediately, so no commit can slip between a read
-      // and a subscribe
-      const wake = Stream.merge(SubscriptionRef.changes(ticks), foreign);
-      // THE tail (C7), and the only drain: the table read forward from the
-      // caller's position, once per wake that can mean new rows. `at` is
-      // the highest commit ordinal this drain has delivered, the one value
-      // a local level is compared against. The two cold reads below
-      // complete; they are never merged with this
-      const all = (fromCommit: SessionCursor) =>
-        Stream.unwrap(
+      const wake = SubscriptionRef.changes(wakeLevel);
+      // Event-only tail for consumers such as NDJSON. SessionInputs uses
+      // finite prefixes of the same table (7.2), never merged live inputs.
+      // This row cursor is never compared with a wake version.
+      const all = (
+        fromCommit: SessionCursor,
+        throughCommit?: SessionCursor,
+      ) => {
+        if (throughCommit !== undefined) {
+          return durable.readAll(fromCommit, throughCommit);
+        }
+        return Stream.unwrap(
           Effect.gen(function* () {
             const at = yield* Ref.make(fromCommit);
             const forward = Stream.unwrap(
@@ -1076,27 +1095,17 @@ class SessionEvents extends Context.Service<
                 ),
               ),
             );
-            return wake.pipe(
-              // a foreign trigger always reads forward; a local level at or
-              // below what this drain has delivered says nothing. A level
-              // says "there is more", not "there is one more", so a burst
-              // of intermediate levels collapses into one further read
-              Stream.filterEffect((w) =>
-                w === 'foreign'
-                  ? Effect.succeed(true)
-                  : Ref.get(at).pipe(Effect.map((h) => w > h)),
-              ),
-              Stream.flatMap(() => forward, { concurrency: 1 }),
-            );
+            return wake.pipe(Stream.flatMap(() => forward, { concurrency: 1 }));
           }),
         );
+      };
       // the cold listing hydrate (C7, C8): one indexed query, latest-of-type
       // per aggregate for the listing fact types plus the outstanding
       // approvals; never a transcript row; completes
       const listing = () => durable.readListing();
       // one aggregate's rows from a seq, in seq order (C7); completes
       const aggregate = (id, fromSeq) => durable.readAggregate(id, fromSeq);
-      return { publish, listing, all, aggregate };
+      return { publishBatch, publish, listing, all, aggregate };
     }),
   );
 }
@@ -1133,82 +1142,41 @@ during the cold reads is delivered by the tail and deduplicated, never
 lost; the "subscribe before you read" invariant and its scoped queue are
 gone.
 
-The local wake is a **level, not an edge**, and the distinction is
-load-bearing. An edge signal must be armed before the read, or a commit
-landing between the read's snapshot and the subscription is lost forever -
-and `concat` does not subscribe to its second stream until the first
-completes, so the obvious shape has exactly that hole (the `Stream.concat`
-of 7.2 does not: its tail is a cursor-driven read from an anchor captured
-before the replay, not a signal armed after it). A `SubscriptionRef`
-replays its current value on subscribe, so the loop reads "read forward,
-then wait for a level above the one I read at" and no ordering of subscribe
-and read can lose a commit. That is why this process's half is a counter
-rather than a `PubSub` - and why it holds the **commit ordinal**
-`durable.appendAll` returns rather than a private tally: it is compared
-against the commit ordinals of the rows the drain has delivered, and a tally
-in another number space would either run ahead, filtering real levels as
-stale, or start behind an existing database and filter every local wake
-until it caught up. One coordinate, again (5.2).
+The wake is a **replaying process-local counter**, distinct from every
+persisted ordinal (C7). The database owns `DurableWrite.wakeLevel`, a
+`SubscriptionRef<number>` advanced in the uninterruptible post-commit path
+of every successful local write transaction. This includes retention that
+deletes already-closed rows without inserting an event; `data_version`
+does not detect a commit on its own connection. Publication alone therefore
+cannot own this signal.
 
-The cross-process wake is **not a level** and is never compared against
-that coordinate. `PRAGMA data_version` (contract C7) is connection-local: it
-moves when another connection commits, does not move for this connection's
-own commits, and resets on reconnect, so its value means nothing in the
-`commit` number space. It is a trigger: the poll keeps its previous sample,
-and a change means only "read forward from where you are", after which
-`all(cursor)` (or the open `aggregate` reads) pick up whatever the other
-process committed. Merging it into the level filter - as an earlier
-revision of this block did with a `durable.commits` counter - is exactly
-the mistake the trigger reading avoids: once a cursor is past the small
-connection-local value every later change is filtered as stale and the
-reader goes silent for the life of the connection. There is one poll per
-database, forked once in the layer, and it fans out through one
-`SubscriptionRef` counter to every drain; a drain never polls on its own,
-so a session with several subscribed aggregates costs one `PRAGMA` per
-interval, not one per read. The counter replays on subscribe, so a drain's
-first wake is a forward read and a foreign commit between the subscribe and
-that read still shows, and a wake that finds no new rows costs one indexed
-read per drain.
+One poll per database compares `PRAGMA data_version` with its previous
+sample and advances the same wake on a foreign change. Neither the PRAGMA
+value nor the wake version is compared with `SessionCursor`. Each wake makes
+`all` read forward and wakes `SessionInputs` to read its finite prefix and
+check existence, even if no new row remains. A new subscriber receives the
+current level immediately, so a commit between replay and subscription is
+not missed. Wake versions may be coalesced only against other wake versions;
+the next read still covers all changes visible in its transaction.
 
-Being a level also means a subscriber need not see every value. The drain
-reads forward to exhaustion and then waits for a level **above the one it
-read at**, so a burst of commits during a read collapses into one further
-drain rather than one indexed empty read per queued wake - which is the
-behaviour a `PubSub` could not have given, since every edge would have had
-to be delivered.
-
-Decision 6 is **resolved by contract C7** (2026-09-04): the cross-process
-wake is the `data_version` poll above, a trigger followed by `all(cursor)`,
-and the only level is the `AUTOINCREMENT` `commit` column (C1), which never
-decreases or reuses a value. The earlier argument is kept for what it rules
-out. The alternative was a **monotone commit counter** exposed by the store
-and merged with the local level. Anything merged into that filter may not
-over-report - reporting 100 while the table is at 50 advances the shared
-`n > seen` filter past ordinals 51-100, and no wake ever arrives for them -
-and may not go backwards or reuse a value: a WAL frame count is reset by a
-checkpoint, `MAX(rowid)` falls when retention deletes the highest row and,
-without `AUTOINCREMENT`, reuses the value afterwards, and `data_version`
-itself is connection-local and resets. Every candidate for a second level
-failed one of those tests, which is why there is no second level: a level
-that can go backwards is worse than a poll, because it looks reliable, so
-the foreign signal is a trigger the level filter never sees. Without a
-foreign wake at all a process that only reads goes stale whenever another
-process owns the run, since a seq gap is only visible once a _later_ row for
-the same stream arrives locally.
+Decision 6 is resolved by C7: database `commit` is the durable row order;
+the transient counter says only to read again. It may advance when the row
+cursor does not, and deletion then travels in `Drained.existence`. Neither
+WAL frame counts, `MAX(rowid)`, nor connection-local PRAGMA values are used
+as durable cursors.
 
 The durable write is in the publish path, under the same permit as seq
-assignment and the wake, so seq order and insert order cannot diverge and
-no subscriber persists anything. The permit section is
+assignment, so seq order and insert order cannot diverge and no subscriber
+persists anything. The database's post-commit wake covers publication and
+retention alike. The permit section is
 `Effect.uninterruptible`, so neither an interrupt nor a failure can land
 between the append and the wake: the append either fails before anything is
-visible, or it commits and the wake fires. The hub is unbounded because
-bounded parks the publisher behind the slowest subscriber, which would
-stall the durable write path; with a payload-free wake there is nothing to
-lose by coalescing anyway. Backpressure lives at each transport framer
+visible, or it commits and the wake advances. The wake carries no payload
+and never waits for a renderer. Backpressure lives at each transport framer
 (7.4).
 
 `SessionCursor` is one number - the session commit ordinal the tail has
-drained (5.2; in a webview, the `cursor` the last frame carried, 8.1) - and
+drained (5.2; the cursor of the last applied `Drained` input, 8.1) - and
 it is a field of the view (`cursor`). Both properties matter. A single
 ordinal is what makes `all` a globally ordered scan of the listing tier
 rather than a per-aggregate merge, and being a field rather than a projection of `view.streams`
@@ -1218,9 +1186,9 @@ wake would re-read from the start, resurrecting the stream and its approvals
 in the intermediate states the fold publishes, forever. An ordinal
 never regresses because it is not a function of what is visible.
 
-That ordinal is also the local level of 7.1: a wake says "this process's
-last commit is N", the reader asks for everything above its own position,
-and a foreign trigger asks the same question without naming a number.
+That ordinal is independent of the wake level of 7.1. A wake asks the
+reader to check the database again; only completing a read advances its
+position.
 `all(view.cursor)` is the resubscribe; the transcript tier resubscribes per
 aggregate from its own `fromSeq`, that aggregate's entry in `view.folded`
 (8.1).
@@ -1232,7 +1200,7 @@ every stream's transcript is #9952 again. The second breaks the frozen
 NDJSON projection (10.3), which needs every event, transcript rows of
 unsubscribed aggregates included, or `stage.start` lines go missing and
 same-type updates collapse before a drain. The read path is therefore the
-three methods in the block above (contract C7): `listing()` is the cold
+three event reads in the block above, a subset of contract C7: `listing()` is the cold
 listing hydrate, the latest-of-type row per aggregate for the listing fact
 types plus the outstanding-approval set, one indexed query that completes,
 returns its rows in commit order, and never returns a transcript row; `all(fromCommit)` is every event above
@@ -1249,7 +1217,7 @@ anchor. The ordered input reader (7.2) completes replay before starting
 those reads, with their overlap absorbed by the fold's duplicate rule (5.2).
 The listing facts (status, parent, removal, inquiry) come from `listing()`
 and then the `all` tail, so a subscriber always holds both tiers. The
-precise shape of the key, the ordinal, the cursor, and the three
+precise shape of the key, the ordinal, the cursor, and the database
 reads is the jointly owned contract with the substrate proposal
 (`2026-09-03-persistence-substrate-decision.md`, section 6.1), and this
 document references that section rather than restating it; where the two
@@ -1266,7 +1234,8 @@ the same log with transient source levels in causal order (7.2). A webview
 supplies `SessionInputs` through `SessionFrames`, with no database or
 publisher. The decoder retains one ordered queue of `EventsFrame`s for the
 current generation and releases each replay only after `replayComplete`.
-It preserves event-before-text order; splitting frame fields into separate
+A finite live read is likewise released only when its final frame supplies
+`Drained` and existence reconciliation (8.1). It preserves event-before-text order; splitting frame fields into separate
 consumers would lose that guarantee. A frame from another generation is
 discarded before decoding its inputs (8.1). The `host` field is separate
 from the fold: the decoder publishes it into a `HostState` service, a
@@ -1319,9 +1288,15 @@ yield *
   );
 ```
 
-Each read first collects the listing, the subscription set, the named
-aggregate histories in sequence, and the current local snapshot. It releases
-these inputs together with `replay.complete` as one batch. This applies to
+Each read first captures its tail anchor and current local snapshot, then
+collects the listing, the subscription set, and the named aggregate histories
+in sequence. In that same database read transaction it expands the checked
+scope with all identities and typed edges introduced by those reads and calls
+`aggregateState(expandedScope)`. It releases the replay inputs, captured local
+snapshot, and `ReplayComplete` carrying this reconciliation as one batch.
+That marker applies current claims and removals without moving the tail
+cursor: the forward read still starts at the pre-replay anchor (7.4), so a
+later claim sample or history row cannot skip intervening events. This applies to
 **every** subscription change. An incomplete or superseded replay does not
 reach the fold and cannot mutate the published view's shared indexes. Merely
 suppressing publication until the first marker is insufficient: later replays
@@ -1333,26 +1308,53 @@ The subscription set governs transcript residency; leaving the set releases
 that aggregate's transcript and in-flight text. Histories resume from the seq
 retained in `view.folded`, independently of the session's commit cursor.
 
-After replay, the runtime input reader treats changes in the event ordinal,
-local snapshot, and text map as wakeups. For each read it captures the text and
-local levels, then the log's committed ordinal, and reads the finite durable
-prefix through that ordinal. It emits those events in order before deriving
-text suffixes from the captured text level. A fresh read has sent no text, so
-its first chunk for every row begins at zero. Capturing text before the ordinal
-is essential: the ordinal must cover every existence event that preceded that
-text. Independent event and text streams merged at the consumer do not provide
-this ordering.
+After replay, the runtime input reader treats the database wake level,
+local snapshot, and text map as wakeups. It captures the text and local
+levels first, then opens one SQLite read transaction, captures the committed
+ordinal, and reads `all(cursor, bound)`. Before closing that transaction it
+expands the captured scope with every identity and typed edge introduced by
+these listing/lifecycle/inquiry rows, then reads C7's
+`aggregateState(expandedScope)`. Newly delivered aggregates therefore receive
+current claims in the same batch. The bound is the committed AUTOINCREMENT
+high-water value, never the maximum surviving event row; retention cannot
+make it regress. It orders those events before
+text suffixes derived from the captured text level. A fresh reader has sent
+no text, so its first chunk for every row begins at zero. Capturing text
+before the ordinal is essential: the bound must cover every existence event
+that preceded that text. Independent event and text streams merged at the
+consumer do not provide this ordering.
 
-The same reader serves the runtime fold and each transport framer. Each tail
-event is published individually in the runtime; transport frames may group
-adjacent inputs over their existing 16 ms window. The transient `drained`
-input advances the cursor through the completed finite read, including rows
-that could no longer be materialized. It carries an existing commit ordinal;
-it is neither a durable event nor another sequence counter.
+The checked scope belongs to this reader: ids from its completed listing,
+ids and stream/execution/inquiry/workflow-checkpoint edges introduced by
+delivered live-tail facts, and its requested transcript aggregates. It retains them until it has
+delivered their removal. Each transport subscription has its own scope;
+it never borrows the database-owning fold's current ids, which may already
+omit a stream the renderer still holds. No absence is inferred for an id
+outside this expanded checked scope. The `run.start.checkpointId` edge
+includes its qualified checkpoint key for claim checks; journal payloads
+remain on-demand runtime/resume reads, not automatic transcript subscriptions.
+
+The same reader serves the runtime fold and each transport framer. Each
+finite read is one ordered batch: durable prefix, captured text/local
+inputs, and finally `Drained` containing the transaction's bound and its
+existence result with a current claim for every surviving checked key.
+Applying that complete batch removes missing aggregates, replaces the
+checked claims after the captured liveness sample, and advances the cursor
+in the same immutable view update. Missing liveness for a newly read owner
+is unprovable; only explicit proven death permits reclaiming its claim. An empty event
+prefix can still carry changed text/local inputs or missing aggregates;
+an absence or claim-only batch must be delivered even when the cursor is
+unchanged. Claim releases clear the corresponding map entries to null even
+while the former owner process remains alive.
+The bound is the existing commit ordinal, including rows no longer
+materializable, not a new sequence counter. Transport may split a batch over
+16 ms frames, but preserves its final `Drained` boundary (7.4, 8.1).
 
 A webview keeps one input queue for the current subscription generation.
 Frames retain event-before-text order, and replay is collected through its
-completion marker before reaching the same fold. It does not demultiplex
+completion marker before reaching the same fold. Live inputs are collected
+through `Drained` in the same way. Incomplete or superseded inputs never
+mutate the published view or advance its saved cursor. It does not demultiplex
 listing, history, tail, and text into independently scheduled consumers, and
 it does not rebuild a second accumulated text map. Host snapshots remain
 separate from session state and cannot make an incomplete replay authoritative.
@@ -1423,29 +1425,39 @@ scheduler drains many fibers' continuations in one turn, so that state
 bleeds across fibers. Roots come from context; the async-local path stays
 in the Promise tier only.
 
+The WAL database and its side files reside on one host's local filesystem.
+Several processes on that host may open it; another machine uses the
+owning runtime's transport and never opens the database through a shared
+network mount. The database layer rejects unsupported shared-filesystem
+storage before opening it, as required by substrate C1. Cross-host owner
+records remain conservative evidence during import; hostname checks do not
+make cross-host WAL access supported.
+
 ### 7.4 Transport framing
 
-**Redaction is the framer's contract obligation (C3, 2026-09-04).** Trace
-rows on the stream aggregate, error payloads, and approval payloads are
-secret-scrubbed at publish time before the row is written. The flow rows on
-the execution aggregate (`2026-09-04-agent-runtime-on-effect.md` section
-2.1 owns the list; the six names of 5.1: `model.message`,
-`model.compaction`, `tool.intent`, `tool.result`, `flow.step`,
-`flow.snapshot`) are
-byte-exact and never scrubbed, because Anthropic signature verification and
-a resumed context need the original bytes. Therefore every framer that
-feeds a renderer process (webview, Electron renderer) and every export
-applies display redaction and truncation, and no webview or export ever
-receives a byte-exact flow payload; only the in-process hub is trusted.
-Until the display fold reads `model.message` directly, message text is
-durable twice (the redacted trace row and the flow row); that collapse
-deletes the trace copy and moves redaction to fold time.
+**Display redaction precedes every view-state update (C3).** Trace rows,
+`flow.step`, error payloads, and approval payloads on the stream aggregate
+are secret-scrubbed before persistence. The five execution-aggregate flow rows
+(`model.message`, `model.compaction`, `tool.intent`, `tool.result`,
+`flow.snapshot`) retain their provider content without redaction, as specified
+by the runtime proposal §2.1. Raw access belongs to `RunLedger`. The shared
+display fold redacts before exposing state, including the CLI's direct
+`SessionViewService.ref` consumer; trusting an in-process reader is not a
+redaction boundary. Every transport and export applies the same display
+redaction and truncation, so a remote fold never receives raw provider
+content. `flow.step` is a scrubbed stream row, not one of those five rows.
+Until the display fold reads `model.message` directly, message text remains
+in the redacted trace copy too; the fold collapse deletes that copy without
+changing the display redaction requirement.
 
 Down, per subscriber: the reads its `Subscribe` names, from the ordered
 input reader (7.2), so the webview's fold consumes them in sequence. Every
 `Subscribe` is answered the same way: `listing()`, then `aggregate(id,
 fromSeq)` per named aggregate in turn, then a frame carrying
-`replayComplete` and the current `local` snapshot, then `all`. A cold mount
+`replayComplete`, the captured `local` snapshot, and the replay transaction's
+`existence` reconciliation, then `all`. The decoder applies this reconciliation
+through `ReplayComplete` without advancing the tail cursor; only a complete
+finite forward read supplies `Drained`. A cold mount
 (cursor 0) reads each history from 0 and takes its tail from the runtime's
 own `view.cursor` captured before those reads; a resubscribe - any
 `Subscribe` whose cursor is not the framer's current position - reads its
@@ -1458,18 +1470,32 @@ committed after it is delivered by the tail and deduplicated by the fold
 (5.2). Each row is tagged with its read, and transcript rows of aggregates
 the subscriber has not named are left out (the fold would drop them; not
 framing them keeps the bridge to the listing tier plus the subscribed
-transcripts). Two fields on every frame cover what the rows alone cannot
-say (8.1). `cursor` is the commit ordinal the framer had drained when it
-cut the frame, so the subscriber's `view.cursor` moves past the rows left
-out and a reload or resubscribe never rescans them. `generation` echoes
+transcripts). Frame metadata covers what the rows alone cannot say (8.1).
+The final frame's `cursor` supplies the completed read bound for `Drained`,
+so the view moves past filtered or collected rows only when the whole batch
+has been applied. `generation` echoes
 the `Subscribe` that started the frame: the surface chooses it, monotone
 per view instance, and the decoder discards a frame whose generation is
 not the surface's current one, so a superseded replay still in flight
-cannot complete the new replay or publish its partial histories. Then
+cannot complete the new replay or publish its partial histories.
+
+A finite live read's final frame carries non-null `existence`; earlier frames
+carry null. The decoder buffers the current generation's inputs until that
+marker, constructs `Drained` from its `cursor` and `existence`, and releases
+one `SessionInputs` batch with events before text/local inputs and `Drained`
+last. A missing-aggregate result therefore reaches remote folds even if its
+tombstone was deleted before either process read it. An absence-only frame
+has empty events and may have an unchanged cursor; it is never filtered by
+`cursor > previousCursor`. Generation checks precede all fields, and a
+superseding subscription discards old buffered inputs. Reconnect uses the
+last applied cursor, never a partial frame's bound.
+
+Framing flushes at each finite-read boundary. It may split one batch, but
+never combines two reads under one `existence` marker. Then
 `Stream.groupedWithin(n, "16
 millis")` then `Stream.buffer({ capacity, strategy: 'suspend' })` for
 durable events, which must not drop; suspension parks the framer, never the
-publisher, because the hub is unbounded. Text chunks are append deltas, not
+publisher, because the table remains the durable source and wakes carry no payload. Text chunks are append deltas, not
 snapshots, so a slid or dropped chunk is lost text that no replay recovers.
 They need neither strategy: the offsets make coalescing lossless, because
 two adjacent chunks for a row merge into one exactly (5.2). The framer
@@ -1539,6 +1565,12 @@ type RequestError = NotOwner | Unavailable | Rejected | Invalid | Internal;
 // Effect.fn('SessionRequests.request')
 request: (req: RuntimeRequest) => Effect.Effect<Outcome, RequestError>;
 ```
+
+`stream.delete` has the explicit user-deletion exception defined in C5/C9:
+it may close a run held by an unprovable owner after the user's confirmation,
+using the current claim check and atomic closure, but never a known-alive
+owner. This exception grants deletion only. `stream.deleteAll` and automatic
+maintenance do not inherit it.
 
 The interaction scope (`executionInteractionOwnership.ts:36-56`, already
 "its own owner token") becomes a resource acquired with
@@ -1614,7 +1646,7 @@ the same functions in process.
 ### 8.1 Down: `events`
 
 ```ts
-EventsFrame = { session: SessionKey, generation: number, cursor: SessionCursor, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, host: HostSnapshot | null, replayComplete: boolean }  // generation echoes the Subscribe; cursor is the commit the framer had drained when it cut the frame; replayComplete is true on the frame that ends the reads this Subscribe started (7.4)
+EventsFrame = { session: SessionKey, generation: number, cursor: SessionCursor, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, host: HostSnapshot | null, existence: ExistenceReconciliation | null, replayComplete: boolean }  // generation echoes the Subscribe; cursor is the commit the framer had drained when it cut the frame; replayComplete is true on the frame that ends the reads this Subscribe started (7.4)
 Subscribe   = { session: SessionKey, generation: number, cursor: SessionCursor, aggregates: { id: AggregateId, fromSeq: Seq }[] }  // generation chosen by the surface, monotone per view instance; listing tier for every stream; transcript tier for the named aggregates; each fromSeq is view.folded[id], 0 when the view has no entry, never the cursor
 ```
 
@@ -1650,9 +1682,28 @@ changed its transcript selection while the previous replay still had
 frames in flight could mistake the old replay's `replayComplete` for the
 new replay's completion and publish before the new histories arrived.
 `cursor` on a frame is the commit ordinal the framer had drained
-when it cut the frame (7.4); the webview fold sets `view.cursor` from it,
-which is how the cursor moves past tail rows the framer left out for
-aggregates the subscriber did not name (5.2).
+when it cut the frame (7.4). The decoder uses it only when the final frame
+of the finite live read carries `existence`, to construct its `Drained` input.
+A `replayComplete` frame supplies its reconciliation to `ReplayComplete`
+instead and does not advance that cursor.
+The shared fold applies that cursor with the complete batch, never on
+receipt of a partial frame (5.2).
+
+`existence` contains `checkedAggregateIds`, `removedAggregateIds`, and
+`claims` for every surviving checked key, including explicit null releases.
+Its schema requires removed ids and current claim ids to partition the
+checked scope, with no duplicate keys. All keys are kind-qualified (5.1). It is non-null
+on the final frame of each finite live read, even if no event or new ordinal
+survives. The decoder preserves one input queue, emits its events before
+text/local inputs, appends `{ _tag: 'drained', cursor, existence }`, and
+releases that complete batch. Earlier listing/history frames carry null; the final `replayComplete` frame
+carries its replay transaction's reconciliation and releases a complete
+replay ending in `ReplayComplete`, which retains the pre-replay tail anchor. Each reader's scope includes listing ids,
+ids and stream/execution/inquiry/workflow-checkpoint edges from delivered
+live-tail facts, and
+requested transcript ids until removal is delivered (7.2). Old generations
+are discarded before buffering or applying absence. An unchanged-cursor
+frame still carries inputs; cursor comparison cannot discard it.
 
 Two shapes on this channel, not three: a resync is a `Subscribe` whose
 cursor is not the framer's current position; its frames start with
@@ -1662,7 +1713,8 @@ with `from: 0` chunks for the streaming rows (5.2, 7.4), so there is no
 `Resync` shape, no replacement fold arm, and no repair path for a tombstone
 retention removed while the surface was away. Every event carries
 its aggregate id, its `seq`, and its session `commit` ordinal (the aggregate
-being a stream id, an execution id, or the session aggregate, 5.1), and
+being a kind-qualified stream, execution, inquiry, workflow-checkpoint, or
+session key, 5.1), and
 every chunk carries its stream and
 its `from`/`to`, so a frame needs no per-stream range. Within one read the
 rows of a frame are in that read's order (commit order for `all`, seq order
@@ -1681,16 +1733,21 @@ and a webview has no database to ask, so this is how it knows when the
 listing and every named history are complete (7.2). Every subscription
 change follows this rule: incomplete inputs remain outside the fold, and
 the retained view remains authoritative until the next complete replay.
-After replay, each live frame publishes. It is a marker rather than an ordinal
+After replay, each complete finite-read batch publishes; partial frames
+remain outside the fold. It is a marker rather than an ordinal
 because retention can prune rows above the last surviving one, leaving an
 ordinal the subscriber would never reach. `streamId` stays a payload field
 on the facts that have one; an unparented `inquiryThreadUpdated` rides its
 thread aggregate (C2, 5.1), which is why no sentinel stream id exists.
 
-The two nullable fields are host-owned transient snapshots, sent on every
-change and on every subscribe, and they are the only two. `local` is this
-process's runtime snapshot - live owner ids and unreadable streams (5.2);
-a surface that has never received one folds with `local` empty. `host` is
+The `local` and `host` fields are host-owned transient snapshots, sent on
+every change and on every subscribe. `existence` instead belongs to the
+database read and accompanies its replay or finite-live completion boundary. `local` is this
+process's runtime snapshot - explicit owner-liveness verdicts and unreadable
+streams (5.2); current claims arrive separately in `Drained.existence`, so a
+captured local sample cannot overwrite a newer database claim. A missing
+owner verdict is unprovable. A surface that has never received a local
+snapshot folds with `local` empty, retaining that conservative verdict. `host` is
 everything the shell renders but does not own: the launcher's option lists
 (models, agents, teams, workspace roots), the document and Git catalogs the
 file-select group and the LaTeXDiff controls need (file lists, the current
@@ -1744,6 +1801,14 @@ more is needed: a `StreamTabId` names one run for its whole life (decision
 only miss, never land on a different run. Earlier drafts carried a
 `{ streamId, executionId }` target on every arm for exactly that race;
 fixing the id retired it.
+
+Ordinary run deletion also removes generated files within that run's
+execution directory, preserving today's `deleteExecution.clear` behavior.
+The runtime closes the aggregate first, keeps durable deletion evidence
+while file cleanup runs or retries, and permits final database collection
+only after cleanup succeeds (C9). It never sweeps other execution directories
+or accepted/copied files in the workspace. The separate debug Delete output
+action remains a file operation; it does not delete the run or its history.
 
 - stream: `stream.stop`, `stream.delete`, `stream.compact`,
   `stream.resume`, `stream.runNew`, `stream.restoreState`, each naming a
@@ -2708,7 +2773,7 @@ As tests:
 | Reconnect loses in-flight text                                                             | Chunks carry `from`/`to`, so adjacent ones coalesce losslessly and text never drops; a reconnect is answered with a `from: 0` chunk per in-flight row                                                        |
 | A late chunk mutates settled text                                                          | Durable text wins: a chunk for a row whose finalizing event has folded is discarded, so the merge order of the three arms cannot change the result (5.2)                                                     |
 | A webview folds another paper's events                                                     | `SessionFrames` is per session; the port is demultiplexed once at decode, so the key is not a runtime value below it (7.1)                                                                                   |
-| Owner liveness stale in a webview                                                          | Snapshot on every change and every subscribe; an empty snapshot folds to interrupted, the safe direction                                                                                                     |
+| Owner liveness stale in a webview                                                          | Snapshot on every change and every subscribe; a missing verdict or different-host owner is unprovable and held; only explicit proven death permits takeover                                                  |
 | Replay-then-tail gap                                                                       | The tail anchor is captured before the cold reads and the tail follows them by `Stream.concat`, so a commit landing during the replay is delivered by the tail and absorbed by the duplicate rule (7.1, 7.2) |
 | Another process commits an event this one never sees (the hub is process-local)            | A poll of `PRAGMA data_version` joins the local level as a trigger, never a level; both only say the table moved, and every subscriber reads forward from its own position (7.1, contract C7)                |
 | Two event sources interleave out of order                                                  | There is one source: the table. The wakes carry no payload, so nothing can arrive ahead of the read they trigger (7.1)                                                                                       |
@@ -2737,22 +2802,14 @@ As tests:
    the canonical set cannot express is dropped by the importer with a
    `warn`. The exported-trace reader (`TraceStreamLogEntrySchema`) is a
    permanent boundary and is unchanged.
-6. **Resolved by contract C7 (2026-09-04):** the cross-process wake is a
-   poll of `PRAGMA data_version` followed by `all(cursor)` - a trigger only,
-   never a level, because the pragma is connection-local, does not move for
-   the connection's own commits, and resets on reconnect - and the only
-   ordinal is the `AUTOINCREMENT` `commit` column. The earlier text, kept
-   for the record: the durable store
-   exposes `commits`, **the session's actual commit ordinal**, readable at
-   any time (7.1). Not an independent generation: 7.1 merges it with this
-   process's own level and compares once, so a source reporting 100 while
-   the table is at 50 suppresses real ordinals 51-100 and leaves
-   cross-process readers stale. The ordinal must **never decrease and never
-   reuse a value** - a persisted generation or a non-reusing sequence, not a
-   WAL frame count (a checkpoint resets it) and not `MAX(rowid)` (retention
-   lowers it, and without `AUTOINCREMENT` the value is reused). A store that
-   can offer neither wakes unconditionally on a timer instead. Without it a process that only reads
-   goes stale whenever another process owns the run.
+6. **Resolved by contract C7:** the database owns a transient replaying wake
+   counter. Every local write commit, including retention without a new
+   event, advances it; one `PRAGMA data_version` poll per database advances
+   it on foreign changes. Wake versions are never compared with the durable
+   cursor. `SessionInputs` reads a bounded prefix and existence in one read
+   transaction and completes its ordered batch with `Drained`. NDJSON reads
+   only event rows through `all`. The `AUTOINCREMENT` `commit` column remains
+   the sole durable ordinal and never decreases or reuses a value.
 7. `WorkspaceProvider` leaves `platform()` rather than being re-pointed at
    a session (section 11). It has one implementation and its body is two
    pure functions of the root, so the port is the process-global, not a
@@ -2768,7 +2825,7 @@ As tests:
    `SessionState.ts:487-501`), so an id names a name, and every reference to
    one is ambiguous until it is paired with an `executionId`. Successive
    review rounds found that single ambiguity in **thirteen** places: the
-   tombstone, the `parent` link, `setParentStream`, `run.activate`, every
+   tombstone, the `parent` link, parent routing, `run.activate`, every
    stream-scoped request, the misc request arms, conversation drafts, queued
    follow-ups, in-flight text, the dictation destination, and the unreadable
    holds. Each was found separately, each was individually correct, and none
@@ -2797,10 +2854,15 @@ As tests:
    key: a relaunch while the prior run is in flight shares that id, so the
    fresh-lease acquisition fails closed rather than starting a second run
    over one journal (`WorkflowScriptTool.ts:465-477`). Fresh ids would
-   remove that guard, so a workflow launch takes a lease on its
-   `checkpointId` as well as its execution - the journal is the shared
-   resource, so the exclusion belongs on the journal's identity, not on a
-   run id that happened to be derived from it. Same correction as the resume
+   remove that guard, so a workflow launch/resume atomically claims
+   `aggregateId('workflow-checkpoint', checkpointId)` together with its
+   stream and execution aggregates before any journal or run mutation (C5).
+   The journal lives on that independent checkpoint aggregate, so both
+   exclusion and replay use its stable identity. Deleting an execution
+   leaves the checkpoint intact while any retained run still refers to it.
+   Explicit deletion of the last referring run may collect the checkpoint
+   under C9 only after acquiring its reclaimable claim and rechecking the
+   absence of references in the final deletion transaction. Same correction as the resume
    anchor, applied to exclusion. Reusing the execution id instead - what an
    earlier draft of this decision proposed - is not merely redundant but
    unsafe: two live rows would share one execution id, and deletion resolves
@@ -2904,14 +2966,14 @@ src/shared/signals.ts                    + toSignal(runtime, changes, initial)
 src/shared/copy/streamStatus.ts          one status label table with tone; one terminal-state vocabulary
 src/shared/session/sessionEvents.ts          Context.Service for the runtime event plane; three reads listing(), all(fromCommit), aggregate(id, fromSeq), the first and last completing; raw NDJSON consumers keep the event stream
 src/shared/session/sessionInputs.ts          Context.Service for ordered fold-input batches; read(aggregates, cursor), shared by runtime and webview
-src/controllers/session/sessionInputs.ts     Runtime ordered reader; complete replay batches, then finite durable prefixes before their text suffixes; source levels are wakeups only
+src/controllers/session/sessionInputs.ts     Runtime ordered reader; complete replay batches, then finite durable prefixes before text/local inputs and Drained with existence; each complete batch publishes atomically; source levels are wakeups only
 src/controllers/session/sessionSources.ts    LocalRuntimeSource and TextChunkSource levels; TranscriptSubscriptions (a SubscriptionRef of { id, fromSeq }[]), the runtime union of sets per transport port and the webview set provided by the shell
 src/shared/session/sessionFrames.ts          Per-session decoder; one frame queue for the current generation, complete replay batches, preserved event-before-text order, host snapshots outside the fold
 src/controllers/session/SessionView.ts        Context.Service; ref + changes; the shared fold applies SessionInputs batches, switching readers on subscription changes and resuming histories from retained seqs; fold fiber forkScoped
 src/controllers/session/WorkspaceRoots.ts    Context.Service; Layer.succeed per session
 src/controllers/session/SessionRequests.ts   request(): Effect<Outcome, RequestError>; ownership scope
 src/controllers/session/sessionLayer.ts      per-session graph; LayerMap keyed by root
-src/agent/runtime/SessionEventHub.ts         rewritten as the durable publisher + commit level (7.1)
+src/agent/runtime/SessionEventHub.ts         rewritten as the durable publisher + transient wake level (7.1)
 <host entry per process>                     ManagedRuntime.make(processLayer); the only run* sites
 src/test-kernel/controllers/session/*.vitest.ts     it.effect + TestClock
 src/test-kernel/shared/session/sessionFold.vitest.ts plain vitest, pure

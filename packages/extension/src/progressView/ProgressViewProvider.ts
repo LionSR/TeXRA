@@ -389,11 +389,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /** A run loaded an agent from the custom directory. */
   public showAgentConfigBanner(agentName: string): void {
-    this.snapshot.setAgentConfigBanner({
-      visible: true,
-      agentName,
-      customDirSet: true,
-    });
+    this.snapshot.showAgentConfigBanner(agentName);
   }
 
   /**

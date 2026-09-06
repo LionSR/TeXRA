@@ -31,8 +31,11 @@ import type {
   SessionView,
   StreamView,
 } from '@shared/session/sessionView';
-import type { RequestErrorWire } from '@shared/session/sessionFrames';
-import { resolvePhase, type Surface } from '@shared/session/surface';
+import {
+  resolvePhase,
+  type Surface,
+  type SurfaceRefusal,
+} from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { formatWorkflowTally } from '@shared/copy/workflowCall';
 import {
@@ -655,7 +658,7 @@ export class WorkflowRunBoard extends LitElement {
   /** The runtime's refusal of a request this surface made, in the runtime's
    *  words; the next request on that stream clears it (`Surface.rejected`).
    *  Kill answers on the run's stream, skip and retry on the call's. */
-  private renderRejection(error: RequestErrorWire): TemplateResult {
+  private renderRejection(error: SurfaceRefusal): TemplateResult {
     switch (error._tag) {
       case 'NotOwner':
         return html`Another process holds this run.`;
