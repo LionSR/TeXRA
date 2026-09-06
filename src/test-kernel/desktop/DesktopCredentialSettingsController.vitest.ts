@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -25,14 +26,16 @@ const codexMocks = vi.hoisted(() => ({
     preferSubscription: false,
   })),
   login: vi.fn(
-    async (_options: { openBrowser(url: string): void | Promise<void> }) => ({
-      email: 'user@example.com',
-    }),
+    (_options: {
+      openBrowser(url: string): void | Promise<void>;
+    }): Effect.Effect<{ email: string }, unknown> =>
+      Effect.succeed({ email: 'user@example.com' }),
   ),
   loginWithDeviceCode: vi.fn(
-    async (_options: {
+    (_options: {
       onPrompt(prompt: SubscriptionDeviceCodePrompt): void;
-    }) => ({ email: 'user@example.com' }),
+    }): Effect.Effect<{ email: string }, unknown> =>
+      Effect.succeed({ email: 'user@example.com' }),
   ),
   setPreferSubscription: vi.fn(async (enabled: boolean) => ({
     effective: enabled,
@@ -194,10 +197,12 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       signedIn: false,
       preferSubscription: false,
     });
-    codexMocks.login.mockResolvedValue({ email: 'user@example.com' });
-    codexMocks.loginWithDeviceCode.mockResolvedValue({
-      email: 'user@example.com',
-    });
+    codexMocks.login.mockReturnValue(
+      Effect.succeed({ email: 'user@example.com' }),
+    );
+    codexMocks.loginWithDeviceCode.mockReturnValue(
+      Effect.succeed({ email: 'user@example.com' }),
+    );
     codexMocks.setPreferSubscription.mockImplementation(async (enabled) => ({
       effective: enabled,
     }));
@@ -440,7 +445,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(codexMocks.signOut).toHaveBeenCalledOnce();
     expect(fixture.infos).toContain('Signed out of ChatGPT.');
 
-    codexMocks.login.mockRejectedValueOnce(new Error('authorization denied'));
+    codexMocks.login.mockReturnValueOnce(
+      Effect.fail(new Error('authorization denied')),
+    );
     await fixture.controller.signInChatGpt();
 
     expect(fixture.errors).toEqual([
@@ -466,18 +473,23 @@ describe('DefaultDesktopCredentialSettingsController', () => {
         presentSubscriptionDeviceCode,
       },
     });
-    codexMocks.login.mockImplementationOnce(async ({ openBrowser }) => {
-      await openBrowser('https://auth.openai.com/authorize');
-      return { email: 'loopback@example.com' };
-    });
-    codexMocks.loginWithDeviceCode.mockImplementationOnce(
-      async ({ onPrompt }) => {
+    codexMocks.login.mockImplementationOnce(({ openBrowser }) =>
+      Effect.tryPromise({
+        try: async () => {
+          await openBrowser('https://auth.openai.com/authorize');
+          return { email: 'loopback@example.com' };
+        },
+        catch: (error) => error,
+      }),
+    );
+    codexMocks.loginWithDeviceCode.mockImplementationOnce(({ onPrompt }) =>
+      Effect.sync(() => {
         onPrompt({
           userCode: 'ABCD-EFGH',
           verificationUrl: 'https://auth.openai.com/device',
         });
         return { email: 'device@example.com' };
-      },
+      }),
     );
 
     await fixture.controller.signInChatGpt();

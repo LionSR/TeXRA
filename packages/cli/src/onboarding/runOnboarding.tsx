@@ -36,6 +36,7 @@ import {
 } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   backfillFirstRunDone,
   readOnboardingFlags,
@@ -479,14 +480,16 @@ function ChatGptProgressStep(
 
   useCancellableEffect(async (isCancelled) => {
     try {
-      const account = await signInCliSubscription(
-        'chatgpt',
-        { device, noBrowser: false },
-        {
-          writeProgress: (next) => {
-            if (!isCancelled()) setMessage(next);
+      const account = await effectRuntime().runPromise(
+        signInCliSubscription(
+          'chatgpt',
+          { device, noBrowser: false },
+          {
+            writeProgress: (next) => {
+              if (!isCancelled()) setMessage(next);
+            },
           },
-        },
+        ),
       );
       const update =
         await subscriptionProvider('chatgpt').setPreferSubscription(true);
