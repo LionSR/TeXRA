@@ -105,6 +105,13 @@ function isBoundaryPath(file, toolExecuteFiles) {
 
 const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them. The debtLanes register is closed: it names the debt that already existed and shrinks as lanes land, and --update will not admit a file it does not already name`;
 
+/** Module specifiers that export the tool contract factory. */
+const TOOL_DEFINE_MODULES = new Set([
+  '@tools/core/define',
+  './core/define',
+  '../core/define',
+]);
+
 const ROW_PLATFORM = 'platform()';
 const ROW_SET_SERVICES = 'setServices()';
 const ROW_ABORT_CONTROLLER = 'new AbortController()';
@@ -159,50 +166,70 @@ const SEMANTICS =
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
+/** The import every real tool file carries, prefixed onto the cases below. */
+const IMPORT_DEFINE = "import { defineTool } from '@tools/core/define';\n";
+
 /** Sources whose `runsOnlyInExecute` the survey must report exactly. */
 const EXECUTE_CASES = [
   // The run sits inside `execute()` on the class that declares the tool
   // contract: this is boundary kind (b), and the only shape that is.
   [
-    'class T extends defineTool({ name: "t" }) { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    `${IMPORT_DEFINE}class T extends defineTool({ name: "t" }) { protected execute(i) { return rt().runPromise(this.run(i)); } }\n`,
     true,
   ],
   // The same method on a class that is not a tool: a helper's `execute` is
   // its own method, not the tool's run edge.
-  ['class H { execute(i) { return rt().runPromise(this.run(i)); } }\n', false],
-  // A tool class, but the run is elsewhere in the file.
   [
-    'class T extends defineTool({ name: "t" }) { execute() {} }\nrt().runPromise(program);\n',
+    `${IMPORT_DEFINE}class H { execute(i) { return rt().runPromise(this.run(i)); } }\n`,
     false,
   ],
-  // A class with an `execute()` method, but the run is elsewhere in the file.
-  ['class H { execute() {} }\nrt().runPromise(program);\n', false],
+  // A tool class, but the run is elsewhere in the file.
+  [
+    `${IMPORT_DEFINE}class T extends defineTool({ name: "t" }) { execute() {} }\nrt().runPromise(program);\n`,
+    false,
+  ],
   // An object literal's `execute` shorthand is not a tool edge.
-  ['const o = { execute() { return rt().runPromise(p); } };\n', false],
+  [
+    `${IMPORT_DEFINE}const o = { execute() { return rt().runPromise(p); } };\n`,
+    false,
+  ],
   // A free function named execute is not a tool edge.
-  ['function execute() { return rt().runPromise(p); }\n', false],
+  [
+    `${IMPORT_DEFINE}function execute() { return rt().runPromise(p); }\n`,
+    false,
+  ],
   // No run at all: nothing to admit.
   [
-    'class T extends defineTool({ name: "t" }) { execute(i) { return i; } }\n',
+    `${IMPORT_DEFINE}class T extends defineTool({ name: "t" }) { execute(i) { return i; } }\n`,
     false,
   ],
   // The two-step shape structuredOutput.ts uses: the base is bound to a name
   // first, so the heritage clause is an identifier, not a call.
   [
-    'const G = defineTool({ name: "t" });\nclass T extends G { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    `${IMPORT_DEFINE}const G = defineTool({ name: "t" });\nclass T extends G { protected execute(i) { return rt().runPromise(this.run(i)); } }\n`,
     true,
   ],
   // The same shape over a name that is not a tool base.
   [
-    'const G = makeThing();\nclass T extends G { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    `${IMPORT_DEFINE}const G = makeThing();\nclass T extends G { protected execute(i) { return rt().runPromise(this.run(i)); } }\n`,
     false,
   ],
   // A name bound twice, once to something else: not resolved lexically, so
-  // not trusted — the run counts as debt rather than silently gaining
-  // boundary status.
+  // not trusted — the run counts as debt rather than gaining boundary status.
   [
-    'const G = makeOtherBase();\nfunction f() { const G = defineTool({ name: "t" }); return G; }\nclass H extends G { execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    `${IMPORT_DEFINE}const G = makeOtherBase();\nfunction f() { const G = defineTool({ name: "t" }); return G; }\nclass H extends G { execute(i) { return rt().runPromise(this.run(i)); } }\n`,
     false,
+  ],
+  // `defineTool` declared locally rather than imported from the tool core: an
+  // unrelated function of the same name cannot present a helper as the tool.
+  [
+    'function defineTool(x) { return class {}; }\nclass H extends defineTool({ name: "t" }) { execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    false,
+  ],
+  // Imported under an alias: the binding is what counts, not the spelling.
+  [
+    `import { defineTool as make } from '@tools/core/define';\nclass T extends make({ name: "t" }) { protected execute(i) { return rt().runPromise(this.run(i)); } }\n`,
+    true,
   ],
 ];
 
@@ -434,7 +461,8 @@ function surveySource(text, fileName) {
       namespaces.has(callee.expression.text) &&
       callee.name.text === 'platform');
   const effect = effectBindings(sourceFile);
-  const generatedBases = generatedToolBases(sourceFile);
+  const toolFactory = definedToolFactory(sourceFile);
+  const generatedBases = generatedToolBases(sourceFile, toolFactory);
   const isEffectCombinator = (callee) =>
     ts.isPropertyAccessExpression(callee) &&
     ((ts.isIdentifier(callee.expression) &&
@@ -490,7 +518,7 @@ function surveySource(text, fileName) {
       // helper's own `execute` too, since a helper is not the tool. An
       // object literal's `execute` shorthand is the same AST node kind and
       // never sets the flag, because it is not a class member.
-      const isTool = extendsDefineTool(node, generatedBases);
+      const isTool = extendsDefineTool(node, generatedBases, toolFactory);
       ts.forEachChild(node, (child) =>
         visit(
           child,
@@ -521,9 +549,38 @@ function surveySource(text, fileName) {
  * builds its terminal tool that way, and a heritage clause that is a bare
  * identifier is otherwise indistinguishable from extending any other class.
  */
-function generatedToolBases(sourceFile) {
+/**
+ * The local name `defineTool` is bound to under an import from the tool core
+ * (`@tools/core/define`, or the relative forms of the same module). Matching
+ * the identifier text alone would let a file that declares its own unrelated
+ * `defineTool` present a helper class as the tool contract, which filters its
+ * runs out of the ratchet entirely -- the one direction this check must never
+ * be wrong in. Returns null when the file imports no such binding.
+ */
+function definedToolFactory(sourceFile) {
+  let local = null;
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !TOOL_DEFINE_MODULES.has(statement.moduleSpecifier.text)
+    ) {
+      continue;
+    }
+    const named = statement.importClause?.namedBindings;
+    if (named == null || !ts.isNamedImports(named)) continue;
+    for (const element of named.elements) {
+      const imported = (element.propertyName ?? element.name).text;
+      if (imported === 'defineTool') local = element.name.text;
+    }
+  }
+  return local;
+}
+
+function generatedToolBases(sourceFile, factory) {
   const fromDefineTool = new Set();
   const shadowed = new Set();
+  if (factory == null) return fromDefineTool;
   const visit = (node) => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
       const name = node.name.text;
@@ -532,7 +589,7 @@ function generatedToolBases(sourceFile) {
         init != null &&
         ts.isCallExpression(init) &&
         ts.isIdentifier(init.expression) &&
-        init.expression.text === 'defineTool';
+        init.expression.text === factory;
       // A name bound more than once in the file is not resolved lexically
       // here, so it is not trusted at all: if any binding of it is something
       // other than defineTool(...), the name stops counting as a tool base.
@@ -556,7 +613,8 @@ function generatedToolBases(sourceFile) {
  * makes "is this the tool class?" a question the AST can answer instead of a
  * guess from the name of a method.
  */
-function extendsDefineTool(node, generatedBases) {
+function extendsDefineTool(node, generatedBases, factory) {
+  if (factory == null) return false;
   return (node.heritageClauses ?? []).some(
     (clause) =>
       clause.token === ts.SyntaxKind.ExtendsKeyword &&
@@ -564,7 +622,7 @@ function extendsDefineTool(node, generatedBases) {
         (type) =>
           (ts.isCallExpression(type.expression) &&
             ts.isIdentifier(type.expression.expression) &&
-            type.expression.expression.text === 'defineTool') ||
+            type.expression.expression.text === factory) ||
           (ts.isIdentifier(type.expression) &&
             (generatedBases?.has(type.expression.text) ?? false)),
       ),
@@ -962,15 +1020,18 @@ function readCommittedCounts() {
     });
   }
   const committed = parsed?.rows ?? {};
+  const has = (row) =>
+    typeof committed[row] === 'object' && committed[row] !== null;
   return {
     rows: Object.fromEntries(
-      ROWS.map((row) => [
-        row.id,
-        typeof committed[row.id] === 'object' && committed[row.id] !== null
-          ? committed[row.id]
-          : {},
-      ]),
+      ROWS.map((row) => [row.id, has(row.id) ? committed[row.id] : {}]),
     ),
+    // Rows the committed baseline does not carry at all. A row the script has
+    // just gained has no ceiling to respect yet, so `--update` seeds it from
+    // the tree; without the distinction, "never add a file" would write it
+    // empty and then report every real entry as new, and the row could never
+    // be introduced at all.
+    unseeded: new Set(ROWS.map((row) => row.id).filter((id) => !has(id))),
     debtLanes:
       typeof parsed?.debtLanes === 'object' && parsed.debtLanes !== null
         ? parsed.debtLanes
@@ -1094,14 +1155,16 @@ function main() {
     const tightened = Object.fromEntries(
       ROWS.map((row) => [
         row.id,
-        Object.fromEntries(
-          Object.entries(rows[row.id])
-            .filter(([file]) => committed.rows[row.id]?.[file] != null)
-            .map(([file, count]) => [
-              file,
-              Math.min(committed.rows[row.id][file], count),
-            ]),
-        ),
+        committed.unseeded.has(row.id)
+          ? rows[row.id]
+          : Object.fromEntries(
+              Object.entries(rows[row.id])
+                .filter(([file]) => committed.rows[row.id]?.[file] != null)
+                .map(([file, count]) => [
+                  file,
+                  Math.min(committed.rows[row.id][file], count),
+                ]),
+            ),
       ]),
     );
     // The register is built from the SURVEY, not from `tightened`. The row
