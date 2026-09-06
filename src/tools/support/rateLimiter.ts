@@ -72,7 +72,10 @@ const rateLimitedRequest = Effect.fn('rateLimiter.rateLimitedApiCall')(
  * `failureMessage` (a `ToolError` the request throws itself passes through
  * unchanged). Cancelling the current tool call interrupts the slot wait and
  * abandons the in-flight request, and the caller gets an immediate
- * `ToolError` so a cancelled dispatch batch stops waiting.
+ * `ToolError('Cancelled <label>.')` so a cancelled dispatch batch stops
+ * waiting. Both phases raise that one message; the p-throttle version said
+ * `Cancelled before contacting the API.` for the slot wait, a string no
+ * caller matched on.
  */
 export async function rateLimitedApiCall<T>(
   apiName: string,
