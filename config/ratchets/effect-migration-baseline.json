@@ -194,7 +194,7 @@
       "packages/desktop/src/main/desktopWindowTitle.ts": 2,
       "packages/desktop/src/main/platform/electronSecrets.ts": 2,
       "packages/desktop/src/main/platform/index.ts": 2,
-      "packages/extension/src/extension.ts": 1,
+      "packages/extension/src/extension.ts": 2,
       "packages/extension/src/frontend/auth/subscriptionSignIn.ts": 1,
       "packages/extension/src/frontend/events/runFactSubscriptions.ts": 2,
       "packages/extension/src/frontend/statusBar/statusBarSessionEvents.ts": 2,
