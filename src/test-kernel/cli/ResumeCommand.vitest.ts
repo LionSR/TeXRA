@@ -149,20 +149,18 @@ describe('runResumeExecution', () => {
     vi.clearAllMocks();
     mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
     mocks.initializeCliTranscriptSession.mockResolvedValue({
-      session: {
-        interactions: {},
-        executions: { isActiveOrResuming: () => false },
-        // `resumeRun` drops any stale read-only hold when it opens the run
-        // for write, and records one when the lease refuses it.
-        status: {
-          clearHold: () => undefined,
-          markUnavailableOrLog: () => undefined,
-        },
-        snapshots: {
-          getRunMetadata: () => ({ executionId: EXECUTION_ID }),
-          getParentStreamId: () => undefined,
-          preload: async () => undefined,
-        },
+      interactions: {},
+      executions: { isActiveOrResuming: () => false },
+      // `resumeRun` drops any stale read-only hold when it opens the run
+      // for write, and records one when the lease refuses it.
+      status: {
+        clearHold: () => undefined,
+        markUnavailableOrLog: () => undefined,
+      },
+      snapshots: {
+        getRunMetadata: () => ({ executionId: EXECUTION_ID }),
+        getParentStreamId: () => undefined,
+        preload: async () => undefined,
       },
     });
     await seedExecution({ config: TOOL_USE_CONFIG, meta: STAMPED_META });

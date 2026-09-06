@@ -77,8 +77,6 @@ interface SessionExitControllerContext {
   readonly commandName: string;
   /** `context.cwd` — the launch directory shown in the resume hint. */
   readonly cwd: string;
-  /** Whether this session persists a resumable transcript. */
-  readonly canResume: boolean;
   /** Session-scoped subscriptions torn down on graceful exit. */
   readonly disposables: DisposableStore;
   /** Removes the process-exit terminal backstop after terminal restoration. */
@@ -149,7 +147,7 @@ export function createSessionExitController(
   // Read the streams slice before resetCliState() clears it; the child rosters
   // arrive as a snapshot taken while the session adapter was still bound.
   const printResumeHintOnExit = (snapshot: ResumeHintSnapshot): void => {
-    if (!ctx.canResume || !session.executionId) return;
+    if (!session.executionId) return;
     const { view, rootStreamId } = snapshot;
     const hint = formatResumeHint(
       collectResumeTargets({
@@ -202,7 +200,7 @@ export function createSessionExitController(
     exitConfirmationExpiresAt = Date.now() + EXIT_CONFIRMATION_TTL_MS;
     setTransientNotice('Press Ctrl-C again to exit', {
       kind: 'exit',
-      resumeId: ctx.canResume ? session.executionId : undefined,
+      resumeId: session.executionId,
       ttlMs: EXIT_CONFIRMATION_TTL_MS,
     });
   };

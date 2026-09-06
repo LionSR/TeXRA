@@ -1420,6 +1420,15 @@ unreachable, or the foundation is reverted under the rollback rule.
 
 ### Phase 2 — the agent runtime on the ledger (lane D of the cutover)
 
+**Implementation order clarified from current main, 2026-09-06:** first
+complete the joint runtime/LLM contract in
+[`agent-runtime-on-effect` §0.1](../proposals/2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package).
+The canonical request, prepared invocation, remote acceptance, continuation
+and tool-settlement boundaries govern the ledger schemas below. Preserve
+both reflection and tool-use as full consumers; do not freeze new rows around
+the old handler/SDK message union or introduce a handler compatibility facade.
+This adds no second storage owner and does not reverse the no-importer ruling.
+
 **Amended 2026-09-06 by owner ruling.** The original Phase 2 ("PocketFlow
 execution kernel": one typed node Effect, one transition kernel, sixteen
 subclasses converted, cursor semantics preserved) is struck. The engine is not

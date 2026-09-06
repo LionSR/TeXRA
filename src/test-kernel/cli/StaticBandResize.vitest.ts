@@ -54,7 +54,6 @@ const TRANSCRIPT_SESSION: Omit<SessionMeta, 'cwd'> = {
   model: 'test-model',
   modelSource: 'builtin-default',
   approvalPolicy: 'ask',
-  transcriptMode: 'persistent',
   version: '0.0.0-test',
 };
 

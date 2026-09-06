@@ -172,15 +172,9 @@ export async function runChat(
   // initInteractiveCliPlatform's doc comment for the full handoff design.
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
   const initialResume = init.initialResume;
-  const transcriptLifecycle = await initializeCliTranscriptSession(
-    initialResume
-      ? { ephemeral: 'reject' }
-      : {
-          ephemeral: 'use-existing',
-          showPersistentWarning: writeTextStderr,
-        },
+  const runtimeSession = await initializeCliTranscriptSession(
+    initialResume ? { delayMs: 0 } : {},
   );
-  const runtimeSession = transcriptLifecycle.session;
   runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the model
@@ -279,16 +273,12 @@ export async function runChat(
     modelSource: defaults.modelSource,
     cwd: context.cwd,
     approvalPolicy: runtimeSession.approvalPolicy,
-    transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
     teamName: init.teamName ?? readCliMultiAgentPresetName(initialPresetId),
     cliMultiAgentPresetId: initialPresetId,
     delegationAgentScope:
       initialResume?.config.delegationAgentScope ?? init.delegationAgentScope,
     version,
   });
-  if (transcriptLifecycle.warning) {
-    appendLocalErrorTranscript(transcriptLifecycle.warning);
-  }
   if (modelSelection.notice) {
     appendLocalAssistantTranscript(modelSelection.notice);
   }
@@ -385,7 +375,6 @@ export async function runChat(
       status: rootStreamStatus(),
     });
   const isResumableIdle = (): boolean =>
-    transcriptLifecycle.canResume &&
     chatTuiIsResumableIdleOnExit({
       canInterruptActiveRun: canInterruptActiveRun(),
       canStopActiveRun: canStopActiveRun(),
@@ -560,7 +549,6 @@ export async function runChat(
     session,
     commandName: context.commandName,
     cwd: context.cwd,
-    canResume: transcriptLifecycle.canResume,
     disposables,
     disposeTerminalRestoreOnExit,
     followUpQueue,

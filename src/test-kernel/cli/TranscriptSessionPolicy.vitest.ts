@@ -52,25 +52,19 @@ describe('CLI transcript session policy', () => {
     expect(runAgent).not.toHaveBeenCalled();
   });
 
-  it.each(['reject', 'use-existing'] as const)(
-    'rejects persistent open failure with the %s policy',
-    async (ephemeral) => {
-      vi.resetModules();
-      await import('@test/support/sessionGraphTestSetup');
-      const { initializeCliTranscriptSession } =
-        await import('@cli/runtime/transcriptSession');
-      const failure = new Error('permission denied');
+  it('rejects persistent open failure', async () => {
+    vi.resetModules();
+    await import('@test/support/sessionGraphTestSetup');
+    const { initializeCliTranscriptSession } =
+      await import('@cli/runtime/transcriptSession');
+    const failure = new Error('permission denied');
 
-      await expect(
-        initializeCliTranscriptSession(
-          { ephemeral, showPersistentWarning: vi.fn() },
-          async () => {
-            throw failure;
-          },
-        ),
-      ).rejects.toBe(failure);
-    },
-  );
+    await expect(
+      initializeCliTranscriptSession({}, async () => {
+        throw failure;
+      }),
+    ).rejects.toBe(failure);
+  });
 
   it('reclaims an orphaned stream sidecar after a headless session opens', async () => {
     vi.resetModules();
@@ -113,7 +107,7 @@ describe('CLI transcript session policy', () => {
 
     const transcripts = await StreamLogStore.open();
     const result = await initializeCliTranscriptSession(
-      { ephemeral: 'reject' },
+      { delayMs: 0 },
       async () => transcripts,
     );
 
@@ -123,9 +117,9 @@ describe('CLI transcript session policy', () => {
     // are awaited together rather than asserting the second one early.
     await vi.waitFor(
       async () => {
-        await expect(
-          result.session.snapshots.listPersistedStreams(),
-        ).resolves.toEqual([]);
+        await expect(result.snapshots.listPersistedStreams()).resolves.toEqual(
+          [],
+        );
         expect(GoalStore.getForStream(orphan)).toBeNull();
       },
       { timeout: 10_000, interval: 100 },

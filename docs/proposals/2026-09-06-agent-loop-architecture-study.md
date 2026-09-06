@@ -76,6 +76,11 @@ The current runtime proposal's comparison table rejects Workflow partly because 
 
 ## 4. Proposed durable phase model
 
+The [joint runtime/LLM implementation contract](2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package)
+supplies the preparation/acceptance barriers, continuation validity and tool
+state/attachment settlement required by this table. Read it before implementing
+the ledger rows; the phase names below are illustrative, not another schema.
+
 ![Proposed turn lifecycle](evidence/2026-09-06-agent-architecture/turn-lifecycle.svg)
 
 This is a domain specification for implementation, not a new graph DSL. The exact names can change. Each phase must be reconstructible from the ledger and have a closed set of commands. `foldRunState` remains pure; it neither calls tools nor consults current clocks, credentials, or UI state.
