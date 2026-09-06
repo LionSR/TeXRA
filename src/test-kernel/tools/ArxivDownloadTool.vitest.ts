@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const gitignoreMock = vi.hoisted(() => ({
@@ -29,10 +30,12 @@ describe('ArxivDownloadTool', () => {
       .mockReturnValue(null);
     const downloadSource = vi
       .spyOn(arxivModule.ArxivProcessor, 'downloadSource')
-      .mockResolvedValue({
-        path: '/workspace/project/sample',
-        alreadyExisted: false,
-      });
+      .mockReturnValue(
+        Effect.succeed({
+          path: '/workspace/project/sample',
+          alreadyExisted: false,
+        }),
+      );
 
     vi.spyOn(WorkspaceFS, 'relativePath').mockReturnValue('sample');
 

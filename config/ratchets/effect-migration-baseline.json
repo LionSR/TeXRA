@@ -134,14 +134,12 @@
     "import:p-retry": {
       "src/agent/core/flows/ModelInvocationNode.ts": 1,
       "src/agent/implementations/agentCreator/agentCreatorFlow.ts": 1,
-      "src/agent/modelHandlers/support/auxiliaryRetry.ts": 1,
-      "src/latex/arxivProcessor.ts": 1
+      "src/agent/modelHandlers/support/auxiliaryRetry.ts": 1
     },
     "import:p-timeout": {
       "packages/cli/src/chat/tui/input/BaseTextInput.tsx": 1,
       "packages/cli/src/runtime/clipboardText.ts": 1,
-      "src/agent/workflowScript/runWorkflowScript.ts": 1,
-      "src/latex/arxivProcessor.ts": 1
+      "src/agent/workflowScript/runWorkflowScript.ts": 1
     },
     "import:p-defer": {
       "packages/cli/src/chat/chatSessionController.ts": 1,
