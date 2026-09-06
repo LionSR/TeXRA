@@ -418,9 +418,8 @@ describe('createDirectLspLeanAdapter', () => {
       spawnCount += 1;
       if (failNextSpawn) {
         failNextSpawn = false;
-        throw Object.assign(new Error('too many open files'), {
-          code: 'EMFILE',
-        });
+        // Node reports EMFILE through the child's `error` event, not a throw.
+        return createFailedSpawnChild('EMFILE');
       }
       return createFakeLeanChild();
     };
@@ -834,6 +833,30 @@ interface FakeLeanChild extends EventEmitter {
   signalCode: NodeJS.Signals | null;
   kill: (signal?: NodeJS.Signals) => boolean;
   closeSoon: () => void;
+}
+
+/**
+ * What `spawn` returns when the process could not be created: no stdio, an
+ * `error` on the next tick carrying the errno, then `close`, as Node does.
+ */
+function createFailedSpawnChild(code: 'EMFILE' | 'ENFILE'): EventEmitter {
+  const events = new EventEmitter();
+  const child = Object.assign(events, {
+    pid: undefined,
+    killed: false,
+    exitCode: null as number | null,
+    signalCode: null as NodeJS.Signals | null,
+    kill: () => false,
+  });
+  process.nextTick(() => {
+    child.exitCode = -24;
+    child.emit(
+      'error',
+      Object.assign(new Error(`spawn lake ${code}`), { code }),
+    );
+    child.emit('close', -24, null);
+  });
+  return child;
 }
 
 function createFakeLeanChild(options?: {

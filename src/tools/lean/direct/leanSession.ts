@@ -108,12 +108,19 @@ interface OpenedFile {
 interface ServerEnd {
   readonly status: 'stopped' | 'error';
   readonly message?: string;
+  /** The child's `error`, when that is what ended it (EMFILE, ENOENT, ...). */
+  readonly cause?: unknown;
 }
 
 interface SpawnedServer {
   readonly child: ChildProcessWithoutNullStreams;
   /** Settles on the child's `close` event, once its stdio has drained. */
   readonly closed: Deferred.Deferred<void>;
+  /**
+   * False when Node could not spawn the process at all (EMFILE/ENFILE): the
+   * child then has no stdio streams and reports the cause on `error`.
+   */
+  readonly hasStdio: boolean;
 }
 
 interface LeanSessionOptions {
@@ -126,27 +133,73 @@ function isAlive(child: ChildProcessWithoutNullStreams): boolean {
   return child.exitCode == null && child.signalCode == null;
 }
 
+/**
+ * Spawn the server and attach its listeners in one synchronous block: Node
+ * delivers spawn failures (EMFILE, ENFILE, ENOENT, ...) through the child's
+ * `error` event on the next tick, so the listener that records the cause
+ * must exist before the fiber can yield. `settle` records how the server
+ * ended; the first end wins.
+ */
 const spawnServer = Effect.fn('LeanSession.spawnServer')(function* (
   lakeCommand: string,
   root: string,
+  settle: (ended: ServerEnd) => void,
 ) {
-  const child = yield* Effect.try({
-    try: () =>
-      spawn(lakeCommand, ['env', 'lean', '--server'], {
+  return yield* Effect.try({
+    try: (): SpawnedServer => {
+      const child = spawn(lakeCommand, ['env', 'lean', '--server'], {
         cwd: root,
         stdio: ['pipe', 'pipe', 'pipe'],
         // Force POSIX behavior on Windows-Node by relying on lake's resolver.
         windowsHide: true,
-      }),
+      });
+      const closed = Deferred.makeUnsafe<void>();
+      child.once('close', () => Deferred.doneUnsafe(closed, Effect.void));
+      child.once('error', (error) => {
+        settle({
+          status: 'error',
+          message: `Failed to spawn 'lake env lean --server': ${toErrorMessage(error)}`,
+          cause: error,
+        });
+      });
+      // The stream types promise pipes, but a child Node failed to spawn
+      // (EMFILE/ENFILE) comes back without them.
+      const streams = child as Partial<ChildProcessWithoutNullStreams>;
+      const hasStdio =
+        streams.stdin != null &&
+        streams.stdout != null &&
+        streams.stderr != null;
+      let stderrTail = '';
+      if (hasStdio) {
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', (chunk: string) => {
+          stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
+          warn(LOG_CHANNEL, `[${root}] ${chunk.trimEnd()}`);
+        });
+      }
+      child.on('exit', (code, signal) => {
+        const tail = stderrTail.slice(-1000);
+        info(
+          LOG_CHANNEL,
+          `lake env lean --server exited (code=${code}, signal=${signal}) at ${root}${tail ? `\n${tail}` : ''}`,
+        );
+        settle(
+          code === 0
+            ? { status: 'stopped' }
+            : {
+                status: 'error',
+                message: `Server exited with code ${code}`,
+              },
+        );
+      });
+      return { child, closed, hasStdio };
+    },
     catch: (error) =>
       new LeanStartError({
         message: `Failed to spawn 'lake env lean --server': ${toErrorMessage(error)}`,
         cause: error,
       }),
   });
-  const closed = Deferred.makeUnsafe<void>();
-  child.once('close', () => Deferred.doneUnsafe(closed, Effect.void));
-  return { child, closed } satisfies SpawnedServer;
 });
 
 /** Terminate the server and wait for its stdio to close, escalating to SIGKILL. */
@@ -215,7 +268,7 @@ export class LeanSession {
         yield* Effect.forkIn(this.serve(startup), this.scope);
       }
       yield* Deferred.await(this.startup);
-    });
+    }).pipe(Effect.withSpan('LeanSession.ready'));
   }
 
   /**
@@ -254,7 +307,7 @@ export class LeanSession {
         }
         yield* Scope.close(this.scope, Exit.void);
       }),
-    );
+    ).pipe(Effect.withSpan('LeanSession.close'));
   }
 
   diagnostics(
@@ -267,7 +320,7 @@ export class LeanSession {
         return yield* new LeanSessionDisposed();
       }
       return diagnostics;
-    });
+    }).pipe(Effect.withSpan('LeanSession.diagnostics'));
   }
 
   restartFile(filePath: string): Effect.Effect<void, LeanSessionError> {
@@ -284,7 +337,7 @@ export class LeanSession {
         this.openFiles.delete(absolute);
       }
       yield* this.ensureFileOpen(absolute, true);
-    });
+    }).pipe(Effect.withSpan('LeanSession.restartFile'));
   }
 
   /**
@@ -306,7 +359,7 @@ export class LeanSession {
         textDocument: { uri: pathToUri(absolute) },
         position: { line, character: column },
       });
-    });
+    }).pipe(Effect.withSpan('LeanSession.requestSettled'));
   }
 
   /** The live JSON-RPC connection, or `LeanSessionNotRunning`. */
@@ -330,7 +383,7 @@ export class LeanSession {
       yield* this.ensureFileOpen(absolute, false);
       yield* this.waitForDiagnosticsQuiet(absolute);
       return absolute;
-    });
+    }).pipe(Effect.withSpan('LeanSession.openAndSettle'));
   }
 
   /**
@@ -358,40 +411,26 @@ export class LeanSession {
         end ??= ended;
         Deferred.doneUnsafe(exited, Effect.succeed(ended));
       };
+      // The server ended before `initialize` completed. The cause is kept:
+      // the adapter's file-table retry matches EMFILE/ENFILE on it.
+      const endedBeforeReady = Deferred.await(exited).pipe(
+        Effect.flatMap((ended) =>
+          Effect.fail(
+            new LeanStartError({
+              message: ended.message ?? 'Lean server stopped',
+              cause: ended.cause,
+            }),
+          ),
+        ),
+      );
 
       const started = yield* Effect.result(
         Effect.gen({ self: this }, function* () {
-          const { child } = yield* Effect.acquireRelease(
-            spawnServer(this.options.lakeCommand, root),
+          const { child, hasStdio } = yield* Effect.acquireRelease(
+            spawnServer(this.options.lakeCommand, root, settle),
             stopProcess,
           );
-          let stderrTail = '';
-          child.stderr.setEncoding('utf8');
-          child.stderr.on('data', (chunk: string) => {
-            stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
-            warn(LOG_CHANNEL, `[${root}] ${chunk.trimEnd()}`);
-          });
-          child.once('error', (error) => {
-            settle({
-              status: 'error',
-              message: `Failed to spawn 'lake env lean --server': ${toErrorMessage(error)}`,
-            });
-          });
-          child.on('exit', (code, signal) => {
-            const tail = stderrTail.slice(-1000);
-            info(
-              LOG_CHANNEL,
-              `lake env lean --server exited (code=${code}, signal=${signal}) at ${root}${tail ? `\n${tail}` : ''}`,
-            );
-            settle(
-              code === 0
-                ? { status: 'stopped' }
-                : {
-                    status: 'error',
-                    message: `Server exited with code ${code}`,
-                  },
-            );
-          });
+          if (!hasStdio) return yield* endedBeforeReady;
 
           const rpc = yield* Effect.acquireRelease(
             Effect.sync(() => new JsonRpcConnection(child.stdin, child.stdout)),
@@ -435,17 +474,7 @@ export class LeanSession {
               },
             })
             .pipe(
-              Effect.raceFirst(
-                Deferred.await(exited).pipe(
-                  Effect.flatMap((ended) =>
-                    Effect.fail(
-                      new LeanStartError({
-                        message: ended.message ?? 'Lean server stopped',
-                      }),
-                    ),
-                  ),
-                ),
-              ),
+              Effect.raceFirst(endedBeforeReady),
               Effect.timeoutOrElse({
                 duration: HANDSHAKE_TIMEOUT,
                 orElse: () =>
@@ -485,6 +514,7 @@ export class LeanSession {
       Effect.ensuring(
         Effect.suspend(() => this.finalize(end ?? { status: 'stopped' })),
       ),
+      Effect.withSpan('LeanSession.serve'),
     );
   }
 
@@ -549,7 +579,7 @@ export class LeanSession {
           },
         });
       }
-    });
+    }).pipe(Effect.withSpan('LeanSession.ensureFileOpen'));
   }
 
   /**
@@ -582,6 +612,7 @@ export class LeanSession {
         duration: DIAGNOSTICS_WAIT,
         orElse: () => Effect.void,
       }),
+      Effect.withSpan('LeanSession.waitForDiagnosticsQuiet'),
     );
   }
 

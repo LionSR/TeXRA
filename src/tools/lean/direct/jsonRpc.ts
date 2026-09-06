@@ -13,7 +13,9 @@ import { type Readable, Writable } from 'node:stream';
 
 import { Data, Effect } from 'effect';
 import {
+  ConnectionErrors,
   createMessageConnection,
+  ErrorCodes,
   StreamMessageReader,
   StreamMessageWriter,
   type MessageConnection,
@@ -96,15 +98,17 @@ export class JsonRpcConnection {
           params === undefined
             ? this.conn.sendRequest<T>(method)
             : this.conn.sendRequest<T>(method, params),
-        // A rejection observed after dispose is the disposal itself: report
-        // the caller's reason rather than vscode-jsonrpc's generic message.
+        // A connection-teardown rejection observed after dispose is the
+        // disposal itself: report the caller's reason rather than
+        // vscode-jsonrpc's generic message. A peer error that races the
+        // dispose keeps its own code and message.
         catch: (error) => {
-          if (this.disposeReason !== undefined) {
+          const code = (error as { code?: unknown } | null)?.code;
+          if (this.disposeReason !== undefined && isTeardownCode(code)) {
             return new JsonRpcConnectionDisposed({
               message: this.disposeReason,
             });
           }
-          const code = (error as { code?: unknown } | null)?.code;
           return new JsonRpcRequestError({
             method,
             message: toErrorMessage(error),
@@ -166,4 +170,16 @@ export class JsonRpcConnection {
     if (this.disposeReason !== undefined || !err) return;
     log.debug(`${context}: ${toErrorMessage(err)}`);
   }
+}
+
+/**
+ * vscode-jsonrpc rejected because of the connection, not the peer: a send on
+ * a closed or disposed connection, or a pending response dropped by dispose.
+ */
+function isTeardownCode(code: unknown): boolean {
+  return (
+    code === ConnectionErrors.Closed ||
+    code === ConnectionErrors.Disposed ||
+    code === ErrorCodes.PendingResponseRejected
+  );
 }

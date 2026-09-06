@@ -206,17 +206,19 @@ export function createDirectLspLeanAdapter(
     );
   });
 
-  const withSession = <A, E>(
+  const withSession = Effect.fn('DirectLspAdapter.withSession')(function* <
+    A,
+    E,
+  >(
     filePath: string,
     runId: ExecutionId | undefined,
     invoke: (session: LeanSession) => Effect.Effect<A, E>,
-  ) =>
-    Effect.gen(function* () {
-      const session = yield* getSession(filePath, runId);
-      return yield* invoke(session).pipe(
-        Effect.ensuring(endUse(session.workspaceRoot, session)),
-      );
-    });
+  ) {
+    const session = yield* getSession(filePath, runId);
+    return yield* invoke(session).pipe(
+      Effect.ensuring(endUse(session.workspaceRoot, session)),
+    );
+  });
 
   const disarmIdleStop = Effect.fn('DirectLspAdapter.disarmIdleStop')(
     function* (tracked: TrackedLeanSession) {
@@ -236,13 +238,23 @@ export function createDirectLspLeanAdapter(
     // Detached: the stop must outlive the tool call that armed it. Its owner
     // is the tracked entry, which interrupts it on use, forget, or dispose.
     // The fiber drops its own handle before stopping so the disposal never
-    // interrupts the fiber it runs on.
+    // interrupts the fiber it runs on. Nothing joins a detached fiber, so a
+    // defect (the stop cannot fail) is logged here or it is lost.
     tracked.idleStop = yield* Effect.forkDetach(
       Effect.sleep(Duration.millis(idleTimeoutMs)).pipe(
         Effect.andThen(
           Effect.suspend(() => {
             tracked.idleStop = undefined;
             return disposeSession(root, 'idle');
+          }),
+        ),
+        Effect.tapDefect((defect) =>
+          Effect.sync(() => {
+            warn(
+              LOG_CHANNEL,
+              `Idle stop of the Lean server at ${root} died: ${toErrorMessage(defect)}`,
+              { data: defect },
+            );
           }),
         ),
       ),
@@ -623,27 +635,30 @@ export function createDirectLspLeanAdapter(
     }
   });
 
-  const positionRequest = <T>(
-    filePath: string,
-    line: number,
-    column: number,
-    method: string,
-  ): Effect.Effect<LspResult<T>> =>
-    withSession(filePath, currentRunId(), (session) =>
-      session.requestSettled<T | null>(filePath, line, column, method),
-    ).pipe(
-      Effect.map((data): LspResult<T> =>
-        data
-          ? { data }
-          : { data: null, error: 'Lean returned no data for this position.' },
-      ),
-      Effect.catch((error) =>
-        Effect.succeed<LspResult<T>>({
-          data: null,
-          error: toErrorMessage(error),
-        }),
-      ),
-    );
+  const positionRequest = Effect.fn('DirectLspAdapter.positionRequest')(
+    function* <T>(
+      filePath: string,
+      line: number,
+      column: number,
+      method: string,
+    ) {
+      return yield* withSession(filePath, currentRunId(), (session) =>
+        session.requestSettled<T | null>(filePath, line, column, method),
+      ).pipe(
+        Effect.map((data): LspResult<T> =>
+          data
+            ? { data }
+            : { data: null, error: 'Lean returned no data for this position.' },
+        ),
+        Effect.catch((error) =>
+          Effect.succeed<LspResult<T>>({
+            data: null,
+            error: toErrorMessage(error),
+          }),
+        ),
+      );
+    },
+  );
 
   // The Promise edge: one run per public entry. The run is captured here,
   // before the fiber starts, because the ambient run context is a property
