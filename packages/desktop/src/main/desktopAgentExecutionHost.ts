@@ -22,6 +22,4 @@ export interface DesktopAgentExecutionHost
   openBuildDisplay: BuildDisplayFn;
   openDiff: DiffViewHost['openDiff'];
   confirmAcceptFile(message: string): Promise<boolean>;
-  /** Recompute window state derived from a newly completed run. */
-  onRunCompleted(): void;
 }

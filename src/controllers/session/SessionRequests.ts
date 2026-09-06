@@ -342,9 +342,15 @@ function handle(
         return done;
       });
     case 'workflow.control':
-      return Effect.sync(() => {
-        session.workflowControls.control(req.executionId, req.action);
-        return done;
-      });
+      // A settled call, or an id no live run of this session owns, acted on
+      // nothing: the surface hears that, never a `done`.
+      return session.workflowControls.control(req.executionId, req.action)
+        ? Effect.succeed(done)
+        : Effect.fail(
+            new Unavailable({
+              streamId: req.streamId,
+              reason: 'No live call under that execution id.',
+            }),
+          );
   }
 }

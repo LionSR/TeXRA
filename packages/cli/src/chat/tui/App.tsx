@@ -61,7 +61,6 @@ import {
 } from './input/activeDraft';
 import {
   isWorkflowScriptStream,
-  numericFocusTargetForActiveStream,
   presentStream,
   resolveChildListTarget,
 } from './state/childControls';
@@ -81,6 +80,8 @@ import {
   workflowPopupView as workflowPopupViewSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
+  sessionListRows,
+  sessionListStreamIds,
 } from './state/cliState';
 import { appendLocalAssistantTranscript } from './state/transcript';
 import {
@@ -89,7 +90,6 @@ import {
 } from './state/childListSelection';
 import {
   currentView,
-  focusTreeOf,
   killableExecutionId,
   sessionView,
   streamPhaseOf,
@@ -261,10 +261,8 @@ export function App(props: AppProps): React.JSX.Element {
     return () => emitter.off('input', onInput);
   }, [inputDisabled, stdin]);
 
-  const sessions = useMemo<readonly StreamTabId[]>(() => {
-    const tree = focusTreeOf(view, childListTarget);
-    return tree.length < 2 ? [] : tree;
-  }, [childListTarget, view]);
+  const sessions = useSignal(sessionListStreamIds);
+  const sessionRows = useSignal(sessionListRows);
   const childRunningCount = runningChildCount(
     view,
     streamViewOf(view, childListTarget),
@@ -282,8 +280,9 @@ export function App(props: AppProps): React.JSX.Element {
   );
   const childListValues = sessions;
   const childListAvailable = childListValues.length > 0;
+  const selectedChild = streamViewOf(view, selectedChildValue);
   const selectedChildKillable =
-    killableExecutionId(streamViewOf(view, selectedChildValue)) !== undefined;
+    killableExecutionId(selectedChild) !== undefined;
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',
@@ -318,10 +317,15 @@ export function App(props: AppProps): React.JSX.Element {
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
   }, [childListValues]);
-  const focusSession = useCallback((streamId: StreamTabId) => {
+  const focusSession = (streamId: StreamTabId): void => {
     dispatchChildListSelection({ kind: 'focusStream', streamId });
-    focusStreamAndPromoteApprovals(streamId);
-  }, []);
+    const stream = view.streams.get(streamId)!;
+    if (stream.group === 'interrupted' && stream.resumeEligible) {
+      props.onSubmit(`/resume ${stream.executionId}`);
+    } else {
+      focusStreamAndPromoteApprovals(streamId);
+    }
+  };
   const approvalKind =
     foregroundKind === 'approval' ? pending?.payload.kind : undefined;
   const foregroundMaxRows = foregroundMaxRowsForKind({
@@ -459,11 +463,7 @@ export function App(props: AppProps): React.JSX.Element {
   const handleMetaShortcut = (value: string): boolean => {
     const digit = digitFromMetaShortcut(value);
     if (digit !== undefined) {
-      const target = numericFocusTargetForActiveStream(
-        currentView(),
-        activeStreamId,
-        digit - 1,
-      );
+      const target = sessionListStreamIds.get()[digit - 1];
       if (!target) return false;
       focusStreamAndPromoteApprovals(target);
       return true;
@@ -691,6 +691,10 @@ export function App(props: AppProps): React.JSX.Element {
               }
               childListFocused={childListFocused}
               childListSelectionKillable={selectedChildKillable}
+              childListSelectionResumable={
+                selectedChild?.group === 'interrupted' &&
+                selectedChild.resumeEligible
+              }
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
               streamFocusAvailable={sessions.length > 0}
@@ -711,10 +715,9 @@ export function App(props: AppProps): React.JSX.Element {
           rootStreamId,
           slashPaletteOpen,
           childListFocused,
-          sessions,
+          sessionRows,
           selectedChildValue,
           subagentExecutionLabels,
-          listRootStreamId: childListTarget,
           pendingApprovals: pendingApprovalsForRows,
         }}
         onCancelChildList={cancelChildList}

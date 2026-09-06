@@ -2,22 +2,17 @@ import type { agentConfigToTaskState } from '@agent/runtime';
 import type {
   AddOutputFilesPayload,
   AgentCategory,
+  ConversationProgress,
   ExecutionId,
   GoalPausedPayload,
-  GoalStateChangedPayload,
   InquiryThreadUpdatedEvent,
-  RemoveStreamPayload,
-  SetParentStreamPayload,
+  RoundStage,
   StreamPhase,
+  StreamSubstate,
   StreamTabId,
-  UpdateConversationProgressPayload,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
-  UpdateQueuedFollowUpsPayload,
-  UpdateRoundStagePayload,
-  UpdateStreamDescriptionPayload,
-  UpdateStreamStatusPayload,
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
@@ -76,7 +71,16 @@ interface CliNdjsonSetActiveStreamPayload {
 export interface CliNdjsonProgressEventPayloads {
   // Run/stream progress.
   setActiveStream: CliNdjsonSetActiveStreamPayload;
-  updateStreamStatus: UpdateStreamStatusPayload;
+  updateStreamStatus: {
+    streamId: StreamTabId;
+    status: StreamPhase;
+    /** Diagnostic transition cause retained for public output. */
+    cause?: string;
+    /** Previous phase before this update, for detecting transitions. */
+    previousStatus?: StreamPhase;
+    /** Narrower in-flight display state for launch/resume overlays. */
+    substate?: StreamSubstate;
+  };
   addOutputFiles: AddOutputFilesPayload;
   updateMissingOutputs: UpdateMissingOutputsPayload;
   updateCompileFailures: UpdateCompileFailuresPayload;
@@ -90,24 +94,31 @@ export interface CliNdjsonProgressEventPayloads {
   inquiryThreadUpdated: InquiryThreadUpdatedEvent;
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
-  updateConversationProgress: UpdateConversationProgressPayload;
-  updateRoundStage: UpdateRoundStagePayload;
-  updateQueuedFollowUps: UpdateQueuedFollowUpsPayload;
+  updateConversationProgress: {
+    streamId: StreamTabId;
+    progress: ConversationProgress;
+  };
+  /** Round advance projected from stage.start with kind round. */
+  updateRoundStage: { streamId: StreamTabId; roundStage: RoundStage };
+  updateQueuedFollowUps: { streamId: StreamTabId };
   goalPaused: GoalPausedPayload;
   updateActiveSubagents: {
     parentStreamId: StreamTabId;
     children: CliNdjsonActiveChildRow[];
   };
-  updateStreamDescription: UpdateStreamDescriptionPayload;
-  setParentStream: SetParentStreamPayload;
+  updateStreamDescription: { streamId: StreamTabId; description: string };
+  setParentStream: {
+    childStreamId: StreamTabId;
+    parentStreamId: StreamTabId | null;
+  };
 
   /**
    * Request the progress view to remove a stream tab. This is used by
    * short-lived child streams that should auto-close once their work is done.
    */
-  removeStream: RemoveStreamPayload;
+  removeStream: { streamId: StreamTabId };
 
-  goalStateChanged: GoalStateChangedPayload;
+  goalStateChanged: { streamId: StreamTabId };
 }
 
 export type CliNdjsonProgressEvent = keyof CliNdjsonProgressEventPayloads;

@@ -140,10 +140,10 @@ TEXRA_FOLD_BENCH=1 npx vitest run --config vitest.config.mjs \
 ```
 
 `TEXRA_FOLD_BENCH_OUT=/path/report.json` also writes the raw numbers. The run
-takes about one minute. Delete the restored file afterwards. Open
-[PR #11911](https://github.com/LionSR/TeXRA/pull/11911) carries a second
-measurement script (section 5); if D5 is adopted, the adoption PR should
-measure with the real fold rather than a transformed copy of it.
+takes about one minute. Delete the restored file afterwards. Section 5 links
+the earlier independent measurement at its recorded revision. D5 is now
+adopted; [PR #11915](https://github.com/LionSR/TeXRA/pull/11915) reports the
+measurement of the production fold.
 
 **Variants.** All three columns run the production
 [`sessionFold.ts`](../../src/shared/session/sessionFold.ts), bundled with
@@ -197,21 +197,24 @@ cost is the row divided by 9 or 99, not by 10 or 100.
 
 ## 5. Relation to the measurement in #11911
 
-[PR #11911](https://github.com/LionSR/TeXRA/pull/11911) carries an earlier
-D5 measurement (`packages/desktop/design-harness/measure-session-fold.mjs`
-and `docs/proposals/2026-09-05-session-fold-immutable-publication-measurement.md`)
-with the same transform idea on a different seed: 2,048 streams, 101,176
-rows, 600 frames, and a copy-on-touch p99 of 4.05 ms for 32 concurrent
-transcripts. This document agrees with it on direction and adds what the D5
-gate asked for: the seed shape named on the SDK page, p50 and p95 per frame,
-cold replay in frames of 512 beside one-batch replay, retention of the last
-10 levels rather than 600, and a second shape that isolates what dominates.
-This PR checks in no script (section 4), so #11911's is the only one
-proposed for the tree. Neither transform needs to outlive the decision: if D5
-is adopted, the adoption PR should measure with the real fold, and the
-transformed copies lose their reason to exist. Note that #11911's transform
-copies a `transcript.compaction` array that does not exist on `main`, so it
-will not apply to the current fold without adjustment.
+The earlier [D5 measurement](https://github.com/LionSR/TeXRA/blob/e6c76a6ae74ad90ec2139e267366d7b45f540bd0/docs/proposals/2026-09-05-session-fold-immutable-publication-measurement.md)
+from [PR #11911](https://github.com/LionSR/TeXRA/pull/11911) used the same
+transform idea on a different seed: 2,048 streams, 101,176 rows, 600 frames,
+and a copy-on-touch p99 of 4.05 ms for 32 concurrent transcripts. Its
+[script](https://github.com/LionSR/TeXRA/blob/e6c76a6ae74ad90ec2139e267366d7b45f540bd0/packages/desktop/design-harness/measure-session-fold.mjs)
+and [raw report](https://github.com/LionSR/TeXRA/blob/e6c76a6ae74ad90ec2139e267366d7b45f540bd0/packages/desktop/design-harness/session-fold-performance-2026-09-05.json)
+remain available at that pinned revision. This document agrees with its
+direction and adds the seed shape named on the SDK page, p50 and p95 per
+frame, cold replay in frames of 512 beside one-batch replay, retention of
+the last 10 levels rather than 600, and a second shape that isolates what
+dominates.
+
+[PR #11915](https://github.com/LionSR/TeXRA/pull/11915) adopted D5 and measured
+the production fold. The earlier transformed-copy script, raw report, and
+superseded September 5 report are retired from the current tree; they are
+historical evidence, not a benchmark for the adopted implementation. In
+particular, that transform expected a `transcript.compaction` array that no
+longer exists. Future measurements should exercise the production fold.
 
 ## 6. Recommendation
 

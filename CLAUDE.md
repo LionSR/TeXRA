@@ -41,8 +41,15 @@ Things the tree won't tell you:
   `packages/agent/src/**` from importing host layers, and the ratchets in
   `config/ratchets/` freeze the remaining edges — `host-agent-import-baseline`
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
-  included), `shared-schemas-deep-import`, `host-agent-mock`, and
-  `architecture-edges`. The invariant to hold is "never widen a baseline"; the
+  included), `shared-schemas-deep-import`, `host-agent-mock`,
+  `architecture-edges`, and `effect-migration` (per-file allowlists of
+  shrink-only counts: `platform()`, `setServices()`, `new AbortController(`,
+  superseded package imports, `Effect.run*` boundary calls, and raw catches in
+  `effect`-importing files; the same script fails on any `@adapter-until`
+  marker, since the owner ruled there are no temporary adapters, and admits a
+  new `Effect.run*` file only under `packages/{extension,desktop,cli,agent}/src/`
+  or `src/tools/**/*Tool.ts`, R1's three boundary kinds). The invariant to hold
+  is "never widen a baseline"; the
   open work is the Tier-1 public manifest and shrinking the frozen lists, not
   another lint rule. npm publication is deliberately held until a named external
   consumer exists. Kernel architecture tests under

@@ -27,10 +27,9 @@ import type { SupabaseClient as Client } from '@supabase/supabase-js';
 // callback/parse option types stay internal to `supabaseSessionTypes`.
 export {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+  GitHubTokenExchangeSchema,
   parseStoredSupabaseSession,
-  parseTokenExchangeResponse,
   toStorableSupabaseSession,
-  type GitHubTokenExchangeResponse,
   type SupabaseCallbackResult,
   type SupabaseSession,
   type SupabaseSessionLog,

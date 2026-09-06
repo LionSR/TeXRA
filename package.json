@@ -1,6 +1,6 @@
 {
   "name": "texra-workspace",
-  "version": "0.40.9",
+  "version": "0.41.0",
   "private": true,
   "packageManager": "pnpm@11.25.0+sha512.5cde925b4f075f725eb71fbae18a42ffe784524789f19b61c731cb8721ec28aaee160e01a8d5af4fedb2a42cdbf300efe23db356b0d4a17b4d63e11f8ab7c956",
   "workspaces": [
@@ -50,6 +50,7 @@
     "check:desktop-package": "node scripts/verify-desktop-package.mjs",
     "check:dead-code": "VITE_WEBVIEW=webview knip --no-progress --include files,exports,types,duplicates",
     "check:dead-code-ratchet": "node scripts/check-dead-code-ratchet.mjs",
+    "check:effect-migration-ratchet": "node scripts/check-effect-migration-ratchet.mjs",
     "check:guidance-refs": "node scripts/check-guidance-refs.mjs",
     "check:browser-safe-utils": "node scripts/check-browser-safe-utils.mjs",
     "texra-local:build": "corepack pnpm --filter @texra-ai/cli run prepare:trace-viewer-assets && corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
@@ -160,7 +161,6 @@
     "p-map": "^7.0.7",
     "p-queue": "^9.3.3",
     "p-retry": "^8.0.1",
-    "p-throttle": "^8.1.0",
     "p-timeout": "^7.0.1",
     "pathe": "^2.0.3",
     "pdf2pic": "^3.2.0",
@@ -183,7 +183,7 @@
     "tree-kill": "^1.2.2",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
-    "undici": "^7.29.0",
+    "undici": "^8.10.1",
     "vscode-jsonrpc": "^9.0.2",
     "which": "^5.0.0",
     "write-file-atomic": "^7.0.1",

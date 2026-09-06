@@ -16,6 +16,7 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
+import { SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -37,6 +38,7 @@ import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
@@ -69,6 +71,15 @@ import type { SessionEventDraft } from '@shared/schemas/sessionEvent';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
+import {
+  buildScenario,
+  foldAll,
+  local,
+  OWNER,
+  OTHER_OWNER,
+  PROCESS,
+  tail,
+} from '@test/shared/session/fanOutScenario';
 import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
@@ -1822,6 +1833,9 @@ function handleHarnessSlashCommand(line: string): boolean {
         }),
       );
       return true;
+    case 'resume':
+      appendHarnessAssistantTranscript(`Harness resume selected: ${rest}.`);
+      return true;
     case 'status':
       appendHarnessStatus();
       return true;
@@ -1881,11 +1895,15 @@ registerBuiltinSlashCommands({
   },
   onModelAccessSelect: (selection) => {
     if (selection.provider === 'kimi-code' && selection.state === 'on') {
-      return updateCliModelAccess(HARNESS_CLI_CONTEXT, selection, {
-        writeProgress: appendHarnessAssistantTranscript,
-      }).then((access) => {
-        appendHarnessAssistantTranscript(access.message);
-      });
+      return effectRuntime()
+        .runPromise(
+          updateCliModelAccess(HARNESS_CLI_CONTEXT, selection, {
+            writeProgress: appendHarnessAssistantTranscript,
+          }),
+        )
+        .then((access) => {
+          appendHarnessAssistantTranscript(access.message);
+        });
     }
     appendHarnessAssistantTranscript(
       `${selection.provider} preference set to ${selection.state}.`,
@@ -1945,6 +1963,68 @@ function renderHarnessApp(): React.JSX.Element {
       onCtrlC={handleHarnessCtrlC}
     />
   );
+}
+
+// The same recorded fan-out as the drawer, followed by waiting and interrupted roots.
+if (process.env.HARNESS_SESSION_TREE === '1') {
+  const { log, events } = buildScenario();
+  const recordedCount = log.events.length;
+  const waiting = 'waiting#eeeeeeeeeeee' as StreamTabId;
+  const interrupted = 'interrupted#ffffffffffff' as StreamTabId;
+  const nested = 'nested#111111111111' as StreamTabId;
+  log.emit(PROCESS, 10_000_000, {
+    type: 'status',
+    phase: STREAM_PHASE.RUNNING,
+    cause: 'harness',
+  });
+  for (const [id, owner, parentStreamId] of [
+    [waiting, OWNER, undefined],
+    [interrupted, OTHER_OWNER, undefined],
+    [nested, OTHER_OWNER, waiting],
+  ] as const) {
+    log.emit(
+      id,
+      10_000_000,
+      {
+        type: 'run.start',
+        executionId: id.split('#')[1]!,
+        identity: { kind: 'agent', agent: id.split('#')[0]! },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        ...(parentStreamId ? { parentStreamId } : {}),
+      },
+      owner,
+    );
+    log.emit(
+      id,
+      10_000_000,
+      { type: 'status', phase: STREAM_PHASE.RUNNING, cause: 'harness' },
+      owner,
+    );
+  }
+  log.emit(waiting, 10_000_000, {
+    type: 'approval.requested',
+    requestId: 'tree-approval',
+    payload: {
+      kind: 'bash',
+      data: {
+        requestId: 'tree-approval',
+        streamId: waiting,
+        command: 'ls',
+        allowBypass: true,
+      },
+    },
+  });
+  const view = foldAll([
+    ...events,
+    ...log.events.slice(recordedCount).map(tail),
+    local({ self: [OWNER] }),
+  ]);
+  const ref = await effectRuntime().runPromise(SubscriptionRef.make(view));
+  HARNESS_DISPOSERS.push(bindSessionView(ref));
+  rootStreamId.set(PROCESS);
+  activeStreamIdSignal.set(PROCESS);
 }
 
 const ink = render(renderHarnessApp(), {

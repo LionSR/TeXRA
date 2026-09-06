@@ -1,9 +1,10 @@
+import { Effect, Exit } from 'effect';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   const authCoordinator = {
     clearSession: vi.fn(),
-    storeSession: vi.fn(),
+    storeSession: vi.fn(async () => undefined),
   };
   return {
     authCoordinator,
@@ -111,8 +112,10 @@ function stubSuccessfulSignIns(session: {
   access_token: string;
 }): FakeCallbackServer {
   const callbackServer = stubBrowserSignIn(async () => session);
-  mocks.requestDeviceAuthorization.mockResolvedValue(DEVICE_AUTHORIZATION);
-  mocks.pollForDeviceSession.mockResolvedValue(session);
+  mocks.requestDeviceAuthorization.mockReturnValue(
+    Effect.succeed(DEVICE_AUTHORIZATION),
+  );
+  mocks.pollForDeviceSession.mockReturnValue(Effect.succeed(session));
   return callbackServer;
 }
 
@@ -139,41 +142,61 @@ describe('CLI Supabase auth', () => {
 
   it('does not store a device session when cancellation follows polling', async () => {
     const controller = new AbortController();
-    mocks.requestDeviceAuthorization.mockResolvedValue(DEVICE_AUTHORIZATION);
-    mocks.pollForDeviceSession.mockImplementation(async () => {
-      controller.abort();
-      return { access_token: 'device-token' };
-    });
+    mocks.requestDeviceAuthorization.mockReturnValue(
+      Effect.succeed(DEVICE_AUTHORIZATION),
+    );
+    // The abort lands while the poll is settling: the fiber is interrupted
+    // at that boundary and never reaches the store step.
+    mocks.pollForDeviceSession.mockReturnValue(
+      Effect.promise(async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        controller.abort();
+        return { access_token: 'device-token' };
+      }),
+    );
     const { signInCliSupabaseDeviceCode } = await loadSupabaseAuth();
 
-    await expect(
-      signInCliSupabaseDeviceCode({ signal: controller.signal }),
-    ).rejects.toMatchObject({ name: 'AbortError' });
+    const exit = await Effect.runPromiseExit(signInCliSupabaseDeviceCode(), {
+      signal: controller.signal,
+    });
 
+    expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
     expect(mocks.authCoordinator.storeSession).not.toHaveBeenCalled();
   });
 
   it('forwards interactive cancellation to both TeXRA transports', async () => {
     const controller = new AbortController();
     const callbackServer = stubSuccessfulSignIns({ access_token: 'token' });
+    let pollInterrupted = false;
+    mocks.pollForDeviceSession.mockReturnValue(
+      Effect.never.pipe(
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            pollInterrupted = true;
+          }),
+        ),
+      ),
+    );
     const { signInCliSupabase, signInCliSupabaseDeviceCode } =
       await loadSupabaseAuth();
     await signInCliSupabase({
       openBrowser: false,
       signal: controller.signal,
     });
-    await signInCliSupabaseDeviceCode({ signal: controller.signal });
+    const deviceSignIn = Effect.runPromise(signInCliSupabaseDeviceCode(), {
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(deviceSignIn).rejects.toThrow(/interrupted/);
 
     expect(callbackServer.waitForSession).toHaveBeenCalledWith(
       controller.signal,
     );
-    expect(mocks.requestDeviceAuthorization).toHaveBeenCalledWith({
-      signal: controller.signal,
-    });
+    expect(mocks.requestDeviceAuthorization).toHaveBeenCalledOnce();
     expect(mocks.pollForDeviceSession).toHaveBeenCalledWith(
       DEVICE_AUTHORIZATION,
-      { signal: controller.signal },
     );
+    expect(pollInterrupted).toBe(true);
   });
 
   it('settles browser sign-in cancellation while its launcher remains pending', async () => {

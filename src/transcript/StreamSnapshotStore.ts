@@ -761,8 +761,35 @@ export class StreamSnapshotStore {
         case 'setParentStream':
           this.setParentStream(event.aggregateId, event.parentStreamId);
           return;
-        default:
+        // `status`, `run.activate`, `stage.start`, `result`, and
+        // `stream.removed` carry liveness and lifecycle, which the class doc
+        // above says this store deliberately does not persist; the three
+        // approval facts, `context.state`, and `conversation.progress` are
+        // run-scoped session facts the fold owns; `transcript.entry` is the transcript
+        // tier; goal, inquiry, and follow-up facts are session/render state
+        // owned by SessionFactApplier/SessionState, not by this sidecar.
+        // Every arm is listed explicitly so a newly added SessionEvent type
+        // fails the `never` check below instead of silently no-op'ing.
+        case 'status':
+        case 'run.activate':
+        case 'stage.start':
+        case 'result':
+        case 'stream.removed':
+        case 'approval.policy':
+        case 'approval.requested':
+        case 'approval.resolved':
+        case 'context.state':
+        case 'conversation.progress':
+        case 'transcript.entry':
+        case 'goalStateChanged':
+        case 'goalPaused':
+        case 'inquiryThreadUpdated':
+        case 'updateQueuedFollowUps':
           return;
+        default: {
+          const unhandled: never = event;
+          return unhandled;
+        }
       }
     };
   }

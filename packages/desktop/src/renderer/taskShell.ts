@@ -7,7 +7,6 @@
 
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
@@ -22,7 +21,6 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import {
   WORKBENCH_KIND_META,
-  type PapersLayout,
   type WorkbenchPlacement,
   type WorkbenchTab,
 } from '../shared/desktopTaskShell.js';
@@ -41,9 +39,10 @@ interface TaskSidebarModel {
   /** Every open paper, in `shell.open` order. */
   readonly papers: readonly RailPaper[];
   readonly shell: Shell;
-  readonly papersLayout: PapersLayout;
-  /** The stream tree lives in the Subagents workbench tab while it is open;
-   *  the rail then lists top-level streams only. */
+  /** The shown workbench (the active paper's) has its Subagents tab open:
+   *  that paper's tree lives there and its section lists top-level streams
+   *  only. Other papers' workbenches are not shown, so their sections keep
+   *  their trees. */
   readonly subagentsOpen: boolean;
   /** Canonical name of the command palette action, from the command catalog. */
   readonly commandsLabel: string;
@@ -57,11 +56,12 @@ interface TaskSidebarCallbacks {
   onSelectPaper(key: string): void;
   onClosePaper(key: string): void;
   onTogglePaperCollapsed(key: string): void;
-  onTogglePapersLayout(): void;
   onOpenTerminal(): void;
   onOpenBrowser(): void;
   onOpenSettings(): void;
   onOpenLogs(): void;
+  /** Opens the Subagents tab on the active paper's selected family. */
+  onOpenSubagents(): void;
 }
 
 function sidebarAction(options: {
@@ -114,46 +114,73 @@ function paperBadge(view: SessionView): TemplateResult | typeof nothing {
 
 function streamTabsTemplate(
   paper: RailPaper,
-  options: { topLevelOnly: boolean; activeOnly?: boolean },
+  options: { topLevelOnly: boolean },
 ): TemplateResult {
   return html`<div data-session=${paper.display.key}>
     <stream-tabs
       .view=${paper.view}
       .surface=${paper.surface}
       .topLevelOnly=${options.topLevelOnly}
-      .activeOnly=${options.activeOnly ?? false}
     ></stream-tabs>
   </div>`;
 }
 
 /**
- * Under a selected workflow run the list shows the root alone (W2): its
- * calls are child streams the run board lists, and the note says so. The
- * selection may sit on one of those calls; the note is the family root's.
+ * Where the selected stream's children are. The whole tree is the Subagents
+ * tab's, and this control is what opens that tab; it belongs to the shown
+ * paper alone, since the workbench beside the rail is that paper's. While the
+ * tab holds the tree the section is flat, and under a workflow run the note
+ * then says where its calls went (W2). Nothing when the selection has no
+ * children, since there would be no tree to reach.
  */
-export function workflowCallsNote(
-  view: SessionView,
-  surface: Surface,
+function childStreamsAccess(
+  paper: RailPaper,
+  options: { active: boolean; flattened: boolean },
+  callbacks: TaskSidebarCallbacks,
 ): TemplateResult | typeof nothing {
+  const { view, surface } = paper;
   const selected = resolveSelected(view, surface);
   const stream = selected === null ? undefined : view.streams.get(selected);
   const rootId = stream?.ancestors[0]?.id ?? stream?.id;
   const root = rootId === undefined ? undefined : view.streams.get(rootId);
-  if (root?.category !== 'workflow' || root.rollup.total === 0) {
-    return nothing;
-  }
+  if (root === undefined || root.rollup.total === 0) return nothing;
   const { total } = root.rollup;
-  return html`<div class="task-workflow-calls-note">
-    ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child streams`},
-    reachable from the board. They never appear here.
-  </div>`;
+  const { icon, label } = WORKBENCH_KIND_META.subagents;
+  return html`
+    ${
+      options.flattened && root.category === 'workflow'
+        ? html`<div class="task-workflow-calls-note">
+            ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child streams`},
+            reachable from the board. They never appear here.
+          </div>`
+        : nothing
+    }
+    ${
+      options.active
+        ? html`<wa-button
+            type="button"
+            class="task-subagents-open btn-ghost"
+            appearance="plain"
+            size="s"
+            title="Open the ${label} tab on this task's tree"
+            @click=${callbacks.onOpenSubagents}
+          >
+            ${waIcon(icon, { slot: 'start' })}
+            <span>${label}</span>
+            <span class="task-subagents-open-count" slot="end">${total}</span>
+          </wa-button>`
+        : nothing
+    }
+  `;
 }
 
 /**
- * One section per open paper. The active paper's section holds its stream
- * tree (and its file tree behind the row's disclosure); any other paper
- * shows its badge and opens on click. The close control beside the row is
- * the one place a paper is closed from.
+ * One section per open paper: the row, then that paper's own stream tree
+ * beneath it unless the user folded the section shut (`Shell.collapsed`).
+ * The row chooses the paper; the chevron folds the section; the close
+ * control beside them is the one place a paper is closed from. The file
+ * tree is the shown paper's workbench tree, so only its section carries the
+ * Files disclosure.
  */
 function paperSection(
   paper: RailPaper,
@@ -163,7 +190,10 @@ function paperSection(
   const { key, name, initials, subtitle } = paper.display;
   const active = key === model.shell.active;
   const collapsed = model.shell.collapsed.includes(key);
-  const expanded = active && !collapsed;
+  const foldLabel = `${collapsed ? 'Expand' : 'Collapse'} ${name}`;
+  // The tree has one home at a time: the Subagents tab holds the shown
+  // paper's, and this section then lists its top-level streams only.
+  const flattened = active && model.subagentsOpen;
   return html`
     <div class="task-project-item">
       <wa-button
@@ -173,12 +203,7 @@ function paperSection(
         size="s"
         title=${key}
         aria-current=${active ? 'true' : nothing}
-        aria-expanded=${expanded ? 'true' : 'false'}
-        @click=${
-          active
-            ? () => callbacks.onTogglePaperCollapsed(key)
-            : () => callbacks.onSelectPaper(key)
-        }
+        @click=${() => callbacks.onSelectPaper(key)}
       >
         <span class="task-project-mark icon-surface is-size-m"
           >${initials}</span
@@ -187,11 +212,19 @@ function paperSection(
           <strong>${name}</strong>
           <small>${subtitle}</small>
         </span>
-        ${expanded ? nothing : paperBadge(paper.view)}
-        ${waIcon(expanded ? 'chevron-down' : 'chevron-right', {
-          className: 'task-project-chevron',
-          slot: 'end',
-        })}
+      </wa-button>
+      ${collapsed ? paperBadge(paper.view) : nothing}
+      <wa-button
+        type="button"
+        class="task-project-fold icon-button is-size-s"
+        appearance="plain"
+        size="s"
+        title=${foldLabel}
+        aria-label=${foldLabel}
+        aria-expanded=${collapsed ? 'false' : 'true'}
+        @click=${() => callbacks.onTogglePaperCollapsed(key)}
+      >
+        ${waIcon(collapsed ? 'chevron-right' : 'chevron-down')}
       </wa-button>
       <wa-button
         type="button"
@@ -206,12 +239,18 @@ function paperSection(
       </wa-button>
     </div>
     ${
-      expanded
-        ? html`
+      collapsed
+        ? nothing
+        : html`
             <div class="task-sidebar-sessions task-paper-streams">
-              ${streamTabsTemplate(paper, { topLevelOnly: model.subagentsOpen })}
-              ${workflowCallsNote(paper.view, paper.surface)}
+              ${streamTabsTemplate(paper, { topLevelOnly: flattened })}
+              ${childStreamsAccess(paper, { active, flattened }, callbacks)}
             </div>
+          `
+    }
+    ${
+      active && !collapsed
+        ? html`
             <wa-button
               type="button"
               class="task-project-files-toggle btn-ghost"
@@ -267,164 +306,10 @@ function papersSectionsTemplate(
   `;
 }
 
-/** Streams the Other papers card lists for a paper: what `activeOnly` shows. */
-function liveCount(view: SessionView): number {
-  return view.rollup.running + view.rollup.waiting + view.rollup.interrupted;
-}
-
-/**
- * The focus layout: the active paper's streams under a switcher, and every
- * other paper's running or waiting streams in one card. Opening a row there
- * switches paper.
- */
-function papersFocusTemplate(
-  model: TaskSidebarModel,
-  callbacks: TaskSidebarCallbacks,
-): TemplateResult {
-  const active = model.papers.find(
-    (paper) => paper.display.key === model.shell.active,
-  );
-  const others = model.papers.filter((paper) => paper !== active);
-  const running = others.reduce(
-    (total, paper) => total + paper.view.rollup.running,
-    0,
-  );
-  const waiting = others.reduce(
-    (total, paper) => total + paper.view.rollup.waiting,
-    0,
-  );
-  return html`
-    <section class="task-sidebar-section task-project-section">
-      <div class="task-sidebar-section-heading">
-        <span class="task-sidebar-section-label">Tasks on this paper</span>
-        <wa-badge
-          class="task-sidebar-section-count"
-          variant="neutral"
-          appearance="outlined"
-          pill
-          >${active?.view.order.length ?? 0}</wa-badge
-        >
-      </div>
-      ${
-        active
-          ? html`<div class="task-sidebar-sessions">
-              ${streamTabsTemplate(active, { topLevelOnly: model.subagentsOpen })}
-            </div>`
-          : nothing
-      }
-      ${
-        others.length > 0
-          ? html`
-              <div class="task-other-papers">
-                <div class="task-other-papers-head">
-                  <span>Other papers</span>
-                  <span class="task-other-papers-counts">
-                    ${waIcon('circle', { className: 'task-rollup-running' })}
-                    ${running} running ·
-                    ${waIcon('circle-dot', { className: 'task-rollup-waiting' })}
-                    ${waiting} waiting
-                  </span>
-                </div>
-                ${others
-                  .filter((paper) => liveCount(paper.view) > 0)
-                  .map(
-                    (paper) => html`
-                      <div
-                        class="task-other-papers-paper"
-                        @click=${() => callbacks.onSelectPaper(paper.display.key)}
-                      >
-                        <span class="task-other-papers-mark">
-                          <span class="task-project-mark icon-surface is-size-s"
-                            >${paper.display.initials}</span
-                          >
-                          ${paper.display.name}
-                        </span>
-                        ${streamTabsTemplate(paper, {
-                          topLevelOnly: true,
-                          activeOnly: true,
-                        })}
-                      </div>
-                    `,
-                  )}
-                <div class="task-other-papers-note">
-                  Opening one switches paper
-                </div>
-              </div>
-            `
-          : nothing
-      }
-    </section>
-  `;
-}
-
-/** The switcher at the top of the focus layout: the active paper, and a
- *  menu of every open paper plus the layout and folder actions. */
-function paperSwitcherTemplate(
-  model: TaskSidebarModel,
-  callbacks: TaskSidebarCallbacks,
-): TemplateResult {
-  const active = model.papers.find(
-    (paper) => paper.display.key === model.shell.active,
-  );
-  return html`
-    <wa-dropdown
-      class="task-paper-switcher"
-      placement="bottom-start"
-      @wa-select=${(
-        event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
-      ) => {
-        const value = event.detail.item.value;
-        if (value === 'open-folder') callbacks.onOpenFolder();
-        else if (value === 'show-sections') callbacks.onTogglePapersLayout();
-        else if (value) callbacks.onSelectPaper(value);
-      }}
-    >
-      <wa-button
-        slot="trigger"
-        type="button"
-        class="task-paper-switcher-trigger"
-        appearance="outlined"
-        size="s"
-        with-caret
-      >
-        <span class="task-project-mark icon-surface is-size-m" slot="start"
-          >${active?.display.initials ?? 'TX'}</span
-        >
-        <span class="task-project-copy">
-          <strong>${active?.display.name ?? 'No paper open'}</strong>
-          <small>${active?.display.subtitle ?? 'Open a folder to start'}</small>
-        </span>
-      </wa-button>
-      ${model.papers.map(
-        (paper) => html`
-          <wa-dropdown-item
-            value=${paper.display.key}
-            type="checkbox"
-            ?checked=${paper === active}
-          >
-            <span class="task-project-mark icon-surface is-size-s" slot="icon"
-              >${paper.display.initials}</span
-            >
-            ${paper.display.name}
-          </wa-dropdown-item>
-        `,
-      )}
-      <wa-divider></wa-divider>
-      <wa-dropdown-item value="show-sections">
-        ${waIcon('list-ul', { slot: 'icon' })} Show all papers
-      </wa-dropdown-item>
-      <wa-dropdown-item value="open-folder">
-        ${waIcon('folder-open', { slot: 'icon' })} Add paper
-      </wa-dropdown-item>
-    </wa-dropdown>
-  `;
-}
-
 export function taskSidebarTemplate(
   model: TaskSidebarModel,
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult {
-  const focus = model.papersLayout === 'focus' && model.papers.length > 0;
   let papersBody: TemplateResult;
   if (model.papers.length === 0) {
     papersBody = html`
@@ -449,8 +334,6 @@ export function taskSidebarTemplate(
         </wa-button>
       </section>
     `;
-  } else if (focus) {
-    papersBody = papersFocusTemplate(model, callbacks);
   } else {
     papersBody = papersSectionsTemplate(model, callbacks);
   }
@@ -473,7 +356,6 @@ export function taskSidebarTemplate(
       </header>
 
       <nav class="task-sidebar-primary" aria-label="Task actions">
-        ${focus ? paperSwitcherTemplate(model, callbacks) : nothing}
         ${sidebarAction({
           icon: 'pencil',
           label: 'New task',
@@ -516,9 +398,9 @@ export function taskSidebarTemplate(
 }
 
 /**
- * The paper chip at the head of the conversation pane (sections layout):
- * names the paper the conversation belongs to and switches paper from its
- * menu. In the focus layout the rail's switcher is that home instead.
+ * The paper chip at the head of the conversation pane: names the paper the
+ * conversation belongs to and switches paper from its menu, the same choice
+ * a rail row makes.
  */
 export function paperChipTemplate(
   papers: readonly RailPaper[],
@@ -563,24 +445,14 @@ export function paperChipTemplate(
 }
 
 /**
- * The dock chips above the composer: the paper-level actions a running
- * conversation reaches for, dispatched as the host and surface arms they
- * are. A git count for the edited file has no home in the view yet.
+ * The dock under the composer: the paper-level shortcut a running
+ * conversation reaches for, dispatched as the surface arm it is. The
+ * latexdiff chip opens the Tools sheet on the launcher's base file and
+ * commit; the desktop host performs its commit verbs (desktopHostRequests).
  */
 export function conversationDockTemplate(): TemplateResult {
   return html`
     <div class="task-conversation-dock" role="group" aria-label="Paper actions">
-      <wa-button
-        type="button"
-        appearance="outlined"
-        size="s"
-        @click=${(event: Event) =>
-          event.target?.dispatchEvent(
-            SessionUiEvents.host({ kind: 'compileInputPdf' }),
-          )}
-      >
-        ${waIcon('file-pdf', { slot: 'start' })} Compile PDF
-      </wa-button>
       <wa-button
         type="button"
         appearance="outlined"
@@ -604,14 +476,14 @@ interface WorkbenchTabsCallbacks {
 }
 
 /** DOM id of one tab's activate button; the tabpanel references it via aria-labelledby. */
-export function workbenchTabDomId(tabId: string, session = ''): string {
+export function workbenchTabDomId(tabId: string, session: string): string {
   return `task-workbench-tab-${session}-${tabId}`;
 }
 
 /** DOM id of the single pane a placement's tab strip switches. */
 export function workbenchPanelDomId(
   placement: WorkbenchPlacement,
-  session = '',
+  session: string,
 ): string {
   return `task-workbench-panel-${session}-${placement}`;
 }
@@ -719,7 +591,7 @@ export function workbenchTabsTemplate(
   activeTabId: string | undefined,
   placement: WorkbenchPlacement,
   callbacks: WorkbenchTabsCallbacks,
-  session = '',
+  session: string,
 ): TemplateResult {
   const hideDirection =
     placement === 'right' ? 'chevron-right' : 'chevron-down';

@@ -10,6 +10,7 @@ import {
 import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, byCategory } from '@shared/schemas';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { getFirstRunDone } from '@shared/state/onboardingState';
@@ -333,14 +334,16 @@ async function runOrchestration(context: CliContext): Promise<number> {
                 ),
               );
             } else {
-              const result = await updateCliModelAccess(
-                context,
-                {
-                  kind: 'subscription-preference',
-                  provider: action.provider,
-                  state: 'on',
-                },
-                { writeProgress: writeTextStdout },
+              const result = await effectRuntime().runPromise(
+                updateCliModelAccess(
+                  context,
+                  {
+                    kind: 'subscription-preference',
+                    provider: action.provider,
+                    state: 'on',
+                  },
+                  { writeProgress: writeTextStdout },
+                ),
               );
               writeTextStdout(result.message);
             }
@@ -357,9 +360,11 @@ async function runOrchestration(context: CliContext): Promise<number> {
       }
       case 'set-model-access': {
         try {
-          const result = await updateCliModelAccess(context, action.access, {
-            writeProgress: writeTextStdout,
-          });
+          const result = await effectRuntime().runPromise(
+            updateCliModelAccess(context, action.access, {
+              writeProgress: writeTextStdout,
+            }),
+          );
           writeTextStdout(result.message);
         } catch (error: unknown) {
           writeErrorStderr(error);

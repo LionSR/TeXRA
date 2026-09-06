@@ -91,6 +91,20 @@ export const workflowRunBoardStyles = css`
     margin-inline-start: var(--wa-space-3xs);
   }
 
+  /* A settled run: the strip closes, its markers and tallies go quiet and
+     the active indicator is not drawn; the rows stay readable below. */
+  .phases.settled {
+    --indicator-color: transparent;
+  }
+
+  .phases.settled .phase-tab {
+    color: var(--wa-color-text-quiet);
+  }
+
+  .controls.settled {
+    color: var(--wa-color-text-quiet);
+  }
+
   wa-tab-panel::part(base) {
     padding: 0;
   }
@@ -174,6 +188,16 @@ export const workflowRunBoardStyles = css`
 
   .row-last.is-error {
     color: var(--wa-color-danger-on-quiet);
+  }
+
+  .row-rejected {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-xs);
+    color: var(--wa-color-warning-on-quiet);
   }
 
   .row-meta {
@@ -286,6 +310,10 @@ export const workflowRunBoardStyles = css`
     font-size: var(--font-size-xs);
     color: var(--wa-color-text-quiet);
     text-align: end;
+  }
+
+  .controls .note-rejected {
+    color: var(--wa-color-warning-on-quiet);
   }
 
   .note-wide {

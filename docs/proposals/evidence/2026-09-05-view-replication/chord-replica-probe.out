@@ -1,0 +1,120 @@
+{
+  "node": "v26.6.0",
+  "iterations": 500,
+  "trials": 5,
+  "samples": [
+    {
+      "messages": 100,
+      "ops": 1,
+      "retained": false,
+      "medianUsPerBatch": 1.7533320000000003,
+      "medianHeapGrowthMiB": 0.015716552734375
+    },
+    {
+      "messages": 100,
+      "ops": 1,
+      "retained": true,
+      "medianUsPerBatch": 1.591083999999995,
+      "medianHeapGrowthMiB": 0.5307540893554688
+    },
+    {
+      "messages": 100,
+      "ops": 8,
+      "retained": false,
+      "medianUsPerBatch": 9.403666000000015,
+      "medianHeapGrowthMiB": 0.13043212890625
+    },
+    {
+      "messages": 100,
+      "ops": 8,
+      "retained": true,
+      "medianUsPerBatch": 9.416833999999996,
+      "medianHeapGrowthMiB": 1.1983261108398438
+    },
+    {
+      "messages": 1000,
+      "ops": 1,
+      "retained": false,
+      "medianUsPerBatch": 1.3426680000000033,
+      "medianHeapGrowthMiB": 0.01534271240234375
+    },
+    {
+      "messages": 1000,
+      "ops": 1,
+      "retained": true,
+      "medianUsPerBatch": 1.354750000000024,
+      "medianHeapGrowthMiB": 3.9639816284179688
+    },
+    {
+      "messages": 1000,
+      "ops": 8,
+      "retained": false,
+      "medianUsPerBatch": 10.637331999999958,
+      "medianHeapGrowthMiB": 0.13134765625
+    },
+    {
+      "messages": 1000,
+      "ops": 8,
+      "retained": true,
+      "medianUsPerBatch": 11.160250000000017,
+      "medianHeapGrowthMiB": 4.631553649902344
+    },
+    {
+      "messages": 10000,
+      "ops": 1,
+      "retained": false,
+      "medianUsPerBatch": 3.1740819999999985,
+      "medianHeapGrowthMiB": 0.01534271240234375
+    },
+    {
+      "messages": 10000,
+      "ops": 1,
+      "retained": true,
+      "medianUsPerBatch": 12.647000000000046,
+      "medianHeapGrowthMiB": 38.29625701904297
+    },
+    {
+      "messages": 10000,
+      "ops": 8,
+      "retained": false,
+      "medianUsPerBatch": 24.626334000000043,
+      "medianHeapGrowthMiB": 0.12215423583984375
+    },
+    {
+      "messages": 10000,
+      "ops": 8,
+      "retained": true,
+      "medianUsPerBatch": 37.961250000000064,
+      "medianHeapGrowthMiB": 38.96385955810547
+    },
+    {
+      "messages": 50000,
+      "ops": 1,
+      "retained": false,
+      "medianUsPerBatch": 12.957750000000033,
+      "medianHeapGrowthMiB": 0.01534271240234375
+    },
+    {
+      "messages": 50000,
+      "ops": 1,
+      "retained": true,
+      "medianUsPerBatch": 75.87450000000013,
+      "medianHeapGrowthMiB": 190.88414764404297
+    },
+    {
+      "messages": 50000,
+      "ops": 8,
+      "retained": false,
+      "medianUsPerBatch": 100.01016600000003,
+      "medianHeapGrowthMiB": 0.12218475341796875
+    },
+    {
+      "messages": 50000,
+      "ops": 8,
+      "retained": true,
+      "medianUsPerBatch": 171.20808399999984,
+      "medianHeapGrowthMiB": 191.55171966552734
+    }
+  ]
+}
+Correctness assertions passed: prior revisions and untouched identities preserved; failed apply preserves prior value/sequence; gap clears; explicit rehydrate recovers.

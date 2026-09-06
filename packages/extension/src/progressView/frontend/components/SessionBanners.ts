@@ -69,7 +69,11 @@ export class SessionBanners extends LitElement {
           this.request({
             kind: 'agentConfigBanner',
             action: detail.action,
-            sessionType: this.sessionType,
+            // The agent the banner names owns the action: a workflow agent's
+            // missing configuration opens the workflow catalog even while a
+            // tool-use conversation renders the strip. The launcher's mode
+            // stands in only for a banner raised without one.
+            sessionType: banners.agentConfig.sessionType ?? this.sessionType,
             customDirSet: banners.agentConfig.customDirSet,
           })}
         @dependency-dismiss=${() =>

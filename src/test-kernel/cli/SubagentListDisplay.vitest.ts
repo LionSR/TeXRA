@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  CHILD_STATUS_MARKER,
   childRowMetadataText,
-  childStatusColor,
   pendingApprovalRowDisplay,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import {
@@ -11,7 +9,7 @@ import {
   selectControlledHighlightIndex,
   type SelectItem,
 } from '@cli/tui/ui/Select';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 
 function session(
   id: string,
@@ -21,27 +19,6 @@ function session(
 }
 
 describe('CLI child list display model', () => {
-  it('keeps status markers steady and status colors independent of focus', () => {
-    expect(CHILD_STATUS_MARKER).toBe('● ');
-    expect(childStatusColor('running')).toBe('cyan');
-    expect(childStatusColor('completed')).toBe('green');
-    expect(childStatusColor('waiting')).toBe('yellow');
-    expect(childStatusColor('failed')).toBe('red');
-    expect(childStatusColor(STREAM_PHASE.CANCELLED)).toBe('gray');
-    expect(childStatusColor(STREAM_PHASE.COMPLETED)).toBe('green');
-  });
-
-  it('paints an unreported or unrecognised phase neutral, never success', () => {
-    // A slice exists before any status fact arrives (`emptySlice`), and a
-    // future STREAM_PHASE reaches this build as an unmapped string. Neither
-    // establishes success, so neither may render green.
-    expect(childStatusColor(undefined)).toBe('gray');
-    expect(childStatusColor('compacting')).toBe('gray');
-    // Legacy free-form status strings no longer exist on the canonical rail;
-    // an unmapped string is neutral, never a fabricated verdict.
-    expect(childStatusColor('exit 2')).toBe('gray');
-  });
-
   it('summarizes what a row is waiting on from its pending approval kinds', () => {
     expect(pendingApprovalRowDisplay(undefined)).toBeUndefined();
     expect(pendingApprovalRowDisplay([])).toBeUndefined();

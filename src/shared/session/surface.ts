@@ -15,21 +15,42 @@ import { z } from 'zod';
 
 import {
   InquiryDraftSchema,
-  MainViewPersistedStateSchema,
+  LaunchTargetSchema,
+  SessionTypeSchema,
+  ToolConfigFieldsSchema,
+  UIFileFieldsSchema,
   StreamTabIdSchema,
   type InquiryDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import type { HostSnapshot } from './hostSnapshot';
-import type { SessionView } from './sessionView';
+import type { RequestErrorWire } from './sessionFrames';
+import type { SessionView, StreamView } from './sessionView';
 
-/**
- * The new-task composer's selections: `MainViewPersistedState` minus the
- * host-derived `openedFiles`, which the host snapshot already owns, so a
- * per-view copy would answer a question two surfaces cannot differ on.
- */
-export const LaunchSurfaceSchema = MainViewPersistedStateSchema.omit({
-  openedFiles: true,
+/** The new-task composer's selections, separate from host-derived state. */
+export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
+  ToolConfigFieldsSchema,
+).extend({
+  sessionType: SessionTypeSchema.prefault('toolUse'),
+  launchTarget: LaunchTargetSchema.prefault('agent'),
+  selectedTeamId: z.string().prefault(''),
+  workingDirectory: z.string().prefault(''),
+  agent: z
+    .object({
+      workflow: z.string().prefault('correct'),
+      toolUse: z.string().prefault('orchestrator'),
+    })
+    .prefault({}),
+  model: z.string().prefault(DEFAULT_AGENT_MODEL),
+  commit: z.string().prefault('HEAD'),
+  instruction: z
+    .object({
+      workflow: z.string().prefault(''),
+      toolUse: z.string().prefault(''),
+    })
+    .prefault({}),
+  baseFile: z.string().prefault(''),
 });
 type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
 
@@ -73,9 +94,17 @@ type ExpansionOverride = z.infer<typeof ExpansionOverrideSchema>;
  */
 type WorkbenchLayout = Readonly<Record<string, unknown>>;
 
+/**
+ * A refusal a surface paints. Cancellation is the user's own doing, so it
+ * stays quiet and never reaches a surface field.
+ */
+export type SurfaceRefusal = Exclude<RequestErrorWire, { _tag: 'Cancelled' }>;
+
 export interface Surface {
   /** Which paper this surface is for; the layer key. Never persisted. */
   readonly session: string;
+  /** The last failed request from this surface. Never persisted. */
+  readonly requestError: SurfaceRefusal | null;
   /**
    * A preference, not a pointer: read it through `resolveSelected`. `null`
    * is the New-task state and resolves to itself.
@@ -86,6 +115,9 @@ export interface Surface {
   readonly polishing: ReadonlySet<string>;
   /** Streams awaiting follow-up admission. Never persisted. */
   readonly sending: ReadonlySet<StreamTabId>;
+  /** The error the runtime answered this surface's last request on a stream
+   *  with, until the next request on that stream. Never persisted. */
+  readonly rejected: ReadonlyMap<StreamTabId, SurfaceRefusal>;
   readonly launch: LaunchSurface;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
@@ -144,12 +176,14 @@ export function loadSurface(
 ): Surface {
   return {
     session,
+    requestError: null,
     selected: persisted.selected,
     drafts: new Map(
       persisted.drafts.map(([id, text]) => [id, { ...EMPTY_DRAFT, text }]),
     ),
     polishing: new Set(),
     sending: new Set(),
+    rejected: new Map(),
     launch: persisted.launch,
     inquiryDrafts: new Map(persisted.inquiryDrafts),
     expanded: new Map(persisted.expanded),
@@ -207,16 +241,18 @@ export function pruneSurface(surface: Surface, view: SessionView): Surface {
   const groups = retain(surface.groups, view);
   const phase = retain(surface.phase, view);
   const scroll = retain(surface.scroll, view);
+  const rejected = retain(surface.rejected, view);
   if (
     drafts === surface.drafts &&
     expanded === surface.expanded &&
     groups === surface.groups &&
     phase === surface.phase &&
-    scroll === surface.scroll
+    scroll === surface.scroll &&
+    rejected === surface.rejected
   ) {
     return surface;
   }
-  return { ...surface, drafts, expanded, groups, phase, scroll };
+  return { ...surface, drafts, expanded, groups, phase, scroll, rejected };
 }
 
 /**
@@ -265,6 +301,34 @@ export function resolveSelected(
 }
 
 /**
+ * Whether a stream takes a follow-up at all: what decides the composer is
+ * shown for it, and therefore what a host action aimed at it may assume. A
+ * run that declares no follow-up support and one this process may not act
+ * on take none; otherwise a run still going or waiting takes one, as does a
+ * conversation that has not started (`ready` with nothing written yet).
+ */
+export function acceptsFollowUp(stream: StreamView): boolean {
+  if (stream.followUpSupport === 'unsupported' || stream.readOnly) return false;
+  if (stream.group === 'running' || stream.group === 'waiting') return true;
+  return stream.status === 'ready' && stream.lastTimestamp === null;
+}
+
+/**
+ * Whether a follow-up can be sent to a stream: the one rule the composer's
+ * Send button and the host's submit accelerator (Cmd+Alt+E) both read, so
+ * the surface a user sees and the keystroke that bypasses it cannot
+ * disagree. The stream must take a follow-up at all (`acceptsFollowUp`, the
+ * same answer that decides whether its composer is on screen), an empty
+ * draft sends nothing, and a pasted image the host has not stored yet is
+ * not ready to name.
+ */
+export function canSendFollowUp(stream: StreamView, draft: Draft): boolean {
+  if (!acceptsFollowUp(stream)) return false;
+  if (draft.images.some((image) => image.path === null)) return false;
+  return draft.text.trim() !== '' || draft.images.length > 0;
+}
+
+/**
  * The phase the run board shows for a stream: the surface's choice while
  * the model still has it, else the current phase (the last opened one, or
  * the first declared), else `null` for a run with no phases.
@@ -290,6 +354,7 @@ export function resolvePhase(
 export type SurfaceAction =
   | { readonly kind: 'select'; readonly streamId: StreamTabId | null }
   | { readonly kind: 'selectNew' }
+  | { readonly kind: 'dismissRequestError' }
   | { readonly kind: 'toggleDrawer' }
   | { readonly kind: 'drawer'; readonly open: boolean }
   | { readonly kind: 'toolsSheet'; readonly open: boolean }
@@ -342,6 +407,8 @@ export function applySurfaceAction(
   action: SurfaceAction,
 ): Surface {
   switch (action.kind) {
+    case 'dismissRequestError':
+      return { ...surface, requestError: null };
     case 'select':
       return { ...surface, selected: action.streamId, drawerOpen: false };
     case 'selectNew':

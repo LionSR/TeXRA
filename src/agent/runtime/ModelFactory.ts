@@ -2,7 +2,6 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { LEVEL_TO_EFFORT } from '@agent/modelHandlers/support/reasoningEffort';
 import {
   internalValidationModelHandlerEnvName,
   shouldUseInternalValidationModelHandler,
@@ -15,6 +14,7 @@ import {
 import { AgentError } from '@common/errors';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
+import { LEVEL_TO_EFFORT } from '@model/reasoningLevel';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,

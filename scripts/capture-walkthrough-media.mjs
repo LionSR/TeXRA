@@ -1,3 +1,4 @@
+import { build } from 'esbuild';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -7,6 +8,7 @@ import process from 'node:process';
 import os from 'node:os';
 import {
   renderWebviewHtml,
+  renderSessionHarnessBridge,
   runElectronWebviewHarness,
 } from './webview-electron-harness.mjs';
 
@@ -19,6 +21,34 @@ const desktopRequire = createRequire(
   join(repoRoot, 'packages', 'desktop', 'package.json'),
 );
 const nonce = 'texra-walkthrough-capture';
+
+// Use the session fixture and host catalog consumed by the current shell.
+await rm(outputDir, { recursive: true, force: true });
+await mkdir(generatedHtmlDir, { recursive: true });
+const fixturePath = join(outputDir, 'session-fixture.cjs');
+await build({
+  stdin: {
+    contents: `export { buildScenario, ROOT, OWNER, BOARD_NOW } from './src/test-kernel/shared/session/fanOutScenario';
+      export { emptyHostSnapshot } from './src/shared/session/hostSnapshot';
+      export { FILE_SELECT_CONFIGS } from './src/shared/launcher/fileSelectConfigs';`,
+    resolveDir: repoRoot,
+    loader: 'ts',
+  },
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  outfile: fixturePath,
+  tsconfig: join(repoRoot, 'tsconfig.json'),
+});
+const {
+  buildScenario,
+  ROOT,
+  OWNER,
+  BOARD_NOW,
+  emptyHostSnapshot,
+  FILE_SELECT_CONFIGS,
+} = desktopRequire(fixturePath);
+const SESSION_KEY = '/workspace/spectral-gap';
 
 const commonReplacements = {
   cspSource: 'file:',
@@ -97,86 +127,77 @@ const agentOptions = {
   ],
 };
 
-const mainWorkflowMessages = [
-  { command: 'setAgentOptions', optionsData: agentOptions },
-  { command: 'setModelOptions', optionsData: modelOptions },
-  { command: 'setSelectedAgent', sessionType: 'workflow', agentId: 'correct' },
-  {
-    command: 'setInputFiles',
-    files: ['main.tex', 'sections/introduction.tex', 'appendix.tex'],
+const host = {
+  ...emptyHostSnapshot({
+    key: SESSION_KEY,
+    name: 'Spectral gap',
+    initials: 'SG',
+    subtitle: SESSION_KEY,
+  }),
+  agentOptions,
+  modelOptions,
+  fileConfigs: FILE_SELECT_CONFIGS,
+  workspaceRoots: [{ value: SESSION_KEY, label: 'Spectral gap' }],
+  fileOptions: {
+    baseFile: ['main.tex'],
+    editedFile: ['main.tex'],
+    commit: ['HEAD'],
   },
-  {
-    command: 'setContextFiles',
-    files: [
-      'references.bib',
-      'notes/algebraic-expanders.tex',
-      'macros.tex',
-      'style/revtex4-2.cls',
-    ],
-  },
-  {
-    command: 'setMediaFiles',
-    files: ['figures/spectral-gap.pdf', 'figures/proof-sketch.png'],
-  },
-];
-
-function mainWebview(name, captures) {
+  onboarding: 'done',
+};
+const launch = {
+  sessionType: 'workflow',
+  model: 'gemini31p',
+  inputFiles: ['main.tex', 'sections/introduction.tex', 'appendix.tex'],
+  contextFiles: [
+    'references.bib',
+    'notes/algebraic-expanders.tex',
+    'macros.tex',
+  ],
+  mediaFiles: ['figures/spectral-gap.pdf', 'figures/proof-sketch.png'],
+};
+function conversationWebview(
+  name,
+  captures,
+  session = { host, events: [], selected: null, surface: { launch } },
+) {
   return {
     name,
-    tagName: 'main-app',
+    tagName: 'progress-app',
     width: 1120,
     height: 1040,
-    templatePath: join(extensionRoot, 'src', 'webview', 'index.html'),
+    templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
     replacements: {
-      bundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
-      styleUri: fileUri('packages/extension/dist/webview/index.css'),
+      bundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
+      styleUri: fileUri('packages/extension/dist/progressView/index.css'),
+      sessionKey: SESSION_KEY,
+      placement: 'tab',
     },
-    messageMode: 'postMessage',
-    messages: mainWorkflowMessages,
+    session,
+    nowMs: BOARD_NOW,
     captures,
   };
 }
 
 const webviewViews = [
-  mainWebview('main-auto-extract', [
+  conversationWebview('launcher-auto-extract', [
     {
       target: 'auto-extract-options',
       outputPath: mediaPath('auto-extract-options.png'),
     },
   ]),
-  mainWebview('main-workflow', [
+  conversationWebview('launcher-files', [
     {
       target: 'file-selection',
       outputPath: mediaPath('file-selection.png'),
     },
   ]),
-  {
-    name: 'main-agent-model',
-    tagName: 'main-app',
-    width: 980,
-    height: 520,
-    templatePath: join(extensionRoot, 'src', 'webview', 'index.html'),
-    replacements: {
-      bundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
-      styleUri: fileUri('packages/extension/dist/webview/index.css'),
+  conversationWebview('launcher-agent-model', [
+    {
+      target: 'agent-model-selection',
+      outputPath: mediaPath('agent-model-selection.png'),
     },
-    messageMode: 'postMessage',
-    messages: [
-      { command: 'setAgentOptions', optionsData: agentOptions },
-      { command: 'setModelOptions', optionsData: modelOptions },
-      {
-        command: 'setSelectedAgent',
-        sessionType: 'toolUse',
-        agentId: 'orchestrator',
-      },
-    ],
-    captures: [
-      {
-        target: 'agent-model-selection',
-        outputPath: mediaPath('agent-model-selection.png'),
-      },
-    ],
-  },
+  ]),
   {
     name: 'settings-models',
     tagName: 'settings-app',
@@ -220,27 +241,23 @@ const webviewViews = [
       },
     ],
   },
-  {
-    name: 'progress-walkthrough',
-    tagName: 'progress-app',
-    width: 1280,
-    height: 760,
-    templatePath: join(extensionRoot, 'src', 'progressView', 'index.html'),
-    attributes: {
-      'data-desktop-view': 'progress',
-    },
-    replacements: {
-      bundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
-      styleUri: fileUri('packages/extension/dist/progressView/index.css'),
-    },
-    messages: progressMessages(),
-    captures: [
+  conversationWebview(
+    'progress-walkthrough',
+    [
       {
         target: 'texra-progressboard',
         outputPath: mediaPath('texra-progressboard.png'),
       },
     ],
-  },
+    {
+      host,
+      events: buildScenario({ proposal: true })
+        .pending.filter((input) => input._tag === 'event')
+        .map((input) => input.event),
+      selected: ROOT,
+      surface: { drawerOpen: false, expanded: [[ROOT, 'expanded']] },
+    },
+  ),
 ];
 
 function fileUri(relativePath) {
@@ -279,241 +296,18 @@ function modelSelection(provider, name, label, enabled) {
   };
 }
 
-function outputLocation(relativePath) {
-  return {
-    kind: 'workspace',
-    absolutePath: `/workspace/${relativePath}`,
-    relativePath,
-  };
-}
-
-function outputFileInfo(source, relativePath, round, added, removed) {
-  return {
-    source,
-    location: outputLocation(relativePath),
-    round,
-    lineage: {
-      original: outputLocation('paper/main.tex'),
-      diffBase: outputLocation('paper/main.tex'),
-    },
-    diff: {
-      added,
-      removed,
-    },
-  };
-}
-
-function progressMessages() {
-  const stream = 'workflow:main.tex';
-  const timestamp = 1_783_353_600_000;
-  return [
-    {
-      command: 'updateStreams',
-      streams: [
-        {
-          name: stream,
-          label: 'main.tex',
-          model: 'gemini31p',
-          modelLabel: 'Gemini 3.1 Pro',
-          agent: 'orchestrator',
-          agentCategory: 'workflow',
-          inputFile: 'paper/main.tex',
-          creationTimestamp: timestamp,
-          executionId: 'exec-walkthrough',
-          description:
-            'Coordinate edits for the spectral gap manuscript and check the generated output.',
-        },
-      ],
-      activeStream: stream,
-      agentFilter: 'all',
-      streamStates: {
-        [stream]: {
-          kind: 'workflow',
-          status: 'running',
-          lastTimestamp: timestamp + 90_000,
-          conversationProgress: {
-            toolCallCount: 5,
-          },
-          stage: { kind: 'round', index: 1 },
-          subagents: [
-            {
-              executionId: 'exec-polish',
-              agentName: 'polish',
-              childStreamId: 'toolUse:polish',
-              status: 'running',
-              elapsed: '42s',
-            },
-            {
-              executionId: 'exec-outline',
-              agentName: 'outline',
-              childStreamId: 'toolUse:outline',
-              status: 'completed',
-              elapsed: '1m 12s',
-              finishedAt: timestamp + 60_000,
-            },
-          ],
-          processes: [],
-        },
-      },
-    },
-    {
-      command: 'logDelta',
-      streamId: stream,
-      entries: [
-        logEntry(
-          1,
-          'user-1',
-          timestamp,
-          'userMessage',
-          'Improve the introduction and check that the theorem statement is mathematically precise.',
-        ),
-        logEntry(
-          2,
-          'assistant-1',
-          timestamp + 15_000,
-          'modelResponse',
-          'I will inspect the manuscript, propose a focused polishing pass, and keep the original files unchanged.',
-        ),
-        {
-          seqNo: 3,
-          id: 'tool-1',
-          type: 'log',
-          level: 'info',
-          timestamp: timestamp + 35_000,
-          messageType: 'toolUse',
-          text: 'proposal',
-          data: {
-            toolName: 'delegate_to_agent',
-            input: {
-              agent: 'polish',
-              model: 'gemini31p',
-              instruction:
-                'Tighten the exposition in the introduction and preserve all LaTeX notation.',
-              inputFiles: ['paper/main.tex'],
-              contextFiles: ['references.bib'],
-              mediaFiles: ['figures/spectral-gap.pdf'],
-              outputFiles: ['History/main_polished.tex'],
-              toolConfig: {
-                autoExtractFigure: true,
-                autoExtractTikzFigure: true,
-                autoCompileInputPdf: false,
-                attachTeXCount: true,
-                attachDiagnostics: true,
-              },
-              agentCategory: 'workflow',
-            },
-            output: {
-              summary: 'Prepared a polishing task for paper/main.tex.',
-            },
-            status: 'completed',
-          },
-        },
-      ],
-      updates: [],
-    },
-    {
-      command: 'updateFiles',
-      stream,
-      reset: true,
-      rounds: {
-        1: [
-          outputFileInfo('output.tex', 'History/main_polished.tex', 1, 31, 12),
-          outputFileInfo('output.xml', 'History/output.xml', 1, 6, 0),
-        ],
-      },
-    },
-    {
-      command: 'updateRunUsage',
-      stream,
-      runId: 'exec-walkthrough',
-      usage: {
-        inputTokens: 18240,
-        outputTokens: 3240,
-        cacheReadInputTokens: 8900,
-        cacheCreationInputTokens: 2100,
-        cacheMissInputTokens: 9340,
-        cost: 0.42,
-      },
-    },
-    {
-      command: 'updatePermission',
-      action: 'show',
-      permission: {
-        kind: 'proposal',
-        data: {
-          requestId: 'proposal-polish-intro',
-          streamId: stream,
-          agent: 'polish',
-          model: 'gemini31p',
-          instruction:
-            'Tighten the exposition in the introduction and preserve all mathematical notation.',
-          memories: [],
-          workingDirectory: null,
-          inputFiles: ['paper/main.tex'],
-          contextFiles: ['references.bib', 'macros.tex'],
-          mediaFiles: ['figures/spectral-gap.pdf'],
-          outputFiles: ['History/main_polished.tex'],
-          toolConfig: {
-            autoExtractFigure: true,
-            autoExtractTikzFigure: true,
-            autoCompileInputPdf: false,
-            attachTeXCount: true,
-            attachDiagnostics: true,
-          },
-          agentCategory: 'workflow',
-        },
-      },
-    },
-  ];
-}
-
-function logEntry(seqNo, id, timestamp, messageType, text) {
-  return {
-    seqNo,
-    id,
-    type: 'log',
-    level: 'info',
-    timestamp,
-    messageType,
-    text,
-  };
-}
-
-function hostBridgeShim() {
-  const shim = `
-    const texraCaptureBridge = {
-      _state: undefined,
-      postMessage(message) {
-        window.__texraCaptureMessages = [...(window.__texraCaptureMessages ?? []), message];
-      },
-      getState() {
-        return this._state;
-      },
-      setState(state) {
-        this._state = state;
-      },
-    };
-    window.__texraHostBridgeApi = texraCaptureBridge;
-    window.acquireVsCodeApi = () => texraCaptureBridge;
-
-    // Capture loads the bundled desktop view directly, where repeated Web
-    // Awesome imports can try to register the same wa-* element twice.
-    const nativeDefine = customElements.define.bind(customElements);
-    customElements.define = (name, constructor, options) => {
-      if (name.startsWith('wa-') && customElements.get(name)) {
-        return undefined;
-      }
-      return nativeDefine(name, constructor, options);
-    };
-  `;
-  return `<script nonce="${nonce}">${shim}</script>`;
-}
-
 async function prepareViewHtml(view) {
   const template = await readFile(view.templatePath, 'utf8');
   const html = renderWebviewHtml(template, {
     attributeLabel: 'capture',
-    bridgeScript: hostBridgeShim(),
+    bridgeScript: renderSessionHarnessBridge({
+      nonce,
+      sessionKey: SESSION_KEY,
+      owner: OWNER,
+      session: view.session,
+      messagesKey: '__texraCaptureMessages',
+      nowMs: view.nowMs,
+    }),
     replacements: { ...commonReplacements, ...view.replacements },
     view,
   });
@@ -523,7 +317,6 @@ async function prepareViewHtml(view) {
     captures: view.captures,
     height: view.height,
     htmlPath,
-    messageMode: view.messageMode,
     messages: view.messages ?? [],
     name: view.name,
     tagName: view.tagName,
@@ -533,8 +326,6 @@ async function prepareViewHtml(view) {
 
 function assertBuiltAssetsExist() {
   const required = [
-    'packages/extension/dist/webview/bundle.js',
-    'packages/extension/dist/webview/index.css',
     'packages/extension/dist/settingsView/bundle.js',
     'packages/extension/dist/settingsView/index.css',
     'packages/extension/dist/progressView/bundle.js',
@@ -574,7 +365,7 @@ function vscodeExecutablePath() {
     return process.env.TEXRA_VSCODE_EXECUTABLE;
   }
   if (process.platform === 'darwin') {
-    return '/Applications/Visual Studio Code.app/Contents/MacOS/Electron';
+    return '/Applications/Visual Studio Code.app/Contents/MacOS/Code';
   }
   return '';
 }
@@ -678,8 +469,6 @@ where the $o(1)$ term tends to zero as the diameter tends to infinity.
 `;
 }
 
-await rm(outputDir, { recursive: true, force: true });
-await mkdir(generatedHtmlDir, { recursive: true });
 assertBuiltAssetsExist();
 
 const preparedViews = [];

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -21,10 +22,15 @@ vi.mock('@cli/runtime/browser', () => ({
 const { signInCliSubscription } =
   await import('@cli/runtime/subscriptionLogin');
 
+/** Run the program as the login command does: once, with the host's signal. */
 const signInCliChatGpt = (
   init: { device: boolean; noBrowser: boolean },
-  options: { writeProgress: (message: string) => void; signal?: AbortSignal },
-) => signInCliSubscription('chatgpt', init, options);
+  options: { writeProgress: (message: string) => void },
+  signal?: AbortSignal,
+) =>
+  Effect.runPromise(signInCliSubscription('chatgpt', init, options), {
+    signal,
+  });
 
 function loopbackSession() {
   return {
@@ -36,10 +42,12 @@ function loopbackSession() {
 
 /** Drive the loopback transport through the sign-in URL it would publish. */
 function publishLoopbackUrl(url: string): void {
-  mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
-    await openBrowser(url);
-    return loopbackSession();
-  });
+  mocks.loginWithLoopback.mockImplementation(({ openBrowser }) =>
+    Effect.promise(async () => {
+      await openBrowser(url);
+      return loopbackSession();
+    }),
+  );
 }
 
 async function runSignIn(url: string, noBrowser = false): Promise<string[]> {
@@ -116,23 +124,29 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
   });
 
   it('forwards interactive cancellation to both ChatGPT transports', async () => {
-    const loopbackSessionResult = loopbackSession();
-    mocks.loginWithLoopback.mockResolvedValue(loopbackSessionResult);
-    mocks.loginWithDeviceCode.mockResolvedValue(loopbackSessionResult);
-    const controller = new AbortController();
-    const options = {
-      signal: controller.signal,
-      writeProgress: vi.fn(),
-    };
+    const interrupted: string[] = [];
+    const pending = (transport: string) =>
+      Effect.never.pipe(
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            interrupted.push(transport);
+          }),
+        ),
+      );
+    mocks.loginWithLoopback.mockReturnValue(pending('loopback'));
+    mocks.loginWithDeviceCode.mockReturnValue(pending('device'));
+    const options = { writeProgress: vi.fn() };
 
-    await signInCliChatGpt({ device: false, noBrowser: true }, options);
-    await signInCliChatGpt({ device: true, noBrowser: false }, options);
+    for (const init of [
+      { device: false, noBrowser: true },
+      { device: true, noBrowser: false },
+    ]) {
+      const controller = new AbortController();
+      const completion = signInCliChatGpt(init, options, controller.signal);
+      controller.abort();
+      await expect(completion).rejects.toThrow(/interrupted/);
+    }
 
-    expect(mocks.loginWithLoopback).toHaveBeenCalledWith(
-      expect.objectContaining({ signal: controller.signal }),
-    );
-    expect(mocks.loginWithDeviceCode).toHaveBeenCalledWith(
-      expect.objectContaining({ signal: controller.signal }),
-    );
+    expect(interrupted).toEqual(['loopback', 'device']);
   });
 });

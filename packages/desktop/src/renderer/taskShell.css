@@ -345,6 +345,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   margin-top: 0;
 }
 
+.task-project-fold {
+  flex: 0 0 auto;
+  color: var(--wa-color-text-quiet);
+}
+
 /* Shown while the row is hovered or the control itself has focus. */
 .task-project-close {
   flex: 0 0 auto;
@@ -428,6 +433,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   width: 100%;
   justify-content: flex-start;
   padding: 4px 8px;
+  border-style: dashed;
 }
 
 .task-project-files {
@@ -738,8 +744,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-conversation-pane > *,
-.task-launcher-surface,
-.task-launcher-surface > main-app {
+.task-launcher-surface {
   min-width: 0;
   min-height: 0;
   width: 100%;
@@ -1055,17 +1060,11 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   scrollbar-width: thin;
 }
 
-/* A collapsed paper's one count sits on the row's top-right corner, clear of
-   the chevron, the way a notification count sits on an icon. */
-.task-project-row {
-  position: relative;
-}
-
+/* A sibling of the row button, not its child: WebAwesome pins a badge
+   slotted into a button to the button's corner. */
 .task-paper-badge {
-  position: absolute;
-  top: -3px;
-  right: 2px;
-  z-index: 1;
+  flex: 0 0 auto;
+  margin: 0 2px;
   font-size: 10px;
   line-height: 1;
 }
@@ -1095,102 +1094,31 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   font-size: var(--font-size-sm);
 }
 
-.task-rollup-running {
-  color: var(--wa-color-success-on-quiet);
-  font-size: 8px;
-}
-
-.task-rollup-waiting {
-  color: var(--wa-color-warning-on-quiet);
-  font-size: 10px;
-}
-
-/* Focus layout: the switcher and the Other papers card. */
-.task-paper-switcher {
-  display: block;
-  margin: 0 0 6px;
-}
-
-.task-paper-switcher-trigger {
-  width: 100%;
-}
-
-.task-paper-switcher-trigger::part(base) {
-  justify-content: flex-start;
-  min-height: 44px;
-}
-
-.task-paper-switcher-trigger::part(label) {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.task-paper-switcher-trigger .task-project-copy {
-  min-width: 0;
-  text-align: left;
-}
-
-.task-other-papers {
-  display: grid;
-  gap: 2px;
-  margin: 12px 0 0;
-  padding: 8px;
-  border: 1px solid var(--wa-color-surface-border);
-  border-radius: 10px;
-  background: var(--wa-color-surface-default);
-}
-
-.task-other-papers-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 4px 6px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.task-other-papers-counts {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: var(--font-weight-normal);
-}
-
-.task-other-papers-paper {
-  display: grid;
-  gap: 2px;
-}
-
-.task-other-papers-paper > stream-tabs {
-  display: flex;
-  min-width: 0;
-  --background-color: transparent;
-  --color-border: transparent;
-}
-
-.task-other-papers-mark {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 4px 0;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.task-other-papers-note {
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
-}
-
-.task-other-papers-note {
-  padding: 6px 8px 0;
-}
-
 .task-workflow-calls-note {
   padding: 4px 10px 6px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
+}
+
+/* Opens the Subagents tab on the selected family: the way into a tree the
+   rail no longer nests. */
+.task-subagents-open {
+  display: block;
+  width: 100%;
+  margin: 2px 0 4px;
+  color: var(--wa-color-text-quiet);
+}
+
+.task-subagents-open::part(base) {
+  justify-content: flex-start;
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: var(--font-size-sm);
+}
+
+.task-subagents-open-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--wa-color-text-quiet);
 }
 
 /* The conversation pane's paper chip and dock. */

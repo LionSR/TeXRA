@@ -8,6 +8,7 @@ import {
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import type { ApiProvider } from '@model/apiProviders';
+import { effectRuntime } from '@platform/processRuntime';
 import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
@@ -48,11 +49,13 @@ async function applyCliModelAccessSelectionWithSignal(
   output: SlashCommandOutput,
   signal: AbortSignal,
 ): Promise<void> {
-  const access = await updateCliModelAccess(context?.cliContext, selection, {
-    writeProgress: (message) =>
-      output.writeProgress(message, { copyable: true }),
-    signal,
-  });
+  const access = await effectRuntime().runPromise(
+    updateCliModelAccess(context?.cliContext, selection, {
+      writeProgress: (message) =>
+        output.writeProgress(message, { copyable: true }),
+    }),
+    { signal },
+  );
   refreshSubscriptionPreferenceViews();
   output.appendOutcome(collapseWhitespace(access.message));
 }
