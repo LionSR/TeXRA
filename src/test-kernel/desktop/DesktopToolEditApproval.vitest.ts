@@ -2,6 +2,7 @@ import { access, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { Effect, Fiber, Stream } from 'effect';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
@@ -185,8 +186,14 @@ async function createApprovalFixture(
   });
   const stagePreview = vi.spyOn(host, 'stagePreview');
   const controller = disposeAfterTest(
-    new modules.controllerModule.ToolEditApprovalController({ host, session }),
+    new modules.controllerModule.ToolEditApprovalController({ host }),
   );
+  const sessionEvents = Effect.runFork(
+    Stream.runForEach(session.events.all(session.now()), (event) =>
+      Effect.sync(() => controller.handleSessionEvent(event)),
+    ),
+  );
+  onTestFinished(() => Effect.runPromise(Fiber.interrupt(sessionEvents)));
   modules.activeApproval.requestApproval = (request) =>
     controller.requestApproval(request);
   return {

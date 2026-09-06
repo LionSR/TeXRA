@@ -7,19 +7,18 @@
  * what the user edited — lives behind {@link ToolEditApprovalHost}.
  */
 
-// Third-party imports
-import { Effect, Fiber, Stream } from 'effect';
-
 // Local imports
 import {
   cancellationResultFor,
   matchesCancelSelector,
   type HostInteractionCancelSelector,
 } from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { effectRuntime } from '@platform/processRuntime';
-import type { StreamTabId, ToolEditApprovalAction } from '@shared/schemas';
+import type {
+  SessionEvent,
+  StreamTabId,
+  ToolEditApprovalAction,
+} from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import {
   previewProposedLatex,
@@ -78,7 +77,6 @@ export interface ToolEditApprovalHost {
 
 interface ToolEditApprovalControllerOptions {
   host: ToolEditApprovalHost;
-  session: SessionHandle;
 }
 
 /** A request whose preview is still being staged, so it cannot be settled yet. */
@@ -108,21 +106,14 @@ export class ToolEditApprovalController {
    * entry, so no separate settled flag can disagree with the map.
    */
   private readonly requests = new Map<string, ToolEditApprovalState>();
-  private readonly resolvedApprovals: Fiber.Fiber<void>;
   private disposed = false;
 
-  constructor(private readonly options: ToolEditApprovalControllerOptions) {
-    const { session } = options;
-    // Runtime cancellation resolves the session's approval before its staged
-    // preview settles. Release that preview through the same rejection path.
-    this.resolvedApprovals = effectRuntime().runFork(
-      Stream.runForEach(session.events.all(session.now()), (event) =>
-        Effect.sync(() => {
-          if (event.type !== 'approval.resolved') return;
-          this.handleAction({ requestId: event.requestId, action: 'reject' });
-        }),
-      ),
-    );
+  constructor(private readonly options: ToolEditApprovalControllerOptions) {}
+
+  /** Release staged previews when the owning session resolves an approval. */
+  handleSessionEvent(event: SessionEvent): void {
+    if (event.type !== 'approval.resolved') return;
+    this.handleAction({ requestId: event.requestId, action: 'reject' });
   }
 
   async requestApproval(
@@ -283,7 +274,6 @@ export class ToolEditApprovalController {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    effectRuntime().runFork(Fiber.interrupt(this.resolvedApprovals));
     this.cancel({ cause: SESSION_DISPOSED_CAUSE });
   }
 

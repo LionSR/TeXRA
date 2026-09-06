@@ -547,7 +547,6 @@ export default tseslint.config(
           './packages/desktop/tsconfig.main.json',
           './packages/desktop/tsconfig.preload.json',
           './packages/desktop/tsconfig.renderer.json',
-          './packages/desktop/tsconfig.tooling.json',
           './packages/cli/tsconfig.json',
           './packages/cli/tsconfig.scripts.json',
           './packages/trace-viewer/tsconfig.json',
@@ -653,6 +652,20 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': 'off',
       'local/no-vscode-import-in-free-zones': 'error',
       'prefer-const': 'error',
+    },
+  },
+
+  // Tooling owns a separate TypeScript program. The lint command runs this
+  // group in a fresh process so the other projects are released first.
+  {
+    files: [
+      'packages/desktop/design-harness/**/*.ts',
+      'packages/desktop/tests/e2e/**/*.ts',
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./packages/desktop/tsconfig.tooling.json'],
+      },
     },
   },
 

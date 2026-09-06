@@ -8,6 +8,8 @@
 // here: a surface answers an approval with `runtime.request`, and the
 // session settles the pending request itself.
 
+import { Effect, Fiber, Stream } from 'effect';
+
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -25,6 +27,7 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
+import { effectRuntime } from '@platform/processRuntime';
 import type {
   AgentCategory,
   RequestOpenFilePayload,
@@ -158,8 +161,12 @@ export function createDesktopAgentExecution(
         showErrorMessage: host.showErrorMessage,
       },
     }),
-    session,
   });
+  const sessionEvents = effectRuntime().runFork(
+    Stream.runForEach(session.events.all(session.now()), (event) =>
+      Effect.sync(() => toolEditApprovals.handleSessionEvent(event)),
+    ),
+  );
   // Attached for the window's life: the runtime parks a request until a
   // host is attached, so the presentation must be there before the first
   // run of this window asks anything.
@@ -207,6 +214,7 @@ export function createDesktopAgentExecution(
       if (disposed) return;
       disposed = true;
       detachHostInteractions();
+      effectRuntime().runFork(Fiber.interrupt(sessionEvents));
       toolEditApprovals.dispose();
     },
   };

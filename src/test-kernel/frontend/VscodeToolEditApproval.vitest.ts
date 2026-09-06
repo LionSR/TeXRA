@@ -3,10 +3,8 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import { createTestSession } from '@test/support/sessionTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
@@ -98,7 +96,6 @@ vi.mock('vscode', () => {
 
 interface ApprovalHarness {
   readonly controller: ToolEditApprovalController;
-  readonly session: SessionHandle;
 }
 
 interface StartedApproval extends ApprovalHarness {
@@ -113,12 +110,10 @@ let storageRoot: string;
 
 /** One controller per session, exactly as `ProgressViewProvider` wires it. */
 function createApprovalHarness(): ApprovalHarness {
-  const session = createTestSession();
   const controller = new ToolEditApprovalController({
     host: new VscodeToolEditApprovalHost(storageRoot),
-    session,
   });
-  const harness = { controller, session };
+  const harness = { controller };
   harnesses.push(harness);
   return harness;
 }
@@ -185,9 +180,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  for (const { controller, session } of harnesses.splice(0)) {
+  for (const { controller } of harnesses.splice(0)) {
     controller.dispose();
-    session.dispose();
   }
   await Promise.allSettled(activeApprovals.splice(0));
 });

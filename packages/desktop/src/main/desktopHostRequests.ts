@@ -13,6 +13,7 @@ import type { SessionHandle } from '@agent/runtime';
 import {
   agentErrorPresentation,
   classifyAgentError,
+  primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -199,9 +200,10 @@ export function createDesktopHostRequests(
           logger.error('Desktop merge execution failed', {
             data: toLogData(error),
           });
+          const primaryError = primaryAgentError(error);
           const presentation = agentErrorPresentation({
-            kind: classifyAgentError(error),
-            message: `Merge failed: ${toErrorMessage(error)}`,
+            kind: classifyAgentError(primaryError),
+            message: `Merge failed: ${toErrorMessage(primaryError)}`,
           });
           if (presentation?.type === 'instruction') {
             session.interactions.emit(
@@ -749,12 +751,14 @@ export function createDesktopHostRequests(
         if (error instanceof Cancelled) throw error;
         // Request-scoped operations do not present. Every rejection, including
         // a capability refusal, reaches this one dialog before the response.
+        const primaryError = primaryAgentError(error);
         const presentation = agentErrorPresentation({
-          kind: classifyAgentError(error),
+          kind: classifyAgentError(primaryError),
           message:
-            error instanceof Rejected || error instanceof Unavailable
-              ? error.reason
-              : toErrorMessage(error),
+            primaryError instanceof Rejected ||
+            primaryError instanceof Unavailable
+              ? primaryError.reason
+              : toErrorMessage(primaryError),
         });
         if (presentation?.type === 'instruction') {
           await session.interactions.emit(

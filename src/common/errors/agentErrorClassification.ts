@@ -28,6 +28,15 @@ export const AGENT_ERROR_OUTCOME: Readonly<Record<AgentErrorKind, RunOutcome>> =
   };
 
 /**
+ * Runtime aggregates put the primary failure first and retain later cleanup
+ * failures for diagnostics. Follow that ordering through nested aggregates.
+ */
+export function primaryAgentError(err: unknown): unknown {
+  while (err instanceof AggregateError) err = err.errors[0];
+  return err;
+}
+
+/**
  * Classify agent execution errors for consistent runtime notification policy.
  *
  * Every kind is decided by a typed signal — an SDK/abort predicate, an errno,
@@ -36,10 +45,11 @@ export const AGENT_ERROR_OUTCOME: Readonly<Record<AgentErrorKind, RunOutcome>> =
  * third-party providers whose SDKs expose no error code for the overflow.
  */
 export function classifyAgentError(err: unknown): AgentErrorKind {
-  if (isUserAbort(err)) return 'abort';
-  if (isDiskFullError(err)) return 'disk-full';
-  if (hasMissingApiKeyErrorMarker(err)) return 'missing-api-key';
-  if (isContextWindowError(err)) return 'context-window';
+  const primary = primaryAgentError(err);
+  if (isUserAbort(primary)) return 'abort';
+  if (isDiskFullError(primary)) return 'disk-full';
+  if (hasMissingApiKeyErrorMarker(primary)) return 'missing-api-key';
+  if (isContextWindowError(primary)) return 'context-window';
 
   return 'unexpected';
 }

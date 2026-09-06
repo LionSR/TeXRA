@@ -4,6 +4,7 @@ import { runInSession, type SessionHandle } from '@agent/runtime';
 import {
   agentErrorPresentation,
   classifyAgentError,
+  primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import type { RecoveryContinuation } from '@platform/interfaces';
@@ -98,9 +99,10 @@ export class DesktopProcessResumeOwner {
       this.logger.error(`Failed to resume desktop stream ${streamId}`, {
         data: toLogData(error),
       });
+      const primaryError = primaryAgentError(error);
       const presentation = agentErrorPresentation({
-        kind: classifyAgentError(error),
-        message: `Resume failed: ${toErrorMessage(error)}`,
+        kind: classifyAgentError(primaryError),
+        message: `Resume failed: ${toErrorMessage(primaryError)}`,
       });
       if (presentation?.type === 'instruction') {
         session.interactions.emit(

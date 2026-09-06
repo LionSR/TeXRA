@@ -12,7 +12,6 @@ import {
   type ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
 import type { StreamTabId } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
@@ -68,11 +67,9 @@ function createTestHost() {
 }
 
 function createController(host: ReturnType<typeof createTestHost>['host']) {
-  const session = createTestSession();
-  const controller = new ToolEditApprovalController({ host, session });
+  const controller = new ToolEditApprovalController({ host });
   onTestFinished(() => {
     controller.dispose();
-    session.dispose();
   });
   return controller;
 }

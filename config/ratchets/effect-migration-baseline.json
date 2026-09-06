@@ -19,7 +19,7 @@
       "packages/desktop/src/main/desktopOnboardingIpc.ts": 1,
       "packages/desktop/src/main/desktopSettingsIpc.ts": 3,
       "packages/desktop/src/main/desktopWorkspaceIpc.ts": 6,
-      "packages/desktop/src/main/index.ts": 17,
+      "packages/desktop/src/main/index.ts": 16,
       "packages/desktop/src/main/platform/index.ts": 1,
       "packages/extension/src/commands/git/gitCommands.ts": 1,
       "packages/extension/src/commands/setup/setupAssistantCommand.ts": 4,

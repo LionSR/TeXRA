@@ -27,6 +27,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   agentErrorPresentation,
   classifyAgentError,
+  primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import {
   teamAvailabilityPrompt,
@@ -1220,10 +1221,13 @@ function createWindow(options: {
         } catch (error) {
           if (error instanceof Cancelled) return;
           // Setup continues after its initiating request has completed.
+          const primaryError = primaryAgentError(error);
           const presentation = agentErrorPresentation({
-            kind: classifyAgentError(error),
+            kind: classifyAgentError(primaryError),
             message:
-              error instanceof Rejected ? error.reason : toErrorMessage(error),
+              primaryError instanceof Rejected
+                ? primaryError.reason
+                : toErrorMessage(primaryError),
           });
           if (presentation?.type === 'instruction') {
             await setupSession.interactions.emit(
