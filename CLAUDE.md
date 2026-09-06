@@ -42,10 +42,10 @@ Things the tree won't tell you:
   `config/ratchets/` freeze the remaining edges — `host-agent-import-baseline`
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
   included), `shared-schemas-deep-import`, `host-agent-mock`,
-  `architecture-edges`, and `effect-migration` (shrink-only per-file counts
-  of `platform()`, `setServices()`, `new AbortController(`, superseded package
-  imports, and raw catches in `effect`-importing files, plus the `Effect.run*`
-  boundary allowlist). The invariant to hold is "never widen a baseline"; the
+  `architecture-edges`, and `effect-migration` (per-file allowlists of
+  shrink-only counts: `platform()`, `setServices()`, `new AbortController(`,
+  superseded package imports, `Effect.run*` boundary calls, and raw catches in
+  `effect`-importing files). The invariant to hold is "never widen a baseline"; the
   open work is the Tier-1 public manifest and shrinking the frozen lists, not
   another lint rule. npm publication is deliberately held until a named external
   consumer exists. Kernel architecture tests under

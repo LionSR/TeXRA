@@ -7,11 +7,11 @@
 // freezes them in config/ratchets/effect-migration-baseline.json as counts
 // that may only shrink: `platform()` reads, `setServices()` calls,
 // `new AbortController(` constructions, imports of the superseded
-// concurrency/error packages, `Effect.run*` boundary calls (an allowlist of
-// files, per rule R1), and raw catch clauses in files that already import
-// `effect` (rule R7). A separate hard check expires `@adapter-until
-// YYYY-MM-DD` markers on temporary adapters. The PR that zeroes a row deletes
-// the row.
+// concurrency/error packages, `Effect.run*` boundary calls (rule R1), and
+// raw catch clauses in files that already import `effect` at runtime (rule
+// R7). Every row is a per-file allowlist: a file absent from a row fails on
+// its first site. A separate hard check expires `@adapter-until YYYY-MM-DD`
+// markers on temporary adapters. The PR that zeroes a row deletes the row.
 //
 // Files are parsed with the TypeScript compiler API (the repo's `typescript`
 // devDependency, as scripts/check-browser-safe-utils.mjs does) rather than
@@ -21,7 +21,7 @@
 // markers live in comments, so that scan is textual by design.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, posix, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -48,6 +48,8 @@ const SUPERSEDED_PACKAGES = [
   'delay',
   'neverthrow',
 ];
+const PLATFORM_MODULE = '@platform/platform';
+const PLATFORM_MODULE_PATH = 'src/platform/platform';
 const RUN_BOUNDARY_NAMES = new Set([
   'runPromise',
   'runPromiseExit',
@@ -64,9 +66,10 @@ const ROW_CATCH = 'catch:effect-importer';
 const importRow = (pkg) => `import:${pkg}`;
 
 /**
- * Baseline rows in output order. `allowlist` rows are file allowlists (a
- * new file fails even though the per-file count is also recorded); the rest
- * are shrink-only counts. `rule` is the PRD rule a failure cites.
+ * Baseline rows in output order. Every row is a per-file allowlist of
+ * shrink-only counts: a file absent from a row fails on its first site, and
+ * a listed count may only stay or fall. `rule` is the PRD rule a failure
+ * cites.
  */
 const ROWS = [
   {
@@ -87,7 +90,6 @@ const ROWS = [
   })),
   {
     id: ROW_RUN_BOUNDARY,
-    allowlist: true,
     rule: `${PRD} R1: Effect inside, Promises at the boundary — Effect.run* is forbidden below the named boundary modules; a new boundary module is added deliberately by regenerating the baseline in the same PR, with the justification in the PR body`,
   },
   {
@@ -100,11 +102,11 @@ const SEMANTICS =
   'Per-file counts of the mechanisms the Effect 4 migration retires (docs/prds/2026-08-26-effect-4-runtime-migration.md, execution rule 3), owned by scripts/check-effect-migration-ratchet.mjs. ' +
   'Scope: *.ts and *.tsx under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
-  "Rows: 'platform()' counts call expressions whose callee is the bare identifier platform (tryPlatform and member calls are not counted); 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
+  "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to — `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback and is a file allowlist under PRD rule R1 — a file absent from the row fails regardless of count; " +
-  "'catch:effect-importer' counts, only in files with an import specifier equal to effect or starting with effect/ or @effect/, catch clauses plus .catch( calls, excluding the Effect.catch combinator. " +
-  'Every count may only stay or shrink: a rise or a file absent from a row fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
+  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback (PRD rule R1: the row's files are the named boundary modules); " +
+  "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator. " +
+  'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   'The PR that zeroes a row deletes the row. `@adapter-until YYYY-MM-DD` markers are a hard check in the same script, not a baseline.';
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -197,6 +199,91 @@ function importsEffect(specifier) {
 }
 
 /**
+ * Whether an import, `export ... from`, or import-equals declaration erases
+ * at compile time: `import type`, `export type`, `import type X = require`,
+ * or a specifier list whose every element is `type`-qualified.
+ */
+function isTypeOnly(node) {
+  if (ts.isImportDeclaration(node)) {
+    const clause = node.importClause;
+    if (clause == null) return false;
+    if (clause.isTypeOnly) return true;
+    const bindings = clause.namedBindings;
+    return (
+      clause.name == null &&
+      bindings != null &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.length > 0 &&
+      bindings.elements.every((element) => element.isTypeOnly)
+    );
+  }
+  if (ts.isExportDeclaration(node)) {
+    if (node.isTypeOnly) return true;
+    const clause = node.exportClause;
+    return (
+      clause != null &&
+      ts.isNamedExports(clause) &&
+      clause.elements.length > 0 &&
+      clause.elements.every((element) => element.isTypeOnly)
+    );
+  }
+  return ts.isImportEqualsDeclaration(node) && node.isTypeOnly;
+}
+
+/**
+ * Whether a specifier names the platform locator module: the `@platform`
+ * alias, or a relative path that resolves to src/platform/platform.
+ */
+function isPlatformModule(specifier, fileName) {
+  if (specifier === PLATFORM_MODULE) return true;
+  if (!specifier.startsWith('.')) return false;
+  const resolved = posix.normalize(
+    posix.join(posix.dirname(fileName), specifier),
+  );
+  return resolved.replace(/\.(ts|js)$/, '') === PLATFORM_MODULE_PATH;
+}
+
+/**
+ * Local names a file binds the platform locator to: `locals` are bindings of
+ * the `platform` export itself (aliased or not); `namespaces` are namespace
+ * imports whose `.platform` member is the locator. Import declarations are
+ * top-level statements, so no tree walk is needed.
+ */
+function platformBindings(sourceFile, fileName) {
+  const locals = new Set();
+  const namespaces = new Set();
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportEqualsDeclaration(statement)) {
+      const specifier = moduleSpecifier(statement);
+      if (specifier != null && isPlatformModule(specifier, fileName)) {
+        namespaces.add(statement.name.text);
+      }
+      continue;
+    }
+    if (!ts.isImportDeclaration(statement)) continue;
+    const specifier = staticSpecifierText(statement.moduleSpecifier);
+    const bindings = statement.importClause?.namedBindings;
+    if (
+      specifier == null ||
+      bindings == null ||
+      !isPlatformModule(specifier, fileName)
+    ) {
+      continue;
+    }
+    if (ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+      continue;
+    }
+    for (const element of bindings.elements) {
+      if ((element.propertyName ?? element.name).text === 'platform') {
+        locals.add(element.name.text);
+      }
+    }
+  }
+  return { locals, namespaces };
+}
+
+/**
  * Per-row counts for one source text. Rows with a zero count are omitted so
  * the result is exactly the file's baseline contribution.
  */
@@ -209,6 +296,13 @@ function surveySource(text, fileName) {
   );
   const counts = new Map();
   const bump = (row) => counts.set(row, (counts.get(row) ?? 0) + 1);
+  const { locals, namespaces } = platformBindings(sourceFile, fileName);
+  const isPlatformRead = (callee) =>
+    (ts.isIdentifier(callee) && locals.has(callee.text)) ||
+    (ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      namespaces.has(callee.expression.text) &&
+      callee.name.text === 'platform');
   let effectImporter = false;
   let catches = 0;
 
@@ -216,12 +310,12 @@ function surveySource(text, fileName) {
     const specifier = moduleSpecifier(node);
     if (specifier != null) {
       if (SUPERSEDED_PACKAGES.includes(specifier)) bump(importRow(specifier));
-      if (importsEffect(specifier)) effectImporter = true;
+      if (importsEffect(specifier) && !isTypeOnly(node)) effectImporter = true;
     }
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
       const name = calleeName(node);
-      if (ts.isIdentifier(callee) && name === 'platform') bump(ROW_PLATFORM);
+      if (isPlatformRead(callee)) bump(ROW_PLATFORM);
       if (name === 'setServices') bump(ROW_SET_SERVICES);
       if (name != null && RUN_BOUNDARY_NAMES.has(name)) bump(ROW_RUN_BOUNDARY);
       if (
@@ -255,12 +349,25 @@ function surveySource(text, fileName) {
 function selfTestSurvey() {
   const cases = [
     {
-      text: "// platform() in prose\nconst s = 'platform()';\ntryPlatform();\nhost.platform();\n",
+      text: "import { platform, tryPlatform } from '@platform/platform';\n// platform() in prose\nconst s = 'platform()';\ntryPlatform();\nhost.platform();\n",
       expected: {},
     },
     {
-      text: 'platform();\nconst fs = platform().fs;\n',
+      text: "import { platform } from '@platform/platform';\nplatform();\nconst fs = platform().fs;\n",
       expected: { [ROW_PLATFORM]: 2 },
+    },
+    {
+      text: "import { platform as p } from '@platform/platform';\nimport * as P from '@platform/platform';\nimport { platform } from 'node:os';\np();\nP.platform();\nP.tryPlatform();\nplatform();\n",
+      expected: { [ROW_PLATFORM]: 2 },
+    },
+    {
+      text: "import { platform } from '../platform/platform';\nplatform();\n",
+      expected: {},
+    },
+    {
+      text: "import { platform } from './platform';\nplatform();\n",
+      fileName: 'src/platform/probe.ts',
+      expected: { [ROW_PLATFORM]: 1 },
     },
     {
       text: "import PQueue from 'p-queue';\nimport type { Options } from 'delay';\nimport pd from 'p-delay';\nimport local from './delay';\nconst map = require('p-map');\nexport { retry } from 'p-retry';\nawait import('neverthrow');\n",
@@ -289,12 +396,20 @@ function selfTestSurvey() {
       expected: {},
     },
     {
+      text: "import type { Stream } from 'effect';\nimport { type Effect } from 'effect';\nexport type { Exit } from 'effect';\ntry { a(); } catch { b(); }\n",
+      expected: {},
+    },
+    {
+      text: "import { Effect, type Stream } from 'effect';\ntry { a(); } catch { b(); }\n",
+      expected: { [ROW_CATCH]: 1 },
+    },
+    {
       text: 'const c = new AbortController();\nflow.setServices(services);\nsetServices(services);\n',
       expected: { [ROW_ABORT_CONTROLLER]: 1, [ROW_SET_SERVICES]: 2 },
     },
   ];
-  for (const { text, expected } of cases) {
-    const actual = Object.fromEntries(surveySource(text, 'case.ts'));
+  for (const { text, fileName = 'case.ts', expected } of cases) {
+    const actual = Object.fromEntries(surveySource(text, fileName));
     if (
       JSON.stringify(sortObject(actual)) !==
       JSON.stringify(sortObject(expected))
@@ -492,7 +607,7 @@ function main() {
     const was = baseline.rows[row.id];
     console.log(
       `  ${row.id.padEnd(24)} ${Object.keys(now).length} files / ${sites(now)} sites` +
-        ` (baseline ${Object.keys(was).length} files / ${sites(was)} sites)${row.allowlist ? ' [file allowlist]' : ''}`,
+        ` (baseline ${Object.keys(was).length} files / ${sites(was)} sites)`,
     );
   }
 
