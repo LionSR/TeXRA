@@ -3,7 +3,7 @@ import { HTTPError, TimeoutError } from 'ky';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - tools
-import { isTransientHttpError } from '@tools/timeouts';
+import { isTransientHttpError, retryTransientFetch } from '@tools/timeouts';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 
 function kyErrorWithStatus(status: number): HTTPError {
@@ -86,5 +86,20 @@ describe('isTransientHttpError / isTransientHttpStatus parity', () => {
         isTransientHttpError(kyErrorWithStatus(status)),
       );
     }
+  });
+});
+
+describe('retryTransientFetch', () => {
+  it('reports retries left per transient attempt, the exhausted one included', async () => {
+    const retriesLeft: number[] = [];
+    await expect(
+      retryTransientFetch(() => Promise.reject(kyErrorWithStatus(503)), {
+        retries: 3,
+        minTimeout: 1,
+        timeoutMs: 1000,
+        onFailedAttempt: (_error, left) => retriesLeft.push(left),
+      }),
+    ).rejects.toBeInstanceOf(HTTPError);
+    expect(retriesLeft).toEqual([3, 2, 1, 0]);
   });
 });

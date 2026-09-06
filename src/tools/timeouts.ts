@@ -126,6 +126,10 @@ function settleRequest<T>(
   cancelSignal: AbortSignal | undefined,
 ): T {
   if (Exit.isSuccess(exit)) return exit.value;
+  // Stricter than `rateLimitedApiCall`'s interrupts-only check because this
+  // edge rethrows `cancelSignal.reason`, which only exists once the signal
+  // has aborted; an interrupt from elsewhere (runtime disposal) has no reason
+  // to rethrow and falls through to the squashed cause below.
   if (cancelSignal?.aborted && Cause.hasInterruptsOnly(exit.cause)) {
     throw cancelSignal.reason;
   }
