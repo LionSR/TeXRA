@@ -133,7 +133,8 @@ export function aggregateTarget(key: AggregateId): {
   return { kind, id };
 }
 
-/** Per-aggregate append order; `run.start` is seq 1 of its stream. */
+/** Per-aggregate append order; `run.start` is seq 1 of its stream. Dense
+ *  from 1, assigned by the substrate's publisher and by nothing else. */
 const SeqSchema = z.int().positive();
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
@@ -167,7 +168,10 @@ const envelope = {
   commit: CommitOrdinalSchema,
   /** Owner of the process that appended the event; null on legacy imports. */
   ownerId: OwnerIdSchema.nullable(),
-  at: z.number(),
+  /** The publish clock in whole milliseconds: C1 stores it in an `INTEGER`
+   *  column of a `STRICT` table, so the vocabulary states that rule here and
+   *  the substrate restates it nowhere. */
+  at: z.int(),
 };
 
 function durable<T extends string, S extends z.ZodRawShape>(
