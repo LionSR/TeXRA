@@ -32,6 +32,7 @@ import {
   type ProviderAuthErrorCtor,
 } from './providerAuthBridge';
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
+import type { HttpClient } from 'effect/unstable/http';
 import type { z } from 'zod';
 
 const log = createLog('SubscriptionOAuth');
@@ -74,10 +75,18 @@ export interface SubscriptionOAuthClient {
     code: string;
     verifier: string;
     redirectUri: string;
-  }): Effect.Effect<SubscriptionTokenResponse, SubscriptionOAuthError>;
+  }): Effect.Effect<
+    SubscriptionTokenResponse,
+    SubscriptionOAuthError,
+    HttpClient.HttpClient
+  >;
   refreshTokens(
     refreshToken: string,
-  ): Effect.Effect<SubscriptionTokenResponse, SubscriptionOAuthError>;
+  ): Effect.Effect<
+    SubscriptionTokenResponse,
+    SubscriptionOAuthError,
+    HttpClient.HttpClient
+  >;
 }
 
 export interface SubscriptionSessionStatus {
@@ -226,7 +235,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     code: string;
     verifier: string;
     redirectUri: string;
-  }): Effect.Effect<S, unknown> {
+  }): Effect.Effect<S, unknown, HttpClient.HttpClient> {
     return Effect.mapError(this.exchangeCode(params), this.toProviderError);
   }
 

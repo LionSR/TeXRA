@@ -37,6 +37,7 @@ import {
   SubscriptionRef,
   Fiber,
 } from 'effect';
+import { FetchHttpClient } from 'effect/unstable/http';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { runInSession } from '@agent/runtime/RunContext';
@@ -599,7 +600,9 @@ export function installProcessRuntime(
   };
   const runtime = ManagedRuntime.make(
     Sessions.layer(release, identity).pipe(
-      Layer.provideMerge(effectDiagnosticsLayer),
+      Layer.provideMerge(
+        Layer.mergeAll(effectDiagnosticsLayer, FetchHttpClient.layer),
+      ),
     ),
   );
   initProcessRuntime(runtime);
