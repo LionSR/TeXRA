@@ -33,6 +33,7 @@ import { SessionBridge } from '@controllers/session/SessionBridge';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
+  FoldEventSchema,
   STREAM_PHASE,
   type ExecutionId,
   type SessionEventDraft,
@@ -165,6 +166,28 @@ const framerSource = Effect.gen(function* () {
 });
 
 describe('session framer', () => {
+  it('rejects a stream event carried by an inquiry aggregate at the wire boundary', () => {
+    const input = {
+      _tag: 'event',
+      read: 'listing',
+      event: {
+        ...runStart,
+        aggregateId: qualifyAggregateId('inquiry', STREAM),
+        seq: 1,
+        commit: 1,
+        ownerId: SELF,
+        at: 0,
+      },
+    };
+    expect(FoldEventSchema.safeParse(input).success).toBe(false);
+    expect(
+      FoldEventSchema.safeParse({
+        ...input,
+        event: { ...input.event, aggregateId: runStart.aggregateId },
+      }).success,
+    ).toBe(true);
+  });
+
   it('preserves stream and execution subscription keys across the webview bridge', async () => {
     const session = createTestSession();
     const bridge = new SessionBridge({
