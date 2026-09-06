@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
+import { installAuthProgramEdge, runAuthProgram } from '@auth/authProgram';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import {
   refreshRemoteAgentCatalogAfterSignOut,
@@ -19,6 +20,7 @@ import {
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { completeDeviceSession } from '@auth/oauth/deviceAuthorization';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 
 // Local file imports
@@ -79,6 +81,10 @@ const deferredAuthLog: SupabaseSessionLog = {
 export function initializeCliSupabaseAuth(
   log?: SupabaseSessionLog,
 ): SupabaseSessionCoordinator {
+  // The auth subsystem's run edge lives at this host entry (PRD R1), installed
+  // on every init so every later Promise-facing auth surface settles on the
+  // process runtime.
+  installAuthProgramEdge((program) => effectRuntime().runPromiseExit(program));
   activeAuthLog = log ?? activeAuthLog;
   const secrets = platform().secrets;
   if (!coordinator || coordinatorSecrets !== secrets) {
@@ -103,7 +109,7 @@ export async function signInCliSupabase(
   try {
     options.signal?.throwIfAborted();
     if (options.selectAccount || options.loginHint) {
-      await authCoordinator.clearSession();
+      await runAuthProgram(authCoordinator.clearSession());
     }
     const { data, error } =
       await SupabaseClient.getClient().auth.signInWithOAuth({
@@ -171,13 +177,15 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
   // The token endpoint mints a native GoTrue session (auth-github shape), so
   // standard Supabase refresh applies — no custom refresh flag.
   const session: SupabaseSession = toStorableSupabaseSession(exchange);
-  yield* completeDeviceSession(() => authCoordinator.storeSession(session));
+  yield* completeDeviceSession(() =>
+    runAuthProgram(authCoordinator.storeSession(session)),
+  );
   return session;
 });
 
 export async function signOutCliSupabase(): Promise<void> {
   const authCoordinator = initializeCliSupabaseAuth();
-  await authCoordinator.clearSession();
+  await runAuthProgram(authCoordinator.clearSession());
   await refreshRemoteAgentCatalogAfterSignOut(
     invalidateRemoteAgentsAfterSignOut,
     (message) => activeAuthLog?.warn?.('cli-auth', message),
@@ -198,7 +206,7 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
     };
   }
 
-  const session = await authCoordinator.loadSession();
+  const session = await runAuthProgram(authCoordinator.loadSession());
   return {
     authenticated: true,
     sessionState,

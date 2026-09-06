@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 // Local imports - auth
 import { Result } from 'effect';
+import { runAuthProgram } from '@auth/authProgram';
 import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';
 import {
   type SupabaseSession,
@@ -158,18 +159,20 @@ async function handleCallbackRequest(
       );
     }
     assertAcceptingCallbacks(attemptState);
-    const result = await authCoordinator.createSessionFromCallback({
-      path: CALLBACK_PATH,
-      query: body.query?.startsWith('?')
-        ? body.query.slice(1)
-        : (body.query ?? ''),
-    });
+    const result = await runAuthProgram(
+      authCoordinator.createSessionFromCallback({
+        path: CALLBACK_PATH,
+        query: body.query?.startsWith('?')
+          ? body.query.slice(1)
+          : (body.query ?? ''),
+      }),
+    );
     if (!result.success) throw new Error(result.error);
     assertAcceptingCallbacks(attemptState);
 
     attemptState.commitStarted = true;
     attemptState.acceptingCallbacks = false;
-    await authCoordinator.storeSession(result.session);
+    await runAuthProgram(authCoordinator.storeSession(result.session));
     writeHtml(response, 200, successHtml(result.session.account.label));
     return result.session;
   }

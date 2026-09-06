@@ -1,3 +1,7 @@
+import type { Effect } from 'effect';
+
+import type { AuthPortError } from './authProgram';
+
 export interface SessionTokens {
   accessToken: string;
   refreshToken: string;
@@ -18,18 +22,22 @@ export function classifyAuthFailureStatus(
   return status === 400 || status === 401 ? 'invalid' : 'transient';
 }
 
-/** Host-neutral source for authenticated Supabase session tokens. */
+/**
+ * Host-neutral source for authenticated Supabase session tokens. Effect-typed
+ * (PRD R1): the one Promise rendering is `SupabaseClient`'s facade, settled
+ * through `runAuthProgram` for the consumers its own comment names.
+ */
 export interface AuthTokenProvider {
-  whenReady(): Promise<void>;
-  ensureFreshToken(): Promise<string | null>;
+  whenReady(): Effect.Effect<void, AuthPortError>;
+  ensureFreshToken(): Effect.Effect<string | null>;
   /** Classify the stored session while guarding against replacement races. */
-  getStoredSessionState(): Promise<StoredSessionState>;
+  getStoredSessionState(): Effect.Effect<StoredSessionState>;
   /**
    * The account label (email) from the stored session, without attempting a
-   * token refresh. Returns null when no session is stored or the stored data
-   * is unreadable.
+   * token refresh. Returns null when no session is stored; fails with
+   * {@link AuthPortError} when the stored data is unreadable.
    */
-  getStoredAccountLabel(): Promise<string | null>;
+  getStoredAccountLabel(): Effect.Effect<string | null, AuthPortError>;
   /**
    * Classification of the most recent refresh failure. `invalid` means the
    * credential was authoritatively rejected; `transient` covers transport and
