@@ -127,7 +127,7 @@ authors (lifecycle, status, approvals) extend the `SessionEvent` schema
 (`src/shared/schemas/sessionEvent.ts`) and are published as drafts through
 `SessionHandle.publish`. Don't add a new `bus.emit` from a
 VS Code-free zone and don't add a new subscribe surface. (Ruled in
-`agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`. The `src/tools`
+`.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`. The `src/tools`
 emit sites this once grandfathered have since migrated to session-owned
 emission via `SessionHandle.publish` / `SessionEvents`, so a new direct
 `bus.emit` is a violation, not a grandfathered pattern.) This does not restrict
@@ -224,8 +224,8 @@ refactoring" and "Code quality rules".
 `docs/guide/` and a few root docs are published on the texra.ai VitePress site;
 internal directories (`architecture/`, `design/`, `dev/`, `supabase/`, …) are
 excluded by `docs/.vitepress/publicDocs.js`. The former PRD and proposal
-trees now live under `agents/docs/` (outside the VitePress root) — see
-`agents/docs/README.md` for the lifecycle/class layout.
+trees now live under `.agents/docs/` (outside the VitePress root) — see
+`.agents/docs/README.md` for the lifecycle/class layout.
 
 **A doc landing at the `docs/` root can silently freeze the texra.ai deploy** if
 it trips the publish allowlist. Check `docs/.vitepress/publicDocs.js` and the

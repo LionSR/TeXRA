@@ -3,11 +3,11 @@
 **Status:** Verification checkpoint. Read alongside the immediately prior
 [`2026-07-26-agent-sdk-readiness-checkpoint.md`](./2026-07-26-agent-sdk-readiness-checkpoint.md),
 the foundation-gap analysis
-[`2026-07-26-agent-sdk-foundation-gap.md`](../../../agents/docs/archived/architecture/2026-07-26-agent-sdk-foundation-gap.md)
+[`2026-07-26-agent-sdk-foundation-gap.md`](../../../.agents/docs/archived/architecture/2026-07-26-agent-sdk-foundation-gap.md)
 (whose §6 "absorption sequence" and §7 acceptance criteria this pass measures against),
 the audit of record
 [`../dev/audits/2026-07-25-agent-sdk-readiness-audit.md`](./2026-07-25-agent-sdk-readiness-audit.md),
-the plan of record [`2026-07-09-agent-sdk-north-star.md`](../../../agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md),
+the plan of record [`2026-07-09-agent-sdk-north-star.md`](../../../.agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md),
 and the `-06-25` → `-07-26` checkpoint chain.
 
 This pass inspected the tree afresh at HEAD `55ee72b` (`CHANGELOG.md` heading

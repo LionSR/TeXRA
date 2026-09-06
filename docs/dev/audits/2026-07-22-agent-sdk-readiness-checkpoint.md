@@ -1,10 +1,10 @@
 # Agent SDK Readiness — Verification Checkpoint (2026-07-22)
 
 **Status:** Verification checkpoint. Read alongside the canonical
-[`2026-05-30-agent-sdk-readiness.md`](../../../agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md), the plan of record
-[`2026-07-09-agent-sdk-north-star.md`](../../../agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md), the detailed
+[`2026-05-30-agent-sdk-readiness.md`](../../../.agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md), the plan of record
+[`2026-07-09-agent-sdk-north-star.md`](../../../.agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md), the detailed
 [`./2026-05-29-agent-sdk-readiness-audit.md`](./2026-05-29-agent-sdk-readiness-audit.md), the
-[`2026-06-24-agent-sdk-readiness-delta.md`](../../../agents/docs/archived/architecture/2026-06-24-agent-sdk-readiness-delta.md)
+[`2026-06-24-agent-sdk-readiness-delta.md`](../../../.agents/docs/archived/architecture/2026-06-24-agent-sdk-readiness-delta.md)
 addendum, and the `-2026-06-25` → `-2026-07-21` checkpoints (most recently
 [`-2026-07-21`](./2026-07-21-agent-sdk-readiness-checkpoint.md)).
 
@@ -281,7 +281,7 @@ An earlier draft of this checkpoint proposed exposing TeXRA's tool registry
 as an in-process MCP server as a "genuinely-uncaptured observation,"
 supported by a grep scoped to `docs/proposals/` only. **That grep was
 incomplete and the premise was wrong (Codex, P2 ×3).** A detailed PRD already
-covers this exact ground: [`agents/docs/archived/feature/2026-05-04-prd-cli-app.md`](../../../agents/docs/archived/feature/2026-05-04-prd-cli-app.md)
+covers this exact ground: [`.agents/docs/archived/feature/2026-05-04-prd-cli-app.md`](../../../.agents/docs/archived/feature/2026-05-04-prd-cli-app.md)
 §24, `texra mcp serve` — a stdio MCP server exposing three tools
 (`run_workflow`, `run_chat`, `list_agents`) to any MCP-speaking caller
 (Claude Code, Codex, opencode), with a `McpHostAdapter`, a per-`tools/call`
@@ -344,7 +344,7 @@ prose table without checking it against the checked-in
 among the 11 `runtime`/`storage` files `0dc0f8b` touched — itself corrected
 up from an initially-undercounted 8 — was actually opened); and this
 checkpoint's own "MCP tool exposure" observation has been **retracted in
-full** — a detailed PRD (`agents/docs/archived/feature/2026-05-04-prd-cli-app.md` §24) already
+full** — a detailed PRD (`.agents/docs/archived/feature/2026-05-04-prd-cli-app.md` §24) already
 covers that ground and deliberately defers it, so it was never a gap to
 begin with (see the retraction section above). Every remaining item is
 reviewed-train (`ModelHandler`

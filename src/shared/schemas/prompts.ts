@@ -164,7 +164,7 @@ export type UserQuestionAnswers = z.infer<typeof UserQuestionAnswersSchema>;
  * (CLI TUI, CLI headless, extension). Hosts that need extra host-specific
  * fields (e.g. the CLI's session bypass / credential mode) extend this rather
  * than redefining the common shape, so the accepted/feedback/answers vocabulary
- * has a single source of truth. See agents/docs/archived/architecture/2026-05-31-tui-extension-sharing.md
+ * has a single source of truth. See .agents/docs/archived/architecture/2026-05-31-tui-extension-sharing.md
  * (Rung 1).
  */
 export type ApprovalDecision = {

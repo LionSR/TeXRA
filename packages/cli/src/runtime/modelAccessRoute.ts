@@ -23,7 +23,7 @@ export type CliModelAccessRoute =
   | 'kimi-code'
   | 'glm-code'
   // LEGACY: renders historical usage recorded on the retired relay route
-  // (removed 2026-08; see agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md).
+  // (removed 2026-08; see .agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md).
   | 'included'
   | 'personal';
 

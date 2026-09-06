@@ -5,8 +5,8 @@
 > not current workspace layout.
 
 **Status:** Verification checkpoint, not a new audit. Read alongside the canonical
-[`2026-05-30-agent-sdk-readiness.md`](../../../agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md) and its most recent addendum
-[`2026-06-24-agent-sdk-readiness-delta.md`](../../../agents/docs/archived/architecture/2026-06-24-agent-sdk-readiness-delta.md).
+[`2026-05-30-agent-sdk-readiness.md`](../../../.agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md) and its most recent addendum
+[`2026-06-24-agent-sdk-readiness-delta.md`](../../../.agents/docs/archived/architecture/2026-06-24-agent-sdk-readiness-delta.md).
 This pass re-verified the standing audit against the working tree at HEAD
 (`b2dcd42`) and records **only** drift since the 2026-06-24 delta — it does not
 re-audit or re-litigate adjudicated findings.

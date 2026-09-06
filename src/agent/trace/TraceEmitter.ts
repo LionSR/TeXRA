@@ -53,7 +53,7 @@ export class TraceEmitter implements AgentTrace {
    * subagent transcripts (a child run's "Run:" stage inheriting the
    * orchestrator's tool-use stage id, absent from the child's own stream).
    * Within a single trace, ambient nesting works exactly as before.
-   * See agents/docs/archived/bug-fix/2026-05-30-progress-grouping-refactor.md (R1).
+   * See .agents/docs/archived/bug-fix/2026-05-30-progress-grouping-refactor.md (R1).
    */
   private readonly stageScope = new AsyncLocalStorage<string[]>();
 

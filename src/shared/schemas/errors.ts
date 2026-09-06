@@ -30,7 +30,7 @@ export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
  *  combined "exhausted for any reason" question. */
 export const ExhaustionReasonSchema = z.enum([
   /** LEGACY: relay monthly spending limit. The relay was removed 2026-08
-   *  (agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md); the member
+   *  (.agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md); the member
    *  stays because persisted stream logs are reparsed on load and the legacy
    *  migration below reconstructs it. Delete after 2026-11. */
   'relay-limit',

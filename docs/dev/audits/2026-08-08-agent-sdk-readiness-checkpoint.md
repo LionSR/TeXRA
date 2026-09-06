@@ -13,7 +13,7 @@ created: 2026-08-08
 > and the base audit
 > [`2026-07-25-agent-sdk-readiness-audit.md`](./2026-07-25-agent-sdk-readiness-audit.md),
 > under the plan of record
-> [`2026-07-09-agent-sdk-north-star.md`](../../../agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md).
+> [`2026-07-09-agent-sdk-north-star.md`](../../../.agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md).
 > Its job is to confirm whether the standing conclusions still hold and to flag
 > what is new. Nothing here overrides a maintainer ruling, reopens the retired
 > package-fence / `RunDescriptor` / `ModelCell` / `RetryGate` proposals, or

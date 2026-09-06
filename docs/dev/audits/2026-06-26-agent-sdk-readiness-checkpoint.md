@@ -1,8 +1,8 @@
 # Agent SDK Readiness — Verification Checkpoint (2026-06-26)
 
 **Status:** Verification checkpoint, not a new audit. Read alongside the canonical
-[`2026-05-30-agent-sdk-readiness.md`](../../../agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md), the
-[`2026-06-24-agent-sdk-readiness-delta.md`](../../../agents/docs/archived/architecture/2026-06-24-agent-sdk-readiness-delta.md)
+[`2026-05-30-agent-sdk-readiness.md`](../../../.agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md), the
+[`2026-06-24-agent-sdk-readiness-delta.md`](../../../.agents/docs/archived/architecture/2026-06-24-agent-sdk-readiness-delta.md)
 addendum, and the [`2026-06-25-agent-sdk-readiness-checkpoint.md`](./2026-06-25-agent-sdk-readiness-checkpoint.md)
 checkpoint. This pass re-verified the standing audit against the working tree at
 HEAD (`93af483`) and records **only** what is genuinely new since the 2026-06-25
@@ -143,7 +143,7 @@ sdkErrorTagger, …)` wrap just to add a single-turn `inFlight` guard. Add a
 ### Documentation drift
 
 - **Stale `2026-05-22-agent-trace-sdk-surface.md`** _(doc fix)_. That proposal
-  (`agents/docs/archived/architecture/2026-05-22-agent-trace-sdk-surface.md:26`) references a `@agent/core/logger`
+  (`.agents/docs/archived/architecture/2026-05-22-agent-trace-sdk-surface.md:26`) references a `@agent/core/logger`
   facade, an `AgentLogger` class, and `platform().log` — **none of which exist**
   (the logger was already flattened to a single host-injected sink). The proposal
   has been executed; the prose should be reconciled or marked landed.

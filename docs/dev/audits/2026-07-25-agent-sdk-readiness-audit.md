@@ -16,9 +16,9 @@ which records the earlier package and architecture state. Read that document as
 historical context and this one as the post-retirement snapshot.
 
 > **Relation to the retired PRDs.** The three heavyweight runtime-boundary
-> proposals — [Runtime/host decoupling](../../../agents/docs/rejected/architecture/2026-06-27-prd-runtime-host-decoupling.md),
-> [Agent SDK boundary](../../../agents/docs/rejected/architecture/2026-06-29-prd-agent-sdk-boundary.md),
-> [Runtime gold-standard](../../../agents/docs/rejected/architecture/2026-06-29-prd-runtime-gold-standard.md) — were
+> proposals — [Runtime/host decoupling](../../../.agents/docs/rejected/architecture/2026-06-27-prd-runtime-host-decoupling.md),
+> [Agent SDK boundary](../../../.agents/docs/rejected/architecture/2026-06-29-prd-agent-sdk-boundary.md),
+> [Runtime gold-standard](../../../.agents/docs/rejected/architecture/2026-06-29-prd-runtime-gold-standard.md) — were
 > **retired 2026-07-18**. `main` deliberately took the lighter path: a small
 > `AgentRuntimeHost` event sink with a no-op headless implementation, run/session
 > facts split across `AgentEvent` (trace) and `SessionFact`, and host→agent import
@@ -31,7 +31,7 @@ historical context and this one as the post-retirement snapshot.
 > or make their other retired designs authoritative. The findings below are the
 > residue that the lighter path leaves, nothing more.
 
-[modelcell-ownership-ruling]: ../../../agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#modelcell
+[modelcell-ownership-ruling]: ../../../.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md#modelcell
 
 ## Headline
 
