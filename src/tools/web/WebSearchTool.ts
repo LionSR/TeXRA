@@ -74,30 +74,40 @@ type DuckDuckGoResponse = z.infer<typeof DuckDuckGoResponseSchema>;
 const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
   (query: string) =>
     retryTransientFetch(
-      async (signal) => {
-        const response = await ky.get('https://api.duckduckgo.com/', {
-          searchParams: {
-            q: query,
-            format: 'json',
-            no_redirect: 1,
-            no_html: 1,
-          },
-          timeout: false,
-          signal,
-          retry: 0,
+      Effect.gen(function* () {
+        const signal = yield* Effect.abortSignal;
+        const response = yield* Effect.tryPromise({
+          try: () =>
+            ky.get('https://api.duckduckgo.com/', {
+              searchParams: {
+                q: query,
+                format: 'json',
+                no_redirect: 1,
+                no_html: 1,
+              },
+              timeout: false,
+              signal,
+              retry: 0,
+            }),
+          catch: (cause) => cause,
         });
-        const raw = await response.json();
+        const raw = yield* Effect.tryPromise({
+          try: () => response.json(),
+          catch: (cause) => cause,
+        });
         // Validate the body at the boundary. A malformed shape is not
         // transient, so it is not retried; the classification below surfaces
         // it as a tool error.
         const parsed = DuckDuckGoResponseSchema.safeParse(raw);
         if (!parsed.success) {
-          throw new Error(
-            `Unexpected DuckDuckGo response shape: ${z.prettifyError(parsed.error)}`,
+          return yield* Effect.fail(
+            new Error(
+              `Unexpected DuckDuckGo response shape: ${z.prettifyError(parsed.error)}`,
+            ),
           );
         }
         return parsed.data;
-      },
+      }),
       {
         retries: DDG_RETRIES,
         minTimeout: 500,
