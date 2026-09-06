@@ -280,21 +280,29 @@ export function createDirectLspLeanAdapter(
         return;
       }
       const disposing = Deferred.makeUnsafe<void>();
-      tracked.disposing = disposing;
-      yield* disarmIdleStop(tracked);
-      // 'restart' and 'shutdown' stops are caller-initiated and already logged.
-      if (reason !== 'restart' && reason !== 'shutdown') {
-        info(LOG_CHANNEL, `Stopping Lean server at ${root} (${reason})`);
-      }
-      yield* tracked.session
-        .close()
-        .pipe(
+      // Runs to completion once begun, like close(): from the moment the
+      // entry is marked disposing until the latch settles, no interruption
+      // can land, and the registry entry and the latch are released on every
+      // exit. An entry left marked disposing with an unsettled latch would
+      // make every later start for this root wait forever under the permit.
+      yield* Effect.uninterruptible(
+        Effect.gen(function* () {
+          tracked.disposing = disposing;
+          yield* disarmIdleStop(tracked);
+          // 'restart' and 'shutdown' stops are caller-initiated and already
+          // logged.
+          if (reason !== 'restart' && reason !== 'shutdown') {
+            info(LOG_CHANNEL, `Stopping Lean server at ${root} (${reason})`);
+          }
+          yield* tracked.session.close();
+        }).pipe(
           Effect.ensuring(
             forgetSession(root, tracked.session).pipe(
               Effect.andThen(Deferred.succeed(disposing, undefined)),
             ),
           ),
-        );
+        ),
+      );
     },
   );
 
@@ -582,10 +590,16 @@ export function createDirectLspLeanAdapter(
             message: 'No Lean server running to restart.',
           });
         }
-        yield* Effect.forEach(roots, (root) => restartSession(root, runId), {
-          concurrency: 'unbounded',
-          discard: true,
-        });
+        // Every root gets its restart attempt: a failing respawn must not
+        // interrupt a sibling's queued restart. The first failure is
+        // reported once all have settled.
+        const restarts = yield* Effect.forEach(
+          roots,
+          (root) => Effect.result(restartSession(root, runId)),
+          { concurrency: 'unbounded' },
+        );
+        const failed = restarts.find(Result.isFailure);
+        if (failed) return yield* Effect.fail(failed.failure);
         return;
       }
       case 'stop_server':

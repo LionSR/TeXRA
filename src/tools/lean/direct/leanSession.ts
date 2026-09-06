@@ -293,7 +293,16 @@ export class LeanSession {
         const rpc = this.rpc;
         if (rpc) {
           yield* rpc.request('shutdown').pipe(
-            Effect.timeout(SHUTDOWN_TIMEOUT),
+            Effect.timeoutOrElse({
+              duration: SHUTDOWN_TIMEOUT,
+              orElse: () =>
+                Effect.sync(() =>
+                  debug(
+                    LOG_CHANNEL,
+                    `[${this.workspaceRoot}] shutdown request timed out after ${Duration.toMillis(SHUTDOWN_TIMEOUT)}ms`,
+                  ),
+                ),
+            }),
             Effect.catch((error) =>
               Effect.sync(() =>
                 debug(
