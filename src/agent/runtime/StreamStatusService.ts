@@ -86,8 +86,9 @@ export class StreamStatusMachine {
 
   /**
    * @param publishStatus Where this machine publishes canonical `status`
-   *   facts: the session's `publishStatus`, the ONLY status rail; every
-   *   consumer, including the transcript recorder (via its `handleStatus`
+   *   facts after launch. Creation batches the initial status with run.start;
+   *   a local reservation publishes nothing. Every consumer, including the
+   *   transcript recorder (via its `handleStatus`
    *   port), reads it. The session constructs the machine with its own
    *   publisher, so a transition reaches every consumer no matter which
    *   caller triggered it. Required and never rebound: a machine publishing
@@ -110,8 +111,9 @@ export class StreamStatusMachine {
 
   /**
    * This stream's combined phase + substate + run-window start, including an
-   * in-flight reservation. The per-stream read every host renders from: the
-   * entry is written before the matching `status` fact is published, so a
+   * in-flight reservation. Reservations describe local launch admission;
+   * creation publishes their initial status. For later transitions the entry
+   * is written before the matching `status` fact is published, so a
    * consumer reacting to that fact reads the phase the fact announced without
    * mirroring it, and `getAllStreamStates()` stays for the whole-map cases.
    */
@@ -124,61 +126,30 @@ export class StreamStatusMachine {
     return this.getStreamState(stream)?.substate;
   }
 
-  tryAcquire(
-    stream: StreamTabId,
-    options: StreamStatusEmitOptions = {},
-  ): boolean {
+  /** Reserve local launch admission. Creation owns the first durable status. */
+  tryAcquire(stream: StreamTabId): boolean {
     const entry = this.streams.get(stream);
     if (entry?.kind === 'reserved') return false;
     const previousState = entry ? effectiveState(entry) : undefined;
-    const previousPhase = previousState?.phase;
-    if (!canAcquireStreamReservation(previousPhase)) {
-      return false;
-    }
-    // A reservation is only acquirable from a non-active phase, so it always
-    // opens a fresh run window rather than extending an earlier one.
-    const runStartedAt = Date.now();
+    if (!canAcquireStreamReservation(previousState?.phase)) return false;
     this.streams.set(stream, {
       kind: 'reserved',
-      runStartedAt,
+      runStartedAt: Date.now(),
       ...(previousState ? { rollbackTo: previousState } : {}),
     });
-    this.publishTransition(stream, STREAM_PHASE.RUNNING, {
-      ...options,
-      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      ...(previousPhase ? { previousPhase } : {}),
-      substate: STREAM_SUBSTATE.STARTING,
-      runStartedAt,
-    });
-    // A reservation that replaces a hold also drops that hold's detail.
     if (entry?.kind === 'hold') this.publishHoldChanged(stream);
     return true;
   }
 
-  releaseIfReserved(
-    stream: StreamTabId,
-    options: StreamStatusEmitOptions = {},
-  ): void {
+  /** A rejected launch restores its local reservation without creating a run. */
+  releaseIfReserved(stream: StreamTabId): void {
     const entry = this.streams.get(stream);
     if (entry?.kind !== 'reserved') return;
-    const rollbackPhase = entry.rollbackTo?.phase ?? STREAM_PHASE.CANCELLED;
-    if (
-      this.transition(
-        stream,
-        rollbackPhase,
-        STREAM_TRANSITION_CAUSE.RESERVATION_ROLLBACK,
-        options,
-      )
-    ) {
-      return;
-    }
-    // The rollback the table refused still has to drop the reservation, so the
-    // stream returns to exactly the state the reservation overlaid.
     if (entry.rollbackTo) {
       this.streams.set(stream, { kind: 'phase', state: entry.rollbackTo });
-      return;
+    } else {
+      this.streams.delete(stream);
     }
-    this.streams.delete(stream);
   }
 
   transition(

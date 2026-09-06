@@ -452,6 +452,20 @@ async function assembleAgentLaunchContext(
       isRemote,
       background,
     },
+    // Reservation is local admission, not a stream fact. Its first visible
+    // status belongs to this creation transaction, after run.start.
+    ...(input.streamTabIdOverride
+      ? []
+      : [
+          {
+            type: 'status' as const,
+            aggregateId: qualifyAggregateId('stream', streamId),
+            phase: STREAM_PHASE.RUNNING,
+            cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+            substate: STREAM_SUBSTATE.STARTING,
+            runStartedAt: session.status.getStreamState(streamId)?.runStartedAt,
+          },
+        ]),
   ]);
   onStarted(runTrace, setting.agentCategory);
   input.onStreamResolved?.(streamId, runTrace.trace);
