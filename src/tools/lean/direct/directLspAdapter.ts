@@ -157,6 +157,11 @@ export function createDirectLspLeanAdapter(
     );
   });
 
+  // Uninterruptible: the lease is one step. Disarming awaits the idle fiber,
+  // and an interruption landing there would leave `inFlight` incremented
+  // with no `endUse` to match it, so the session could never be idle-evicted
+  // or stopped at run end. Interrupting the idle fiber from inside this
+  // region is fine; only this fiber is shielded.
   const beginUse = Effect.fn('DirectLspAdapter.beginUse')(function* (
     root: string,
   ) {
@@ -166,7 +171,7 @@ export function createDirectLspLeanAdapter(
     tracked.lastUsedAt = now();
     yield* disarmIdleStop(tracked);
     return tracked;
-  });
+  }, Effect.uninterruptible);
 
   const endUse = Effect.fn('DirectLspAdapter.endUse')(function* (
     root: string,
@@ -655,8 +660,9 @@ export function createDirectLspLeanAdapter(
       line: number,
       column: number,
       method: string,
+      runId: ExecutionId | undefined,
     ) {
-      return yield* withSession(filePath, currentRunId(), (session) =>
+      return yield* withSession(filePath, runId, (session) =>
         session.requestSettled<T | null>(filePath, line, column, method),
       ).pipe(
         Effect.map((data): LspResult<T> =>
@@ -699,7 +705,13 @@ export function createDirectLspLeanAdapter(
 
     getGoalState: (filePath, line, column) =>
       effectRuntime().runPromise(
-        positionRequest<PlainGoal>(filePath, line, column, '$/lean/plainGoal'),
+        positionRequest<PlainGoal>(
+          filePath,
+          line,
+          column,
+          '$/lean/plainGoal',
+          currentRunId(),
+        ),
       ),
 
     getTermGoal: (filePath, line, column) =>
@@ -709,12 +721,19 @@ export function createDirectLspLeanAdapter(
           line,
           column,
           '$/lean/plainTermGoal',
+          currentRunId(),
         ),
       ),
 
     getHoverInfo: (filePath, line, column) =>
       effectRuntime().runPromise(
-        positionRequest<LspHover>(filePath, line, column, 'textDocument/hover'),
+        positionRequest<LspHover>(
+          filePath,
+          line,
+          column,
+          'textDocument/hover',
+          currentRunId(),
+        ),
       ),
 
     stopSessionsForRun: (runId) =>
