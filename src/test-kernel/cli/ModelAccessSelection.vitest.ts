@@ -13,6 +13,7 @@ import {
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
+import { effectRuntime } from '@platform/processRuntime';
 import type { UsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -316,7 +317,7 @@ describe('CLI model access routes', () => {
   it('enables Kimi Code routing on a personal fallback when a key exists', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
 
-    const result = await Effect.runPromise(
+    const result = await effectRuntime().runPromise(
       await updateCliModelAccess(
         context,
         subscriptionPreference('kimi-code', 'on'),
@@ -336,7 +337,7 @@ describe('CLI model access routes', () => {
   });
 
   it('guides to key entry when Kimi Code is selected without a key', async () => {
-    const result = await Effect.runPromise(
+    const result = await effectRuntime().runPromise(
       await updateCliModelAccess(
         context,
         subscriptionPreference('kimi-code', 'on'),
@@ -371,7 +372,7 @@ describe('CLI model access routes', () => {
   it('enables GLM Coding Plan routing on a personal fallback when a key exists', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
 
-    const result = await Effect.runPromise(
+    const result = await effectRuntime().runPromise(
       await updateCliModelAccess(
         context,
         subscriptionPreference('glm-code', 'on'),
@@ -391,7 +392,7 @@ describe('CLI model access routes', () => {
   });
 
   it('guides to key entry when GLM Coding Plan is selected without a key', async () => {
-    const result = await Effect.runPromise(
+    const result = await effectRuntime().runPromise(
       await updateCliModelAccess(
         context,
         subscriptionPreference('glm-code', 'on'),
@@ -405,7 +406,7 @@ describe('CLI model access routes', () => {
   });
 
   it('turns off GLM Coding Plan without requiring a key', async () => {
-    const result = await Effect.runPromise(
+    const result = await effectRuntime().runPromise(
       await updateCliModelAccess(
         context,
         subscriptionPreference('glm-code', 'off'),
@@ -436,7 +437,7 @@ describe('CLI model access routes', () => {
     });
     const writeProgress = vi.fn();
 
-    const result = await Effect.runPromise(
+    const result = await effectRuntime().runPromise(
       await updateCliModelAccess(
         context,
         subscriptionPreference('chatgpt', 'on'),
@@ -470,7 +471,7 @@ describe('CLI model access routes', () => {
       target: 'global',
     });
 
-    const result = await Effect.runPromise(
+    const result = await effectRuntime().runPromise(
       await updateCliModelAccess(
         context,
         subscriptionPreference('chatgpt', 'off'),
@@ -517,7 +518,7 @@ describe('CLI model access routes', () => {
       'glm-code': 'Off · key configured',
     });
 
-    await Effect.runPromise(
+    await effectRuntime().runPromise(
       await updateCliModelAccess(
         context,
         subscriptionPreference('kimi-code', 'off'),
@@ -541,7 +542,7 @@ describe('CLI model access routes', () => {
       effective: false,
       target: 'global',
     });
-    await Effect.runPromise(
+    await effectRuntime().runPromise(
       await updateCliModelAccess(
         context,
         subscriptionPreference('chatgpt', 'off'),
@@ -571,7 +572,7 @@ describe('CLI model access routes', () => {
     );
     expect(selection?.description).toBe('On · sign in required');
     if (!selection) throw new Error('Expected ChatGPT preference item');
-    await Effect.runPromise(
+    await effectRuntime().runPromise(
       await updateCliModelAccess(context, selection.value, {
         writeProgress: vi.fn(),
       }),
@@ -596,7 +597,7 @@ describe('CLI model access routes', () => {
     if (!selection) throw new Error('Expected Kimi preference item');
 
     vi.clearAllMocks();
-    await Effect.runPromise(
+    await effectRuntime().runPromise(
       await updateCliModelAccess(context, selection.value),
     );
 

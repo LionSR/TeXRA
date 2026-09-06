@@ -1,5 +1,7 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import * as logger from '@logger/logUtils';
 import * as rootsAccess from '@platform/workspaceRoots';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -148,6 +150,41 @@ describe('logUtils', () => {
     expect(lines).toHaveLength(2);
     expect(output).toContain('[BoundChannel] with data');
     expect(output).toContain('"requestId": "visible-request-id"');
+  });
+
+  it('routes native Effect logs and nested spans through the redacting sink', () => {
+    enableDebugLogging();
+    const lines = captureLines();
+    const operation = Effect.fn('model.request')(function* () {
+      yield* Effect.annotateCurrentSpan('executionId', 'run-42');
+      yield* Effect.annotateCurrentSpan('authorization', `Bearer ${SECRET}`);
+      yield* Effect.logWarning('provider warning').pipe(
+        Effect.annotateLogs({ executionId: 'run-42', apiKey: SECRET }),
+      );
+    });
+
+    Effect.runSync(
+      operation().pipe(
+        Effect.withSpan('session.run'),
+        Effect.provide(effectDiagnosticsLayer),
+      ),
+    );
+
+    const output = lines.join('\n');
+    expect(output).toContain('WARN');
+    expect(output).toContain('provider warning');
+    expect(output).toContain('model.request: Success');
+    expect(output).toContain('session.run: Success');
+    expect(output).toContain('"executionId": "run-42"');
+    expect(output).toContain('"parentSpanId"');
+    expect(output).toContain('[redacted]');
+    expect(output).not.toContain(SECRET);
+
+    vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue(undefined);
+    lines.length = 0;
+    Effect.runSync(operation().pipe(Effect.provide(effectDiagnosticsLayer)));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('provider warning');
   });
 
   it('disposes a shared underlying sink exactly once', () => {
