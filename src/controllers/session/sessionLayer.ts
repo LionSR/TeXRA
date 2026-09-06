@@ -398,6 +398,19 @@ const openSession = (open: SessionOpen) =>
     return Context.get(context, Session);
   }).pipe(Effect.scoped);
 
+/** Every session the map holds, entries still building waited for. Builds
+ *  nothing: a key whose entry has been released is skipped. */
+const listSessions = Effect.gen(function* () {
+  const sessions = yield* Sessions;
+  const keys = yield* RcMap.keys(sessions.rcMap);
+  const held: SessionHandle[] = [];
+  for (const key of keys) {
+    const entry = yield* sessions.contextEffectOption(key).pipe(Effect.scoped);
+    if (Option.isSome(entry)) held.push(Context.get(entry.value, Session));
+  }
+  return held;
+});
+
 /** The session held for `root`, if the map holds one: an entry still
  *  building is waited for, never skipped. Builds nothing. */
 const heldSession = (root: string) =>
@@ -542,14 +555,15 @@ const closeSession = (root: string, signal?: AbortSignal) =>
  * composition root is its first run (the package): the map itself never
  * waits for it, so an open registers its root with the owner before the
  * caller's first await, and only the entry's build does. The owner it
- * installs is the map's Promise-and-sync face: `open` builds under
- * `runSync`, so everything a root's graph does at build time, the history
- * import included, must complete inside the scheduler's yield budget
+ * installs answers in Effect except for the two synchronous faces the
+ * unconverted hosts still take: `openSync` builds under `runSync`, so
+ * everything a root's graph does at build time, the history import
+ * included, must complete inside the scheduler's yield budget
  * (`Scheduler.MaxOpsBeforeYield` steps per yield) or the open reads as
- * asynchronous and throws; an opener whose identity is pending opens through
- * `openAsync`. The import appends the whole history in one call for that
- * reason; moving it to row open (#11907) is what removes the history pass
- * from here.
+ * asynchronous and throws; an opener whose identity is still pending opens
+ * through the Effect face. The import appends the whole history in one call
+ * for that reason; moving it to row open (#11907) is what removes the
+ * history pass from here.
  */
 export function installProcessRuntime(
   processStart: string | undefined | Promise<string | undefined>,
@@ -569,11 +583,21 @@ export function installProcessRuntime(
   };
   const runtime = ManagedRuntime.make(Sessions.layer(release, identity));
   initProcessRuntime(runtime);
+  // The map's services on the caller's own fiber: an Effect-native opener
+  // (the SDK) runs these where it stands, so the owner adds no run site of
+  // its own. `openSync` and `current` stay synchronous for the three hosts.
+  const onThisRuntime = <A, E>(
+    effect: Effect.Effect<A, E, Sessions>,
+  ): Effect.Effect<A, E> =>
+    Effect.flatMap(runtime.contextEffect, (context) =>
+      Effect.provideContext(effect, context),
+    );
   initSessionOwner({
-    open: (open) => runtime.runSync(openSession(open)),
-    openAsync: (open) => runtime.runPromise(openSession(open)),
+    openSync: (open) => runtime.runSync(openSession(open)),
+    open: (open) => onThisRuntime(openSession(open)),
     current: (root) => runtime.runSync(heldSession(root))?.session,
-    close: (root, signal) => runtime.runPromise(closeSession(root, signal)),
+    list: () => onThisRuntime(listSessions),
+    close: (root, signal) => onThisRuntime(closeSession(root, signal)),
   });
 }
 

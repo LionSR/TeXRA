@@ -13,6 +13,12 @@
  */
 
 import {
+  Effect,
+  type Context,
+  type Stream,
+  type SubscriptionRef,
+} from 'effect';
+import {
   processWorkspaceRoots,
   tryProcessWorkspaceRoots,
   type WorkspaceRoots,
@@ -29,7 +35,6 @@ import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
-import type { Context, Effect, Stream, SubscriptionRef } from 'effect';
 import type { SessionHandle, SessionHandleInit } from './SessionHandle';
 
 /** What a session holds of its graph, resolved once at construction. */
@@ -80,18 +85,23 @@ export type SessionOpen = SessionHandleInit & {
 
 /** The process's session owner, as `installProcessRuntime` installs it. */
 export interface SessionOwner {
+  /** The hosts' synchronous face of {@link SessionOwner.open}: the
+   *  extension, the desktop, and the CLI still open from Promise-native
+   *  code. It is scheduled for deletion when those lanes convert, and no
+   *  new caller may take it. */
+  openSync(open: SessionOpen): SessionHandle;
   /** The session of `open.roots`' storage root: the one already open there,
-   *  or built now over what `open` supplies. */
-  open(open: SessionOpen): SessionHandle;
-  /** The same open for a process still reading its identity (the package):
-   *  the root's entry is registered with the owner before this returns, so
-   *  a close issued after it finds the session and waits for its build. */
-  openAsync(open: SessionOpen): Promise<SessionHandle>;
+   *  or built now over what `open` supplies. The root's entry is registered
+   *  with the owner before this Effect's first yield, so a close issued
+   *  after it finds the session and waits for its build. */
+  open(open: SessionOpen): Effect.Effect<SessionHandle>;
   /** The session open on a storage root, if one is; never builds one. */
   current(root: string): SessionHandle | undefined;
+  /** Every session the owner holds, in no particular order. */
+  list(): Effect.Effect<readonly SessionHandle[]>;
   /** Close the session of a storage root, settling what it owns inside
    *  `signal`'s budget, or the runtime's own when the caller passes none. */
-  close(root: string, signal?: AbortSignal): Promise<SessionCloseReport>;
+  close(root: string, signal?: AbortSignal): Effect.Effect<SessionCloseReport>;
 }
 
 let owner: SessionOwner | undefined;
@@ -131,20 +141,23 @@ function sessions(): SessionOwner {
  * session ends.
  */
 export function openSession(init: SessionHandleInit): SessionHandle {
-  return sessions().open(resolveRoots(init));
+  return sessions().openSync(resolveRoots(init));
+}
+
+/** {@link openSession} for a caller that already speaks Effect: the same
+ *  one-session-per-root open, on the caller's own fiber. */
+export function openSessionEffect(
+  init: SessionHandleInit,
+): Effect.Effect<SessionHandle> {
+  return Effect.suspend(() => sessions().open(resolveRoots(init)));
 }
 
 /**
- * {@link openSession} for an opener whose process identity is still being
- * read (the package, whose composition root is its first run): the root's
- * entry is registered with the owner before this returns, so a close or a
- * shutdown issued right after it settles this open too, and the handle
- * arrives when the session is built.
+ * Every session the process's owner holds. A process with no owner
+ * installed has opened none and holds none, which is what this reports.
  */
-export function openSessionAsync(
-  init: SessionHandleInit,
-): Promise<SessionHandle> {
-  return sessions().openAsync(resolveRoots(init));
+export function listSessions(): Effect.Effect<readonly SessionHandle[]> {
+  return Effect.suspend(() => owner?.list() ?? Effect.succeed([]));
 }
 
 function resolveRoots(init: SessionHandleInit): SessionOpen {
@@ -179,8 +192,10 @@ export function defaultRootSession(): SessionHandle | undefined {
 export function closeSession(
   root: string,
   signal?: AbortSignal,
-): Promise<SessionCloseReport> {
-  return owner
-    ? owner.close(root, signal)
-    : Promise.resolve({ settled: true, abandoned: [] });
+): Effect.Effect<SessionCloseReport> {
+  return Effect.suspend(() =>
+    owner
+      ? owner.close(root, signal)
+      : Effect.succeed({ settled: true, abandoned: [] }),
+  );
 }
