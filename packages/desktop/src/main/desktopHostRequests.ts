@@ -506,12 +506,24 @@ export function createDesktopHostRequests(
       return;
     }
     // The workspace-relative base, as the extension passes: the collector
-    // resolves it from the workspace root.
-    const packed = await runPackLatexdiffvc(
-      baseFile,
-      commit,
-      action === 'cleanLatexdiffvc',
-    );
+    // resolves it from the workspace root. A filesystem failure here, a
+    // read-only Diffs directory or a locked artifact, reaches the renderer
+    // as a result its settle path drops, so it is reported the way the
+    // extension's latexdiff commands report the same failures, then
+    // rethrown so the request still settles as a failure.
+    let packed;
+    try {
+      packed = await runPackLatexdiffvc(
+        baseFile,
+        commit,
+        action === 'cleanLatexdiffvc',
+      );
+    } catch (error) {
+      await host.showErrorMessage(
+        `Error packing LaTeX diff: ${toErrorMessage(error)}`,
+      );
+      throw error;
+    }
     const message = latexdiffPackMessage(packed);
     if (message) await host.showInfoMessage(message);
   }
@@ -639,31 +651,7 @@ export function createDesktopHostRequests(
 
   const notOnDesktop = (what: string) =>
     new Rejected({ reason: `${what} is not available in the desktop app.` });
-
-  /**
-   * Every host request settles here. A `Rejected` or `Unavailable` is a
-   * deliberate answer whose reason its own arm has already presented when
-   * the user needs to see it. Anything else is this host failing, and the
-   * renderer's settle path drops every non-OK result, so such a failure
-   * used to reach the user as nothing at all. It is shown once here and
-   * then rethrown, so the request still settles as `Internal` and the
-   * cause is still logged.
-   */
   async function handle(
-    request: HostRequest,
-    port: string,
-  ): Promise<HostOutcome> {
-    try {
-      return await dispatch(request, port);
-    } catch (error) {
-      if (error instanceof Rejected || error instanceof Unavailable)
-        throw error;
-      await host.showErrorMessage(toErrorMessage(error));
-      throw error;
-    }
-  }
-
-  async function dispatch(
     request: HostRequest,
     port: string,
   ): Promise<HostOutcome> {
