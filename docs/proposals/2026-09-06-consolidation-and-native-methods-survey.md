@@ -1,7 +1,7 @@
 # Survey: code consolidation and native-method opportunities (2026-09-06)
 
 > **Status:** Written 2026-09-06 against branch HEAD `03d2cfd` (`chore(deps-dev):
-> bump the development-dependencies group across 1 directory with 6 updates`,
+bump the development-dependencies group across 1 directory with 6 updates`,
 > #11842). Scheduled routine re-ran the standing question — "find
 > duplicate/similar logic to consolidate, and hand-rolled code that a native
 > method or the standard library already covers" — three days after
@@ -56,10 +56,16 @@ were the same function:
 const s = signal(initial);
 const fiber = runtime.runFork(
   Stream.runForEachArray(changes, (arr) =>
-    Effect.sync(() => { s.set(arr.at(-1) as A); }),
+    Effect.sync(() => {
+      s.set(arr.at(-1) as A);
+    }),
   ),
 );
-return Object.assign(s, { dispose: () => { runtime.runFork(Fiber.interrupt(fiber)); } });
+return Object.assign(s, {
+  dispose: () => {
+    runtime.runFork(Fiber.interrupt(fiber));
+  },
+});
 
 // packages/cli/.../sessionView.ts — viewSignal (new in this window, #11881)
 const s = signal(SubscriptionRef.getUnsafe(view));
@@ -71,7 +77,11 @@ const fiber = runtime.runFork(
     }),
   ),
 );
-return Object.assign(s, { dispose: () => { runtime.runFork(Fiber.interrupt(fiber)); } });
+return Object.assign(s, {
+  dispose: () => {
+    runtime.runFork(Fiber.interrupt(fiber));
+  },
+});
 ```
 
 `viewSignal`'s three call-site arguments (`effectRuntime()`,
