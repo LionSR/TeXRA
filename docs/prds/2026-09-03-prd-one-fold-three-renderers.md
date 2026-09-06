@@ -2543,8 +2543,10 @@ a component.
   the `LayerMap`.
 - **Conversation** (760 px column): the paper chip and stream title in the
   task header, the same conversation and composer as the extension, and a
-  dock with the diff count, Compile PDF, and latexdiff-vs-last-commit
-  shortcuts into the Tools sheet.
+  dock containing only the latexdiff-vs-last-commit shortcut into the Tools
+  sheet. The dock renders below the composer until `ProgressApp` provides a
+  slot for it. Compile PDF and the diff-count chip are out of scope for this
+  lane; a diff count requires a host-produced count in `HostSnapshot`.
   The desktop keeps its auxiliary IPC alongside this protocol. A PTY streams
   `desktop:terminal:data`, `:exit`, and `:error` into xterm through
   `renderer/messageRoutes.ts:180-190`, which is a continuous byte stream, not
