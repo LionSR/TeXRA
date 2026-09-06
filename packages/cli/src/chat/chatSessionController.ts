@@ -319,17 +319,14 @@ export function createChatSessionController(
       ),
     );
 
-  // Shared prelude of the three run-starting paths (start, resume,
-  // follow-up-wake resume): resolve the model-keyed session context and
-  // activate the config into the session meta signals in one step.
-  const beginRunContext = (
+  /** Publish the configuration of the conversation the TUI adopts. */
+  const adoptRunConfig = (
     config: Pick<
       AgentConfig,
       'agent' | 'model' | 'cli' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
-  ): CliContext => {
-    const sessionContext = getSessionContext();
+  ): void => {
     const cliMultiAgentPresetId = config.cli?.multiAgentPresetId ?? undefined;
     patchSessionMeta({
       agent: config.agent,
@@ -339,7 +336,6 @@ export function createChatSessionController(
       cliMultiAgentPresetId,
       delegationAgentScope: config.delegationAgentScope ?? undefined,
     });
-    return sessionContext;
   };
 
   const supersedeInterruptedRecovery = ():
@@ -566,7 +562,8 @@ export function createChatSessionController(
 
   const startRootRun = (config: AgentConfigPayload): void => {
     void supersedeInterruptedRecovery();
-    const sessionContext = beginRunContext(config);
+    const sessionContext = getSessionContext();
+    adoptRunConfig(config);
     const { approvalsUnavailable, ownExecution, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
@@ -679,7 +676,7 @@ export function createChatSessionController(
         return;
       }
 
-      const sessionContext = beginRunContext(config, 'history');
+      const sessionContext = getSessionContext();
       const { approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
       ownExecution(id);
@@ -694,6 +691,7 @@ export function createChatSessionController(
       // honored by `isCancellationRequested`, which `resumeRun` re-reads once
       // this returns, rather than starting an agent the user cancelled.
       const adoptResumedStream = async (): Promise<void> => {
+        adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
         session.streamId = streamId;
@@ -847,7 +845,8 @@ export function createChatSessionController(
         if (isCancellationRequested()) return false;
         const parentStreamId = snapshotStore.getParentStreamId(streamId);
 
-        const sessionContext = beginRunContext(config, 'history');
+        const sessionContext = getSessionContext();
+        adoptRunConfig(config, 'history');
 
         const runHost = setupRunHost(sessionContext);
         finalize = runHost.finalize;

@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   secrets: {},
   setCliSubscriptionPreference: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
-  refreshSubscriptionPreferenceViews: vi.fn(),
   setGLMCodingPlan: vi.fn(),
   updateGlobalState: vi.fn(),
 }));
@@ -61,7 +60,6 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
 }));
 
 vi.mock('@cli/chat/tui/state/subscriptionPreference', () => ({
-  refreshSubscriptionPreferenceViews: mocks.refreshSubscriptionPreferenceViews,
   setCliSubscriptionPreference: mocks.setCliSubscriptionPreference,
   setCliCodingPlanSubscription: mocks.setCliCodingPlanSubscription,
 }));
@@ -113,7 +111,10 @@ import {
   type ApprovalDecision,
 } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
-import { resetCliState } from '@cli/chat/tui/state/cliState';
+import {
+  codexPreferenceVersion,
+  resetCliState,
+} from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -468,7 +469,6 @@ afterEach(() => {
   mocks.notify.mockReset();
   mocks.setCliSubscriptionPreference.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
-  mocks.refreshSubscriptionPreferenceViews.mockReset();
   mocks.setGLMCodingPlan.mockReset();
   mocks.updateGlobalState.mockReset();
 });
@@ -1034,6 +1034,7 @@ describe('TUI retry approvals', () => {
     });
 
     const { interactions } = tui();
+    const previousPreferenceVersion = codexPreferenceVersion.get();
     const result = port().requestRetry(
       kimiCodeSubscriptionRetry('kimi-prepare-fails'),
       { prepareRetry },
@@ -1050,7 +1051,9 @@ describe('TUI retry approvals', () => {
       GlobalStateKey.KIMI_CODE_PREFER,
       true,
     );
-    expect(mocks.refreshSubscriptionPreferenceViews).toHaveBeenCalled();
+    expect(codexPreferenceVersion.get()).toBeGreaterThan(
+      previousPreferenceVersion,
+    );
     expectNoPreferenceWrites();
   });
 
@@ -1144,6 +1147,7 @@ describe('TUI retry approvals', () => {
     });
 
     const { interactions } = tui();
+    const previousPreferenceVersion = codexPreferenceVersion.get();
     const result = port().requestRetry(
       kimiCodeSubscriptionRetry('kimi-rollback'),
     );
@@ -1158,7 +1162,7 @@ describe('TUI retry approvals', () => {
       GlobalStateKey.KIMI_CODE_PREFER,
       true,
     );
-    expect(mocks.refreshSubscriptionPreferenceViews).toHaveBeenCalledOnce();
+    expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
   });
 
   it('does not offer or apply the subscription switch without an OpenAI API key', async () => {
