@@ -18,7 +18,10 @@ export function mountProgressWebview(app: ProgressApp): void {
   if (!sessionKey) {
     throw new Error('<progress-app> is missing its data-session key');
   }
-  const sessions = createSessionSurfaces({ storage: webviewStorage });
+  const sessions = createSessionSurfaces({
+    storage: webviewStorage,
+    hostRequestFailureOwner: 'surface',
+  });
   // Every message the extension posts to this window is a session message;
   // one that is not is the host's defect.
   const receive = (event: MessageEvent): void => {

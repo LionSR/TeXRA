@@ -3,6 +3,7 @@
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
  */
 import type { StreamTabId } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 // ---------------------------------------------------------------------------
 // Disposable
@@ -172,9 +173,19 @@ export interface ProcessesPort {
 // Cross-process file locks
 // ---------------------------------------------------------------------------
 
-/** Serialize work by a canonical absolute path shared by every host process. */
+/**
+ * Serialize work by a canonical absolute path shared by every host process.
+ *
+ * The port is the Effect combinator itself: `withFileLock(path)(self)` holds
+ * the lock around `self` and releases it on success, failure, and
+ * interruption. Lock acquisition failures reach the caller as `Error` (the
+ * implementation's own instances — `proper-lockfile`'s carry `code`
+ * ELOCKED / ECOMPROMISED, which callers match on) added to `self`'s own `E`.
+ */
 export interface FileLockProvider {
-  runExclusive<T>(path: string, operation: () => Promise<T>): Promise<T>;
+  withFileLock(
+    path: string,
+  ): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E | Error, R>;
 }
 
 // ---------------------------------------------------------------------------

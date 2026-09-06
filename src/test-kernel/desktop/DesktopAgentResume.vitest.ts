@@ -16,7 +16,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as AgentRunner from '@agent/runtime/runAgent';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
 import {
   AgentCategory,
@@ -148,17 +147,11 @@ function createResumeHarness(): {
   const session = createProcessSession({ snapshots });
   session.transcripts.ensureStream(stream);
   const owner = new DesktopProcessResumeOwner({ sessions: () => [session] });
-  const detachTerminalResultToast = attachTerminalResultToast(
-    session,
-    session.interactions,
-    { replayWhenAttached: true },
-  );
   let disposed = false;
   const dispose = (): void => {
     if (disposed) return;
     disposed = true;
     owner.disable();
-    detachTerminalResultToast();
     session.dispose();
   };
   onTestFinished(dispose);
@@ -205,7 +198,7 @@ describe('desktop process resume owner', () => {
     expect(runAgent).toHaveBeenCalledOnce();
   });
 
-  it('presents one fallback when workflow resume fails before lifecycle startup', async () => {
+  it('presents one error when workflow resume fails before lifecycle startup', async () => {
     await mockWorkflowResume();
     runAgent.mockRejectedValue(new Error('launch failed'));
     const harness = createResumeHarness();
@@ -220,7 +213,7 @@ describe('desktop process resume owner', () => {
     expect(replacement.emit).not.toHaveBeenCalled();
   });
 
-  it('leaves post-lifecycle workflow failure presentation to the terminal result', async () => {
+  it('presents one workflow failure after lifecycle startup', async () => {
     await mockWorkflowResume();
     const harness = createResumeHarness();
     failAfterLifecycle(
@@ -231,7 +224,10 @@ describe('desktop process resume owner', () => {
     const presenter = attachResultPresenter(harness.session);
 
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
-    expectOneErrorPresentation(presenter, 'workflow lifecycle failed');
+    expectOneErrorPresentation(
+      presenter,
+      'Resume failed: workflow lifecycle failed',
+    );
   });
 
   it('replays one detached post-lifecycle workflow failure on replacement', async () => {
@@ -247,7 +243,10 @@ describe('desktop process resume owner', () => {
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
     const replacement = attachResultPresenter(harness.session);
     await Promise.resolve();
-    expectOneErrorPresentation(replacement, 'detached lifecycle failed');
+    expectOneErrorPresentation(
+      replacement,
+      'Resume failed: detached lifecycle failed',
+    );
     replacement.detach();
 
     const secondReplacement = attachResultPresenter(harness.session);
@@ -255,7 +254,7 @@ describe('desktop process resume owner', () => {
     expect(secondReplacement.emit).not.toHaveBeenCalled();
   });
 
-  it('leaves post-lifecycle tool-use failure presentation to the terminal result and restores follow-ups', async () => {
+  it('presents one tool-use failure after lifecycle startup and restores follow-ups', async () => {
     await persistRunRecord('toolUse');
     retrieveSessionResumeData.mockResolvedValue(
       createToolUseResumeData({ streamId: stream, executionId }),
@@ -275,7 +274,10 @@ describe('desktop process resume owner', () => {
     const presenter = attachResultPresenter(harness.session);
 
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
-    expectOneErrorPresentation(presenter, 'tool-use lifecycle failed');
+    expectOneErrorPresentation(
+      presenter,
+      'Resume failed: tool-use lifecycle failed',
+    );
     expect(harness.session.followUps.getAll(stream)).toEqual([
       'keep this queued',
     ]);
@@ -289,7 +291,10 @@ describe('desktop process resume owner', () => {
     await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
     const presenter = attachResultPresenter(harness.session);
     await Promise.resolve();
-    expectOneErrorPresentation(presenter, 'terminal resume failed');
+    expectOneErrorPresentation(
+      presenter,
+      'Resume failed: terminal resume failed',
+    );
   });
 
   it('reports a resume failure that follows a completed terminal result', async () => {

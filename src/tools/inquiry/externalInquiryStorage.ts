@@ -201,41 +201,6 @@ function normalizeSessionLinks(links?: string[] | null): string[] | undefined {
 // ============================================================================
 
 /**
- * Read a thread manifest under its lock, require the last turn to be open,
- * and replace it via `update`. Returns null without calling `update` if the
- * thread is missing, not open, has no turns, or its last turn isn't open —
- * the shared guard behind `recordAnswerForOpenTurn`.
- */
-async function withOpenTurnUpdate(
-  threadId: InquiryThreadId,
-  update: (
-    existing: ExternalInquiryThreadManifest,
-    lastTurn: OpenInquiryTurn,
-    timestamp: string,
-  ) =>
-    | Promise<ExternalInquiryThreadManifest | null>
-    | ExternalInquiryThreadManifest
-    | null,
-): Promise<ExternalInquiryThreadManifest | null> {
-  return threadMutex.runExclusive(threadId, async () => {
-    const existing = await readThreadManifest(threadId);
-    if (!existing || existing.status !== 'open' || existing.turns.length === 0)
-      return null;
-
-    // Safe: the length check above guarantees at least one turn.
-    const lastTurn = existing.turns.at(-1)!;
-    if (lastTurn.kind !== 'open') return null;
-
-    const timestamp = new Date().toISOString();
-    const nextManifest = await update(existing, lastTurn, timestamp);
-    if (!nextManifest) return null;
-
-    await writeThreadManifest(nextManifest);
-    return nextManifest;
-  });
-}
-
-/**
  * Append a new open question to a thread. Creates the thread when no
  * thread_id is passed (or the existing thread is unknown). Updates the
  * thread's `parentStreamId` and `parentExecutionId` to the caller —
@@ -333,32 +298,39 @@ export async function recordAnswerForOpenTurn(params: {
   answer: string;
   sessionLinks?: string[] | null;
 }): Promise<ExternalInquiryThreadManifest | null> {
-  return withOpenTurnUpdate(
-    params.threadId,
-    (existing, lastTurn, timestamp) => {
-      if (lastTurn.turnIndex !== params.turnIndex) return null;
-      const sessionLinks = normalizeSessionLinks(params.sessionLinks);
+  return threadMutex.runExclusive(params.threadId, async () => {
+    const existing = await readThreadManifest(params.threadId);
+    if (!existing || existing.status !== 'open' || existing.turns.length === 0)
+      return null;
 
-      // `draft` is open-turn-only state and must not survive the transition.
-      const { draft: _draft, ...openFields } = lastTurn;
-      const answeredTurn: AnsweredInquiryTurn = {
-        ...openFields,
-        kind: 'answered',
-        answer: params.answer,
-        answeredAt: timestamp,
-        sessionLinks,
-      };
+    // Safe: the length check above guarantees at least one turn.
+    const lastTurn = existing.turns.at(-1)!;
+    if (lastTurn.kind !== 'open' || lastTurn.turnIndex !== params.turnIndex)
+      return null;
 
-      const nextManifest: ExternalInquiryThreadManifest = {
-        ...existing,
-        status: 'answered',
-        updatedAt: timestamp,
-        turns: [...existing.turns.slice(0, -1), answeredTurn],
-      };
+    const timestamp = new Date().toISOString();
+    const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
-      return nextManifest;
-    },
-  );
+    // `draft` is open-turn-only state and must not survive the transition.
+    const { draft: _draft, ...openFields } = lastTurn;
+    const answeredTurn: AnsweredInquiryTurn = {
+      ...openFields,
+      kind: 'answered',
+      answer: params.answer,
+      answeredAt: timestamp,
+      sessionLinks,
+    };
+
+    const nextManifest: ExternalInquiryThreadManifest = {
+      ...existing,
+      status: 'answered',
+      updatedAt: timestamp,
+      turns: [...existing.turns.slice(0, -1), answeredTurn],
+    };
+
+    await writeThreadManifest(nextManifest);
+    return nextManifest;
+  });
 }
 
 /**

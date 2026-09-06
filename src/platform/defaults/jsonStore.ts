@@ -1,10 +1,11 @@
 import { chmod, mkdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
+import { effectRuntime } from '@platform/processRuntime';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { StateStore } from '../interfaces';
@@ -164,6 +165,12 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * lock for cross-process exclusion. Reads (`get`, `has`, `snapshot`, `keys`)
  * still serve this instance's view: open-time contents plus its own
  * mutations; they don't observe other writers' changes.
+ *
+ * `set` is the store's own write and is an `Effect`. `update` exists only
+ * because {@link StateStore} and `ConfigStore` mirror `vscode.Memento`, whose
+ * shape the VS Code host cannot change: it is the port's method, the single
+ * place this module reaches the process runtime, and it disappears with those
+ * two port shapes rather than with this class.
  */
 export class JsonStore implements StateStore {
   private constructor(
@@ -178,21 +185,13 @@ export class JsonStore implements StateStore {
    * in {@link flush}, so pure reads work on storage the process can't write
    * (see {@link JsonStoreOptions.mode}).
    */
-  static async open(
+  static readonly open = Effect.fn('JsonStore.open')(function* (
     filePath: string,
     options: JsonStoreOptions = {},
-  ): Promise<JsonStore> {
+  ) {
     const storePath = resolve(filePath);
-    // Runs on Effect's default runtime, not `effectRuntime()`: the CLI and
-    // desktop hosts open their stores before `installProcessRuntime` — the
-    // CLI's `initPlatform` calls `createCliStateStores` and
-    // `openTexraConfigStores` first — so the process runtime does not exist
-    // yet. Pinned by the "Effect run boundaries" ratchet in
-    // src/test-kernel/architecture/dependencyDirection.vitest.ts.
-    const exit = await Effect.runPromiseExit(readJsonRecord(storePath));
-    if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
-    return new JsonStore(storePath, exit.value, options);
-  }
+    return new JsonStore(storePath, yield* readJsonRecord(storePath), options);
+  });
 
   get<T>(key: string, defaultValue?: T): T {
     const value = this.data[key];
@@ -205,34 +204,32 @@ export class JsonStore implements StateStore {
 
   /**
    * Apply the mutation in memory, then flush it on the file's lane in
-   * {@link writeLanes}. The lane is claimed synchronously, before any
-   * await, so flushes run in `set()` call order rather than racing on
-   * `mkdir`/read/`write-file-atomic` timing; a failed flush doesn't stop
-   * the lane from running subsequent flushes.
+   * {@link writeLanes}. Both steps happen in the effect's first synchronous
+   * step, so flushes run in `set()` order rather than racing on
+   * `mkdir`/read/`write-file-atomic` timing; a failed flush doesn't stop the
+   * lane from running subsequent flushes.
    */
-  async set(key: string, value: unknown): Promise<void> {
-    if (value === undefined) {
-      delete this.data[key];
-    } else {
-      this.data[key] = value;
-    }
-    // Default runtime for the same reason as `open`: a store opened during
-    // host bootstrap is written through this same entry, and this module
-    // sits below the runtime install, so no entry here may assume
-    // `installProcessRuntime` has run. Pinned by the same "Effect run
-    // boundaries" ratchet.
-    const exit = await Effect.runPromiseExit(
-      withPerKeyLane(
+  set(key: string, value: unknown) {
+    return Effect.suspend(() => {
+      if (value === undefined) {
+        delete this.data[key];
+      } else {
+        this.data[key] = value;
+      }
+      return withPerKeyLane(
         writeLanes,
         this.filePath,
-      )(flush(this.filePath, this.options.mode, key, value, this.snapshot())),
-    );
-    if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+      )(flush(this.filePath, this.options.mode, key, value, this.snapshot()));
+    });
   }
 
-  /** {@link StateStore} conformance; same persistence semantics as `set`. */
+  /**
+   * {@link StateStore} / `ConfigStore` conformance — the `vscode.Memento`
+   * shape both ports mirror. Same persistence semantics as {@link set},
+   * which is the Effect-side write every caller inside a program uses.
+   */
   update(key: string, value: unknown): Promise<void> {
-    return this.set(key, value);
+    return effectRuntime().runPromise(this.set(key, value));
   }
 
   snapshot(): JsonRecord {

@@ -5,10 +5,11 @@
 
 import { statSync } from 'node:fs';
 
+import { Effect } from 'effect';
+
 import type { SessionStores } from '@agent/storage';
 import {
   agentResponseTextConnector,
-  attachTerminalResultToast,
   openSession,
   runInSession,
   type SessionHandle,
@@ -16,6 +17,7 @@ import {
 import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { DisposableStore } from '@platform/disposable';
+import { effectRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import {
   runWithWorkspaceRoots,
@@ -226,11 +228,6 @@ async function openPaperSession(
       responseTextProcessing,
     });
     resources.add(() => session.dispose());
-    resources.add(
-      attachTerminalResultToast(session, session.interactions, {
-        replayWhenAttached: true,
-      }),
-    );
     return await runInSession(session, async () => {
       const processStores = await initializeDesktopProcessStores(session);
       resources.add(() => processStores.dispose());
@@ -298,10 +295,15 @@ export async function openDesktopPaperRegistry(
       options.dataRoot,
       root,
     ).getStoragePath();
-    const [workspaceState, workspaceConfig] = await Promise.all([
-      openNodeWorkspaceStateStore(storage),
-      openTexraWorkspaceConfigStore(storage, root, options.warn),
-    ]);
+    const [workspaceState, workspaceConfig] = await effectRuntime().runPromise(
+      Effect.all(
+        [
+          openNodeWorkspaceStateStore(storage),
+          openTexraWorkspaceConfigStore(storage, root, options.warn),
+        ],
+        { concurrency: 'unbounded' },
+      ),
+    );
     const roots = createNodeWorkspaceRoots({
       workspacePath: root,
       storage,

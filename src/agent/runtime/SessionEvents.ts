@@ -283,16 +283,14 @@ export class SessionEventLog extends Context.Service<
           // the rows above a commit are the slice past it; a cursor inside
           // the listing tier's space reads every log row.
           readAll: (fromCommit) =>
-            Stream.unwrap(
-              Effect.sync(() =>
-                Stream.fromIterable(
-                  rows
-                    .slice(Math.max(0, fromCommit - reserved))
-                    .flatMap((row) => {
-                      const event = materialize(row);
-                      return event === null ? [] : [event];
-                    }),
-                ),
+            Stream.suspend(() =>
+              Stream.fromIterable(
+                rows
+                  .slice(Math.max(0, fromCommit - reserved))
+                  .flatMap((row) => {
+                    const event = materialize(row);
+                    return event === null ? [] : [event];
+                  }),
               ),
             ),
           // The listing tier is the summary tier's plus the log's own
@@ -301,13 +299,8 @@ export class SessionEventLog extends Context.Service<
           // this process appended, which outrank them per key under the
           // fold's commit order. No history is walked at graph open.
           readListing: () =>
-            Stream.unwrap(
-              Effect.sync(() =>
-                Stream.fromIterable([
-                  ...historicalRows(),
-                  ...listingRows(rows),
-                ]),
-              ),
+            Stream.suspend(() =>
+              Stream.fromIterable([...historicalRows(), ...listingRows(rows)]),
             ),
           // The transcript tier is the store's: its rows for the stream
           // above `fromSeq`, read once without adding residency, stamped

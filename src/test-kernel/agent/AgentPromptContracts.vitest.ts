@@ -99,7 +99,7 @@ const INTENTIONAL_NON_PROMPT_DASH_LITERALS: Readonly<
     literals: ['\n\n---\n\n'],
     evidence: 'Markdown section separator in a structured tool result',
   },
-  'src/tools/lean/direct/directLspAdapter.ts': {
+  'src/tools/lean/direct/leanServerPool.ts': {
     literals: ['\n---\n'],
     evidence: 'Plain-text separator between Lean LSP result sections',
   },

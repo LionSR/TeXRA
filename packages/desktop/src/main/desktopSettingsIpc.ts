@@ -11,6 +11,7 @@ import { appSignals } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -200,7 +201,7 @@ export function createDesktopSettingsIpc(
     await Promise.all([
       goalListPosted,
       postSkillsList(),
-      settingsHost.sendMemoryData(),
+      effectRuntime().runPromise(settingsHost.sendMemoryData()),
       modelSelectionDataPosted,
       postGitHubTokenStatus(),
       postGitHubSubscriptions(),
@@ -414,16 +415,24 @@ export function createDesktopSettingsIpc(
     // the dispatcher, so this entry is never actually invoked — it exists
     // only to satisfy the exhaustive registry type.
     webviewReady: () => {},
-    getMemoryData: () => settingsHost.sendMemoryData(),
+    getMemoryData: () =>
+      effectRuntime().runPromise(settingsHost.sendMemoryData()),
     getMemoryPreview: (message) =>
-      settingsHost.sendMemoryPreview(message, { onError }),
+      effectRuntime().runPromise(
+        settingsHost.sendMemoryPreview(message, { onError }),
+      ),
     openMemoryFile,
     openMemoryFolder,
-    deleteMemory: (message) => settingsHost.deleteMemory(message),
+    deleteMemory: (message) =>
+      effectRuntime().runPromise(settingsHost.deleteMemory(message)),
     pinMemory: (message) =>
-      settingsHost.setMemoryPinned(message.storagePath, true),
+      effectRuntime().runPromise(
+        settingsHost.setMemoryPinned(message.storagePath, true),
+      ),
     unpinMemory: (message) =>
-      settingsHost.setMemoryPinned(message.storagePath, false),
+      effectRuntime().runPromise(
+        settingsHost.setMemoryPinned(message.storagePath, false),
+      ),
     ...options.credentialSettingsController.profileHandlers,
     setModelEnabled: updateModelEnabled,
     setModelReasoningLevel: (message) =>

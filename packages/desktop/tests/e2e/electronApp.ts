@@ -10,9 +10,8 @@ import { dirname, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron } from 'playwright';
-import type { ElectronApplication, Page } from 'playwright';
-
 import { cleanupDirectory } from './workspaceStorageFixture.js';
+import type { ElectronApplication, Page } from 'playwright';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(HERE, '..', '..');
@@ -186,7 +185,7 @@ export async function dismissStartupPanel(
 ): Promise<void> {
   const waitForDismissButton = page.waitForFunction(() => {
     const panel = document.querySelector('.desktop-startup-panel');
-    const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
+    const btn = [...(panel?.querySelectorAll('wa-button') ?? [])].find(
       (button) => button.textContent?.trim() === 'Skip for now',
     );
     return btn instanceof HTMLElement;
@@ -201,7 +200,7 @@ export async function dismissStartupPanel(
 
   await page.evaluate(() => {
     const panel = document.querySelector('.desktop-startup-panel');
-    const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
+    const btn = [...(panel?.querySelectorAll('wa-button') ?? [])].find(
       (button) => button.textContent?.trim() === 'Skip for now',
     );
     if (btn instanceof HTMLElement) btn.click();

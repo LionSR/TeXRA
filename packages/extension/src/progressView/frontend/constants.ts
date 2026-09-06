@@ -34,7 +34,6 @@ export const ELEMENT_IDS = {
   GENERATED_FILES_COLLAPSIBLE: 'generatedFilesCollapsible',
   STREAM_TABS: 'streamTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
-  PARENT_LINK: 'parentLink',
   STATUS_INDICATOR: 'statusIndicator',
   GOAL_CHIP: 'goalChip',
   PROGRESS_BADGE: 'progressBadge',
@@ -57,18 +56,12 @@ export const ELEMENT_IDS = {
   PACK_STREAM_BTN: 'packStreamBtn',
   OPEN_TASK_STORAGE_BTN: 'openTaskStorageBtn',
   COPY_RUN_CONTEXT_BTN: 'copyRunContextBtn',
-  FOLLOW_UP_CONTAINER: 'followUpContainer',
-  FOLLOW_UP_INPUT: 'followUpInput',
-  FOLLOW_UP_HINT: 'followUpHint',
   QUEUED_FOLLOW_UPS_COLLAPSIBLE: 'queuedFollowUpsCollapsible',
   QUEUED_FOLLOW_UPS_LIST: 'queuedFollowUpsList',
-  RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
   COMPACT_RESPONSE_BTN: 'compactResponseBtn',
   TOOL_EDIT_TOGGLE_BTN: 'toolEditToggleBtn',
   BASH_TOGGLE_BTN: 'bashToggleBtn',
   AUTO_TASK_TOGGLE_BTN: 'autoTaskToggleBtn',
-  POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
-  SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
 };
 
 export const GROUP_DOM_IDS = Object.freeze({

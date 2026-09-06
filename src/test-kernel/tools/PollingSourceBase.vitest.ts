@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { z, type ZodType } from 'zod';
 
@@ -8,6 +9,7 @@ import {
   DedupedResource,
   PollingSourceBase,
   type BasePollSubscriptionState,
+  type PollHookRejected,
 } from '@tools/github/PollingSourceBase';
 import type { ConditionalResponse } from '@tools/github/githubClient';
 
@@ -43,8 +45,8 @@ class TestPollingSource extends PollingSourceBase<
     this.logger.warn = warn;
   }
 
-  protected pollOne(): Promise<void> {
-    return Promise.resolve();
+  protected pollOne(): Effect.Effect<void, PollHookRejected> {
+    return Effect.void;
   }
 
   protected formatErrorEvent(): string {

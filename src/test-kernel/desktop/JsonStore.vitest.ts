@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 
 // Third-party imports
 import { build } from 'esbuild';
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - test support
@@ -34,6 +35,20 @@ async function readStoredJson(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, 'utf8'));
 }
 
+/**
+ * Entry that re-exports the store beside the `Effect` module it was bundled
+ * with, so a bundle's programs are run by the same copy of Effect that built
+ * them — `open` and `set` are Effects, and a second copy would not run them.
+ */
+async function writeBundleEntry(dir: string): Promise<string> {
+  const entry = join(dir, 'jsonStoreEntry.ts');
+  await writeFile(
+    entry,
+    `export { JsonStore } from ${JSON.stringify(JSON_STORE_SOURCE)};\nexport { Effect } from 'effect';\n`,
+  );
+  return entry;
+}
+
 describe('shared JsonStore', () => {
   const tempDirs = useTempDirs();
   let tempDir: string | undefined;
@@ -53,7 +68,9 @@ describe('shared JsonStore', () => {
     const original = '{"truncated"';
     const filePath = await createTempFile('state.json', original);
 
-    await expect(JsonStore.open(filePath)).rejects.toBeInstanceOf(SyntaxError);
+    await expect(
+      Effect.runPromise(JsonStore.open(filePath)),
+    ).rejects.toBeInstanceOf(SyntaxError);
     expect(await readFile(filePath, 'utf8')).toBe(original);
   });
 
@@ -65,7 +82,7 @@ describe('shared JsonStore', () => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', content);
 
-    await expect(JsonStore.open(filePath)).rejects.toThrow(
+    await expect(Effect.runPromise(JsonStore.open(filePath))).rejects.toThrow(
       'to contain a JSON object',
     );
   });
@@ -77,12 +94,12 @@ describe('shared JsonStore', () => {
       '{"keep": 1, "drop": 1}\n',
     );
 
-    const store = await JsonStore.open(filePath);
+    const store = await Effect.runPromise(JsonStore.open(filePath));
     // Simulate another process persisting a key while this store sits open
     // (e.g. across an awaited network fetch).
     await writeFile(filePath, '{"keep": 1, "drop": 1, "foreign": 2}\n');
 
-    await store.set('drop', undefined);
+    await Effect.runPromise(store.set('drop', undefined));
 
     expect(await readStoredJson(filePath)).toEqual({
       keep: 1,
@@ -93,22 +110,24 @@ describe('shared JsonStore', () => {
   it('rejects a mutation when the file becomes corrupt and preserves its bytes', async () => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', '{"keep": 1}\n');
-    const store = await JsonStore.open(filePath);
+    const store = await Effect.runPromise(JsonStore.open(filePath));
 
     const corrupt = '{"truncated"';
     await writeFile(filePath, corrupt);
 
-    await expect(store.set('added', 2)).rejects.toBeInstanceOf(SyntaxError);
+    await expect(
+      Effect.runPromise(store.set('added', 2)),
+    ).rejects.toBeInstanceOf(SyntaxError);
     expect(await readFile(filePath, 'utf8')).toBe(corrupt);
   });
 
   it('preserves loaded keys when the backing file disappears before a mutation', async () => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', '{"keep": 1}\n');
-    const store = await JsonStore.open(filePath);
+    const store = await Effect.runPromise(JsonStore.open(filePath));
 
     await rm(filePath);
-    await store.set('added', 2);
+    await Effect.runPromise(store.set('added', 2));
 
     expect(await readStoredJson(filePath)).toEqual({
       keep: 1,
@@ -120,13 +139,17 @@ describe('shared JsonStore', () => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', '{}\n');
 
-    const [a, b] = await Promise.all([
-      JsonStore.open(filePath),
-      JsonStore.open(filePath),
-    ]);
+    const [a, b] = await Effect.runPromise(
+      Effect.all([JsonStore.open(filePath), JsonStore.open(filePath)], {
+        concurrency: 'unbounded',
+      }),
+    );
     // Both instances opened off the same on-disk snapshot; without per-path
     // read-modify-write serialization the later flush drops the other's key.
-    await Promise.all([a.set('fromA', 'a'), b.set('fromB', 'b')]);
+    await Promise.all([
+      Effect.runPromise(a.set('fromA', 'a')),
+      Effect.runPromise(b.set('fromB', 'b')),
+    ]);
 
     expect(await readStoredJson(filePath)).toEqual({
       fromA: 'a',
@@ -137,16 +160,16 @@ describe('shared JsonStore', () => {
   it('flushes chained sets in call order, not in wake-up order', async () => {
     const JsonStore = await loadJsonStore();
     const filePath = await createTempFile('state.json', '{}\n');
-    const store = await JsonStore.open(filePath);
+    const store = await Effect.runPromise(JsonStore.open(filePath));
 
     // The third set is issued from the continuation of the first, while the
     // second is still queued behind it. A lane that wakes waiters in a
     // scheduled task lets the third flush barge ahead of the second and
     // leaves the file at 2 while memory says 3.
-    const first = store.set('k', 1);
-    const second = store.set('k', 2);
+    const first = Effect.runPromise(store.set('k', 1));
+    const second = Effect.runPromise(store.set('k', 2));
     await first;
-    const third = store.set('k', 3);
+    const third = Effect.runPromise(store.set('k', 3));
     await Promise.all([second, third]);
 
     expect(store.get('k')).toBe(3);
@@ -158,7 +181,7 @@ describe('shared JsonStore', () => {
     const outdir = join(tempDir, 'bundle');
     await build({
       entryPoints: {
-        jsonStore: JSON_STORE_SOURCE,
+        jsonStore: await writeBundleEntry(tempDir),
       },
       bundle: true,
       format: 'esm',
@@ -167,15 +190,19 @@ describe('shared JsonStore', () => {
       outdir,
       outExtension: { '.js': '.mjs' },
       logLevel: 'silent',
+      tsconfig: repoPath('tsconfig.json'),
+      nodePaths: [repoPath('node_modules')],
     });
 
-    const { JsonStore } = (await import(
+    const { JsonStore, Effect: bundledEffect } = (await import(
       moduleFileUrl(join(outdir, 'jsonStore.mjs'))
-    )) as typeof import('@platform/defaults/jsonStore');
+    )) as typeof import('@platform/defaults/jsonStore') & {
+      Effect: typeof Effect;
+    };
     const filePath = join(tempDir, 'state.json');
-    const store = await JsonStore.open(filePath);
+    const store = await bundledEffect.runPromise(JsonStore.open(filePath));
 
-    await store.set('persisted', true);
+    await bundledEffect.runPromise(store.set('persisted', true));
 
     expect(await readStoredJson(filePath)).toEqual({
       persisted: true,
@@ -204,12 +231,14 @@ describe('shared JsonStore', () => {
       `,
     );
     await build({
-      entryPoints: [JSON_STORE_SOURCE],
+      entryPoints: [await writeBundleEntry(tempDir!)],
       bundle: true,
       format: 'cjs',
       platform: 'node',
       outfile: bundlePath,
       logLevel: 'silent',
+      tsconfig: repoPath('tsconfig.json'),
+      nodePaths: [repoPath('node_modules')],
       plugins: [
         {
           name: 'signal-lock-attempt',
@@ -225,10 +254,10 @@ describe('shared JsonStore', () => {
 
     const script = `
       (async () => {
-        const { JsonStore } = require(${JSON.stringify(bundlePath)});
-        const store = await JsonStore.open(${JSON.stringify(filePath)});
+        const { JsonStore, Effect } = require(${JSON.stringify(bundlePath)});
+        const store = await Effect.runPromise(JsonStore.open(${JSON.stringify(filePath)}));
         console.log('ready');
-        await store.set('child', 2);
+        await Effect.runPromise(store.set('child', 2));
       })().catch((error) => {
         console.error(error);
         process.exitCode = 1;
@@ -279,15 +308,15 @@ describe('shared JsonStore', () => {
     await chmod(tempDir, 0o500);
 
     try {
-      const store = await JsonStore.open(filePath, {
-        mode: 0o600,
-      });
+      const store = await Effect.runPromise(
+        JsonStore.open(filePath, { mode: 0o600 }),
+      );
 
       expect(store.get('key', 'fallback')).toBe('fallback');
       await expect(stat(dir)).rejects.toMatchObject({ code: 'ENOENT' });
 
       await chmod(tempDir, 0o700);
-      await store.set('key', 'value');
+      await Effect.runPromise(store.set('key', 'value'));
 
       expect((await stat(filePath)).mode & 0o777).toBe(0o600);
       expect((await stat(dir)).mode & 0o777).toBe(0o700);
@@ -302,10 +331,10 @@ describe('shared JsonStore', () => {
     tempDir = await makeTempDir('texra-json-store-', tempDirs);
     const filePath = join(tempDir, 'nested', 'secrets.json');
 
-    const store = await JsonStore.open(filePath, {
-      mode: 0o600,
-    });
-    await store.set('key', 'value');
+    const store = await Effect.runPromise(
+      JsonStore.open(filePath, { mode: 0o600 }),
+    );
+    await Effect.runPromise(store.set('key', 'value'));
 
     const fileStat = await stat(filePath);
     const dirStat = await stat(dirname(filePath));

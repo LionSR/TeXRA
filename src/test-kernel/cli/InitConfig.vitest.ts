@@ -1,6 +1,7 @@
 import { readFile as nodeReadFile, writeFile } from 'node:fs/promises';
 import path, { join } from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -75,7 +76,9 @@ describe('setWorkspaceCliChatAgent', () => {
     const configPath = workspaceTexraConfigPath(workspace);
     await writeInitConfig(configPath, buildInitConfig(ANSWERS));
 
-    await setWorkspaceCliChatAgent(workspace, 'builtInToolUse:review');
+    await Effect.runPromise(
+      setWorkspaceCliChatAgent(workspace, 'builtInToolUse:review'),
+    );
 
     const raw = JSON.parse(await nodeReadFile(configPath, 'utf8')) as {
       'texra.model': string;
@@ -90,7 +93,7 @@ describe('setWorkspaceCliChatAgent', () => {
       'builtInToolUse:review',
     );
 
-    await setWorkspaceCliChatAgent(workspace, undefined);
+    await Effect.runPromise(setWorkspaceCliChatAgent(workspace, undefined));
     expect((await loadWorkspaceCliConfig(workspace)).values.chat).toEqual({
       model: 'deepseekT',
     });

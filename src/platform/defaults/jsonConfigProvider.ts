@@ -11,11 +11,15 @@ import type {
  * The store surface one config target needs. `JsonStore` satisfies it; so does
  * the in-memory twin behind `MemoryConfigProvider`, which is why the
  * layered-resolution rule below has exactly one implementation.
+ *
+ * `update` is named for the `vscode.Memento` shape `ConfigProvider.update`
+ * and `StateStore` both mirror: it is the write this port exposes, and
+ * the reason it is a Promise rather than an `Effect`.
  */
 export interface ConfigStore {
   get<T>(key: string): T | undefined;
   has(key: string): boolean;
-  set(key: string, value: unknown): Promise<void>;
+  update(key: string, value: unknown): Promise<void>;
 }
 
 export interface JsonConfigProviderOptions {
@@ -54,8 +58,8 @@ export class JsonConfigProvider implements ConfigProvider {
   ): Promise<void> {
     const store = target === 'global' ? this.globalStore : this.workspaceStore;
     const storedKey = canonicalConfigKey(key);
-    // JsonStore.set treats `undefined` as a delete.
-    await store.set(storedKey, value);
+    // A store treats `undefined` as a delete.
+    await store.update(storedKey, value);
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {

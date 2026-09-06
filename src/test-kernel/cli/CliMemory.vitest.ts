@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,7 +10,7 @@ import {
 import type { MemoryViewItem } from '@shared/schemas';
 
 vi.mock('@tools/memory/memoryFileSystem', () => ({
-  loadMemoryPreview: async () => ({ lineCount: 1, preview: 'preview' }),
+  loadMemoryPreview: () => Effect.succeed({ lineCount: 1, preview: 'preview' }),
 }));
 
 const item: MemoryViewItem = {
@@ -64,20 +65,22 @@ describe('CLI memory formatting', () => {
     'memories\\project.md',
     'project.md',
   ])('accepts the path form %s', async (input) => {
-    await expect(loadCliMemoryDetail(input)).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(loadCliMemoryDetail(input)),
+    ).resolves.toMatchObject({
       path: '/memories/project.md',
     });
   });
 
   it('rejects absolute paths outside the memory display root', async () => {
-    await expect(loadCliMemoryDetail('/memoriesExtra')).rejects.toThrow(
-      'Invalid memory path',
-    );
+    await expect(
+      Effect.runPromise(loadCliMemoryDetail('/memoriesExtra')),
+    ).rejects.toThrow('Invalid memory path');
   });
 
   it('reports the original display path when a memory path escapes the root', async () => {
     await expect(
-      loadCliMemoryDetail('/memories/../outside.md'),
+      Effect.runPromise(loadCliMemoryDetail('/memories/../outside.md')),
     ).rejects.toThrow('Invalid memory path: /memories/../outside.md');
   });
 });

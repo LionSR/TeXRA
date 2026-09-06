@@ -14,6 +14,8 @@
  * fenced off from `@model` (eslint `AUTH_RESTRICTED_IMPORT_PATTERNS`). This is
  * the same composition `chatGptAuthStatus.ts` / `grokAuthStatus.ts` already do.
  */
+import { Effect } from 'effect';
+
 import {
   codexCoordinator,
   getCodexStatus,
@@ -91,7 +93,6 @@ type SubscriptionTransport = 'loopback' | 'device' | 'auto';
 interface SubscriptionSignInOptions {
   readonly transport: SubscriptionTransport;
   readonly present: SubscriptionSignInPresenter;
-  readonly signal?: AbortSignal;
 }
 
 /** One OAuth subscription provider, as every host consumes it. */
@@ -105,7 +106,15 @@ export interface SubscriptionProvider {
   readonly copyTarget: string;
   /** Models the subscription unlocks ('Codex models', 'xAI models'). */
   readonly modelFamily: string;
-  signIn(options: SubscriptionSignInOptions): Promise<SubscriptionAccount>;
+  /**
+   * The sign-in program. A host runs it at its own edge (command, IPC or
+   * message handler), where its cancellation signal, if any, becomes fiber
+   * interruption. Failures are the transports' own; their `message` is the
+   * user-facing text.
+   */
+  signIn(
+    options: SubscriptionSignInOptions,
+  ): Effect.Effect<SubscriptionAccount, unknown>;
   signOut(): Promise<void>;
   getStatus(): Promise<SubscriptionAccount>;
   isPreferSubscription(): boolean;
@@ -133,13 +142,11 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly loginWithDeviceCode: (options: {
     coordinator: Coordinator;
     onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
-    signal?: AbortSignal;
-  }) => Promise<Session>;
+  }) => Effect.Effect<Session, unknown>;
   readonly loginWithLoopback: (options: {
     coordinator: Coordinator;
     openBrowser: (url: string) => void | Promise<void>;
-    signal?: AbortSignal;
-  }) => Promise<Session>;
+  }) => Effect.Effect<Session, unknown>;
   readonly accountLabel: (
     account:
       | { readonly email?: string | null; readonly accountId?: string | null }
@@ -162,48 +169,52 @@ function defineSubscriptionProvider<
 >(
   bindings: SubscriptionProviderBindings<Coordinator, Session>,
 ): SubscriptionProvider {
-  function deviceCodeLogin(
+  const deviceCodeLogin = (
     coordinator: Coordinator,
     options: SubscriptionSignInOptions,
-  ): Promise<Session> {
-    return bindings.loginWithDeviceCode({
+  ) =>
+    bindings.loginWithDeviceCode({
       coordinator,
       onPrompt: (prompt) => options.present.presentDeviceCode(prompt),
-      signal: options.signal,
     });
-  }
 
-  async function runSignIn(
-    options: SubscriptionSignInOptions,
-  ): Promise<Session> {
-    const coordinator = bindings.coordinator();
-    if (options.transport === 'device') {
-      return deviceCodeLogin(coordinator, options);
-    }
-    try {
-      return await bindings.loginWithLoopback({
-        coordinator,
-        openBrowser: (url) => options.present.presentSignInUrl(url),
-        signal: options.signal,
-      });
-    } catch (error: unknown) {
-      if (
-        options.transport !== 'auto' ||
-        !(error instanceof LoopbackTransportUnavailableError)
-      ) {
-        throw error;
-      }
-      const causeMessage =
-        error.cause === undefined
-          ? ''
-          : ` Cause: ${toErrorMessage(error.cause)}`;
-      log.warn(
-        `${bindings.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
-        { data: error },
-      );
-      return deviceCodeLogin(coordinator, options);
-    }
-  }
+  const signIn = Effect.fn(`subscriptionProviders.${bindings.id}.signIn`)(
+    function* (options: SubscriptionSignInOptions) {
+      const coordinator = bindings.coordinator();
+      const session =
+        options.transport === 'device'
+          ? yield* deviceCodeLogin(coordinator, options)
+          : yield* bindings
+              .loginWithLoopback({
+                coordinator,
+                openBrowser: (url) => options.present.presentSignInUrl(url),
+              })
+              .pipe(
+                Effect.catchIf(
+                  (error): error is LoopbackTransportUnavailableError =>
+                    options.transport === 'auto' &&
+                    error instanceof LoopbackTransportUnavailableError,
+                  (error) => {
+                    const causeMessage =
+                      error.cause === undefined
+                        ? ''
+                        : ` Cause: ${toErrorMessage(error.cause)}`;
+                    log.warn(
+                      `${bindings.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
+                      { data: error },
+                    );
+                    return deviceCodeLogin(coordinator, options);
+                  },
+                ),
+              );
+      return {
+        signedIn: true,
+        email: session.email,
+        accountId: session.accountId,
+        label: bindings.accountLabel(session),
+      } satisfies SubscriptionAccount;
+    },
+  );
 
   return Object.freeze({
     id: bindings.id,
@@ -211,15 +222,7 @@ function defineSubscriptionProvider<
     sessionName: bindings.sessionName,
     copyTarget: bindings.copyTarget,
     modelFamily: bindings.modelFamily,
-    async signIn(options: SubscriptionSignInOptions) {
-      const session = await runSignIn(options);
-      return {
-        signedIn: true,
-        email: session.email,
-        accountId: session.accountId,
-        label: bindings.accountLabel(session),
-      };
-    },
+    signIn,
     signOut: () => bindings.coordinator().signOut(),
     async getStatus() {
       const status = await bindings.getStatus();

@@ -1,0 +1,15 @@
+{
+  "effectVersion": "4.0.0-rc.112",
+  "controlled": {
+    "providerCalls": 1,
+    "handlerCalls": 0,
+    "handlerLayerProvided": false,
+    "inputPreserved": true
+  },
+  "automatic": {
+    "providerCalls": 1,
+    "handlerCalls": 1,
+    "toolResultPresent": true
+  },
+  "interpretation": "One generation resolves tools by default but does not perform the next model turn. Disabling resolution leaves tool execution with the application. This does not validate a TeXRA provider integration or durability."
+}

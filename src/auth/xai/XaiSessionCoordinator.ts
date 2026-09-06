@@ -4,6 +4,9 @@
  * Thin policy over {@link SubscriptionOAuthCoordinator} — only authorize URL,
  * claims, and JWT-exp refresh differ from ChatGPT/Codex.
  */
+import { Effect } from 'effect';
+
+import { providerAuthError } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionOAuthClient,
@@ -21,10 +24,7 @@ import {
   xaiRedirectUri,
 } from './xaiConstants';
 import { decodeXaiJwtClaims } from './xaiJwt';
-import {
-  exchangeAuthorizationCode as defaultExchange,
-  refreshTokens as defaultRefresh,
-} from './xaiOAuthClient';
+import { exchangeAuthorizationCode, refreshTokens } from './xaiOAuthClient';
 import {
   XaiAuthError,
   XaiSessionSchema,
@@ -99,8 +99,18 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
 export class XaiSessionCoordinator extends SubscriptionOAuthCoordinator<XaiSession> {
   constructor(init: XaiSessionCoordinatorInit) {
     const client = init.client ?? {
-      exchangeAuthorizationCode: defaultExchange,
-      refreshTokens: defaultRefresh,
+      exchangeAuthorizationCode: (params: {
+        code: string;
+        verifier: string;
+        redirectUri: string;
+      }) =>
+        exchangeAuthorizationCode(params).pipe(
+          Effect.mapError((error) => providerAuthError(error, XaiAuthError)),
+        ),
+      refreshTokens: (refreshToken: string) =>
+        refreshTokens(refreshToken).pipe(
+          Effect.mapError((error) => providerAuthError(error, XaiAuthError)),
+        ),
     };
     super({
       storage: init.storage,

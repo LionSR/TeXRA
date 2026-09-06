@@ -1,0 +1,24 @@
+flowchart TB
+    ready["Ready for a provider turn"]
+    intent["Commit exact request and attempt intent"]
+    invoke["Execute or retrieve provider operation<br/>Display deltas; no local tools yet"]
+    complete["Validate and commit completed response<br/>Assistant content · calls · continuation · usage"]
+    choice{"Local tool calls?"}
+    preflight["Validate batch and preflight permissions"]
+    tools["Commit intent → execute → commit result<br/>Bounded safe groups; mutation barriers"]
+    follow["Commit tool messages and admit queued input"]
+    output["Document / reflection / finish decision"]
+    unknown["Missing completion after an external effect<br/>Reconcile, retrieve, or record unknown outcome"]
+
+    ready --> intent --> invoke --> complete --> choice
+    choice -->|yes| preflight --> tools --> follow --> ready
+    choice -->|no| output
+    invoke -. interruption or owner loss .-> unknown
+    tools -. interruption or owner loss .-> unknown
+
+    classDef commit fill:#fef3c7,stroke:#b45309,color:#78350f;
+    classDef execution fill:#dbeafe,stroke:#2563eb,color:#172554;
+    classDef uncertainty fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;
+    class intent,complete,follow commit;
+    class ready,invoke,choice,preflight,tools,output execution;
+    class unknown uncertainty;

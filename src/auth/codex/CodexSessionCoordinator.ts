@@ -5,6 +5,9 @@
  * authorize URL, claims, and device-login redirect live here; single-flight
  * refresh, storage races, and error mapping live in the shared machine.
  */
+import { Effect } from 'effect';
+
+import { providerAuthError } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionOAuthClient,
@@ -22,10 +25,7 @@ import {
   codexRedirectUri,
 } from './codexConstants';
 import { extractCodexClaims } from './codexJwt';
-import {
-  exchangeAuthorizationCode as defaultExchange,
-  refreshTokens as defaultRefresh,
-} from './codexOAuthClient';
+import { exchangeAuthorizationCode, refreshTokens } from './codexOAuthClient';
 import {
   CodexAuthError,
   CodexSessionSchema,
@@ -96,8 +96,18 @@ export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexS
       storage: init.storage,
       policy: CODEX_POLICY,
       client: init.client ?? {
-        exchangeAuthorizationCode: defaultExchange,
-        refreshTokens: defaultRefresh,
+        exchangeAuthorizationCode: (params) =>
+          exchangeAuthorizationCode(params).pipe(
+            Effect.mapError((error) =>
+              providerAuthError(error, CodexAuthError),
+            ),
+          ),
+        refreshTokens: (refreshToken) =>
+          refreshTokens(refreshToken).pipe(
+            Effect.mapError((error) =>
+              providerAuthError(error, CodexAuthError),
+            ),
+          ),
       },
       now: init.now,
       errorType: CodexAuthError,

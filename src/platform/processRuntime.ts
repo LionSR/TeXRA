@@ -18,6 +18,29 @@ export function initProcessRuntime(runtime: ProcessRuntime): void {
   processRuntime = runtime;
 }
 
+/**
+ * The installed runtime, or `null` — the non-throwing read, like
+ * `tryPlatform()` beside `platform()`. An entry that may or may not be the
+ * first one, and a shutdown that may or may not be the first one, ask here
+ * instead of keeping a latch of their own: a boolean beside the install
+ * drifts from the fact the moment a dispose or a raced install lands between
+ * the two.
+ */
+export function tryProcessRuntime(): ProcessRuntime | null {
+  return processRuntime;
+}
+
+/**
+ * Forget `runtime`, but only while it is still the installed one. Called by
+ * `disposeProcessRuntime` AFTER its disposal, never before: the layer
+ * finalizers unwinding inside `dispose()` still publish through
+ * `effectRuntime()`, and a runtime installed to replace this one while it was
+ * unwinding must survive the clear that ends its predecessor.
+ */
+export function clearProcessRuntime(runtime: ProcessRuntime): void {
+  if (processRuntime === runtime) processRuntime = null;
+}
+
 /** The process runtime, for the Promise-facing boundaries that run fibers. */
 export function effectRuntime(): ProcessRuntime {
   if (!processRuntime) {

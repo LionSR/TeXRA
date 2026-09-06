@@ -156,11 +156,14 @@ export function installWebviewTransport(): WebviewTransport {
       if (held) return held;
       // The graph lives under this scope: closing it releases the LayerMap
       // entry once the last holder leaves.
-      const scope = runtime.runSync(Scope.make());
-      const graph = runtime.runSync(
-        WebviewSessions.open(key).pipe(
-          Effect.provideService(Scope.Scope, scope),
-        ),
+      const { scope, graph } = runtime.runSync(
+        Effect.gen(function* () {
+          const scope = yield* Scope.make();
+          const graph = yield* WebviewSessions.open(key).pipe(
+            Effect.provideService(Scope.Scope, scope),
+          );
+          return { scope, graph };
+        }),
       );
       const session: OpenSession = {
         key,

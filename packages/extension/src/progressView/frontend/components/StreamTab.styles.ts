@@ -283,21 +283,6 @@ export const streamTabStyles = css`
     color: var(--color-text-secondary);
   }
 
-  /* The compact rail reserves its remaining select width for lifecycle state.
-     The accessible button name and visual tooltip retain the title, while the
-     hidden title cannot shrink or clip the status glyph. */
-  .tab-container.is-compact .tab-title,
-  .tab-container.is-compact .tab-status-label {
-    display: none;
-  }
-
-  .tab-container.is-compact .tab-status {
-    inline-size: 1em;
-    min-inline-size: 1em;
-    max-width: none;
-    overflow: visible;
-  }
-
   .nested-stream-icon {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);

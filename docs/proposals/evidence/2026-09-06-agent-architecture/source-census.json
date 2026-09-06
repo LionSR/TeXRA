@@ -1,0 +1,482 @@
+{
+  "sourceCommit": "cc22843af3fa7d8457b6899266a6e04bf15067e9",
+  "method": "Tracked .ts files; physical lines include comments and blanks; static imports parsed with TypeScript AST. Type-only imports are reported, not counted as runtime dependencies.",
+  "handlerFiles": 71,
+  "physicalLines": 21370,
+  "publicPortMemberCount": 41,
+  "publicPortMembers": [
+    "config",
+    "capabilities",
+    "getStreamingConfig",
+    "getWireRouteKey",
+    "getModelRetryRouteKey",
+    "setOutputStreaming",
+    "isBackgroundModeActive",
+    "supportsManualCompaction",
+    "supportsForcedToolChoice",
+    "requiresPerCallSystemPrompt",
+    "requestCompaction",
+    "clearCompactionRequest",
+    "getEffectiveContextWindow",
+    "requiresBatchedParallelToolResults",
+    "setLogger",
+    "setAgentCategory",
+    "getClient",
+    "refreshClient",
+    "createResponse",
+    "initializeMessages",
+    "createRoundMessages",
+    "extractNormalizedResponse",
+    "addContinueMessage",
+    "initializeOutputAndPrefill",
+    "getLastCredentialUsageRoute",
+    "getCredentialRouteForClient",
+    "updateMessageContent",
+    "shouldContinue",
+    "checkStopConditions",
+    "processThinkingBlock",
+    "extractToolUse",
+    "extractServerToolData",
+    "createBatchedToolUseFollowUpMessages",
+    "createUserFollowUpMessages",
+    "createAssistantMessageFromResponse",
+    "isEndTurnStop",
+    "extractAssistantContent",
+    "prependTextToUserMessage",
+    "addMediaToUserMessage",
+    "consumeInsertedAttachmentKinds",
+    "dispose"
+  ],
+  "largestFiles": [
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
+      "physicalLines": 2422
+    },
+    {
+      "file": "src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts",
+      "physicalLines": 2421
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "physicalLines": 2032
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts",
+      "physicalLines": 1598
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAI.ts",
+      "physicalLines": 1218
+    },
+    {
+      "file": "src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts",
+      "physicalLines": 776
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/openAICompactionCoordinator.ts",
+      "physicalLines": 652
+    },
+    {
+      "file": "src/agent/modelHandlers/toolConversion.ts",
+      "physicalLines": 617
+    },
+    {
+      "file": "src/agent/modelHandlers/support/BackgroundRunLifecycle.ts",
+      "physicalLines": 535
+    },
+    {
+      "file": "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts",
+      "physicalLines": 528
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/OpenAIResponseWebSocketTransport.ts",
+      "physicalLines": 506
+    },
+    {
+      "file": "src/agent/modelHandlers/support/AnthropicStreamHandler.ts",
+      "physicalLines": 445
+    }
+  ],
+  "domainEdges": [
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@agent/core/definition/AgentConfig",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@agent/core/definition/AgentDataclass",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@agent/core/state/AgentState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@agent/core/constants",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@agent/runtime/responseTextProcessing",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@latex/texraResponseTextProcessing",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@model/openRouterRouting",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@model/apiProviders",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@platform/platform",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/ModelHandler.ts",
+      "specifier": "@platform/defaults/longRunningModelTransport",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/anthropicContextManagement.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/anthropicMessages.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/anthropicServerTools.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/anthropicToolResults.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/anthropicToolResults.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/anthropicTools.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts",
+      "specifier": "@agent/core/definition/AgentDataclass",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/google/googleHandlerShared.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts",
+      "specifier": "@agent/core/flows/toolCallParsing",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts",
+      "specifier": "@agent/core/constants",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts",
+      "specifier": "@platform/defaults/longRunningModelTransport",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/modelHandlerValidation.ts",
+      "specifier": "@agent/core/definition/AgentDataclass",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/modelHandlerValidation.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/modelHandlerValidation.ts",
+      "specifier": "@latex/texraResponseTextProcessing",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/OpenAIResponseWebSocketTransport.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/ResponseStreamProcessor.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerCodex.ts",
+      "specifier": "@auth/codex",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerCodex.ts",
+      "specifier": "@model/providerCapabilities",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerCodex.ts",
+      "specifier": "@model/codex/codexPreference",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerMiniMax.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAI.ts",
+      "specifier": "@agent/core/flows/toolCallParsing",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAI.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAI.ts",
+      "specifier": "@agent/core/constants",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
+      "specifier": "@agent/core/flows/toolCallParsing",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
+      "specifier": "@agent/core/constants",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
+      "specifier": "@model/modelNames",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
+      "specifier": "@model/providerCapabilities",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerXAI.ts",
+      "specifier": "@auth/xai",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerXAI.ts",
+      "specifier": "@model/providerCapabilities",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/modelHandlerXAI.ts",
+      "specifier": "@model/xai/xaiSignedIn",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/openAIBackgroundRunLifecycle.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/openAIChatHelpers.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/openAIChatHelpers.ts",
+      "specifier": "@model/openRouterRouting",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/openAICompactionCoordinator.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openai/openAIResponseFileUploads.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts",
+      "specifier": "@agent/core/flows/toolCallParsing",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts",
+      "specifier": "@agent/core/constants",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts",
+      "specifier": "@model/openRouterEndpoint",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/support/AnthropicStreamHandler.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/support/BackgroundPoller.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/support/BackgroundRunLifecycle.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/support/MediaAttachmentProcessor.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/support/ProxyConfigResolver.ts",
+      "specifier": "@model/glmRouting",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/support/ProxyConfigResolver.ts",
+      "specifier": "@model/openRouterEndpoint",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/support/ProxyConfigResolver.ts",
+      "specifier": "@model/providerEndpoint",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/support/ProxyConfigResolver.ts",
+      "specifier": "@model/openRouterRouting",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/support/compactionLogging.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/support/mediaAttachmentPolicy.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/support/mediaAttachmentPolicy.ts",
+      "specifier": "@agent/trace",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/toolConversion.ts",
+      "specifier": "@platform/languageModel",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts",
+      "specifier": "@agent/core/state/AgentWorkspaceState",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts",
+      "specifier": "@latex/texraResponseTextProcessing",
+      "typeOnly": true
+    },
+    {
+      "file": "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts",
+      "specifier": "@model/runtimeModelRegistry",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts",
+      "specifier": "@platform/platform",
+      "typeOnly": false
+    },
+    {
+      "file": "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts",
+      "specifier": "@platform/languageModel",
+      "typeOnly": false
+    }
+  ]
+}

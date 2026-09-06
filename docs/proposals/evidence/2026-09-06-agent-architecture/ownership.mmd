@@ -1,0 +1,28 @@
+flowchart TB
+    host["Host and public SDK boundaries"]
+    selection["TeXRA application services<br/>Model selection · credentials · quotas"]
+    runtime["TeXRA runtime · Effect 4<br/>Turns · retries · approvals · recovery"]
+    llm["TeXRA LLM package<br/>Canonical requests · provider turns · streams"]
+    providers["Provider protocols and scoped transports<br/>Responses · Interactions · Anthropic · others"]
+    tools["Tool gateway<br/>Admission · execution · settlement"]
+    documents["Document policy and output<br/>Prefill · reflection · artifacts · compile"]
+    ledger[("One RunLedger / SQLite authority<br/>History · phases · intents · outcomes · ownership")]
+    views["Redacted projections<br/>UI · traces · exports"]
+
+    host --> selection
+    selection --> runtime
+    runtime -->|one provider turn| llm
+    llm --> providers
+    runtime -->|sole local executor| tools
+    runtime --> documents
+    runtime <-->|commit and fold| ledger
+    ledger --> views
+
+    classDef boundary fill:#f1f5f9,stroke:#64748b,color:#0f172a;
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#172554;
+    classDef library fill:#dcfce7,stroke:#15803d,color:#14532d;
+    classDef durable fill:#fef3c7,stroke:#b45309,color:#78350f;
+    class host,selection,views boundary;
+    class runtime,tools,documents core;
+    class llm,providers library;
+    class ledger durable;

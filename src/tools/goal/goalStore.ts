@@ -52,8 +52,12 @@ function goalStateOf(goal: Goal | null): GoalState {
     : { active: false };
 }
 
+// Callers already hold the goal they just wrote (or, for a delete, know it's
+// now absent) — passing it in place of a fresh readRaw() avoids a redundant
+// storage round trip and a narrow re-read race against a concurrent writer.
 function emitGoalStateChanged(
   streamId: StreamTabId,
+  current: Goal | null,
   session?: SessionHandle,
 ): void {
   // Local storage commands can update goals without composing an agent
@@ -66,7 +70,7 @@ function emitGoalStateChanged(
     {
       type: 'goalStateChanged',
       aggregateId: qualifyAggregateId('stream', streamId),
-      state: goalStateOf(readRaw(streamId)),
+      state: goalStateOf(current),
     },
   ]);
 }
@@ -149,7 +153,7 @@ async function update(
   const final: Goal = { ...mutate(goal), updatedAt: nowIso() };
   await writeRaw(final);
   // In-run: the active run's session (ALS), falling back to the default session.
-  emitGoalStateChanged(streamId);
+  emitGoalStateChanged(streamId, final);
   return final;
 }
 
@@ -234,7 +238,7 @@ export const GoalStore = Object.freeze({
       updatedAt: now,
     };
     await Promise.all([writeRaw(goal), addToIndex(streamId)]);
-    emitGoalStateChanged(streamId);
+    emitGoalStateChanged(streamId, goal);
     return goal;
   },
 
@@ -315,7 +319,7 @@ export const GoalStore = Object.freeze({
         return next.length === index.length ? index : next;
       }),
     ]);
-    for (const id of toRemove) emitGoalStateChanged(id, session);
+    for (const id of toRemove) emitGoalStateChanged(id, null, session);
   },
 
   /**

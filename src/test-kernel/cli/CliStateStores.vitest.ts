@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { createCliStateStores } from '@cli/runtime/cliStateStores';
@@ -20,18 +21,22 @@ describe('CLI state stores', () => {
       agents: { workflow: ['polish'], toolUse: ['review'] },
     };
 
-    const first = await createCliStateStores({
-      storageRoot: path.join(root, 'storage'),
-      workspacePath,
-    });
+    const first = await Effect.runPromise(
+      createCliStateStores({
+        storageRoot: path.join(root, 'storage'),
+        workspacePath,
+      }),
+    );
     await first.workspaceState.update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
       preset,
     ]);
 
-    const second = await createCliStateStores({
-      storageRoot: path.join(root, 'storage'),
-      workspacePath,
-    });
+    const second = await Effect.runPromise(
+      createCliStateStores({
+        storageRoot: path.join(root, 'storage'),
+        workspacePath,
+      }),
+    );
 
     expect(
       second.workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),

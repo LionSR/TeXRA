@@ -1,16 +1,20 @@
 /**
  * Memory filesystem utilities shared by host surfaces.
  *
- * Provides functions to walk the memory storage directory and build
- * preview data for memory items displayed in views or terminal UI.
+ * Every read and write of the memory tree is an Effect program and the walk
+ * is a `Stream`: the callers (the memory tool, the settings controller, the
+ * CLI) compose them into their own programs and run once at their host or
+ * tool edge. Filesystem failures are the two tagged errors below rather than
+ * raw rejections, so a caller decides by tag whether an unreadable entry
+ * ends its work or is reported.
  */
 
+import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
 
 import { Data, Effect, Semaphore, Stream } from 'effect';
 
 import { debug } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
 import {
@@ -58,75 +62,116 @@ export interface MemoryWalkEntry {
   meta: MemoryFileMeta | null;
 }
 
-async function readStoragePrefix(
-  storagePath: string,
-  maxBytes: number,
-  stats?: { size: number },
-): Promise<{ text: string; truncated: boolean }> {
-  const fileStats = stats ?? (await StorageFS.stat(storagePath));
-  if (fileStats.size === 0) {
-    return { text: '', truncated: false };
-  }
-
-  const chunks: Buffer[] = [];
-  const end = Math.min(maxBytes, fileStats.size) - 1;
-  for await (const chunk of StorageFS.createReadStream(storagePath, {
-    start: 0,
-    end,
-  })) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return {
-    text: normalizeLineEndings(Buffer.concat(chunks).toString('utf-8')),
-    truncated: fileStats.size > maxBytes,
-  };
-}
-
 /**
- * A directory could not be listed or an entry could not be stat'ed (race
- * deletion, permission error). Nothing in the walk recovers from this: the
- * failure ends the walk, and the Promise edge rethrows `cause` so the
- * consumer sees the same Error instance (with its `code`) the filesystem
- * raised.
+ * A memory path could not be listed, stat'ed, or read (race deletion,
+ * permission error). Nothing in this module recovers from it: the walk ends
+ * and the failure reaches whoever composed the program, which decides
+ * whether to report it or let it end the surrounding work.
  */
-class MemoryEntryUnreadable extends Data.TaggedError('MemoryEntryUnreadable')<{
+export class MemoryEntryUnreadable extends Data.TaggedError(
+  'MemoryEntryUnreadable',
+)<{
+  readonly storagePath: string;
+  readonly cause: unknown;
+}> {}
+
+/** A memory file could not be written or removed. */
+export class MemoryFileUnwritable extends Data.TaggedError(
+  'MemoryFileUnwritable',
+)<{
   readonly storagePath: string;
   readonly cause: unknown;
 }> {}
 
 /**
- * The frontmatter head of a memory file could not be read or parsed (race
- * deletion, permission error). Attribution is skipped rather than failing
- * the whole walk; the entry itself still lists.
+ * The frontmatter head of a memory file could not be parsed (a truncated or
+ * malformed head). Attribution is skipped rather than failing the whole
+ * walk; the entry itself still lists.
  */
 class MemoryMetaUnreadable extends Data.TaggedError('MemoryMetaUnreadable')<{
   readonly storagePath: string;
   readonly cause: unknown;
 }> {}
 
+/**
+ * An entry lists without attribution when its head cannot be read or parsed
+ * (a race deletion or permission error between the stat and the head read, a
+ * truncated head). Skipping is the whole recovery: the walk continues and
+ * the entry still appears, with the reason on the debug channel.
+ */
+const skipAttribution = (error: {
+  readonly storagePath: string;
+  readonly cause: unknown;
+}): Effect.Effect<null> =>
+  Effect.sync(() => {
+    debug(
+      'memory',
+      `Skipping attribution for unreadable memory file ${error.storagePath}`,
+      { data: error.cause },
+    );
+    return null;
+  });
+
+/** Does a memory path exist? The one existence probe every caller shares. */
+export const memoryPathExists = Effect.fn('memoryFileSystem.memoryPathExists')(
+  (storagePath: string) =>
+    Effect.tryPromise({
+      try: () => StorageFS.exists(storagePath),
+      catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
+    }),
+);
+
+const statEntry = Effect.fn('memoryFileSystem.statEntry')(
+  (storagePath: string) =>
+    Effect.tryPromise({
+      try: () => StorageFS.stat(storagePath),
+      catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
+    }),
+);
+
+/** Read at most `maxBytes` from the head of a memory file. */
+const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
+  function* (storagePath: string, maxBytes: number, stats?: { size: number }) {
+    const fileStats = stats ?? (yield* statEntry(storagePath));
+    if (fileStats.size === 0) {
+      return { text: '', truncated: false };
+    }
+    const end = Math.min(maxBytes, fileStats.size) - 1;
+    const chunks = yield* Stream.unwrap(
+      Effect.try({
+        try: () =>
+          Stream.fromAsyncIterable(
+            StorageFS.createReadStream(storagePath, { start: 0, end }),
+            (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
+          ),
+        catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
+      }),
+    ).pipe(Stream.runCollect);
+    const text = Buffer.concat(
+      chunks.map((chunk) =>
+        Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk),
+      ),
+    ).toString('utf-8');
+    return {
+      text: normalizeLineEndings(text),
+      truncated: fileStats.size > maxBytes,
+    };
+  },
+);
+
 const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
   (storagePath: string, stats: { size: number }) =>
-    Effect.tryPromise({
-      try: async () => {
-        const { text: raw } = await readStoragePrefix(
-          storagePath,
-          FRONTMATTER_SCAN_BYTES,
-          stats,
-        );
-        return parseFrontmatter(raw).meta;
-      },
-      catch: (cause) => new MemoryMetaUnreadable({ storagePath, cause }),
-    }).pipe(
-      Effect.catchTag('MemoryMetaUnreadable', (error) =>
-        Effect.sync(() => {
-          debug(
-            'memory',
-            `Skipping attribution for unreadable memory file ${error.storagePath}`,
-            { data: error.cause },
-          );
-          return null;
+    readStoragePrefix(storagePath, FRONTMATTER_SCAN_BYTES, stats).pipe(
+      Effect.flatMap(({ text }) =>
+        Effect.try({
+          try: () => parseFrontmatter(text).meta,
+          catch: (cause) => new MemoryMetaUnreadable({ storagePath, cause }),
         }),
       ),
+      Effect.catchTags({
+        MemoryMetaUnreadable: skipAttribution,
+        MemoryEntryUnreadable: skipAttribution,
+      }),
     ),
 );
 
@@ -137,10 +182,10 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
  * anything was left out. `lineCount` is reported only when the whole file fit
  * inside the scan window, since a partial read cannot count the rest.
  */
-export async function loadMemoryPreview(
-  storagePath: string,
-): Promise<MemoryPreview> {
-  const { text: raw, truncated: scanTruncated } = await readStoragePrefix(
+export const loadMemoryPreview = Effect.fn(
+  'memoryFileSystem.loadMemoryPreview',
+)(function* (storagePath: string) {
+  const { text: raw, truncated: scanTruncated } = yield* readStoragePrefix(
     storagePath,
     PREVIEW_SCAN_BYTES,
   );
@@ -161,7 +206,7 @@ export async function loadMemoryPreview(
   }
 
   return { storagePath, preview, lineCount };
-}
+});
 
 /** Stat one directory entry and, for a file, read its attribution head. */
 const describeEntry = Effect.fn('memoryFileSystem.describeEntry')(function* (
@@ -169,10 +214,7 @@ const describeEntry = Effect.fn('memoryFileSystem.describeEntry')(function* (
   relativePath: string,
   type: number,
 ) {
-  const stats = yield* Effect.tryPromise({
-    try: () => StorageFS.stat(storagePath),
-    catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
-  });
+  const stats = yield* statEntry(storagePath);
   const entry = {
     relativePath,
     storagePath,
@@ -241,84 +283,83 @@ function walkLevel(
 }
 
 /**
- * Walks the memory directory tree in depth-first order, skipping dotfiles,
+ * The memory directory tree in depth-first order, skipping dotfiles,
  * `node_modules`, and symlinks (no realpath/visited guard, so a symlink is
- * never followed rather than risking a cycle). Breaking out of the iteration
- * early interrupts the walk, so no further entries are read. The walk's
- * fibers are forked from the process runtime's context, like every other
- * Promise edge in this module's neighbours. An unreadable directory or entry
- * rejects the iteration with the filesystem's own error.
+ * never followed rather than risking a cycle). A consumer that takes a
+ * bounded prefix (`Stream.take`) interrupts the walk, so no further entries
+ * are read. An unreadable directory or entry fails the stream with
+ * {@link MemoryEntryUnreadable}.
  * @param storagePath - Directory to start walking from
  * @param relativeRoot - Path prefix used to build each entry's relativePath
  * @param options - `maxDepth` (levels below the root; unlimited if omitted)
  *   and `includeDirs` (whether directory entries themselves are yielded)
  */
-export async function* walkMemoryDirectory(
+export function walkMemoryDirectory(
   storagePath: string,
   relativeRoot = '',
   options: MemoryWalkOptions = {},
-): AsyncGenerator<MemoryWalkEntry> {
-  yield* await effectRuntime().runPromise(
-    Stream.toAsyncIterableEffect(
-      Stream.unwrap(
-        Effect.map(Semaphore.make(MEMORY_LISTING_CONCURRENCY), (permits) =>
-          walkLevel(storagePath, relativeRoot, 0, options, permits),
-        ),
-      ).pipe(
-        Stream.catchTag('MemoryEntryUnreadable', (error) =>
-          Stream.die(error.cause),
-        ),
-      ),
+): Stream.Stream<MemoryWalkEntry, MemoryEntryUnreadable> {
+  return Stream.unwrap(
+    Effect.map(Semaphore.make(MEMORY_LISTING_CONCURRENCY), (permits) =>
+      walkLevel(storagePath, relativeRoot, 0, options, permits),
     ),
   );
 }
 
 /**
- * Loads all memory items from the storage root, sorted by modification time.
- * @returns Array of memory items, newest first
+ * All memory items under the storage root, sorted pinned-first then by
+ * modification time, newest first. Empty when the root does not exist.
  */
-export async function loadMemoryItems(): Promise<MemoryViewItem[]> {
-  const exists = await StorageFS.exists(MEMORY_STORAGE_DIR);
-  if (!exists) {
-    return [];
-  }
+export const loadMemoryItems = Effect.fn('memoryFileSystem.loadMemoryItems')(
+  function* () {
+    const exists = yield* memoryPathExists(MEMORY_STORAGE_DIR);
+    if (!exists) return [];
 
-  const items: MemoryViewItem[] = [];
-  for await (const entry of walkMemoryDirectory(MEMORY_STORAGE_DIR)) {
-    items.push({
+    const entries = yield* Stream.runCollect(
+      walkMemoryDirectory(MEMORY_STORAGE_DIR),
+    );
+    const items = entries.map((entry): MemoryViewItem => ({
       displayPath: relativeToDisplayPath(entry.relativePath),
       storagePath: entry.storagePath,
       size: entry.size,
       mtime: new Date(entry.mtime).toISOString(),
       modifiedBy: entry.meta ? formatAttribution(entry.meta) : undefined,
       pinned: entry.meta?.pinned,
-    });
-  }
-  return items.toSorted(
-    (a, b) =>
-      (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.mtime.localeCompare(a.mtime),
-  );
-}
+    }));
+    return items.toSorted(
+      (a, b) =>
+        (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) ||
+        b.mtime.localeCompare(a.mtime),
+    );
+  },
+);
 
 /**
- * Count pinned memory files under MEMORY_STORAGE_DIR.
- * Short-circuits once `limit` is reached to avoid unnecessary reads.
- * Returns 0 if the storage root does not exist.
+ * Count pinned memory files under MEMORY_STORAGE_DIR. `limit` bounds the
+ * walk — the stream is interrupted once that many pinned files are seen, so
+ * the remaining metadata reads never happen. Returns 0 if the storage root
+ * does not exist.
  */
-export async function countPinnedMemories(limit?: number): Promise<number> {
-  const exists = await StorageFS.exists(MEMORY_STORAGE_DIR);
+export const countPinnedMemories = Effect.fn(
+  'memoryFileSystem.countPinnedMemories',
+)(function* (limit?: number) {
+  const exists = yield* memoryPathExists(MEMORY_STORAGE_DIR);
   if (!exists) return 0;
 
-  const cap = limit ?? Infinity;
-  let count = 0;
-  for await (const entry of walkMemoryDirectory(MEMORY_STORAGE_DIR)) {
-    if (entry.meta?.pinned) count++;
-    if (count >= cap) break;
-  }
-  return count;
-}
+  const pinned = walkMemoryDirectory(MEMORY_STORAGE_DIR).pipe(
+    Stream.filter((entry) => entry.meta?.pinned === true),
+  );
+  return yield* Stream.runCount(
+    limit === undefined ? pinned : Stream.take(pinned, limit),
+  );
+});
 
-export type SetMemoryPinnedResult =
+/**
+ * What one pin/unpin attempt did. Module-local: every caller reads the
+ * `status` discriminant off the returned value and formats its own surface
+ * message, so nothing imports the name.
+ */
+type SetMemoryPinnedResult =
   | { readonly status: 'changed'; readonly pinnedCount: number }
   | { readonly status: 'already' }
   | { readonly status: 'cap-reached' };
@@ -336,24 +377,34 @@ export type SetMemoryPinnedResult =
  * the tree again to display it: a second `countPinnedMemories()` without a
  * limit loses the early exit and rescans every file.
  */
-export async function setMemoryPinned(
-  storagePath: string,
-  pinned: boolean,
-): Promise<SetMemoryPinnedResult> {
-  const raw = await StorageFS.read(storagePath);
-  const { meta, content } = parseFrontmatter(raw);
+export const setMemoryPinned = Effect.fn('memoryFileSystem.setMemoryPinned')(
+  function* (storagePath: string, pinned: boolean) {
+    const raw = yield* Effect.tryPromise({
+      try: () => StorageFS.read(storagePath),
+      catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
+    });
+    const { meta, content } = parseFrontmatter(raw);
 
-  const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
-  if (alreadyInState) return { status: 'already' };
+    const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
+    if (alreadyInState) {
+      return { status: 'already' } satisfies SetMemoryPinnedResult;
+    }
 
-  let pinnedCount = 0;
-  if (pinned) {
-    const priorPinned = await countPinnedMemories(MAX_PINNED_MEMORIES);
-    if (priorPinned >= MAX_PINNED_MEMORIES) return { status: 'cap-reached' };
-    pinnedCount = priorPinned + 1;
-  }
+    let pinnedCount = 0;
+    if (pinned) {
+      const priorPinned = yield* countPinnedMemories(MAX_PINNED_MEMORIES);
+      if (priorPinned >= MAX_PINNED_MEMORIES) {
+        return { status: 'cap-reached' } satisfies SetMemoryPinnedResult;
+      }
+      pinnedCount = priorPinned + 1;
+    }
 
-  const updatedMeta = setPinnedMeta(meta, pinned);
-  await StorageFS.writeAtomic(storagePath, buildFile(content, updatedMeta));
-  return { status: 'changed', pinnedCount };
-}
+    const updatedMeta = setPinnedMeta(meta, pinned);
+    yield* Effect.tryPromise({
+      try: () =>
+        StorageFS.writeAtomic(storagePath, buildFile(content, updatedMeta)),
+      catch: (cause) => new MemoryFileUnwritable({ storagePath, cause }),
+    });
+    return { status: 'changed', pinnedCount } satisfies SetMemoryPinnedResult;
+  },
+);

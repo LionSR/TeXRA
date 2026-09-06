@@ -14,6 +14,8 @@
 > **Adoption:** [PR #11915](https://github.com/LionSR/TeXRA/pull/11915) adopts
 > D5 in `sessionFold.ts` (2026-09-06); the adopted fold, re-measured with the
 > same method against `origin/main` on one machine, is tabled in that PR.
+> Section 9 records the precise ownership and type-enforcement contract.
+> Sections 1 through 8 retain the pre-adoption measurement and recommendation.
 
 ## 1. Question and gate
 
@@ -284,3 +286,50 @@ the measurement script applied and checked for parity.
   what a tuned persistent map would.
 - Both variants support sequential publication only; branching from an older
   level is unmeasured because it is unsupported.
+
+## 9. Adopted read-only contract (2026-09-06)
+
+**Decision: accept mutable internal view types, with read-only ownership for
+readers.** D5 guarantees that the fold does not change a previously published
+level when it computes the next level. It does not make a published value
+impossible to mutate. The word "immutable" in the adoption means stable under
+later folds, subject to the ownership rule below.
+
+The fold is the sole permitted writer. A host may retain any published level
+and read it later; it must not change that level or any object, array, or map
+reachable from it. Only the latest level may be used as the next fold input,
+because the fold's private indexes belong to one sequential history. A reader
+that needs editable state must construct its own state and send an action
+through the existing request surface.
+
+There are two distinct type boundaries:
+
+- The public SDK exports `SessionView`, `StreamView`, and `TranscriptView`
+  through its existing `ReadonlyDeep` type in `packages/agent/src/index.ts`.
+  TypeScript callers there cannot write properties, append rows, or call
+  `Map.set`, `Map.delete`, or `Map.clear` through those types.
+- The shared types in `src/shared/session/sessionView.ts` are inferred directly
+  from the schemas and also describe the fold's working copies. Internal
+  renderers import these types. Their maps and arrays remain mutable in the
+  compiler: an internal call such as `view.streams.clear()` would compile and
+  would violate the ownership contract. This limitation is accepted explicitly.
+
+This keeps the existing separation between the fold's mutable construction and
+its public read-only SDK surface. Making the shared aliases recursively
+read-only also requires separating the fold's writable copies and propagating
+read-only inputs through transcript, workflow-board, and approval renderers.
+That is a change to those interfaces, not a property supplied by the existing
+schemas. The present ruling retains the internal ownership contract rather
+than adding casts that merely conceal those writes.
+
+There is no runtime mutation barrier. These view schemas are not parsed on
+publication, and the values are not recursively frozen. `Object.freeze` on a
+map would not disable its mutating methods in any case. JavaScript callers and
+TypeScript callers that discard the read-only type can still violate the
+contract. D5 is therefore not an isolation boundary for untrusted consumers.
+
+The existing D5 case in `src/test-kernel/shared/session/sessionFold.vitest.ts`
+checks the guarantee actually adopted: a later fold leaves an older level
+unchanged and shares untouched branches by reference. It does not establish
+that a consumer is unable to mutate either level. The measurements above price
+copying by the writer; they do not measure runtime enforcement.
