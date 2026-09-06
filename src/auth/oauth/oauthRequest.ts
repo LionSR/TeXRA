@@ -20,7 +20,7 @@ import type { SubscriptionOAuthErrorKind } from './subscriptionOAuthError';
  * The endpoint could not be reached, or did not answer (headers and body)
  * within the timeout.
  */
-class OAuthNetworkError extends Data.TaggedError('OAuthNetworkError')<{
+export class OAuthNetworkError extends Data.TaggedError('OAuthNetworkError')<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -33,7 +33,7 @@ export class OAuthHttpError extends Data.TaggedError('OAuthHttpError')<{
 }> {}
 
 /** A 2xx body that did not match the expected schema. */
-class OAuthUnexpectedResponse extends Data.TaggedError(
+export class OAuthUnexpectedResponse extends Data.TaggedError(
   'OAuthUnexpectedResponse',
 )<{
   readonly message: string;
