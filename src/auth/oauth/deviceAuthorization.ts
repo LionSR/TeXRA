@@ -1,26 +1,19 @@
 /**
- * Device-authorization polling as one Effect program (Codex custom JSON and
- * xAI RFC 8628 share it; the Supabase CLI flow still runs the Promise twin in
- * `deviceCodePoll.ts` until its lane converts).
+ * Device-authorization polling as one Effect program, shared by the Codex
+ * custom JSON flow, the xAI RFC 8628 flow, and the TeXRA (Supabase) CLI
+ * device sign-in.
  *
  * The poll is `Effect.retry` while the endpoint reports "pending", spaced by
  * the server's interval with RFC 8628 `slow_down` growth folded into the
  * schedule. The code's lifetime is a deadline on the runtime clock checked
- * before each wait — never during a request, so a poll in flight when the
- * code expires still completes and its authorization is honored.
- * Cancellation is fiber interruption from the flow's Promise edge; there is
- * no signal threading here.
+ * before each wait and before each poll — never during a request, so a poll
+ * in flight when the code expires still completes and its authorization is
+ * honored. Cancellation is fiber interruption from the host's run edge; there
+ * is no signal threading here.
  */
 import { Clock, Data, Duration, Effect, Ref, Schedule } from 'effect';
 
-import { assertNever } from '@utils/core';
-
-import type { ProviderAuthErrorCtor } from './providerAuthBridge';
-import type {
-  OAuthHttpError,
-  OAuthNetworkError,
-  OAuthUnexpectedResponse,
-} from './oauthRequest';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** The user has not approved yet; `slowDown` asks for a longer interval. */
 export class DeviceAuthorizationPending extends Data.TaggedError(
@@ -38,6 +31,7 @@ class DeviceCodeTimedOut extends Data.TaggedError('DeviceCodeTimedOut')<{
 class SessionCompletionFailed extends Data.TaggedError(
   'SessionCompletionFailed',
 )<{
+  readonly message: string;
   readonly cause: unknown;
 }> {}
 
@@ -71,13 +65,23 @@ export const pollDeviceAuthorization = Effect.fn(
     Clock.currentTimeMillis,
     (now) => now < deadline,
   );
+  const timedOut = new DeviceCodeTimedOut({
+    message: DEVICE_CODE_TIMED_OUT_MESSAGE,
+  });
   const extraDelayMs = yield* Ref.make(0);
   const increment = options.slowDownIncrementMs ?? 0;
+
+  // A poll never starts past the deadline; one in flight at the deadline
+  // completes.
+  const guardedPoll = Effect.gen(function* () {
+    if (!(yield* beforeDeadline)) return yield* timedOut;
+    return yield* options.poll;
+  });
 
   // The server asks the client to wait the interval before its first poll,
   // and the schedule spaces every later one.
   yield* Effect.sleep(Duration.millis(options.intervalMs));
-  return yield* options.poll.pipe(
+  return yield* guardedPoll.pipe(
     Effect.tapError((error) =>
       isPending(error) && error.slowDown
         ? Ref.update(extraDelayMs, (ms) => ms + increment)
@@ -91,63 +95,27 @@ export const pollDeviceAuthorization = Effect.fn(
         Schedule.addDelay(() => Ref.get(extraDelayMs)),
       ),
     }),
-    Effect.catchIf(
-      isPending,
-      () => new DeviceCodeTimedOut({ message: DEVICE_CODE_TIMED_OUT_MESSAGE }),
-    ),
+    Effect.catchIf(isPending, () => timedOut),
   );
 });
 
 /**
  * Persist the approved token as a session through the coordinator's Promise
- * method. Runs outside the flow's interruptible region: once it starts, the
- * caller's abort lets it finish and the session is returned.
+ * method: the one foreign-boundary wrap over the session coordinators until
+ * they are Effect programs themselves. An interruption already pending is
+ * honored before the store starts; once it has started, an interruption
+ * waits for it, so the persisted session and the caller's view of it never
+ * diverge.
  */
 export const completeDeviceSession = Effect.fn(
   'deviceAuthorization.completeDeviceSession',
 )(function* <Session>(complete: () => Promise<Session>) {
-  return yield* Effect.tryPromise({
-    try: complete,
-    catch: (cause) => new SessionCompletionFailed({ cause }),
-  });
+  yield* Effect.yieldNow;
+  return yield* Effect.uninterruptible(
+    Effect.tryPromise({
+      try: complete,
+      catch: (cause) =>
+        new SessionCompletionFailed({ message: toErrorMessage(cause), cause }),
+    }),
+  );
 });
-
-/** Every expected failure the shared request and poll programs can raise. */
-export type DeviceAuthorizationError =
-  | OAuthNetworkError
-  | OAuthHttpError
-  | OAuthUnexpectedResponse
-  | DeviceAuthorizationPending
-  | DeviceCodeTimedOut
-  | SessionCompletionFailed;
-
-/**
- * Re-mint a shared failure as what the flow's Promise API always threw: the
- * provider's auth error with the same message, kind, and status; a plain
- * `Error` for the timeout; the coordinator's own rejection untouched.
- */
-export function deviceAuthorizationThrowable(
-  error: DeviceAuthorizationError,
-  ErrorType: ProviderAuthErrorCtor,
-): unknown {
-  switch (error._tag) {
-    case 'OAuthNetworkError':
-      return new ErrorType(error.message, 'transient', undefined, {
-        cause: error.cause,
-      });
-    case 'OAuthHttpError':
-      return new ErrorType(error.message, error.kind, error.status);
-    case 'OAuthUnexpectedResponse':
-      return new ErrorType(error.message, 'transient', undefined, {
-        cause: error.cause,
-      });
-    case 'DeviceAuthorizationPending':
-      return new ErrorType('Authorization pending', 'pending');
-    case 'DeviceCodeTimedOut':
-      return new Error(error.message);
-    case 'SessionCompletionFailed':
-      return error.cause;
-    default:
-      return assertNever(error, 'Unknown device-authorization error');
-  }
-}

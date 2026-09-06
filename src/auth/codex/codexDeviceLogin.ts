@@ -5,27 +5,23 @@
  * Host-neutral: the host renders the prompt (`onPrompt`) however it likes.
  *
  * One Effect program per sign-in: the requests, the spaced poll, and the
- * expiry bound run on one fiber, and the caller's `AbortSignal` becomes
- * fiber interruption at the single run boundary in {@link loginWithDeviceCode}.
- * Interruption reaches the requests and the wait; persisting the approved
- * session runs to completion once started, as the Promise loop always did.
- * The Promise API and the errors it rejects with are unchanged.
+ * expiry bound run on one fiber. The host runs it at its own edge, where its
+ * `AbortSignal` (when it has one) becomes fiber interruption; interruption
+ * reaches the requests and the wait, while persisting the approved session
+ * runs to completion once started.
  */
 // Third-party imports
-import { Cause, Data, Effect, Exit } from 'effect';
+import { Data, Effect } from 'effect';
 
-// Local imports - oauth, platform
+// Local imports - oauth
 import {
   completeDeviceSession,
-  deviceAuthorizationThrowable,
   pollDeviceAuthorization,
 } from '@auth/oauth/deviceAuthorization';
-import { effectRuntime } from '@platform/processRuntime';
 
 // Local imports - codex
 import { CODEX_DEVICE_VERIFICATION_URL } from './codexConstants';
 import { type CodexSessionCoordinator } from './CodexSessionCoordinator';
-import { CodexAuthError, type CodexSession } from './codexSessionTypes';
 import { pollDeviceToken, requestDeviceUserCode } from './codexOAuthClient';
 
 /**
@@ -50,81 +46,45 @@ export interface CodexDeviceLoginOptions {
   coordinator: CodexSessionCoordinator;
   /** Show the user the verification URL + one-time code. */
   onPrompt: (prompt: CodexDevicePrompt) => void;
-  signal?: AbortSignal;
 }
-
-const loginProgram = Effect.fn('codexDeviceLogin.loginWithDeviceCode')(
-  function* (options: CodexDeviceLoginOptions) {
-    // The fiber runs uninterruptible (see `loginWithDeviceCode`); the
-    // requests and the wait for approval restore interruption so the caller's
-    // abort cancels them, while storing the approved session does not.
-    const token = yield* Effect.interruptible(
-      Effect.gen(function* () {
-        const userCodeResponse = yield* requestDeviceUserCode();
-        const userCode =
-          userCodeResponse.user_code ?? userCodeResponse.usercode;
-        if (!userCode) {
-          return yield* new DeviceCodeMissing({
-            message: 'ChatGPT did not return a device code. Try again.',
-          });
-        }
-
-        options.onPrompt({
-          userCode,
-          verificationUrl: CODEX_DEVICE_VERIFICATION_URL,
-        });
-
-        return yield* pollDeviceAuthorization({
-          poll: pollDeviceToken({
-            deviceAuthId: userCodeResponse.device_auth_id,
-            userCode,
-          }),
-          intervalMs: userCodeResponse.interval * 1000,
-          expiresInMs:
-            userCodeResponse.expires_in == null
-              ? DEVICE_TIMEOUT_FALLBACK_MS
-              : userCodeResponse.expires_in * 1000,
-        });
-      }),
-    );
-
-    return yield* completeDeviceSession(() =>
-      options.coordinator.completeDeviceLogin({
-        authorizationCode: token.authorization_code,
-        codeVerifier: token.code_verifier,
-      }),
-    );
-  },
-  Effect.mapError((error) =>
-    error._tag === 'DeviceCodeMissing'
-      ? new Error(error.message)
-      : deviceAuthorizationThrowable(error, CodexAuthError),
-  ),
-);
 
 /**
- * Run the device-code flow end to end and persist the session. Resolves to the
- * stored session once the user approves; rejects on timeout or a hard failure.
+ * Run the device-code flow end to end and persist the session. Succeeds with
+ * the stored session once the user approves; fails on timeout or a hard
+ * failure with a tagged error whose `message` is the user-facing text.
  */
-export async function loginWithDeviceCode(
-  options: CodexDeviceLoginOptions,
-): Promise<CodexSession> {
-  const { signal } = options;
-  signal?.throwIfAborted();
-  let exit: Exit.Exit<CodexSession, unknown>;
-  try {
-    // Uninterruptible by default so an abort that lands while the coordinator
-    // stores the session lets it finish and resolves with that session;
-    // `loginProgram` restores interruption for everything before it.
-    exit = await effectRuntime().runPromiseExit(loginProgram(options), {
-      signal,
-      uninterruptible: true,
+export const loginWithDeviceCode = Effect.fn(
+  'codexDeviceLogin.loginWithDeviceCode',
+)(function* (options: CodexDeviceLoginOptions) {
+  const userCodeResponse = yield* requestDeviceUserCode();
+  const userCode = userCodeResponse.user_code ?? userCodeResponse.usercode;
+  if (!userCode) {
+    return yield* new DeviceCodeMissing({
+      message: 'ChatGPT did not return a device code. Try again.',
     });
-  } catch (error) {
-    if (signal?.aborted) throw signal.reason;
-    throw error;
   }
-  if (Exit.isSuccess(exit)) return exit.value;
-  if (signal?.aborted) throw signal.reason;
-  throw Cause.squash(exit.cause);
-}
+
+  options.onPrompt({
+    userCode,
+    verificationUrl: CODEX_DEVICE_VERIFICATION_URL,
+  });
+
+  const token = yield* pollDeviceAuthorization({
+    poll: pollDeviceToken({
+      deviceAuthId: userCodeResponse.device_auth_id,
+      userCode,
+    }),
+    intervalMs: userCodeResponse.interval * 1000,
+    expiresInMs:
+      userCodeResponse.expires_in == null
+        ? DEVICE_TIMEOUT_FALLBACK_MS
+        : userCodeResponse.expires_in * 1000,
+  });
+
+  return yield* completeDeviceSession(() =>
+    options.coordinator.completeDeviceLogin({
+      authorizationCode: token.authorization_code,
+      codeVerifier: token.code_verifier,
+    }),
+  );
+});
