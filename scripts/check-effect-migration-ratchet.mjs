@@ -183,6 +183,17 @@ const EXECUTE_CASES = [
     'class T extends defineTool({ name: "t" }) { execute(i) { return i; } }\n',
     false,
   ],
+  // The two-step shape structuredOutput.ts uses: the base is bound to a name
+  // first, so the heritage clause is an identifier, not a call.
+  [
+    'const G = defineTool({ name: "t" });\nclass T extends G { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    true,
+  ],
+  // The same shape over a name that is not a tool base.
+  [
+    'const G = makeThing();\nclass T extends G { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    false,
+  ],
 ];
 
 /** Production TypeScript files, repo-relative and '/'-joined, sorted. */
@@ -413,6 +424,7 @@ function surveySource(text, fileName) {
       namespaces.has(callee.expression.text) &&
       callee.name.text === 'platform');
   const effect = effectBindings(sourceFile);
+  const generatedBases = generatedToolBases(sourceFile);
   const isEffectCombinator = (callee) =>
     ts.isPropertyAccessExpression(callee) &&
     ((ts.isIdentifier(callee.expression) &&
@@ -468,7 +480,7 @@ function surveySource(text, fileName) {
       // helper's own `execute` too, since a helper is not the tool. An
       // object literal's `execute` shorthand is the same AST node kind and
       // never sets the flag, because it is not a class member.
-      const isTool = extendsDefineTool(node);
+      const isTool = extendsDefineTool(node, generatedBases);
       ts.forEachChild(node, (child) =>
         visit(
           child,
@@ -493,20 +505,49 @@ function surveySource(text, fileName) {
 }
 
 /**
+ * Names bound in this file to a `defineTool(...)` call, so the two-step shape
+ * `const GeneratedTool = defineTool({ ... })` followed by `class X extends
+ * GeneratedTool` is recognised as the tool contract too. `structuredOutput.ts`
+ * builds its terminal tool that way, and a heritage clause that is a bare
+ * identifier is otherwise indistinguishable from extending any other class.
+ */
+function generatedToolBases(sourceFile) {
+  const names = new Set();
+  const visit = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer != null &&
+      ts.isCallExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === 'defineTool'
+    ) {
+      names.add(node.name.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return names;
+}
+
+/**
  * Whether a class declares the tool contract: `class X extends defineTool({
- * ... })`. Every tool in `src/tools/` is written that way, which is what
+ * ... })` directly, or `extends <a local name bound to defineTool(...)>`.
+ * Every tool in `src/tools/` is written one of those two ways, which is what
  * makes "is this the tool class?" a question the AST can answer instead of a
  * guess from the name of a method.
  */
-function extendsDefineTool(node) {
+function extendsDefineTool(node, generatedBases) {
   return (node.heritageClauses ?? []).some(
     (clause) =>
       clause.token === ts.SyntaxKind.ExtendsKeyword &&
       clause.types.some(
         (type) =>
-          ts.isCallExpression(type.expression) &&
-          ts.isIdentifier(type.expression.expression) &&
-          type.expression.expression.text === 'defineTool',
+          (ts.isCallExpression(type.expression) &&
+            ts.isIdentifier(type.expression.expression) &&
+            type.expression.expression.text === 'defineTool') ||
+          (ts.isIdentifier(type.expression) &&
+            (generatedBases?.has(type.expression.text) ?? false)),
       ),
   );
 }
@@ -939,11 +980,46 @@ function main() {
   let failed = false;
 
   if (options.update) {
-    if (!existsSync(baselinePath)) throw new Error(BASELINE_MISSING);
-    const committed = JSON.parse(readFileSync(baselinePath, 'utf8'));
+    // Both gates run against the COMMITTED baseline and before anything is
+    // written. Writing first and comparing after is how `--update` came to
+    // accept both kinds of widening: the comparison below `--update` reads
+    // back the file it had already replaced, so every count matched itself.
+    const committed = readBaseline();
+
+    const { failures: grew } = diffRows(rows, committed.rows);
+    if (grew.length > 0) {
+      console.error(
+        `\n--update refused: ${grew.length} count(s) would grow beyond the committed baseline.`,
+      );
+      for (const { row, file, was, now, kind } of grew) {
+        console.error(`  - [${row.id}] ${file}: ${was} -> ${now} (${kind})`);
+      }
+      console.error(
+        "\nA ratchet is shrink-only in both directions of use: --update records a measurement, it never raises a ceiling. Remove the new sites, or move them to one of R1's boundary kinds.",
+      );
+      process.exit(1);
+    }
+
+    const admitted = new Set(Object.keys(committed.debtLanes ?? {}));
+    const newDebt = Object.keys(rows[ROW_RUN_BOUNDARY])
+      .filter((file) => !isBoundaryPath(file, toolExecuteFiles))
+      .filter((file) => !admitted.has(file))
+      .toSorted(compareCodePoints);
+    if (newDebt.length > 0) {
+      console.error(
+        `\n--update refused: ${newDebt.length} file(s) would enter the below-boundary register that the committed baseline does not already name.`,
+      );
+      for (const file of newDebt)
+        console.error(`  - ${file} is ${BELOW_BOUNDARY}.`);
+      console.error(
+        `\nThe register records the debt that already existed when it was written; it is not an intake. Convert the file and its callers so the run moves to one of ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06: never widen a ratchet in config/ratchets/ — naming future work does not create an exception).`,
+      );
+      process.exit(1);
+    }
+
     const lanes = runBoundaryDebtLanes(
       rows[ROW_RUN_BOUNDARY],
-      committed?.debtLanes ?? {},
+      committed.debtLanes ?? {},
       toolExecuteFiles,
     );
     writeBaseline(rows, lanes);
