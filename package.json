@@ -185,7 +185,6 @@
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
     "undici": "^7.29.0",
-    "vscode-jsonrpc": "^9.0.2",
     "which": "^5.0.0",
     "write-file-atomic": "^7.0.1",
     "yaml": "^2.9.0",

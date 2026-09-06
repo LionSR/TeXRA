@@ -1,3 +1,13 @@
+/**
+ * The direct LSP lane at its two boundaries: the `LeanServerPool` service
+ * (Effect, under `it.effect`'s `TestClock` where idle eviction and the
+ * diagnostics quiet window are the subject, under `it.live` where the child
+ * process's real exit timing is) and the Promise edge
+ * `createDirectLspLeanAdapter` returns. Servers are a fake `lake` script
+ * (a real child process) or an in-memory child handed to the Node spawner
+ * through the mocked `spawn`.
+ */
+
 // Node imports
 import { EventEmitter } from 'node:events';
 import {
@@ -11,11 +21,21 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
-import { pathToFileURL } from 'node:url';
 
 // Third-party imports
-import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import {
+  Context,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Scope,
+} from 'effect';
+import { TestClock } from 'effect/testing';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const { spawnOverride } = vi.hoisted(() => ({
   spawnOverride: {
@@ -34,11 +54,18 @@ vi.mock('node:child_process', async (importOriginal) => {
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { nodeChildProcessSpawnerLayer } from '@platform/defaults/nodeChildProcessSpawner';
+import type { ExecutionId } from '@shared/schemas';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
-import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
+import { LeanServer } from '@tools/lean/direct/leanServer';
+import {
+  LeanServerPool,
+  type LeanServerPoolOptions,
+} from '@tools/lean/direct/leanServerPool';
 import {
   isLeanServerActive,
   listLeanServers,
+  unregisterLeanServer,
 } from '@tools/lean/leanServerRegistry';
 import { delay } from '@utils/core';
 import { splitOutputLines } from '@utils/text/stringUtils';
@@ -119,6 +146,9 @@ process.stdin.on('data', (chunk) => {
 });
 `;
 
+const NO_RUN: ExecutionId | undefined = undefined;
+const IDLE_HOUR = Duration.hours(1);
+
 let tempRoot: string;
 let projectRoot: string;
 let fakeLakePath: string;
@@ -144,6 +174,9 @@ afterEach(() => {
   spawnOverride.current = undefined;
   vi.unstubAllEnvs();
   rmSync(tempRoot, { recursive: true, force: true });
+  // The registry is process-global and ids are per server instance: a test
+  // that failed mid-way must not leave its entries for the next one.
+  for (const server of listLeanServers()) unregisterLeanServer(server.id);
 });
 
 async function countStarts(): Promise<number> {
@@ -151,46 +184,521 @@ async function countStarts(): Promise<number> {
   return splitOutputLines(text).length;
 }
 
+const starts = Effect.promise(countStarts);
+
+/** A pool over the fake lake, disposed by the test scope unless disposed first. */
+const openPool = (options: Partial<LeanServerPoolOptions> = {}) =>
+  Effect.gen(function* () {
+    const scope = yield* Scope.make();
+    yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+    const pool = yield* Layer.build(
+      LeanServerPool.layer({
+        lakeCommand: fakeLakePath,
+        idleTimeToLive: Duration.infinity,
+        ...options,
+      }).pipe(Layer.provide(nodeChildProcessSpawnerLayer)),
+    ).pipe(
+      Scope.provide(scope),
+      Effect.map((context) => Context.get(context, LeanServerPool)),
+    );
+    return { pool, dispose: Scope.close(scope, Exit.void) };
+  });
+
+/**
+ * Run `effect` while stepping the test clock until it settles. The server's
+ * replies arrive on real I/O; only the diagnostics quiet window is on the
+ * clock, so each step is a fraction of it and the overshoot stays far below
+ * the hour-long idle times the tests use.
+ */
+const settle = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.gen(function* () {
+    const done = yield* Deferred.make<void>();
+    const fiber = yield* Effect.forkChild(
+      effect.pipe(Effect.ensuring(Deferred.succeed(done, undefined))),
+    );
+    while (!(yield* Deferred.isDone(done))) {
+      yield* Effect.promise(() => delay(5));
+      yield* TestClock.adjust('100 millis');
+    }
+    return yield* Fiber.join(fiber);
+  });
+
+const eventually = (assertion: () => void) =>
+  Effect.promise(() => vi.waitFor(assertion, { timeout: 3000, interval: 10 }));
+
+const fakeLakeIt = {
+  effect: it.effect.skipIf(process.platform === 'win32'),
+  live: it.live.skipIf(process.platform === 'win32'),
+};
+
+describe('LeanServerPool', () => {
+  fakeLakeIt.effect(
+    'restarts by replacing the disposed server with a fresh process',
+    () =>
+      Effect.gen(function* () {
+        const { pool } = yield* openPool();
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN));
+        expect(yield* starts).toBe(1);
+
+        yield* pool.executeProjectCommand('restart_server', NO_RUN);
+
+        expect(yield* starts).toBe(2);
+      }),
+  );
+
+  fakeLakeIt.effect('keeps more than two active workspaces by default', () =>
+    Effect.gen(function* () {
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const third = makeLakeProject(tempRoot, 'project-c');
+      const { pool } = yield* openPool();
+      yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN));
+      yield* settle(pool.fetchDiagnosticsForFile(second.filePath, NO_RUN));
+      yield* settle(pool.fetchDiagnosticsForFile(third.filePath, NO_RUN));
+      expect(yield* starts).toBe(3);
+      expect(activeServerRoots()).toEqual([
+        projectRoot,
+        second.projectRoot,
+        third.projectRoot,
+      ]);
+    }),
+  );
+
+  fakeLakeIt.effect('stops a workspace that sits idle for the idle time', () =>
+    Effect.gen(function* () {
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const { pool } = yield* openPool({ idleTimeToLive: IDLE_HOUR });
+      yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN));
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      yield* TestClock.adjust('2 hours');
+      yield* eventually(() => expect(activeServerRoots()).toEqual([]));
+
+      yield* settle(pool.fetchDiagnosticsForFile(second.filePath, NO_RUN));
+      expect(yield* starts).toBe(2);
+      expect(activeServerRoots()).toEqual([second.projectRoot]);
+    }),
+  );
+
+  fakeLakeIt.effect(
+    'does not stop a server while a diagnostics request is in flight',
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
+        const { pool, dispose } = yield* openPool({
+          idleTimeToLive: Duration.seconds(1),
+        });
+        const pending = yield* Effect.forkChild(
+          pool.fetchDiagnosticsForFile(filePath, NO_RUN),
+        );
+        yield* eventually(() =>
+          expect(runningServerRoots()).toEqual([projectRoot]),
+        );
+
+        // Well past the idle time, still inside the diagnostics wait: the
+        // lease, not the clock, decides.
+        yield* TestClock.adjust('5 seconds');
+        expect(activeServerRoots()).toEqual([projectRoot]);
+
+        yield* dispose;
+        expect(yield* Fiber.join(pending)).toMatchObject({
+          ok: false,
+          kind: 'toolchain_unavailable',
+        });
+        expect(activeServerRoots()).toEqual([]);
+      }),
+  );
+
+  fakeLakeIt.effect('does not start queued servers after dispose', () =>
+    Effect.gen(function* () {
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const third = makeLakeProject(tempRoot, 'project-c');
+      const { pool, dispose } = yield* openPool();
+      const pending = yield* Effect.forkChild(
+        Effect.all(
+          [filePath, second.filePath, third.filePath].map((file) =>
+            Effect.exit(pool.fetchDiagnosticsForFile(file, NO_RUN)),
+          ),
+          { concurrency: 'unbounded' },
+        ),
+      );
+      yield* dispose;
+      yield* Fiber.await(pending);
+      expect(activeServerRoots()).toEqual([]);
+      const started = yield* starts;
+      yield* Effect.promise(() => delay(100));
+      expect(yield* starts).toBe(started);
+    }),
+  );
+
+  fakeLakeIt.effect(
+    'does not SIGKILL a live server two seconds after spawn',
+    () =>
+      Effect.gen(function* () {
+        const { pool } = yield* openPool();
+        yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN));
+        yield* TestClock.adjust('2200 millis');
+        yield* Effect.promise(() => delay(50));
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        expect(yield* starts).toBe(1);
+        expect(
+          yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN)),
+        ).toMatchObject({ ok: true });
+        expect(yield* starts).toBe(1);
+      }),
+  );
+
+  it.live(
+    'waits for the child to close before a failed start finishes releasing',
+    () =>
+      Effect.gen(function* () {
+        const child = createFakeLeanChild({ closeDelayMs: 80, silent: true });
+        spawnOverride.current = () => child;
+        const scope = yield* Scope.make();
+        const build = yield* Effect.forkChild(
+          Layer.build(
+            LeanServer.layer({
+              workspaceRoot: projectRoot,
+              lakeCommand: fakeLakePath,
+            }).pipe(Layer.provide(nodeChildProcessSpawnerLayer)),
+          ).pipe(Scope.provide(scope)),
+        );
+        yield* Effect.promise(() => delay(20));
+        const closing = yield* Effect.forkChild(Scope.close(scope, Exit.void));
+        const finished = yield* Deferred.make<void>();
+        yield* Effect.forkChild(
+          Fiber.await(closing).pipe(
+            Effect.andThen(Deferred.succeed(finished, undefined)),
+          ),
+        );
+        yield* Effect.promise(() => delay(30));
+        expect(yield* Deferred.isDone(finished)).toBe(false);
+        child.closeSoon();
+        yield* Fiber.join(closing);
+        yield* Fiber.await(build);
+        expect(yield* Deferred.isDone(finished)).toBe(true);
+      }),
+  );
+
+  it.live(
+    'retries EMFILE after evicting idle servers without waiting for busy ones',
+    () =>
+      Effect.gen(function* () {
+        const second = makeLakeProject(tempRoot, 'project-b');
+        const third = makeLakeProject(tempRoot, 'project-c');
+        let spawnCount = 0;
+        let failNextSpawn = false;
+        spawnOverride.current = () => {
+          spawnCount += 1;
+          if (failNextSpawn) {
+            failNextSpawn = false;
+            // Node reports EMFILE through the child's `error` event, not a throw.
+            return createFailedSpawnChild('EMFILE');
+          }
+          return createFakeLeanChild();
+        };
+
+        const { pool, dispose } = yield* openPool();
+        yield* pool.fetchDiagnosticsForFile(filePath, NO_RUN);
+        yield* pool.fetchDiagnosticsForFile(second.filePath, NO_RUN);
+
+        // Keep the first workspace in flight so recovery cannot evict it.
+        const pendingBusy = yield* Effect.forkChild(
+          pool.positionRequest(filePath, 0, 0, 'textDocument/hover', NO_RUN),
+        );
+        yield* Effect.promise(() => delay(50));
+
+        failNextSpawn = true;
+        const started = yield* pool
+          .fetchDiagnosticsForFile(third.filePath, NO_RUN)
+          .pipe(
+            Effect.timeoutOrElse({
+              duration: '1 second',
+              orElse: () =>
+                Effect.die(
+                  new Error('EMFILE recovery waited for the busy session'),
+                ),
+            }),
+          );
+        expect(started).toMatchObject({
+          ok: true,
+          diagnostics: [{ message: 'fake diagnostic' }],
+        });
+        expect(activeServerRoots()).toEqual([projectRoot, third.projectRoot]);
+        expect(spawnCount).toBe(4);
+        yield* dispose;
+        yield* Fiber.await(pendingBusy);
+      }),
+  );
+
+  it.live('awaits already-closing servers before retrying EMFILE', () =>
+    Effect.gen(function* () {
+      const second = makeLakeProject(tempRoot, 'project-b');
+      let spawnCount = 0;
+      let firstClosed = false;
+      spawnOverride.current = () => {
+        spawnCount += 1;
+        if (spawnCount > 1 && !firstClosed) {
+          throw Object.assign(new Error('too many open files'), {
+            code: 'EMFILE',
+          });
+        }
+        const child = createFakeLeanChild({
+          closeDelayMs: spawnCount === 1 ? 200 : 0,
+        });
+        if (spawnCount === 1) {
+          child.on('close', () => {
+            firstClosed = true;
+          });
+        }
+        return child;
+      };
+
+      const { pool } = yield* openPool({
+        idleTimeToLive: Duration.millis(30),
+      });
+      yield* pool.fetchDiagnosticsForFile(filePath, NO_RUN);
+      yield* Effect.promise(() => delay(80));
+      const started = yield* pool
+        .fetchDiagnosticsForFile(second.filePath, NO_RUN)
+        .pipe(
+          Effect.timeoutOrElse({
+            duration: '1 second',
+            orElse: () =>
+              Effect.die(
+                new Error(
+                  'EMFILE recovery did not wait for the closing server',
+                ),
+              ),
+          }),
+        );
+      expect(started).toMatchObject({
+        ok: true,
+        diagnostics: [{ message: 'fake diagnostic' }],
+      });
+      expect(firstClosed).toBe(true);
+      expect(spawnCount).toBe(3);
+    }),
+  );
+
+  it.live('keeps a closing server reserved until the child closes', () =>
+    Effect.gen(function* () {
+      let spawnCount = 0;
+      spawnOverride.current = () => {
+        spawnCount += 1;
+        return createFakeLeanChild({ closeDelayMs: 200 });
+      };
+      const { pool } = yield* openPool({
+        idleTimeToLive: Duration.millis(30),
+      });
+      yield* pool.fetchDiagnosticsForFile(filePath, NO_RUN);
+      expect(spawnCount).toBe(1);
+      yield* Effect.promise(() => delay(60));
+      const pending = yield* Effect.forkChild(
+        pool.fetchDiagnosticsForFile(filePath, NO_RUN),
+      );
+      yield* Effect.promise(() => delay(40));
+      expect(spawnCount).toBe(1);
+      yield* Fiber.join(pending);
+      expect(spawnCount).toBe(2);
+    }),
+  );
+
+  fakeLakeIt.effect('stops a restarted server after it sits idle', () =>
+    Effect.gen(function* () {
+      const { pool } = yield* openPool({ idleTimeToLive: IDLE_HOUR });
+      yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN));
+      yield* pool.executeProjectCommand('restart_server', NO_RUN);
+      expect(activeServerRoots()).toEqual([projectRoot]);
+      yield* TestClock.adjust('2 hours');
+      yield* eventually(() => expect(activeServerRoots()).toEqual([]));
+    }),
+  );
+
+  fakeLakeIt.effect('treats project commands as server activity', () =>
+    Effect.gen(function* () {
+      const second = makeLakeProject(tempRoot, 'project-b');
+      const { pool } = yield* openPool({ idleTimeToLive: IDLE_HOUR });
+      yield* settle(pool.fetchDiagnosticsForFile(filePath, NO_RUN));
+      yield* TestClock.adjust('30 minutes');
+      yield* pool.executeProjectCommand('build', NO_RUN);
+      yield* TestClock.adjust('45 minutes');
+      yield* settle(pool.fetchDiagnosticsForFile(second.filePath, NO_RUN));
+      expect(activeServerRoots()).toEqual([projectRoot, second.projectRoot]);
+    }),
+  );
+
+  // Idle eviction is off in the run-end tests below (infinite idle time), so
+  // the run-end stop is the only mechanism that can remove a server.
+  fakeLakeIt.live('stops the server when the run that started it ends', () =>
+    Effect.gen(function* () {
+      const { pool } = yield* openPool();
+      yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      yield* pool.stopSessionsForRun(run('e00001'));
+
+      expect(activeServerRoots()).toEqual([]);
+      expect(yield* starts).toBe(1);
+    }),
+  );
+
+  fakeLakeIt.live(
+    'keeps servers started by other runs or outside a run when a run ends',
+    () =>
+      Effect.gen(function* () {
+        const second = makeLakeProject(tempRoot, 'project-b');
+        const third = makeLakeProject(tempRoot, 'project-c');
+        const { pool } = yield* openPool();
+        yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+        yield* pool.fetchDiagnosticsForFile(second.filePath, run('e00002'));
+        yield* pool.fetchDiagnosticsForFile(third.filePath, NO_RUN);
+        expect(activeServerRoots()).toEqual([
+          projectRoot,
+          second.projectRoot,
+          third.projectRoot,
+        ]);
+
+        yield* pool.stopSessionsForRun(run('e00001'));
+
+        expect(activeServerRoots()).toEqual([
+          second.projectRoot,
+          third.projectRoot,
+        ]);
+      }),
+  );
+
+  fakeLakeIt.live(
+    'stops a shared server after its final owner and lease end',
+    () =>
+      Effect.gen(function* () {
+        const { pool } = yield* openPool();
+        yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
+        const build = yield* Effect.forkChild(
+          pool.executeProjectCommand('build', run('e00001')),
+        );
+        yield* Effect.promise(() => delay(50));
+        yield* pool.fetchDiagnosticsForFile(filePath, run('e00002'));
+
+        // The reuser joins the original owner. Ending only e00002 keeps the
+        // shared server for e00001; ending the final owner defers the stop
+        // until e00001's already-running build releases its lease.
+        yield* pool.stopSessionsForRun(run('e00002'));
+        expect(activeServerRoots()).toEqual([projectRoot]);
+        yield* pool.stopSessionsForRun(run('e00001'));
+        expect(activeServerRoots()).toEqual([projectRoot]);
+
+        yield* Fiber.join(build);
+        expect(activeServerRoots()).toEqual([]);
+      }),
+  );
+
+  fakeLakeIt.live(
+    'cancels a deferred stop when a later run takes ownership',
+    () =>
+      Effect.gen(function* () {
+        const { pool } = yield* openPool();
+        yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
+        const build = yield* Effect.forkChild(
+          pool.executeProjectCommand('build', run('e00001')),
+        );
+        yield* Effect.promise(() => delay(50));
+        yield* pool.fetchDiagnosticsForFile(filePath, run('e00002'));
+        yield* pool.stopSessionsForRun(run('e00001'));
+        yield* pool.stopSessionsForRun(run('e00002'));
+
+        yield* pool.fetchDiagnosticsForFile(filePath, run('e00003'));
+        yield* Fiber.join(build);
+        expect(activeServerRoots()).toEqual([projectRoot]);
+
+        yield* pool.stopSessionsForRun(run('e00003'));
+        expect(activeServerRoots()).toEqual([]);
+      }),
+  );
+
+  fakeLakeIt.live('adds a project-command run as a server owner', () =>
+    Effect.gen(function* () {
+      const { pool } = yield* openPool();
+      yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+      yield* pool.executeProjectCommand('build', run('e00002'));
+
+      yield* pool.stopSessionsForRun(run('e00001'));
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      yield* pool.stopSessionsForRun(run('e00002'));
+      expect(activeServerRoots()).toEqual([]);
+    }),
+  );
+
+  fakeLakeIt.live(
+    "keeps a parent's reused server until both parent and subagent end",
+    () =>
+      Effect.gen(function* () {
+        const { pool } = yield* openPool();
+        yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+        yield* pool.fetchDiagnosticsForFile(filePath, run('e00002'));
+        expect(yield* starts).toBe(1);
+
+        // A subagent joins the parent as an owner; either run ending alone
+        // leaves the shared-worktree server available to the other.
+        yield* pool.stopSessionsForRun(run('e00001'));
+        expect(activeServerRoots()).toEqual([projectRoot]);
+
+        yield* pool.stopSessionsForRun(run('e00002'));
+        expect(activeServerRoots()).toEqual([]);
+      }),
+  );
+
+  it.live('records an owner before its server is ready', () =>
+    Effect.gen(function* () {
+      let releaseInitialize!: () => void;
+      const initializeGate = new Promise<void>((resolve) => {
+        releaseInitialize = resolve;
+      });
+      let spawnCount = 0;
+      spawnOverride.current = () => {
+        spawnCount += 1;
+        return createFakeLeanChild({ initializeGate });
+      };
+      const { pool } = yield* openPool();
+      // Hold the handshake open: the owner must be recorded before the wait
+      // for readiness, so a run end that lands meanwhile sees it and defers
+      // the stop to the end of this request's lease.
+      const request = yield* Effect.forkChild(
+        pool.fetchDiagnosticsForFile(filePath, run('e00002')),
+      );
+      yield* eventually(() => expect(spawnCount).toBe(1));
+      yield* pool.stopSessionsForRun(run('e00002'));
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      releaseInitialize();
+      expect(yield* Fiber.join(request)).toMatchObject({ ok: true });
+      expect(activeServerRoots()).toEqual([]);
+    }),
+  );
+
+  fakeLakeIt.live('reattributes a restarted server to the restarting run', () =>
+    Effect.gen(function* () {
+      const { pool } = yield* openPool();
+      yield* pool.fetchDiagnosticsForFile(filePath, run('e00001'));
+      yield* pool.executeProjectCommand('restart_server', run('e00002'));
+      expect(yield* starts).toBe(2);
+
+      // The replacement process was started by e00002, so e00001's end must
+      // leave it alone and e00002's end must stop it.
+      yield* pool.stopSessionsForRun(run('e00001'));
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      yield* pool.stopSessionsForRun(run('e00002'));
+      expect(activeServerRoots()).toEqual([]);
+    }),
+  );
+});
+
 describe('createDirectLspLeanAdapter', () => {
   const fakeLakeIt = it.skipIf(process.platform === 'win32');
-
-  it('decodes file URIs with platform path semantics', () => {
-    const spacedPath = path.join(projectRoot, 'File With Space.lean');
-    expect(fileUriToPath(pathToFileURL(spacedPath).toString())).toBe(
-      spacedPath,
-    );
-    expect(fileUriToPath('untitled:Lean')).toBeNull();
-  });
-
-  it('rejects ensureReady after disposal through the promise path', async () => {
-    const session = new LeanSession({
-      workspaceRoot: projectRoot,
-      lakeCommand: fakeLakePath,
-    });
-
-    await session.dispose();
-
-    await expect(session.ensureReady()).rejects.toThrow(
-      'Lean session has been disposed.',
-    );
-  });
-
-  fakeLakeIt('settles diagnostic waiters during disposal', async () => {
-    vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
-    const session = new LeanSession({
-      workspaceRoot: projectRoot,
-      lakeCommand: fakeLakePath,
-    });
-    await session.ensureReady();
-
-    const pendingDiagnostics = session.fetchDiagnostics(filePath);
-    const settled = expect(pendingDiagnostics).rejects.toThrow(
-      'Lean session has been disposed.',
-    );
-    await delay(100);
-    await session.dispose();
-    await settled;
-  });
 
   fakeLakeIt(
     'joins concurrent first-touch requests for the same workspace',
@@ -217,6 +725,23 @@ describe('createDirectLspLeanAdapter', () => {
     },
   );
 
+  fakeLakeIt('attributes a request to the ambient agent run', async () => {
+    const adapter = createDirectLspLeanAdapter({
+      lakeCommand: fakeLakePath,
+      idleTimeoutMs: 0,
+    });
+    try {
+      await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
+      await adapter.stopSessionsForRun?.('e00001' as ExecutionId);
+
+      expect(activeServerRoots()).toEqual([]);
+    } finally {
+      await adapter.dispose();
+    }
+  });
+
   it('reports a missing lake command as toolchain_unavailable, not "file missing"', async () => {
     const adapter = createDirectLspLeanAdapter({
       lakeCommand: path.join(tempRoot, 'missing-lake'),
@@ -231,570 +756,30 @@ describe('createDirectLspLeanAdapter', () => {
   });
 
   fakeLakeIt(
-    'restarts by replacing the disposed session with a fresh process',
+    'stops every server when disposed, and disposes twice',
     async () => {
       const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });
-      try {
-        await adapter.fetchDiagnosticsForFile(filePath);
-        expect(await countStarts()).toBe(1);
-
-        await adapter.executeProjectCommand('restart_server');
-
-        expect(await countStarts()).toBe(2);
-      } finally {
-        await adapter.dispose();
-      }
-    },
-  );
-
-  fakeLakeIt('keeps more than two active workspaces by default', async () => {
-    const second = makeLakeProject(tempRoot, 'project-b');
-    const third = makeLakeProject(tempRoot, 'project-c');
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 0,
-    });
-    try {
       await adapter.fetchDiagnosticsForFile(filePath);
-      await adapter.fetchDiagnosticsForFile(second.filePath);
-      await adapter.fetchDiagnosticsForFile(third.filePath);
-      expect(await countStarts()).toBe(3);
-      expect(activeServerRoots()).toEqual([
-        projectRoot,
-        second.projectRoot,
-        third.projectRoot,
-      ]);
-    } finally {
+      expect(activeServerRoots()).toEqual([projectRoot]);
+
       await adapter.dispose();
-    }
-  });
+      expect(activeServerRoots()).toEqual([]);
 
-  fakeLakeIt('stops an idle workspace before opening another', async () => {
-    const second = makeLakeProject(tempRoot, 'project-b');
-    let clock = 0;
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 1_000,
-      now: () => clock,
-    });
-    try {
-      await adapter.fetchDiagnosticsForFile(filePath);
-      clock = 2_000;
-      await adapter.fetchDiagnosticsForFile(second.filePath);
-      expect(await countStarts()).toBe(2);
-      expect(activeServerRoots()).toEqual([second.projectRoot]);
-    } finally {
       await adapter.dispose();
-    }
-  });
-
-  fakeLakeIt(
-    'does not stop a session while a diagnostics request is in flight',
-    async () => {
-      vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        idleTimeoutMs: 50,
-      });
-      const pending = adapter.fetchDiagnosticsForFile(filePath);
-      try {
-        await delay(700);
-        expect(activeServerRoots()).toEqual([projectRoot]);
-        await delay(150);
-        expect(activeServerRoots()).toEqual([projectRoot]);
-        await adapter.dispose();
-        await expect(pending).resolves.toMatchObject({
-          ok: false,
-          kind: 'toolchain_unavailable',
-        });
-      } finally {
-        await adapter.dispose();
-        await Promise.allSettled([pending]);
-      }
-    },
-  );
-
-  fakeLakeIt('does not start queued servers after dispose', async () => {
-    const second = makeLakeProject(tempRoot, 'project-b');
-    const third = makeLakeProject(tempRoot, 'project-c');
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 0,
-    });
-    const pending = Promise.allSettled([
-      adapter.fetchDiagnosticsForFile(filePath),
-      adapter.fetchDiagnosticsForFile(second.filePath),
-      adapter.fetchDiagnosticsForFile(third.filePath),
-    ]);
-    await adapter.dispose();
-    await pending;
-    expect(activeServerRoots()).toEqual([]);
-    const starts = await countStarts();
-    await delay(100);
-    expect(await countStarts()).toBe(starts);
-  });
-
-  fakeLakeIt(
-    'does not SIGKILL a live server two seconds after spawn',
-    async () => {
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        idleTimeoutMs: 0,
-      });
-      try {
-        await adapter.fetchDiagnosticsForFile(filePath);
-        await delay(2_200);
-        expect(activeServerRoots()).toEqual([projectRoot]);
-        expect(await countStarts()).toBe(1);
-        await expect(
-          adapter.fetchDiagnosticsForFile(filePath),
-        ).resolves.toMatchObject({ ok: true });
-        expect(await countStarts()).toBe(1);
-      } finally {
-        await adapter.dispose();
-      }
-    },
-  );
-
-  it('waits for the child to close before a failed start finishes disposing', async () => {
-    const child = createFakeLeanChild({ closeDelayMs: 80, silent: true });
-    spawnOverride.current = () => child;
-
-    const session = new LeanSession({
-      workspaceRoot: projectRoot,
-      lakeCommand: fakeLakePath,
-    });
-    const ready = session.ensureReady();
-    await delay(20);
-    const disposed = session.dispose();
-    let finished = false;
-    void Promise.allSettled([ready, disposed]).then(() => {
-      finished = true;
-    });
-    await delay(30);
-    expect(finished).toBe(false);
-    child.closeSoon();
-    await disposed;
-    await Promise.allSettled([ready]);
-    expect(finished).toBe(true);
-  });
-
-  fakeLakeIt(
-    'does not release a replacement session from a project command that never acquired it',
-    async () => {
-      vi.stubEnv('TEXRA_FAKE_LEAN_EXIT_DELAY', '150');
-      vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '400');
-      const second = makeLakeProject(tempRoot, 'project-b');
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        idleTimeoutMs: 40,
-      });
-      try {
-        await adapter.fetchDiagnosticsForFile(filePath);
-        await delay(80);
-        const build = adapter.executeProjectCommand('build');
-        void build.catch(() => undefined);
-        await delay(200);
-        vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
-        const pending = adapter.fetchDiagnosticsForFile(filePath);
-        await Promise.allSettled([build]);
-        const other = adapter.fetchDiagnosticsForFile(second.filePath);
-        await delay(80);
-        expect(activeServerRoots()).toContain(projectRoot);
-        await adapter.dispose();
-        await Promise.allSettled([pending, other]);
-      } finally {
-        await adapter.dispose();
-      }
-    },
-  );
-
-  it('retries EMFILE after evicting idle sessions without waiting for busy ones', async () => {
-    const second = makeLakeProject(tempRoot, 'project-b');
-    const third = makeLakeProject(tempRoot, 'project-c');
-    let spawnCount = 0;
-    let failNextSpawn = false;
-    spawnOverride.current = () => {
-      spawnCount += 1;
-      if (failNextSpawn) {
-        failNextSpawn = false;
-        // Node reports EMFILE through the child's `error` event, not a throw.
-        return createFailedSpawnChild('EMFILE');
-      }
-      return createFakeLeanChild();
-    };
-
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 0,
-    });
-    try {
-      await adapter.fetchDiagnosticsForFile(filePath);
-      await adapter.fetchDiagnosticsForFile(second.filePath);
-
-      // Keep the first workspace in-flight so recovery cannot evict it.
-      const pendingBusy = adapter.getHoverInfo(filePath, 0, 0);
-      await delay(50);
-
-      failNextSpawn = true;
-      const started = adapter.fetchDiagnosticsForFile(third.filePath);
       await expect(
-        Promise.race([
-          started,
-          delay(1_000).then(() => {
-            throw new Error('EMFILE recovery waited for the busy session');
-          }),
-        ]),
-      ).resolves.toMatchObject({
-        ok: true,
-        diagnostics: [{ message: 'fake diagnostic' }],
-      });
-      expect(activeServerRoots()).toEqual([projectRoot, third.projectRoot]);
-      expect(spawnCount).toBe(4);
-      await adapter.dispose();
-      await Promise.allSettled([pendingBusy]);
-    } finally {
-      await adapter.dispose();
-    }
-  });
-
-  it('awaits already-disposing sessions before retrying EMFILE', async () => {
-    const second = makeLakeProject(tempRoot, 'project-b');
-    let spawnCount = 0;
-    let firstClosed = false;
-    spawnOverride.current = () => {
-      spawnCount += 1;
-      if (spawnCount > 1 && !firstClosed) {
-        throw Object.assign(new Error('too many open files'), {
-          code: 'EMFILE',
-        });
-      }
-      const child = createFakeLeanChild({
-        closeDelayMs: spawnCount === 1 ? 200 : 0,
-      });
-      if (spawnCount === 1) {
-        child.on('close', () => {
-          firstClosed = true;
-        });
-      }
-      return child;
-    };
-
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 30,
-    });
-    try {
-      await adapter.fetchDiagnosticsForFile(filePath);
-      await delay(80);
-      const started = adapter.fetchDiagnosticsForFile(second.filePath);
-      await expect(
-        Promise.race([
-          started,
-          delay(1_000).then(() => {
-            throw new Error(
-              'EMFILE recovery did not wait for the disposing session',
-            );
-          }),
-        ]),
-      ).resolves.toMatchObject({
-        ok: true,
-        diagnostics: [{ message: 'fake diagnostic' }],
-      });
-      expect(firstClosed).toBe(true);
-      expect(spawnCount).toBe(3);
-    } finally {
-      await adapter.dispose();
-    }
-  });
-
-  it('keeps a disposing session reserved until the child closes', async () => {
-    let spawnCount = 0;
-    spawnOverride.current = () => {
-      spawnCount += 1;
-      return createFakeLeanChild({ closeDelayMs: 200 });
-    };
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 30,
-    });
-    try {
-      await adapter.fetchDiagnosticsForFile(filePath);
-      expect(spawnCount).toBe(1);
-      await delay(60);
-      const pending = adapter.fetchDiagnosticsForFile(filePath);
-      await delay(40);
-      expect(spawnCount).toBe(1);
-      await pending;
-      expect(spawnCount).toBe(2);
-    } finally {
-      await adapter.dispose();
-    }
-  });
-
-  fakeLakeIt('stops a restarted session after it sits idle', async () => {
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 50,
-    });
-    try {
-      await adapter.fetchDiagnosticsForFile(filePath);
-      await adapter.executeProjectCommand('restart_server');
-      expect(activeServerRoots()).toEqual([projectRoot]);
-      await delay(150);
-      expect(activeServerRoots()).toEqual([]);
-    } finally {
-      await adapter.dispose();
-    }
-  });
-
-  fakeLakeIt('treats project commands as session activity', async () => {
-    const second = makeLakeProject(tempRoot, 'project-b');
-    let clock = 0;
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 1_000,
-      now: () => clock,
-    });
-    try {
-      await adapter.fetchDiagnosticsForFile(filePath);
-      clock = 2_000;
-      await adapter.executeProjectCommand('build');
-      await adapter.fetchDiagnosticsForFile(second.filePath);
-      expect(activeServerRoots()).toEqual([projectRoot, second.projectRoot]);
-    } finally {
-      await adapter.dispose();
-    }
-  });
-
-  // Idle eviction is disabled in the run-end tests below (idleTimeoutMs: 0),
-  // so the run-end stop is the only mechanism that can remove a server.
-  fakeLakeIt('stops the server when the run that started it ends', async () => {
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 0,
-    });
-    try {
-      await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
-      expect(activeServerRoots()).toEqual([projectRoot]);
-
-      await adapter.stopSessionsForRun?.('e00001');
-
-      expect(activeServerRoots()).toEqual([]);
-      expect(await countStarts()).toBe(1);
-    } finally {
-      await adapter.dispose();
-    }
-  });
-
-  fakeLakeIt(
-    'keeps servers started by other runs or outside a run when a run ends',
-    async () => {
-      const second = makeLakeProject(tempRoot, 'project-b');
-      const third = makeLakeProject(tempRoot, 'project-c');
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        idleTimeoutMs: 0,
-      });
-      try {
-        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
-        await asRun('e00002', () =>
-          adapter.fetchDiagnosticsForFile(second.filePath),
-        );
-        await adapter.fetchDiagnosticsForFile(third.filePath);
-        expect(activeServerRoots()).toEqual([
-          projectRoot,
-          second.projectRoot,
-          third.projectRoot,
-        ]);
-
-        await adapter.stopSessionsForRun?.('e00001');
-
-        expect(activeServerRoots()).toEqual([
-          second.projectRoot,
-          third.projectRoot,
-        ]);
-      } finally {
-        await adapter.dispose();
-      }
-    },
-  );
-
-  fakeLakeIt(
-    'stops a shared server after its final owner and lease end',
-    async () => {
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        idleTimeoutMs: 0,
-      });
-      try {
-        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
-        expect(activeServerRoots()).toEqual([projectRoot]);
-        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
-        const build = asRun('e00001', () =>
-          adapter.executeProjectCommand('build'),
-        );
-        await asRun('e00002', () => adapter.fetchDiagnosticsForFile(filePath));
-
-        // The reuser joins the original owner. Ending only e00002 keeps the
-        // shared server for e00001; ending the final owner defers disposal
-        // until e00001's already-running build releases its lease.
-        await adapter.stopSessionsForRun?.('e00002');
-        expect(activeServerRoots()).toEqual([projectRoot]);
-        await adapter.stopSessionsForRun?.('e00001');
-        expect(activeServerRoots()).toEqual([projectRoot]);
-
-        await build;
-        expect(activeServerRoots()).toEqual([]);
-      } finally {
-        await adapter.dispose();
-      }
-    },
-  );
-
-  fakeLakeIt(
-    'cancels a deferred stop when a later run takes ownership',
-    async () => {
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        idleTimeoutMs: 0,
-      });
-      try {
-        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
-        vi.stubEnv('TEXRA_FAKE_LEAN_LAKE_DELAY', '1500');
-        const build = asRun('e00001', () =>
-          adapter.executeProjectCommand('build'),
-        );
-        await asRun('e00002', () => adapter.fetchDiagnosticsForFile(filePath));
-        await adapter.stopSessionsForRun?.('e00001');
-        await adapter.stopSessionsForRun?.('e00002');
-
-        await asRun('e00003', () => adapter.fetchDiagnosticsForFile(filePath));
-        await build;
-        expect(activeServerRoots()).toEqual([projectRoot]);
-
-        await adapter.stopSessionsForRun?.('e00003');
-        expect(activeServerRoots()).toEqual([]);
-      } finally {
-        await adapter.dispose();
-      }
-    },
-  );
-
-  fakeLakeIt('adds a project-command run as a session owner', async () => {
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 0,
-    });
-    try {
-      await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
-      await asRun('e00002', () => adapter.executeProjectCommand('build'));
-
-      await adapter.stopSessionsForRun?.('e00001');
-      expect(activeServerRoots()).toEqual([projectRoot]);
-
-      await adapter.stopSessionsForRun?.('e00002');
-      expect(activeServerRoots()).toEqual([]);
-    } finally {
-      await adapter.dispose();
-    }
-  });
-
-  fakeLakeIt(
-    "keeps a parent's reused server until both parent and subagent end",
-    async () => {
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        idleTimeoutMs: 0,
-      });
-      try {
-        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
-        await asRun('e00002', () => adapter.fetchDiagnosticsForFile(filePath));
-        expect(await countStarts()).toBe(1);
-
-        // A subagent joins the parent as an owner; either run ending alone
-        // leaves the shared-worktree server available to the other.
-        await adapter.stopSessionsForRun?.('e00001');
-        expect(activeServerRoots()).toEqual([projectRoot]);
-
-        await adapter.stopSessionsForRun?.('e00002');
-        expect(activeServerRoots()).toEqual([]);
-      } finally {
-        await adapter.dispose();
-      }
-    },
-  );
-
-  fakeLakeIt('records a reuser before awaiting session readiness', async () => {
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 0,
-    });
-    try {
-      // Start without run ownership so the reuser below is the only owner.
-      await adapter.fetchDiagnosticsForFile(filePath);
-      const originalReady = LeanSession.prototype.ready;
-      let enteredReady!: () => void;
-      const readyEntered = new Promise<void>((resolve) => {
-        enteredReady = resolve;
-      });
-      let releaseReady!: () => void;
-      const readyGate = new Promise<void>((resolve) => {
-        releaseReady = resolve;
-      });
-      // Hold the adapter's readiness wait open: the owner must be recorded
-      // before it, so a run end that lands meanwhile sees the reuser.
-      vi.spyOn(LeanSession.prototype, 'ready').mockImplementation(function (
-        this: LeanSession,
-      ) {
-        enteredReady();
-        return Effect.promise(() => readyGate).pipe(
-          Effect.andThen(originalReady.call(this)),
-        );
-      });
-
-      const request = asRun('e00002', () =>
         adapter.fetchDiagnosticsForFile(filePath),
-      );
-      await readyEntered;
-      await adapter.stopSessionsForRun?.('e00002');
-      expect(activeServerRoots()).toEqual([projectRoot]);
-
-      releaseReady();
-      await request;
-      expect(activeServerRoots()).toEqual([]);
-    } finally {
-      await adapter.dispose();
-    }
-  });
-
-  fakeLakeIt(
-    'reattributes a restarted server to the restarting run',
-    async () => {
-      const adapter = createDirectLspLeanAdapter({
-        lakeCommand: fakeLakePath,
-        idleTimeoutMs: 0,
+      ).resolves.toMatchObject({
+        ok: false,
+        kind: 'toolchain_unavailable',
+        message: 'Lean adapter was stopped.',
       });
-      try {
-        await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
-        await asRun('e00002', () =>
-          adapter.executeProjectCommand('restart_server'),
-        );
-        expect(await countStarts()).toBe(2);
-
-        // The replacement process was started by e00002, so e00001's end must
-        // leave it alone and e00002's end must dispose it.
-        await adapter.stopSessionsForRun?.('e00001');
-        expect(activeServerRoots()).toEqual([projectRoot]);
-
-        await adapter.stopSessionsForRun?.('e00002');
-        expect(activeServerRoots()).toEqual([]);
-      } finally {
-        await adapter.dispose();
-      }
     },
   );
 });
+
+function run(executionId: string): ExecutionId {
+  return executionId as ExecutionId;
+}
 
 /** Run `fn` with the ambient run context of the given agent run. */
 function asRun<T>(
@@ -814,6 +799,12 @@ function makeLakeProject(
   const filePath = path.join(projectRoot, 'Test.lean');
   writeFileSync(filePath, 'example : True := by trivial\n');
   return { projectRoot, filePath };
+}
+
+function runningServerRoots(): string[] {
+  return listLeanServers()
+    .filter((info) => info.status === 'running')
+    .map((info) => info.workspaceRoot);
 }
 
 function activeServerRoots(): string[] {
@@ -862,6 +853,8 @@ function createFailedSpawnChild(code: 'EMFILE' | 'ENFILE'): EventEmitter {
 function createFakeLeanChild(options?: {
   closeDelayMs?: number;
   silent?: boolean;
+  /** Answer `initialize` only once this settles. */
+  initializeGate?: Promise<void>;
 }): FakeLeanChild {
   const stdin = new PassThrough();
   const stdout = new PassThrough();
@@ -882,7 +875,10 @@ function createFakeLeanChild(options?: {
   }): void {
     if (message.method === 'initialize') {
       if (options?.silent) return;
-      send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+      const reply = () =>
+        send({ jsonrpc: '2.0', id: message.id, result: { capabilities: {} } });
+      if (options?.initializeGate) void options.initializeGate.then(reply);
+      else reply();
       return;
     }
     if (message.method === 'shutdown') {
@@ -960,6 +956,8 @@ function createFakeLeanChild(options?: {
       this.exitCode = 1;
       this.emit('close', 1, null);
     },
+    unref() {},
+    ref() {},
   });
   return child;
 }

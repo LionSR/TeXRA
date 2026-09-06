@@ -26,7 +26,6 @@ const {
 )) as AliasUtilsModule;
 
 const SAMPLE_ROOT_PATHS = {
-  'vscode-jsonrpc/node': ['./node_modules/vscode-jsonrpc/lib/node/main'],
   '@/*': ['./packages/extension/src/*', './src/*'],
   '@shared/*': ['./src/shared/*'],
   '@commands/*': ['./packages/extension/src/commands/*'],

@@ -1610,12 +1610,6 @@
       "name": "DirectLspLeanAdapterOptions"
     },
     {
-      "file": "src/tools/lean/direct/leanSession.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "fileUriToPath"
-    },
-    {
       "file": "src/tools/memory/memoryFileSystem.ts",
       "category": "production-dead",
       "kind": "exports",
