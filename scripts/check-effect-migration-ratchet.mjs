@@ -197,6 +197,13 @@ const EXECUTE_CASES = [
     'const G = makeThing();\nclass T extends G { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
     false,
   ],
+  // A name bound twice, once to something else: not resolved lexically, so
+  // not trusted — the run counts as debt rather than silently gaining
+  // boundary status.
+  [
+    'const G = makeOtherBase();\nfunction f() { const G = defineTool({ name: "t" }); return G; }\nclass H extends G { execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    false,
+  ],
 ];
 
 /** Production TypeScript files, repo-relative and '/'-joined, sorted. */
@@ -515,22 +522,31 @@ function surveySource(text, fileName) {
  * identifier is otherwise indistinguishable from extending any other class.
  */
 function generatedToolBases(sourceFile) {
-  const names = new Set();
+  const fromDefineTool = new Set();
+  const shadowed = new Set();
   const visit = (node) => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer != null &&
-      ts.isCallExpression(node.initializer) &&
-      ts.isIdentifier(node.initializer.expression) &&
-      node.initializer.expression.text === 'defineTool'
-    ) {
-      names.add(node.name.text);
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      const name = node.name.text;
+      const init = node.initializer;
+      const isBase =
+        init != null &&
+        ts.isCallExpression(init) &&
+        ts.isIdentifier(init.expression) &&
+        init.expression.text === 'defineTool';
+      // A name bound more than once in the file is not resolved lexically
+      // here, so it is not trusted at all: if any binding of it is something
+      // other than defineTool(...), the name stops counting as a tool base.
+      // That fails closed -- the class is treated as a helper, its runs count
+      // as debt, and the register demands a lane -- which is the safe
+      // direction for a check whose whole job is refusing to widen.
+      if (isBase) fromDefineTool.add(name);
+      else shadowed.add(name);
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return names;
+  for (const name of shadowed) fromDefineTool.delete(name);
+  return fromDefineTool;
 }
 
 /**
@@ -659,6 +675,18 @@ function surveyTree(files) {
       toolExecuteFiles.add(file);
     }
   }
+  // The `Effect.run*` row is the debt, and a run at one of R1's boundary kinds
+  // is not debt -- it is the destination. Counting those too is what made
+  // every conversion lane widen this baseline: runs MOVE to a host entry, so
+  // the entry's count rises, and the ratchet then had to be argued with
+  // rather than obeyed. Dropping them makes "this row only ever shrinks" true
+  // by construction instead of by exception, and leaves the row's keys equal
+  // to the register's.
+  rows[ROW_RUN_BOUNDARY] = Object.fromEntries(
+    Object.entries(rows[ROW_RUN_BOUNDARY]).filter(
+      ([file]) => !isBoundaryPath(file, toolExecuteFiles),
+    ),
+  );
   return { rows, texts, toolExecuteFiles };
 }
 
@@ -1026,34 +1054,24 @@ function main() {
     // back the file it had already replaced, so every count matched itself.
     const committed = readCommittedCounts();
 
-    // Growth is refused everywhere except one place: `Effect.run*` at a legal
-    // boundary path. That exception is the migration itself working -- a lane
-    // converts a subsystem and its runs MOVE to a host entry, so the entry's
-    // count rises while the debt below it falls. Every other row is a pure
-    // debt counter with no legitimate growth, and a below-boundary
-    // `Effect.run*` is the case the owner reproduced: a file already named in
-    // the register going 1 -> 2 was written, not refused.
-    const { failures: allGrowth } = diffRows(rows, committed.rows);
-    const grew = allGrowth.filter(
-      ({ row, file }) =>
-        row.id !== ROW_RUN_BOUNDARY || !isBoundaryPath(file, toolExecuteFiles),
-    );
+    // `--update` records progress and nothing else: every count it writes is
+    // the lower of the committed one and the tree's, so a ceiling can only
+    // ever fall. Growth is still reported, and still fails, but it no longer
+    // blocks the write -- refusing outright meant a tree with one new site
+    // could not record any of its genuine shrinkage, which is how a
+    // legitimate reduction ended up needing a hand edit.
+    const { failures: grew } = diffRows(rows, committed.rows);
     if (grew.length > 0) {
       console.error(
-        `\n--update refused: ${grew.length} count(s) would grow beyond the committed baseline.`,
+        `\n${grew.length} count(s) grew; the baseline keeps the committed ceiling for each and the check stays red until they are gone.`,
       );
       for (const { row, file, was, now, kind } of grew) {
         console.error(`  - [${row.id}] ${file}: ${was} -> ${now} (${kind})`);
       }
-      console.error(
-        `\nA ratchet is shrink-only in both directions of use: --update records a measurement, it never raises a ceiling. Remove the new sites, or move them to one of ${BOUNDARY_PATHS_TEXT}, where an Effect.run* count may rise because the debt below it fell.`,
-      );
-      process.exit(1);
     }
 
     const admitted = new Set(Object.keys(committed.debtLanes ?? {}));
     const newDebt = Object.keys(rows[ROW_RUN_BOUNDARY])
-      .filter((file) => !isBoundaryPath(file, toolExecuteFiles))
       .filter((file) => !admitted.has(file))
       .toSorted(compareCodePoints);
     if (newDebt.length > 0) {
@@ -1068,12 +1086,30 @@ function main() {
       process.exit(1);
     }
 
+    // Every written count is the lower of the committed one and the tree's,
+    // and a file the row does not already carry is not added at all, so this
+    // command cannot raise a ceiling or open a new one. A file that is new to
+    // a row is new debt: the check reports it and stays red until it is gone,
+    // which is the only outcome that does not quietly bless it.
+    const tightened = Object.fromEntries(
+      ROWS.map((row) => [
+        row.id,
+        Object.fromEntries(
+          Object.entries(rows[row.id])
+            .filter(([file]) => committed.rows[row.id]?.[file] != null)
+            .map(([file, count]) => [
+              file,
+              Math.min(committed.rows[row.id][file], count),
+            ]),
+        ),
+      ]),
+    );
     const lanes = runBoundaryDebtLanes(
-      rows[ROW_RUN_BOUNDARY],
+      tightened[ROW_RUN_BOUNDARY],
       committed.debtLanes ?? {},
       toolExecuteFiles,
     );
-    writeBaseline(rows, lanes);
+    writeBaseline(tightened, lanes);
     console.log(`Effect migration baseline written: ${baselinePath}`);
     const pending = unassignedDebt(
       rows[ROW_RUN_BOUNDARY],
