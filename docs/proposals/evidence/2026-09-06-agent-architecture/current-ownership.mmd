@@ -1,0 +1,23 @@
+flowchart TB
+    host["Host and SDK entry points"]
+    runtime["Current agent runtime<br/>ModelFactory · ModelCell · execution lifecycle"]
+    flow["PocketFlow-style flows and nodes<br/>ModelInvocationNode · tool-use · reflection"]
+    handler["IModelHandler · ModelHandler<br/>Provider I/O + history conversion + workflow policy"]
+    providers["Provider-specific handlers<br/>SDK clients · streaming · server continuation"]
+    tools["ToolUseDispatchNode<br/>Parallel safe groups · mutation barriers"]
+    documents["Document and output behavior<br/>Split across handlers and flow nodes"]
+    persistence[("PersistedFlow / ExecutionKVStore<br/>Shared state + node cursor; claimed and fenced")]
+
+    host --> runtime --> flow
+    flow --> handler --> providers
+    flow --> tools
+    flow --> documents
+    handler --> documents
+    flow <-->|persist outer state| persistence
+
+    classDef current fill:#f1f5f9,stroke:#64748b,color:#0f172a;
+    classDef mixed fill:#fff1e6,stroke:#c2410c,color:#7c2d12;
+    classDef durable fill:#fef3c7,stroke:#b45309,color:#78350f;
+    class host,runtime,flow,providers,tools current;
+    class handler,documents mixed;
+    class persistence durable;
