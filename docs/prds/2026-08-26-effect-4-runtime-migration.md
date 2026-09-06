@@ -525,7 +525,15 @@ of place, and nothing inside the tree is one. (a) A host entry that a host
 framework invokes: a VS Code command or webview message handler, an Electron
 IPC handler, a CLI command action, a React or Ink event handler, an activate
 or deactivate hook. (b) The agent tool `execute()` contract in `src/tools`,
-until lane D converts the tool runner; a tool's `execute` body is one
+until lane D converts the tool runner (_amended 2026-09-06 (review
+finding):_ Phase 2 **is** lane D, so "until lane D" cannot mean "until this
+phase" without the rule contradicting itself the moment the phase lands. It
+means: the boundary survives Phase 2 and retires when the tool **runner** —
+`Tools`, the dispatcher that calls `execute()` — is itself Effect-typed and
+can await an Effect-returning tool, which Phase 2 does not do. Until then a
+tool's `execute()` returning a Promise is boundary kind (b), not an adapter,
+and `check:effect-migration-ratchet` admits it on exactly that basis);
+a tool's `execute` body is one
 `runPromise` of a program that holds every line of logic. (c) The SDK's
 public Promise API in `packages/agent/src`. Everything below those three is
 Effect-typed: exported functions return `Effect` or `Stream`, stateful
@@ -1487,6 +1495,22 @@ lane D of the persistence cutover branch, sequenced and sized by
    cutover, with a message naming the release. The record is left on disk
    for D8 to delete. Phase 2 deletes `persistedFlow.ts` with the rest of
    `src/agent/node/`, and no code in the tree reads the old format again.
+
+   _Amended 2026-09-06 (review finding):_ that deletion is only landable if
+   **every** importer converts in this same phase, and at this commit
+   `persistedFlow.ts` has nine production importers, not the two the earlier
+   text implied: `RoundPersistedFlow`, `runReflectionFlow`, `runToolUseFlow`,
+   `AgentLaunchContext`, `SessionResumeRetrieval`, `persistedCompileRejection`,
+   `resumeRun`, `storage/executionLifecycle` (which imports `flowKey`), and
+   `storage/resumability`. Two of them were assigned elsewhere and move here:
+   `AgentRunLifecycle`'s `setFlowRecordDisposition` (declared at
+   `AgentRunLifecycle.ts:104`, implemented at `:515`, called from
+   `executeAgent.ts:171`) was left to Stage 3a, and `executionLifecycle`'s
+   `flowKey` use had no phase at all. A Phase 2 that deletes the module while
+   either still references it does not build, so both convert in Phase 2 —
+   which follows anyway from the second ruling putting `executeAgent`'s
+   interior in this phase, since `executeAgent` is what calls the
+   disposition setter.
    Deletes `src/agent/node/`, `ModelInvocationNode`, `RoundPersistedFlow`,
    `ResponseCycleFlow`, `ToolUseRoundFlow`, all sixteen node classes, the
    disposition ladder, the flow-local uses of `linkAbortSignals` and
