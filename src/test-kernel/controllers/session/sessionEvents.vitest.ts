@@ -927,6 +927,36 @@ describe('the C1 event table and the C6 publisher', () => {
     }).pipe(Effect.provide(substrate(storage)));
   });
 
+  it.effect(
+    'reports non-JSON payloads as typed write failures before assigning ordinals',
+    () => {
+      const storage = workspace();
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        const failure = yield* Effect.flip(
+          db.appendAll([
+            {
+              type: 'transcript.entry',
+              aggregateId: runStart.aggregateId,
+              entry: {
+                seqNo: 1,
+                id: 'non-json',
+                type: 'log',
+                level: 'info',
+                timestamp: 1,
+                messageType: 'internal',
+                data: 1n,
+              },
+            },
+          ]),
+        );
+        expect(failure._tag).toBe('DatabaseWriteFailed');
+        expect(yield* SubscriptionRef.get(db.level)).toBe(0);
+        expect((yield* db.appendAll([runStart]))[0]?.commit).toBe(1);
+      }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
   it.effect('reopens at the committed ordinal and never reuses one', () => {
     const storage = workspace();
     const append = Effect.gen(function* () {

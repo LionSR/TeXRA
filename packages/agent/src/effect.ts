@@ -42,10 +42,12 @@ export {
 export type { LaunchError } from './effect/errors.js';
 
 // The payloads, as the runtime defines them.
+export { aggregateId } from '@shared/schemas';
 export type { AgentEvent } from '@agent/trace';
 export type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 export type { ITool } from '@agent/core/tools/ToolTypes';
 export type {
+  AggregateId,
   ExecutionId,
   SessionCloseReport,
   StreamTabId,
