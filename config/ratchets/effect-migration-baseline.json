@@ -96,8 +96,7 @@
       "src/agent/workflowScript/runWorkflowScript.ts": 2,
       "src/platform/defaults/lifecycleHost.ts": 1,
       "src/platform/defaults/longRunningModelTransport.ts": 1,
-      "src/tools/claudeAgent.ts": 1,
-      "src/tools/lean/direct/directLspAdapter.ts": 2
+      "src/tools/claudeAgent.ts": 1
     },
     "import:p-queue": {
       "packages/cli/src/chat/chatSessionController.ts": 1,
@@ -124,7 +123,6 @@
       "src/auth/SupabaseClient.ts": 1,
       "src/auth/SupabaseSession.ts": 1,
       "src/auth/oauth/SubscriptionOAuthCoordinator.ts": 1,
-      "src/tools/lean/direct/directLspAdapter.ts": 1,
       "src/transcript/StagedDeletionCoordinator.ts": 1,
       "src/transcript/StreamLogStore.ts": 1,
       "src/transcript/StreamSnapshotStore.ts": 1,
@@ -154,8 +152,7 @@
       "packages/cli/src/chat/tui/input/BaseTextInput.tsx": 1,
       "packages/cli/src/runtime/clipboardText.ts": 1,
       "src/agent/workflowScript/runWorkflowScript.ts": 1,
-      "src/latex/arxivProcessor.ts": 1,
-      "src/tools/lean/direct/leanSession.ts": 1
+      "src/latex/arxivProcessor.ts": 1
     },
     "import:p-defer": {
       "packages/cli/src/chat/chatSessionController.ts": 1,
@@ -222,6 +219,7 @@
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/tools/goal/goalStore.ts": 2,
       "src/tools/lean/LoogleTool.ts": 1,
+      "src/tools/lean/direct/directLspAdapter.ts": 4,
       "src/tools/memory/memoryFileSystem.ts": 1,
       "src/tools/web/WebFetchTool.ts": 1,
       "src/tools/web/WebSearchTool.ts": 1,
@@ -256,6 +254,7 @@
       "src/common/errors/sdkError/providerErrorFormat.ts": 2,
       "src/tools/arxiv/ArxivSearchTool.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 2,
+      "src/tools/lean/direct/leanServer.ts": 1,
       "src/tools/web/WebFetchTool.ts": 2,
       "src/tools/zotero/bbtClient.ts": 1,
       "src/utils/files/relativeFS.ts": 2
@@ -278,6 +277,7 @@
     "src/tools/agentCliSessionRegistry.ts": "wave-1 rebuild — tools: memory, executions, polling sources",
     "src/tools/github/PollingSourceBase.ts": "wave-1 rebuild — tools: memory, executions, polling sources",
     "src/tools/goal/goalStore.ts": "Phase 5 — tools subsystem",
+    "src/tools/lean/direct/directLspAdapter.ts": "Lean LSP follow-up — LeanLanguageServices becomes an Effect-typed port and the run moves to LspTools' execute()",
     "src/tools/memory/memoryFileSystem.ts": "wave-1 rebuild — tools: memory, executions, polling sources"
   }
 }
