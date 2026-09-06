@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Exit, Fiber } from 'effect';
+import { TestClock } from 'effect/testing';
+import { describe, expect, vi } from 'vitest';
 
 import {
   CLI_DEVICE_AUTH_URL_PROMPT,
@@ -8,7 +11,6 @@ import {
   requestDeviceAuthorization,
 } from '@cli/runtime/supabaseAuthDeviceCode';
 
-import { createFakeClock } from '@test/support/asyncTestUtils';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 
 const SESSION_PAYLOAD = {
@@ -48,42 +50,49 @@ function queuedFetch(queue: Array<Response | Error>): {
   return { fetchImpl, calls };
 }
 
-/** Starts a poll over a queued fetch driven by a fresh deterministic clock. */
-function pollWithQueue(
+/** Let a settled fetch resume the poll, then move the clock one interval. */
+const tick = Effect.gen(function* () {
+  yield* Effect.promise(
+    () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+  );
+  yield* TestClock.adjust(`${AUTHORIZATION.interval} seconds`);
+});
+
+/** Forks a poll over a queued fetch on the test clock. */
+const pollWithQueue = (
   queue: Array<Response | Error>,
   authorization: Parameters<typeof pollForDeviceSession>[0] = AUTHORIZATION,
-): {
-  completion: ReturnType<typeof pollForDeviceSession>;
-  clock: ReturnType<typeof createFakeClock>;
-  calls: FetchCall[];
-} {
-  const clock = createFakeClock();
-  const { fetchImpl, calls } = queuedFetch(queue);
-  return {
-    completion: pollForDeviceSession(authorization, {
-      fetchImpl,
-      sleep: clock.sleep,
-      now: clock.now,
-    }),
-    clock,
-    calls,
-  };
-}
+) =>
+  Effect.gen(function* () {
+    const { fetchImpl, calls } = queuedFetch(queue);
+    const fiber = yield* Effect.forkChild(
+      pollForDeviceSession(authorization, { fetchImpl }),
+    );
+    return { fiber, calls };
+  });
+
+/** Tick until the poll settles (bounded), then its exit. */
+const settle = <A, E>(fiber: Fiber.Fiber<A, E>, ticks = 12) =>
+  Effect.gen(function* () {
+    for (let i = 0; i < ticks; i++) {
+      yield* tick;
+    }
+    return yield* Fiber.await(fiber);
+  });
 
 describe('CLI device-code sign-in (texra login --device)', () => {
-  it('cancels a pending poll before its first network request', async () => {
-    const controller = new AbortController();
-    const fetchImpl = vi.fn() as unknown as typeof fetch;
-    const completion = pollForDeviceSession(AUTHORIZATION, {
-      fetchImpl,
-      signal: controller.signal,
-    });
-
-    controller.abort();
-
-    await expect(completion).rejects.toMatchObject({ name: 'AbortError' });
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
+  it.effect('cancels a pending poll before its first network request', () =>
+    Effect.gen(function* () {
+      const fetchImpl = vi.fn() as unknown as typeof fetch;
+      const fiber = yield* Effect.forkChild(
+        pollForDeviceSession(AUTHORIZATION, { fetchImpl }),
+      );
+      yield* Fiber.interrupt(fiber);
+      const exit = yield* Fiber.await(fiber);
+      expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }),
+  );
 
   it('parses a device authorization and defaults a missing interval', () => {
     const parsed = DeviceAuthorizationSchema.parse({
@@ -94,84 +103,124 @@ describe('CLI device-code sign-in (texra login --device)', () => {
     expect(parsed.user_code).toBe('BCDF-GHJK');
   });
 
-  it('requests a device authorization from the auth server', async () => {
-    const { fetchImpl, calls } = queuedFetch([jsonResponse(AUTHORIZATION)]);
-    const authorization = await requestDeviceAuthorization({ fetchImpl });
-    expect(authorization.device_code).toBe('device-code-secret');
-    expect(calls[0].url).toMatch(/\/auth-device\/code$/);
-  });
+  it.effect('requests a device authorization from the auth server', () =>
+    Effect.gen(function* () {
+      const { fetchImpl, calls } = queuedFetch([jsonResponse(AUTHORIZATION)]);
+      const authorization = yield* requestDeviceAuthorization({ fetchImpl });
+      expect(authorization.device_code).toBe('device-code-secret');
+      expect(calls[0].url).toMatch(/\/auth-device\/code$/);
+    }),
+  );
 
-  it('reports an unavailable device endpoint with a recovery hint', async () => {
-    const { fetchImpl } = queuedFetch([jsonResponse({ error: 'nope' }, 503)]);
-    await expect(requestDeviceAuthorization({ fetchImpl })).rejects.toThrow(
-      /unavailable.*--no-browser/s,
-    );
-  });
+  it.effect('reports an unavailable device endpoint with a recovery hint', () =>
+    Effect.gen(function* () {
+      const { fetchImpl } = queuedFetch([jsonResponse({ error: 'nope' }, 503)]);
+      const error = yield* Effect.flip(
+        requestDeviceAuthorization({ fetchImpl }),
+      );
+      expect(error.message).toMatch(/unavailable.*--no-browser/s);
+    }),
+  );
 
-  it('polls through pending and slow_down, honoring the growing interval', async () => {
-    const { completion, clock, calls } = pollWithQueue([
-      jsonResponse({ error: 'authorization_pending' }, 400),
-      jsonResponse({ error: 'slow_down' }, 400),
-      jsonResponse(SESSION_PAYLOAD),
-    ]);
+  it.effect(
+    'polls through pending and slow_down, honoring the growing interval',
+    () =>
+      Effect.gen(function* () {
+        const { fiber, calls } = yield* pollWithQueue([
+          jsonResponse({ error: 'authorization_pending' }, 400),
+          jsonResponse({ error: 'slow_down' }, 400),
+          jsonResponse(SESSION_PAYLOAD),
+        ]);
 
-    const exchange = await completion;
+        // 5s, 5s, then 10s after the slow_down bump: the third poll needs two
+        // intervals.
+        yield* tick;
+        expect(calls).toHaveLength(1);
+        yield* tick;
+        expect(calls).toHaveLength(2);
+        yield* tick;
+        expect(calls).toHaveLength(2);
+        yield* tick;
+        expect(calls).toHaveLength(3);
 
-    expect(exchange.access_token).toBe('access-token');
-    expect(exchange.user.email).toBe('user@example.edu');
-    // 5s, 5s, then 10s after the slow_down bump.
-    expect(clock.sleeps).toEqual([5000, 5000, 10000]);
-    expect(calls.every((call) => call.url.endsWith('/auth-device/token'))).toBe(
-      true,
-    );
-    expect(calls[0].body).toEqual({ device_code: 'device-code-secret' });
-  });
+        const exchange = yield* Fiber.join(fiber);
+        expect(exchange.access_token).toBe('access-token');
+        expect(exchange.user.email).toBe('user@example.edu');
+        expect(
+          calls.every((call) => call.url.endsWith('/auth-device/token')),
+        ).toBe(true);
+        expect(calls[0].body).toEqual({ device_code: 'device-code-secret' });
+      }),
+  );
 
-  it('surfaces a denial from the browser as a clear error', async () => {
-    await expect(
-      pollWithQueue([jsonResponse({ error: 'access_denied' }, 400)]).completion,
-    ).rejects.toThrow('Sign-in was denied in the browser.');
-  });
+  it.effect('surfaces a denial from the browser as a clear error', () =>
+    Effect.gen(function* () {
+      const { fiber } = yield* pollWithQueue([
+        jsonResponse({ error: 'access_denied' }, 400),
+      ]);
+      yield* settle(fiber, 1);
+      const error = yield* Effect.flip(Fiber.join(fiber));
+      expect(error.message).toBe('Sign-in was denied in the browser.');
+    }),
+  );
 
-  it('maps expired_token to a fresh-code suggestion', async () => {
-    await expect(
-      pollWithQueue([jsonResponse({ error: 'expired_token' }, 400)]).completion,
-    ).rejects.toThrow(/expired before it was approved/);
-  });
+  it.effect('maps expired_token to a fresh-code suggestion', () =>
+    Effect.gen(function* () {
+      const { fiber } = yield* pollWithQueue([
+        jsonResponse({ error: 'expired_token' }, 400),
+      ]);
+      yield* settle(fiber, 1);
+      const error = yield* Effect.flip(Fiber.join(fiber));
+      expect(error.message).toMatch(/expired before it was approved/);
+    }),
+  );
 
-  it('stops polling when the code expires locally', async () => {
-    const { completion, calls } = pollWithQueue(
-      [jsonResponse({ error: 'authorization_pending' }, 400)],
-      { ...AUTHORIZATION, expires_in: 10 },
-    );
-    await expect(completion).rejects.toThrow(/expired before it was approved/);
-    expect(calls).toHaveLength(1);
-  });
+  it.effect('stops polling when the code expires locally', () =>
+    Effect.gen(function* () {
+      const { fiber, calls } = yield* pollWithQueue(
+        [jsonResponse({ error: 'authorization_pending' }, 400)],
+        { ...AUTHORIZATION, expires_in: 10 },
+      );
+      yield* settle(fiber, 2);
+      const error = yield* Effect.flip(Fiber.join(fiber));
+      expect(error.message).toMatch(/expired before it was approved/);
+      expect(calls).toHaveLength(1);
+    }),
+  );
 
-  it('tolerates transient poll failures but not persistent ones', async () => {
-    const transient = await pollWithQueue([
-      new Error('socket hang up'),
-      new Error('socket hang up'),
-      jsonResponse(SESSION_PAYLOAD),
-    ]).completion;
-    expect(transient.access_token).toBe('access-token');
+  it.effect('tolerates transient poll failures but not persistent ones', () =>
+    Effect.gen(function* () {
+      const tolerated = yield* pollWithQueue([
+        new Error('socket hang up'),
+        new Error('socket hang up'),
+        jsonResponse(SESSION_PAYLOAD),
+      ]);
+      yield* settle(tolerated.fiber, 3);
+      const transient = yield* Fiber.join(tolerated.fiber);
+      expect(transient.access_token).toBe('access-token');
 
-    await expect(
-      pollWithQueue([
+      const persistent = yield* pollWithQueue([
         new Error('socket hang up'),
         new Error('socket hang up'),
         new Error('socket hang up'),
-      ]).completion,
-    ).rejects.toThrow('socket hang up');
-  });
+      ]);
+      yield* settle(persistent.fiber, 3);
+      const error = yield* Effect.flip(Fiber.join(persistent.fiber));
+      expect(error.message).toBe('socket hang up');
+    }),
+  );
 
-  it('treats rate-limited poll responses as transient', async () => {
-    const exchange = await pollWithQueue([
-      jsonResponse({ error: 'rate_limited' }, 429),
-      jsonResponse(SESSION_PAYLOAD),
-    ]).completion;
-    expect(exchange.access_token).toBe('access-token');
-  });
+  it.effect('treats rate-limited poll responses as transient', () =>
+    Effect.gen(function* () {
+      const { fiber } = yield* pollWithQueue([
+        jsonResponse({ error: 'rate_limited' }, 429),
+        jsonResponse(SESSION_PAYLOAD),
+      ]);
+      yield* settle(fiber, 2);
+      const exchange = yield* Fiber.join(fiber);
+      expect(exchange.access_token).toBe('access-token');
+    }),
+  );
 
   it('describes device login as any-device auth with the code inline', () => {
     const message = formatCliDeviceAuthMessage(AUTHORIZATION);

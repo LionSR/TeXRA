@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { type ZodType } from 'zod';
 
 // Local imports
+import { Result } from 'effect';
 import { parseJsonWith, safeParseJson } from '@common/parsing/safeParseJson';
 import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -42,13 +43,13 @@ export abstract class RelativeFS extends BaseFS {
   ): Promise<T> {
     const raw = await this.read(target);
     const result = schema ? parseJsonWith(raw, schema) : safeParseJson(raw);
-    if (result.isErr()) {
+    if (Result.isFailure(result)) {
       throw new Error(
-        `Failed to parse JSON from ${target}: ${result.error.message}`,
-        { cause: result.error },
+        `Failed to parse JSON from ${target}: ${result.failure.message}`,
+        { cause: result.failure },
       );
     }
-    return result.value as T;
+    return result.success as T;
   }
 
   /**

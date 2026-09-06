@@ -6,9 +6,12 @@
  */
 
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { effectRuntime } from '@platform/processRuntime';
 import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -128,6 +131,71 @@ function collectionPath(chain: BbtCollectionChain): string {
   return parts.join(' / ');
 }
 
+const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* ({
+  query,
+  title,
+  author,
+  year,
+  library,
+  include_collections,
+}: ZoteroSearchInput) {
+  const port = getZoteroPort();
+
+  // Build search params: use advanced tuple search when structured fields
+  // are provided, otherwise fall back to simple quick-search string.
+  const searchTerms: unknown =
+    title || author || year
+      ? [
+          ...(title ? [['title', 'contains', title]] : []),
+          ...(author ? [['creator', 'contains', author]] : []),
+          ...(year ? [['date', 'is', String(year)]] : []),
+        ]
+      : query!;
+
+  const params: unknown[] = library ? [searchTerms, library] : [searchTerms];
+
+  const result = yield* callBetterBibTeX(
+    'item.search',
+    params,
+    port,
+    z.array(BbtSearchResultItemSchema),
+  );
+
+  const label = describeSearch({ query, title, author, year });
+
+  if (result.length === 0) {
+    return executed(
+      'No matching items in Zotero library.',
+      `No results found for ${label}`,
+    );
+  }
+
+  const collectionMap = include_collections
+    ? yield* callBetterBibTeX(
+        'item.collections',
+        [result.map((r) => r.citekey), true],
+        port,
+        z.record(z.string(), z.array(BbtCollectionChainSchema)),
+      )
+    : null;
+
+  const items = result.map((item) => {
+    const base = formatSearchResult(item);
+    if (!collectionMap) return base;
+
+    const chains = collectionMap[item.citekey];
+    if (!chains || chains.length === 0) return base;
+
+    const paths = chains.map((c) => collectionPath(c));
+    return `${base}\n  Filed in: ${paths.join(', ')}`;
+  });
+
+  return executed(
+    items.join('\n'),
+    `Found ${formatResultCount(result.length, 'item')} matching ${label}`,
+  );
+});
+
 export class ZoteroSearchTool extends defineTool({
   name: 'zotero_search',
   parallelSafe: true,
@@ -137,68 +205,9 @@ export class ZoteroSearchTool extends defineTool({
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroSearchInputSchema,
 }) {
-  protected async execute({
-    query,
-    title,
-    author,
-    year,
-    library,
-    include_collections,
-  }: ZoteroSearchInput): Promise<ToolResult> {
-    const port = getZoteroPort();
-
-    // Build search params: use advanced tuple search when structured fields
-    // are provided, otherwise fall back to simple quick-search string.
-    const searchTerms: unknown =
-      title || author || year
-        ? [
-            ...(title ? [['title', 'contains', title]] : []),
-            ...(author ? [['creator', 'contains', author]] : []),
-            ...(year ? [['date', 'is', String(year)]] : []),
-          ]
-        : query!;
-
-    const params: unknown[] = library ? [searchTerms, library] : [searchTerms];
-
-    const result = await callBetterBibTeX(
-      'item.search',
-      params,
-      port,
-      z.array(BbtSearchResultItemSchema),
-    );
-
-    const label = describeSearch({ query, title, author, year });
-
-    if (result.length === 0) {
-      return executed(
-        'No matching items in Zotero library.',
-        `No results found for ${label}`,
-      );
-    }
-
-    const collectionMap = include_collections
-      ? await callBetterBibTeX(
-          'item.collections',
-          [result.map((r) => r.citekey), true],
-          port,
-          z.record(z.string(), z.array(BbtCollectionChainSchema)),
-        )
-      : null;
-
-    const items = result.map((item) => {
-      const base = formatSearchResult(item);
-      if (!collectionMap) return base;
-
-      const chains = collectionMap[item.citekey];
-      if (!chains || chains.length === 0) return base;
-
-      const paths = chains.map((c) => collectionPath(c));
-      return `${base}\n  Filed in: ${paths.join(', ')}`;
+  protected execute(input: ZoteroSearchInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(searchZotero(input), {
+      signal: getCurrentToolCallContext()?.signal,
     });
-
-    return executed(
-      items.join('\n'),
-      `Found ${formatResultCount(result.length, 'item')} matching ${label}`,
-    );
   }
 }

@@ -12,6 +12,7 @@
 // CLI can consume it.
 
 import escapeRegExp from 'escape-string-regexp';
+import { Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   DELIVERY_TAG,
@@ -199,9 +200,9 @@ export function parseWorkflowScriptDeliverySummary(
   const rawSummary = innerTag(xml, 'workflow-summary');
   if (!rawSummary) return undefined;
   const parsedJson = safeParseJson(decodeXmlEntities(rawSummary));
-  if (parsedJson.isErr()) return undefined;
+  if (Result.isFailure(parsedJson)) return undefined;
   const parsed = WorkflowScriptDeliverySummarySchema.safeParse(
-    parsedJson.value,
+    parsedJson.success,
   );
   return parsed.success ? parsed.data : undefined;
 }

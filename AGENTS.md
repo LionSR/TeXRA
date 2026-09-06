@@ -92,7 +92,7 @@ subset of the same files under the same options.
 - Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
-- Keep the directory structure aligned among different webviews (webview, progressView, settingsView). Use the same folder names for modules of the same type and functionality but in different webviews.
+- Keep the directory structure aligned among different webviews where they share a concern (e.g. `components/`, `styles/`). `progressView` and `settingsView` intentionally diverge beyond that — see "Webview Consistency Patterns" for which folders are pattern-specific (`settingsView/frontend/slices/` vs `progressView/frontend/formatters/`) rather than a naming drift to fix.
 - Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`). Host-neutral session bridging lives under `src/controllers/session/` (e.g. `src/controllers/session/SessionBridge.ts`), per the `controllers/` host-neutral-orchestration rule.
 
 ### Naming conventions
@@ -540,13 +540,45 @@ travel through the flows are described in `docs/architecture/2026-06-20-pocketfl
 
 ### Webview Consistency Patterns
 
-- **Base Classes**: All webviews (webview, progressView, settingsView) extend `BaseViewContentProvider` and `BaseViewMessageHandler` from `packages/extension/src/common/webview/` for consistent error handling, logging, and cleanup.
-- **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `SettingsViewMessageHandler`, `ProgressViewContentProvider`)
-- **Command Constants**: Define commands in `src/shared/ipc.ts` — `COMMON_COMMANDS` plus the per-view groups (`MAIN_VIEW_COMMANDS`, etc.) in that same file — use constants, not string literals
-- **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
+Two message-passing architectures coexist for the extension's views. Match the
+one the view you're touching already uses — `BaseViewMessageHandler` is not a
+default to reach for, it's `settingsView`'s pattern specifically:
+
+- **`settingsView`** is request/response: `SettingsViewMessageHandler`
+  (`packages/extension/src/settingsView/`) extends `BaseViewMessageHandler`
+  (`packages/extension/src/common/webview/`) for inbound dispatch through a
+  `HandlerRegistry`, delegating tab-shaped groups to focused handler classes in
+  `settingsView/handlers/` (`AgentHandlers`, `LatexSettingsHandlers`,
+  `MemoryHandlers`, `GitHubSubscriptionHandlers`, `SubscriptionHandlers`).
+  Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
+  `SETTINGS_VIEW_CMD`, `PROFILE_VIEW_COMMANDS`, `MEMORY_VIEW_COMMANDS`) — use
+  those, not string literals. Frontend state lives in module-level reactive
+  signals declared in `settingsView/frontend/settingsState.ts`
+  (`trackedSignal`); `settingsView/frontend/slices/` holds the domain-grouped
+  outbound message-handler registries (`agentSelectionSlice.ts`,
+  `latexSlice.ts`, etc., each `satisfies Partial<SettingsViewOutboundHandlerRegistry>`)
+  that mutate those signals — there is no Redux store or reducer.
+- **`progressView`** (the sidebar and editor-tab conversation shell) is
+  event-fold, not request/response: `ProgressViewProvider` implements
+  `vscode.WebviewViewProvider` directly — composed with
+  `BundledViewContentProvider` (`common/webview/BaseViewContentProvider.ts`;
+  there is no `BaseViewContentProvider` class, despite the file name) for
+  shared webview boilerplate — and routes through `SessionBridge` /
+  `HostDraftRequests` as typed `runtime.request` / `host.request` calls (see
+  `docs/proposals/2026-09-03-one-view-state-three-renderers.md`). Its Lit
+  components (`progressView/frontend/components/`) read the `SessionView` fold
+  (`src/shared/session/sessionView.ts`) and `Surface` records as properties
+  directly; there is no command-constant registry or slice layer here.
+- **`webview/frontend`** is not a third view with its own content provider —
+  it's the shared Lit component library (banners, file pickers, onboarding
+  cards) that `progressView` composes. There is no `MainViewContentProvider`.
+- **Naming Convention**: within whichever pattern applies, follow
+  `[Domain]View[Component]` (e.g. `SettingsViewMessageHandler`,
+  `ProgressViewProvider`). Adding a genuinely new pattern needs an update to
+  this section, not a silent third variant.
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
-- **Module Structure**: Keep UI managers focused on a single responsibility
+- **Module Structure**: Keep UI managers/handlers focused on a single responsibility
 - **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it
 - **Dropdown Menus**: Should close when clicking outside, not just on toggle
 - **CSS Organization**: Keep per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`

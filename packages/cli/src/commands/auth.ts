@@ -2,6 +2,7 @@ import { defineCommand } from 'citty';
 
 import { DEFAULT_OAUTH_PROVIDER, isOAuthProvider } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
+import { effectRuntime } from '@platform/processRuntime';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -91,14 +92,16 @@ async function runDeviceLogin(context: CliContext): Promise<number> {
   // result stream stays machine-readable (same convention as --no-browser).
   const writeProgress = cliProgressWriter(context);
   const deviceResult = await withCliAuthError(() =>
-    signInCliSupabaseDeviceCode({
-      onDeviceCode: (authorization) => {
-        writeProgress(formatCliDeviceAuthMessage(authorization));
-        writeProgress(
-          'Waiting for you to approve in the browser… (Ctrl-C cancels)',
-        );
-      },
-    }),
+    effectRuntime().runPromise(
+      signInCliSupabaseDeviceCode({
+        onDeviceCode: (authorization) => {
+          writeProgress(formatCliDeviceAuthMessage(authorization));
+          writeProgress(
+            'Waiting for you to approve in the browser… (Ctrl-C cancels)',
+          );
+        },
+      }),
+    ),
   );
   if (!deviceResult.ok) return CliExitCode.ModelOrNetworkError;
   emitLoginResult(context, deviceResult.value);

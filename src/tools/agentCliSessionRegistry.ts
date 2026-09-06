@@ -1,9 +1,10 @@
-import pDefer from 'p-defer';
+import { Data, Deferred, Effect } from 'effect';
 
 import { getExecutionStore } from '@agent/storage';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const logger = createLog('AgentCliSessionRegistry');
@@ -27,6 +28,38 @@ const DEFAULT_DEPENDENCIES: AgentCliSessionRegistryDependencies = {
   },
 };
 
+/** The session-mapping write rejected or threw; `cause` is what it raised. */
+class SessionMappingWriteFailed extends Data.TaggedError(
+  'SessionMappingWriteFailed',
+)<{ readonly cause: unknown }> {}
+
+/**
+ * Persist one SDK session id for a child execution. A write failure is
+ * reported through the injected diagnostics sink and otherwise contained:
+ * registration never waits on it and never fails because of it. The sink
+ * itself throwing is a defect of the detached fiber, not a rejection anyone
+ * observes.
+ */
+const persistSessionMapping = Effect.fn(
+  'AgentCliSessionRegistry.persistSessionMapping',
+)(function* (
+  dependencies: AgentCliSessionRegistryDependencies,
+  executionId: ExecutionId,
+  key: string,
+  sessionId: string,
+) {
+  yield* Effect.tryPromise({
+    try: () => dependencies.persistSessionId(executionId, key, sessionId),
+    catch: (cause) => new SessionMappingWriteFailed({ cause }),
+  }).pipe(
+    Effect.catchTag('SessionMappingWriteFailed', (failure) =>
+      Effect.sync(() =>
+        dependencies.reportPersistenceFailure(executionId, failure.cause),
+      ),
+    ),
+  );
+});
+
 /**
  * What the registry tracks about one live agent-CLI session: the child run's
  * identity and its follow-up address. Live handles are resolved on demand
@@ -43,10 +76,18 @@ export interface AgentCliSessionEntry {
 type AgentCliSessionState =
   | {
       kind: 'reserved';
-      ready: Promise<AgentCliSessionEntry | undefined>;
-      resolve: (entry: AgentCliSessionEntry | undefined) => void;
+      ready: Deferred.Deferred<AgentCliSessionEntry | undefined>;
     }
   | { kind: 'active'; entry: AgentCliSessionEntry };
+
+function settleReservation(
+  state: AgentCliSessionState | undefined,
+  entry: AgentCliSessionEntry | undefined,
+): void {
+  if (state?.kind === 'reserved') {
+    Deferred.doneUnsafe(state.ready, Effect.succeed(entry));
+  }
+}
 
 export class AgentCliSessionRegistry {
   private readonly sessions = new Map<string, AgentCliSessionState>();
@@ -66,17 +107,15 @@ export class AgentCliSessionRegistry {
   claim(sessionId: string): (() => void) | undefined {
     if (this.sessions.has(sessionId)) return undefined;
 
-    const ready = pDefer<AgentCliSessionEntry | undefined>();
     const reservation: AgentCliSessionState = {
       kind: 'reserved',
-      ready: ready.promise,
-      resolve: ready.resolve,
+      ready: Deferred.makeUnsafe<AgentCliSessionEntry | undefined>(),
     };
     this.sessions.set(sessionId, reservation);
     return () => {
       if (this.sessions.get(sessionId) !== reservation) return;
       this.sessions.delete(sessionId);
-      reservation.resolve(undefined);
+      settleReservation(reservation, undefined);
     };
   }
 
@@ -84,27 +123,21 @@ export class AgentCliSessionRegistry {
    * Register an active external-agent session and persist its SDK id for later
    * display or cross-reference after an extension reload clears memory. When
    * the id was reserved, registration also wakes callers waiting to enqueue a
-   * follow-up on the new loop.
+   * follow-up on the new loop. The persistence write runs on a detached fiber
+   * owned by this registry's process runtime; see {@link persistSessionMapping}.
    */
   register(sessionId: string, entry: AgentCliSessionEntry): void {
     const previous = this.sessions.get(sessionId);
     this.sessions.set(sessionId, { kind: 'active', entry });
-    if (previous?.kind === 'reserved') previous.resolve(entry);
-    void Promise.resolve()
-      .then(() =>
-        this.dependencies.persistSessionId(
-          entry.executionId,
-          this.persistedSessionKey,
-          sessionId,
-        ),
-      )
-      .catch((error) => {
-        try {
-          this.dependencies.reportPersistenceFailure(entry.executionId, error);
-        } catch {
-          // Best-effort diagnostics must not create an unhandled rejection.
-        }
-      });
+    settleReservation(previous, entry);
+    effectRuntime().runFork(
+      persistSessionMapping(
+        this.dependencies,
+        entry.executionId,
+        this.persistedSessionKey,
+        sessionId,
+      ),
+    );
   }
 
   /** Track a launched loop before its SDK session id is safe to publish. */
@@ -134,13 +167,15 @@ export class AgentCliSessionRegistry {
     sessionId: string,
   ): Promise<AgentCliSessionEntry | undefined> {
     const state = this.sessions.get(sessionId);
-    return state?.kind === 'active' ? state.entry : state?.ready;
+    if (!state) return undefined;
+    if (state.kind === 'active') return state.entry;
+    return effectRuntime().runPromise(Deferred.await(state.ready));
   }
 
   release(sessionId: string): void {
     const state = this.sessions.get(sessionId);
     this.sessions.delete(sessionId);
-    if (state?.kind === 'reserved') state.resolve(undefined);
+    settleReservation(state, undefined);
   }
 
   /** Release every alias and in-flight handle owned by one child execution. */

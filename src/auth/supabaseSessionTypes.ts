@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -84,14 +85,14 @@ export function parseStoredSupabaseSession(
   if (!sessionData) return null;
   const logSource = options?.logSource ?? 'SupabaseSession';
   const parsedJson = safeParseJson(sessionData);
-  if (parsedJson.isErr()) {
+  if (Result.isFailure(parsedJson)) {
     options?.warn?.(
       logSource,
-      `Failed to parse stored session: ${toErrorMessage(parsedJson.error)}`,
+      `Failed to parse stored session: ${toErrorMessage(parsedJson.failure)}`,
     );
     return null;
   }
-  const parsed = SupabaseSessionSchema.safeParse(parsedJson.value);
+  const parsed = SupabaseSessionSchema.safeParse(parsedJson.success);
   if (!parsed.success) {
     options?.warn?.(
       logSource,

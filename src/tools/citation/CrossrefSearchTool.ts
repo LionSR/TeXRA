@@ -5,9 +5,12 @@ import {
   type Work,
   type WorkSortOptions,
 } from '@jamesgopsill/crossref-client';
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
@@ -74,6 +77,102 @@ type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
  */
 type ExtendedQueryWorksParams = QueryWorksParams & { filter?: string };
 
+/** Look up one DOI's work record. */
+const lookupDoi = Effect.fn('CrossrefSearchTool.lookupDoi')(function* (
+  doi: string | null | undefined,
+) {
+  const trimmedDoi = requireNonEmptyString(doi, 'DOI');
+
+  const response = yield* rateLimitedApiCall(
+    'crossref',
+    CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+    'Crossref lookup failed',
+    () => CrossrefClient.work(trimmedDoi),
+  );
+
+  if (!response.ok || !response.content?.message) {
+    return yield* Effect.fail(
+      new ToolError('Crossref response did not include metadata.'),
+    );
+  }
+
+  const work: Work = response.content.message;
+  const metadata = {
+    doi: work.DOI,
+    title: work.title?.[0] ?? null,
+    titles: work.title ?? [],
+    publisher: work.publisher,
+    type: work.type,
+    abstract: work.abstract ?? null,
+    description: null, // Not exposed by the library type.
+    created: work.created,
+    published: work.published ?? null,
+    url: work.resource?.primary?.URL ?? null,
+    language: work.language ?? null,
+    authors: work.author ?? [],
+    licenses: work.license ?? [],
+  };
+
+  return executed(
+    JSON.stringify(metadata, null, 2),
+    `Retrieved: DOI ${metadata.doi}`,
+  );
+});
+
+/** Search Crossref works. */
+const searchWorks = Effect.fn('CrossrefSearchTool.searchWorks')(function* (
+  input: Extract<CrossrefSearchInput, { command: 'search' }>,
+) {
+  const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
+
+  const options: ExtendedQueryWorksParams = {
+    query: trimmedQuery,
+    rows: input.rows,
+    ...(input.offset != null && { offset: input.offset }),
+    ...(input.sort && { sort: input.sort as WorkSortOptions }),
+    ...(input.order && {
+      order: input.order === 'asc' ? SortOrder.ASC : SortOrder.DESC,
+    }),
+    ...(input.filter && { filter: input.filter }),
+  };
+
+  const response = yield* rateLimitedApiCall(
+    'crossref',
+    CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+    'Crossref search failed',
+    () => CrossrefClient.works(options),
+  );
+
+  if (!response.ok || !response.content?.message) {
+    return yield* Effect.fail(
+      new ToolError('Crossref search did not return any items.'),
+    );
+  }
+
+  const { message } = response.content;
+  const results = message.items.map((work) => ({
+    title: work.title?.[0] ?? null,
+    doi: work.DOI,
+    publisher: work.publisher,
+    type: work.type,
+    issued: work.issued,
+    url: work.resource?.primary?.URL ?? null,
+  }));
+
+  const payload = {
+    query: trimmedQuery,
+    count: results.length,
+    totalResults:
+      typeof message.totalResults === 'number' ? message.totalResults : null,
+    results,
+  };
+
+  return executed(
+    JSON.stringify(payload, null, 2),
+    `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"`,
+  );
+});
+
 export class CrossrefSearchTool extends defineTool({
   name: 'crossref_search',
   parallelSafe: true,
@@ -81,91 +180,10 @@ export class CrossrefSearchTool extends defineTool({
     'Search Crossref works or look up detailed metadata for a DOI. Use command="search" with query, or command="doi" with doi.',
   schema: CrossrefSearchInputSchema,
 }) {
-  protected async execute(input: CrossrefSearchInput): Promise<ToolResult> {
-    if (input.command === 'doi') {
-      const trimmedDoi = requireNonEmptyString(input.doi, 'DOI');
-
-      const response = await rateLimitedApiCall(
-        'crossref',
-        CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
-        'Crossref DOI lookup',
-        'Crossref lookup failed',
-        () => CrossrefClient.work(trimmedDoi),
-      );
-
-      if (!response.ok || !response.content?.message) {
-        throw new ToolError('Crossref response did not include metadata.');
-      }
-
-      const work: Work = response.content.message;
-      const metadata = {
-        doi: work.DOI,
-        title: work.title?.[0] ?? null,
-        titles: work.title ?? [],
-        publisher: work.publisher,
-        type: work.type,
-        abstract: work.abstract ?? null,
-        description: null, // Not exposed by the library type.
-        created: work.created,
-        published: work.published ?? null,
-        url: work.resource?.primary?.URL ?? null,
-        language: work.language ?? null,
-        authors: work.author ?? [],
-        licenses: work.license ?? [],
-      };
-
-      return executed(
-        JSON.stringify(metadata, null, 2),
-        `Retrieved: DOI ${metadata.doi}`,
-      );
-    }
-
-    const trimmedQuery = requireNonEmptyString(input.query, 'Search query');
-
-    const options: ExtendedQueryWorksParams = {
-      query: trimmedQuery,
-      rows: input.rows,
-      ...(input.offset != null && { offset: input.offset }),
-      ...(input.sort && { sort: input.sort as WorkSortOptions }),
-      ...(input.order && {
-        order: input.order === 'asc' ? SortOrder.ASC : SortOrder.DESC,
-      }),
-      ...(input.filter && { filter: input.filter }),
-    };
-
-    const response = await rateLimitedApiCall(
-      'crossref',
-      CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
-      'Crossref search',
-      'Crossref search failed',
-      () => CrossrefClient.works(options),
-    );
-
-    if (!response.ok || !response.content?.message) {
-      throw new ToolError('Crossref search did not return any items.');
-    }
-
-    const { message } = response.content;
-    const results = message.items.map((work) => ({
-      title: work.title?.[0] ?? null,
-      doi: work.DOI,
-      publisher: work.publisher,
-      type: work.type,
-      issued: work.issued,
-      url: work.resource?.primary?.URL ?? null,
-    }));
-
-    const payload = {
-      query: trimmedQuery,
-      count: results.length,
-      totalResults:
-        typeof message.totalResults === 'number' ? message.totalResults : null,
-      results,
-    };
-
-    return executed(
-      JSON.stringify(payload, null, 2),
-      `Found: ${results.length} ${pluralize(results.length, 'result')} for "${trimmedQuery}"`,
+  protected execute(input: CrossrefSearchInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(
+      input.command === 'doi' ? lookupDoi(input.doi) : searchWorks(input),
+      { signal: getCurrentToolCallContext()?.signal },
     );
   }
 }

@@ -136,7 +136,10 @@ describe('MemoryTool view with an omitted path', () => {
   );
 
   it('preserves the model-facing directory listing bytes and depth limit', async () => {
-    vi.useFakeTimers();
+    // Only the system clock is pinned (the MODIFIED column is relative to
+    // now); the walk runs on Effect's scheduler, which needs live
+    // setImmediate/setTimeout to make progress.
+    vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
 
     const alphaPath = path.join(MEMORY_STORAGE_DIR, 'alpha');

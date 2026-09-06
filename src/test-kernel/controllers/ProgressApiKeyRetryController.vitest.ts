@@ -36,6 +36,7 @@ function testRuntime(
   >,
   getEnabled: () => boolean,
   setEnabled: (enabled: boolean) => Promise<void>,
+  restoreEnabled: (enabled: boolean) => Promise<void> = setEnabled,
 ): QuotaFallbackRuntime {
   return {
     descriptor: {
@@ -45,7 +46,7 @@ function testRuntime(
     },
     getEnabled,
     setEnabled,
-    restoreEnabled: setEnabled,
+    restoreEnabled,
   };
 }
 
@@ -59,6 +60,8 @@ interface HarnessOptions {
   retryPending?: boolean;
   triggerRetry?: ProgressApiKeyRetryControllerDeps['triggerRetry'];
   isRetryPending?: ProgressApiKeyRetryControllerDeps['isRetryPending'];
+  /** Replaces the ChatGPT runtime's rollback restore; `setEnabled` otherwise. */
+  restoreChatGptSubscription?(enabled: boolean): Promise<void>;
 }
 
 function createHarness(options: HarnessOptions = {}): {
@@ -116,6 +119,7 @@ function createHarness(options: HarnessOptions = {}): {
             preferChatGptSubscription = enabled;
             chatGptSubscriptionValues.push(enabled);
           },
+          options.restoreChatGptSubscription,
         ),
         testRuntime(
           {
@@ -485,6 +489,36 @@ describe('ProgressApiKeyRetryController', () => {
     // preference is never written, so a crash mid-launch cannot drop it.
     expect(persistedWrites).toEqual([]);
     expect(prefersCopilotRoute('sonnet46')).toBe(true);
+  });
+
+  it('reports the retry failure over a failed rollback restore, and the restore failure alone when the retry did not run', async () => {
+    const retryFailure = new Error('retry launch failed');
+    const restoreFailure = new Error('restore failed');
+    const request = {
+      stream: 'stream-a',
+      requestId: 'retry-a',
+      provider: 'openai',
+      exhaustionReason: 'chatgpt-subscription',
+    } as const;
+
+    const bothFail = createHarness({
+      keys: { openai: 'stored-openai' },
+      triggerRetry: () => Promise.reject(retryFailure),
+      restoreChatGptSubscription: () => Promise.reject(restoreFailure),
+    });
+    await expect(bothFail.controller.useOwnApiKey(request)).rejects.toBe(
+      retryFailure,
+    );
+    expect(bothFail.chatGptSubscriptionValues).toStrictEqual([false]);
+
+    const restoreFails = createHarness({
+      keys: { openai: 'stored-openai' },
+      retryAvailable: false,
+      restoreChatGptSubscription: () => Promise.reject(restoreFailure),
+    });
+    await expect(restoreFails.controller.useOwnApiKey(request)).rejects.toBe(
+      restoreFailure,
+    );
   });
 
   it('serializes routing rollback across concurrent stream retries', async () => {

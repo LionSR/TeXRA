@@ -6,6 +6,9 @@ import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ALL_HOST_PRODUCTION_ROOTS,
+  expectRealCoverage,
+  productionFilesUnder,
   REPO_ROOT,
   sourceFilesUnder as sharedSourceFilesUnder,
   stripComments,
@@ -86,6 +89,28 @@ const HOST_LAYER_IMPORT_PREFIXES = [
   '@cli/',
   '@desktop/',
 ] as const;
+
+/**
+ * Effect run boundary (PRD R1, docs/prds/2026-08-26-effect-4-runtime-migration.md
+ * "Execution strategy" rule 3): production code enters Effect through the
+ * host-owned runtime, `effectRuntime()` from `@platform/processRuntime`. A
+ * bare `Effect.run*` call is allowed only where the program must run before
+ * `installProcessRuntime` — today the platform stores every host opens in its
+ * `initPlatform` (`JsonStore`) and the file-lock provider those stores flush
+ * through. The pins are exact counts: a new site anywhere fails, and a removed
+ * site is recorded by lowering (then deleting) its pin.
+ */
+const EFFECT_RUN_ROOTS = [
+  ...ALL_HOST_PRODUCTION_ROOTS,
+  'packages/agent/src',
+  'packages/trace-viewer/src',
+] as const;
+const EFFECT_RUN_CALL =
+  /\bEffect\.run(?:Promise|PromiseExit|Sync|SyncExit|Fork|Callback)(?:With)?\s*\(/g;
+const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
+  'src/platform/defaults/fileLocks.ts': 1,
+  'src/platform/defaults/jsonStore.ts': 2,
+};
 
 function sourceFilesUnder(
   zone: string,
@@ -210,5 +235,29 @@ describe('Agent core dependency direction', () => {
       .toSorted();
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('Effect run boundaries', () => {
+  it('runs Effect only through effectRuntime() outside the pinned pre-runtime sites', () => {
+    const sites: Record<string, number> = {};
+    for (const root of EFFECT_RUN_ROOTS) {
+      for (const file of productionFilesUnder(root).toSorted()) {
+        const source = stripComments(
+          readFileSync(resolve(REPO_ROOT, file), 'utf8'),
+        );
+        const count = source.match(EFFECT_RUN_CALL)?.length ?? 0;
+        if (count > 0) sites[file] = count;
+      }
+    }
+
+    expect(
+      sites,
+      'bare Effect.run* sites must go through effectRuntime() from @platform/processRuntime; a site that has to run before installProcessRuntime is pinned in BARE_EFFECT_RUN_SITES in this PR, and a removed site lowers its pin',
+    ).toEqual(BARE_EFFECT_RUN_SITES);
+  });
+
+  it('actually scans the Effect run roots', () => {
+    expectRealCoverage(EFFECT_RUN_ROOTS);
   });
 });

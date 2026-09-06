@@ -1,6 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
@@ -148,36 +148,36 @@ describe('tool-use follow-up progress events', () => {
     expect(run.events).toEqual([]);
   });
 
-  it('aborts a blocking wait when the owning session emits followUpSent', () => {
+  it('breaks a blocking wait when the owning session emits followUpSent', () => {
     const session = trackSession();
-    const ac = new AbortController();
+    const onFollowUp = vi.fn();
     const otherStream = 'stream:other' as StreamTabId;
 
     let cleanup: () => void = () => {};
     withRunContext(createRunContext({ session, streamId }), () => {
-      cleanup = listenForFollowUp(ac);
+      cleanup = listenForFollowUp(onFollowUp);
     });
     unsubscribeFollowUpObservers.push(cleanup);
 
     notifyFollowUpSent(otherStream, session);
-    expect(ac.signal.aborted).toBe(false);
+    expect(onFollowUp).not.toHaveBeenCalled();
 
     notifyFollowUpSent(streamId, session);
-    expect(ac.signal.aborted).toBe(true);
+    expect(onFollowUp).toHaveBeenCalledOnce();
   });
 
-  it('stops aborting waits once the follow-up listener is cleaned up', () => {
+  it('stops breaking waits once the follow-up listener is cleaned up', () => {
     const session = trackSession();
-    const ac = new AbortController();
+    const onFollowUp = vi.fn();
 
     let cleanup: () => void = () => {};
     withRunContext(createRunContext({ session, streamId }), () => {
-      cleanup = listenForFollowUp(ac);
+      cleanup = listenForFollowUp(onFollowUp);
     });
     cleanup();
 
     notifyFollowUpSent(streamId, session);
-    expect(ac.signal.aborted).toBe(false);
+    expect(onFollowUp).not.toHaveBeenCalled();
   });
 
   it('does not append through stale active contexts after final status', async () => {
