@@ -5,12 +5,7 @@ import {
   parseAuthCallbackCode,
   type AuthCallbackUriParts,
 } from './authCallback';
-import {
-  callPort,
-  runAuthProgram,
-  SerializedWrites,
-  type AuthPortError,
-} from './authProgram';
+import { callPort, SerializedWrites, type AuthPortError } from './authProgram';
 import {
   parseStoredSupabaseSession,
   toStorableSupabaseSession,
@@ -61,9 +56,10 @@ const NOOP_SUPABASE_SESSION_LOG: Required<SupabaseSessionLog> = {
  * Host-neutral coordinator for Supabase session storage, token freshness,
  * OAuth callback conversion, and refresh. Host wrappers own UI and registration.
  *
- * The Promise methods are the boundary; each runs one of the Effect programs
- * below through {@link runAuthProgram}. Storage and GoTrue rejections travel
- * as {@link AuthPortError} and reach the caller as the port's own error.
+ * The public surface is Effect-typed (PRD R1): each method is one of the
+ * programs below, and the caller's edge runs it. Storage and GoTrue rejections
+ * travel as {@link AuthPortError}; `SupabaseClient`'s Promise facade settles
+ * them through `runAuthProgram`, whose edge unwraps the port's own error.
  */
 export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private refreshInFlight: Deferred.Deferred<SupabaseSession | null> | null =
@@ -81,22 +77,20 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     this.log = { ...NOOP_SUPABASE_SESSION_LOG, ...options.log };
   }
 
-  async whenReady(): Promise<void> {
-    await this.options.whenReady();
+  whenReady(): Effect.Effect<void, AuthPortError> {
+    return callPort(() => this.options.whenReady());
   }
 
-  async loadSession(): Promise<SupabaseSession | null> {
-    return runAuthProgram(this.load());
+  loadSession(): Effect.Effect<SupabaseSession | null, AuthPortError> {
+    return this.load();
   }
 
-  async storeSession(session: SupabaseSession): Promise<void> {
-    await runAuthProgram(this.mutate(this.write(session)));
+  storeSession(session: SupabaseSession): Effect.Effect<void, AuthPortError> {
+    return this.mutate(this.write(session));
   }
 
-  async clearSession(): Promise<void> {
-    await runAuthProgram(
-      this.mutate(callPort(() => this.options.storage.delete())),
-    );
+  clearSession(): Effect.Effect<void, AuthPortError> {
+    return this.mutate(callPort(() => this.options.storage.delete()));
   }
 
   /**
@@ -105,23 +99,21 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * while an older validation request is in flight; that older result must not
    * delete the replacement.
    */
-  async clearSessionIfCurrent(expected: SupabaseSession): Promise<boolean> {
-    return runAuthProgram(
-      this.sessionMutations.run(this.clearIfCurrent(expected)),
-    );
+  clearSessionIfCurrent(
+    expected: SupabaseSession,
+  ): Effect.Effect<boolean, AuthPortError> {
+    return this.sessionMutations.run(this.clearIfCurrent(expected));
   }
 
   /**
    * Ensure the access token is fresh, refreshing proactively if near expiry.
-   *
-   * @returns Fresh access token, or null if no session or refresh failed.
+   * Resolves to the fresh access token, or null if no session or refresh
+   * failed; a port rejection is logged where its disposition is decided.
    */
-  async ensureFreshToken(): Promise<string | null> {
-    return runAuthProgram(
-      Effect.map(
-        this.freshSession(),
-        (session) => session?.accessToken ?? null,
-      ),
+  ensureFreshToken(): Effect.Effect<string | null> {
+    return Effect.map(
+      this.freshSession(),
+      (session) => session?.accessToken ?? null,
     );
   }
 
@@ -130,31 +122,27 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * session while refresh is in flight; in that case retry rather than apply
    * the old credential's failure to the new one.
    */
-  async getStoredSessionState(): Promise<StoredSessionState> {
-    return runAuthProgram(
-      this.storedSessionState().pipe(
-        Effect.catchTag('AuthPortError', (error) =>
-          Effect.sync(() => {
-            this.log.error(
-              'SupabaseSession',
-              `Error classifying stored session: ${toErrorMessage(error.cause)}`,
-            );
-            return 'transient' as const;
-          }),
-        ),
+  getStoredSessionState(): Effect.Effect<StoredSessionState> {
+    return this.storedSessionState().pipe(
+      Effect.catchTag('AuthPortError', (error) =>
+        Effect.sync(() => {
+          this.log.error(
+            'SupabaseSession',
+            `Error classifying stored session: ${toErrorMessage(error.cause)}`,
+          );
+          return 'transient' as const;
+        }),
       ),
     );
   }
 
   /**
    * Read the stored session's account label without attempting a token
-   * refresh. Returns null when no session is stored or the data is
-   * unreadable — the caller decides what to show in its place.
+   * refresh. Returns null when no session is stored; a storage rejection
+   * travels as {@link AuthPortError} and the caller decides what to show.
    */
-  async getStoredAccountLabel(): Promise<string | null> {
-    return runAuthProgram(
-      Effect.map(this.load(), (session) => session?.account.label ?? null),
-    );
+  getStoredAccountLabel(): Effect.Effect<string | null, AuthPortError> {
+    return Effect.map(this.load(), (session) => session?.account.label ?? null);
   }
 
   getLastRefreshFailure(): SessionRefreshFailure | null {
@@ -162,36 +150,34 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   /** Get access and refresh tokens from secure storage. */
-  async getSessionTokens(): Promise<SessionTokens | null> {
-    return runAuthProgram(
-      Effect.map(this.freshSession(), (session) =>
-        session
-          ? {
-              accessToken: session.accessToken,
-              refreshToken: session.refreshToken,
-            }
-          : null,
-      ),
+  getSessionTokens(): Effect.Effect<SessionTokens | null> {
+    return Effect.map(this.freshSession(), (session) =>
+      session
+        ? {
+            accessToken: session.accessToken,
+            refreshToken: session.refreshToken,
+          }
+        : null,
     );
   }
 
   /** Convert a PKCE OAuth callback into a host-neutral session record. */
-  async createSessionFromCallback(
+  createSessionFromCallback(
     uri: AuthCallbackUriParts,
     flowId?: string,
-  ): Promise<SupabaseCallbackResult> {
+  ): Effect.Effect<SupabaseCallbackResult, AuthPortError> {
     const parsedCode = parseAuthCallbackCode(uri);
     return parsedCode.success
-      ? runAuthProgram(this.exchangeCode(parsedCode.code, flowId))
-      : parsedCode;
+      ? this.exchangeCode(parsedCode.code, flowId)
+      : Effect.succeed(parsedCode);
   }
 
   /** Refresh session via Supabase native refresh, with concurrency protection. */
-  async refreshSession(
+  refreshSession(
     session: SupabaseSession,
     expectedVersion = this.sessionMutationVersion,
-  ): Promise<SupabaseSession | null> {
-    return runAuthProgram(this.refresh(session, expectedVersion));
+  ): Effect.Effect<SupabaseSession | null> {
+    return this.refresh(session, expectedVersion);
   }
 
   /** Read and parse the stored session. */

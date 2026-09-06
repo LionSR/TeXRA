@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -189,18 +190,20 @@ function routeMatchingCallback(
 }
 
 function installAuthenticatedSupabaseProvider() {
-  const ensureFreshToken = vi.fn(async () => 'fresh-access-token');
-  const getStoredSessionState = vi.fn(async () => 'authenticated' as const);
+  const ensureFreshToken = vi.fn(() => Effect.succeed('fresh-access-token'));
+  const getStoredSessionState = vi.fn(() =>
+    Effect.succeed('authenticated' as const),
+  );
   SupabaseClient.initialize(
     'https://example.supabase.co',
     'public-key',
     new FakeSecrets(),
   );
   SupabaseClient.setAuthProvider({
-    whenReady: vi.fn(async () => {}),
+    whenReady: vi.fn(() => Effect.void),
     ensureFreshToken,
     getStoredSessionState,
-    getStoredAccountLabel: vi.fn(async () => null),
+    getStoredAccountLabel: vi.fn(() => Effect.succeed(null)),
     getLastRefreshFailure: vi.fn(() => null),
   });
   vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({

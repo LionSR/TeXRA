@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const providerMocks = vi.hoisted(() => ({
@@ -7,13 +8,15 @@ const providerMocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   invalidateRemoteAgentsAfterSignOut: vi.fn(async () => {}),
   openExternal: vi.fn(async () => true),
-  runPkceOperation: vi.fn((operation: () => Promise<unknown>) => {
-    const result = testDoubles.pkceTail.then(operation);
+  withPkcePermit: vi.fn((operation: unknown) => {
+    const result = testDoubles.pkceTail.then(() =>
+      testDoubles.runEffect(operation),
+    );
     testDoubles.pkceTail = result.then(
       () => undefined,
       () => undefined,
     );
-    return result;
+    return testDoubles.effectFrom(result);
   }),
   secretDelete: vi.fn(async (key: string) => {
     testDoubles.secrets.delete(key);
@@ -32,6 +35,11 @@ const testDoubles = vi.hoisted(() => ({
   emitters: [] as Array<{ fire: ReturnType<typeof vi.fn> }>,
   pkceTail: Promise.resolve<unknown>(undefined),
   secrets: new Map<string, string>(),
+  // Assigned at module scope (after the `effect` import): the `withPkcePermit`
+  // double turns its program into a Promise chained on the shared tail, and
+  // wraps that chain back into an Effect for `runAuthProgram` to settle.
+  runEffect: null as unknown as (operation: unknown) => Promise<unknown>,
+  effectFrom: null as unknown as (promise: Promise<unknown>) => unknown,
 }));
 
 vi.mock('vscode', () => ({
@@ -93,9 +101,12 @@ vi.mock('@auth/SupabaseAuthCoordinator', () => ({
   createHostAuthCoordinator: () => testDoubles.coordinator,
 }));
 
+vi.mock('@auth/pkcePermit', () => ({
+  withPkcePermit: providerMocks.withPkcePermit,
+}));
+
 vi.mock('@auth/SupabaseClient', () => ({
   SupabaseClient: {
-    runPkceOperation: providerMocks.runPkceOperation,
     getClient: () => ({
       auth: {
         getUser: providerMocks.getUser,
@@ -121,6 +132,10 @@ import type { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 const PENDING_STATE_PREFIX = 'texra.extension.pendingOAuthState.';
 const TEST_NONCE = '0123456789abcdef0123456789abcdef';
 const TEST_FLOW_ID = 'abcdef0123456789abcdef0123456789';
+
+testDoubles.runEffect = (operation) =>
+  Effect.runPromise(operation as Effect.Effect<unknown, unknown>);
+testDoubles.effectFrom = (promise) => Effect.promise(() => promise);
 
 function seedPendingOAuthAttempt(
   nonce = TEST_NONCE,
@@ -152,9 +167,9 @@ function createProvider(options: {
   showError: ReturnType<typeof vi.fn>;
   showSignInPrompt: ReturnType<typeof vi.fn>;
 } {
-  const clearSessionIfCurrent = vi.fn(async () => true);
-  const getStoredSessionState = vi.fn<() => Promise<StoredSessionState>>(
-    async () => 'invalid',
+  const clearSessionIfCurrent = vi.fn(() => Effect.succeed(true));
+  const getStoredSessionState = vi.fn(() =>
+    Effect.succeed<StoredSessionState>('invalid'),
   );
   const showError = vi.fn();
   const showSignInPrompt = vi.fn();
@@ -166,10 +181,10 @@ function createProvider(options: {
     expiresAt: options.expiresAt,
   };
   const coordinator = {
-    loadSession: vi.fn(async () => session),
-    refreshSession: vi.fn(async () => null),
-    storeSession: vi.fn(async () => {}),
-    clearSession: vi.fn(async () => {}),
+    loadSession: vi.fn(() => Effect.succeed(session)),
+    refreshSession: vi.fn(() => Effect.succeed(null)),
+    storeSession: vi.fn(() => Effect.void),
+    clearSession: vi.fn(() => Effect.void),
     getStoredSessionState,
     getLastRefreshFailure: vi.fn(() => options.failure ?? null),
     clearSessionIfCurrent,
@@ -305,7 +320,7 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
     });
     const { provider, clearSessionIfCurrent, showSignInPrompt } =
       createUnexpiredProvider();
-    clearSessionIfCurrent.mockResolvedValueOnce(false);
+    clearSessionIfCurrent.mockReturnValueOnce(Effect.succeed(false));
 
     await expect(provider.getSessions()).resolves.toEqual([]);
 
@@ -317,7 +332,7 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
   it('does not clear a session that revalidates as authenticated', async () => {
     const { provider, clearSessionIfCurrent, getStoredSessionState } =
       createUnexpiredProvider();
-    getStoredSessionState.mockResolvedValueOnce('authenticated');
+    getStoredSessionState.mockReturnValueOnce(Effect.succeed('authenticated'));
 
     await expect(provider.clearStoredSession()).resolves.toBe(false);
 
@@ -347,7 +362,7 @@ describe('SupabaseAuthProvider model availability', () => {
     const { provider, coordinator } = createUnexpiredProvider();
     const uriHandler = createUriHandlerHarness();
     provider.setUriHandler(uriHandler.handler);
-    coordinator.loadSession.mockResolvedValue(null);
+    coordinator.loadSession.mockReturnValue(Effect.succeed(null));
     let redirectTo = '';
     providerMocks.signInWithOAuth.mockImplementation(async (input) => {
       redirectTo = input.options.redirectTo;
@@ -389,10 +404,12 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const { provider, session, coordinator } = createUnexpiredProvider();
     const uriHandler = createUriHandlerHarness();
     provider.setUriHandler(uriHandler.handler);
-    coordinator.createSessionFromCallback.mockResolvedValue({
-      success: true,
-      session,
-    });
+    coordinator.createSessionFromCallback.mockReturnValue(
+      Effect.succeed({
+        success: true,
+        session,
+      }),
+    );
     providerMocks.getUser.mockResolvedValue({
       data: { user: { id: session.id } },
       error: null,
@@ -453,10 +470,12 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const { provider, session, coordinator } = createUnexpiredProvider();
     const uriHandler = createUriHandlerHarness();
     provider.setUriHandler(uriHandler.handler);
-    coordinator.createSessionFromCallback.mockResolvedValue({
-      success: true,
-      session,
-    });
+    coordinator.createSessionFromCallback.mockReturnValue(
+      Effect.succeed({
+        success: true,
+        session,
+      }),
+    );
     providerMocks.getUser.mockResolvedValue({
       data: { user: { id: session.id } },
       error: null,
@@ -498,11 +517,13 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const secondHandler = createUriHandlerHarness();
     first.provider.setUriHandler(firstHandler.handler);
     second.provider.setUriHandler(secondHandler.handler);
-    second.coordinator.loadSession.mockResolvedValue(null);
-    second.coordinator.createSessionFromCallback.mockResolvedValue({
-      success: true,
-      session: second.session,
-    });
+    second.coordinator.loadSession.mockReturnValue(Effect.succeed(null));
+    second.coordinator.createSessionFromCallback.mockReturnValue(
+      Effect.succeed({
+        success: true,
+        session: second.session,
+      }),
+    );
 
     const redirects: string[] = [];
     providerMocks.signInWithOAuth.mockImplementation(async (input) => {
@@ -559,7 +580,7 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const first = createUnexpiredProvider();
     const firstHandler = createUriHandlerHarness();
     first.provider.setUriHandler(firstHandler.handler);
-    first.coordinator.loadSession.mockResolvedValue(null);
+    first.coordinator.loadSession.mockReturnValue(Effect.succeed(null));
 
     let exchangeStarted!: () => void;
     const started = new Promise<void>((resolve) => {
@@ -569,11 +590,13 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const exchangeGate = new Promise<void>((resolve) => {
       finishExchange = resolve;
     });
-    first.coordinator.createSessionFromCallback.mockImplementation(async () => {
-      exchangeStarted();
-      await exchangeGate;
-      throw new Error('first exchange failed');
-    });
+    first.coordinator.createSessionFromCallback.mockImplementation(() =>
+      Effect.promise(async () => {
+        exchangeStarted();
+        await exchangeGate;
+        throw new Error('first exchange failed');
+      }),
+    );
 
     const firstCallback = firstHandler.fire({
       path: '/auth-callback',
@@ -584,10 +607,12 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const second = createUnexpiredProvider();
     const secondHandler = createUriHandlerHarness();
     second.provider.setUriHandler(secondHandler.handler);
-    second.coordinator.createSessionFromCallback.mockResolvedValue({
-      success: true,
-      session: second.session,
-    });
+    second.coordinator.createSessionFromCallback.mockReturnValue(
+      Effect.succeed({
+        success: true,
+        session: second.session,
+      }),
+    );
     providerMocks.getUser.mockResolvedValue({
       data: { user: { id: second.session.id } },
       error: null,
@@ -615,7 +640,7 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
 
     const secondSignIn = second.provider.createSession([]);
     await vi.waitFor(() =>
-      expect(providerMocks.runPkceOperation).toHaveBeenCalledTimes(2),
+      expect(providerMocks.withPkcePermit).toHaveBeenCalledTimes(2),
     );
     expect(providerMocks.signInWithOAuth).not.toHaveBeenCalled();
 
@@ -645,10 +670,12 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const { provider, session, coordinator } = createUnexpiredProvider();
     const uriHandler = createUriHandlerHarness();
     provider.setUriHandler(uriHandler.handler);
-    coordinator.createSessionFromCallback.mockResolvedValue({
-      success: true,
-      session,
-    });
+    coordinator.createSessionFromCallback.mockReturnValue(
+      Effect.succeed({
+        success: true,
+        session,
+      }),
+    );
     providerMocks.getUser.mockResolvedValue({
       data: { user: { id: session.id } },
       error: null,
@@ -709,11 +736,13 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const { provider, session, coordinator } = createUnexpiredProvider();
     const uriHandler = createUriHandlerHarness();
     provider.setUriHandler(uriHandler.handler);
-    coordinator.loadSession.mockResolvedValue(null);
-    coordinator.createSessionFromCallback.mockResolvedValue({
-      success: true,
-      session,
-    });
+    coordinator.loadSession.mockReturnValue(Effect.succeed(null));
+    coordinator.createSessionFromCallback.mockReturnValue(
+      Effect.succeed({
+        success: true,
+        session,
+      }),
+    );
     providerMocks.signInWithOAuth.mockResolvedValue({
       data: {
         url: 'https://provider.example/authorize',
@@ -763,11 +792,13 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
         createUnexpiredProvider();
       const uriHandler = createUriHandlerHarness();
       provider.setUriHandler(uriHandler.handler);
-      coordinator.loadSession.mockResolvedValue(null);
-      coordinator.createSessionFromCallback.mockResolvedValue({
-        success: true,
-        session,
-      });
+      coordinator.loadSession.mockReturnValue(Effect.succeed(null));
+      coordinator.createSessionFromCallback.mockReturnValue(
+        Effect.succeed({
+          success: true,
+          session,
+        }),
+      );
       const failure = new Error('secret backend unavailable: private detail');
       if (operation === 'read') {
         providerMocks.secretGetStored.mockRejectedValueOnce(failure);
@@ -852,11 +883,13 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const { provider, coordinator } = createUnexpiredProvider();
     const uriHandler = createUriHandlerHarness();
     provider.setUriHandler(uriHandler.handler);
-    coordinator.createSessionFromCallback.mockResolvedValue({
-      success: false,
-      error: 'exchange failed',
-      isAuthError: true,
-    });
+    coordinator.createSessionFromCallback.mockReturnValue(
+      Effect.succeed({
+        success: false,
+        error: 'exchange failed',
+        isAuthError: true,
+      }),
+    );
     providerMocks.signInWithOAuth.mockResolvedValue({
       data: {
         url: 'https://provider.example/authorize',
@@ -897,11 +930,13 @@ describe('SupabaseAuthProvider OAuth callback binding', () => {
     const { provider, session, coordinator } = createUnexpiredProvider();
     const uriHandler = createUriHandlerHarness();
     provider.setUriHandler(uriHandler.handler);
-    coordinator.loadSession.mockResolvedValue(null);
-    coordinator.createSessionFromCallback.mockResolvedValue({
-      success: true,
-      session,
-    });
+    coordinator.loadSession.mockReturnValue(Effect.succeed(null));
+    coordinator.createSessionFromCallback.mockReturnValue(
+      Effect.succeed({
+        success: true,
+        session,
+      }),
+    );
 
     for (const query of [
       'code=test',

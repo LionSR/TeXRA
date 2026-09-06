@@ -1,11 +1,12 @@
 /**
  * The Promise edge of the auth subsystem's Effect programs (Effect 4 runtime
- * PRD, R1 and R7): one run boundary behind each Promise-facing method, and
- * one typed failure for the host ports those programs call.
+ * PRD, R1 and R7): one typed failure for the host ports those programs call,
+ * and the settle-fold every Promise-facing auth surface shares. The run edge
+ * itself is installed by the host entry ({@link installAuthProgramEdge}), so
+ * the only `Effect.run*` site in the subsystem lives in host code at the
+ * sanctioned boundary, not here.
  */
 import { Cause, Data, Deferred, Effect, Exit, Option, Semaphore } from 'effect';
-
-import { effectRuntime } from '@platform/processRuntime';
 
 /**
  * A host port (secret storage), an SDK call, or a provider policy rejected.
@@ -103,7 +104,25 @@ function rethrowPortCause(error: unknown): never {
 }
 
 /**
- * Run one auth program on the process runtime and settle it as a Promise.
+ * Settles an auth program as an `Exit`, for the Promise-facing surfaces that
+ * settle through {@link runAuthProgram}. Installed like the process roots:
+ * exactly once per process, by the host entry, as
+ * `(program) => effectRuntime().runPromiseExit(program)` — which keeps the
+ * `Effect.run*` call itself in boundary code (PRD R1).
+ */
+export type AuthProgramEdge = <A, E>(
+  program: Effect.Effect<A, E>,
+) => Promise<Exit.Exit<A, E>>;
+
+let authProgramEdge: AuthProgramEdge | null = null;
+
+/** Install the process-wide run edge for auth programs. */
+export function installAuthProgramEdge(edge: AuthProgramEdge): void {
+  authProgramEdge = edge;
+}
+
+/**
+ * Run one auth program on the installed edge and settle it as a Promise.
  * An expected failure reaches `rethrow`, which re-mints it as the error the
  * caller matches on — by default the port's own error, unwrapped. Defects
  * and interruption propagate as they are.
@@ -112,7 +131,12 @@ export async function runAuthProgram<A, E>(
   program: Effect.Effect<A, E>,
   rethrow: (error: E) => never = rethrowPortCause,
 ): Promise<A> {
-  const exit = await effectRuntime().runPromiseExit(program);
+  if (!authProgramEdge) {
+    throw new Error(
+      'Auth program edge not installed: the host entry installs it beside the process runtime.',
+    );
+  }
+  const exit = await authProgramEdge(program);
   if (Exit.isSuccess(exit)) return exit.value;
   const failure = Cause.findErrorOption(exit.cause);
   if (Option.isSome(failure)) return rethrow(failure.value);
