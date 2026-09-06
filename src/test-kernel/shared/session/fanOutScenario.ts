@@ -296,21 +296,18 @@ export function buildScenario({ proposal = false } = {}) {
 
   // The child's own delegate: the dispatching tool row, then a grandchild
   // that starts and finishes while the child waits, and one empty-round file
-  // fact the tab must not show. The row is re-logged under its id when the
-  // grandchild settles, the way the tool's own result lands.
-  const dispatchRow = (status: 'in_progress' | 'completed'): EntryFixture => ({
+  // fact the tab must not show.
+  const dispatchData = {
+    toolName: 'delegate_agent',
+    input: { agent: 'lint', instruction: 'lint appendix B' },
+  };
+  const dispatched = log.entry(CHILD, T.grandchild - 1, {
     id: 'dispatch-lint',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     messageType: MESSAGE_TYPES.TOOL_USE,
     text: 'delegate_agent',
-    data: {
-      toolName: 'delegate_agent',
-      input: { agent: 'lint', instruction: 'lint appendix B' },
-      ...(status === 'completed' ? { output: 'Appendix B: no findings.' } : {}),
-      status,
-    },
+    data: { ...dispatchData, status: 'in_progress' },
   });
-  log.entry(CHILD, T.grandchild - 1, dispatchRow('in_progress'));
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.start',
     executionId: 'dddddddddddd',
@@ -343,7 +340,26 @@ export function buildScenario({ proposal = false } = {}) {
     previousPhase: STREAM_PHASE.RUNNING,
     cause: 'lifecycle',
   });
-  log.entry(CHILD, T.grandchildDone + 1, dispatchRow('completed'));
+  // The tool's result lands the way the recorder's `update` lands it: the
+  // patch merged over the stored entry, so the row keeps its id, seqNo, and
+  // timestamp under a later commit.
+  log.emit(CHILD, T.grandchildDone + 1, {
+    type: 'transcript.entry',
+    entry: {
+      id: 'dispatch-lint',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      text: 'delegate_agent',
+      seqNo: dispatched.seqNo,
+      timestamp: dispatched.timestamp,
+      level: dispatched.level,
+      data: {
+        ...dispatchData,
+        output: 'Appendix B: no findings.',
+        status: 'completed',
+      },
+    },
+  });
 
   // A background process stream, newer than the root: leads the order.
   log.emit(PROCESS, T.process, {
@@ -980,17 +996,21 @@ function boardView({
           },
         });
       }
-      if (entry.status === 'failed') {
+      // A call already terminal when the board opens carries its child's
+      // outcome too: the row's status and the child stream's phase are one
+      // fact, so the tree never reads "Running" under a finished call.
+      if (entry.status === 'failed' || entry.status === 'completed') {
+        const done = entry.status === 'completed';
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'result',
-          outcome: 'failed',
+          outcome: done ? 'completed' : 'failed',
           executionId: kid.executionId,
           category: AgentCategory.ToolUse,
           isSubagent: true,
         });
         log.emit(kid.id, kid.startedAt + min(2), {
           type: 'status',
-          phase: STREAM_PHASE.FAILED,
+          phase: done ? STREAM_PHASE.COMPLETED : STREAM_PHASE.FAILED,
           previousPhase: STREAM_PHASE.RUNNING,
           cause: 'lifecycle',
         });

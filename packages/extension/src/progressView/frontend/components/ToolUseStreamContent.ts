@@ -46,9 +46,10 @@ export class ToolUseStreamContent extends BaseStreamContent {
           ></todo-list>
           <plan-view .plan=${stream.plan} .collapseKey=${stream.id}></plan-view>
           <background-tasks-panel
-            scope="inquiries"
             .stream=${stream}
             .view=${this.view}
+            .surface=${this.surface}
+            .nowMs=${this.nowMs}
           ></background-tasks-panel>
         </div>
         ${this.renderLog()}

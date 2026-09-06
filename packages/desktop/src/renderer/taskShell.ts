@@ -42,9 +42,6 @@ interface TaskSidebarModel {
   readonly papers: readonly RailPaper[];
   readonly shell: Shell;
   readonly papersLayout: PapersLayout;
-  /** The stream tree lives in the Subagents workbench tab while it is open;
-   *  the rail then lists top-level streams only. */
-  readonly subagentsOpen: boolean;
   /** Canonical name of the command palette action, from the command catalog. */
   readonly commandsLabel: string;
 }
@@ -112,15 +109,18 @@ function paperBadge(view: SessionView): TemplateResult | typeof nothing {
   return nothing;
 }
 
+/** The rail lists top-level streams only: the tree lives in the Subagents
+ *  workbench tab, so the two never show two active rows, and a workflow
+ *  run's calls never appear here (W2). */
 function streamTabsTemplate(
   paper: RailPaper,
-  options: { topLevelOnly: boolean; activeOnly?: boolean },
+  options: { activeOnly?: boolean } = {},
 ): TemplateResult {
   return html`<div data-session=${paper.display.key}>
     <stream-tabs
       .view=${paper.view}
       .surface=${paper.surface}
-      .topLevelOnly=${options.topLevelOnly}
+      .topLevelOnly=${true}
       .activeOnly=${options.activeOnly ?? false}
     ></stream-tabs>
   </div>`;
@@ -131,7 +131,7 @@ function streamTabsTemplate(
  * calls are child streams the run board lists, and the note says so. The
  * selection may sit on one of those calls; the note is the family root's.
  */
-export function workflowCallsNote(
+function workflowCallsNote(
   view: SessionView,
   surface: Surface,
 ): TemplateResult | typeof nothing {
@@ -209,7 +209,7 @@ function paperSection(
       expanded
         ? html`
             <div class="task-sidebar-sessions task-paper-streams">
-              ${streamTabsTemplate(paper, { topLevelOnly: model.subagentsOpen })}
+              ${streamTabsTemplate(paper)}
               ${workflowCallsNote(paper.view, paper.surface)}
             </div>
             <wa-button
@@ -308,7 +308,7 @@ function papersFocusTemplate(
       ${
         active
           ? html`<div class="task-sidebar-sessions">
-              ${streamTabsTemplate(active, { topLevelOnly: model.subagentsOpen })}
+              ${streamTabsTemplate(active)}
             </div>`
           : nothing
       }
@@ -339,10 +339,7 @@ function papersFocusTemplate(
                           >
                           ${paper.display.name}
                         </span>
-                        ${streamTabsTemplate(paper, {
-                          topLevelOnly: true,
-                          activeOnly: true,
-                        })}
+                        ${streamTabsTemplate(paper, { activeOnly: true })}
                       </div>
                     `,
                   )}

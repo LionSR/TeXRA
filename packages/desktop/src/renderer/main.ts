@@ -677,9 +677,6 @@ function shellTemplate(): TemplateResult {
             papers: railPapers(),
             shell,
             papersLayout: shellState().papersLayout,
-            subagentsOpen: shellState().workbenchTabs.some(
-              (tab) => tab.kind === 'subagents',
-            ),
             commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
           },
           {

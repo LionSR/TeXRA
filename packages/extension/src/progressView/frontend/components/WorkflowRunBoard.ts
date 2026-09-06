@@ -31,6 +31,7 @@ import type {
   SessionView,
   StreamView,
 } from '@shared/session/sessionView';
+import type { RequestErrorWire } from '@shared/session/sessionFrames';
 import { resolvePhase, type Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { formatWorkflowTally } from '@shared/copy/workflowCall';
@@ -170,17 +171,14 @@ export class WorkflowRunBoard extends LitElement {
   /** The desktop's headline: the tally leads the strip instead of closing
    *  the board. */
   @property({ type: Boolean, reflect: true }) summary = false;
-  /** The run has a durable outcome: nothing on the board can act any more,
-   *  and the strip paints closed. Reflected for the styles; read from the
-   *  view on every update, never set by a caller. */
-  @property({ type: Boolean, reflect: true }) settled = false;
-
   private get run(): WorkflowRunModel | null {
     return this.stream.transcript.run;
   }
 
-  override willUpdate(): void {
-    this.settled = this.stream.durableOutcome !== null;
+  /** The run has a durable outcome: nothing on the board can act any more,
+   *  and the strip paints closed. */
+  private get settled(): boolean {
+    return this.stream.durableOutcome !== null;
   }
 
   /** Skip, retry, and kill act only on a run this process owns that is
@@ -642,12 +640,33 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
+  /** The runtime's answer to the last skip, retry, or kill from this
+   *  surface, in the runtime's words; the next request on the stream clears
+   *  it (`Surface.rejected`). */
+  private renderRejection(error: RequestErrorWire): TemplateResult {
+    switch (error._tag) {
+      case 'NotOwner':
+        return html`Another process holds this run.`;
+      case 'Unavailable':
+      case 'Rejected':
+      case 'Invalid':
+        return html`${error.reason}`;
+      case 'Internal':
+        return html`The request failed; the host log has it under ${error.ref}.`;
+      default:
+        return assertNever(error, 'Unhandled request error');
+    }
+  }
+
   /** Next failed only navigates, so it stays live on a settled run that
    *  has failures to read; the two that act follow `canControl`. */
   private renderControls(): TemplateResult {
     const failed = this.failedRows().length;
     const disabled = !this.canControl;
-    return html`<div class="controls">
+    const rejected = this.surface.rejected.get(this.stream.id);
+    return html`<div
+      class=${classMap({ controls: true, settled: this.settled })}
+    >
       <wa-button
         size="s"
         appearance="outlined"
@@ -662,12 +681,18 @@ export class WorkflowRunBoard extends LitElement {
         @click=${this.retryFailed}
         >Retry failed</wa-button
       >
-      <span class="note"
-        ><span class="note-narrow">This run has no chat</span
-        ><span class="note-wide"
-          >Skip and retry are per call; Kill is the run's stop.</span
-        ></span
-      >
+      ${
+        rejected === undefined
+          ? html`<span class="note"
+              ><span class="note-narrow">This run has no chat</span
+              ><span class="note-wide"
+                >Skip and retry are per call; Kill is the run's stop.</span
+              ></span
+            >`
+          : html`<span class="note note-rejected" role="status"
+              >${this.renderRejection(rejected)}</span
+            >`
+      }
       <wa-button
         size="s"
         variant="danger"
@@ -685,7 +710,7 @@ export class WorkflowRunBoard extends LitElement {
     const active = resolvePhase(this.surface, this.stream.id, run.phases);
     return html`${this.summary ? this.renderSummary(run) : nothing}
       <wa-tab-group
-        class="phases"
+        class=${classMap({ phases: true, settled: this.settled })}
         active=${active ?? nothing}
         @wa-tab-show=${this.handleTabShow}
       >

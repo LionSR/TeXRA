@@ -170,7 +170,7 @@ const filesPlaceholder = document.createElement('div');
 const rail = (
   papers: readonly RailPaper[],
   shell: Shell,
-  options: { layout?: PapersLayout; subagentsOpen?: boolean } = {},
+  options: { layout?: PapersLayout } = {},
 ) =>
   taskSidebarTemplate(
     {
@@ -179,7 +179,6 @@ const rail = (
       papers,
       shell,
       papersLayout: options.layout ?? 'sections',
-      subagentsOpen: options.subagentsOpen ?? false,
       commandsLabel: 'Commands',
     },
     sidebarCallbacks,
@@ -332,7 +331,7 @@ function sceneDesktopSubagents(): TemplateResult {
   ];
   return desktopFrame(
     '288px minmax(0,1fr) 400px',
-    rail(papers, shellOf('LP', ['LP', 'CT', 'TN']), { subagentsOpen: true }),
+    rail(papers, shellOf('LP', ['LP', 'CT', 'TN'])),
     conversationPane(
       papers,
       lp,

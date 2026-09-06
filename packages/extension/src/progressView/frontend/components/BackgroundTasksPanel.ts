@@ -1,15 +1,17 @@
 /**
- * The dispatch card (board E2): what a stream has fanned out, at the
- * dispatching row of its transcript. A `<wa-details>` headed "Dispatched N
- * subagents" with the parent's `rollup` as badges and "since <time>" from
- * the dispatching row, one row per child stream (nested children indented
- * under theirs), and a "Waiting on N subagents" line while any run. The
- * `inquiries` scope is the same card over the inquiry threads the stream
- * opened, in the conversation prelude. Every row is a child of the fold:
- * label, status, tone, latest line, and clock facts come from
- * `view.streams`; the host paints the glyph and the time. The card's open
- * state is the surface's (`Surface.groups`, key {@link DISPATCH_GROUP_KEY});
- * a toggle goes out as a `group` action. Selecting a row is the navigation.
+ * The dispatch card (board E2): what a stream has fanned out, in its
+ * conversation prelude. A `<wa-details>` headed "Dispatched N subagents"
+ * with the parent's `rollup` as badges and "since <time>" from the earliest
+ * child still running (the fold clears `runStartedAt` when a run ends, so a
+ * settled fan-out carries no since), one row per child stream (nested children
+ * indented under theirs), the inquiry threads the stream opened, and a
+ * "Waiting on N subagents" line while any run. The `inquiries` scope is the
+ * same card over the inquiry threads alone (the workflow body, whose run
+ * board already lists every call). Every row is a child of the fold: label,
+ * status, tone, latest line, and clock facts come from `view.streams`; the
+ * host paints the glyph and the time. The card's open state is the
+ * surface's (`Surface.groups`, key {@link DISPATCH_GROUP_KEY}); a toggle
+ * goes out as a `group` action. Selecting a row is the navigation.
  */
 
 // Third-party imports
@@ -29,6 +31,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { InquiryThreadUpdatedEvent, StreamTabId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -40,7 +43,7 @@ import {
 import { getTimeFormatter } from '../formatters/timestampUtils';
 
 /** The card's key in `Surface.groups` for its stream. */
-export const DISPATCH_GROUP_KEY = 'dispatch';
+const DISPATCH_GROUP_KEY = 'dispatch';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
 const TONE_ICONS: Record<StreamView['tone'], TeXRAIconName> = {
@@ -96,6 +99,18 @@ export class BackgroundTasksPanel extends LitElement {
       .task-list {
         display: flex;
         flex-direction: column;
+      }
+
+      .section-label {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-2xs) var(--wa-space-xs) var(--wa-space-3xs);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-semibold);
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: var(--letter-spacing-caps);
       }
 
       /* One row per child: the tone glyph, the label, the latest line, the
@@ -216,16 +231,14 @@ export class BackgroundTasksPanel extends LitElement {
   /** The dispatching stream: its `childIds` are the rows. */
   @property({ attribute: false }) stream: StreamView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
+  /** The card's open state lives here (`groups`, key `dispatch`). */
+  @property({ attribute: false }) surface: Surface | null = null;
   /** The host's clock, for a running row's elapsed time (G4). */
   @property({ type: Number }) nowMs: number | null = null;
 
-  /** The subagent rows at the dispatching row, or only the inquiry threads
-   *  (the prelude of either stream kind). */
-  @property() scope: 'dispatch' | 'inquiries' = 'dispatch';
-  /** The dispatching row's timestamp: when the fan-out began. */
-  @property({ type: Number }) since: number | null = null;
-  /** `Surface.groups` for the dispatch key; a missing entry is open. */
-  @property({ type: Boolean }) open = true;
+  /** The complete card, or only the inquiry threads (the workflow body,
+   *  whose run board already lists every call). */
+  @property() scope: 'all' | 'inquiries' = 'all';
 
   private childrenOf(stream: StreamView): StreamView[] {
     const view = this.view;
@@ -244,81 +257,79 @@ export class BackgroundTasksPanel extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const stream = this.stream;
     if (!stream) return nothing;
-    return this.scope === 'inquiries'
-      ? this.renderInquiries(stream)
-      : this.renderDispatch(stream);
-  }
+    const children = this.scope === 'all' ? this.childrenOf(stream) : [];
+    const inquiries = this.inquiriesOf(stream);
+    if (children.length === 0 && inquiries.length === 0) return nothing;
 
-  private renderDispatch(stream: StreamView): TemplateResult | typeof nothing {
-    const children = this.childrenOf(stream);
-    if (children.length === 0) return nothing;
     const { rollup } = stream;
+    // When the fan-out began: the earliest child still running. The fold
+    // clears `runStartedAt` on a terminal status, so a settled fan-out
+    // has no start to name and the line drops.
+    const starts = children.flatMap((child) => child.runStartedAt ?? []);
+    const since = starts.length > 0 ? Math.min(...starts) : null;
+    const summary =
+      this.scope === 'inquiries'
+        ? html`${waIcon('comments')} Inquiries
+            <wa-badge variant="neutral" appearance="outlined" pill
+              >${inquiries.length}</wa-badge
+            >`
+        : html`${waIcon('diagram-project')} Dispatched
+            ${formatResultCount(rollup.total, BACKGROUND_TASK.countNoun)}
+            <wa-badge variant="neutral" appearance="outlined" pill
+              >${rollup.total}</wa-badge
+            >${
+              rollup.running > 0
+                ? html`<wa-badge variant="success" pill
+                    >${rollup.running}</wa-badge
+                  >`
+                : nothing
+            }${
+              stream.approval === 'descendant'
+                ? html`<wa-badge variant="warning" pill
+                    >${waIcon('triangle-exclamation')}</wa-badge
+                  >`
+                : nothing
+            }${
+              since === null
+                ? nothing
+                : html`<span class="dispatch-since"
+                    >since ${getTimeFormatter().format(new Date(since))}</span
+                  >`
+            }`;
+    const open =
+      this.surface?.groups.get(stream.id)?.get(DISPATCH_GROUP_KEY) !== false;
+
     return html`
       <wa-details
         class="dispatch"
-        ?open=${this.open}
+        ?open=${open}
         @wa-show=${this.handleToggle}
         @wa-hide=${this.handleToggle}
       >
-        <span slot="summary" class="dispatch-summary"
-          >${waIcon('diagram-project')} Dispatched
-          ${formatResultCount(rollup.total, BACKGROUND_TASK.countNoun)}
-          <wa-badge variant="neutral" appearance="outlined" pill
-            >${rollup.total}</wa-badge
-          >${
-            rollup.running > 0
-              ? html`<wa-badge variant="success" pill
-                  >${rollup.running}</wa-badge
-                >`
-              : nothing
-          }${
-            stream.approval === 'descendant'
-              ? html`<wa-badge variant="warning" pill
-                  >${waIcon('triangle-exclamation')}</wa-badge
-                >`
-              : nothing
-          }${
-            this.since === null
-              ? nothing
-              : html`<span class="dispatch-since"
-                  >since
-                  ${getTimeFormatter().format(new Date(this.since))}</span
-                >`
-          }</span
-        >
+        <span slot="summary" class="dispatch-summary">${summary}</span>
         <div class="task-list" role="list">
           ${this.renderChildren(children, 0)}
-        </div>
-        ${
-          rollup.running > 0
-            ? html`<div class="task-wait">
-                ${waIcon('clock')} Waiting on
-                ${formatResultCount(rollup.running, BACKGROUND_TASK.countNoun)}
-              </div>`
-            : nothing
-        }
-      </wa-details>
-    `;
-  }
-
-  private renderInquiries(stream: StreamView): TemplateResult | typeof nothing {
-    const inquiries = this.inquiriesOf(stream);
-    if (inquiries.length === 0) return nothing;
-    return html`
-      <wa-details class="dispatch" open>
-        <span slot="summary" class="dispatch-summary"
-          >${waIcon('comments')} Inquiries
-          <wa-badge variant="neutral" appearance="outlined" pill
-            >${inquiries.length}</wa-badge
-          ></span
-        >
-        <div class="task-list" role="list">
+          ${
+            children.length > 0 && inquiries.length > 0
+              ? html`<div class="section-label">
+                  ${waIcon('comments')} Inquiries
+                </div>`
+              : nothing
+          }
           ${repeat(
             inquiries,
             (thread) => thread.threadId,
             (thread, index) => this.renderInquiryItem(thread, index),
           )}
         </div>
+        ${
+          this.scope === 'all' && rollup.running > 0
+            ? html`<div class="task-wait">
+                ${waIcon('clock')} Waiting on
+                ${formatResultCount(rollup.running, BACKGROUND_TASK.countNoun)}
+              </div>`
+            : nothing
+        }
       </wa-details>
     `;
   }

@@ -21,6 +21,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { HostSnapshot } from './hostSnapshot';
+import type { RequestErrorWire } from './sessionFrames';
 import type { SessionView } from './sessionView';
 
 /**
@@ -86,6 +87,9 @@ export interface Surface {
   readonly polishing: ReadonlySet<string>;
   /** Streams awaiting follow-up admission. Never persisted. */
   readonly sending: ReadonlySet<StreamTabId>;
+  /** The error the runtime answered this surface's last request on a stream
+   *  with, until the next request on that stream. Never persisted. */
+  readonly rejected: ReadonlyMap<StreamTabId, RequestErrorWire>;
   readonly launch: LaunchSurface;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
@@ -150,6 +154,7 @@ export function loadSurface(
     ),
     polishing: new Set(),
     sending: new Set(),
+    rejected: new Map(),
     launch: persisted.launch,
     inquiryDrafts: new Map(persisted.inquiryDrafts),
     expanded: new Map(persisted.expanded),
@@ -207,16 +212,18 @@ export function pruneSurface(surface: Surface, view: SessionView): Surface {
   const groups = retain(surface.groups, view);
   const phase = retain(surface.phase, view);
   const scroll = retain(surface.scroll, view);
+  const rejected = retain(surface.rejected, view);
   if (
     drafts === surface.drafts &&
     expanded === surface.expanded &&
     groups === surface.groups &&
     phase === surface.phase &&
-    scroll === surface.scroll
+    scroll === surface.scroll &&
+    rejected === surface.rejected
   ) {
     return surface;
   }
-  return { ...surface, drafts, expanded, groups, phase, scroll };
+  return { ...surface, drafts, expanded, groups, phase, scroll, rejected };
 }
 
 /**

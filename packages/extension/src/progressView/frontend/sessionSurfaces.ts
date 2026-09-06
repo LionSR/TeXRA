@@ -341,6 +341,7 @@ export function createSessionSurfaces(options: {
 
   function runtimeRequestFor(entry: Held, request: RuntimeRequest): void {
     const { key } = entry;
+    const streamId = 'streamId' in request ? request.streamId : null;
     if (request.kind === 'followUp.send') {
       const current = entry.surface$.get();
       if (current.sending.has(request.streamId)) return;
@@ -348,6 +349,13 @@ export function createSessionSurfaces(options: {
         ...current,
         sending: new Set([...current.sending, request.streamId]),
       });
+    }
+    // A new request on the stream retires the answer to the last one.
+    if (streamId !== null && entry.surface$.get().rejected.has(streamId)) {
+      const current = entry.surface$.get();
+      const rejected = new Map(current.rejected);
+      rejected.delete(streamId);
+      setSurface(entry, { ...current, rejected });
     }
     // Keep text and images until admission succeeds. A rejection needs
     // no restoration, and a later edit remains independent of this send.
@@ -363,7 +371,17 @@ export function createSessionSurfaces(options: {
         request,
       })
       .then((result) => {
-        if (held.get(key) !== entry || request.kind !== 'followUp.send') return;
+        if (held.get(key) !== entry) return;
+        // The runtime's refusal reaches the surface (7.6): the stream's
+        // controls paint it, and nothing here swallows it.
+        if (!result.ok && streamId !== null) {
+          const current = entry.surface$.get();
+          setSurface(entry, {
+            ...current,
+            rejected: new Map(current.rejected).set(streamId, result.error),
+          });
+        }
+        if (request.kind !== 'followUp.send') return;
         const current = entry.surface$.get();
         const sending = new Set(current.sending);
         sending.delete(request.streamId);

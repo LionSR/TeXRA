@@ -73,6 +73,7 @@ export class WorkflowStreamContent extends LitElement {
             scope="inquiries"
             .stream=${stream}
             .view=${view}
+            .surface=${surface}
           ></background-tasks-panel>
         </div>
 
@@ -85,12 +86,7 @@ export class WorkflowStreamContent extends LitElement {
                 .nowMs=${this.nowMs}
               ></workflow-run-board>`
             : html`<div class="conversation-log">
-                <log-list
-                  .stream=${stream}
-                  .view=${view}
-                  .surface=${surface}
-                  .nowMs=${this.nowMs}
-                ></log-list>
+                <log-list .stream=${stream} .surface=${surface}></log-list>
               </div>`
         }
 

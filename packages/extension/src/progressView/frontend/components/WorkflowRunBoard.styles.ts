@@ -93,15 +93,15 @@ export const workflowRunBoardStyles = css`
 
   /* A settled run: the strip closes, its markers and tallies go quiet and
      the active indicator is not drawn; the rows stay readable below. */
-  :host([settled]) .phases {
+  .phases.settled {
     --indicator-color: transparent;
   }
 
-  :host([settled]) .phase-tab {
+  .phases.settled .phase-tab {
     color: var(--wa-color-text-quiet);
   }
 
-  :host([settled]) .controls {
+  .controls.settled {
     color: var(--wa-color-text-quiet);
   }
 
@@ -300,6 +300,10 @@ export const workflowRunBoardStyles = css`
     font-size: var(--font-size-xs);
     color: var(--wa-color-text-quiet);
     text-align: end;
+  }
+
+  .controls .note-rejected {
+    color: var(--wa-color-warning-on-quiet);
   }
 
   .note-wide {
