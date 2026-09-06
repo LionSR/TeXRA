@@ -1,14 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import {
-  Clock,
-  Data,
-  Deferred,
-  Duration,
-  Effect,
-  Fiber,
-  Semaphore,
-} from 'effect';
+import { Clock, Data, Duration, Effect, Fiber, Semaphore } from 'effect';
 import ky from 'ky';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -39,15 +31,6 @@ const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-u
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;
-
-export const USAGE_LOG_FLUSH_OUTCOME = {
-  ACCEPTED: 'accepted',
-  PENDING: 'pending',
-  REJECTED: 'rejected',
-} as const;
-
-type UsageLogFlushOutcome =
-  (typeof USAGE_LOG_FLUSH_OUTCOME)[keyof typeof USAGE_LOG_FLUSH_OUTCOME];
 
 interface UsageLogConfig {
   batchSize: number;
@@ -233,13 +216,11 @@ class UsageLogServiceImpl {
    *  and interrupted by `dispose`. It only schedules: each flush runs on a
    *  fiber of its own, so interrupting the ticker never touches a send. */
   private flushTimer: Fiber.Fiber<never> | null = null;
-  /** One permit: a flush holds it while it drains, so batches leave in order
-   *  and a second caller (or `dispose`) waits behind the one in flight. */
+  /** One permit: batches leave in order, and disposal joins an active drain. */
   private readonly flushLane = Semaphore.makeUnsafe(1);
-  /** The drain in flight, if any: a `flush()` arriving while it runs joins
-   *  its outcome, so a rejection the drain hit is not hidden behind the
-   *  ACCEPTED an empty queue would report. */
-  private inFlightDrain: Deferred.Deferred<UsageLogFlushOutcome> | null = null;
+  /** Coalesce triggers before they wait for the lane; failed sends wait for
+   *  a later trigger instead of being retried by already waiting callers. */
+  private backgroundFlushActive = false;
   // Copied, never aliased: `dispose()` writes `config.enabled`, so a
   // dispose-before-initialize would otherwise flip DEFAULT_CONFIG for good.
   private config: UsageLogConfig = { ...DEFAULT_CONFIG };
@@ -298,46 +279,27 @@ class UsageLogServiceImpl {
     }
   }
 
-  flush(): Promise<UsageLogFlushOutcome> {
-    return effectRuntime().runPromise(this.sharedDrain());
-  }
-
-  /** One drain under the lane, its outcome shared with every caller that
-   *  arrives while it is in flight. The lane still orders it behind a
-   *  running dispose or an earlier drain. */
-  private readonly sharedDrain = Effect.fn('UsageLogService.flush')(function* (
-    this: UsageLogServiceImpl,
-  ) {
-    if (this.inFlightDrain) return yield* Deferred.await(this.inFlightDrain);
-    const outcome = yield* Deferred.make<UsageLogFlushOutcome>();
-    this.inFlightDrain = outcome;
-    return yield* this.flushLane.withPermit(this.drain()).pipe(
-      Effect.onExit((exit) => {
-        this.inFlightDrain = null;
-        return Deferred.done(outcome, exit);
-      }),
-    );
-  });
-
   /** Send every batch that is due, one after another, under the lane. */
   private readonly drain = Effect.fn('UsageLogService.drain')(function* (
     this: UsageLogServiceImpl,
   ) {
-    let finalOutcome: UsageLogFlushOutcome = USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
-
     while (this.retryBatch || this.queue.length > 0) {
-      const batchOutcome = yield* this.flushQueuedBatch();
-      if (batchOutcome === USAGE_LOG_FLUSH_OUTCOME.PENDING) {
-        return finalOutcome === USAGE_LOG_FLUSH_OUTCOME.REJECTED
-          ? finalOutcome
-          : batchOutcome;
-      }
-      if (batchOutcome === USAGE_LOG_FLUSH_OUTCOME.REJECTED) {
-        finalOutcome = batchOutcome;
-      }
+      const batchSettled = yield* this.sendNextBatch().pipe(
+        Effect.catchTag('UsageBatchUndelivered', (error) =>
+          Effect.sync(() => {
+            const requeued = error.requeue?.entries.length ?? 0;
+            if (error.requeue) this.retryBatch = error.requeue;
+            const requeuedMessage =
+              requeued > 0 ? `; requeued ${requeued} entries` : '';
+            log.warn(
+              `Failed to send usage batch${requeuedMessage}: ${error.reason}`,
+            );
+            return false;
+          }),
+        ),
+      );
+      if (!batchSettled) return;
     }
-
-    return finalOutcome;
   });
 
   /**
@@ -345,106 +307,95 @@ class UsageLogServiceImpl {
    * drain cannot fail, so only a defect reaches here, and it is reported by
    * its owner instead of ending a fiber nobody observes.
    */
-  private backgroundFlush(): Effect.Effect<void> {
-    return this.sharedDrain().pipe(
-      Effect.asVoid,
-      Effect.catchDefect((defect) =>
-        Effect.sync(() => {
-          log.error(`Usage flush failed: ${toErrorMessage(defect)}`);
-        }),
-      ),
-    );
-  }
+  private readonly backgroundFlush = Effect.fn('UsageLogService.flush')(
+    function* (this: UsageLogServiceImpl) {
+      if (this.backgroundFlushActive) return;
+      this.backgroundFlushActive = true;
+      yield* this.flushLane.withPermit(this.drain()).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            this.backgroundFlushActive = false;
+          }),
+        ),
+      );
+    },
+    Effect.catchDefect((defect) =>
+      Effect.sync(() => {
+        log.error(`Usage flush failed: ${toErrorMessage(defect)}`);
+      }),
+    ),
+  );
 
-  /** One batch: keep it for retry (PENDING) when it cannot be delivered. */
-  private flushQueuedBatch(): Effect.Effect<UsageLogFlushOutcome> {
-    return this.sendNextBatch().pipe(
-      Effect.catchTag('UsageBatchUndelivered', (error) =>
-        Effect.sync(() => {
-          const requeued = error.requeue?.entries.length ?? 0;
-          if (error.requeue) this.retryBatch = error.requeue;
-          const requeuedMessage =
-            requeued > 0 ? `; requeued ${requeued} entries` : '';
-          log.warn(
-            `Failed to send usage batch${requeuedMessage}: ${error.reason}`,
-          );
-          return USAGE_LOG_FLUSH_OUTCOME.PENDING;
-        }),
-      ),
-    );
-  }
+  /** True means this batch is settled; false pauses draining until a later trigger. */
+  private readonly sendNextBatch = Effect.fn('UsageLogService.sendNextBatch')(
+    function* (this: UsageLogServiceImpl) {
+      const token = yield* Effect.tryPromise({
+        try: () => SupabaseClient.getAccessToken(),
+        catch: (error) =>
+          new UsageBatchUndelivered({
+            reason: toErrorMessage(error),
+            requeue: null,
+          }),
+      });
+      if (!token) {
+        log.debug('Skipping flush - user not authenticated');
+        return false;
+      }
 
-  private readonly sendNextBatch = Effect.fn(
-    'UsageLogService.flushQueuedBatch',
-  )(function* (this: UsageLogServiceImpl) {
-    const token = yield* Effect.tryPromise({
-      try: () => SupabaseClient.getAccessToken(),
-      catch: (error) =>
-        new UsageBatchUndelivered({
-          reason: toErrorMessage(error),
-          requeue: null,
-        }),
-    });
-    if (!token) {
-      log.debug('Skipping flush - user not authenticated');
-      return USAGE_LOG_FLUSH_OUTCOME.PENDING;
-    }
+      let batch = this.retryBatch;
+      if (batch) {
+        this.retryBatch = null;
+      } else {
+        const entries = this.queue;
+        this.queue = [];
+        if (entries.length === 0) return false;
 
-    let batch = this.retryBatch;
-    if (batch) {
-      this.retryBatch = null;
-    } else {
-      const entries = this.queue;
-      this.queue = [];
-      if (entries.length === 0) return USAGE_LOG_FLUSH_OUTCOME.PENDING;
+        batch = {
+          entries,
+          batchId: randomUUID(),
+        };
+      }
 
-      batch = {
-        entries,
-        batchId: randomUUID(),
-      };
-    }
+      // Re-read each entry's consent here rather than on entry: the token
+      // lookup above is asynchronous, so a user who opts out while it is in
+      // flight would otherwise have this continuation ship the batch anyway.
+      // Applied after the batch is taken so it also drops optional rounds
+      // queued before the opt-out instead of leaving the timer to send them,
+      // and read from the workspace each entry was recorded in, since this
+      // flush runs outside any run.
+      const kept = batch.entries.filter(
+        ({ entry, config }) =>
+          isPlanAccounting(entry) || isTelemetryEnabledBySetting(config),
+      );
+      const dropped = batch.entries.length - kept.length;
+      if (dropped > 0) {
+        log.debug(
+          `Usage logging is disabled; dropped ${dropped} optional ${dropped === 1 ? 'entry' : 'entries'} without sending`,
+        );
+      }
+      if (kept.length === 0) {
+        return true;
+      }
+      batch = { ...batch, entries: kept };
 
-    // Re-read each entry's consent here rather than on entry: the token
-    // lookup above is asynchronous, so a user who opts out while it is in
-    // flight would otherwise have this continuation ship the batch anyway.
-    // Applied after the batch is taken so it also drops optional rounds
-    // queued before the opt-out instead of leaving the timer to send them,
-    // and read from the workspace each entry was recorded in, since this
-    // flush runs outside any run.
-    const kept = batch.entries.filter(
-      ({ entry, config }) =>
-        isPlanAccounting(entry) || isTelemetryEnabledBySetting(config),
-    );
-    const dropped = batch.entries.length - kept.length;
-    if (dropped > 0) {
       log.debug(
-        `Usage logging is disabled; dropped ${dropped} optional ${dropped === 1 ? 'entry' : 'entries'} without sending`,
+        `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
       );
-    }
-    if (kept.length === 0) {
-      // ACCEPTED, not PENDING: these entries are gone for good, and PENDING
-      // means "kept for a later retry" to every caller that inspects it.
-      return USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
-    }
-    batch = { ...batch, entries: kept };
 
-    log.debug(
-      `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
-    );
-
-    const response = yield* this.sendBatch(batch, token);
-    if (!response.success) {
-      this.reportPermanentRejection(
-        batch,
-        response.error ?? 'Usage batch was rejected',
+      const response = yield* this.sendBatch(batch, token);
+      if (!response.success) {
+        this.reportPermanentRejection(
+          batch,
+          response.error ?? 'Usage batch was rejected',
+        );
+        return true;
+      }
+      log.debug(
+        `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
       );
-      return USAGE_LOG_FLUSH_OUTCOME.REJECTED;
-    }
-    log.debug(
-      `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
-    );
-    return USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
-  });
+      return true;
+    },
+  );
 
   private reportPermanentRejection(batch: RetryBatch, reason: string): void {
     log.error(
@@ -565,7 +516,7 @@ class UsageLogServiceImpl {
     }
     this.config.enabled = false;
 
-    // An in-flight flush — a caller's or the timer's — is waited for without
+    // An in-flight background flush is waited for without
     // bound; past the deadline the wait is reported, not abandoned. The
     // warning is withdrawn the moment the lane is ours.
     const warning = yield* Effect.forkChild(

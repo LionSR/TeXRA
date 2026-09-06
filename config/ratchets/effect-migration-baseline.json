@@ -171,7 +171,7 @@
       "src/controllers/session/sessionLayer.ts": 3,
       "src/platform/defaults/jsonStore.ts": 1,
       "src/shared/signals.ts": 2,
-      "src/telemetry/UsageLogService.ts": 5,
+      "src/telemetry/UsageLogService.ts": 4,
       "src/tools/agentCliSessionRegistry.ts": 2,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/tools/lean/direct/directLspAdapter.ts": 3
