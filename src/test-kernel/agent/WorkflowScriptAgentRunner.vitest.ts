@@ -323,6 +323,44 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(first).toBe(second);
   });
 
+  it('keeps the requested workspace symlink name in the launched inputs', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-inputs-'));
+    const workspace = path.join(root, 'workspace');
+    const storage = path.join(root, 'storage');
+    const target = path.join(workspace, 'versions/v1.tex');
+    const requested = path.join(workspace, 'chapters/current.tex');
+    const storagePath = vi
+      .spyOn(StorageFS, 'fullPath')
+      .mockImplementation((file: string) => path.join(storage, file));
+    try {
+      await fs.mkdir(storage);
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.mkdir(path.dirname(requested), { recursive: true });
+      await fs.writeFile(target, 'Current chapter');
+      await fs.symlink(target, requested);
+      mocks.realpath.mockImplementation((file: string) => fs.realpath(file));
+      mocks.workspaceToAbsolute.mockImplementation((file: string) =>
+        path.resolve(workspace, file),
+      );
+
+      await defaultRunner()(
+        invocation({ inputFiles: ['chapters/current.tex'] }),
+      );
+
+      expect(mocks.preparedOptions[0]).toEqual(
+        expect.objectContaining({
+          configPayload: expect.objectContaining({
+            inputFiles: ['chapters/current.tex'],
+          }),
+        }),
+      );
+      expect(mocks.resolveChildRunOutput).not.toHaveBeenCalled();
+    } finally {
+      storagePath.mockRestore();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses delegation policy and executes a direct in-band child', async () => {
     const call = invocation({
       inputFiles: ['paper.tex'],
@@ -355,7 +393,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       { label: 'Context file', files: ['/workspace/notes.tex'] },
     ]);
     expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith([
-      '/workspace/notes.tex',
+      'notes.tex',
     ]);
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
       { label: 'Media file', files: ['/workspace/figure.pdf'] },
@@ -383,9 +421,9 @@ describe('createWorkflowScriptAgentRunner', () => {
           agentCategory: 'workflow',
           model: 'child-model',
           instruction: 'Draft the section.',
-          inputFiles: ['/workspace/paper.tex'],
-          contextFiles: ['/workspace/notes.tex'],
-          mediaFiles: ['/workspace/figure.pdf'],
+          inputFiles: ['paper.tex'],
+          contextFiles: ['notes.tex'],
+          mediaFiles: ['figure.pdf'],
           workingDirectory: '/workspace',
           delegationAgentScope: {
             workflow: ['builtInWorkflow:correct'],
@@ -546,7 +584,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect.objectContaining({
         agentName: 'merge',
         configPayload: expect.objectContaining({
-          inputFiles: [firstCanonical, '/workspace/notes.tex', secondCanonical],
+          inputFiles: [firstCanonical, 'notes.tex', secondCanonical],
         }),
       }),
     );

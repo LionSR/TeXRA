@@ -44,7 +44,7 @@ async function resolveInvocationFileList(
   parentExecutionId: LaunchRunContext['runScope']['executionId'],
   label: string,
   files: readonly string[],
-): Promise<string[]> {
+): Promise<{ file: string; absolutePath: string }[]> {
   try {
     const storageRoot = await realpath(StorageFS.fullPath(''));
     const references = await Promise.all(
@@ -70,7 +70,11 @@ async function resolveInvocationFileList(
           runStorageLocationFromAnyAbsolutePath(absolutePath) !== undefined
             ? absolutePath
             : storagePath;
-        return { file: canonicalPath, runStoragePath };
+        return {
+          file,
+          absolutePath: canonicalPath,
+          runStoragePath,
+        };
       }),
     );
     await assertWorkflowFilesExist([
@@ -78,11 +82,11 @@ async function resolveInvocationFileList(
         label,
         files: references
           .filter((reference) => reference.runStoragePath === undefined)
-          .map((reference) => reference.file),
+          .map((reference) => reference.absolutePath),
       },
     ]);
     return await Promise.all(
-      references.map(async ({ file, runStoragePath }) => {
+      references.map(async ({ file, absolutePath, runStoragePath }) => {
         if (runStoragePath !== undefined) {
           const output = await resolveChildRunOutput(
             parentExecutionId,
@@ -94,7 +98,11 @@ async function resolveInvocationFileList(
             );
           }
         }
-        return file;
+        // Workspace names remain the caller's prompt and output identity.
+        return {
+          file: runStoragePath === undefined ? file : absolutePath,
+          absolutePath,
+        };
       }),
     );
   } catch (error) {
@@ -132,8 +140,8 @@ export async function fingerprintWorkflowAgentDependencies(
       label,
       files,
     );
-    for (const [index, file] of resolved.entries()) {
-      const bytes = await AbsoluteFS.readBytes(file);
+    for (const [index, { absolutePath }] of resolved.entries()) {
+      const bytes = await AbsoluteFS.readBytes(absolutePath);
       hash.update(`${kind}\0${index}\0${bytes.length}\0`);
       hash.update(bytes);
     }
@@ -237,7 +245,7 @@ async function resolveWorkflowCallConfig(
     // Model resolves before any file I/O so an unavailable/invalid
     // declared model fails the call without touching the filesystem.
     const model = await workflowScriptModelSelection(call, parent);
-    const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
+    const [inputs, context, media] = await Promise.all([
       resolveInvocationFileList(
         runExecutionId,
         'Input file',
@@ -254,6 +262,9 @@ async function resolveWorkflowCallConfig(
         call.options.mediaFiles ?? [],
       ),
     ]);
+    const inputFiles = inputs.map(({ file }) => file);
+    const contextFiles = context.map(({ file }) => file);
+    const mediaFiles = media.map(({ file }) => file);
     const oversizedBibRejection =
       await rejectOversizedBibAttachments(contextFiles);
     if (oversizedBibRejection) {
