@@ -579,7 +579,16 @@ barrier tools and re-run for parallel-safe ones; finer tool-use checkpoints =
 per-call rows; stable identity = logical keys `round`, `turn`, `callId`, never
 a traversal path; rounds as durable coordinates = `flow.step`; one child
 protocol = the script journal folded into the event table) is the proposal's
-§6, first bullet. Where a subsection below speaks of a cursor, a node, a record,
+§6, first bullet. R4.2's three barrier phases (intent, started, completed)
+collapse to two rows by design: `tool.intent` is appended at the dispatch
+site, after approval and immediately before the adapter call, so it is the
+started marker, and `tool.result` is completed. The declared-but-unapproved
+phase needs no row, because a run that dies during approval re-asks from
+its `approval.requested` row. The window between the intent append and the
+adapter invocation, a few instructions in one fiber with no await, is
+accepted as outcome-unknown on resume; a separate started row would only
+move that same window one instruction later, and the manual reconciliation
+it triggers is the safe outcome for a barrier tool. Where a subsection below speaks of a cursor, a node, a record,
 or an interpreter, read the corresponding row-model term.
 
 ~~Preparation, external execution, recovery, and state mutation may remain as
@@ -1007,7 +1016,11 @@ interrupts the owned root fiber.
   across the run's two aggregates when the batch spans them (as
   `SessionEvents.publish` already does for `run.start` plus `run.activate`,
   one-fold PRD §6 item 8); a turn's or a round's closing snapshot and its
-  `flow.step` are one batch, so neither is ever durable without the other.
+  `flow.step` are one batch, so neither is ever durable without the other,
+  and a `flow.step` that carries a lifecycle outcome (`waiting`, `halted`,
+  or terminal) is batched with the canonical `status` fact it corresponds
+  to, so a view can never show a settled coordinate beside a running
+  status.
   The append is the single uninterruptible region and runs under the
   publisher's permit. `append` returns the state obtained by folding the
   batch into the current state with the same `foldRunState` step; there is
@@ -1338,8 +1351,16 @@ lane D of the persistence cutover branch, sequenced and sized by
 2. **Both families on the ledger, one PR.** `ModelInvoker`, `Tools`,
    `FollowUps`, `RunContext`, `OutputPipeline`, `runToolUse`, `runReflection`;
    `executeAgent` and every resume arm call `runtime.runPromiseExit` with the
-   fiber's signal; the importer's `flow_<id>.json` to `flow.snapshot` arm,
-   which is a temporary compatibility reader under AGENTS.md's rule and
+   fiber's signal; the importer's `flow_<id>.json` arm, which writes one
+   batch: the `flow.snapshot` carrying the record's `shared` state and the
+   canonical `flow.step` derived from the record's cursor and action (a
+   cursor at the wait node is `waiting`; a cursor at a round boundary is
+   `round.end` with its round number; any mid-cycle cursor maps to the last
+   completed turn or round boundary, which is safe because every completed
+   model response and tool result the record holds is already in `shared`
+   and nothing with a result is re-run), so the loop resumes from a
+   coordinate, never from a node identity. The importer is a temporary
+   compatibility reader under AGENTS.md's rule and
    records beside itself its introduction date (the cutover release) and
    its retirement condition: it is deleted three months after that release
    ships, once every session root's C9 retention window has passed, so no
@@ -1347,9 +1368,19 @@ lane D of the persistence cutover branch, sequenced and sized by
    carries an `@adapter-until` marker for it.
    Deletes `src/agent/node/`, `ModelInvocationNode`, `RoundPersistedFlow`,
    `ResponseCycleFlow`, `ToolUseRoundFlow`, all sixteen node classes, the
-   disposition ladder, `linkAbortSignals`, `onAbort`, the startup window,
+   disposition ladder, the flow-local uses of `linkAbortSignals` and
+   `onAbort` (the shared helpers themselves survive until their last
+   consumer migrates in Phases 3 to 5, since at this commit they are also
+   imported by `runAgent.ts`, `AgentLaunchContext.ts`, `tools/timeouts.ts`,
+   `claudeAgent.ts`, `executionRegistry.ts`, `FollowUpQueue.ts`, the
+   workflow-script runner, the CLI runtime, and the platform lifecycle; the
+   Phase 1 ratchet counts their importers down), the startup window,
    `p-retry` in the runtime, `resumability.ts`'s parse, the checkpoint arm of
-   `SessionResumeRetrieval`, the engine tests, and every guidance passage
+   `SessionResumeRetrieval`, the engine tests except the manual-retry cases
+   of `PocketFlowNode.vitest.ts` (approval-driven retry budgets, the
+   cancellation race, `AbortError` unwrapping, approvals past the former
+   ceiling), which move into `ModelInvoker`'s existing suite because R8 and
+   F7 preserve that behavior, and every guidance passage
    that names the engine: at this commit `rg -l PocketFlow` finds CLAUDE.md,
    AGENTS.md, `src/README.md`, `.claude/agents/our-code-simplifier.md`,
    `.claude/skills/code-review/SKILL.md` and its
@@ -1572,14 +1603,21 @@ reader-outlives-writer rule cannot hold across it, because pre-cutover code
 has no reader for rows, so the revertibility claim is **withdrawn for runs
 that progressed under the ledger** and replaced by a weaker, explicit
 guarantee: such a run is interrupted on rollback, never silently resumed
-from a stale record and never repeated. The mechanism is the importer's:
-on first resume under the ledger it imports `flow_<id>.json` into the first
-`flow.snapshot` row and renames the file to `flow_<id>.json.imported` in
-the same step (never deleting it; single-owner D8 still governs deletion),
-so a reverted release finds no legacy checkpoint for that run, reports it
-as not resumable, and repeats no paid or side-effecting work. A run never
-resumed under the ledger keeps its untouched record and resumes after
-rollback exactly as before. The importer is the temporary compatibility
+from a stale record and never repeated. The mechanism is the importer's
+three-step idempotent protocol, since a SQLite append and a file rename
+cannot be one atomic step: (1) rename `flow_<id>.json` to
+`flow_<id>.json.importing`; (2) append the import batch (`flow.snapshot`
+carrying `importedFrom: { path, sha256 }` plus the derived `flow.step`) in
+one transaction; (3) rename `.importing` to `.imported` (never deleting;
+single-owner D8 still governs deletion). Every resume under the ledger
+first repairs: an `.importing` file with no `importedFrom` snapshot on the
+aggregate completes steps 2 and 3; an `.importing` file beside such a
+snapshot completes step 3 only; a `flow_<id>.json` beside such a snapshot
+is renamed straight to `.imported` and never re-imported. A reverted
+release, in every window, finds no `flow_<id>.json` for a run that
+progressed under the ledger, reports it as not resumable, and repeats no
+paid or side-effecting work; a run never resumed under the ledger keeps its
+untouched record and resumes after rollback exactly as before. The importer is the temporary compatibility
 reader of Phase 2 step 2 and follows the repository's compatibility and
 retirement policy. A phase lands only after all affected hosts have crossed
 the same internal boundary; the repository does not ship one host on the Effect

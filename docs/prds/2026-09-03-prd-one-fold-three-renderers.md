@@ -981,9 +981,20 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    subscribed transcript rows; a private row is neither), and no renderer
    subscription can name them. The fold never reads them; only `RunLedger`,
    through `aggregate(executionId, fromSeq)` in the runtime process, and the
-   host's in-process step scrubber over it do. They are lane D's rows, not
-   this document's lanes', and the eight changes above stay eight; this item
-   exists so the durable set this section enumerates is complete.
+   host's in-process step scrubber over it do. Two rules bind the publisher:
+   a `flow.step` whose step is `waiting`, `halted`, or a terminal outcome is
+   published in the same transaction as the canonical `status` fact of item
+   3 it corresponds to (`publish` takes a batch), so `StreamView` can never
+   durably show a settled `flow` beside a running `status`, and `status`
+   stays the lifecycle authority while `flow` is only the coordinate. On the
+   checkpoint aggregate (5.1): the workflow-script journal rows (migration
+   PRD Phase 2 step 4) and **`checkpoint.removed`**, the aggregate's last
+   row, published only by the one path that deletes a workflow checkpoint
+   today (single-owner D8), which sets `closed = 1` on the aggregate and its
+   dependents; it is the checkpoint's tombstone as `stream.removed` is a
+   stream's. They are lane D's rows, not this document's lanes', and the
+   eight changes above stay eight; this item exists so the durable set this
+   section enumerates is complete.
 
 **Rename, cut before add (lane 1).** The tombstone this document calls
 `stream.removed` is today's `removeStream` session fact
