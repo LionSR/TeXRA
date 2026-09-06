@@ -258,7 +258,7 @@ event
   INDEX (type, commit)                              -- listing tier across streams
 
 event_sequence
-  aggregate_id  TEXT PRIMARY KEY
+  aggregate_id  TEXT PRIMARY KEY                    -- kind-qualified AggregateId (C2)
   seq           INTEGER NOT NULL                    -- last assigned
   owner_id      TEXT                                -- current sequence writer, NULL when none
   parent_id     TEXT REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE
@@ -280,24 +280,45 @@ every row; neither is derived from the other.
 **C2. Aggregates.** An aggregate is a unit of independent lifecycle, and
 **every fact lives on the aggregate of its logical target**, so a
 latest-of-type lookup never has to disambiguate targets and no key column
-exists. Aggregate ids: a stream id for run-scoped trace `AgentEvent`s and for
+exists. A database `AggregateId` is the canonical encoding
+`aggregateId(kind, logicalId) = JSON.stringify([kind, logicalId])`, with kind
+`stream`, `execution`, `inquiry`, `session`, or the temporary `migration`.
+This encoding is injective even when logical ids coincide or contain
+punctuation. Raw logical ids never serve as database keys. The constructor
+accepts a kind and an unencoded logical id; encoded keys are a distinct type
+and are never encoded twice. External `streamId`, `executionId`, thread ids,
+and their payload fields remain unchanged.
+
+Every `aggregate_id`, `parent_id`, read or claim argument, per-aggregate fold
+map, and transport subscription key uses this qualified `AggregateId`.
+Logical parent or execution edges from an event payload are converted using
+their declared kind before lookup. The importer performs the same conversion,
+including for legacy ids; the roots are `aggregateId('session', 'singleton')`
+and `aggregateId('migration', 'cutover')`,
+so neither can collide with user-supplied stream ids.
+
+Placement is by kind: a stream aggregate holds run-scoped trace `AgentEvent`s and
 the stream's own lifecycle facts (`stream.removed`, `goal`, the queued-follow-ups
 snapshot). Goals are keyed by stream, as in `GoalStore.getForStream` and
 `GoalStore.list` (`src/tools/goal/goalStore.ts:176-215`); updating one stream's
 goal cannot replace another's, and deleting the stream deletes its goal rows.
-An execution id holds what the model sees, the byte-exact flow rows
+An execution aggregate holds what the model sees, the byte-exact flow rows
 of `2026-09-04-agent-runtime-on-effect.md` §2.1 (`model.message`,
 `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`); which of
 a run's two aggregates each flow row lives on is decided in that §2.1, which
 places `flow.step` on the stream aggregate as a replay coordinate. The listing
 tier reads the canonical `status` fact for outcome, including failures before
-the runtime starts. An inquiry thread id holds that thread's facts; one fixed session aggregate id holds
+the runtime starts. An inquiry aggregate holds that thread's facts; one fixed session aggregate holds
 **singleton** session facts only. A fact that can have more than
 one live instance never goes on the session aggregate, because after two
 deletions a latest-of-type read would see only the newer tombstone. The
-execution-to-stream edge is on `run.start`. A stream exists iff its
-`event_sequence` row exists; `run.start` is `seq` 1 and creates it in the same
-transaction.
+execution-to-stream edge is on `run.start`. A stream is present to readers
+iff its `event_sequence` row exists and `closed = 0`; a closed row may remain
+physically until retention. `run.start` is `seq` 1 and creates the open row
+in the same transaction. A child's declared parent edge pairs the logical
+`parentStreamId` with `parentStartCommit`, the parent's `run.start` commit.
+The commit distinguishes parent incarnations even if a logical id is reused
+after physical retention. C9 defines the effective parent used for routing.
 
 During the import window, one reserved migration aggregate holds the
 workspace migration claim and its progress facts (§8). It is excluded from
@@ -356,7 +377,9 @@ for one datum with a render-time `max()` to reconcile.
 **C5. Owner id.** `owner_id` names a process: pid plus process start time. The
 `Database` layer derives it; callers cannot supply an arbitrary writer id.
 It is stamped on `event_sequence` (who may append) and on every event row
-(who did). Liveness is `kill(pid, 0)` plus the start-time check, probed per
+(who did). Only the sequence row is current ownership: an immutable event's
+writer is historical attribution and never establishes a present claim.
+Liveness is `kill(pid, 0)` plus the start-time check, probed per
 distinct owner, never per run; there are a handful of owners in a workspace.
 An inconclusive probe, including a permissions error, is not evidence of death.
 
@@ -367,10 +390,22 @@ the caller's owner only if all targets are unowned or their owners are proved
 dead. This is one atomic claim or takeover, not an unconditional upsert.
 New aggregates are claimed in their first-event transaction (C2).
 The process also admits only one local run holding a claim for an aggregate.
+An execution acquires and releases its stream and execution claims together;
+the current stream claim therefore supplies its displayed ownership, while
+an action rechecks both targets before writing.
 Release clears only the caller's own claim. Every append verifies both the
 claim and `closed = 0` inside its transaction; a serialized non-owner write
 still fails. The legacy import additionally preserves the old claims until
 their owners are proved inactive (§8).
+
+Claim, takeover, and release all wake local readers after commit, even when
+they append no event and the commit ordinal is unchanged; foreign readers
+observe the sequence-row change through `data_version`. C7 reads current
+claims per aggregate and carries explicit nulls for released claims to every
+fold. A still-live process can therefore release a waiting execution without
+leaving that execution classified as owned merely because it wrote the last
+event. Liveness answers whether the current claimant is alive, not whether
+any historical writer is alive.
 
 **C6. Write path.** `SessionEvents.publishBatch(events)` appends an ordered
 batch of durable events, possibly on several aggregates. Under the local
@@ -396,7 +431,7 @@ channel and never advance a durable cursor; they are not batch members.
 The write remains in the publish path, never in a subscriber, and no
 publisher waits for a remote renderer.
 
-**C7. Read path.** Five event queries, bounded reads, and one wake level:
+**C7. Read path.** Five read queries, bounded reads, and one wake level:
 
 - `all(fromCommit, throughCommit?)`: events with `commit > fromCommit` in
   commit order. The optional inclusive upper bound makes one finite read;
@@ -421,11 +456,14 @@ publisher waits for a remote renderer.
   cursor, and a dormant run never scans unrelated session history. The
   message-base read in runtime §2.3 uses the same execution index with an
   inclusive base and an upper bound at the snapshot commit.
-- `existing(aggregateIds)`: the subset of resident aggregate ids whose
-  sequence rows still exist, using the primary key. The finite input read
-  below reads this set and the bounded event prefix in one transaction.
-  Only the listed or opened aggregate ids are checked; no transcript bodies
-  are read.
+- `aggregateState(aggregateIds)`: the sequence rows for the named qualified
+  keys, using the primary key, returned as `{ aggregateId, ownerId, closed,
+parentId, startCommit }`. For streams, `startCommit` is obtained from the
+  indexed `seq = 1` row; it is null for other kinds. Missing keys have no row;
+  a present row with `ownerId: null`
+  is explicitly unclaimed. The finite input read below reads this state and
+  the bounded event prefix in one transaction. Only the listed or opened
+  aggregates are checked; no transcript bodies are read.
 - `PRAGMA data_version`: changes when another connection commits. It is
   connection-local and does not move for the connection's own commits, so it
   is a wake trigger only, never a level in the `commit` number space.
@@ -439,8 +477,12 @@ queries into ordered finite input batches, as in the view-state PRD §7.2.
 It adds no persisted event or second tail interface. Each live read captures
 its text/local levels and per-subscription resident scope first, then opens
 one read transaction. Within that transaction it captures the log's committed
-`AUTOINCREMENT` high-water mark, reads `all(cursor, bound)`, and reads
-`existing(scope)`. The bound is the SQLite-maintained committed ordinal,
+`AUTOINCREMENT` high-water mark and reads `all(cursor, bound)`. It extends the
+checked scope with every identity and typed edge introduced by that read's
+listing/lifecycle/inquiry rows, then reads `aggregateState(expandedScope)`
+before closing the transaction. Newly delivered streams and their execution
+or inquiry aggregates therefore receive current claims in the same batch,
+without waiting for another event. The bound is the SQLite-maintained committed ordinal,
 not `MAX(event.commit)`, which can fall when retention removes rows.
 
 The batch keeps events before text/local inputs and ends with the existing
@@ -450,6 +492,7 @@ transient `Drained` marker, extended by one field:
 type ExistenceReconciliation = {
   checkedAggregateIds: readonly AggregateId[];
   removedAggregateIds: readonly AggregateId[];
+  claims: readonly { aggregateId: AggregateId; ownerId: OwnerId | null }[];
 };
 type Drained = {
   _tag: 'drained';
@@ -458,23 +501,40 @@ type Drained = {
 };
 ```
 
-`removedAggregateIds` is exactly the captured checked set minus the ids
-returned by `existing` in that transaction. The fold receives the complete
-ordered batch, then applies the marker's removals and captured bound before
+`removedAggregateIds` is exactly the expanded checked set minus the keys
+returned by `aggregateState` in that transaction. `claims` has one entry for
+every surviving checked key, including null for every released claim. The
+fold receives the complete ordered batch, then replaces those keys' current
+claims and applies the marker's removals and captured bound before
 publishing its view. Removal uses the same rule as a tombstone, including
 re-rooting surviving child streams, and is authoritative only for the
 checked ids. Removing a resident invents no ordinal. `Drained.cursor` is
 always the captured bound: it may equal the prior cursor or exceed it even
 when retention has removed every event in that interval.
 
+Current claims and owner-process liveness are separate transient inputs.
+The captured local liveness snapshot cannot overwrite the later sequence-row
+claim snapshot. A current owner absent from that liveness snapshot is
+unprovable and blocks automatic takeover until a probe supplies an explicit
+verdict. Distinct returned owner ids are probed; verdict changes wake another
+finite read. A null current claim needs no process probe. Cold replay also
+reads and supplies this reconciliation through the existing `ReplayComplete`
+marker before publishing its completed view. That marker applies current
+claims and removals while retaining the pre-replay tail anchor; it never
+adopts a later replay-read ordinal or falls back to the latest event writer.
+
 The same batch reaches every renderer. The view-state PRD §8.1 adds
 `existence: ExistenceReconciliation | null` to `EventsFrame`. When a finite
-read spans frames, only its final frame carries the reconciliation; the
+live read spans frames, only its final frame carries the reconciliation; the
 decoder buffers the read, builds `Drained` from that frame's existing
 `cursor` and `existence`, and releases the ordered `SessionInputs` batch.
+The final `replayComplete` frame also carries `existence`; its decoder uses
+`ReplayComplete` to apply that reconciliation without moving the saved tail
+anchor.
 Earlier split frames cannot advance the retained view cursor, so reconnecting
 cannot skip their still-unapplied rows. A read with no new materialized
-events still sends the marker, including when its cursor is unchanged. The
+events still sends the marker, including for claim-only changes when its
+cursor is unchanged. The
 receiver accepts it by frame order and the current `Subscribe` generation,
 not by requiring a larger cursor; obsolete generations are discarded before
 any inputs fold.
@@ -491,7 +551,7 @@ Cold hydration captures a commit anchor before its listing and aggregate
 reads, completes replay, then uses the finite input reader from that anchor.
 The fold handles overlap by latest-of-type listing facts and by each
 aggregate's settled `seq`, as in the view-state PRD §7.2. Local and foreign
-wakes both trigger the bounded event/existence read, including when there
+wakes both trigger the bounded event/aggregate-state read, including when there
 are no new materialized events. A surface's cursor advances only to the
 completed read's captured commit bound; an aggregate's settled boundary is
 a `seq` value. The reserved migration aggregate is excluded from these
@@ -509,14 +569,37 @@ fold drops that tier when the last subscriber leaves. This is the rule that
 keeps #9952 from returning.
 
 **C9. Existence, deletion, retention.** `run.start` creates. Every aggregate
-records its **owning lifecycle**, and only that, in `event_sequence.parent_id`
-when it is created: an execution's parent is its stream (from the `run.start`
-edge); an inquiry aggregate's parent is the stream that opened it; a child
-stream's `parent_id` is NULL, because a child stream is its own lifecycle
-that survives its parent's deletion (the fold re-roots it and
-`detachActiveChildren` lets it run on), and the parent-child edge stays on
-`run.start`'s `parentStreamId` payload as today. One semantic for the column,
-no exception clause. `stream.removed` is the last row on the stream's own
+records its current **owning lifecycle**, and only that, as a qualified key
+in `event_sequence.parent_id`: an execution's parent is its stream (from
+the `run.start` edge); an inquiry's parent is its most recent asker. An
+inquiry reopened after an answer changes parents, as
+`recordOpenQuestion` does today (`src/tools/inquiry/externalInquiryStorage.ts:250-323`).
+Its reopen transaction acquires the inquiry claim under C5 and uses the
+caller's current new-parent claim. It verifies both rows are open and
+caller-owned, verifies the latest inquiry state is answered,
+then appends the reopened inquiry fact with the new logical parent fields
+and updates `parent_id` to the new stream key. Both changes commit or neither
+does. A concurrent old-parent deletion either closes the inquiry first,
+causing reopen to fail, or follows the reparent and no longer reaches it.
+Inquiry writes release their inquiry claim once complete; reopening does
+not require the last answering process to exit. An already-open or dropped
+inquiry cannot be reopened.
+
+A child stream's `parent_id` is NULL: its independent lifecycle survives
+parent deletion. Its immutable `run.start` records only the declared
+`parentStreamId`/`parentStartCommit` pair. Before admission, resume, each new
+turn after WAITING, and parent-directed approval or follow-up routing, the
+runtime resolves `aggregateId('stream', parentStreamId)` through
+`aggregateState`. The parent is effective only if the row is present, open,
+and has the matching `startCommit`; otherwise the child is detached. Stale
+snapshots cannot override that check, and display residency is not evidence
+of parent existence. Local deletion and remote reconciliation also apply the
+existing detach operation to active handles and approval ancestry. A still
+present, open parent remains the parent even if its owner has released it
+or died. The runtime proposal §2.4 owns this reconstruction rule; no new
+detach event is needed.
+
+`stream.removed` is the last row on the stream's own
 aggregate and, in the same transaction, sets `event_sequence.closed = 1` on
 that aggregate **and on every dependent reachable through `parent_id`**, one
 recursive `UPDATE`, so nothing the removed run owns stays writable and
@@ -534,7 +617,7 @@ that is still open receives `stream.removed` and the recursive close update
 before collection; no user deletion is required. Deleting the selected root
 sequence rows then cascades through their closed dependents and events by C1.
 Publication of the wake occurs after commit even if every newly written
-tombstone was collected in that transaction. C7's indexed existence check
+tombstone was collected in that transaction. C7's indexed aggregate-state read
 removes those streams from resident views even when their tombstones were
 never observed. Retention is a setting with a default; its value is owner
 decision 6. Streams with no terminal or removal fact do not expire.
@@ -788,6 +871,10 @@ commits, so a crash restart preserves history order. For each stream:
 
 - Synthesize `run.start` from `meta.json` and the sidecar descriptor, with
   nullish identity where none exists, followed by its normalized history.
+  Convert all database keys and owning-parent keys through C2. Preserve a
+  child's declared parent only when the manifest establishes the exact
+  parent run and its imported `run.start` commit; otherwise import it
+  detached. No legacy parent id alone authorizes future routing.
 - Convert persisted `StreamLogEntry` values into recognized current
   `AgentEvent` arms in file order, as specified by view-state PRD §6. There
   is no `legacy.entry` arm. Read any `spillPath` and inline the full payload
@@ -816,7 +903,8 @@ exactly where they are. The importer moves only the app-state files it has
 imported (`meta`, `config`, `report`, `result-meta`, `turn-state`,
 `child-*`, `todos`, `workspace-files`, `flow_<id>`, `toolOutput/`) into a
 mirror under `pre-sqlite-backup/`. It then verifies the moved files against
-the manifest and imported rows before releasing the claim and admitting
+the manifest and imported rows before releasing all imported aggregate
+claims and the migration claim, then admitting
 normal access. For a crash between a move and its progress commit, the next
 claimant verifies the destination hash and records the completed move. A
 source change, conflicting destination, or unaccounted missing file aborts

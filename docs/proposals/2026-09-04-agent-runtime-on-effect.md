@@ -92,8 +92,11 @@ Findings all refuters agreed on, regardless of design:
 ### 2.1 Rows
 
 Two aggregates per run in the substrate's `event` table, keyed
-`(aggregate_id, seq)` (contract C1), with the execution id as an aggregate
-kind (C2) beside the stream and session ids. The `commit` column (`INTEGER
+`(aggregate_id, seq)` (contract C1). Their storage keys are
+`aggregateId('execution', executionId)` and `aggregateId('stream', streamId)`
+under C2; a logical id alone is never an aggregate key, even if a stream and
+an execution happen to share that id. `RunLedger.load` accepts the logical
+execution id and qualifies its database reads internally. The `commit` column (`INTEGER
 PRIMARY KEY AUTOINCREMENT`) is the database-wide total order; nothing
 relies on the implicit rowid. The split is the one that exists today as two
 files, made explicit:
@@ -249,7 +252,8 @@ for the C9 retention window, the owner's decision 6 in the substrate
 proposal.
 
 Resumability follows single-owner D8: "resumable" is "a `flow.snapshot`
-exists and nobody alive holds the lease", independent of the outcome, so a
+exists and no live owner holds either run aggregate's current claim",
+independent of the outcome, so a
 completed run can be continued; the fold is the same in every case, and
 the viewer steps any run from the same rows.
 
@@ -425,15 +429,16 @@ an explicitly approved new intent supersedes the previous attempt, and only
 a result for the current attempt removes the pending call. Settled results
 remain available under the pending response until its single handler-built
 message batch is delivered, following §2.1. Snapshots retain
-these maps, pending approval decisions, durable phase, and the reference to
+these maps, pending approval decisions, the `pendingRetry` gate below,
+durable phase, and the reference to
 any response still awaiting processing. It runs in
 `RunLedger.load` on resume and in the trace viewer's
 stepper, and nowhere else: there is no `run_state` summary, no projection
 table, and no `executions` table (contract C10). The listing tier reads the
 latest canonical `status` fact through the `(aggregate_id, type, seq)` index,
 including a reservation that fails before any `flow.step` exists, and
-"resumable" means a `flow.snapshot` exists and no live owner holds the
-lease (single-owner D8; the outcome does not enter into it). Because the
+"resumable" means a `flow.snapshot` exists and no live owner holds either
+run aggregate's current claim (single-owner D8; the outcome does not enter into it). Because the
 same function produces the
 state the loop saw when it appended step `k`, "state at step k" and "resume
 would continue after step k" are the same fact. This is the
@@ -446,7 +451,8 @@ row also carries the database-wide `commit` value, exported under the same
 name, and the scrubber keys on that. `StreamLogEntry.seqNo` is
 renumbered on merge and is explicitly not foldable, so it is not the key.
 `RunLedger.load` uses C7's indexed
-`aggregatesAfterCommit([executionId, streamId], snapshot.commit)` for the
+`aggregatesAfterCommit([aggregateId('execution', executionId),
+aggregateId('stream', streamId)], snapshot.commit)` for the
 tail, so it neither confuses the two sequence spaces nor scans unrelated
 runs. A snapshot includes the preceding rows on both aggregates and its
 explicit non-message state; `appendBatch` resolves any reference to an
@@ -460,8 +466,11 @@ coordinates, the tool-call graph, and display-redacted state at step `k`;
 the runtime alone receives byte-exact provider content. Both local display
 and exported documents pass through C3's display redaction.
 
-Resume: `runAgent({kind:'resume'})` acquires the lease first (as today at
-`runAgent.ts:168` and `executeAgent.ts:648`), then `RunLedger.load`. The
+Resume: `runAgent({kind:'resume'})` acquires the current claims for the
+execution and stream aggregates first (C5), then calls `RunLedger.load`.
+Claims come from current aggregate state, never the writer on a historical
+event. It restores the recoverable approval bindings below before retiring
+any stale process-local request. The
 resume rules live in the runtime, not the fold, and read only row data:
 a barrier `tool.intent` without a matching `tool.result` is an explicit
 outcome-unknown state, whether the tool ran, was mid-approval, or never
@@ -501,13 +510,39 @@ Blank-continuation synthetic messages
 (`ToolUseProcessNode.ts:208-275`) are ordinary `model.message` rows and
 fold without special handling.
 
-Manual retry across process death: `ModelInvoker`'s approval loop blocks
-the fiber on `session.interactions.requestRetry`, and a death during the
-prompt loses it. The prompt is therefore an `approval.requested` row
-(one-fold PRD §6 item 1) and the decision an `approval.resolved` row, so a
-resumed run re-asks from the row instead of re-firing the model call. It is
-the same mechanism as the outcome-unknown barrier tool and lands with it
-(§7 item 3).
+Manual retry across process death: `ModelInvoker` currently blocks on
+`session.interactions.requestRetry` (`ModelInvocationNode.ts:554-598`).
+Before presenting that prompt, the ledger atomically commits its
+`approval.requested` and a snapshot containing `pendingRetry`: the request
+id, invocation identity, failed attempt, failed model/compatibility key,
+credential-route requirements without secrets, and a `waiting` recovery
+substate. The family phase can remain `model.ready`; `ModelInvoker` checks
+this gate before any invocation. Absence of a response is not permission
+to retry while the gate is waiting.
+
+Only two approval purposes have a durable recovery binding: `model-retry`
+names that saved invocation/request, and `tool-outcome` names the pending
+response/call/attempt above. Resume validates these bindings against the
+ledger and reconnects each unresolved request's original id to a new
+listener before admitting model or tool activity. The companion's generic
+`approval.resolved { cause: 'interrupted' }` cleanup applies only to
+unrecoverable process-local requests; it must not retire these two kinds.
+A missing or inconsistent recovery binding refuses resume with a diagnostic
+rather than converting the request into consent. Pending requests before a
+snapshot remain reachable through its saved request references.
+
+A retry decision and the snapshot's `authorized` substate commit together;
+denial/cancellation instead commits the resolution and the corresponding
+halt state. Authorization permits exactly one named attempt. Before its
+external invocation, `ModelInvoker` durably consumes that authorization by
+recording `started` for the attempt. A resumed `authorized` attempt can
+consume its unused permit; a `started` attempt without a committed response
+requires a new retry decision and cannot reuse the earlier permit. The
+response row identifies the invocation/attempt and clears the gate when
+folded. Thus a crash before a decision preserves the prompt, one after the
+decision preserves unused consent, and one after consumption cannot launch
+another billed attempt implicitly. These recovery rules land with the
+approval events in PR 2 (§7 item 3).
 
 ### 2.4 Services and layers
 
@@ -529,7 +564,9 @@ region: the loop body runs under `Effect.uninterruptibleMask((restore) =>
 ...)` with only the activity itself under `restore`, so a user stop cannot
 lose a completed model response between completion and its row. Process
 death in that window still re-runs the call, as today; the mask is a fiber
-construct, not crash protection. The append runs inside the publisher's
+construct, not crash protection. A manually authorized retry is the narrow
+exception: its consumed permit requires renewed consent under §2.3.
+The append runs inside the publisher's
 `Semaphore(1)` and `BEGIN IMMEDIATE`, so stop latency is bounded by the
 largest in-flight row on that session root; PR 2 must budget it or move the
 payload write out of the seq-assignment critical section. `linkAbortSignals`,
@@ -538,12 +575,44 @@ delete, together with `RunScope.signal`; its two Promise-tier readers
 (`executeAgent.ts:440`, `AgentRunLifecycle.ts:706`) move onto the fiber's
 exit in the same PR rather than keeping the field alive for them.
 
-Child dispatch: unchanged in shape. Native delegation and workflow-script
-`agent()` re-enter `runAgent`; a child is its own aggregate; the parent's
+Child dispatch: native delegation and workflow-script
+`agent()` re-enter `runAgent`; a child has its own stream and execution
+aggregates, independent of its parent's owning lifecycle (C9). The parent's
 `tool.result` for the delegation call is the launch acknowledgement for
 detached children and the terminal result for in-band ones, exactly as
 today. R4.6's single activity protocol (the script journal moving into the
 event table, `persistence.ts` deleted) is PR 4 and is in scope.
+
+Detachment after parent deletion is reconstructed from durable parent
+state, not just the live registry. `run.start.parentStreamId` and
+`parentStartCommit` record the declared parent and that parent's particular
+`run.start` commit, captured together when the child is registered. Before
+admission, resume, a new child turn after
+WAITING, or parent-directed delivery/approval routing, the runtime resolves
+`aggregateId('stream', parentStreamId)` through C7 `aggregateState` and the
+indexed current `run.start` lookup. A missing or closed parent, or a current
+start commit unequal to `parentStartCommit`, gives **no effective parent**;
+the matching open parent remains the parent even when it has no live owner.
+Missing view residency or an
+unsubscribed transcript is never evidence of deletion. Snapshot fields and
+cached launch options cannot restore a parent that this check removed.
+
+Local deletion and cross-process aggregate-state reconciliation apply the
+existing `activation.detach()`, `handle.detach()`, and approval-ancestry
+detachment to live children. Waiting and persisted children receive the same
+result when their runtime is reconstructed. Their standalone approval policy
+comes from the child's durable `approval.policy` snapshot; routing never
+consults the deleted parent's grants or follow-up queue. Before a parent
+delivery commits, C6 also checks that its target remains open with the same
+`parentStartCommit`; a concurrent
+deletion detaches the child instead of recreating the target. Thus no result,
+approval, or later follow-up can return to a deleted parent merely because
+its immutable launch edge or an old snapshot still names it. The commit
+comparison also prevents a reused logical id from adopting the child after
+retention erased the original parent. It uses the existing non-reused commit
+ordinal, so removing `setParentStream` requires no new detachment event.
+Legacy import retains a parent edge only when the import manifest identifies
+that exact parent run; otherwise the imported child is detached.
 
 ### 2.5 What OpenCode confirms and what it does not
 
