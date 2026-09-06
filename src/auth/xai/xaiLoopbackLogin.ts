@@ -1,27 +1,27 @@
 /**
- * Loopback (browser) sign-in for xAI Grok OAuth — thin wrapper around the
+ * Loopback (browser) sign-in program for xAI Grok OAuth — thin wrapper around the
  * shared {@link loginWithOAuthLoopback}.
  */
+
 import {
   loginWithOAuthLoopback,
   type LoopbackOAuthCoordinator,
 } from '../oauth/loopbackLogin';
 import { XAI_CALLBACK_PATH, XAI_CALLBACK_PORT } from './xaiConstants';
 import { type XaiSession } from './xaiSessionTypes';
+import type { Effect } from 'effect';
 
 export interface XaiLoopbackLoginOptions {
   coordinator: LoopbackOAuthCoordinator<XaiSession>;
   openBrowser: (url: string) => void | Promise<void>;
-  signal?: AbortSignal;
 }
 
-export async function loginWithLoopback(
+export function loginWithLoopback(
   options: XaiLoopbackLoginOptions,
-): Promise<XaiSession> {
+): Effect.Effect<XaiSession, unknown> {
   return loginWithOAuthLoopback({
     coordinator: options.coordinator,
     openBrowser: options.openBrowser,
-    signal: options.signal,
     ports: [XAI_CALLBACK_PORT],
     callbackPath: XAI_CALLBACK_PATH,
     displayName: 'Grok',

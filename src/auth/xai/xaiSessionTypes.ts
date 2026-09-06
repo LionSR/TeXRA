@@ -52,7 +52,6 @@ export const XaiDeviceCodeSchema = z.object({
   expires_in: z.coerce.number().positive().nullish().catch(undefined),
   interval: z.coerce.number().positive().nullish().catch(undefined),
 });
-export type XaiDeviceCode = z.infer<typeof XaiDeviceCodeSchema>;
 
 export class XaiAuthError extends SubscriptionOAuthError {
   constructor(
