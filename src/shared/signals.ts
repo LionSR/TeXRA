@@ -29,7 +29,8 @@ export function toSignal<A>(
   const fiber = runtime.runFork(
     Stream.runForEachArray(changes, (arr) =>
       Effect.sync(() => {
-        s.set(arr.at(-1) as A);
+        const last = arr.at(-1);
+        if (last !== undefined) s.set(last);
       }),
     ),
   );
