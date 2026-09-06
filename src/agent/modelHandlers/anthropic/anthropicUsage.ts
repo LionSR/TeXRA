@@ -73,12 +73,9 @@ function getAnthropicUsageTokenTotals(
 
 /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
 function computeAnthropicPrice(
-  responseUsage: BetaUsage,
+  usageTotals: AnthropicUsageTokenTotals,
   config: AnthropicPricingConfig,
 ): number {
-  // Note: Anthropic doesn't provide tool_use_tokens in their API response
-  const usageTotals = getAnthropicUsageTokenTotals(responseUsage);
-
   // Standard pricing applies across the full context window (no long-context premium).
   const inputPrice = config.inputPrice;
   const outputPrice = config.outputPrice;
@@ -136,37 +133,29 @@ export function normalizeAnthropicUsage(
   responseTimeMs: number,
   config: AnthropicPricingConfig,
 ): NormalizedUsage {
-  return normalizeUsage(
-    {
-      provider: 'anthropic',
-      computePrice: (usage) => computeAnthropicPrice(usage, config),
-      extract: (usage) => {
-        const usageTotals = getAnthropicUsageTokenTotals(usage);
-        // Anthropic bills cache-read and cache-creation tokens separately, so
-        // total input is base + read + creation (matches percentageCached).
-        const totalInput =
-          usageTotals.baseInputTokens +
-          usageTotals.cacheReadTokens +
-          usageTotals.cacheCreationTokens;
+  if (!rawUsage) return normalizeUsage('anthropic', responseTimeMs, null);
 
-        return {
-          inputTokens: totalInput,
-          outputTokens: usageTotals.outputTokens,
-          cachedTokens: usageTotals.cacheReadTokens,
-          cacheCreationTokens: usageTotals.cacheCreationTokens,
-          cachePercentageBasis:
-            usageTotals.cacheReadTokens + usageTotals.cacheCreationTokens,
-          // SDK 0.100.0 reports the thinking-token breakdown of output_tokens,
-          // so Anthropic surfaces reasoning tokens like OpenAI/Google/xAI. This
-          // is a subset of outputTokens (already billed), not an extra charge.
-          reasoningTokens: usage.output_tokens_details?.thinking_tokens ?? 0,
-          serverToolRequests:
-            (usage.server_tool_use?.web_search_requests ?? 0) +
-            (usage.server_tool_use?.web_fetch_requests ?? 0),
-        };
-      },
-    },
+  const usageTotals = getAnthropicUsageTokenTotals(rawUsage);
+  // Anthropic bills cache-read and cache-creation tokens separately, so
+  // total input is base + read + creation (matches percentageCached).
+  const totalInput =
+    usageTotals.baseInputTokens +
+    usageTotals.cacheReadTokens +
+    usageTotals.cacheCreationTokens;
+
+  return normalizeUsage('anthropic', responseTimeMs, {
     rawUsage,
-    responseTimeMs,
-  );
+    inputTokens: totalInput,
+    outputTokens: usageTotals.outputTokens,
+    cachedTokens: usageTotals.cacheReadTokens,
+    cacheCreationTokens: usageTotals.cacheCreationTokens,
+    cachePercentageBasis:
+      usageTotals.cacheReadTokens + usageTotals.cacheCreationTokens,
+    // Thinking tokens are a subset of outputTokens, not an extra charge.
+    reasoningTokens: rawUsage.output_tokens_details?.thinking_tokens ?? 0,
+    serverToolRequests:
+      (rawUsage.server_tool_use?.web_search_requests ?? 0) +
+      (rawUsage.server_tool_use?.web_fetch_requests ?? 0),
+    cost: computeAnthropicPrice(usageTotals, config),
+  });
 }

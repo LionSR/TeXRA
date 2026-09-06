@@ -17,32 +17,6 @@ import {
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { ChatUsage } from '@openrouter/sdk/models';
 
-function toStandardTokens(usage: ChatUsage) {
-  return {
-    inputTokens: usage.promptTokens ?? 0,
-    outputTokens: usage.completionTokens ?? 0,
-    cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
-    reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? 0,
-  };
-}
-
-/**
- * Prefer OpenRouter's billed cost for credit-backed requests. BYOK cost is
- * split between OpenRouter credits and the upstream provider account, so keep
- * the existing static full-inference estimate for that route.
- */
-function computeOpenRouterPrice(
-  responseUsage: ChatUsage | null,
-  config: StandardPricingConfig,
-): number {
-  if (!responseUsage) return 0;
-  if (responseUsage.isByok !== true && responseUsage.cost != null) {
-    return responseUsage.cost;
-  }
-
-  return computeStandardPrice(toStandardTokens(responseUsage), config);
-}
-
 /** Normalizes OpenRouter usage data into a unified format. */
 export function normalizeOpenRouterUsage(
   rawUsage: ChatUsage | null,
@@ -50,13 +24,23 @@ export function normalizeOpenRouterUsage(
   provider: NormalizedUsage['provider'],
   config: StandardPricingConfig,
 ): NormalizedUsage {
-  return normalizeUsage(
-    {
-      provider,
-      computePrice: (usage) => computeOpenRouterPrice(usage, config),
-      extract: (usage) => toStandardTokens(usage),
-    },
+  if (!rawUsage) return normalizeUsage(provider, responseTimeMs, null);
+
+  const tokens = {
+    inputTokens: rawUsage.promptTokens ?? 0,
+    outputTokens: rawUsage.completionTokens ?? 0,
+    cachedTokens: rawUsage.promptTokensDetails?.cachedTokens ?? 0,
+    reasoningTokens: rawUsage.completionTokensDetails?.reasoningTokens ?? 0,
+  };
+  // BYOK splits billing across accounts; retain the full-inference estimate.
+  // Credit-backed requests use the provider's billed cost, including zero.
+  const cost =
+    rawUsage.isByok !== true && rawUsage.cost != null
+      ? rawUsage.cost
+      : computeStandardPrice(tokens, config);
+  return normalizeUsage(provider, responseTimeMs, {
+    ...tokens,
     rawUsage,
-    responseTimeMs,
-  );
+    cost,
+  });
 }
