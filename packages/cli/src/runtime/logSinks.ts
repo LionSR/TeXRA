@@ -12,6 +12,9 @@ import type { LogLevel } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// Local file imports
+import { bestEffortStreamWrite } from './bestEffortStreamWrite';
+
 /**
  * Minimal structured-log primitives. The CLI uses these to format every
  * progress event as either NDJSON or human-readable text on stdout/stderr.
@@ -128,13 +131,15 @@ function writeRaw(key: StreamKey, text: string): void {
   if (!stream) return;
   const runtime = tryProcessRuntime();
   if (!runtime) {
-    try {
-      stream.write(text, (error) => {
-        if (error) closed[key] = true;
-      });
-    } catch {
-      closed[key] = true;
-    }
+    bestEffortStreamWrite(
+      () =>
+        stream.write(text, (error) => {
+          if (error) closed[key] = true;
+        }),
+      () => {
+        closed[key] = true;
+      },
+    );
     return;
   }
   runtime.runSync(guardedStreamWrite(key, stream, text, () => undefined));
@@ -146,15 +151,17 @@ function writeRawAndWait(key: StreamKey, text: string): Promise<void> {
   const runtime = tryProcessRuntime();
   if (!runtime) {
     return new Promise<void>((resolve) => {
-      try {
-        stream.write(text, (error) => {
-          if (error) closed[key] = true;
+      bestEffortStreamWrite(
+        () =>
+          stream.write(text, (error) => {
+            if (error) closed[key] = true;
+            resolve();
+          }),
+        () => {
+          closed[key] = true;
           resolve();
-        });
-      } catch {
-        closed[key] = true;
-        resolve();
-      }
+        },
+      );
     });
   }
   return runtime.runPromise(
@@ -302,11 +309,10 @@ export class NdjsonStdoutSink implements LogSink {
       // platform; post-disposal nothing queues): no lane fiber can be waiting
       // ahead of this record, so a direct write keeps the lane's call order.
       // A synchronous stringify/write throw still closes the sink.
-      try {
-        this.stdout.write(`${JSON.stringify(record)}\n`);
-      } catch {
-        this.closeQueue();
-      }
+      bestEffortStreamWrite(
+        () => this.stdout.write(`${JSON.stringify(record)}\n`),
+        () => this.closeQueue(),
+      );
       return;
     }
     runtime.runFork(withPerKeyLane(sinkLanes, this)(this.writeLine(record)));
