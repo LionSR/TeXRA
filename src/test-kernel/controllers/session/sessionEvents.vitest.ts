@@ -456,7 +456,10 @@ describe('the C1 event table and the C6 publisher', () => {
       Layer.provide(ProcessIdentity.layer(SELF)),
     );
 
-  const olderStart: SessionEventDraft = { ...runStart, aggregateId: OLDER };
+  const olderStart: SessionEventDraft = {
+    ...runStart,
+    aggregateId: qualifyAggregateId('stream', OLDER),
+  };
 
   /** A connection of the kind another host process would open, on the file
    *  name a session root gives its database. */
@@ -479,10 +482,10 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(
           [...first, ...second].map((e) => [e.aggregateId, e.seq, e.commit]),
         ).toEqual([
-          [STREAM, 1, 1],
-          [OLDER, 1, 2],
-          [STREAM, 2, 3],
-          [STREAM, 3, 4],
+          [runStart.aggregateId, 1, 1],
+          [olderStart.aggregateId, 1, 2],
+          [runStart.aggregateId, 2, 3],
+          [runStart.aggregateId, 3, 4],
         ]);
         // The writer is the process, stamped by the layer (C5), and `at` is
         // the layer's own clock: no caller passes either.
@@ -541,7 +544,7 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(observed.events).toEqual([
           {
             commit: 1,
-            aggregateId: STREAM,
+            aggregateId: runStart.aggregateId,
             seq: 1,
             type: 'run.start',
             ownerId: SELF,
@@ -556,7 +559,7 @@ describe('the C1 event table and the C6 publisher', () => {
           },
           {
             commit: 2,
-            aggregateId: OLDER,
+            aggregateId: olderStart.aggregateId,
             seq: 1,
             type: 'run.start',
             ownerId: SELF,
@@ -575,14 +578,14 @@ describe('the C1 event table and the C6 publisher', () => {
         // acquire or takeover under C5 and stage 6 owns it.
         expect(observed.sequences).toEqual([
           {
-            aggregateId: STREAM,
+            aggregateId: runStart.aggregateId,
             seq: 1,
             ownerId: null,
             parentId: null,
             closed: 0,
           },
           {
-            aggregateId: OLDER,
+            aggregateId: olderStart.aggregateId,
             seq: 1,
             ownerId: null,
             parentId: null,
@@ -640,7 +643,7 @@ describe('the C1 event table and the C6 publisher', () => {
           raw.exec('PRAGMA foreign_keys = ON');
           raw
             .prepare('DELETE FROM event_sequence WHERE aggregate_id = ?')
-            .run(STREAM);
+            .run(runStart.aggregateId);
           expect(raw.prepare('SELECT COUNT(*) AS n FROM event').get()?.n).toBe(
             0,
           );
