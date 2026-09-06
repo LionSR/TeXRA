@@ -17,15 +17,14 @@ import {
   type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
+import { completeDeviceSession } from '@auth/oauth/deviceAuthorization';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { openBrowser } from './browser';
 import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
 import {
-  DeviceSignInError,
   pollForDeviceSession,
   requestDeviceAuthorization,
   type DeviceAuthorization,
@@ -156,11 +155,11 @@ interface CliDeviceLoginOptions {
 }
 
 /**
- * Device-code sign-in for headless terminals (SSH, WSL2, containers) where
- * the loopback callback server can't be reached. The user approves a short
- * code from a browser on any device; no callback port is needed here.
- * Interrupting the program (the command's cancellation) stops the poll, and
- * no session is stored.
+ * Device-code sign-in program for headless terminals (SSH, WSL2, containers)
+ * where the loopback callback server can't be reached. The user approves a
+ * short code from a browser on any device; no callback port is needed here.
+ * The command action or slash handler runs it, where its cancellation signal
+ * (if any) becomes fiber interruption.
  */
 export const signInCliSupabaseDeviceCode = Effect.fn(
   'supabaseAuth.signInCliSupabaseDeviceCode',
@@ -171,12 +170,8 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
   const exchange = yield* pollForDeviceSession(authorization);
   // The token endpoint mints a native GoTrue session (auth-github shape), so
   // standard Supabase refresh applies — no custom refresh flag.
-  const session = toStorableSupabaseSession(exchange);
-  yield* Effect.tryPromise({
-    try: () => authCoordinator.storeSession(session),
-    catch: (cause) =>
-      new DeviceSignInError({ message: toErrorMessage(cause), cause }),
-  });
+  const session: SupabaseSession = toStorableSupabaseSession(exchange);
+  yield* completeDeviceSession(() => authCoordinator.storeSession(session));
   return session;
 });
 

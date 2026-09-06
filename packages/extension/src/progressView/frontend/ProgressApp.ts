@@ -85,12 +85,6 @@ type OverflowItem =
   | 'pack'
   | 'clean';
 
-function menuValue(event: Event): string {
-  const item = (event as CustomEvent<{ item?: { value?: unknown } }>).detail
-    ?.item;
-  return typeof item?.value === 'string' ? item.value : '';
-}
-
 @customElement('progress-app')
 export class ProgressApp extends LitElement {
   static override styles = [designTokens, progressAppStyles];
@@ -343,8 +337,12 @@ export class ProgressApp extends LitElement {
     return html`
       <wa-dropdown
         placement="bottom-end"
-        @wa-select=${(event: Event) =>
-          this.handleOverflow(menuValue(event), stream)}
+        @wa-select=${(event: Event) => {
+          const item = (event as CustomEvent<{ item?: { value?: unknown } }>)
+            .detail?.item;
+          const value = typeof item?.value === 'string' ? item.value : '';
+          this.handleOverflow(value, stream);
+        }}
       >
         <wa-button
           slot="trigger"

@@ -81,7 +81,6 @@ import {
   type WorkbenchTab,
   type WorkbenchPlacement,
 } from '../shared/desktopTaskShell';
-import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import { DESKTOP_PAPER_COMMANDS } from '../shared/desktopPaperMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
@@ -191,7 +190,10 @@ function setShell(next: Shell): void {
 // One fold, one surface, and one host snapshot per open paper, on the one
 // webview runtime; the rail, the conversation shell, the palette, and the
 // chrome read those three records and nothing else.
-const paperSessions = createSessionSurfaces({ storage: rendererState });
+const paperSessions = createSessionSurfaces({
+  storage: rendererState,
+  hostRequestFailureOwner: 'host',
+});
 paperSessions.onChange(rerenderShell);
 // A paper whose session has not framed its host snapshot yet is not listed:
 // the rail shows what is known.

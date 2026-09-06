@@ -20,7 +20,10 @@ import {
   type AssistantTextAppendOptions,
   type CreatedMedia,
 } from '@agent/modelHandlers/ModelHandler';
-import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
+import {
+  reportMediaAttachmentFailure,
+  type MediaAttachmentContext,
+} from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { parseToolInputAsObject } from '@agent/core/flows/toolCallParsing';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
@@ -796,6 +799,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   protected override async createMediaMessage(
     mediaFiles: FileLocation[],
+    context: MediaAttachmentContext,
   ): Promise<CreatedMedia<Content>> {
     if (!this.canAttachMedia(mediaFiles)) {
       return { media: [], entries: [] };
@@ -809,30 +813,29 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       return { media: [], entries: [] };
     }
 
-    return this.uploadMediaEntries(entries);
+    return this.uploadMediaEntries(entries, context);
   }
 
   /**
    * Media blocks for the entries (inline when small enough, uploaded
-   * otherwise). Unlike the base template this reports only the entries that
-   * were actually appended, since an upload can drop one.
+   * otherwise). The shared attachment policy reports each failure; returned
+   * entries describe only the media that was successfully attached.
    */
   protected async uploadMediaEntries(
     entries: MediaEntry[],
+    context: MediaAttachmentContext,
   ): Promise<CreatedMedia<Content>> {
-    const insertedEntries: MediaEntry[] = [];
-    const media = await uploadGoogleMediaEntries<Content>(entries, {
+    return uploadGoogleMediaEntries<Content>(entries, {
       getClient: () => this.getClient(),
       inlineLimit: this.getInlineUploadLimitBytes(),
       logger: this.logger,
+      context,
       buildMedia: (source, mimeType) => this.buildMedia(source, mimeType),
       buildLabel: (media, fileName) =>
         this.textMedia(
           `${media.type[0].toUpperCase()}${media.type.slice(1)}: ${fileName}`,
         ),
-      onInsertedEntry: (entry) => insertedEntries.push(entry),
     });
-    return { media, entries: insertedEntries };
   }
 
   // ===========================================================================

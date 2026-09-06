@@ -5,6 +5,7 @@ import {
   InvalidAgentTeamError,
   loadAgents,
 } from '@agent/index';
+import { effectRuntime } from '@platform/processRuntime';
 import { agentKeyOf, CLI_STATE_SETTINGS } from '@shared/schemas';
 import { readSetting } from '@shared/config/settingsAccess';
 import { unique } from '@utils/core';
@@ -22,6 +23,7 @@ import {
 import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeErrorStderr } from '../runtime/logSinks';
+
 import { setWorkspaceCliChatAgent } from '../runtime/cliConfig';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -160,10 +162,14 @@ async function configureAgentRoster(
         `Default chat agent "${input.defaultAgent}" is not in the effective workspace roster. Available agents: ${names || '(none)'}.`,
       );
     }
-    await setWorkspaceCliChatAgent(context.cwd, agentKeyOf(selected));
+    await effectRuntime().runPromise(
+      setWorkspaceCliChatAgent(context.cwd, agentKeyOf(selected)),
+    );
   }
   if (input.clearDefaultAgent) {
-    await setWorkspaceCliChatAgent(context.cwd, undefined);
+    await effectRuntime().runPromise(
+      setWorkspaceCliChatAgent(context.cwd, undefined),
+    );
   }
 
   const record = await readCliAgentRoster();

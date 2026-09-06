@@ -11,13 +11,7 @@ const targetInput = process.env.TEXRA_CLI_RESOURCES_OUTDIR?.trim();
 const target = targetInput
   ? path.resolve(packageDir, targetInput)
   : path.resolve(packageDir, 'dist/resources');
-const runtimeResourceEntries = [
-  'agents',
-  'docs/agent-creation',
-  'goal',
-  'shared',
-  'tool_use_agents',
-];
+const runtimeResourceEntries = ['agents', 'goal', 'shared', 'tool_use_agents'];
 
 // Built (not checked-in) assets: only present once packages/trace-viewer's
 // own build has run (normally guaranteed by this package's own `build`

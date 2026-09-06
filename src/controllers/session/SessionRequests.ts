@@ -61,11 +61,6 @@ export function sessionRequests(
   return { request };
 }
 
-/** The stream a request acts on. */
-function targetStream(req: RuntimeRequest): StreamTabId {
-  return req.kind === 'policy.set' ? req.change.streamId : req.streamId;
-}
-
 /** Existence from the log's sequence table, ownership from the view: no
  *  row is `Unavailable`, held elsewhere is `NotOwner`. A stream the view
  *  has not folded yet is held by nobody this process knows of. A deletion
@@ -76,7 +71,9 @@ function admit(
   log: Pick<Context.Service.Shape<typeof SessionEventLog>, 'exists'>,
   req: RuntimeRequest,
 ): Effect.Effect<void, RequestError> {
-  const streamId = targetStream(req);
+  // The stream a request acts on.
+  const streamId =
+    req.kind === 'policy.set' ? req.change.streamId : req.streamId;
   return Effect.flatMap(
     log.exists(qualifyAggregateId('stream', streamId)),
     (exists): Effect.Effect<void, RequestError> => {

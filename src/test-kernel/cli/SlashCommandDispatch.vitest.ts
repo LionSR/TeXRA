@@ -1,6 +1,8 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect } from 'effect';
+
 // Slash command execution dispatch.
 
 import {
@@ -258,23 +260,24 @@ function workPlanSnapshots(
 }
 
 /** A sign-in mock whose promise rejects when its abort signal fires. */
-function abortRejection(): {
-  mock: (options: { signal?: AbortSignal }) => Promise<never>;
-  receivedSignal: () => AbortSignal | undefined;
+/**
+ * A sign-in program that never completes on its own and records whether the
+ * slash handler's cancellation reached it as fiber interruption.
+ */
+function interruptibleProgram(): {
+  program: Effect.Effect<never>;
+  interrupted: () => boolean;
 } {
-  let receivedSignal: AbortSignal | undefined;
+  let interrupted = false;
   return {
-    receivedSignal: () => receivedSignal,
-    mock: (options) => {
-      receivedSignal = options.signal;
-      return new Promise((_resolve, reject) => {
-        options.signal?.addEventListener(
-          'abort',
-          () => reject(options.signal?.reason),
-          { once: true },
-        );
-      });
-    },
+    interrupted: () => interrupted,
+    program: Effect.never.pipe(
+      Effect.onInterrupt(() =>
+        Effect.sync(() => {
+          interrupted = true;
+        }),
+      ),
+    ),
   };
 }
 
@@ -572,12 +575,16 @@ describe('handleTuiSlashCommand', () => {
   );
 
   it('opens memory list and preview output in the reference pane', async () => {
-    vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockResolvedValue([]);
-    vi.spyOn(memoryFileSystem, 'loadMemoryPreview').mockResolvedValue({
-      storagePath: 'memory/note.md',
-      lineCount: 1,
-      preview: 'Remember this.',
-    });
+    vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockReturnValue(
+      Effect.succeed([]),
+    );
+    vi.spyOn(memoryFileSystem, 'loadMemoryPreview').mockReturnValue(
+      Effect.succeed({
+        storagePath: 'memory/note.md',
+        lineCount: 1,
+        preview: 'Remember this.',
+      }),
+    );
 
     await showCliMemoryList();
     expect(infoPane.get()).toEqual({
@@ -754,11 +761,13 @@ describe('handleTuiSlashCommand', () => {
   it('uses ChatGPT device-code login from a likely remote shell', async () => {
     registerBuiltinSlashCommands();
     vi.stubEnv('SSH_TTY', '/dev/pts/3');
-    vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockResolvedValue({
-      signedIn: true,
-      email: 'person@example.com',
-      label: 'person@example.com',
-    });
+    vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockReturnValue(
+      Effect.succeed({
+        signedIn: true,
+        email: 'person@example.com',
+        label: 'person@example.com',
+      }),
+    );
     vi.spyOn(codexPreference, 'setPreferCodexSubscription').mockResolvedValue({
       effective: true,
       target: 'global',
@@ -778,9 +787,9 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('exposes cancellation for an interactive sign-in', async () => {
-    const abort = abortRejection();
-    vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockImplementation(
-      (_provider, _args, options) => abort.mock(options),
+    const signIn = interruptibleProgram();
+    vi.spyOn(subscriptionLogin, 'signInCliSubscription').mockReturnValue(
+      signIn.program,
     );
 
     const completion = loginFromChat(
@@ -788,13 +797,11 @@ describe('handleTuiSlashCommand', () => {
       createCliContext(),
       silentOutput(),
     );
-    const rejection = expect(completion).rejects.toMatchObject({
-      name: 'AbortError',
-    });
+    const rejection = expect(completion).rejects.toThrow(/interrupted/);
     completion.abort();
 
     await rejection;
-    expect(abort.receivedSignal()?.aborted).toBe(true);
+    expect(signIn.interrupted()).toBe(true);
   });
 
   it('derives /auth and /api status from the same access overview', async () => {
@@ -834,12 +841,9 @@ describe('handleTuiSlashCommand', () => {
   });
 
   it('exposes cancellation while model access is signing in to ChatGPT', async () => {
-    const abort = abortRejection();
-    vi.spyOn(modelAccessSelection, 'updateCliModelAccess').mockImplementation(
-      (_context, _selection, options) => {
-        if (!options) throw new Error('Expected selection options');
-        return abort.mock(options);
-      },
+    const update = interruptibleProgram();
+    vi.spyOn(modelAccessSelection, 'updateCliModelAccess').mockReturnValue(
+      update.program,
     );
     const completion = applyCliModelAccessSelection(
       {
@@ -850,14 +854,12 @@ describe('handleTuiSlashCommand', () => {
       createContext(),
       silentOutput(),
     );
-    const rejection = expect(completion).rejects.toMatchObject({
-      name: 'AbortError',
-    });
+    const rejection = expect(completion).rejects.toThrow(/interrupted/);
 
     completion.abort();
 
     await rejection;
-    expect(abort.receivedSignal()?.aborted).toBe(true);
+    expect(update.interrupted()).toBe(true);
   });
 
   it('clears TeXRA and ChatGPT credentials on /logout', async () => {

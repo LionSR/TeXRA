@@ -1,10 +1,8 @@
 import { Cause, Exit } from 'effect';
 
 import type { SupabaseSession } from '@auth/SupabaseSession';
-import {
-  refreshSubscriptionPreferenceViews,
-  setCliSubscriptionPreference,
-} from '@cli/chat/tui/state/subscriptionPreference';
+import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
+import { setCliSubscriptionPreference } from '@cli/chat/tui/state/subscriptionPreference';
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
@@ -96,11 +94,13 @@ async function loginToSubscription(
   output: SlashCommandOutput,
   signal: AbortSignal,
 ): Promise<void> {
-  const account = await signInCliSubscription(providerId, args, {
-    writeProgress: (message) =>
-      output.writeProgress(message, { copyable: true }),
-    signal,
-  });
+  const account = await effectRuntime().runPromise(
+    signInCliSubscription(providerId, args, {
+      writeProgress: (message) =>
+        output.writeProgress(message, { copyable: true }),
+    }),
+    { signal },
+  );
   const update = await setCliSubscriptionPreference(providerId, true);
   const auth = SUBSCRIPTION_AUTH_COPY[providerId];
   output.appendOutcome(
@@ -222,7 +222,7 @@ export async function logoutFromChat(
   ): Promise<void> {
     try {
       const update = await signOutCliSubscription(providerId);
-      refreshSubscriptionPreferenceViews();
+      bumpCodexPreferenceVersion();
       lines.push(ACCOUNT_OUTCOME.signedOut(label));
       lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
     } catch (error: unknown) {

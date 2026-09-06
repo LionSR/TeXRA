@@ -18,6 +18,7 @@ import {
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import type { ConfigProvider } from '@platform/interfaces';
+import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -351,10 +352,12 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       (provider, error) =>
         `${provider.displayName} sign-in failed: ${toErrorMessage(error)}`,
       async (provider) => {
-        const account = await provider.signIn({
-          transport: 'auto',
-          present: this.signInPresenter(provider.displayName),
-        });
+        const account = await effectRuntime().runPromise(
+          provider.signIn({
+            transport: 'auto',
+            present: this.signInPresenter(provider.displayName),
+          }),
+        );
         await provider.setPreferSubscription(true);
         await this.options.notifications.showInfoMessage(
           ACCOUNT_OUTCOME.signedInAs(provider.displayName, account.label),

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { loginWithLoopback } from '@auth/codex';
@@ -32,32 +33,42 @@ function coordinatorStub(
   } as unknown as CodexSessionCoordinator;
 }
 
+/** Run the program as a host does: once, with the host's signal. */
+function runLogin(
+  options: Parameters<typeof loginWithLoopback>[0],
+  signal?: AbortSignal,
+): Promise<CodexSession> {
+  return Effect.runPromise(loginWithLoopback(options), { signal });
+}
+
 describe('Codex loopback login', () => {
   it('closes the callback wait when its host cancels', async () => {
     const controller = new AbortController();
-    const completion = loginWithLoopback({
-      coordinator: coordinatorStub(),
-      openBrowser: () => controller.abort(),
-      signal: controller.signal,
-    });
+    const completion = runLogin(
+      {
+        coordinator: coordinatorStub(),
+        openBrowser: () => controller.abort(),
+      },
+      controller.signal,
+    );
 
-    await expect(completion).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(completion).rejects.toThrow(/interrupted/);
   });
 
   it('settles cancellation while the browser launcher remains pending', async () => {
     const controller = new AbortController();
     let finishBrowserLaunch!: () => void;
-    const completion = loginWithLoopback({
-      coordinator: coordinatorStub(),
-      openBrowser: () =>
-        new Promise<void>((resolve) => {
-          finishBrowserLaunch = resolve;
-        }),
-      signal: controller.signal,
-    });
-    const rejection = expect(completion).rejects.toMatchObject({
-      name: 'AbortError',
-    });
+    const completion = runLogin(
+      {
+        coordinator: coordinatorStub(),
+        openBrowser: () =>
+          new Promise<void>((resolve) => {
+            finishBrowserLaunch = resolve;
+          }),
+      },
+      controller.signal,
+    );
+    const rejection = expect(completion).rejects.toThrow(/interrupted/);
 
     controller.abort();
 
@@ -68,27 +79,31 @@ describe('Codex loopback login', () => {
   it('does not exchange a code when cancellation follows its callback', async () => {
     const controller = new AbortController();
     let request!: SubscriptionAuthorizeRequest;
-    const completeLoginWithCode = vi.fn();
-    const completion = loginWithLoopback({
-      coordinator: coordinatorStub({
-        buildAuthorizeRequest: (port: number): SubscriptionAuthorizeRequest => {
-          request = loopbackRequest(port);
-          return request;
+    const loginWithCode = vi.fn();
+    const completion = runLogin(
+      {
+        coordinator: coordinatorStub({
+          buildAuthorizeRequest: (
+            port: number,
+          ): SubscriptionAuthorizeRequest => {
+            request = loopbackRequest(port);
+            return request;
+          },
+          loginWithCode,
+        }),
+        openBrowser: async () => {
+          const callback = new URL(request.redirectUri);
+          callback.searchParams.set('state', request.state);
+          callback.searchParams.set('code', 'authorization-code');
+          await fetch(callback);
+          controller.abort();
         },
-        completeLoginWithCode,
-      }),
-      openBrowser: async () => {
-        const callback = new URL(request.redirectUri);
-        callback.searchParams.set('state', request.state);
-        callback.searchParams.set('code', 'authorization-code');
-        await fetch(callback);
-        controller.abort();
       },
-      signal: controller.signal,
-    });
+      controller.signal,
+    );
 
-    await expect(completion).rejects.toMatchObject({ name: 'AbortError' });
-    expect(completeLoginWithCode).not.toHaveBeenCalled();
+    await expect(completion).rejects.toThrow(/interrupted/);
+    expect(loginWithCode).not.toHaveBeenCalled();
   });
 
   it('ignores stale callback errors and accepts a later valid callback', async () => {
@@ -96,7 +111,7 @@ describe('Codex loopback login', () => {
     const verifier = 'verifier';
     const expectedSession = testSession();
     let request!: SubscriptionAuthorizeRequest;
-    const completeLoginWithCode = vi.fn(async () => expectedSession);
+    const loginWithCode = vi.fn(() => Effect.succeed(expectedSession));
     const coordinator = coordinatorStub({
       buildAuthorizeRequest: (port: number): SubscriptionAuthorizeRequest => {
         const redirectUri = `http://localhost:${port}${CODEX_CALLBACK_PATH}`;
@@ -111,10 +126,10 @@ describe('Codex loopback login', () => {
         };
         return request;
       },
-      completeLoginWithCode,
+      loginWithCode,
     });
 
-    const session = await loginWithLoopback({
+    const session = await runLogin({
       coordinator,
       openBrowser: async () => {
         const callback = new URL(request.redirectUri);
@@ -135,7 +150,7 @@ describe('Codex loopback login', () => {
     });
 
     expect(session).toEqual(expectedSession);
-    expect(completeLoginWithCode).toHaveBeenCalledWith({
+    expect(loginWithCode).toHaveBeenCalledWith({
       code: 'valid-code',
       verifier,
       redirectUri: request.redirectUri,

@@ -1,10 +1,12 @@
 // Suites for the annotation-page budget path of @tools/github
 // (PRPollingSource pagination + AnnotationFetchBudget token bucket).
 
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
+import type { PollHookRejected } from '@tools/github/PollingSourceBase';
 import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
 import { mockGitHubClient } from '../support/githubClientMock';
 import {
@@ -20,7 +22,7 @@ interface AnnotationDrainSource {
   drainAnnotationQueues(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now?: number,
-  ): Promise<void>;
+  ): Effect.Effect<void, PollHookRejected>;
   has(key: string): boolean;
 }
 
@@ -179,7 +181,9 @@ describe('PRPollingSource annotation pagination', () => {
     const runs = [checkRun(7), checkRun(8)];
     const state = drainState(runs);
 
-    await source.drainAnnotationQueues([['owner/repo#7', state]]);
+    await Effect.runPromise(
+      source.drainAnnotationQueues([['owner/repo#7', state]]),
+    );
 
     expect(ghGet).not.toHaveBeenCalled();
     expect(state.currentShaState?.pendingAnnotationRuns).toEqual(runs);

@@ -10,6 +10,7 @@ import {
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
@@ -84,12 +85,14 @@ export async function signInWithSubscription(
         cancellable: false,
       },
       () =>
-        provider.signIn({
-          // Remote windows cannot reach the extension host's loopback port
-          // from the user's local browser.
-          transport: vscode.env.remoteName ? 'device' : 'loopback',
-          present: vscodePresenter(provider),
-        }),
+        effectRuntime().runPromise(
+          provider.signIn({
+            // Remote windows cannot reach the extension host's loopback port
+            // from the user's local browser.
+            transport: vscode.env.remoteName ? 'device' : 'loopback',
+            present: vscodePresenter(provider),
+          }),
+        ),
     );
   } catch (error) {
     if (error instanceof SubscriptionSignInCancelled) {

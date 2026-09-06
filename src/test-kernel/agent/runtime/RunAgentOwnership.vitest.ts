@@ -35,7 +35,15 @@ import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent } from '@agent/runtime/runAgent';
 import { getStreamTabId } from '@agent/runtime/streamTab';
+import {
+  agentErrorPresentation,
+  classifyAgentError,
+  primaryAgentError,
+} from '@common/errors/agentErrorClassification';
+import { AgentError } from '@common/errors/agentErrors';
+import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const EXECUTION_ID = 'run-agent-owner' as ExecutionId;
 const CONFIG = AgentConfigSchema.parse({
@@ -336,29 +344,72 @@ describe('runAgent execution ownership', () => {
     expect(mocks.releaseOwnedExecutionLease).not.toHaveBeenCalled();
   });
 
-  it('preserves run and final-artifact failures before releasing ownership', async () => {
-    const runError = new Error('run failed');
-    const artifactError = new Error('transcript flush failed');
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRun?.();
-      throw runError;
-    });
+  it.each(['missing-api-key', 'context-window', 'unexpected'] as const)(
+    'preserves the %s run failure and cleanup diagnostics before releasing ownership',
+    async (kind) => {
+      const primaryError = new Error(
+        kind === 'context-window'
+          ? 'maximum context length is 128000'
+          : 'run failed',
+      );
+      if (kind === 'missing-api-key') attachMissingApiKeyError(primaryError);
+      const runError = new AgentError(primaryError.message, {
+        cause: primaryError,
+      });
+      const artifactError = Object.assign(
+        new Error('transcript flush failed'),
+        {
+          code: 'ENOSPC',
+        },
+      );
+      const finalizationError = new Error('terminal status write failed');
+      const lifecycleStarted = kind !== 'context-window';
+      if (!lifecycleStarted) {
+        mocks.finalizeRun.mockResolvedValueOnce({
+          ok: false,
+          error: finalizationError,
+        });
+      }
+      mocks.executeAgent.mockImplementationOnce(
+        async (_config, _id, options) => {
+          if (lifecycleStarted) await options.onRun?.();
+          throw runError;
+        },
+      );
 
-    const failure = await launch({
-      kind: 'fresh',
-      beforeLeaseRelease: async () => {
-        throw artifactError;
-      },
-    }).catch((error: unknown) => error);
+      const failure = await launch({
+        kind: 'fresh',
+        beforeLeaseRelease: async () => {
+          throw artifactError;
+        },
+      }).catch((error: unknown) => error);
 
-    expect(failure).toBeInstanceOf(AggregateError);
-    expect((failure as AggregateError).errors).toEqual([
-      runError,
-      artifactError,
-    ]);
-    // A failed host hook never changes ownership: the one drain still runs
-    // and releases the lease.
-    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(EXECUTION_ID);
-    expect(flushArtifacts).toHaveBeenCalledOnce();
-  });
+      expect(failure).toBeInstanceOf(AggregateError);
+      expect((failure as AggregateError).errors).toEqual([
+        lifecycleStarted
+          ? runError
+          : expect.objectContaining({ errors: [runError, finalizationError] }),
+        artifactError,
+      ]);
+      expect(classifyAgentError(failure)).toBe(kind);
+      const primary = primaryAgentError(failure);
+      expect(primary).toBe(runError);
+      expect(
+        agentErrorPresentation({
+          kind: classifyAgentError(primary),
+          message: toErrorMessage(primary),
+        }),
+      ).toMatchObject(
+        kind === 'missing-api-key'
+          ? { type: 'instruction', payload: { key: 'missingApiKey' } }
+          : { type: 'error', payload: { message: primaryError.message } },
+      );
+      // A failed host hook never changes ownership: the one drain still runs
+      // and releases the lease.
+      expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
+        EXECUTION_ID,
+      );
+      expect(flushArtifacts).toHaveBeenCalledOnce();
+    },
+  );
 });

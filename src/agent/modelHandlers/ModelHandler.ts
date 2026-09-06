@@ -48,7 +48,6 @@ import type {
   TokenValidationResult,
 } from '@agent/types/ModelHandlerContracts';
 import { createNeutralResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
-import { supportsReasoningLevel } from '@agent/modelHandlers/support/reasoningEffort';
 import type { ServerToolExtractionResult } from '@agent/types/ServerTools';
 import {
   attachContextWindowError,
@@ -61,6 +60,7 @@ import {
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { attachSdkCredentialRoute } from '@common/errors/sdkError/sdkRequestEndpoint';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { supportsReasoningLevel } from '@model/reasoningLevel';
 import {
   resolveDirectModelApiKeyProvider,
   resolveModelSource,
@@ -904,6 +904,7 @@ export abstract class ModelHandler<
    */
   protected async createMediaMessage(
     mediaFiles: FileLocation[],
+    _context: MediaAttachmentContext,
   ): Promise<CreatedMedia<Media>> {
     const { entries, results } =
       await this.mediaProcessor.loadEntries(mediaFiles);
@@ -936,7 +937,10 @@ export abstract class ModelHandler<
   ): Promise<Media[]> {
     this.insertedAttachmentKinds.set(context, []);
     try {
-      const { media, entries } = await this.createMediaMessage(mediaFiles);
+      const { media, entries } = await this.createMediaMessage(
+        mediaFiles,
+        context,
+      );
       if (media.length > 0) {
         this.insertedAttachmentKinds.set(
           context,

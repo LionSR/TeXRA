@@ -62,7 +62,6 @@ export function deriveDesktopPaths(rootPaths) {
 // Aliases that the declaration-only agent build cannot resolve because its
 // include is intentionally limited to packages/agent/src and root src/types.
 export const BUILD_EXCLUDED_ALIASES = [
-  'vscode-jsonrpc/node',
   '@common/state/*',
   '@common/webview',
   '@common/webview/*',

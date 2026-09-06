@@ -1178,9 +1178,13 @@ describe('createChatSessionController', () => {
       },
     });
     installResumeExecutionStore(config);
-    const ctrl = createChatSessionController(makeInit());
+    const session = makeSession();
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore: makeResumeSnapshotStore({ config }) }),
+    );
 
     await ctrl.resume('exec-resume' as ExecutionId);
+    await session.runPromise;
 
     expect(sessionMeta.get()).toMatchObject({
       teamName: 'Physicist',
@@ -1189,30 +1193,44 @@ describe('createChatSessionController', () => {
     });
   });
 
-  // A history row is advertised from its checkpoint file alone, so a run whose
-  // saved state cannot be loaded is offered and refused. The refusal has to
-  // reach the chat the user is looking at: clearing the transcript and
-  // switching the session onto the dead stream first would answer in a window
-  // that no longer holds their conversation.
-  it('refuses an unloadable checkpoint without clearing the chat or switching streams', async () => {
-    const session = makeSession();
-    // A refusal `resumeRun` reaches before its own retrieval yields resume
-    // state: the adoption hook is never called, so nothing here rearranged.
-    mocks.resumeRun.mockResolvedValueOnce({ failed: 'unusable_checkpoint' });
-    const ctrl = createChatSessionController(makeInit({ session }));
+  it.each(['unusable_checkpoint', 'owned_elsewhere'] as const)(
+    'refuses %s without changing the visible conversation or its configuration',
+    async (failure) => {
+      const session = makeSession();
+      patchSessionMeta({
+        agent: 'current-agent',
+        model: 'current-model',
+        modelSource: 'explicit-override',
+        teamName: 'Mathematician',
+        cliMultiAgentPresetId: 'mathematician',
+        delegationAgentScope: {
+          workflow: ['custom:current'],
+          toolUse: ['custom:current'],
+        },
+      });
+      const previousMetadata = sessionMeta.get();
+      installResumeExecutionStore(
+        makeResumeConfig({ cli: { multiAgentPresetId: 'physicist' } }),
+      );
+      // Both runtime refusals precede the hook that adopts the target run.
+      mocks.resumeRun.mockResolvedValueOnce({ failed: failure });
+      const ctrl = createChatSessionController(makeInit({ session }));
 
-    await ctrl.resume('exec-resume' as ExecutionId);
-    await session.runPromise;
+      await ctrl.resume('exec-resume' as ExecutionId);
+      await session.runPromise;
 
-    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
-      describeFollowUpFailure('unusable_checkpoint'),
-    );
-    expect(mocks.clearLocalTranscript).not.toHaveBeenCalled();
-    expect(session.streamId).toBeUndefined();
-    expect(session.executionId).toBeUndefined();
-    expect(rootStreamId.get()).toBeUndefined();
-    expect(session.runCompleted).toBe(true);
-  });
+      expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+        describeFollowUpFailure(failure),
+      );
+      expect(sessionMeta.get()).toEqual(previousMetadata);
+      expect(mocks.setCliHelperModel).not.toHaveBeenCalled();
+      expect(mocks.clearLocalTranscript).not.toHaveBeenCalled();
+      expect(session.streamId).toBeUndefined();
+      expect(session.executionId).toBeUndefined();
+      expect(rootStreamId.get()).toBeUndefined();
+      expect(session.runCompleted).toBe(true);
+    },
+  );
 
   it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
     const session = makeSession({ runCompleted: true });
@@ -1250,6 +1268,7 @@ describe('createChatSessionController', () => {
     );
 
     await ctrl.resume('aaaaaa' as ExecutionId);
+    await session.runPromise;
 
     expect(session.streamId).toBe('stream-resume');
     expect(session.interruptedStreamId).toBeUndefined();
@@ -1478,12 +1497,15 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => ({
-        ...STARTED,
-        outcome: options.isCancellationRequested?.()
-          ? RUN_OUTCOME.CANCELLED
-          : RUN_OUTCOME.COMPLETED,
-      }),
+      async (_id: ExecutionId, options: ResumeRunOptions) => {
+        await options.onResumeResolved?.();
+        return {
+          ...STARTED,
+          outcome: options.isCancellationRequested?.()
+            ? RUN_OUTCOME.CANCELLED
+            : RUN_OUTCOME.COMPLETED,
+        };
+      },
     );
 
     const resumeStarted = ctrl.resume('aaaaaa' as ExecutionId);

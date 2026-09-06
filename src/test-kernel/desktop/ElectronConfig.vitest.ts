@@ -2,6 +2,7 @@
 import { join } from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
@@ -25,9 +26,11 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       loadSourceModule('@platform/defaults/jsonConfigProvider'),
     ]);
     const tempDir = await makeTempDir('texra-electron-config-', tempDirs);
-    const globalStore = await JsonStore.open(join(tempDir, 'global.json'));
-    const workspaceStore = await JsonStore.open(
-      join(tempDir, 'workspace.json'),
+    const [globalStore, workspaceStore] = await Effect.runPromise(
+      Effect.all([
+        JsonStore.open(join(tempDir, 'global.json')),
+        JsonStore.open(join(tempDir, 'workspace.json')),
+      ]),
     );
     return {
       provider: new JsonConfigProvider({
@@ -41,8 +44,10 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
 
   it('lets workspace values override global values', async () => {
     const { provider, globalStore, workspaceStore } = await createProvider();
-    await globalStore.set('texra.files.exclude', ['dist']);
-    await workspaceStore.set('texra.files.exclude', ['node_modules']);
+    await Effect.runPromise(globalStore.set('texra.files.exclude', ['dist']));
+    await Effect.runPromise(
+      workspaceStore.set('texra.files.exclude', ['node_modules']),
+    );
 
     expect(provider.get('files.exclude', [])).toEqual(['node_modules']);
     expect(provider.inspect('files.exclude')).toEqual({
@@ -53,7 +58,9 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
 
   it('updates existing canonical keys', async () => {
     const { provider, workspaceStore } = await createProvider();
-    await workspaceStore.set('texra.files.exclude', ['dist']);
+    await Effect.runPromise(
+      workspaceStore.set('texra.files.exclude', ['dist']),
+    );
 
     await provider.update('files.exclude', ['node_modules']);
 
@@ -76,7 +83,9 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
 
   it('clears the stored value when a config value is unset', async () => {
     const { provider, workspaceStore } = await createProvider();
-    await workspaceStore.set('texra.files.exclude', ['node_modules']);
+    await Effect.runPromise(
+      workspaceStore.set('texra.files.exclude', ['node_modules']),
+    );
 
     await provider.update('files.exclude', undefined);
 

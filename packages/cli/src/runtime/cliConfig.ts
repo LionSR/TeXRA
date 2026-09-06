@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { z } from 'zod';
 
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -412,23 +412,24 @@ export async function loadUserApprovalPolicy(
  * Nested command defaults remain a JSON object under the canonical
  * `texra.chat` key.
  */
-export async function setWorkspaceCliChatAgent(
-  cwd: string,
-  agent: string | undefined,
-): Promise<void> {
+export const setWorkspaceCliChatAgent = Effect.fn(
+  'cliConfig.setWorkspaceCliChatAgent',
+)(function* (cwd: string, agent: string | undefined) {
   const trimmed = agent?.trim();
   if (agent !== undefined && !trimmed) {
-    throw new Error('The default chat agent must not be empty.');
+    return yield* Effect.fail(
+      new Error('The default chat agent must not be empty.'),
+    );
   }
-  const store = await JsonStore.open(workspaceTexraConfigPath(cwd));
+  const store = yield* JsonStore.open(workspaceTexraConfigPath(cwd));
   const snapshot = store.snapshot();
   const sectionKey = canonicalConfigKey('chat');
   const existing = isObject(snapshot[sectionKey]) ? snapshot[sectionKey] : {};
   const next = { ...existing };
   if (trimmed) next.agent = trimmed;
   else delete next.agent;
-  await store.set(sectionKey, Object.keys(next).length > 0 ? next : undefined);
-}
+  yield* store.set(sectionKey, Object.keys(next).length > 0 ? next : undefined);
+});
 
 export function resolveConfiguredAgent(
   config: CliConfigValues | undefined,

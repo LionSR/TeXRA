@@ -1,9 +1,11 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports - tools
 import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
 import type { GhCheckRun, GhPullRequest } from '@tools/github/prTypes';
+import type { PollHookRejected } from '@tools/github/PollingSourceBase';
 
 // Local imports - test support
 import { mockGitHubClient } from '../support/githubClientMock';
@@ -13,7 +15,10 @@ import {
 } from '../support/prPollingSourceState';
 
 interface CiStartedSource {
-  pollOne(key: string, state: PRSubscriptionState): Promise<void>;
+  pollOne(
+    key: string,
+    state: PRSubscriptionState,
+  ): Effect.Effect<void, PollHookRejected>;
 }
 
 const SHA = 'abcdef1234567890';
@@ -118,7 +123,7 @@ describe('PRPollingSource CI-started events', () => {
 
     queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
 
-    await source.pollOne('owner/repo/pulls/7', state);
+    await Effect.runPromise(source.pollOne('owner/repo/pulls/7', state));
 
     expect(events).toEqual([]);
     expect(state.currentShaState?.sha).toBe(SHA);
@@ -133,7 +138,7 @@ describe('PRPollingSource CI-started events', () => {
 
     queuePollResponses(ghGet, SHA, runs);
 
-    await source.pollOne('owner/repo/pulls/7', state);
+    await Effect.runPromise(source.pollOne('owner/repo/pulls/7', state));
 
     expect(events).toHaveLength(1);
     expect(events[0]).toContain('CI triggered');
@@ -143,7 +148,7 @@ describe('PRPollingSource CI-started events', () => {
 
     queuePollResponses(ghGet, SHA, runs);
 
-    await source.pollOne('owner/repo/pulls/7', state);
+    await Effect.runPromise(source.pollOne('owner/repo/pulls/7', state));
 
     expect(events).toHaveLength(1);
   });
@@ -157,7 +162,7 @@ describe('PRPollingSource CI-started events', () => {
 
     queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
 
-    await source.pollOne('owner/repo/pulls/7', state);
+    await Effect.runPromise(source.pollOne('owner/repo/pulls/7', state));
 
     expect(events).toHaveLength(1);
     expect(events[0]).toContain('(head abcdef1)');

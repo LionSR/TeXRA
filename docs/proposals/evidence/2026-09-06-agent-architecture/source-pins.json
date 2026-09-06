@@ -1,0 +1,38 @@
+{
+  "inspectedOn": "2026-09-06",
+  "texra": {
+    "repository": "LionSR/TeXRA",
+    "commit": "cc22843af3fa7d8457b6899266a6e04bf15067e9"
+  },
+  "references": [
+    {
+      "repository": "danieljvdm/effect-agent",
+      "branch": "main",
+      "commit": "bedf7f8f016a50724390f436939488cf348a5400",
+      "commitDate": "2026-09-06T04:33:30Z",
+      "cloneDirectory": "clone-effect-agent"
+    },
+    {
+      "repository": "anomalyco/opencode",
+      "branch": "dev",
+      "commit": "337fd144d2ba144743368f78d9579a99cce175bd",
+      "commitDate": "2026-09-06T04:32:46Z",
+      "cloneDirectory": "clone-opencode"
+    },
+    {
+      "repository": "earendil-works/pi",
+      "branch": "main",
+      "commit": "9767ba275f3e9a5ee0f5c5342249b629ab1b2282",
+      "commitDate": "2026-09-05T22:30:17Z",
+      "cloneDirectory": "clone-pi"
+    },
+    {
+      "repository": "Effect-TS/effect",
+      "branch": "main",
+      "commit": "77f85fe1613348f5c990016b49dc97e252576c82",
+      "commitDate": "2026-09-06T09:01:30Z",
+      "cloneDirectory": "clone-effect"
+    }
+  ],
+  "scope": "Latest pinned design and source; drafts explicitly distinguished from implementation. Reference packages are not proposed dependencies."
+}

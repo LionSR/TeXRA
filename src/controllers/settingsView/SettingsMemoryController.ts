@@ -1,3 +1,5 @@
+import { Data, Effect } from 'effect';
+
 import type { PromptHost } from '@hosts/uiHosts';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -6,6 +8,7 @@ import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';
 import {
   loadMemoryItems,
   loadMemoryPreview,
+  MemoryFileUnwritable,
   setMemoryPinned,
 } from '@tools/memory/memoryFileSystem';
 import { StorageFS } from '@utils/files/storageFS';
@@ -13,6 +16,11 @@ import { StorageFS } from '@utils/files/storageFS';
 interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;
 }
+
+/** A host prompt (the delete confirmation, the pin-cap warning) rejected. */
+class MemoryPromptFailed extends Data.TaggedError('MemoryPromptFailed')<{
+  readonly cause: unknown;
+}> {}
 
 type SettingsMemoryMessage =
   | {
@@ -27,22 +35,26 @@ type SettingsMemoryMessage =
 export class SettingsMemoryController {
   constructor(private readonly deps: SettingsMemoryControllerDeps) {}
 
-  async getMemoryDataMessage(): Promise<SettingsMemoryMessage> {
+  readonly getMemoryDataMessage = Effect.fn(
+    'SettingsMemoryController.getMemoryDataMessage',
+  )(function* () {
+    const items = yield* loadMemoryItems();
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
-      items: await loadMemoryItems(),
-    };
-  }
+      items,
+    } satisfies SettingsMemoryMessage;
+  });
 
-  async getMemoryPreviewMessage(
-    storagePath: string,
-  ): Promise<SettingsMemoryMessage> {
+  readonly getMemoryPreviewMessage = Effect.fn(
+    'SettingsMemoryController.getMemoryPreviewMessage',
+  )(function* (storagePath: string) {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
+    const preview = yield* loadMemoryPreview(resolvedPath);
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
-      preview: await loadMemoryPreview(resolvedPath),
-    };
-  }
+      preview,
+    } satisfies SettingsMemoryMessage;
+  });
 
   getMemoryPreviewErrorMessage(storagePath: string): SettingsMemoryMessage {
     return {
@@ -54,37 +66,49 @@ export class SettingsMemoryController {
     };
   }
 
-  async deleteMemory(input: {
-    storagePath: string;
-    displayPath: string;
-  }): Promise<SettingsMemoryMessage | null> {
-    const confirmed = await this.deps.prompt.confirm(
-      `Delete "${input.displayPath}"?`,
-      {
-        modal: true,
-        confirmLabel: 'Delete',
-      },
-    );
-    if (!confirmed) return null;
+  readonly deleteMemory = Effect.fn('SettingsMemoryController.deleteMemory')(
+    function* (
+      this: SettingsMemoryController,
+      input: { storagePath: string; displayPath: string },
+    ) {
+      const confirmed = yield* Effect.tryPromise({
+        try: () =>
+          this.deps.prompt.confirm(`Delete "${input.displayPath}"?`, {
+            modal: true,
+            confirmLabel: 'Delete',
+          }),
+        catch: (cause) => new MemoryPromptFailed({ cause }),
+      });
+      if (!confirmed) return null;
 
-    await StorageFS.delete(resolveMemoryStoragePath(input.storagePath), {
-      recursive: true,
-    });
-    return this.getMemoryDataMessage();
-  }
+      const storagePath = resolveMemoryStoragePath(input.storagePath);
+      yield* Effect.tryPromise({
+        try: () => StorageFS.delete(storagePath, { recursive: true }),
+        catch: (cause) => new MemoryFileUnwritable({ storagePath, cause }),
+      });
+      return yield* this.getMemoryDataMessage();
+    },
+  );
 
-  async setMemoryPinned(
+  readonly setMemoryPinned = Effect.fn(
+    'SettingsMemoryController.setMemoryPinned',
+  )(function* (
+    this: SettingsMemoryController,
     storagePath: string,
     pinned: boolean,
-  ): Promise<SettingsMemoryMessage | null> {
+  ) {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const result = await setMemoryPinned(resolvedPath, pinned);
+    const result = yield* setMemoryPinned(resolvedPath, pinned);
     if (result.status === 'cap-reached') {
-      await this.deps.prompt.warning(
-        `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
-      );
+      yield* Effect.tryPromise({
+        try: () =>
+          this.deps.prompt.warning(
+            `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
+          ),
+        catch: (cause) => new MemoryPromptFailed({ cause }),
+      });
       return null;
     }
-    return this.getMemoryDataMessage();
-  }
+    return yield* this.getMemoryDataMessage();
+  });
 }

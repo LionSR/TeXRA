@@ -1,0 +1,50 @@
+{
+  "status": "passed within stated scope",
+  "date": "2026-09-06",
+  "sourceCommit": "cc22843af3fa7d8457b6899266a6e04bf15067e9",
+  "links": {
+    "documents": 6,
+    "localLinks": 107,
+    "pinnedSourceLinks": 45,
+    "clonesVerified": 4
+  },
+  "probeReproduced": true,
+  "censusReproduced": true,
+  "scriptSyntaxChecks": 3,
+  "diagrams": {
+    "count": 4,
+    "mermaidCli": "11.17.0",
+    "validatedBeforeExport": true,
+    "renderedImagesInspected": true,
+    "htmlEmbeddedSvgsMatchSources": true
+  },
+  "html": {
+    "browser": "Local Chrome via Playwright; network offline",
+    "desktopViewport": [1440, 1100],
+    "mobileViewport": [390, 844],
+    "checks": [
+      "Current, proposed and LLM-package diagrams load",
+      "Current/proposed toggle updates diagram and explanation",
+      "Keyboard tab navigation updates selected panel",
+      "Eight-phase navigation and recovery disclosure",
+      "41 source-census members rendered",
+      "Owner and text filters including empty state",
+      "Four latest-reference summaries",
+      "No page errors",
+      "No external HTTP requests",
+      "No page-level mobile overflow"
+    ],
+    "limitations": "Interaction and layout QA of a documentation explorer; not agent runtime, provider or recovery execution."
+  },
+  "scope": "Three research studies, an architectural review, an HTML explorer and evidence files. No production implementation, dependency changes or live provider calls. Artifact checks do not establish correctness of the proposed runtime.",
+  "prePrRepositoryChecks": {
+    "baseCommit": "fd32b8b9cad310bcf41114cc2d90b1125a97f257",
+    "format": "passed; includes formatter-only normalization of the existing September 6 consolidation survey",
+    "lint": "passed",
+    "compileSafe": "passed; full type checking and extension build",
+    "docsBuild": "passed; existing bundle-size warning",
+    "guidanceRefs": "passed",
+    "vitest": "passed; npm test -- --maxWorkers=4; 764 test files passed, 1 skipped; 9068 tests passed, 5 skipped",
+    "scope": "Existing repository checks before the documentation PR; not execution of the proposed engine."
+  }
+}

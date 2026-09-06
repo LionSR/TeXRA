@@ -88,6 +88,8 @@ export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
   context: z.string().optional(),
   cost: z.string().optional(),
   hint: z.string().optional(),
+  /** Current reasoning setting, including default or fixed-mode context. */
+  reasoning: z.string().optional(),
   ...ModelAvailabilityFieldsSchema.shape,
 });
 export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;

@@ -94,6 +94,29 @@ describe('computeModelOptionsData availability', () => {
     installTexraAccountProbes();
   });
 
+  it.each([
+    { model: 'gpt56', override: undefined, expected: 'Default (Medium)' },
+    { model: 'gpt56', override: 'low', expected: 'Low' },
+    { model: 'kimi3', override: 'low', expected: 'Max (fixed)' },
+    { model: 'sonnet45T', override: 'low', expected: 'Default' },
+    { model: 'gpt4o', override: 'high', expected: undefined },
+  ])(
+    'includes the current reasoning setting for $model ($override)',
+    async ({ model, override, expected }) => {
+      await installPlatform({
+        globalState: {
+          [GlobalStateKey.REASONING_LEVELS]:
+            override === undefined ? {} : { [model]: override },
+        },
+        secrets: OPENAI_KEY_SECRETS,
+      });
+
+      const [option] = await computeModelOptionsData([model]);
+
+      expect(option.reasoning).toBe(expected);
+    },
+  );
+
   it('uses a Kimi Code key for the plan-exclusive model', async () => {
     await installAccessPlatform({
       secrets: { [apiKeySecretName('kimiCode')]: 'sk-kimi-code' },

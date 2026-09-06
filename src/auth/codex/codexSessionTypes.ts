@@ -62,7 +62,6 @@ export const CodexDeviceUserCodeSchema = z.object({
   // absent or unusable, the caller applies its own fallback deadline.
   expires_in: z.coerce.number().positive().nullish().catch(undefined),
 });
-export type CodexDeviceUserCode = z.infer<typeof CodexDeviceUserCodeSchema>;
 
 /** Device-code poll success: an authorization code + its PKCE verifier. */
 export const CodexDeviceTokenSchema = z.object({
@@ -70,7 +69,6 @@ export const CodexDeviceTokenSchema = z.object({
   code_verifier: z.string().min(1),
   code_challenge: z.string().min(1).nullish(),
 });
-export type CodexDeviceToken = z.infer<typeof CodexDeviceTokenSchema>;
 
 /** Error kinds match the shared subscription OAuth vocabulary. */
 export type CodexAuthErrorKind = SubscriptionOAuthErrorKind;

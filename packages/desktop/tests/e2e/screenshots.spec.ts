@@ -58,7 +58,7 @@ async function commandPaletteIsClosed(): Promise<boolean> {
   });
 }
 
-test('startup team chooser screenshot', async ({}, testInfo) => {
+test('startup team chooser screenshot', async () => {
   const panel = launched.page.locator('.desktop-startup-panel');
   await expect(panel).toBeVisible();
   await expect(
@@ -67,26 +67,26 @@ test('startup team chooser screenshot', async ({}, testInfo) => {
     }),
   ).toBeVisible();
   await launched.page.screenshot({
-    path: getScreenshotPath(testInfo, 'startup.png'),
+    path: getScreenshotPath(test.info(), 'startup.png'),
     fullPage: false,
   });
   await dismissOnboarding(launched.page);
 });
 
-test('launcher screenshot', async ({}, testInfo) => {
+test('launcher screenshot', async () => {
   await showLauncher(launched);
   await launched.page.screenshot({
-    path: getScreenshotPath(testInfo, 'launcher.png'),
+    path: getScreenshotPath(test.info(), 'launcher.png'),
     fullPage: false,
   });
   expect(launched.page.url()).toBeTruthy();
 });
 
-test('settings screenshot', async ({}, testInfo) => {
+test('settings screenshot', async () => {
   // Open the Multi-Agent settings page — the most visually rich area.
   await setSettingsTab(launched, 'multi-agent');
   await launched.page.screenshot({
-    path: getScreenshotPath(testInfo, 'settings.png'),
+    path: getScreenshotPath(test.info(), 'settings.png'),
     fullPage: false,
   });
   expect(launched.page.url()).toBeTruthy();

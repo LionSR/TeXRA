@@ -15,7 +15,6 @@
 import {
   lookupStreamExecutionId,
   submitFollowUp,
-  type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 import {
   currentSession,
@@ -140,16 +139,6 @@ async function archiveAsParentFinished(
   return 'archived';
 }
 
-function mapSubmissionToInquiryOutcome(
-  result: SubmitFollowUpResult,
-): InjectionOutcome {
-  if (result.status === 'sent') return 'sent';
-  // A queued continuation whose wake failed is still queued; an explicit
-  // Resume delivers it. A refusal has nothing left to continue.
-  if (result.status === 'queued') return 'queued';
-  return 'archived';
-}
-
 async function deliverContinuation(params: {
   parentStreamId: StreamTabId;
   text: string;
@@ -160,20 +149,21 @@ async function deliverContinuation(params: {
     session: params.session,
   });
 
-  const outcome = mapSubmissionToInquiryOutcome(result);
-  if (outcome === 'archived') {
+  // A queued continuation whose wake failed is still queued; an explicit
+  // Resume delivers it. A refusal has nothing left to continue.
+  if (result.status === 'failed') {
     logger.warn(
-      `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} refused it (${result.status === 'failed' ? result.reason : result.status}).`,
+      `Inquiry continuation for ${params.threadId}: parent stream ${params.parentStreamId} refused it (${result.reason}).`,
     );
     return archiveAsParentFinished(params.threadId, params.session);
   }
 
   await emitInquiryThreadUpdate(
     params.threadId,
-    { resumeOutcome: outcome },
+    { resumeOutcome: result.status },
     params.session,
   );
-  return outcome;
+  return result.status;
 }
 
 /**
