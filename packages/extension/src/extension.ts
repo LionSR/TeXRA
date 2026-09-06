@@ -65,7 +65,6 @@ import {
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
-import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog, setOutputChannelFactory } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
@@ -85,6 +84,8 @@ import {
 } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
+import { openTexraConfigStores } from '@platform/defaults/nodeStores';
+import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
@@ -154,8 +155,14 @@ async function initVscodePlatform(
   // synchronous `open` would otherwise face an asynchronous layer build.
   installProcessRuntime(await nodeProcesses.selfIdentity());
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
-  const config = await effectRuntime().runPromise(
-    createExtensionTexraConfig(storage, workspaceRoot),
+  // VS Code restarts the extension host when the first workspace folder
+  // changes, so the configuration stores stay pinned for this process.
+  const config = new JsonConfigProvider(
+    await effectRuntime().runPromise(
+      openTexraConfigStores(storage, workspaceRoot, (message) =>
+        log.warn(message),
+      ),
+    ),
   );
   initPlatform(
     createNodePlatform({
