@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { effectRuntime } from '@platform/processRuntime';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
@@ -22,6 +23,7 @@ import {
   resolveCliCwd,
   type CliContext,
 } from './cliContext';
+import { installCliProcessRuntime } from './cliProcessRuntime';
 import { openCliGlobalStateStore } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr } from './logSinks';
@@ -274,15 +276,17 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   const style = createCliStyle(context.stderrColorEnabled);
   // Runs before `initInteractiveCliPlatform`, so `platform()` isn't up yet —
   // open the same global `state.json` that `createCliStateStores` opens later
-  // via `openCliGlobalStateStore` (see `cliStateStores.ts`). Failures here
+  // via `openCliGlobalStateStore` (see `cliStateStores.ts`), on the process
+  // runtime this entry installs when it gets there first. Failures here
   // (e.g. an unreadable or unwritable global-storage directory, or stdin
   // closing mid-prompt) must stay as silent as a network failure: this whole
   // check is best-effort and must never block `chat` / `orchestrate` startup.
   let latest: string | undefined;
   let confirmed = false;
   try {
-    const globalState = await openCliGlobalStateStore(
-      createNodeStorageProvider(),
+    await installCliProcessRuntime({ onlyIfMissing: true });
+    const globalState = await effectRuntime().runPromise(
+      openCliGlobalStateStore(createNodeStorageProvider()),
     );
     latest = await runDailyUpdateCheck({
       currentVersion: context.version,

@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 
+import { Effect, Layer, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
@@ -11,7 +12,7 @@ import type {
   StorageProvider,
 } from '@platform/interfaces';
 import type { JsonStore } from '@platform/defaults/jsonStore';
-import type { bootstrapNodeAgentDirectories } from '@platform/defaults/nodeHost';
+import type { NodeAgentDirectoryBootstrapOptions } from '@platform/defaults/nodeHost';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFileLocks } from '@platform/defaults/fileLocks';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
@@ -38,7 +39,9 @@ describe('desktop agent directory bootstrap', () => {
   });
 
   async function createHarness(): Promise<{
-    bootstrapNodeAgentDirectories: typeof bootstrapNodeAgentDirectories;
+    bootstrapNodeAgentDirectories: (
+      options: NodeAgentDirectoryBootstrapOptions,
+    ) => Promise<void>;
     agentDirectories: AgentDirectoriesPort;
     globalStateStore: JsonStore;
     resourcesPath: string;
@@ -61,23 +64,32 @@ describe('desktop agent directory bootstrap', () => {
 
     const [
       { JsonStore },
-      { bootstrapNodeAgentDirectories },
+      { bootstrapNodeAgentDirectories: bootstrapEffect },
       { initPlatform, platform },
       { initProcessWorkspaceRoots },
       { createPlatformAgentDirectories },
+      { effectRuntime, initProcessRuntime },
     ] = await Promise.all([
       loadSourceModule('@platform/defaults/jsonStore'),
       loadSourceModule('@platform/defaults/nodeHost'),
       import('@platform/platform'),
       import('@platform/workspaceRoots'),
       import('@agent/index/platformAgentDirectories'),
+      import('@platform/processRuntime'),
     ]);
+    // The desktop entry installs the process runtime before it opens a store;
+    // this harness stands in for that entry, so it installs a bare one.
+    try {
+      effectRuntime();
+    } catch {
+      initProcessRuntime(ManagedRuntime.make(Layer.empty));
+    }
     const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
-    const globalStateStore = await JsonStore.open(
-      join(userDataPath, 'state', 'global.json'),
-    );
-    const workspaceStateStore = await JsonStore.open(
-      join(storage.getStoragePath(), 'state.json'),
+    const [globalStateStore, workspaceStateStore] = await Effect.runPromise(
+      Effect.all([
+        JsonStore.open(join(userDataPath, 'state', 'global.json')),
+        JsonStore.open(join(storage.getStoragePath(), 'state.json')),
+      ]),
     );
 
     initPlatform({
@@ -108,7 +120,11 @@ describe('desktop agent directory bootstrap', () => {
     });
 
     return {
-      bootstrapNodeAgentDirectories,
+      // The desktop entry runs this program on the process runtime; here it
+      // runs on the default one, which is what the harness has.
+      bootstrapNodeAgentDirectories: (
+        options: NodeAgentDirectoryBootstrapOptions,
+      ) => Effect.runPromise(bootstrapEffect(options)),
       agentDirectories: platform().agentDirectories,
       globalStateStore,
       resourcesPath,
@@ -282,9 +298,9 @@ describe('desktop agent directory bootstrap', () => {
       copiedSources.push(source);
       if (copiedSources.length === 1) await firstCopyBlocked;
     });
-    const runExclusive = vi
-      .spyOn(nodeFileLocks, 'runExclusive')
-      .mockImplementation((_lockPath, operation) => operation());
+    const withFileLock = vi
+      .spyOn(nodeFileLocks, 'withFileLock')
+      .mockImplementation(() => (self) => self);
     const first = bootstrapNodeAgentDirectories({
       channel: 'desktop',
       resourcesPath,
@@ -301,7 +317,7 @@ describe('desktop agent directory bootstrap', () => {
     const second = bootstrapNodeAgentDirectories(secondOptions);
 
     await nextTurn();
-    expect(runExclusive).toHaveBeenCalledOnce();
+    expect(withFileLock).toHaveBeenCalledOnce();
     expect(copiedSources).toEqual([join(resourcesPath, 'agents')]);
 
     releaseFirstCopy();

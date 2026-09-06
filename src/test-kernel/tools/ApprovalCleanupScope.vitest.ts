@@ -1,5 +1,6 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { currentSession } from '@agent/runtime/SessionHandle';
 
@@ -221,15 +222,19 @@ describe('session-owned approval state (#8144)', () => {
 
     try {
       // Session A's prompt slot is occupied by a never-answered approval.
-      void sessionA.approvals.bash.enqueue(undefined, {
-        prompt: pendingApproval,
-        bypassed: () => 'never bypassed',
-      });
+      void Effect.runPromise(
+        sessionA.approvals.bash.enqueue(undefined, {
+          prompt: pendingApproval,
+          bypassed: () => 'never bypassed',
+        }),
+      );
 
-      const ranInB = sessionB.approvals.bash.enqueue(undefined, {
-        prompt: () => Promise.resolve('answered'),
-        bypassed: () => 'never bypassed',
-      });
+      const ranInB = Effect.runPromise(
+        sessionB.approvals.bash.enqueue(undefined, {
+          prompt: () => Promise.resolve('answered'),
+          bypassed: () => 'never bypassed',
+        }),
+      );
 
       await expect(ranInB).resolves.toBe('answered');
     } finally {

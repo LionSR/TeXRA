@@ -1,8 +1,10 @@
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { setImmediate, setTimeout as sleep } from 'node:timers/promises';
+import { setImmediate } from 'node:timers/promises';
 
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Fiber, Schedule } from 'effect';
+import { describe, expect } from 'vitest';
 
 import {
   createNodeFileLocks,
@@ -13,97 +15,130 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 const tempDirs = useTempDirs();
 
 describe('nodeFileLocks', () => {
-  it('refreshes a lock while a long critical section is still held', async () => {
-    const root = await makeTempDir('texra-file-lock-refresh-', tempDirs);
-    const lockPath = join(root, 'executionLocks', 'a8644b');
-    // A short refresh interval exercises the same mtime-refresh mechanism as
-    // the default tuning without holding the critical section for seconds.
-    const locks = createNodeFileLocks({
-      staleMs: 5_000,
-      updateMs: 50,
-      retries: 0,
-    });
+  // `it.live`: proper-lockfile refreshes on its own real timer, so this case
+  // must run on the real clock rather than the TestClock `it.effect` installs.
+  it.live(
+    'refreshes a lock while a long critical section is still held',
+    () =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(() =>
+          makeTempDir('texra-file-lock-refresh-', tempDirs),
+        );
+        const lockPath = join(root, 'executionLocks', 'a8644b');
+        // A short refresh interval exercises the same mtime-refresh mechanism
+        // as the default tuning without holding the critical section for
+        // seconds.
+        const locks = createNodeFileLocks({
+          staleMs: 5_000,
+          updateMs: 50,
+          retries: 0,
+        });
 
-    await locks.runExclusive(lockPath, async () => {
-      const lockDirectory = `${lockPath}.lock`;
-      const initialMtime = (await stat(lockDirectory)).mtimeMs;
-      // Poll for the mtime bump instead of sleeping a fixed window, so a slow
-      // CI scheduler delays the assertion rather than failing it.
-      const deadline = Date.now() + 5_000;
-      let refreshedMtime = initialMtime;
-      while (refreshedMtime <= initialMtime && Date.now() < deadline) {
-        await sleep(20);
-        refreshedMtime = (await stat(lockDirectory)).mtimeMs;
+        yield* locks.withFileLock(lockPath)(
+          Effect.gen(function* () {
+            const lockDirectory = `${lockPath}.lock`;
+            const mtime = Effect.promise(() =>
+              stat(lockDirectory).then((s) => s.mtimeMs),
+            );
+            const initialMtime = yield* mtime;
+            // Poll for the mtime bump instead of sleeping a fixed window, so a
+            // slow CI scheduler delays the assertion rather than failing it.
+            const refreshedMtime = yield* Effect.retry(
+              Effect.filterOrFail(
+                mtime,
+                (current) => current > initialMtime,
+                () => 'not refreshed yet' as const,
+              ),
+              { schedule: Schedule.spaced('20 millis') },
+            ).pipe(Effect.timeout('5 seconds'));
+            expect(refreshedMtime).toBeGreaterThan(initialMtime);
+          }),
+        );
+      }),
+    { timeout: 20_000 },
+  );
+
+  it.effect('serializes independent callers using the same shared path', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() =>
+        makeTempDir('texra-file-lock-', tempDirs),
+      );
+      const lockPath = join(root, 'executionLocks', 'a8644a');
+      const firstEntered = yield* Deferred.make<void>();
+      const releaseFirst = yield* Deferred.make<void>();
+      let secondEntered = false;
+
+      const first = yield* Effect.forkChild(
+        nodeFileLocks.withFileLock(lockPath)(
+          Deferred.succeed(firstEntered, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseFirst)),
+          ),
+        ),
+      );
+      yield* Deferred.await(firstEntered);
+      const second = yield* Effect.forkChild(
+        nodeFileLocks.withFileLock(lockPath)(
+          Effect.sync(() => {
+            secondEntered = true;
+          }),
+        ),
+      );
+      // The lane chains the second caller behind the first's hand-off, so no
+      // timer can admit it early; flushing macrotask turns gives any pending
+      // scheduling a deterministic chance to run instead of a wall-clock wait.
+      for (let turn = 0; turn < 5; turn += 1) {
+        yield* Effect.promise(() => setImmediate());
       }
-      expect(refreshedMtime).toBeGreaterThan(initialMtime);
-    });
-  });
+      expect(secondEntered).toBe(false);
 
-  it('serializes independent callers using the same shared path', async () => {
-    const root = await makeTempDir('texra-file-lock-', tempDirs);
-    const lockPath = join(root, 'executionLocks', 'a8644a');
-    let releaseFirst!: () => void;
-    const firstPaused = new Promise<void>(
-      (resolve) => (releaseFirst = resolve),
-    );
-    let firstEntered!: () => void;
-    const entered = new Promise<void>((resolve) => (firstEntered = resolve));
-    let secondEntered = false;
+      yield* Deferred.succeed(releaseFirst, undefined);
+      yield* Fiber.join(first);
+      yield* Fiber.join(second);
+      expect(secondEntered).toBe(true);
+    }),
+  );
 
-    const first = nodeFileLocks.runExclusive(lockPath, async () => {
-      firstEntered();
-      await firstPaused;
-    });
-    await entered;
-    const second = nodeFileLocks.runExclusive(lockPath, async () => {
-      secondEntered = true;
-    });
-    // The keyed mutex chains the second caller behind the first's promise, so
-    // no timer can admit it early; flushing macrotask turns gives any pending
-    // scheduling a deterministic chance to run instead of a wall-clock sleep.
-    for (let turn = 0; turn < 5; turn += 1) {
-      await setImmediate();
-    }
-    expect(secondEntered).toBe(false);
+  it.effect(
+    'admits waiting callers in arrival order ahead of a later one',
+    () =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(() =>
+          makeTempDir('texra-file-lock-fifo-', tempDirs),
+        );
+        const lockPath = join(root, 'executionLocks', 'a8644c');
+        const entered: string[] = [];
+        const firstIn = yield* Deferred.make<void>();
+        const releaseFirst = yield* Deferred.make<void>();
+        const enter = (name: string) =>
+          nodeFileLocks.withFileLock(lockPath)(
+            Effect.sync(() => {
+              entered.push(name);
+            }),
+          );
 
-    releaseFirst();
-    await Promise.all([first, second]);
-    expect(secondEntered).toBe(true);
-  });
+        const first = yield* Effect.forkChild(
+          nodeFileLocks.withFileLock(lockPath)(
+            Effect.sync(() => entered.push('first')).pipe(
+              Effect.andThen(Deferred.succeed(firstIn, undefined)),
+              Effect.andThen(Deferred.await(releaseFirst)),
+            ),
+          ),
+        );
+        yield* Deferred.await(firstIn);
+        const second = yield* Effect.forkChild(enter('second'));
+        for (let turn = 0; turn < 5; turn += 1) {
+          yield* Effect.promise(() => setImmediate());
+        }
+        yield* Deferred.succeed(releaseFirst, undefined);
+        yield* Fiber.join(first);
+        // Started from the first caller's continuation while the second is
+        // still waiting: a lane that wakes waiters in a scheduled task would
+        // admit it first.
+        const third = yield* Effect.forkChild(enter('third'));
+        yield* Fiber.join(second);
+        yield* Fiber.join(third);
 
-  it('admits waiting callers in arrival order ahead of a later one', async () => {
-    const root = await makeTempDir('texra-file-lock-fifo-', tempDirs);
-    const lockPath = join(root, 'executionLocks', 'a8644c');
-    const entered: string[] = [];
-    let releaseFirst!: () => void;
-    const firstPaused = new Promise<void>(
-      (resolve) => (releaseFirst = resolve),
-    );
-    let firstEntered!: () => void;
-    const firstIn = new Promise<void>((resolve) => (firstEntered = resolve));
-
-    const first = nodeFileLocks.runExclusive(lockPath, async () => {
-      entered.push('first');
-      firstEntered();
-      await firstPaused;
-    });
-    await firstIn;
-    const second = nodeFileLocks.runExclusive(lockPath, async () => {
-      entered.push('second');
-    });
-    for (let turn = 0; turn < 5; turn += 1) {
-      await setImmediate();
-    }
-    releaseFirst();
-    await first;
-    // Issued from the first caller's continuation while the second is still
-    // waiting: a lane that wakes waiters in a scheduled task would admit it
-    // first.
-    const third = nodeFileLocks.runExclusive(lockPath, async () => {
-      entered.push('third');
-    });
-    await Promise.all([second, third]);
-
-    expect(entered).toEqual(['first', 'second', 'third']);
-  });
+        expect(entered).toEqual(['first', 'second', 'third']);
+      }),
+  );
 });

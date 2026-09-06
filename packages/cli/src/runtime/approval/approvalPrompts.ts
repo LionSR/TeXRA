@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { defaultSession } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import { getExhaustionReason } from '@shared/schemas';
@@ -9,12 +11,11 @@ import {
 } from '@shared/quotaFallbackRoutes';
 import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
 import { safeTerminalText } from '../terminalText';
-import type PQueue from 'p-queue';
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
@@ -31,11 +32,15 @@ export interface CliApprovalContent {
   readonly details?: () => string;
 }
 
-const cliPromptQueues = new WeakMap<CliContext, PQueue>();
+/**
+ * One prompt lane per CLI context: a single stdin, so two prompts never read
+ * from it at once. Keyed weakly by the context, whose lifetime bounds it.
+ */
+const cliPromptLanes = new WeakMap<CliContext, PerKeyLane>();
 const warnedApprovalContexts = new WeakSet<CliContext>();
 
-function cliPromptQueue(context: CliContext): PQueue {
-  return getOrCreatePQueue(cliPromptQueues, context);
+function onCliPromptLane(context: CliContext) {
+  return withPerKeyLane(cliPromptLanes, context);
 }
 
 /**
@@ -122,17 +127,21 @@ export function cliRetryApiSwitchDecision(
   };
 }
 
-async function askCliApprovalQuestion(
-  context: CliContext,
-  request: CliPromptRequest,
-): Promise<string> {
-  if (context.approvalPrompt) {
-    return context.approvalPrompt(request);
-  }
-  return askCliQuestion(
-    request.summary ? `${request.summary}\n${request.prompt}` : request.prompt,
-  );
-}
+const askCliApprovalQuestion = Effect.fn(
+  'approvalPrompts.askCliApprovalQuestion',
+)(function* (context: CliContext, request: CliPromptRequest) {
+  return yield* Effect.tryPromise({
+    try: async () =>
+      context.approvalPrompt
+        ? context.approvalPrompt(request)
+        : askCliQuestion(
+            request.summary
+              ? `${request.summary}\n${request.prompt}`
+              : request.prompt,
+          ),
+    catch: (cause) => cause as Error,
+  });
+});
 
 interface ParsedApprovalAnswer {
   readonly accepted: boolean;
@@ -173,33 +182,31 @@ function isViewDetailsAnswer(answer: string): boolean {
 }
 
 /**
- * Queue a CLI prompt against the context's serial prompt queue. Exposed so the
+ * Run a CLI prompt on the context's serial prompt lane. Exposed so the
  * user-question handler can interleave its own per-question prompts with
  * approval prompts without overlapping reads from a single stdin.
  */
 export function queueCliApprovalQuestion(
   context: CliContext,
   request: CliPromptRequest,
-): Promise<string> {
-  return cliPromptQueue(context).add(() =>
-    askCliApprovalQuestion(context, request),
-  );
+) {
+  return onCliPromptLane(context)(askCliApprovalQuestion(context, request));
 }
 
-export async function askApproval(
+export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
   context: CliContext,
   content: CliApprovalContent,
   hooks: CliApprovalPromptHooks = {},
-): Promise<CliApprovalDecision> {
-  try {
-    return await cliPromptQueue(context).add(async () => {
+) {
+  return yield* onCliPromptLane(context)(
+    Effect.gen(function* () {
       const prompt = content.details
         ? 'Approve? [y/N, v view full, or n <feedback>] '
         : 'Approve? [y/N, or n <feedback>] ';
       let answer: string;
       while (true) {
         hooks.beforePrompt?.();
-        answer = await askCliApprovalQuestion(context, {
+        answer = yield* askCliApprovalQuestion(context, {
           kind: 'approval',
           summary: content.summary,
           prompt,
@@ -214,7 +221,7 @@ export async function askApproval(
       let feedback = parsed.feedback;
       if (!parsed.accepted && parsed.shouldPromptForFeedback) {
         hooks.beforePrompt?.();
-        const feedbackAnswer = await askCliApprovalQuestion(context, {
+        const feedbackAnswer = yield* askCliApprovalQuestion(context, {
           kind: 'approval',
           summary: '',
           prompt: 'Rejection feedback (optional, Enter to skip): ',
@@ -222,19 +229,25 @@ export async function askApproval(
         feedback = feedbackAnswer.trim() || undefined;
       }
 
-      return {
+      const decision: CliApprovalDecision = {
         accepted: parsed.accepted,
         userMessage: parsed.accepted ? undefined : feedback,
       };
-    });
-  } catch (error) {
-    logWarning(
-      'cli.approval',
-      `The CLI approval prompt failed: ${toErrorMessage(error)}`,
-    );
-    return {
-      accepted: false,
-      rejectionCause: 'CLI approval prompt failed.',
-    };
-  }
-}
+      return decision;
+    }),
+  ).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        logWarning(
+          'cli.approval',
+          `The CLI approval prompt failed: ${toErrorMessage(error)}`,
+        );
+        const failed: CliApprovalDecision = {
+          accepted: false,
+          rejectionCause: 'CLI approval prompt failed.',
+        };
+        return failed;
+      }),
+    ),
+  );
+});

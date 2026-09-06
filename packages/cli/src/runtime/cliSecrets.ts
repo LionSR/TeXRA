@@ -1,18 +1,27 @@
 // Node imports
 import path from 'node:path';
 
-import PQueue from 'p-queue';
+// Third-party imports
+import { Effect } from 'effect';
 
 // Local imports
 import { secretWithEnvOverride, type PlatformSecrets } from '@platform/secrets';
+import { effectRuntime } from '@platform/processRuntime';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 // Local file imports
 import { cliEnvValue } from './cliContext';
 
 /** Secrets file is owner-only: `0o600` (containing dir gets `0o700`). */
 const SECRETS_FILE_MODE = 0o600;
+
+/**
+ * One mutation lane per secrets file, so two instances over the same path
+ * still write in call order before entering the cross-process lock.
+ */
+const mutationLanes = new Map<string, PerKeyLane>();
 
 /**
  * CLI secret storage.
@@ -26,54 +35,60 @@ const SECRETS_FILE_MODE = 0o600;
  *
  * Each operation opens its own `JsonStore` rather than caching one for the
  * lifetime of this instance, so reads (`get`/`getStored`/`listStoredKeys`)
- * always observe the current on-disk file. Mutations are serialized at call
- * time through {@link mutationQueue}, before the asynchronous open, so
- * same-key writes preserve caller order. `JsonStore` handles cross-instance
- * and cross-process exclusion while flushing.
+ * always observe the current on-disk file. Mutations take the file's lane in
+ * {@link mutationLanes}, claimed in the program's first synchronous step —
+ * before the open — so same-key writes preserve caller order. `JsonStore`
+ * handles cross-instance and cross-process exclusion while flushing.
+ *
+ * `PlatformSecrets` is a Promise-shaped platform port, so this host
+ * implementation is where its programs are run; every line of logic above
+ * that boundary is an `Effect`.
  */
 export class CliSecrets implements PlatformSecrets {
-  private readonly mutationQueue = new PQueue({ concurrency: 1 });
-
   constructor(private readonly filePath = cliSecretsPath()) {}
 
   get(key: string): Promise<string | undefined> {
     return secretWithEnvOverride(key, cliEnvValue, (k) => this.getStored(k));
   }
 
-  async getStored(key: string): Promise<string | undefined> {
-    const store = await this.openStore();
-    const value = store.get<unknown>(key, undefined);
-    return typeof value === 'string' ? value : undefined;
+  getStored(key: string): Promise<string | undefined> {
+    return effectRuntime().runPromise(
+      Effect.map(this.openStore(), (store) => {
+        const value = store.get<unknown>(key, undefined);
+        return typeof value === 'string' ? value : undefined;
+      }),
+    );
   }
 
   set(key: string, value: string): Promise<void> {
-    return this.mutate((store) => store.set(key, value));
+    return this.mutate(key, value);
   }
 
   delete(key: string): Promise<void> {
-    return this.mutate((store) => store.set(key, undefined));
+    return this.mutate(key, undefined);
   }
 
-  async listStoredKeys(): Promise<readonly string[]> {
-    const store = await this.openStore();
-    return store.keys();
+  listStoredKeys(): Promise<readonly string[]> {
+    return effectRuntime().runPromise(
+      Effect.map(this.openStore(), (store) => store.keys()),
+    );
   }
 
   getEnv(name: string): string | undefined {
     return cliEnvValue(name);
   }
 
-  private mutate(op: (store: JsonStore) => Promise<void>): Promise<void> {
-    return this.mutationQueue.add(async () => {
-      const store = await this.openStore();
-      await op(store);
-    });
+  private mutate(key: string, value: string | undefined): Promise<void> {
+    return effectRuntime().runPromise(
+      withPerKeyLane(
+        mutationLanes,
+        this.filePath,
+      )(Effect.flatMap(this.openStore(), (store) => store.set(key, value))),
+    );
   }
 
-  private openStore(): Promise<JsonStore> {
-    return JsonStore.open(this.filePath, {
-      mode: SECRETS_FILE_MODE,
-    });
+  private openStore() {
+    return JsonStore.open(this.filePath, { mode: SECRETS_FILE_MODE });
   }
 }
 

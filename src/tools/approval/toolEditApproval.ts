@@ -8,6 +8,7 @@ import {
 } from '@agent/runtime/RunContext';
 import type { RejectionProvenance } from '@agent/runtime/HostInteractions';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   decideTexraApproval,
   isTexraApprovalDenied,
@@ -211,21 +212,25 @@ export async function requestToolEditApproval(
     };
   }
 
-  return session.approvals.toolEdit.enqueue(streamId, {
-    prompt: async () =>
-      finalizeApprovalResult(
-        await session.interactions.requestToolEditApproval({
-          ...preparedRequest,
-          permission: prepareToolEditApprovalPrompt(session, {
-            requestId: `approval-${generateShortId()}`,
-            request: preparedRequest,
-            relativePath: WorkspaceFS.relativePath(preparedRequest.path),
+  // The approval lane is an Effect program; the tool-facing contract here is
+  // still a Promise, so it runs on the process runtime at this boundary.
+  return effectRuntime().runPromise(
+    session.approvals.toolEdit.enqueue(streamId, {
+      prompt: async () =>
+        finalizeApprovalResult(
+          await session.interactions.requestToolEditApproval({
+            ...preparedRequest,
+            permission: prepareToolEditApprovalPrompt(session, {
+              requestId: `approval-${generateShortId()}`,
+              request: preparedRequest,
+              relativePath: WorkspaceFS.relativePath(preparedRequest.path),
+            }),
           }),
-        }),
-        preparedRequest,
-      ),
-    bypassed: acceptProposedAsIs,
-  });
+          preparedRequest,
+        ),
+      bypassed: acceptProposedAsIs,
+    }),
+  );
 }
 
 function finalizeApprovalResult(

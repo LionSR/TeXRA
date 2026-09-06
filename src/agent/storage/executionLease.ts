@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { Effect } from 'effect';
 import pDefer from 'p-defer';
 import { z } from 'zod';
 
@@ -11,9 +12,10 @@ import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
 import { workspaceRoots } from '@platform/workspaceRoots';
+import { effectRuntime } from '@platform/processRuntime';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
-import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import {
   currentLeaseOwner,
@@ -22,7 +24,6 @@ import {
   type OwnerLiveness,
   proveOwnerLiveness,
 } from './leaseOwnerLiveness';
-import type PQueue from 'p-queue';
 
 const log = createLog('ExecutionLease');
 
@@ -666,11 +667,21 @@ export async function runWithExecutionLeaseWriteFence<T>(
     return runWithValidatedOwnership(lease, operation);
   }
   // Unleased writers in this process take turns, so that two of them never
-  // refuse each other over the maintenance claim the first one holds.
-  // `runOnPerKeyQueue` also drops the idle queue when the operation throws,
-  // which the previous inline epilogue skipped (a small leak on failure).
-  const claimed = await runOnPerKeyQueue(unleasedWriteQueues, key, () =>
-    runWithInactiveExecutionLease(executionId, operation),
+  // refuse each other over the maintenance claim the first one holds. The
+  // lane is claimed in the program's first synchronous step and released on
+  // success, failure, and interruption alike, so a throwing operation leaves
+  // no entry behind. The fence itself stays Promise-shaped for
+  // `ExecutionKVStore`, which owns that contract.
+  const claimed = await effectRuntime().runPromise(
+    withPerKeyLane(
+      unleasedWriteLanes,
+      key,
+    )(
+      Effect.tryPromise({
+        try: () => runWithInactiveExecutionLease(executionId, operation),
+        catch: (cause) => cause as Error,
+      }),
+    ),
   );
   if (claimed.status === 'active') {
     throw new ExecutionLeaseLostError(executionId);
@@ -678,7 +689,7 @@ export async function runWithExecutionLeaseWriteFence<T>(
   return claimed.value;
 }
 
-const unleasedWriteQueues = new Map<string, PQueue>();
+const unleasedWriteLanes = new Map<string, PerKeyLane>();
 
 async function acquireExecutionLease(
   executionId: ExecutionId,
