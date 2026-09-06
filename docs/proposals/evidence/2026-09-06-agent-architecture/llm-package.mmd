@@ -1,0 +1,21 @@
+flowchart TB
+    caller["TeXRA runtime or one-shot helper"]
+    model["Configured Model<br/>Protocol · deployment · capabilities · defaults"]
+    request["Portable TurnRequest<br/>Messages · definitions · generation controls"]
+    subgraph package["TeXRA LLM"]
+        lower["Provider request lowering<br/>Validate options · encode canonical content"]
+        transport["Scoped provider transport<br/>HTTP / SSE / WebSocket / host port"]
+        raise["Provider response normalization<br/>Parse once · preserve opaque continuation"]
+        result["TurnEvent stream + complete TurnResult<br/>Content · calls · usage · operation evidence"]
+    end
+    decision["Runtime commits result and decides next action<br/>Tools · compaction · document output · continuation"]
+    caller --> model
+    caller --> request
+    model --> lower
+    request --> lower
+    lower --> transport --> raise --> result --> decision
+
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#172554;
+    classDef library fill:#dcfce7,stroke:#15803d,color:#14532d;
+    class caller,decision app;
+    class model,request,lower,transport,raise,result library;
