@@ -88,10 +88,12 @@ const BOUNDARY_TOOL_SUFFIX = 'Tool.ts';
 const BOUNDARY_PATHS_TEXT =
   'packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts';
 
-function isBoundaryPath(file) {
+function isBoundaryPath(file, toolExecuteFiles) {
   return (
     BOUNDARY_HOST_ROOTS.some((root) => file.startsWith(root)) ||
-    (file.startsWith(BOUNDARY_TOOL_ROOT) && file.endsWith(BOUNDARY_TOOL_SUFFIX))
+    (file.startsWith(BOUNDARY_TOOL_ROOT) &&
+      (file.endsWith(BOUNDARY_TOOL_SUFFIX) ||
+        (toolExecuteFiles?.has(file) ?? false)))
   );
 }
 
@@ -150,6 +152,13 @@ const SEMANTICS =
   'The PR that zeroes a row deletes the row. The same script fails on the presence of any `@adapter-until` marker in scope (owner ruling 2026-09-06: no temporary adapters), a hard check with no baseline.';
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Sources whose `declaresExecute` the survey must report exactly. */
+const EXECUTE_CASES = [
+  ['class T { protected execute(i) { return this.run(i); } }\n', true],
+  ['const o = { execute(i) { return i; } };\n', false],
+  ['function execute(i) { return i; }\n', false],
+];
 
 /** Production TypeScript files, repo-relative and '/'-joined, sorted. */
 function productionFiles() {
@@ -389,6 +398,7 @@ function surveySource(text, fileName) {
         callee.expression.name.text === 'Effect'));
   let effectImporter = false;
   let catches = 0;
+  let declaresExecute = false;
 
   const visit = (node) => {
     const specifier = moduleSpecifier(node);
@@ -417,13 +427,26 @@ function surveySource(text, fileName) {
       bump(ROW_ABORT_CONTROLLER);
     } else if (ts.isCatchClause(node)) {
       catches += 1;
+    } else if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+      // A tool's run edge is `execute()` on the tool class; an object
+      // literal's `execute` shorthand is the same AST node kind and is not.
+      if (
+        node.members.some(
+          (member) =>
+            ts.isMethodDeclaration(member) &&
+            ts.isIdentifier(member.name) &&
+            member.name.text === 'execute',
+        )
+      ) {
+        declaresExecute = true;
+      }
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
 
   if (effectImporter && catches > 0) counts.set(ROW_CATCH, catches);
-  return counts;
+  return { counts, declaresExecute };
 }
 
 /** Fail the ratchet itself if the classifier regresses. */
@@ -494,7 +517,7 @@ function selfTestSurvey() {
     },
   ];
   for (const { text, fileName = 'case.ts', expected } of cases) {
-    const actual = Object.fromEntries(surveySource(text, fileName));
+    const actual = Object.fromEntries(surveySource(text, fileName).counts);
     if (
       JSON.stringify(sortObject(actual)) !==
       JSON.stringify(sortObject(expected))
@@ -518,14 +541,19 @@ function sortObject(object) {
 function surveyTree(files) {
   const rows = Object.fromEntries(ROWS.map((row) => [row.id, {}]));
   const texts = new Map();
+  const toolExecuteFiles = new Set();
   for (const file of files) {
     const text = readFileSync(join(rootDir, file), 'utf8');
     texts.set(file, text);
-    for (const [row, count] of surveySource(text, file)) {
+    const { counts, declaresExecute } = surveySource(text, file);
+    for (const [row, count] of counts) {
       rows[row][file] = count;
     }
+    if (declaresExecute && file.startsWith(BOUNDARY_TOOL_ROOT)) {
+      toolExecuteFiles.add(file);
+    }
   }
-  return { rows, texts };
+  return { rows, texts, toolExecuteFiles };
 }
 
 /**
@@ -559,19 +587,19 @@ const UNASSIGNED_LANE = 'UNASSIGNED';
  * owning lane in the same PR rather than quietly widening an allowlist. A
  * file that has left the row is dropped.
  */
-function runBoundaryDebtLanes(current, committedLanes) {
+function runBoundaryDebtLanes(current, committedLanes, toolExecuteFiles) {
   const lanes = {};
   for (const file of Object.keys(current)) {
-    if (isBoundaryPath(file)) continue;
+    if (isBoundaryPath(file, toolExecuteFiles)) continue;
     lanes[file] = committedLanes?.[file] ?? UNASSIGNED_LANE;
   }
   return lanes;
 }
 
 /** Below-boundary files whose lane is missing or still the placeholder. */
-function unassignedDebt(current, lanes) {
+function unassignedDebt(current, lanes, toolExecuteFiles) {
   return Object.keys(current)
-    .filter((file) => !isBoundaryPath(file))
+    .filter((file) => !isBoundaryPath(file, toolExecuteFiles))
     .filter((file) => {
       const lane = lanes?.[file];
       return (
@@ -619,14 +647,32 @@ function selfTestBoundaryAndMarkers() {
     ['src/tools/arxiv/SearchTool.ts', true],
     ['src/tools/goal/goalStore.ts', false],
     ['src/tools/bash.ts', false],
+    // A tool class whose file is not named *Tool.ts is still boundary (b):
+    // the survey reports that it declares an execute() method.
+    ['src/tools/claudeAgent.ts', true, new Set(['src/tools/claudeAgent.ts'])],
+    // The same set never promotes a file outside src/tools/.
+    [
+      'src/controllers/session/sessionLayer.ts',
+      false,
+      new Set(['src/controllers/session/sessionLayer.ts']),
+    ],
     ['src/agent/runtime/SessionHandle.ts', false],
     ['src/controllers/session/SessionBridge.ts', false],
     ['packages/trace-viewer/src/main.ts', false],
   ];
-  for (const [file, expected] of boundaryCases) {
-    if (isBoundaryPath(file) !== expected) {
+  for (const [file, expected, executeFiles] of boundaryCases) {
+    if (isBoundaryPath(file, executeFiles) !== expected) {
       console.error(
         `isBoundaryPath self-test failed: ${file} expected ${expected}`,
+      );
+      process.exit(1);
+    }
+  }
+
+  for (const [text, expected] of EXECUTE_CASES) {
+    if (surveySource(text, 'src/tools/probe.ts').declaresExecute !== expected) {
+      console.error(
+        `declaresExecute self-test failed for ${JSON.stringify(text)}`,
       );
       process.exit(1);
     }
@@ -638,10 +684,14 @@ function selfTestBoundaryAndMarkers() {
     'src/tools/NewTool.ts': 1,
     'src/tools/goal/goalStore.ts': 3,
   };
-  const lanes = runBoundaryDebtLanes(debtRow, {
-    'src/tools/goal/goalStore.ts': 'lane D',
-    'src/agent/runtime/gone.ts': 'lane D',
-  });
+  const lanes = runBoundaryDebtLanes(
+    debtRow,
+    {
+      'src/tools/goal/goalStore.ts': 'lane D',
+      'src/agent/runtime/gone.ts': 'lane D',
+    },
+    new Set(),
+  );
   if (
     JSON.stringify(lanes) !==
     JSON.stringify({
@@ -780,7 +830,7 @@ function main() {
   selfTestSurvey();
   selfTestBoundaryAndMarkers();
   const files = productionFiles();
-  const { rows, texts } = surveyTree(files);
+  const { rows, texts, toolExecuteFiles } = surveyTree(files);
   let failed = false;
 
   if (options.update) {
@@ -789,10 +839,15 @@ function main() {
     const lanes = runBoundaryDebtLanes(
       rows[ROW_RUN_BOUNDARY],
       committed?.debtLanes ?? {},
+      toolExecuteFiles,
     );
     writeBaseline(rows, lanes);
     console.log(`Effect migration baseline written: ${baselinePath}`);
-    const pending = unassignedDebt(rows[ROW_RUN_BOUNDARY], lanes);
+    const pending = unassignedDebt(
+      rows[ROW_RUN_BOUNDARY],
+      lanes,
+      toolExecuteFiles,
+    );
     if (pending.length > 0) {
       console.log(
         `\n${pending.length} below-boundary Effect.run* file(s) need a lane name in debtLanes ` +
@@ -824,7 +879,10 @@ function main() {
     for (const { row, file, was, now, kind } of failures) {
       console.error(`  - [${row.id}] ${file}: ${was} -> ${now} (${kind})`);
       console.error(`      ${row.rule}`);
-      if (row.id === ROW_RUN_BOUNDARY && !isBoundaryPath(file)) {
+      if (
+        row.id === ROW_RUN_BOUNDARY &&
+        !isBoundaryPath(file, toolExecuteFiles)
+      ) {
         console.error(`      This file is ${BELOW_BOUNDARY}.`);
       }
     }
@@ -849,7 +907,7 @@ function main() {
 
   const debtLanes = baseline.debtLanes ?? {};
   const debtFiles = Object.keys(rows[ROW_RUN_BOUNDARY])
-    .filter((file) => !isBoundaryPath(file))
+    .filter((file) => !isBoundaryPath(file, toolExecuteFiles))
     .toSorted(compareCodePoints);
   if (debtFiles.length > 0) {
     console.log(
@@ -861,7 +919,11 @@ function main() {
       );
     }
   }
-  const pendingDebt = unassignedDebt(rows[ROW_RUN_BOUNDARY], debtLanes);
+  const pendingDebt = unassignedDebt(
+    rows[ROW_RUN_BOUNDARY],
+    debtLanes,
+    toolExecuteFiles,
+  );
   if (pendingDebt.length > 0) {
     failed = true;
     console.error(
