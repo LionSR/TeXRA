@@ -153,11 +153,21 @@ const SEMANTICS =
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Sources whose `declaresExecute` the survey must report exactly. */
+/** Sources whose `runsOnlyInExecute` the survey must report exactly. */
 const EXECUTE_CASES = [
-  ['class T { protected execute(i) { return this.run(i); } }\n', true],
-  ['const o = { execute(i) { return i; } };\n', false],
-  ['function execute(i) { return i; }\n', false],
+  // The run sits inside a class `execute()`: this is boundary kind (b).
+  [
+    'class T { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    true,
+  ],
+  // A class with an `execute()` method, but the run is elsewhere in the file.
+  ['class H { execute() {} }\nrt().runPromise(program);\n', false],
+  // An object literal's `execute` shorthand is not a tool edge.
+  ['const o = { execute() { return rt().runPromise(p); } };\n', false],
+  // A free function named execute is not a tool edge.
+  ['function execute() { return rt().runPromise(p); }\n', false],
+  // No run at all: nothing to admit.
+  ['class T { execute(i) { return i; } }\n', false],
 ];
 
 /** Production TypeScript files, repo-relative and '/'-joined, sorted. */
@@ -398,9 +408,10 @@ function surveySource(text, fileName) {
         callee.expression.name.text === 'Effect'));
   let effectImporter = false;
   let catches = 0;
-  let declaresExecute = false;
+  let runsInExecute = 0;
+  let runsOutsideExecute = 0;
 
-  const visit = (node) => {
+  const visit = (node, inExecute) => {
     const specifier = moduleSpecifier(node);
     if (specifier != null) {
       if (SUPERSEDED_PACKAGES.includes(specifier)) bump(importRow(specifier));
@@ -411,7 +422,11 @@ function surveySource(text, fileName) {
       const name = calleeName(node);
       if (isPlatformRead(callee)) bump(ROW_PLATFORM);
       if (name === 'setServices') bump(ROW_SET_SERVICES);
-      if (name != null && RUN_BOUNDARY_NAMES.has(name)) bump(ROW_RUN_BOUNDARY);
+      if (name != null && RUN_BOUNDARY_NAMES.has(name)) {
+        bump(ROW_RUN_BOUNDARY);
+        if (inExecute) runsInExecute += 1;
+        else runsOutsideExecute += 1;
+      }
       if (
         name === 'catch' &&
         ts.isPropertyAccessExpression(callee) &&
@@ -427,26 +442,34 @@ function surveySource(text, fileName) {
       bump(ROW_ABORT_CONTROLLER);
     } else if (ts.isCatchClause(node)) {
       catches += 1;
-    } else if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
-      // A tool's run edge is `execute()` on the tool class; an object
-      // literal's `execute` shorthand is the same AST node kind and is not.
-      if (
-        node.members.some(
-          (member) =>
-            ts.isMethodDeclaration(member) &&
-            ts.isIdentifier(member.name) &&
-            member.name.text === 'execute',
-        )
-      ) {
-        declaresExecute = true;
-      }
     }
-    ts.forEachChild(node, visit);
+    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+      // A tool's run edge is `execute()` on the tool class. Recurse with the
+      // flag set only through that member's subtree, so a run elsewhere in
+      // the file — including in a sibling helper class that happens to have
+      // its own `execute` — is still counted as below the boundary. An
+      // object literal's `execute` shorthand is the same AST node kind and
+      // never sets the flag, because it is not a class member.
+      ts.forEachChild(node, (child) =>
+        visit(
+          child,
+          inExecute ||
+            (ts.isMethodDeclaration(child) &&
+              ts.isIdentifier(child.name) &&
+              child.name.text === 'execute'),
+        ),
+      );
+      return;
+    }
+    ts.forEachChild(node, (child) => visit(child, inExecute));
   };
-  visit(sourceFile);
+  visit(sourceFile, false);
 
   if (effectImporter && catches > 0) counts.set(ROW_CATCH, catches);
-  return { counts, declaresExecute };
+  // A file is a tool run edge when it runs Effects and every one of them sits
+  // inside an `execute()` class method — not merely when such a method exists.
+  const runsOnlyInExecute = runsInExecute > 0 && runsOutsideExecute === 0;
+  return { counts, runsOnlyInExecute };
 }
 
 /** Fail the ratchet itself if the classifier regresses. */
@@ -545,11 +568,11 @@ function surveyTree(files) {
   for (const file of files) {
     const text = readFileSync(join(rootDir, file), 'utf8');
     texts.set(file, text);
-    const { counts, declaresExecute } = surveySource(text, file);
+    const { counts, runsOnlyInExecute } = surveySource(text, file);
     for (const [row, count] of counts) {
       rows[row][file] = count;
     }
-    if (declaresExecute && file.startsWith(BOUNDARY_TOOL_ROOT)) {
+    if (runsOnlyInExecute && file.startsWith(BOUNDARY_TOOL_ROOT)) {
       toolExecuteFiles.add(file);
     }
   }
@@ -670,9 +693,11 @@ function selfTestBoundaryAndMarkers() {
   }
 
   for (const [text, expected] of EXECUTE_CASES) {
-    if (surveySource(text, 'src/tools/probe.ts').declaresExecute !== expected) {
+    if (
+      surveySource(text, 'src/tools/probe.ts').runsOnlyInExecute !== expected
+    ) {
       console.error(
-        `declaresExecute self-test failed for ${JSON.stringify(text)}`,
+        `runsOnlyInExecute self-test failed for ${JSON.stringify(text)}`,
       );
       process.exit(1);
     }
@@ -773,11 +798,13 @@ function writeBaseline(rows, debtLanes) {
   writeFileSync(
     baselinePath,
     `${JSON.stringify(
-      {
-        semantics: SEMANTICS,
-        rows: sortedRows,
-        debtLanes: sortObject(debtLanes),
-      },
+      Object.keys(debtLanes).length === 0
+        ? { semantics: SEMANTICS, rows: sortedRows }
+        : {
+            semantics: SEMANTICS,
+            rows: sortedRows,
+            debtLanes: sortObject(debtLanes),
+          },
       null,
       2,
     )}\n`,
