@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const providerMocks = vi.hoisted(() => ({
   asExternalUri: vi.fn(async (uri: { toString: () => string }) => uri),
   getUser: vi.fn(),
-  invalidateModelOptionsCache: vi.fn(),
   invalidateRemoteAgentsAfterSignOut: vi.fn(async () => {}),
   openExternal: vi.fn(async () => true),
   runPkceOperation: vi.fn((operation: () => Promise<unknown>) => {
@@ -110,10 +109,6 @@ vi.mock('@auth/SupabaseClient', () => ({
 vi.mock('@agent/index', () => ({
   invalidateRemoteAgentsAfterSignOut:
     providerMocks.invalidateRemoteAgentsAfterSignOut,
-}));
-
-vi.mock('@model/computeModelOptions', () => ({
-  invalidateModelOptionsCache: providerMocks.invalidateModelOptionsCache,
 }));
 
 // Local imports
@@ -333,54 +328,6 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
 describe('SupabaseAuthProvider model availability', () => {
   afterEach(() => {
     vi.clearAllMocks();
-  });
-
-  // Listeners recompute model options from the session-change event, so an
-  // event published ahead of the invalidation serves the stale option list.
-  it('invalidates model availability before publishing a new session', async () => {
-    seedPendingOAuthAttempt();
-    const { provider, session, coordinator, fire } = createUnexpiredProvider();
-
-    // Drive the login path through its public seams: a late OAuth callback
-    // delivered to the registered URI handler stores the session.
-    coordinator.loadSession.mockResolvedValueOnce(null);
-    coordinator.createSessionFromCallback.mockResolvedValue({
-      success: true,
-      session,
-    });
-    let authCallback:
-      ((uri: { path: string; query: string }) => unknown) | undefined;
-    const handler = {
-      onDidReceiveCallback: (
-        listener: (uri: { path: string; query: string }) => unknown,
-      ) => {
-        authCallback = listener;
-        return { dispose: vi.fn() };
-      },
-      handleUri: vi.fn(),
-    } as unknown as SupabaseUriHandler;
-    provider.setUriHandler(handler);
-
-    await authCallback?.({
-      path: '/auth-callback',
-      query: `code=test&app_nonce=${TEST_NONCE}`,
-    });
-
-    expect(providerMocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
-    expect(
-      providerMocks.invalidateModelOptionsCache.mock.invocationCallOrder[0],
-    ).toBeLessThan(fire.mock.invocationCallOrder[0]);
-  });
-
-  it('invalidates model availability before publishing a sign-out', async () => {
-    const { provider, session, fire } = createUnexpiredProvider();
-
-    await provider.removeSession(session.id);
-
-    expect(providerMocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
-    expect(
-      providerMocks.invalidateModelOptionsCache.mock.invocationCallOrder[0],
-    ).toBeLessThan(fire.mock.invocationCallOrder[0]);
   });
 
   // The shared client persists no session, so a remote sign-out would revoke

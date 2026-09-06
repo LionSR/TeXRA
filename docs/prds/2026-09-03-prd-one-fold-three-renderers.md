@@ -119,15 +119,16 @@ switch (`main/index.ts:577-596`).
 
 **G1. One fold, everywhere.** `fold(view, input): SessionView` is a pure
 function in `src/shared/session/` over `FoldInput`, the union of durable
-events, live text chunks, local runtime state, and the transient read and
-subscription inputs of 5.2. Every process that shows a session runs it, and
-the same inputs give the same view in all of them. No process holds a mirror
-of another process's fold output. A process that does not own a run may
-receive fewer live text chunks and render its settled prefix (7.2); durable
-rows and existence reconciliation have the same meaning in every process.
+events, live text chunks, and this process's local runtime state (5.2).
+Every process that shows a session runs it, and the same inputs give the
+same view in all of them. No process holds a mirror of another process's
+fold output. The two non-durable arms are by definition local: a process
+that does not own a run has fewer inputs and renders the settled prefix of
+its text (7.2), which is a smaller input set, never a different reading of
+the same one.
 
-**G2. The transport carries input, never output.** Down: durable events, existence reconciliation, and
-live text chunks in the read order of 7.4. Up: `runtime.request` and `host.request`. A
+**G2. The transport carries input, never output.** Down: durable events and
+live text chunks, seq ordered. Up: `runtime.request` and `host.request`. A
 generic setter applying view patches is a second reducer imitating the
 first and is not built.
 
@@ -166,8 +167,8 @@ SessionView = {
   streams: Map<StreamTabId, StreamView>,
   // top-level ids, streamOrdering rule
   order: StreamTabId[],
-  // the tail position: the last commit folded from `all`, seeded with the
-  // layer's anchor (7.1, 7.2); a listing or history row never advances it
+  // the drained durable prefix, seeded before the cold reads (7.1, 7.2);
+  // a listing or history row never advances it
   cursor: CommitOrdinal,
   // one entry per SUBSCRIBED aggregate: the highest seq the fold has
   // retained for it. Created when the aggregate enters the subscription
@@ -249,7 +250,7 @@ TranscriptView = {
 ```
 
 `SessionView` holds `Map`s because it never crosses a bridge - only events,
-chunks, existence reconciliation, and `local` do (8.1). Every type that _is_ on the wire uses arrays
+chunks, and `local` do (8.1). Every type that _is_ on the wire uses arrays
 and records, so nothing depends on a `Map` surviving `JSON.stringify`; the
 same rule governs the persisted `Surface` (9).
 
@@ -300,34 +301,31 @@ SessionView` and loses its metadata cache and its own topology.
 ### 5.2 Fold rules
 
 The fold's input is `FoldInput = Event | TextChunk | LocalRuntimeState |
-TranscriptSubscriptionSet | ReplayComplete | TailBatch`, where `Event` is
+TranscriptSubscriptionSet | ReplayComplete | Drained`, where `Event` is
 `{ read: 'listing' | 'aggregate' | 'all', event: SessionEvent }`: the row
 carries the read that delivered it (7.1; a frame tags its rows the same
 way, 7.4) because one rule below depends on it. `ReplayComplete` is the one
 marker of 7.2: transient, never durable, carrying no fact; the fold uses it
-only to close the listing ahead of it (7.2), and it exists so the publish
-gate can see where the sequenced cold reads end. The additional tail input
-is a read result, never a persisted event:
+to close the listing ahead of it. The input reader delivers a replay only
+when that marker has arrived. `Drained` completes a finite live read and
+carries its existing commit ordinal and existence reconciliation:
 
 ```ts
 ExistenceReconciliation = { checkedAggregateIds: AggregateId[], removedAggregateIds: AggregateId[] }
-TailBatch = { _tag: 'tail.batch', events: SessionEvent[], existence: ExistenceReconciliation, cursor: SessionCursor }
+Drained = { _tag: 'drained', cursor: SessionCursor, existence: ExistenceReconciliation }
 ```
 
-`removedAggregateIds` is a subset of `checkedAggregateIds`: the ids absent
-from C7's `existing(checkedAggregateIds)` in the same read transaction that
-produced the batch's events. The checked scope contains the retained listing
-ids and named transcript aggregates of this reader; no conclusion is drawn
-about ids outside that scope. Folding a `TailBatch` first applies its events
-as `Event` inputs with `read: 'all'`, then applies the shared removal rule
-below to its removed ids and advances to its drained cursor, returning one view. It removes dependent state
-and re-roots surviving child streams exactly as `stream.removed` does,
-without synthesizing a durable tombstone. Thus no intermediate view exposes
-rows from this drain without its matching absence information. An absence-only
-batch changes the view but never advances its durable cursor. This input is
-produced by both `SessionEvents` layers (7.1), including after a tombstone
-has already been physically collected. Three rules govern the event arm
-before any fact below applies.
+The removed ids must be a subset of the checked scope. They are absent from
+C7's `existing(checkedAggregateIds)` in the same read transaction that
+produced the bounded event prefix. The reader emits that prefix, then the
+captured text/local inputs, then `Drained` as one ordered input batch (7.2).
+The fold removes the named aggregates through the same rule as
+`stream.removed`, including dependent state and re-rooting surviving child
+streams, and advances the cursor when applying `Drained`. The entire batch
+produces one new immutable view; neither partial rows nor a cursor beyond
+unapplied inputs are published. This records a read result, never a durable
+event. An absence-only batch changes the view even when its cursor is
+unchanged. Three rules govern the event arm before any fact below applies.
 
 **Duplicates.** The three reads of 7.1 overlap by construction - `run.start` is a
 listing fact and row seq 1 of its aggregate, so `aggregate(id, 0)` replays
@@ -377,18 +375,14 @@ creates its `folded` entry, and when it leaves the fold drops that stream's
 belongs to the evicted aggregate and is dropped by this rule - keeping
 every listing fact.
 
-**Cursor.** `view.cursor` is the tail position, and it advances to the
-position the tail has drained: in the runtime, the commit of each row
-delivered by `all`, whether or not the residency rule kept that row's
-content; in a webview, the final `EventsFrame.cursor` of a complete `TailBatch`
-(8.1), applied with that batch rather than when an earlier frame arrives.
-It is the commit ordinal the framer had drained, which moves
-past the tail rows the framer left out for aggregates the subscriber did
-not name. It never advances from a history or listing row. A
-history row can carry a commit the tail has not reached yet - the read ran
-after the tail's anchor was captured - and a cursor advanced by it would
-make the next `all(cursor)` (a resubscribe, 8.1, or the reopened tail of
-7.2) skip every other aggregate's rows in between.
+**Cursor.** `view.cursor` is the durable prefix completed by the last
+`Drained` input, whether or not every row in that prefix still exists or
+passes the residency filter. The runtime and webview apply it with the
+complete finite-read batch, never on receipt of a partial frame (7.2, 8.1).
+It never advances from a listing/history row or a wake value. A history row
+can carry a commit above the current tail position, so advancing from it
+would skip other aggregates' intervening events on the next forward read.
+
 Every fact below derives from the durable events of section 6 except the
 explicit existence read above and owner liveness, which is process state
 and not an event: the runtime's lease
@@ -477,8 +471,8 @@ it hands the fold.
   the fold keeps no tombstone set, so this rule relies on that order: a
   tombstone folded first would be forgotten and the later `run.start` would
   recreate the stream), and the tail carries it while it remains stored. If retention has already
-  removed it, `TailBatch.existence` carries the same removal to every reader,
-  including remote folds (7.1, 8.1). **A tombstone is final**. Nothing supersedes it:
+  removed it, `Drained.existence` carries the same removal to every reader,
+  including remote folds (7.2, 8.1). **A tombstone is final**. Nothing supersedes it:
   a relaunch after a deletion mints a fresh `StreamTabId` and carries the
   deterministic workflow name as a label (decision 9), so it is a different
   stream, no later event can target the closed one, and nothing has to tell
@@ -779,20 +773,22 @@ it hands the fold.
   the resumed run's repair path appends a durable finalization for every
   row it finds open, so replay never reconstructs a never-terminated row. A
   non-owning process renders the settled prefix (7.2).
-- **In-flight text is its own map, so row order does not matter.** Chunks
+- **In-flight text is its own map.** Chunks
   accumulate in `SessionView.inflight`, keyed by stream and row, beside the
-  rows rather than inside them: the producer can append before it streams,
-  but the fold's two inputs are separate streams and the table drain is
-  asynchronous, so emission order is not delivery order, and a chunk can
-  reach the fold before the trace row it belongs to. A row renders by
+  rows rather than inside them. Transcript residency may omit a row while
+  the stream remains in the listing, so text does not depend on a retained
+  transcript row. A row renders by
   joining its durable fields with its in-flight entry, and the entry is
-  dropped when the row's finalizing event lands. A consumer-side buffer
-  ordered against the event stream would need an eviction policy of its
-  own; keying the text by row ties it to the stream lifecycle instead. A
+  dropped when the row's finalizing event lands. Keying text by row ties
+  it to the stream lifecycle. A
   chunk for a **stream** the view does not hold is dropped: `run.start` is
   committed at the reservation point before any model call (section 6,
-  item 3), so no text can precede its stream, and the only stream a chunk
-  can miss is one `stream.removed` has closed. An entry goes when its row's
+  item 3), but this does not imply that a renderer has observed it. The
+  ordered input reader (7.2) captures the text level first, then reads the
+  committed event prefix before emitting its text suffixes. The webview
+  preserves that order within and between frames. Thus a chunk can miss
+  only a stream that has been removed, not an existence event still waiting
+  in a separate reader. An entry goes when its row's
   finalizing event folds, when its stream's terminal status folds (a run
   can end with a row unfinalized - a crash, an abandoned interrupt), when
   `stream.removed` closes the stream, or when the stream's aggregate leaves
@@ -845,13 +841,14 @@ is C3's view from the fold's side. Emission for everything is `SessionHandle.eve
 
 Agreed additions and changes (substrate owner, 2026-09-03):
 
-1. **`approval.requested` and `approval.resolved`**, run-scoped
-   `AgentEvent`s; resolved carries the request id. Payload is what the UI
+1. **`approval.requested` and `approval.resolved`**, run-scoped session
+   facts `SessionHostInteractions` publishes directly as drafts (they are
+   not trace `AgentEvent`s); resolved carries the request id. Payload is what the UI
    shows (diff, command, question), never host handles. Today these travel
    only on the `HostInteractions` port, so a pending approval does not
    survive a restart.
 2. **`approval.policy`**, run-scoped, carrying the full policy snapshot
-   after a change, emitted by the single policy authority
+   after a change, published directly as a draft by the single policy authority
    (`src/shared/approvalPolicy.ts`, pinned by
    `approvalPolicyAuthorityRatchet.vitest.ts`). The **initial** snapshot is a
    field on the `run.start` payload rather than a separate event at the
@@ -1003,8 +1000,8 @@ class SessionEvents extends Context.Service<
       events: readonly SessionEvent[],
     ) => Effect.Effect<void>;
     readonly publish: (event: SessionEvent) => Effect.Effect<void>;
-    // The three event reads used by renderers are a subset of C7;
-    // tail composes its all/ existing queries in one read transaction.
+    // These three event reads are a subset of C7. SessionInputs also uses
+    // its bounded prefix and existence queries in one read transaction.
     // the cold listing hydrate (C8): the latest-of-type row per aggregate
     // for the listing fact types plus the outstanding-approval set, one
     // indexed query; never a transcript row; completes, no tail. Rows are
@@ -1014,13 +1011,12 @@ class SessionEvents extends Context.Service<
     readonly listing: () => Stream.Stream<SessionEvent>;
     // every event with commit > fromCommit, in commit order across
     // aggregates, then the tail. Transcript rows of unsubscribed aggregates
-    // included: the live tail, and the frozen NDJSON projection's read (10.3)
-    readonly all: (fromCommit: SessionCursor) => Stream.Stream<SessionEvent>;
-    // Same rows plus existence for this reader's captured resident scope.
-    readonly tail: (
+    // included: the live tail, and the frozen NDJSON projection's read (10.3).
+    // With throughCommit, completes at that inclusive bound (SessionInputs).
+    readonly all: (
       fromCommit: SessionCursor,
-      residentIds: Effect.Effect<readonly AggregateId[]>,
-    ) => Stream.Stream<TailBatch>;
+      throughCommit?: SessionCursor,
+    ) => Stream.Stream<SessionEvent>;
     // one aggregate's rows from `fromSeq`, in seq order; completes. A
     // history read, never a tail: a subscribed aggregate's live rows come
     // from `all`. An AggregateId is a stream id, an execution id, an
@@ -1030,10 +1026,6 @@ class SessionEvents extends Context.Service<
       aggregateId: AggregateId,
       fromSeq: Seq,
     ) => Stream.Stream<SessionEvent>;
-    // where this layer's tail starts, fixed at layer build: the durable
-    // layer's commit ordinal at build, a webview's Subscribe cursor (8.1).
-    // A value, not a query: the shared fold never reads a durable ordinal
-    readonly anchor: SessionCursor;
   }
 >()('@texra/session/SessionEvents') {
   // runtime processes: the durable table is the source of truth
@@ -1042,10 +1034,10 @@ class SessionEvents extends Context.Service<
     Effect.gen(function* () {
       const gate = yield* Semaphore.make(1);
       const durable = yield* DurableWrite;
-      // Database-owned, replaying process-local counter (C7), not a commit
-      // ordinal. Every successful local write transaction increments it in
-      // the uninterruptible post-commit path, including retention with no
-      // appended event. The publisher is not its only writer.
+      // Database-owned replaying counter (C7), never a commit ordinal.
+      // Every successful local write transaction advances it in the
+      // uninterruptible post-commit path, including retention with no
+      // appended event. Publication is not its only writer.
       const wakeLevel = durable.wakeLevel;
       const publishBatch = Effect.fn('SessionEvents.publishBatch')(
         function* (events) {
@@ -1054,9 +1046,10 @@ class SessionEvents extends Context.Service<
           );
         },
       );
+      const publish = (event: SessionEvent) => publishBatch([event]);
       // One foreign-connection poll per database updates the same wake.
       // data_version is compared only with its previous sample, never a
-      // cursor. Replaying the wake level makes a new drain read immediately.
+      // cursor. Replaying the level makes a new reader read immediately.
       yield* Effect.forkScoped(
         Stream.tick(dataVersionPollInterval).pipe(
           Stream.mapEffect(() => durable.dataVersion),
@@ -1067,16 +1060,17 @@ class SessionEvents extends Context.Service<
         ),
       );
       const wake = SubscriptionRef.changes(wakeLevel);
-      // the tail anchor: read once, here, before any cold read this layer
-      // serves. `durable.now` has one other reader, the NDJSON projection
-      // (10.3); the shared fold never sees it
-      const anchor = yield* durable.now;
-      // The event-only tail (C7): the table read forward from the
-      // caller's position on every wake. `at` is only its row cursor;
-      // it is never compared with a wake value. The cold reads complete
-      // and are never merged with this.
-      const all = (fromCommit: SessionCursor) =>
-        Stream.unwrap(
+      // Event-only tail for consumers such as NDJSON. SessionInputs uses
+      // finite prefixes of the same table (7.2), never merged live inputs.
+      // This row cursor is never compared with a wake version.
+      const all = (
+        fromCommit: SessionCursor,
+        throughCommit?: SessionCursor,
+      ) => {
+        if (throughCommit !== undefined) {
+          return durable.readAll(fromCommit, throughCommit);
+        }
+        return Stream.unwrap(
           Effect.gen(function* () {
             const at = yield* Ref.make(fromCommit);
             const forward = Stream.unwrap(
@@ -1091,75 +1085,14 @@ class SessionEvents extends Context.Service<
             return wake.pipe(Stream.flatMap(() => forward, { concurrency: 1 }));
           }),
         );
-      const publish = (event: SessionEvent) => publishBatch([event]);
-      // A view drain includes both C7 reads in one SQLite read transaction.
-      // readTail captures the supplied scope, reads all(c) and existing(ids),
-      // and returns { events, existence }; it adds no database query or event.
-      const tail = (fromCommit, residentIds) =>
-        Stream.unwrap(
-          Effect.gen(function* () {
-            const at = yield* Ref.make(fromCommit);
-            return wake.pipe(
-              // Every wake checks existence, even if no event survives.
-              Stream.mapEffect(() =>
-                Effect.gen(function* () {
-                  const c = yield* Ref.get(at);
-                  const ids = yield* residentIds;
-                  const batch = yield* durable.readTail(c, ids);
-                  const cursor = batch.events.at(-1)?.commit ?? c;
-                  yield* Ref.set(at, cursor);
-                  return {
-                    _tag: 'tail.batch',
-                    ...batch,
-                    cursor,
-                  } satisfies TailBatch;
-                }),
-              ),
-              Stream.filter(
-                (batch) =>
-                  batch.events.length > 0 ||
-                  batch.existence.removedAggregateIds.length > 0,
-              ),
-            );
-          }),
-        );
+      };
       // the cold listing hydrate (C7, C8): one indexed query, latest-of-type
       // per aggregate for the listing fact types plus the outstanding
       // approvals; never a transcript row; completes
       const listing = () => durable.readListing();
       // one aggregate's rows from a seq, in seq order (C7); completes
       const aggregate = (id, fromSeq) => durable.readAggregate(id, fromSeq);
-      return { publishBatch, publish, listing, all, tail, aggregate, anchor };
-    }),
-  );
-
-  // webviews: no database, no publish; the bridge's frames are the source
-  static readonly transportLayer = Layer.effect(
-    SessionEvents,
-    Effect.gen(function* () {
-      // this session's frames: the port is demultiplexed once, above (7.4)
-      const frames = yield* SessionFrames;
-      return {
-        publishBatch: () => Effect.die(new Error('webview cannot publish')),
-        publish: () => Effect.die(new Error('webview cannot publish')),
-        // the runtime ran this Subscribe's reads in the fold fiber's order
-        // (7.4) and framed their rows tagged by read; the decoder routes
-        // each row to its read's queue and ends the listing and aggregate
-        // queues at the frame that carries `replayComplete` (8.1), so the
-        // fiber's `Stream.concat` over these reads is the same code as in
-        // the runtime. `all` ignores its argument: the tail is the frames
-        // after that marker, anchored by the runtime at the Subscribe cursor
-        listing: () => frames.listing(),
-        all: () => frames.events(),
-        // The decoder buffers each drain until its existence field arrives.
-        // It emits the same TailBatch as durableLayer, after generation checks.
-        tail: () => frames.tail(),
-        aggregate: (id, fromSeq) => frames.aggregate(id, fromSeq),
-        // the Subscribe cursor the shell issued (8.1): 0 on a cold mount,
-        // the retained view's cursor on a resync. No durable ordinal exists
-        // here and none is read
-        anchor: frames.cursor,
-      };
+      return { publishBatch, publish, listing, all, aggregate };
     }),
   );
 }
@@ -1189,9 +1122,9 @@ dropped when its seq is not above `view.folded` for its aggregate, which is
 order-safe because the fold fiber sequences the reads (7.2). Those are the
 only dedupe: there is no `dedupeBySeq` pass and no reorder buffer (a
 transcript row is placed by the commit ordinal it carries, 7.2). The
-replay-then-tail seam is closed by the anchor rather than by a queue: the
-durable layer captures its commit ordinal once at build, before any cold
-read it serves, and the tail reads forward from there, so a commit landing
+replay-then-tail seam is closed by the anchor: the runtime input reader
+captures the current commit ordinal before a cold read, or resumes from
+the retained view's cursor. The tail reads forward from there, so a commit landing
 during the cold reads is delivered by the tail and deduplicated, never
 lost; the "subscribe before you read" invariant and its scoped queue are
 gone.
@@ -1199,30 +1132,29 @@ gone.
 The wake is a **replaying process-local counter**, distinct from every
 persisted ordinal (C7). The database owns `DurableWrite.wakeLevel`, a
 `SubscriptionRef<number>` advanced in the uninterruptible post-commit path
-of every successful local write transaction. This includes a retention
-transaction that deletes already-closed rows without inserting an event;
-`data_version` cannot detect a commit on its own connection. Publication
-alone therefore cannot own this signal.
+of every successful local write transaction. This includes retention that
+deletes already-closed rows without inserting an event; `data_version`
+does not detect a commit on its own connection. Publication alone therefore
+cannot own this signal.
 
 One poll per database compares `PRAGMA data_version` with its previous
-sample and advances the same wake counter on a foreign change. Neither the
-PRAGMA value nor the wake counter is compared with `SessionCursor`. Every
-wake makes `all` read forward and makes `tail` also check the captured
-resident scope, even if no event remains. A new subscriber receives the
-current wake level immediately, so no commit between replay and subscription
-is missed. A burst may be coalesced by comparing wake versions with wake
-versions only; a later drain still checks all changes visible in its read
-transaction. The sketches drain every observed version sequentially.
+sample and advances the same wake on a foreign change. Neither the PRAGMA
+value nor the wake version is compared with `SessionCursor`. Each wake makes
+`all` read forward and wakes `SessionInputs` to read its finite prefix and
+check existence, even if no new row remains. A new subscriber receives the
+current level immediately, so a commit between replay and subscription is
+not missed. Wake versions may be coalesced only against other wake versions;
+the next read still covers all changes visible in its transaction.
 
 Decision 6 is resolved by C7: database `commit` is the durable row order;
 the transient counter says only to read again. It may advance when the row
-cursor does not, and deletion is then conveyed by `TailBatch.existence`.
-No WAL frame count, `MAX(rowid)`, or connection-local PRAGMA value is used
-as a durable cursor.
+cursor does not, and deletion then travels in `Drained.existence`. Neither
+WAL frame counts, `MAX(rowid)`, nor connection-local PRAGMA values are used
+as durable cursors.
 
 The durable write is in the publish path, under the same permit as seq
 assignment, so seq order and insert order cannot diverge and no subscriber
-persists anything. The database's post-commit wake covers this path and
+persists anything. The database's post-commit wake covers publication and
 retention alike. The permit section is
 `Effect.uninterruptible`, so neither an interrupt nor a failure can land
 between the append and the wake: the append either fails before anything is
@@ -1231,7 +1163,7 @@ and never waits for a renderer. Backpressure lives at each transport framer
 (7.4).
 
 `SessionCursor` is one number - the session commit ordinal the tail has
-drained (5.2; in a webview, the final cursor of the last applied tail batch, 8.1) - and
+drained (5.2; the cursor of the last applied `Drained` input, 8.1) - and
 it is a field of the view (`cursor`). Both properties matter. A single
 ordinal is what makes `all` a globally ordered scan of the listing tier
 rather than a per-aggregate merge, and being a field rather than a projection of `view.streams`
@@ -1241,10 +1173,10 @@ wake would re-read from the start, resurrecting the stream and its approvals
 in the intermediate states the fold publishes, forever. An ordinal
 never regresses because it is not a function of what is visible.
 
-That ordinal is also the local level of 7.1: a wake says "this process's
-last commit is N", the reader asks for everything above its own position,
-and a foreign trigger asks the same question without naming a number.
-`tail(view.cursor, residentIds)` is the view resubscribe; the transcript tier resubscribes per
+That ordinal is independent of the wake level of 7.1. A wake asks the
+reader to check the database again; only completing a read advances its
+position.
+`all(view.cursor)` is the resubscribe; the transcript tier resubscribes per
 aggregate from its own `fromSeq`, that aggregate's entry in `view.folded`
 (8.1).
 **Read path, corrected 2026-09-04.** An earlier revision of this section
@@ -1259,17 +1191,17 @@ three event reads in the block above, a subset of contract C7: `listing()` is th
 listing hydrate, the latest-of-type row per aggregate for the listing fact
 types plus the outstanding-approval set, one indexed query that completes,
 returns its rows in commit order, and never returns a transcript row; `all(fromCommit)` is every event above
-a commit ordinal in commit order, then the tail, and is what the NDJSON projection reads. The fold uses `tail`, which pairs
-those rows with C7's existence query from the same transaction; `aggregate(aggregateId, fromSeq)`
+a commit ordinal in commit order, then the tail, and is what the fold's
+live tail and the NDJSON projection read; `aggregate(aggregateId, fromSeq)`
 is one aggregate's rows from a seq, opened by `SessionViewService` (7.2)
 for each aggregate in its subscription set and closed when that aggregate
 leaves the set. A transcript subscriber names aggregates, not streams - the
 stream aggregate and, through the edge on `run.start`, its execution
 aggregate, each with its own `fromSeq` (5.1, 8.1) - and cold hydration is
 `listing()`, then `aggregate(id, 0)` per named aggregate in turn, then the
-one replay-complete marker, then `tail(anchor, residentIds)`, sequenced by
-`Stream.concat` in the fold fiber (7.2), with the overlap between the reads
-absorbed by the fold's duplicate rule (5.2).
+one replay-complete marker, then finite forward reads from the captured
+anchor. The ordered input reader (7.2) completes replay before starting
+those reads, with their overlap absorbed by the fold's duplicate rule (5.2).
 The listing facts (status, parent, removal, inquiry) come from `listing()`
 and then the `all` tail, so a subscriber always holds both tiers. The
 precise shape of the key, the ordinal, the cursor, and the database
@@ -1283,23 +1215,19 @@ wins on what the fold consumes. The rc.112 names used above -
 against `node_modules/effect/dist`; the v3 `toQueueScoped` and
 `unwrapScoped` are gone and are no longer needed here.
 
-Two layers implement this one shape. `durableLayer` runs in the extension
-host, the desktop main process, and the CLI, and is the only one that
-resolves `DurableWrite`. `transportLayer` runs in a webview, where there is
-no database and no publisher: it decodes the `EventsFrame`s of 8.1 through
-`SessionFrames`, the one service a webview's process layer provides. Its session inputs are `events` (the rows of whichever read the
-runtime ran for this subscriber, each tagged with its read and routed by
-the decoder to that read's queue, so the fold fiber consumes the reads in
-sequence), `existence` (paired with tail events as a `TailBatch`), `chunks`,
-and `local` (7.2). `replayComplete` is the marker that
-ends the listing and aggregate queues (8.1), a frame whose `generation` is
-not the surface's current one is discarded before any of that (8.1), and
-`host` is not a fold arm at all: the decoder
-publishes it into a `HostState` service (a `SubscriptionRef` the shell's
-components read as a signal), because it is host data, not session state
-(8.1, 9). Without the `host` field the frame would carry the snapshot with
-nowhere to put it. A webview that reaches for `publish` is a defect, not a
-silent no-op: it issues a `runtime.request` (8.2) instead.
+`durableLayer` runs in the extension host, the desktop main process, and
+the CLI. The runtime's `SessionInputs` reader combines finite reads from
+the same log with transient source levels in causal order (7.2). A webview
+supplies `SessionInputs` through `SessionFrames`, with no database or
+publisher. The decoder retains one ordered queue of `EventsFrame`s for the
+current generation and releases each replay only after `replayComplete`.
+A finite live read is likewise released only when its final frame supplies
+`Drained` and existence reconciliation (8.1). It preserves event-before-text order; splitting frame fields into separate
+consumers would lose that guarantee. A frame from another generation is
+discarded before decoding its inputs (8.1). The `host` field is separate
+from the fold: the decoder publishes it into a `HostState` service, a
+`SubscriptionRef` read by shell components (8.1, 9). A webview issues a
+`runtime.request` (8.2) for an action; it has no event publisher.
 
 `SessionFrames` takes no `SessionKey`, because it _is_ one session's frames.
 A webview has one `postMessage` port and N open papers, so the port is
@@ -1315,250 +1243,97 @@ be trusted at each call.
 
 ### 7.2 `SessionView`
 
+`SessionViewService` applies the same pure fold in every host. Its source is
+`SessionInputs.read(aggregates, cursor)`: complete replay batches, followed by
+ordered live inputs. The runtime supplies this source from the event log and
+its transient levels; the webview supplies it from the transport frames.
+
 ```ts
-// src/controllers/session/SessionView.ts
-class SessionViewService extends Context.Service<
-  SessionViewService,
-  {
-    readonly ref: SubscriptionRef.SubscriptionRef<SessionView>;
-    readonly changes: Stream.Stream<SessionView>;
-  }
->()('@texra/session/SessionView') {
-  static readonly layer = Layer.effect(
-    SessionViewService,
-    Effect.gen(function* () {
-      const events = yield* SessionEvents;
-      // lease reader in the runtime; the frames' local field in a webview
-      const liveness = yield* LocalRuntimeSource;
-      // the delta path in the runtime; the frames' chunks field in a webview
-      const chunks = yield* TextChunkSource;
-      // the subscription set (5.2, 8.1): the aggregates some surface holds a
-      // transcript subscription on, each with its own fromSeq. In the
-      // runtime its value is the union of one set per transport port (a
-      // port's Subscribe replaces that port's set, a port close removes it,
-      // 8.1); in a webview the shell writes it. It
-      // is a SubscriptionRef because it is a fold input: every change of the
-      // set folds, and an aggregate leaving it evicts its transcript state
-      const subscriptions = yield* TranscriptSubscriptions;
-      // the key is the layer's, not an input: no fold arm carries one.
-      // SessionKey IS the workspace root that keys the LayerMap (7.3).
-      const roots = yield* WorkspaceRoots;
-      // the view's cursor starts at the layer's tail anchor (7.1): the
-      // durable layer's ordinal at build, a webview's Subscribe cursor. This
-      // code never reads a durable ordinal, so it is the same in a webview
-      const empty = emptySessionView(roots.workspace, events.anchor);
-      const ref = yield* SubscriptionRef.make(empty);
-      // every row enters the fold with the read that delivered it (5.2)
-      const from = (read: 'listing' | 'aggregate' | 'all') =>
-        Stream.map((event: SessionEvent): FoldInput => ({
-          _tag: 'event',
-          read,
-          event,
-        }));
-      // One shape for every value of the subscription set, the first one
-      // included, and it is SEQUENCED, never merged: the listing first (the
-      // hydrate every Subscribe starts with, 7.4; a row the view already
-      // holds is a no-op under the commit rule of 5.2), the set itself (a
-      // fold input, so `folded` entries exist before their rows), then the
-      // history of each aggregate in the set from the seq the view has
-      // retained (its `fromSeq` when the view has none), then the current
-      // local snapshot, then the one replay-complete marker, then the tail
-      // from the view's cursor. Stream.concat is what makes the seq
-      // threshold order-safe (5.2): no tail row can fold before the history
-      // beneath it. `switchMap` closes the previous set's reads; every read
-      // is cursor-driven (7.1), so a reopen costs the rows since the view's
-      // position and loses nothing. The marker closes the listing ahead of
-      // it: a stream the listing did not name goes (below). After the first
-      // set the gate below has already released
-      const reads = SubscriptionRef.changes(subscriptions).pipe(
-        Stream.switchMap((set) =>
-          Stream.unwrap(
-            SubscriptionRef.get(ref).pipe(
-              Effect.map((view) =>
-                Stream.concat(
-                  set.reduce(
-                    (history, s) =>
-                      Stream.concat(
-                        history,
-                        events
-                          .aggregate(s.id, view.folded.get(s.id) ?? s.fromSeq)
-                          .pipe(from('aggregate')),
-                      ),
-                    Stream.concat(
-                      events.listing().pipe(from('listing')),
-                      Stream.make<[FoldInput]>({ _tag: 'subscriptions', set }),
-                    ),
-                  ),
-                  Stream.concat(
-                    // the local snapshot is a level (below): read once here,
-                    // ahead of the marker, so the first published view has it
-                    Stream.fromEffect(SubscriptionRef.get(liveness.ref)).pipe(
-                      Stream.map((local): FoldInput => ({
-                        _tag: 'local',
-                        local,
-                      })),
-                    ),
-                    Stream.concat(
-                      Stream.make<[FoldInput]>({ _tag: 'replay.complete' }),
-                      events.tail(
-                        view.cursor,
-                        SubscriptionRef.get(ref).pipe(
-                          Effect.map((current) =>
-                            retainedAggregateIds(current, set),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+const ref = yield * SubscriptionRef.make(emptySessionView(roots.storage));
+yield *
+  Effect.forkScoped(
+    SubscriptionRef.changes(subscriptions.ref).pipe(
+      Stream.switchMap((set) =>
+        Stream.unwrap(
+          SubscriptionRef.get(ref).pipe(
+            Effect.map((view) =>
+              inputs.read(
+                set.map((entry) => ({
+                  ...entry,
+                  fromSeq: view.folded.get(entry.id) ?? entry.fromSeq,
+                })),
+                view.cursor,
               ),
             ),
           ),
         ),
-      );
-      yield* Effect.forkScoped(
-        Stream.mergeAll([reads, liveness.changes, chunks.changes], {
-          concurrency: 3,
-        }).pipe(
-          // each state paired with the input that produced it, so the gate
-          // can see the marker without the view carrying a flag for it
-          Stream.mapAccum(
-            () => empty,
-            (view, input) => {
-              const next = fold(view, input);
-              return [next, [{ view: next, input }]] as const;
-            },
-          ),
-          // nothing is published before the marker: a mounting surface must
-          // not render the intermediate states of the cold reads
-          Stream.dropWhile(({ input }) => input._tag !== 'replay.complete'),
-          Stream.runForEach(({ view }) => SubscriptionRef.set(ref, view)),
-        ),
-      );
-      return { ref, changes: SubscriptionRef.changes(ref) };
-    }),
+      ),
+      Stream.runForEach((batch) =>
+        SubscriptionRef.update(ref, (view) => fold(view, batch)),
+      ),
+    ),
   );
-}
 ```
 
-`retainedAggregateIds` collects the current view's stream ids, their
-execution ids, inquiry thread ids, and the named transcript aggregates. It
-reads the view afresh for each tail drain; it is not another stored index.
-A transport subscription maintains its own equivalent scope from ids sent
-by its listing or live-tail lifecycle/inquiry rows (including stream,
-execution, and inquiry edges), plus requested transcripts, until it has been
-sent their removal (7.4). It never substitutes the database-owning view's
-scope, which may already have forgotten an id the renderer still holds.
+Each read first collects the listing, the subscription set, the named
+aggregate histories in sequence, and the current local snapshot. It releases
+these inputs together with `replay.complete` as one batch. This applies to
+**every** subscription change. An incomplete or superseded replay does not
+reach the fold and cannot mutate the published view's shared indexes. Merely
+suppressing publication until the first marker is insufficient: later replays
+would otherwise change visible membership before they were complete.
 
-The empty value is built once from `WorkspaceRoots` and the layer's anchor
-and passed to _both_ `SubscriptionRef.make` and `Stream.mapAccum`:
-`SessionView.key` identifies which paper a view is of, no `FoldInput` arm
-carries a `SessionKey`, and seeding the fold with anything else would have
-its first emission overwrite the correctly keyed ref. `SessionKey` needs no field of its own - it is
-`roots.workspace`, the same value that keys the `LayerMap` (7.3, 8.1).
+Listing hydration remains authoritative. At the replay marker, streams absent
+from the completed listing are removed together with their transcript state.
+The subscription set governs transcript residency; leaving the set releases
+that aggregate's transcript and in-flight text. Histories resume from the seq
+retained in `view.folded`, independently of the session's commit cursor.
 
-The fold folds the replay through before the first value reaches `ref`:
-`Stream.mapAccum` emits one view per input, so publishing them all would
-let a surface mounting onto an existing session render its history -
-deleted streams reappearing, resolved approvals actionable again,
-non-terminal runs briefly `interrupted` because no `local` snapshot has
-arrived yet, a transcript filling in row by row - for the length of the
-replay. The replay says when it is finished rather than being inferred from
-an ordinal, and it says so **once**: the cold reads are sequenced,
-`listing()` then each initially subscribed aggregate's history in turn, then
-the current `local` snapshot, and one `replay.complete` marker follows the
-last of them (a `FoldInput` arm, transient, never durable, 5.2); the tail
-starts after it. There is nothing to coordinate because nothing runs
-concurrently: when the marker arrives, the listing, every initial history,
-and the local snapshot have completed by construction. The snapshot is in
-the sequence because `LocalRuntimeSource` is a `SubscriptionRef`, a level:
-`liveness.changes` in the merge replays its current value too, but
-`mergeAll` orders it against nothing, so without the sequenced read the
-marker could arrive first and the first published view would fold a run
-with a live owner as `interrupted` and actionable, the intermediate state
-the gate exists to suppress. A frame carries the same marker (8.1). An
-aggregate that joins the set later is sequenced the same way, the listing
-and its history ahead of the reopened tail, but the marker after it gates
-nothing: the view is already published and the rows arrive incrementally
-like any tail. Comparing the view's cursor against a
-captured ordinal would not work instead, because retention can prune a
-deleted stream's rows and its tombstone while the ordinal keeps counting -
-if the surviving history ends at 10 and the pruned rows held 11-20, nothing
-the subscriber folds ever reaches 20 and the view would stay empty until
-some unrelated commit arrived. The fold drops states until the marker's and
-publishes every one after; the tail then publishes incrementally as before.
+After replay, the runtime input reader treats the database wake level,
+local snapshot, and text map as wakeups. It captures the text and local
+levels first, then opens one SQLite read transaction, captures the committed
+ordinal, and reads `all(cursor, bound)` together with C7's
+`existing(checkedAggregateIds)`. The bound is the committed AUTOINCREMENT
+high-water value, never the maximum surviving event row; retention cannot
+make it regress. It orders those events before
+text suffixes derived from the captured text level. A fresh reader has sent
+no text, so its first chunk for every row begins at zero. Capturing text
+before the ordinal is essential: the bound must cover every existence event
+that preceded that text. Independent event and text streams merged at the
+consumer do not provide this ordering.
 
-`Layer.effect` strips `Scope` from the requirements, so the forked fold
-fiber is owned by the layer's scope and ends on `runtime.dispose()`.
-`Layer.scoped` does not exist in v4 (the migration PRD's section 8.3 example
-needs the same correction). `SubscriptionRef` does not coalesce; the bridge
-does (7.5). Synchronous reads use `SubscriptionRef.getUnsafe`, never
-`runSync`. The three merged streams carry the six arms of `FoldInput`
-(5.2): the sequenced reads (event histories, tail batches, the subscription
-set, and the marker) and the two transient sources, each of which has a source
-service with a process-specific layer, so the fold fiber is the same code
-everywhere - it reads no durable ordinal, and in a webview the transport
-layer's reads are the frame queues (7.1).
-`LocalRuntimeSource` is one `SubscriptionRef` (`ref`, with `changes` over
-it): the lease reader and restart repair's shared ref in the runtime, and
-the `local` field of each frame (8.1) written into a ref in a webview.
-`TextChunkSource` is the model handler's existing delta path in the runtime
-(the stream `StreamingTextAccumulator` consumes today) and the `chunks`
-field of each frame in a webview.
+The checked scope belongs to this reader: ids from its completed listing,
+ids and stream/execution/inquiry edges introduced by delivered live-tail
+facts, and its requested transcript aggregates. It retains them until it has
+delivered their removal. Each transport subscription has its own scope;
+it never borrows the database-owning fold's current ids, which may already
+omit a stream the renderer still holds. No absence is inferred for an id
+outside the captured scope.
 
-`events.listing()` is the listing hydrate: the latest-of-type row per
-aggregate for the listing fact types plus the outstanding-approval set, in
-commit order, never a transcript row. It opens every sequence: the cold
-mount, every resync (a `Subscribe` whose cursor is not the framer's
-current position, 7.4, 8.1), and every change of the subscription set, whose
-listing rows the view already holds and the commit rule of 5.2 ignores.
-**Listing hydration is authoritative**: when the marker that ends the
-sequence folds, every stream the view holds that no listing row of that
-sequence named is removed, with everything `stream.removed` clears (5.2).
-Retention can delete a closed aggregate together with its tombstone while a
-surface is away, after which neither `all(cursor)` nor any aggregate read
-can deliver the deletion. Listing covers an absent surface; the ordinary
-live `tail` additionally reconciles existence on every drain, so an open
-surface does not need to resubscribe to learn the same removal. It carries
-every row committed after the view's cursor, in commit order, transcript rows of
-every aggregate included, of which the fold keeps only the subscribed
-aggregates' (the residency rule of 5.2); the cursor starts at the layer's
-anchor and advances only on tail rows (5.2). Transcript history arrives
-through `events.aggregate(id, fromSeq)`, a completing read per aggregate in
-the subscription set: the set gains an aggregate when a surface subscribes
-to it (8.1; the TUI and headless write the set in process) and loses it
-when the last subscriber leaves. Every value of the set, the first
-included, is answered by the same sequence - the set change, each
-aggregate's history, the marker, the tail - so a late subscription is not a
-special case and no history read is ever merged with the tail it overlaps.
-The set is itself a fold input: `switchMap` closes the previous reads, and
-the eviction is the fold's, on the set change - that stream's `rows`,
-`taskGroups`, `compaction`, `run`, `folded` entry, and `inflight` entries
-go, its listing facts stay - so opening and closing transcripts accumulates nothing. The set
-names aggregates, not streams - a stream's transcript is its stream
-aggregate plus its execution aggregate, each from its own seq (5.1) - and
-the subscribe handler writes each entry's `fromSeq` from the subscriber's
-`view.folded` entry for that aggregate (0 when it has none), never from
-`settledSeq` or the cursor, which are commit ordinals in another number
-space; a stream at commit 100 whose execution aggregate is at seq 3 reopens
-the execution read from 3, not 100. The fiber itself reopens from its own
-`view.folded` entry when it has one, so an aggregate that stays in the set
-across a change costs the rows since then, not the history. That is the
-residency rule of 5.2 applied to the runtime, not only to webviews; one
-`SubscriptionRef` that folded all history would be #9952 again.
+The same reader serves the runtime fold and each transport framer. Each
+finite read is one ordered batch: durable prefix, captured text/local
+inputs, and finally `Drained` containing the transaction's bound and its
+existence result. Applying that complete batch removes missing aggregates
+and advances the cursor in the same immutable view update. An empty event
+prefix can still carry changed text/local inputs or missing aggregates;
+an absence-only batch must be delivered even when the cursor is unchanged.
+The bound is the existing commit ordinal, including rows no longer
+materializable, not a new sequence counter. Transport may split a batch over
+16 ms frames, but preserves its final `Drained` boundary (7.4, 8.1).
 
-All three non-durable inputs are **levels**, like the commit ordinal (7.1),
-and for the same reason: a snapshot read beside a separately armed delta
-stream loses whatever lands between the two. `TextChunkSource` is therefore
-a `SubscriptionRef` of the in-flight text per row rather than a snapshot
-plus a delta feed. Subscribing to a `SubscriptionRef` replays its current
-value, so there is no window in which a chunk can be lost, and the framer
-derives each subscriber's chunks from the difference between that ref and
-what it has already sent for each row - which is what the `from`/`to`
-offsets are for. A fresh subscriber has sent nothing, so its first chunk per
-row is `from: 0`. Without this a webview reloading mid-response starts with
-an empty `inflight` map and meets the next delta at `from > length`, the
-defect assertion.
+A webview keeps one input queue for the current subscription generation.
+Frames retain event-before-text order, and replay is collected through its
+completion marker before reaching the same fold. Live inputs are collected
+through `Drained` in the same way. Incomplete or superseded inputs never
+mutate the published view or advance its saved cursor. It does not demultiplex
+listing, history, tail, and text into independently scheduled consumers, and
+it does not rebuild a second accumulated text map. Host snapshots remain
+separate from session state and cannot make an incomplete replay authoritative.
+
+`Layer.effect` owns the fold fiber's scope. `SubscriptionRef` supplies current
+state and later changes; synchronous reads use `SubscriptionRef.getUnsafe`.
+The three transient source levels remain process-owned: local liveness,
+in-flight text, and the union of per-port transcript subscriptions.
 
 Chunks are process-local by decision, and that bounds G1 precisely: a run's
 incremental text exists only in the process that owns the run and in the
@@ -1590,10 +1365,11 @@ class WorkspaceRoots extends Context.Service<
 >()('@texra/session/WorkspaceRoots') {}
 
 // the runtime graph; a webview's is the same with
-// SessionEvents.transportLayer over SessionFrames and no Database (7.1)
+// SessionInputs over SessionFrames and no Database (7.1)
 const sessionLayer = (roots: WorkspaceRoots.Shape) =>
   Layer.mergeAll(
     SessionEvents.durableLayer,
+    sessionInputsLayer,
     SessionViewService.layer,
     SessionRequests.layer,
   ).pipe(
@@ -1637,11 +1413,11 @@ Until the display fold reads `model.message` directly, message text remains
 in the redacted trace copy too; the fold collapse deletes that copy without
 changing the display redaction requirement.
 
-Down, per subscriber: the reads its `Subscribe` names, run in the fold
-fiber's order (7.2) so the webview's fold consumes them in sequence. Every
+Down, per subscriber: the reads its `Subscribe` names, from the ordered
+input reader (7.2), so the webview's fold consumes them in sequence. Every
 `Subscribe` is answered the same way: `listing()`, then `aggregate(id,
 fromSeq)` per named aggregate in turn, then a frame carrying
-`replayComplete` and the current `local` snapshot, then `tail`. A cold mount
+`replayComplete` and the current `local` snapshot, then `all`. A cold mount
 (cursor 0) reads each history from 0 and takes its tail from the runtime's
 own `view.cursor` captured before those reads; a resubscribe - any
 `Subscribe` whose cursor is not the framer's current position - reads its
@@ -1655,38 +1431,27 @@ committed after it is delivered by the tail and deduplicated by the fold
 the subscriber has not named are left out (the fold would drop them; not
 framing them keeps the bridge to the listing tier plus the subscribed
 transcripts). Frame metadata covers what the rows alone cannot say (8.1).
-`cursor` is the commit ordinal the framer had drained. The final frame's
-cursor is applied with its complete tail batch, moving past rows left out
-without risking a saved position beyond unapplied buffered rows. `generation` echoes
+The final frame's `cursor` supplies the completed read bound for `Drained`,
+so the view moves past filtered or collected rows only when the whole batch
+has been applied. `generation` echoes
 the `Subscribe` that started the frame: the surface chooses it, monotone
 per view instance, and the decoder discards a frame whose generation is
 not the surface's current one, so a superseded replay still in flight
-cannot end the new one's queues or release its publish gate.
+cannot complete the new replay or publish its partial histories.
 
-Each tail drain captures this subscription's retained scope: ids previously
-sent by listing or delivered live-tail lifecycle/inquiry rows, including
-stream, execution, and inquiry edges, plus named transcript aggregates. This
-includes ids the
-renderer may still hold after the database-owning view removed them. C7's
-`all(cursor)` and `existing(scope)` share one read transaction. The final
-frame of that drain carries a non-null `existence` value naming the checked
-scope and its missing ids; earlier frames of a split drain carry null.
-The decoder buffers those tail rows until this final frame and emits one
-`TailBatch` to `SessionFrames.tail()`, including that frame's cursor, so the
-remote fold applies events, removals, and cursor together before publishing.
-No partial frame advances the saved cursor; a reconnect discards incomplete
-buffers and starts from the last fully applied batch. An absence-only drain sends a frame
-with empty events and the unchanged cursor. Such a frame is processed in
-channel order, never rejected merely because its cursor did not advance.
-Generation checks happen before buffering or applying any field; changing a
-subscription discards the old generation's buffered tail batch. This is a
-transient read result, not a new durable event or a view patch.
+A finite live read's final frame carries non-null `existence`; earlier frames
+carry null. The decoder buffers the current generation's inputs until that
+marker, constructs `Drained` from its `cursor` and `existence`, and releases
+one `SessionInputs` batch with events before text/local inputs and `Drained`
+last. A missing-aggregate result therefore reaches remote folds even if its
+tombstone was deleted before either process read it. An absence-only frame
+has empty events and may have an unchanged cursor; it is never filtered by
+`cursor > previousCursor`. Generation checks precede all fields, and a
+superseding subscription discards old buffered inputs. Reconnect uses the
+last applied cursor, never a partial frame's bound.
 
-Framing flushes at every tail-drain boundary: it may split one drain across
-frames, but never combines two drains under one `existence` field. The final
-non-null value remains the decoder's unambiguous batch delimiter.
-
-Then
+Framing flushes at each finite-read boundary. It may split one batch, but
+never combines two reads under one `existence` marker. Then
 `Stream.groupedWithin(n, "16
 millis")` then `Stream.buffer({ capacity, strategy: 'suspend' })` for
 durable events, which must not drop; suspension parks the framer, never the
@@ -1793,12 +1558,13 @@ bump.
 One `ManagedRuntime.make(processLayer)` per process, module-owned at the
 existing entry, disposed on the existing shutdown path. The runtime
 processes take `SessionEvents.durableLayer` with the runtime's
-`LocalRuntimeSource` and `TextChunkSource`; every webview entry takes
-`SessionEvents.transportLayer` over `SessionFrames` and never resolves
-`Database` or `DurableWrite` (7.1); its tail anchor is the cursor of the
-`Subscribe` the shell issued, so no webview code path reads a durable
-ordinal, and `DurableWrite.now` has exactly two readers, the durable
-layer's build and the NDJSON projection (10.3). The entries:
+`LocalRuntimeSource` and `TextChunkSource`, combined by `SessionInputs`;
+every webview entry supplies `SessionInputs` over `SessionFrames` and never
+resolves `Database` or `DurableWrite` (7.1). Its tail resumes at the cursor
+of the `Subscribe` the shell issued, so no webview code path queries the
+durable ordinal. Runtime input readers capture that ordinal before replay
+and before each finite tail read (7.2); the NDJSON projection also captures
+its initial position (10.3). The entries:
 `packages/extension/src/extension.ts`, the desktop main entry, the CLI
 entry, and each webview entry (`packages/extension/src/progressView/frontend/index.ts`,
 which the extension sidebar, the editor tab, and the Electron renderer all
@@ -1867,25 +1633,25 @@ surface chooses it, monotone per view instance, every frame the runtime
 cuts for that `Subscribe` echoes it, and the decoder ignores a frame whose
 generation is not the surface's current one. Without it a surface that
 changed its transcript selection while the previous replay still had
-frames in flight could see the old replay's `replayComplete` end the new
-aggregate queues and release the publish gate before the new histories
-arrived. `cursor` on a frame is the commit ordinal the framer had drained
-when it cut the frame (7.4). The webview applies the final frame's cursor
-with its complete `TailBatch`, never on receipt of a partial frame. This
-moves past tail rows the framer left out without making a reconnect skip
-buffered rows that have not reached the fold (5.2).
+frames in flight could mistake the old replay's `replayComplete` for the
+new replay's completion and publish before the new histories arrived.
+`cursor` on a frame is the commit ordinal the framer had drained
+when it cut the frame (7.4). The decoder uses it only when the final frame
+of the finite read carries `existence`, to construct its `Drained` input.
+The shared fold applies that cursor with the complete batch, never on
+receipt of a partial frame (5.2).
 
-`existence` is non-null only on the final frame of a tail drain, including
-an empty-event drain that found removed ids. Its schema requires removed
-ids to belong to its checked scope. The decoder keeps same-generation tail
-rows in order until that field arrives, then emits `{ _tag: 'tail.batch',
-events, existence, cursor }`; the shared fold applies the rows and removal together
-(5.2). Neither this input nor an unchanged-cursor frame is dropped by a
-commit comparison. `generation` is checked before all fields, including
-absence, so a superseded subscription cannot remove state from the new one.
-`listing()` and aggregate history frames carry null and keep their existing
-completion rules. The runtime's durable layer emits the identical input
-from C7's paired read; neither fold needs access to the database.
+`existence` contains `checkedAggregateIds` and `removedAggregateIds`; its
+schema requires every removed id to be in the checked scope. It is non-null
+on the final frame of each finite live read, even if no event or new ordinal
+survives. The decoder preserves one input queue, emits its events before
+text/local inputs, appends `{ _tag: 'drained', cursor, existence }`, and
+releases that complete batch. Listing/history frames carry null and retain
+their `replayComplete` boundary. Each reader's scope includes listing ids,
+ids and stream/execution/inquiry edges from delivered live-tail facts, and
+requested transcript ids until removal is delivered (7.2). Old generations
+are discarded before buffering or applying absence. An unchanged-cursor
+frame still carries inputs; cursor comparison cannot discard it.
 
 Two shapes on this channel, not three: a resync is a `Subscribe` whose
 cursor is not the framer's current position; its frames start with
@@ -1900,7 +1666,7 @@ every chunk carries its stream and
 its `from`/`to`, so a frame needs no per-stream range. Within one read the
 rows of a frame are in that read's order (commit order for `all`, seq order
 per `aggregate`); across reads a frame never interleaves: the runtime
-frames the reads in the fold fiber's sequence (7.4), which is what keeps
+frames the ordered reader's inputs in sequence (7.4), which is what keeps
 the seq threshold order-safe in a webview exactly as in the runtime (5.2).
 Within a transcript the stream and execution rows still land by the commit
 ordinal each carries, not by arrival, so a flow row framed after a trace
@@ -1908,21 +1674,22 @@ row that was committed later still lands before it. A subscriber advances
 one cursor (the framer's drained commit, carried on each frame) and one
 `folded` seq per subscribed aggregate. `replayComplete` is the one marker of 7.2 on the
 wire: the runtime sets it on the frame that ends the last of a
-`Subscribe`'s reads, the decoder ends the listing and aggregate queues
-there, and the fold fiber's own marker follows. Replay spans many frames
-and a webview has no database to ask, so this is how it knows when to
-publish its first view (7.2): after the listing and every aggregate it
-named at subscribe. Before that the webview folds and stays silent; from
-then on, each complete tail batch publishes, while independent local/chunk
-inputs keep their normal live behavior. It is a marker rather than an ordinal
+`Subscribe`'s replay reads. The decoder collects those inputs through the
+marker and releases them to the fold in one batch. Replay spans many frames
+and a webview has no database to ask, so this is how it knows when the
+listing and every named history are complete (7.2). Every subscription
+change follows this rule: incomplete inputs remain outside the fold, and
+the retained view remains authoritative until the next complete replay.
+After replay, each complete finite-read batch publishes; partial frames
+remain outside the fold. It is a marker rather than an ordinal
 because retention can prune rows above the last surviving one, leaving an
 ordinal the subscriber would never reach. `streamId` stays a payload field
 on the facts that have one; an unparented `inquiryThreadUpdated` rides its
 thread aggregate (C2, 5.1), which is why no sentinel stream id exists.
 
 The `local` and `host` fields are host-owned transient snapshots, sent on
-every change and on every subscribe. `existence` instead belongs to its
-database read and follows the tail-drain boundary above. `local` is this
+every change and on every subscribe. `existence` instead belongs to the
+finite database read and supplies its completion boundary. `local` is this
 process's runtime snapshot - live owner ids and unreadable streams (5.2);
 a surface that has never received one folds with `local` empty. `host` is
 everything the shell renders but does not own: the launcher's option lists
@@ -1945,6 +1712,12 @@ already established the shape, so this is a second field on an existing
 message rather than one field per kind of host state - which is what feeds
 the pickers, the banners, and the empty state once lane 4 deletes
 `SET_BANNER`, `SET_ONBOARDING_FUNNEL`, and the option-posting commands.
+
+View placement is fixed by the document that hosts a surface: sidebar,
+editor tab, or desktop. It is supplied to that document's shell directly,
+and is absent from the session-wide `HostSnapshot`. Two ports sharing one
+session can therefore use different layouts without changing each other's
+state.
 
 `SessionKey` is the workspace root that keys the `LayerMap` (7.3), and it
 is on every message in both directions. One desktop renderer has N papers
@@ -2191,7 +1964,11 @@ failure, under the request's id. The webview bridge is one-way today
 (`hostBridge.postMessage`), so this is the message that carries an outcome
 back at all: the follow-up admission latch clears on it, a rejected
 follow-up keeps its draft and restores focus from the error arm, a file
-picker returns its paths in the outcome. In process (TUI, headless) the
+picker returns its paths in the outcome. The Surface retains the complete
+submitted draft until admission succeeds. Success clears it only if the user
+has not edited it meanwhile; failure leaves the current text and images
+intact. Each stream admits at most one pending submission from this
+Surface; editing remains available while that request is pending. In process (TUI, headless) the
 Effect's own result is the response and no message exists.
 
 ### 8.5 Down: `surface.action`
@@ -2294,6 +2071,8 @@ Surface = {
   session: SessionKey
   selected: StreamTabId | null
   drafts: Map<StreamTabId, Draft>
+  polishing: Set<StreamTabId | `launch:${SessionType}`>  // foreground only
+  sending: Set<StreamTabId>                 // pending follow-up admission
   // the new-task composer: the existing MainViewPersistedState, per session
   launch: LaunchSurface
   // answers in progress; keyed by inquiry, not by stream (8.6).
@@ -2316,8 +2095,13 @@ Surface = {
 }
 ```
 
-`Draft` is `{ text, images: PastedImage[], polished: string | null,
-transcribed: string | null }`. The key is the bare `StreamTabId`: it names
+`Draft` is `{ text, images: PastedImage[] }`. Polish and transcription
+complete once at the originating Surface owner, which captures the stream
+or launcher mode when the request starts. The composer reads the resulting
+text; it does not hold or apply intermediate variants. A polish reply
+replaces text only if that text is still the submitted text; transcription
+appends to the originating draft. `polishing` records active operations for
+the corresponding controls and never persists. The draft key is the bare `StreamTabId`: it names
 one run for the stream's whole life (decision 9), so a draft cannot outlive
 its run and reappear against a different one - and being a primitive it
 survives the persisted entry array's round trip, where an object key would
@@ -2367,14 +2151,15 @@ The signal record holds Maps; the persisted form is a Zod schema beside it
 in which each Map is an entry array (`[StreamTabId, V][]`), parsed and
 rebuilt into Maps at load, because webview state crosses `JSON.stringify`
 and a Map serializes to `{}`. Persisted per view and session: `selected`, `launch` (as
-today), `drafts` (text only; images and the polished and transcribed
-variants are not), `phase`, `inquiryDrafts` (whole, and cleared when the
+today), `drafts` (text only; image bytes are not persisted), `phase`, `inquiryDrafts` (whole, and cleared when the
 inquiry
 resolves - §8.6 removes the round trip that persists them today, so nothing
 else would), `expanded`, `groups`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
-`session` (it is the key) and `focusedRow`; Every per-stream map in `Surface` - `drafts`, `phase`, `expanded`, `groups`,
-`scroll` - drops its entry when that stream leaves the view, in every
-subscribed surface and in the persisted form. An id is never reused
+`session` (it is the key), `focusedRow`, `polishing`, and `sending`. Every per-stream map in `Surface` - `drafts`, `phase`, `expanded`, `groups`,
+`scroll` - drops its entry when completed listing membership or an
+authoritative removal establishes that the stream has gone, in every
+subscribed surface and in the persisted form. The initial unpublished view
+and partial replay do not authorize pruning. An id is never reused
 (decision 9), so an entry for a removed stream can never become valid again;
 without the prune, repeated runs and deletions grow the live Maps and the
 persisted webview state without bound and keep a deleted conversation's
@@ -2491,12 +2276,20 @@ at the current ordinal never sees the historical one. `workflowPlainOutput.ts` (
 fold, terminal gate, status table, and model-label swap) renders
 `transcript.run` to text. `packages/agent` exports the pure `fold`,
 the `SessionView` and request Zod types, and an async-iterable
-`subscribeSessionView()` that owns the runtime internally - not
+`AgentRun.view` that owns the runtime internally - not
 `SessionViewService`. G6 puts Promises at the boundary, and exporting the
 service would make an embedder import `effect`, hold layers, and manage
 fiber scope just to read a view. The point stands either way: consumers stop
 re-folding raw events (`src/index.ts:78-150`). The trace viewer already reads the shared renderer
 and stays.
+
+`AgentRun.view` yields the current view, then changes through the first view
+holding the run's durable outcome, including that final view. A reader starting
+after `result` settles receives the final current view once. The package keeps
+the session alive until the final view has folded, even if no caller reads it;
+execution settlement alone cannot close the fold. A launch that fails before
+the run enters the session has no view and ends the iteration empty, with the
+failure on `result`. Ending an iteration early releases only that reader.
 
 ## 11. Session roots and many papers
 
@@ -2949,10 +2742,10 @@ As tests:
    counter. Every local write commit, including retention without a new
    event, advances it; one `PRAGMA data_version` poll per database advances
    it on foreign changes. Wake versions are never compared with the durable
-   cursor. Views drain the ordered rows and existence reconciliation
-   together through `tail`; the NDJSON projection reads only event rows
-   through `all`. The `AUTOINCREMENT` `commit` column remains the sole
-   durable ordinal and never decreases or reuses a value.
+   cursor. `SessionInputs` reads a bounded prefix and existence in one read
+   transaction and completes its ordered batch with `Drained`. NDJSON reads
+   only event rows through `all`. The `AUTOINCREMENT` `commit` column remains
+   the sole durable ordinal and never decreases or reuses a value.
 7. `WorkspaceProvider` leaves `platform()` rather than being re-pointed at
    a session (section 11). It has one implementation and its body is two
    pure functions of the root, so the port is the process-global, not a
@@ -3060,35 +2853,36 @@ scale.
 
 ## Appendix A. Verified Effect 4 rc.112 vocabulary
 
-| Concept           | rc.112 API                                                                                       | Import           | Note                                                                                                                   |
-| ----------------- | ------------------------------------------------------------------------------------------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Service key       | `class X extends Context.Service<X, Shape>()('@texra/…')`                                        | `effect`         | `Context.Tag`, `ServiceMap`, `Effect.Service` do not exist in rc.112                                                   |
-| Layer from effect | `Layer.effect(X, effect)`                                                                        | `effect`         | strips `Scope`; `Layer.scoped` does not exist in v4                                                                    |
-| Layer helpers     | `Layer.succeed`, `Layer.sync`, `Layer.mergeAll`, `Layer.provide`, `Layer.provideMerge`           | `effect`         | store parameterized layers in constants (memoized by reference)                                                        |
-| Keyed layers      | `LayerMap.make((key) => layer, { idleTimeToLive })`, `.invalidate`                               | `effect`         | RcMap-backed                                                                                                           |
-| Partial fakes     | `Layer.mock(X, partial)`                                                                         | `effect`         | real, @since 3.17; hand-written `testLayer` preferred                                                                  |
-| Commit level      | `SubscriptionRef.make(0)`, `.update`, `SubscriptionRef.changes`                                  | `effect`         | replays its current value on subscribe, so no wake is missed (7.1); `PubSub` is an edge, not a level                   |
-| Fold              | `Stream.mapAccum(() => initial, f)`                                                              | `effect`         | lazy initial; `f` returns `[state, outputs]`; pairs each view with its input so the publish gate sees the marker (7.2) |
-| Cold hydrate      | `Stream.concat(a, b)`, `Stream.make(x)`, `Stream.fromEffect(e)`, `Stream.empty`                  | `effect`         | listing, then each history, then the local snapshot, then the marker, then the tail, in sequence (7.2)                 |
-| Publish gate      | `Stream.dropWhile(p)`                                                                            | `effect`         | drops states until the marker's (7.2)                                                                                  |
-| Merge inputs      | `Stream.merge(a, b)`, `Stream.mergeAll(streams, { concurrency })`                                | `effect`         | events, liveness, and text chunks into one fold; `concurrency` is required                                             |
-| Cursor read loop  | `Stream.unwrap(effect)`, `Stream.flatMap(f, { concurrency })`, `Ref.make`/`Ref.get`              | `effect`         | one ordered read per wake (7.1); the v3 `toQueueScoped` / `unwrapScoped` do not exist                                  |
-| Poll trigger      | `Stream.tick(interval)`, `Stream.mapEffect`, `Stream.changes`, `Stream.filterEffect`             | `effect`         | the `data_version` poll (7.1): a trigger, never a level                                                                |
-| Subscription set  | `Stream.switchMap(f)`                                                                            | `effect`         | reopen the transcript reads when the set changes (7.2)                                                                 |
-| Atomic section    | `Effect.uninterruptible(effect)`                                                                 | `effect`         | around append plus fan-out under the permit                                                                            |
-| Ref               | `SubscriptionRef.make(a)`, `SubscriptionRef.changes(ref)`, `.set`, `.update`, `.getUnsafe`       | `effect`         | no coalescing; no `Stream.fromSubscriptionRef`                                                                         |
-| Framing           | `Stream.groupedWithin(n, "16 millis")`, `Stream.buffer({ capacity, strategy })`, `Stream.concat` | `effect`         | `Duration.Input` accepts `"16 millis"`                                                                                 |
-| Sink              | `Stream.runForEachArray(stream, f)`, `Stream.runForEach`                                         | `effect`         | coalesce by taking the last element                                                                                    |
-| Fork under scope  | `Effect.forkScoped(effect)`                                                                      | `effect`         | inside `Layer.effect`                                                                                                  |
-| Resource          | `Effect.acquireRelease(acquire, release)`, `Effect.scoped`, `Scope`                              | `effect`         | interaction scope                                                                                                      |
-| Serialize         | `Semaphore.make(permits)`, `.withPermit`, `.withPermits(n)`                                      | `effect`         | own module; `Effect.makeSemaphore` does not exist                                                                      |
-| Queue             | `Queue.bounded/sliding/dropping/unbounded<A, E>`, `offer`, `take`, `takeAll`                     | `effect`         | v4 queues carry an error channel                                                                                       |
-| Errors            | `class E extends Data.TaggedError('E')<{…}> {}`                                                  | `effect`         | yieldable; `catchTag`, `catchTags`, `orDie`, `tapCause`; no `tapErrorCause`, no `catch`/`catchAll`                     |
-| Defect            | `Effect.die(defect)`                                                                             | `effect`         | no `Effect.dieMessage`; the transport layer's `publish` (7.1)                                                          |
-| Tracing           | `Effect.fn('X.method')(function* (…) {…})`                                                       | `effect`         | every named service method                                                                                             |
-| Runtime           | `ManagedRuntime.make(layer)`, `.runPromise(effect, { signal })`, `.runFork`, `.dispose()`        | `effect`         | one per process                                                                                                        |
-| Test clock        | `TestClock.adjust`, `TestClock.layer()`, `TestClock.withLive`                                    | `effect/testing` | also `TestConsole`, `FastCheck`                                                                                        |
-| Test runner       | `it.effect`, `it.layer`                                                                          | `@effect/vitest` | not installed; decision 2                                                                                              |
+| Concept           | rc.112 API                                                                                                          | Import           | Note                                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Service key       | `class X extends Context.Service<X, Shape>()('@texra/…')`                                                           | `effect`         | `Context.Tag`, `ServiceMap`, `Effect.Service` do not exist in rc.112                                                       |
+| Layer from effect | `Layer.effect(X, effect)`                                                                                           | `effect`         | strips `Scope`; `Layer.scoped` does not exist in v4                                                                        |
+| Layer helpers     | `Layer.succeed`, `Layer.sync`, `Layer.mergeAll`, `Layer.provide`, `Layer.provideMerge`                              | `effect`         | store parameterized layers in constants (memoized by reference)                                                            |
+| Keyed layers      | `LayerMap.make((key) => layer, { idleTimeToLive })`, `.invalidate`                                                  | `effect`         | RcMap-backed                                                                                                               |
+| Partial fakes     | `Layer.mock(X, partial)`                                                                                            | `effect`         | real, @since 3.17; hand-written `testLayer` preferred                                                                      |
+| Commit level      | `SubscriptionRef.make(0)`, `.update`, `SubscriptionRef.changes`                                                     | `effect`         | replays its current value on subscribe, so no wake is missed (7.1); `PubSub` is an edge, not a level                       |
+| Ordered read      | `Stream.mapAccumEffect(() => initial, f)`                                                                           | `effect`         | each step captures source levels, reads a finite durable prefix, and returns ordered input batches (7.2)                   |
+| Cold hydrate      | `Stream.concat(a, b)`, `Stream.make(x)`, `Stream.fromEffect(e)`, `Stream.empty`                                     | `effect`         | listing, then each history, then the local snapshot, then the marker, then the tail, in sequence (7.2)                     |
+| Atomic replay     | `SubscriptionRef.update(ref, f)`                                                                                    | `effect`         | applies each completed replay batch once; incomplete replay inputs remain outside the fold (7.2)                           |
+| Merge wakeups     | `Stream.merge(a, b)`, `Stream.mergeAll(streams, { concurrency })`                                                   | `effect`         | source changes only wake the ordered reader; `concurrency` is required                                                     |
+| Cursor read loop  | `Stream.unwrap(effect)`, `Stream.flatMap(f, { concurrency })`, `Ref.make`/`Ref.get`                                 | `effect`         | one ordered read per wake (7.1); the v3 `toQueueScoped` / `unwrapScoped` do not exist                                      |
+| Poll trigger      | `Stream.tick(interval)`, `Stream.mapEffect`, `Stream.changes`, `Stream.filterEffect`                                | `effect`         | the `data_version` poll (7.1): a trigger, never a level                                                                    |
+| Subscription set  | `Stream.switchMap(f)`                                                                                               | `effect`         | reopen the transcript reads when the set changes (7.2)                                                                     |
+| Atomic section    | `Effect.uninterruptible(effect)`                                                                                    | `effect`         | around append plus fan-out under the permit                                                                                |
+| Ref               | `SubscriptionRef.make(a)`, `SubscriptionRef.changes(ref)`, `.set`, `.update`, `.getUnsafe`                          | `effect`         | no coalescing; no `Stream.fromSubscriptionRef`                                                                             |
+| Framing           | `Stream.groupedWithin(n, "16 millis")`, `Stream.buffer({ capacity, strategy })`, `Stream.concat`                    | `effect`         | `Duration.Input` accepts `"16 millis"`                                                                                     |
+| Sink              | `Stream.runForEachArray(stream, f)`, `Stream.runForEach`                                                            | `effect`         | coalesce by taking the last element                                                                                        |
+| Async boundary    | `Stream.toAsyncIterable(stream)`, `Stream.unwrap(effect)`, `Stream.takeUntil(predicate)`, `Stream.runDrain(stream)` | `effect`         | the SDK's `AgentRun.view` (10.3): include the first durably final view; drain the same stream before disposing the session |
+| Fork under scope  | `Effect.forkScoped(effect)`                                                                                         | `effect`         | inside `Layer.effect`                                                                                                      |
+| Resource          | `Effect.acquireRelease(acquire, release)`, `Effect.scoped`, `Scope`                                                 | `effect`         | interaction scope                                                                                                          |
+| Serialize         | `Semaphore.make(permits)`, `.withPermit`, `.withPermits(n)`                                                         | `effect`         | own module; `Effect.makeSemaphore` does not exist                                                                          |
+| Queue             | `Queue.bounded/sliding/dropping/unbounded<A, E>`, `offer`, `take`, `takeAll`                                        | `effect`         | v4 queues carry an error channel                                                                                           |
+| Errors            | `class E extends Data.TaggedError('E')<{…}> {}`                                                                     | `effect`         | yieldable; `catchTag`, `catchTags`, `orDie`, `tapCause`; no `tapErrorCause`, no `catch`/`catchAll`                         |
+| Defect            | `Effect.die(defect)`                                                                                                | `effect`         | no `Effect.dieMessage`; the transport layer's `publish` (7.1)                                                              |
+| Tracing           | `Effect.fn('X.method')(function* (…) {…})`                                                                          | `effect`         | every named service method                                                                                                 |
+| Runtime           | `ManagedRuntime.make(layer)`, `.runPromise(effect, { signal })`, `.runFork`, `.dispose()`                           | `effect`         | one per process                                                                                                            |
+| Test clock        | `TestClock.adjust`, `TestClock.layer()`, `TestClock.withLive`                                                       | `effect/testing` | also `TestConsole`, `FastCheck`                                                                                            |
+| Test runner       | `it.effect`, `it.layer`                                                                                             | `@effect/vitest` | not installed; decision 2                                                                                                  |
 
 ## Appendix B. File layout
 
@@ -3096,15 +2890,17 @@ No barrels; import the defining module through the existing aliases.
 
 ```
 src/shared/session/sessionView.ts        Zod SessionView (with folded: Map<AggregateId, Seq>), StreamView, TranscriptView; z.infer types
-src/shared/session/sessionFold.ts        fold(view, input): pure; no effect import; no platform(); the per-aggregate seq rule, the residency drop, the tail-only cursor, and the eviction on a subscription-set change (5.2); the marker arm is the one input it does not fold
+src/shared/session/sessionFold.ts        fold(view, input): pure; no effect import; no platform(); the per-aggregate seq rule, the residency drop, the drained cursor, and the eviction on a subscription-set change (5.2); the replay marker closes the listing
 src/shared/session/runtimeRequest.ts     Zod RuntimeRequest, HostRequest, Outcome
 src/shared/session/requestErrors.ts      Data.TaggedError NotOwner | Unavailable | Rejected | Invalid
 src/shared/signals.ts                    + toSignal(runtime, changes, initial)
 src/shared/copy/streamStatus.ts          one status label table with tone; one terminal-state vocabulary
-src/controllers/session/SessionEvents.ts     Context.Service; durableLayer (publishBatch under one permit, publish(event) delegates; listing(), all(fromCommit), aggregate(id, fromSeq), and tail over the paired all/existing read; listing and aggregate complete; anchor captured at build; one data_version poll per database fanned out through one SubscriptionRef) and transportLayer (anchor = the Subscribe cursor; the reads are the frame queues; no durable ordinal)
-src/controllers/session/sessionSources.ts    LocalRuntimeSource, TextChunkSource, TranscriptSubscriptions (a SubscriptionRef of { id, fromSeq }[]); a runtime and a webview layer each; the runtime's TranscriptSubscriptions is the union of one set per transport port, fed by the subscribe handler, the webview's by the shell
-src/shared/session/sessionFrames.ts          Zod EventsFrame, Subscribe, Response, TextChunk, LocalRuntimeState, HostSnapshot, ExistenceReconciliation; SessionFrames (per session; cursor; listing(), events(), aggregate(id, fromSeq), tail() as queues the decoder feeds and ends at the replayComplete frame; frames of a superseded generation are dropped; tail rows buffer until existence closes their drain, then emit one TailBatch with the final frame's cursor; incomplete buffers never advance the saved cursor)
-src/controllers/session/SessionView.ts       Context.Service; ref + changes; subscription set as a fold input; listing() once, then per subscription-set value: the set, each aggregate's history in turn, the marker, the tail from the view's cursor, by Stream.concat; fold fiber forkScoped
+src/shared/session/sessionEvents.ts          Context.Service for the runtime event plane; three reads listing(), all(fromCommit), aggregate(id, fromSeq), the first and last completing; raw NDJSON consumers keep the event stream
+src/shared/session/sessionInputs.ts          Context.Service for ordered fold-input batches; read(aggregates, cursor), shared by runtime and webview
+src/controllers/session/sessionInputs.ts     Runtime ordered reader; complete replay batches, then finite durable prefixes before text/local inputs and Drained with existence; each complete batch publishes atomically; source levels are wakeups only
+src/controllers/session/sessionSources.ts    LocalRuntimeSource and TextChunkSource levels; TranscriptSubscriptions (a SubscriptionRef of { id, fromSeq }[]), the runtime union of sets per transport port and the webview set provided by the shell
+src/shared/session/sessionFrames.ts          Per-session decoder; one frame queue for the current generation, complete replay batches, preserved event-before-text order, host snapshots outside the fold
+src/controllers/session/SessionView.ts        Context.Service; ref + changes; the shared fold applies SessionInputs batches, switching readers on subscription changes and resuming histories from retained seqs; fold fiber forkScoped
 src/controllers/session/WorkspaceRoots.ts    Context.Service; Layer.succeed per session
 src/controllers/session/SessionRequests.ts   request(): Effect<Outcome, RequestError>; ownership scope
 src/controllers/session/sessionLayer.ts      per-session graph; LayerMap keyed by root

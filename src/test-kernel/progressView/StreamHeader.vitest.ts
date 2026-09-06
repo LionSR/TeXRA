@@ -1,448 +1,141 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { StreamHeader } from '@progressView/frontend/components/StreamHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
-import type { StreamEventDetail } from '@progressView/frontend/events';
-import {
-  AgentCategory,
-  STREAM_PHASE,
-  createStreamState,
-  type StreamTabInfo,
-  type ToolUseStreamState,
-  type WorkflowStreamState,
-} from '@shared/schemas';
-import { APPROVAL_BYPASS_BADGE } from '@shared/copy/approvalBypass';
-import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import type { HostRequest } from '@shared/session/hostRequest';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type { SurfaceAction } from '@shared/session/surface';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import { CHILD, fanOutView, ROOT } from '@test/shared/session/fanOutScenario';
 
 // Local file imports
 import {
-  dispatchKey,
   mountComponent,
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-function baseStream(overrides: Partial<StreamTabInfo> = {}): StreamTabInfo {
-  return {
-    name: 'stream-a',
-    label: 'Stream A',
-    identity: { kind: 'agent', agent: 'stream-a' },
-    agentCategory: AgentCategory.Workflow,
-    creationTimestamp: 1,
-    ...overrides,
-  };
+useLitComponentTestDom(
+  () => import('@progressView/frontend/components/StreamHeader'),
+);
+
+interface Mounted {
+  readonly element: StreamHeader;
+  readonly surfaceActions: SurfaceAction[];
+  readonly requests: (RuntimeRequest | HostRequest)[];
 }
 
-function baseState(
-  overrides: Partial<ToolUseStreamState> = {},
-): ToolUseStreamState {
-  return createStreamState(AgentCategory.ToolUse, {
-    status: STREAM_PHASE.RUNNING,
-    ...overrides,
-  }) as ToolUseStreamState;
+function streamOf(view: SessionView, id: string): StreamView {
+  const stream = view.streams.get(id);
+  if (!stream) throw new Error(`fixture has no stream ${id}`);
+  return stream;
 }
 
-function workflowState(
-  overrides: Partial<WorkflowStreamState> = {},
-): WorkflowStreamState {
-  return createStreamState(AgentCategory.Workflow, {
-    status: STREAM_PHASE.COMPLETED,
-    files: {
-      2: [
-        {
-          source: 'main.tex',
-          round: 2,
-          lineage: null,
-          diff: null,
-          location: {
-            kind: 'runStorage',
-            absolutePath: '/tmp/exec/answer.tex',
-            relativePath: 'answer.tex',
-            executionId: 'a1b2c3d4',
-          },
-        },
-      ],
-    },
-    ...overrides,
-  }) as WorkflowStreamState;
-}
-
-function mount(props: Partial<StreamHeader> = {}): Promise<StreamHeader> {
-  return mountComponent<StreamHeader>('stream-header', {
-    stream: baseStream(),
-    state: baseState(),
-    // Buttons default to hidden until the host confirms which commands it
-    // supports (`isKnownUnsupported` treats `null` as "unknown, so hide").
-    unsupportedCommands: new Set(),
-    ...props,
+async function mountHeader(
+  view: SessionView,
+  stream: StreamView,
+): Promise<Mounted> {
+  const element = await mountComponent<StreamHeader>('stream-header', {
+    view,
+    stream,
   });
+  const surfaceActions: SurfaceAction[] = [];
+  const requests: (RuntimeRequest | HostRequest)[] = [];
+  element.addEventListener('surface-action', (event) => {
+    surfaceActions.push(event.detail);
+  });
+  element.addEventListener('runtime-request', (event) => {
+    requests.push(event.detail);
+  });
+  element.addEventListener('host-request', (event) => {
+    requests.push(event.detail);
+  });
+  return { element, surfaceActions, requests };
 }
 
 /** Themed-tooltip contract: anchor carries an id, no native title, sibling wa-tooltip[for=id]. */
-function expectAnchoredTooltip(
-  element: StreamHeader,
-  anchorId: string,
-  text: string,
-): void {
+function expectAnchoredTooltip(element: StreamHeader, anchorId: string): void {
   const anchor = element.shadowRoot?.querySelector(`#${anchorId}`);
   expect(anchor).toBeTruthy();
   expect(anchor?.hasAttribute('title')).toBe(false);
-
-  const tooltip = element.shadowRoot?.querySelector(
-    `wa-tooltip[for="${anchorId}"]`,
-  );
-  expect(tooltip).toBeTruthy();
-  expect(tooltip?.textContent?.trim()).toBe(text);
+  expect(
+    element.shadowRoot?.querySelector(`wa-tooltip[for="${anchorId}"]`),
+  ).toBeTruthy();
 }
 
-// Single shared DOM/customElements registration for the whole file: each
-// `useLitComponentTestDom` call tears down its jsdom window (and the
-// customElements registry defined against it) in `afterAll`, and the
-// `@progressView/frontend/components/StreamHeader` module — including its
-// `customElements.define(...)` — only evaluates once thanks to ESM module
-// caching. A second top-level call in this file would re-run against a
-// fresh, unregistered window, silently leaving `stream-header` undefined for
-// every test in that later block. Nest all suites under one registration
-// instead of calling `useLitComponentTestDom` per describe.
-describe('stream-header', () => {
-  useLitComponentTestDom(
-    () => import('@progressView/frontend/components/StreamHeader'),
-  );
+describe('stream-header over the fold', () => {
+  it('names the stream and its status from the view, with anchored tooltips', async () => {
+    const view = fanOutView();
+    const stream = streamOf(view, ROOT);
+    const { element } = await mountHeader(view, stream);
 
-  /**
-   * Regression coverage for the a11y-clickables audit: the "go to parent
-   * stream" label was a bare `<span @click>` with no role/tabindex/keydown, so
-   * keyboard users could never reach or activate it even though `.parent-link`
-   * already shipped a `:focus-visible` outline. Mirrors FileList.ts's
-   * file-path keyboard-activation coverage for the same "clickable label"
-   * job.
-   */
-  describe('parent-link keyboard activation', () => {
-    it('exposes role=button and tabindex=0 on the parent-link span', async () => {
-      const element = await mount({
-        stream: baseStream({ parentStreamId: 'assistant@123' }),
-      });
+    const name = element.shadowRoot?.querySelector<HTMLElement>(
+      `#${ELEMENT_IDS.ACTIVE_STREAM_NAME}`,
+    );
+    expect(name?.textContent?.trim()).toBe(stream.label);
+    expect(name?.dataset.stream).toBe(ROOT);
+    expectAnchoredTooltip(element, ELEMENT_IDS.ACTIVE_STREAM_NAME);
 
-      const link = element.shadowRoot?.querySelector('.parent-link');
-      expect(link).toBeInstanceOf(HTMLElement);
-      expect(link?.getAttribute('role')).toBe('button');
-      expect(link?.getAttribute('tabindex')).toBe('0');
-    });
-
-    it('switches to the parent stream on Enter and Space, not on other keys', async () => {
-      const element = await mount({
-        stream: baseStream({ parentStreamId: 'assistant@123' }),
-      });
-      const switches: StreamEventDetail[] = [];
-      element.addEventListener('stream-switch', (event) => {
-        switches.push((event as CustomEvent<StreamEventDetail>).detail);
-      });
-
-      const link = element.shadowRoot?.querySelector('.parent-link');
-      expect(link).toBeInstanceOf(HTMLElement);
-
-      dispatchKey(link!, 'a');
-      expect(switches).toHaveLength(0);
-
-      dispatchKey(link!, 'Enter');
-      dispatchKey(link!, ' ');
-
-      expect(switches).toEqual([
-        { streamId: 'assistant@123' },
-        { streamId: 'assistant@123' },
-      ]);
-    });
-
-    it('renders nothing when there is no parent stream', async () => {
-      const element = await mount({ stream: baseStream() });
-      expect(element.shadowRoot?.querySelector('.parent-link')).toBeFalsy();
-    });
+    const status = element.shadowRoot?.querySelector(
+      `#${ELEMENT_IDS.STATUS_INDICATOR}`,
+    );
+    expect(status?.getAttribute('role')).toBe('img');
+    expect(status?.getAttribute('aria-label')).toBe(stream.statusLabel);
+    expectAnchoredTooltip(element, ELEMENT_IDS.STATUS_INDICATOR);
   });
 
-  /**
-   * Regression coverage for #8158: the goal chip (`wa-badge`) and progress
-   * badge (`wa-tag`) used native `title=` hover labels while the rest of the
-   * header (e.g. the status indicator, id `statusIndicator`) already uses the
-   * themed `wa-tooltip[for=]` mechanism. Both anchors must expose an id with a
-   * sibling `<wa-tooltip for=id>` and no native `title` attribute, matching the
-   * status-indicator pattern.
-   */
-  describe('tooltips', () => {
-    it('anchors the truncated stream label via wa-tooltip[for]', async () => {
-      const element = await mount();
-      // The label names the run; the opaque id rides along so it is
-      // recoverable on hover without ever sitting in the header text.
-      expectAnchoredTooltip(
-        element,
-        ELEMENT_IDS.ACTIVE_STREAM_NAME,
-        'Stream A · stream-a',
-      );
-    });
+  it('renders the ancestors path for a child and selects the ancestor on activation', async () => {
+    const view = fanOutView();
+    const child = streamOf(view, CHILD);
+    expect(child.ancestors.map((ancestor) => ancestor.id)).toEqual([ROOT]);
+    const { element, surfaceActions } = await mountHeader(view, child);
 
-    it('keeps the icon-only stream status accessible and available on hover', async () => {
-      const element = await mount({
-        state: baseState({ status: STREAM_PHASE.FAILED }),
-      });
-      const indicator = element.shadowRoot?.querySelector(
-        `#${ELEMENT_IDS.STATUS_INDICATOR}`,
-      );
-
-      expect(indicator?.textContent?.trim()).toBe('');
-      expect(indicator?.getAttribute('role')).toBe('img');
-      expect(indicator?.getAttribute('aria-label')).toBe('Error');
-      expectAnchoredTooltip(element, ELEMENT_IDS.STATUS_INDICATOR, 'Error');
-    });
-
-    it('anchors the goal chip tooltip via wa-tooltip[for], not a native title', async () => {
-      const element = await mount({
-        state: baseState({
-          goal: {
-            active: true,
-            status: 'active',
-            objective: 'ship the fix',
-          },
-        }),
-      });
-
-      expectAnchoredTooltip(element, 'goalChip', 'Goal: ship the fix');
-    });
-
-    it('anchors the progress badge tooltip via wa-tooltip[for], not a native title', async () => {
-      const element = await mount({
-        state: baseState({ stage: { kind: 'round', index: 0, total: 2 } }),
-      });
-
-      expectAnchoredTooltip(element, 'progressBadge', 'Round 1 of 2');
-    });
-
-    it('omits the progress badge tooltip entirely when there is no title text', async () => {
-      const element = await mount({});
-
-      expect(element.shadowRoot?.querySelector('#progressBadge')).toBeFalsy();
-      expect(
-        element.shadowRoot?.querySelector('wa-tooltip[for="progressBadge"]'),
-      ).toBeFalsy();
-    });
+    const link = element.shadowRoot?.querySelector<HTMLElement>(
+      'nav.ancestors button.ancestor',
+    );
+    expect(link?.getAttribute('aria-label')).toBe(
+      `Go to ${child.ancestors[0]?.label}`,
+    );
+    link?.click();
+    expect(surfaceActions).toEqual([{ kind: 'select', streamId: ROOT }]);
   });
 
-  /**
-   * The badge's stage slot is the canonical discriminated `StreamStage`: a
-   * workflow-script run advances through named phases, a tool-use run through
-   * numbered rounds — one slot carries whichever this stream has.
-   */
-  describe('phase/round stage slot', () => {
-    function badgeText(element: StreamHeader): string | undefined {
-      return element.shadowRoot
-        ?.querySelector(`#${ELEMENT_IDS.PROGRESS_BADGE}`)
-        ?.querySelector('span[aria-hidden="true"]')
-        ?.textContent?.trim();
-    }
-
-    function badgeTooltip(element: StreamHeader): string | undefined {
-      return element.shadowRoot
-        ?.querySelector(`wa-tooltip[for="${ELEMENT_IDS.PROGRESS_BADGE}"]`)
-        ?.textContent?.trim();
-    }
-
-    function badgeAccessibleText(element: StreamHeader): string | undefined {
-      return element.shadowRoot
-        ?.querySelector(`#${ELEMENT_IDS.PROGRESS_BADGE} .visually-hidden`)
-        ?.textContent?.trim();
-    }
-
-    it.each<{
-      name: string;
-      props: Partial<StreamHeader>;
-      text: string;
-      tooltip: string;
-    }>([
-      {
-        name: 'renders the phase label when the stream has one',
-        props: {
-          state: baseState({
-            stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
-          }),
-        },
-        text: 'Reduce (2/3)',
-        tooltip: 'Phase 2 of 3: Reduce',
-      },
-      {
-        name: 'renders a dynamically opened phase with no declared position',
-        props: {
-          state: baseState({ stage: { kind: 'phase', label: 'Cleanup' } }),
-        },
-        text: 'Cleanup',
-        tooltip: 'Phase: Cleanup',
-      },
-      {
-        name: 'keeps the tool-call count alongside the phase',
-        props: {
-          state: baseState({
-            stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
-            conversationProgress: { toolCallCount: 4 },
-          }),
-        },
-        text: 'Reduce (2/3), 4 tool calls',
-        tooltip: 'Phase 2 of 3: Reduce, Tool calls: 4',
-      },
-    ])('$name', async ({ props, text, tooltip }) => {
-      const element = await mount(props);
-
-      expect(badgeText(element)).toBe(text);
-      expect(badgeAccessibleText(element)).toBe(tooltip);
-      expect(badgeTooltip(element)).toBe(tooltip);
-    });
+  it('renders no ancestors path for a top-level stream', async () => {
+    const view = fanOutView();
+    const { element } = await mountHeader(view, streamOf(view, ROOT));
+    expect(element.shadowRoot?.querySelector('nav.ancestors')).toBeNull();
   });
 
-  /**
-   * Regression coverage for consolidating the toolbar's wa-button-group +
-   * external-tooltip workaround onto `renderIconActionButtonParts` (src/
-   * shared/wa/actionButtons.ts): each toolbar button must anchor its own
-   * `<wa-tooltip>` by id (not via a slotted child, which would break
-   * wa-button-group's corner-fusion), and clicking a button must dispatch
-   * `toolbar-command` directly — no more delegated `[data-command]` lookup.
-   */
-  describe('toolbar', () => {
-    it('renders the stop button as a wa-button with a matching sibling tooltip', async () => {
-      const element = await mount();
+  it('dispatches the stop arm from the toolbar of a running stream', async () => {
+    const view = fanOutView();
+    const stream = streamOf(view, ROOT);
+    expect(stream.group).toBe('running');
+    const { element, requests } = await mountHeader(view, stream);
 
-      const stopButton = element.shadowRoot?.querySelector<HTMLElement>(
-        `#${ELEMENT_IDS.STOP_STREAM_BTN}`,
-      );
-      expect(stopButton).toBeTruthy();
-      expect(stopButton?.tagName).toBe('WA-BUTTON');
-      expect(stopButton?.hasAttribute('data-command')).toBe(false);
-      expect(stopButton?.querySelector('wa-icon')?.getAttribute('name')).toBe(
-        'circle-stop',
-      );
-
-      const stopTooltip = element.shadowRoot?.querySelector(
-        `wa-tooltip[for="${ELEMENT_IDS.STOP_STREAM_BTN}"]`,
-      );
-      expect(stopTooltip).toBeTruthy();
-    });
-
-    it('describes delegated-work approval with its run-scoped shared copy', async () => {
-      const element = await mount({
-        stream: baseStream({ agentCategory: AgentCategory.ToolUse }),
-      });
-
-      const tooltip = element.shadowRoot?.querySelector(
-        `wa-tooltip[for="${ELEMENT_IDS.AUTO_TASK_TOGGLE_BTN}"]`,
-      );
-      expect(tooltip?.textContent?.trim()).toBe(
-        DELEGATION_APPROVAL_COPY.progressViewToggle,
-      );
-    });
-
-    it('presses AUTO-EDIT and AUTO-BASH independently', async () => {
-      const element = await mount({
-        stream: baseStream({ agentCategory: AgentCategory.ToolUse }),
-        state: baseState({
-          bypasses: { bash: false, toolEdit: true, superYolo: false },
-        }),
-      });
-
-      const editButton = element.shadowRoot?.querySelector(
-        `#${ELEMENT_IDS.TOOL_EDIT_TOGGLE_BTN}`,
-      );
-      const bashButton = element.shadowRoot?.querySelector(
-        `#${ELEMENT_IDS.BASH_TOGGLE_BTN}`,
-      );
-      expect(editButton?.getAttribute('aria-label')).toBe(
-        APPROVAL_BYPASS_BADGE.toolEdit,
-      );
-      expect(bashButton?.getAttribute('aria-label')).toBe(
-        APPROVAL_BYPASS_BADGE.bash,
-      );
-      expect(editButton?.getAttribute('aria-pressed')).toBe('true');
-      expect(bashButton?.getAttribute('aria-pressed')).toBe('false');
-    });
-
-    it('dispatches toolbar-command with the button-specific command on click', async () => {
-      const element = await mount();
-      const events: unknown[] = [];
-      element.addEventListener('toolbar-command', (event) => {
-        events.push((event as CustomEvent).detail);
-      });
-
-      const stopButton = element.shadowRoot?.querySelector<HTMLElement>(
-        `#${ELEMENT_IDS.STOP_STREAM_BTN}`,
-      );
-      stopButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-
-      expect(events).toHaveLength(1);
-      expect(events[0]).toMatchObject({ command: expect.any(String) });
-    });
+    const stop = element.shadowRoot?.querySelector<HTMLElement>(
+      `#${ELEMENT_IDS.STOP_STREAM_BTN}`,
+    );
+    expect(stop?.tagName.toLowerCase()).toBe('wa-button');
+    expectAnchoredTooltip(element, ELEMENT_IDS.STOP_STREAM_BTN);
+    stop?.click();
+    expect(requests).toEqual([{ kind: 'stream.stop', streamId: ROOT }]);
   });
 
-  /**
-   * The run-context copy is the one toolbar entry with no backend command: it
-   * writes the clipboard from state the webview already holds. These pin that
-   * it stays a local action (no `toolbar-command`) and that it only offers
-   * itself when there is something to copy.
-   */
-  describe('copy run context', () => {
-    it('writes the run context and dispatches no toolbar command', async () => {
-      const element = await mount({
-        stream: baseStream({
-          // What buildStreamTabInfo emits for this identity — the copy path
-          // reads the label, never re-derives it from the identity.
-          label: 'stream-a',
-          model: 'gemini31p',
-          modelLabel: 'Gemini 3.1 Pro',
-          executionId: 'a1b2c3d4',
-        }),
-        state: workflowState(),
-      });
-      const commands: unknown[] = [];
-      element.addEventListener('toolbar-command', (event) => {
-        commands.push((event as CustomEvent).detail);
-      });
+  it('offers no copy-run-context action on a workflow-script run or a tool-use stream', async () => {
+    const view = fanOutView();
+    const root = streamOf(view, ROOT);
+    expect(root.identity?.kind).toBe('multiAgentWorkflow');
+    const { element: script } = await mountHeader(view, root);
+    expect(
+      script.shadowRoot?.querySelector(`#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`),
+    ).toBeNull();
 
-      const writeText = vi.fn(async () => undefined);
-      vi.stubGlobal('navigator', { clipboard: { writeText } });
-      element.shadowRoot
-        ?.querySelector<HTMLElement>(`#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`)
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-
-      await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
-      expect(writeText).toHaveBeenCalledWith(
-        [
-          'Workflow run: stream-a (Gemini 3.1 Pro)',
-          'Execution: a1b2c3d4',
-          '',
-          'Outputs:',
-          '- r3: /executions/a1b2c3d4/files/answer.tex (source: main.tex)',
-        ].join('\n'),
-      );
-      expect(commands).toHaveLength(0);
-      vi.unstubAllGlobals();
-    });
-
-    it('disables itself when the workflow produced nothing to copy', async () => {
-      const element = await mount({
-        state: workflowState({ files: {} }),
-      });
-
-      const button = element.shadowRoot?.querySelector(
-        `#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`,
-      );
-      expect(button?.hasAttribute('disabled')).toBe(true);
-    });
-
-    it('is not offered on a tool-use stream', async () => {
-      const element = await mount({
-        stream: baseStream({ agentCategory: AgentCategory.ToolUse }),
-        state: baseState(),
-      });
-
-      expect(
-        element.shadowRoot?.querySelector(
-          `#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`,
-        ),
-      ).toBeNull();
-    });
+    const child = streamOf(view, CHILD);
+    expect(child.category).toBe('toolUse');
+    const { element: toolUse } = await mountHeader(view, child);
+    expect(
+      toolUse.shadowRoot?.querySelector(`#${ELEMENT_IDS.COPY_RUN_CONTEXT_BTN}`),
+    ).toBeNull();
   });
 });

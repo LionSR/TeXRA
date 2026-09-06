@@ -48,6 +48,12 @@ export function initProcessWorkspaceRoots(roots: WorkspaceRoots): void {
   processRoots = Object.freeze({ ...roots });
 }
 
+/** The process roots when a composition root has installed them; a
+ *  process without roots has no session of its own to name. */
+export function tryProcessWorkspaceRoots(): WorkspaceRoots | undefined {
+  return processRoots ?? undefined;
+}
+
 function requireProcessRoots(): WorkspaceRoots {
   if (!processRoots) {
     throw new Error(

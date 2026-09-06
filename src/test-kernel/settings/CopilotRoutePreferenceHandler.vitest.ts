@@ -5,7 +5,6 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  invalidateModelOptionsCache: vi.fn(),
   invalidateRuntimeModelRegistry: vi.fn(),
   requestRuntimeModelAccess: vi.fn(),
   safeExecuteCommand: vi.fn(async () => undefined),
@@ -28,14 +27,6 @@ vi.mock('@model/copilotRouting', async (original) => {
   return {
     ...actual,
     setCopilotRoutePreference: mocks.setCopilotRoutePreference,
-  };
-});
-
-vi.mock('@model/computeModelOptions', async (original) => {
-  const actual = await original<typeof import('@model/computeModelOptions')>();
-  return {
-    ...actual,
-    invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
   };
 });
 

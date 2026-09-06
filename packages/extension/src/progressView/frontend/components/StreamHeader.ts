@@ -1,76 +1,53 @@
-// Third-party imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { consume } from '@lit/context';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type {
   ConversationProgress,
   GoalState,
   StreamStage,
-  StreamState,
-  StreamTabInfo,
+  StreamTabId,
 } from '@shared/schemas';
 import {
-  DEFAULT_STREAM_METADATA_STATUS,
   isPlainAgentIdentity,
-  isToolUseState,
-  isWorkflowState,
   STREAM_LIFECYCLE_UNAVAILABLE,
   STREAM_PHASE,
   STREAM_SUBSTATE,
 } from '@shared/schemas';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { formatWorkflowRunContext } from '@shared/copy/workflowRunContext';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import {
   progressHeaderStatus,
-  streamStatusIndicatorClass,
-  streamStatusTooltip,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-
-// Side-effect imports - register WA icon component and <tool-timer>
 import '@progressView/frontend/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 
-// Local imports - progress view constants
 import {
   ELEMENT_IDS,
   NEUTRAL_TOOLBAR,
   TOOLBAR_BUTTONS,
   type ProgressToolbarButton,
 } from '../constants';
-import {
-  archivedContext,
-  streamByIdContext,
-  EMPTY_STREAM_BY_ID,
-  type StreamByIdMap,
-} from '../streamContexts';
-import { ProgressEvents } from '../events';
-import { streamDisplayLabel } from '../utils';
 import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
 import {
   renderProgressBadgeContent,
   getProgressBadgeTitle,
 } from '../formatters/progressBadgeFormatter';
 
-/**
- * Buttons enabled while a run is active (running / waiting / resuming): stop
- * plus the live-session controls (bypass toggles, compact, restore, storage,
- * export) and the run-context copy, whose text is worth handing off mid-run.
- */
 const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.STOP_STREAM_BTN,
   ELEMENT_IDS.TOOL_EDIT_TOGGLE_BTN,
@@ -83,11 +60,6 @@ const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
 
-/**
- * Buttons enabled in every terminal (finished) state — failed / completed /
- * cancelled: the run is over, so re-run, resume, archive, diff, restore,
- * export, and the run-context copy are all available.
- */
 const TERMINAL_STATE_BUTTONS = [
   ELEMENT_IDS.RUN_NEW_BTN,
   ELEMENT_IDS.RESUME_BTN,
@@ -100,39 +72,18 @@ const TERMINAL_STATE_BUTTONS = [
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
 
-/**
- * Buttons enabled while the run is unavailable here (held by another TeXRA
- * process, or its saved state unreadable): the read-only verbs, plus resume.
- * Stop, re-run, restore, archive, diff, pack, and clean all act on a run this
- * process does not own. Removing the run is the tab's Delete.
- *
- * Resume is here because the unavailable reading is a snapshot of a fact that
- * can go stale — the other process exits, the unreadable file becomes
- * readable — and resuming is the one action that re-reads it. The lease, not
- * this table, is what keeps the attempt safe: a run another live process still
- * holds refuses at the lease and re-words the same reading. Without it the tab
- * is read-only for the rest of this process's life on a run nobody owns.
- */
-const UNAVAILABLE_STATE_BUTTONS = [
-  ELEMENT_IDS.RESUME_BTN,
+/** A stream this process cannot act on: read and export only. */
+const READ_ONLY_BUTTONS = new Set<string>([
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
-];
+]);
 
-/**
- * Terminal-set buttons that make no sense before the stream's first run:
- * there is no prior run to resume, and no outputs to copy context from.
- */
 const NOT_YET_RUN_BUTTONS = new Set<string>([
   ELEMENT_IDS.RESUME_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ]);
 
-/**
- * Buttons enabled per phase/substate - pre-computed as Sets to avoid
- * allocating a new Set on every getButtonState() call during render.
- */
 const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   StreamStatusDisplayKey,
   Set<string>
@@ -150,34 +101,36 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   ),
   [STREAM_PHASE.WAITING]: new Set(ACTIVE_STATE_BUTTONS),
   [STREAM_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_BUTTONS),
-  [STREAM_LIFECYCLE_UNAVAILABLE]: new Set(UNAVAILABLE_STATE_BUTTONS),
+  [STREAM_LIFECYCLE_UNAVAILABLE]: new Set(READ_ONLY_BUTTONS),
 };
 
-/** Buttons that depend on having an executionId */
-const EXECUTION_DEPENDENT_BUTTONS = new Set([
-  ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-  ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
-  ELEMENT_IDS.RESUME_BTN,
-]);
-
-/**
- * Native-agent-only controls. Resume, re-run, and restore relaunch the run's
- * stored config — which is borrowed for a workflow-script stream, synthetic
- * for a process stream, and owned by the external tool for a CLI-driven
- * session — so they are hidden (same mechanism as unsupported commands)
- * unless `identity` is a native agent run. An absent identity is still
- * pending and hides them too. Mirrors the backend gate
- * `resolveNativeAgentRun` in `ProgressViewCommandHandlers`, which the
- * `RESUME`, `RUN_NEW`, and `RESTORE_STATE` handlers all pass through.
- */
 const NATIVE_AGENT_ONLY_BUTTONS = new Set([
   ELEMENT_IDS.RESUME_BTN,
   ELEMENT_IDS.RUN_NEW_BTN,
   ELEMENT_IDS.RESTORE_STATE_BTN,
 ]);
 
+/** The status dot's hue per tone (G4: the fold spells the tone). */
+const TONE_INDICATOR_CLASS: Record<StreamView['tone'], string> = {
+  running: 'is-running',
+  success: 'is-completed',
+  danger: 'is-failed',
+  warning: 'is-starting',
+  neutral: 'is-ready',
+};
+
+/** Which toolbar buttons a stream's state licenses. */
+function enabledToolbarButtons(
+  stream: StreamView,
+  displayKey: StreamStatusDisplayKey | undefined,
+): ReadonlySet<string> | undefined {
+  if (stream.readOnly) return READ_ONLY_BUTTONS;
+  if (stream.group === 'interrupted') return new Set(TERMINAL_STATE_BUTTONS);
+  return displayKey ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey] : undefined;
+}
+
 @customElement('stream-header')
-export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
+export class StreamHeader extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -222,7 +175,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
 
       #activeStreamName {
         flex: 1;
-        min-width: 0;
+        min-width: 8ch;
         margin: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -238,6 +191,11 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         flex: 0 0 auto;
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
+        white-space: nowrap;
+      }
+
+      tool-timer {
+        flex: 0 0 auto;
         white-space: nowrap;
       }
 
@@ -266,6 +224,19 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
          segmented pill rather than a row of squares. */
       .header-actions .action-icon-button::part(base) {
         border-radius: var(--wa-border-radius-circle, 50%);
+      }
+
+      /* Narrow, the whole toolbar folds behind one trailing icon (see the
+         container query); wide, the toolbar is what the row shows. */
+      .header-overflow {
+        display: none;
+      }
+
+      .header-overflow-status {
+        padding: var(--wa-space-2xs) var(--wa-space-s) var(--wa-space-3xs);
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+        white-space: nowrap;
       }
 
       /* Status indicator overrides - base styles from statusIndicatorStyles.
@@ -314,45 +285,58 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         font-size: var(--font-size-xs);
       }
 
-      .parent-link {
+      /* The ancestors path, root first, capped at 40 percent of the header
+         (PRD 12.1). Segments are laid out in reverse DOM order so that when
+         the path cannot fit, the root end is what the overflow clips: the
+         nearest ancestor always survives (per-segment eviction). The title
+         beside it takes the remaining width. */
+      .ancestors {
+        display: flex;
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        flex: 0 1 auto;
+        max-width: 40%;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .ancestor {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-3xs);
-        padding: var(--wa-space-3xs) var(--wa-space-xs);
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
         background: var(--wa-color-neutral-fill-quiet);
+        border: none;
+        border-radius: var(--border-radius-small);
+        font: inherit;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         cursor: pointer;
-        white-space: nowrap;
-        border-radius: var(--border-radius-small);
-        /* Secondary to the active title (#activeStreamName, flex:1) — cap it
-           so a long parent label truncates instead of pushing the toolbar
-           off-screen or wrapping the header. */
-        flex-shrink: 1;
-        min-width: 0;
-        max-width: 40%;
       }
-
-      .parent-link-label {
+      .ancestor-label {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         min-width: 0;
       }
-
-      .parent-link:hover {
+      .ancestor:hover {
         color: var(--color-text-link);
       }
-
-      /* Radius only — the ring comes from focusRingStyles. */
-      .parent-link:focus-visible {
+      .ancestor:focus-visible {
         border-radius: var(--border-radius-small);
       }
-
-      .parent-link wa-icon {
+      .ancestor-separator {
+        flex: 0 0 auto;
         font-size: var(--font-size-xs);
+        color: var(--color-text-muted);
       }
-
+      :dir(rtl) .ancestor-separator {
+        transform: scaleX(-1);
+      }
       wa-tag.progress-badge wa-icon {
         font-size: var(--font-size-xs);
       }
@@ -365,137 +349,157 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         transform: scaleX(-1);
       }
 
-      @container (max-width: 520px) {
-        .status-label {
+      /* Below the wide width the eight-button toolbar cannot share the row
+         with the path and the title, so it folds behind one trailing icon
+         with the tool-calls count and the status label. */
+      @container (max-width: 880px) {
+        .status-label,
+        wa-tag.progress-badge,
+        .header-actions wa-button-group {
           display: none;
         }
 
         .log-header {
           padding-inline: var(--wa-space-xs);
-          flex-wrap: wrap;
         }
 
-        .header-left {
-          flex-basis: 100%;
-        }
-
-        .header-actions {
-          width: 100%;
-          margin-inline-start: 0;
-          justify-content: flex-start;
+        .header-overflow {
+          display: inline-flex;
         }
       }
     `,
   ];
 
-  @property({ attribute: false }) stream: StreamTabInfo | null = null;
-  /**
-   * The full stream state. The header derives its status/substate/progress/
-   * stage display and the tool-use-only bypass/goal indicators from this one
-   * object, so containers bind a single `.state` property instead of a
-   * per-field sync surface.
-   */
-  @property({ attribute: false }) state: StreamState | null = null;
+  @property({ attribute: false }) stream: StreamView | null = null;
+  /** For the per-run policy snapshot behind the bypass toggles. */
+  @property({ attribute: false }) view: SessionView | null = null;
 
-  /** Read-only trace-viewer export: no toolbar action reaches a live backend. */
-  @consume({ context: archivedContext, subscribe: true })
-  private archived = false;
-
-  /** Parent tab labels come from the parent's own tab info, not id parsing. */
-  @consume({ context: streamByIdContext, subscribe: true })
-  private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
-
-  /** Owns the copied/reset feedback for the run-context copy button. */
   private readonly copyRunContext = new CopyButtonController(this, {
     successTitle: 'Copied!',
   });
 
-  /**
-   * The run-context text for this stream, or `''` when there is nothing worth
-   * copying (not a workflow stream, or no outputs and no compile failures) —
-   * which is what disables the button.
-   */
-  private runContextText(
-    stream: StreamTabInfo,
-    state: StreamState | null | undefined,
-  ): string {
-    if (!state || !isWorkflowState(state)) return '';
+  private runContextText(stream: StreamView): string {
+    if (stream.category !== 'workflow') return '';
     return formatWorkflowRunContext({
-      stream,
-      files: state.files,
-      compileFailures: state.compileFailures,
+      stream: {
+        name: stream.id,
+        label: stream.label,
+        model: stream.model ?? undefined,
+        modelLabel: stream.modelLabel ?? undefined,
+        executionId: stream.executionId,
+        description: stream.description ?? undefined,
+        creationTimestamp: stream.runStartedAt ?? 0,
+        identity: stream.identity ?? undefined,
+        agentCategory: stream.category,
+      },
+      files: stream.files,
+      compileFailures: stream.compileFailures,
     });
   }
 
-  override render(): TemplateResult | typeof nothing {
-    if (!this.stream) {
-      return nothing;
+  /** The arm each toolbar button dispatches. */
+  private dispatchToolbar(button: ProgressToolbarButton, stream: StreamView) {
+    const streamId = stream.id;
+    if (button.bypassKind !== undefined) {
+      const enabled = !this.bypassActive(stream, button.bypassKind);
+      this.dispatchEvent(
+        SessionUiEvents.runtime({
+          kind: 'policy.set',
+          change: {
+            field: 'bypass',
+            streamId,
+            bypass: button.bypassKind,
+            enabled,
+          },
+        }),
+      );
+      return;
     }
+    switch (button.id) {
+      case ELEMENT_IDS.STOP_STREAM_BTN:
+        this.dispatchEvent(
+          SessionUiEvents.runtime({ kind: 'stream.stop', streamId }),
+        );
+        return;
+      case ELEMENT_IDS.COMPACT_RESPONSE_BTN:
+        this.dispatchEvent(
+          SessionUiEvents.runtime({ kind: 'stream.compact', streamId }),
+        );
+        return;
+      case ELEMENT_IDS.RESUME_BTN:
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', streamId }));
+        return;
+      case ELEMENT_IDS.RUN_NEW_BTN:
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'runNew', streamId }));
+        return;
+      case ELEMENT_IDS.RESTORE_STATE_BTN:
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: 'restoreIntoLauncher', streamId }),
+        );
+        return;
+      case ELEMENT_IDS.OPEN_TASK_STORAGE_BTN:
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: 'openTaskStorage', streamId }),
+        );
+        return;
+      case ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN:
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: 'exportTranscript', streamId }),
+        );
+        return;
+      case ELEMENT_IDS.DIFF_STREAM_BTN:
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: 'latexdiff', streamId }),
+        );
+        return;
+      case ELEMENT_IDS.CLEAN_STREAM_BTN:
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'clean', streamId }));
+        return;
+      case ELEMENT_IDS.PACK_STREAM_BTN:
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'pack', streamId }));
+        return;
+    }
+  }
 
-    const state = this.state;
-    const status = state?.status ?? DEFAULT_STREAM_METADATA_STATUS;
-    const substate = state?.substate;
-    const { label: statusLabel, displayKey } = progressHeaderStatus(
-      status,
-      substate,
+  private bypassActive(
+    stream: StreamView,
+    kind: NonNullable<ProgressToolbarButton['bypassKind']>,
+  ): boolean {
+    return this.view?.policy.get(stream.id)?.bypasses[kind] === true;
+  }
+
+  override render(): TemplateResult | typeof nothing {
+    const stream = this.stream;
+    if (!stream) return nothing;
+    const { displayKey } = progressHeaderStatus(
+      stream.status,
+      stream.substate ?? undefined,
     );
-    const statusClass = streamStatusIndicatorClass(status, substate);
-    const progress = state?.conversationProgress;
-    const stage = state?.stage;
-    // Tool-use-only bypass/goal indicators; workflow/process states report off.
-    const toolUse = state && isToolUseState(state) ? state : null;
-    const goal = toolUse?.goal ?? { active: false };
-    const hasExecutionId = Boolean(this.stream.executionId);
-    const identity = this.stream.identity;
-    const isNativeAgentRun = isPlainAgentIdentity(identity);
-    const agentCategory = this.stream.agentCategory;
-    // Identity decides the chrome: a non-agent run (process, multi-agent-
-    // workflow container) gets the neutral toolbar even when a borrowed
-    // agentCategory rides the live wire, and a pending stream (no identity,
-    // no category) never gets a fabricated category's chrome.
-    const isAgentOrPending =
-      identity === undefined || identity.kind === 'agent';
+    const statusLabel = stream.statusLabel;
+    const goal: GoalState =
+      stream.category === 'toolUse' ? stream.goal : { active: false };
+    const identity = stream.identity;
+    // An agent run takes its category's chrome; a legacy stream with no
+    // identity, a process, or a workflow container takes the neutral one.
     const toolbarButtons =
-      isAgentOrPending && agentCategory
-        ? TOOLBAR_BUTTONS[agentCategory]
+      identity?.kind === 'agent'
+        ? TOOLBAR_BUTTONS[stream.category]
         : NEUTRAL_TOOLBAR;
-    const enabledButtons = displayKey
-      ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
-      : undefined;
-    // Composed once per render: it both gates the copy button and is the
-    // payload its click writes.
-    const runContext = this.runContextText(this.stream, state);
-
-    // Precompute per-button view metadata once. Only the tooltip is
-    // active-state-aware; the accessible name stays constant because
-    // `aria-pressed` already carries the toggle state — a name that swaps
-    // with state announces a full sentence on every change (same rationale
-    // as the wa-switch toggles in settingsView's ToolCard). The tooltips
-    // live OUTSIDE <wa-button-group>: the group's rounded-corner styling
-    // keys off ::slotted(:first-child)/(:last-child), so interleaving
-    // tooltip nodes between the buttons would break those selectors —
-    // `renderIconActionButtonParts` keeps them apart, and each anchors by
-    // `for=${btn.id}` within this shadow root.
+    // Resume, Run new, and Restore reach the host's `nativeAgentRun` gate,
+    // which admits a plain agent identity and nothing else.
+    const isNativeAgentRun = isPlainAgentIdentity(identity);
+    const enabledButtons = enabledToolbarButtons(stream, displayKey);
+    const runContext = this.runContextText(stream);
     const toolbarButtonViews = toolbarButtons.map((btn) => {
-      const { disabled: computedDisabled, hidden } = this.getButtonState(
-        btn,
-        enabledButtons,
-        hasExecutionId,
-        isNativeAgentRun,
-      );
+      const hidden = NATIVE_AGENT_ONLY_BUTTONS.has(btn.id) && !isNativeAgentRun;
       const isCopyRunContext = btn.localAction === 'copyRunContext';
-      // Read-only trace-viewer export: no toolbar action reaches a live
-      // backend — the onClick below re-checks `disabled` before
-      // dispatching, so this one flag both looks and behaves inert.
       const disabled =
-        this.archived ||
-        computedDisabled ||
+        hidden ||
+        !enabledButtons?.has(btn.id) ||
         (isCopyRunContext && runContext === '');
-      const isActive = Boolean(
-        btn.bypassKind && toolUse?.bypasses[btn.bypassKind],
-      );
-      // A tooltip only shows on hover, so the copy confirmation also swaps the
-      // icon — same pairing as the external-inquiry copy button.
+      const isActive =
+        btn.bypassKind !== undefined &&
+        this.bypassActive(stream, btn.bypassKind);
       const copied = isCopyRunContext && this.copyRunContext.state.copied;
       const restingTooltip =
         isActive && btn.titleActive ? btn.titleActive : btn.title;
@@ -509,6 +513,14 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       ]
         .filter(Boolean)
         .join(' ');
+      const activate = (): void => {
+        if (disabled) return;
+        if (isCopyRunContext) {
+          void this.copyRunContext.copy(runContext);
+          return;
+        }
+        this.dispatchToolbar(btn, stream);
+      };
       const { button, tooltip } = renderIconActionButtonParts({
         id: btn.id,
         icon: copied ? 'check' : btn.icon,
@@ -517,60 +529,53 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         className,
         size: 'm',
         disabled,
-        // Bypass toggles expose grant state as aria-pressed; plain actions
-        // must not read as toggle buttons.
         pressed: btn.bypassKind === undefined ? undefined : isActive,
         ariaHidden: hidden,
-        onClick: () => {
-          if (disabled) return;
-          if (isCopyRunContext) {
-            void this.copyRunContext.copy(runContext);
-            return;
-          }
-          // Non-local buttons all carry a command; the table pairs exactly one
-          // of `command` / `localAction` with each entry.
-          if (btn.command === undefined) return;
-          this.dispatchEvent(
-            ProgressEvents.toolbarCommand({ command: btn.command }),
-          );
-        },
+        onClick: activate,
       });
-      return { id: btn.id, hidden, button, tooltip };
+      // The same action as one menu row, for the folded toolbar.
+      const item = html`<wa-dropdown-item
+        value=${btn.id}
+        type=${btn.bypassKind === undefined ? 'normal' : 'checkbox'}
+        ?checked=${isActive}
+        ?disabled=${disabled}
+        >${waIcon(copied ? 'check' : btn.icon, { slot: 'icon' })}${
+          btn.label ?? restingTooltip
+        }</wa-dropdown-item
+      >`;
+      return { id: btn.id, hidden, button, tooltip, item, activate };
     });
+    const shownButtons = toolbarButtonViews.filter((view) => !view.hidden);
+    const progressTitle = getProgressBadgeTitle(
+      stream.conversationProgress,
+      stream.stage ?? undefined,
+    );
 
     return html`
       <div class="log-header">
         <div class="header-left">
-          ${this.renderParentLink()}
-          <h1
-            id=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
-            data-stream=${this.stream.name}
-          >
-            ${streamDisplayLabel(this.stream)}
+          ${this.renderAncestors(stream)}
+          <h1 id=${ELEMENT_IDS.ACTIVE_STREAM_NAME} data-stream=${stream.id}>
+            ${stream.label}
           </h1>
-          ${
-            this.stream.label
-              ? html`<wa-tooltip for=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
-                  >${this.stream.label} · ${this.stream.name}</wa-tooltip
-                >`
-              : nothing
-          }
+          <wa-tooltip for=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
+            >${stream.description ?? stream.label} · ${stream.id}</wa-tooltip
+          >
           <span
             id=${ELEMENT_IDS.STATUS_INDICATOR}
             role="img"
             aria-label=${statusLabel}
             class=${classMap({
               'status-indicator': true,
-              ...(statusClass ? { [statusClass]: true } : {}),
+              [TONE_INDICATOR_CLASS[stream.tone]]: true,
             })}
           ></span>
           <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-            ${streamStatusTooltip(state, statusLabel)}
+            ${stream.statusDetail ?? statusLabel}
           </wa-tooltip>
           <span class="status-label" aria-hidden="true">${statusLabel}</span>
-          ${this.renderRunElapsed(state?.runStartedAt)}
-          ${this.renderGoalChip(goal)}
-          ${this.renderProgressBadge(progress, stage)}
+          ${this.renderRunElapsed(stream)} ${this.renderGoalChip(goal)}
+          ${this.renderProgressBadge(stream.conversationProgress, stream.stage)}
         </div>
         <div class="header-actions">
           <wa-button-group
@@ -584,34 +589,46 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
             )}
           </wa-button-group>
           ${repeat(
-            toolbarButtonViews.filter((view) => !view.hidden),
+            shownButtons,
             (view) => view.id,
             (view) => view.tooltip,
           )}
+          <wa-dropdown
+            class="header-overflow"
+            placement="bottom-end"
+            @wa-select=${(event: Event) => {
+              const value = (
+                event as CustomEvent<{ item?: { value?: unknown } }>
+              ).detail?.item?.value;
+              shownButtons.find((view) => view.id === value)?.activate();
+            }}
+          >
+            <wa-button
+              slot="trigger"
+              id=${ELEMENT_IDS.HEADER_MORE_BTN}
+              class="action-icon-button"
+              appearance="plain"
+              variant="neutral"
+              size="s"
+              type="button"
+              aria-label="Stream actions"
+              >${waIcon('ellipsis')}</wa-button
+            >
+            <div class="header-overflow-status">
+              ${statusLabel}${progressTitle ? ` · ${progressTitle}` : ''}
+            </div>
+            ${repeat(
+              shownButtons,
+              (view) => view.id,
+              (view) => view.item,
+            )}
+          </wa-dropdown>
+          <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}
+            >Stream actions</wa-tooltip
+          >
         </div>
       </div>
     `;
-  }
-
-  private getButtonState(
-    button: ProgressToolbarButton,
-    enabledButtons: ReadonlySet<string> | undefined,
-    hasExecutionId: boolean,
-    isNativeAgentRun: boolean,
-  ): { disabled: boolean; hidden: boolean } {
-    // Same treatment as an execution-dependent button with no executionId:
-    // hidden, not just disabled, so the toolbar never displays a control the
-    // active host's registry has declared unsupported (or that this stream's
-    // run identity does not support).
-    const hidden =
-      (EXECUTION_DEPENDENT_BUTTONS.has(button.id) && !hasExecutionId) ||
-      (NATIVE_AGENT_ONLY_BUTTONS.has(button.id) && !isNativeAgentRun) ||
-      // A local action has no backend command, so no host can declare it
-      // unsupported.
-      (button.command !== undefined &&
-        isKnownUnsupported(this.unsupportedCommands, button.command));
-    const disabled = hidden || !enabledButtons?.has(button.id);
-    return { disabled, hidden };
   }
 
   private renderGoalChip(goal: GoalState): TemplateResult | typeof nothing {
@@ -631,37 +648,35 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       <wa-tooltip for=${ELEMENT_IDS.GOAL_CHIP}>${tooltip}</wa-tooltip>`;
   }
 
-  /**
-   * Live elapsed time for the run in progress. `runStartedAt` is stamped and
-   * cleared by the session status machine, so its mere presence is the "a run
-   * is active" signal — the header neither re-derives it from the phase nor
-   * keeps a clock of its own; `<tool-timer>` owns the tick.
-   */
   private renderRunElapsed(
-    runStartedAt: number | undefined,
+    stream: StreamView,
   ): TemplateResult | typeof nothing {
-    if (runStartedAt === undefined) return nothing;
+    if (stream.runStartedAt === null || stream.group === 'recent') {
+      return nothing;
+    }
     return html`<tool-timer
       id=${ELEMENT_IDS.RUN_ELAPSED}
-      .startTime=${runStartedAt}
+      .startTime=${stream.runStartedAt}
     ></tool-timer>`;
   }
 
   private renderProgressBadge(
     progress: ConversationProgress | undefined,
-    stage: StreamStage | undefined,
+    stage: StreamStage | null,
   ): TemplateResult | typeof nothing {
-    if (!stage && !progress?.toolCallCount) {
+    const stageValue = stage ?? undefined;
+    if (!stageValue && !progress?.toolCallCount) {
       return nothing;
     }
-    const progressTitle = getProgressBadgeTitle(progress, stage);
+    const progressTitle = getProgressBadgeTitle(progress, stageValue);
     return html`<wa-tag
         id=${ELEMENT_IDS.PROGRESS_BADGE}
         class="progress-badge"
         variant="neutral"
         size="s"
       >
-        ${waIcon('chart-line')} ${renderProgressBadgeContent(progress, stage)}
+        ${waIcon('chart-line')}
+        ${renderProgressBadgeContent(progress, stageValue)}
       </wa-tag>
       ${
         progressTitle
@@ -672,49 +687,45 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       }`;
   }
 
-  private renderParentLink(): TemplateResult | typeof nothing {
-    const parentStreamId = this.stream?.parentStreamId;
-    if (!parentStreamId) return nothing;
-
-    // The parent's own tab info owns its display label. A missing entry
-    // means the parent tab was evicted while this child still references
-    // it — fall back to a neutral label, never the raw
-    // `agent#executionId` handle.
-    const displayName =
-      streamDisplayLabel(this.streamById.get(parentStreamId)) ??
-      'Parent session';
-
+  /** The full ancestors path, root first, each segment a link to that
+   *  stream. Laid out nearest-first in the DOM (see the styles). */
+  private renderAncestors(stream: StreamView): TemplateResult | typeof nothing {
+    if (stream.ancestors.length === 0) return nothing;
+    const nearestFirst = [...stream.ancestors].reverse();
     return html`
-      <span
-        id=${ELEMENT_IDS.PARENT_LINK}
-        class="parent-link"
-        role="button"
-        tabindex="0"
-        aria-label=${`Go to parent session: ${displayName}`}
-        @click=${this.navigateToParent}
-        @keydown=${this.handleParentLinkKey}
-      >
-        ${waIcon('arrow-left')}
-        <span class="parent-link-label">${displayName}</span>
-      </span>
-      <wa-tooltip for=${ELEMENT_IDS.PARENT_LINK}
-        >Go to parent: ${displayName} · ${parentStreamId}</wa-tooltip
-      >
+      <nav class="ancestors" aria-label="Parent sessions">
+        ${repeat(
+          nearestFirst,
+          (ancestor) => ancestor.id,
+          (ancestor, index) => html`
+            <span class="ancestor-separator" aria-hidden="true"
+              >${waIcon('chevron-right')}</span
+            >
+            <button
+              type="button"
+              class="ancestor"
+              id=${`ancestor-${index}`}
+              aria-label=${`Go to ${ancestor.label}`}
+              @click=${() => this.navigateTo(ancestor.id)}
+            >
+              <span class="ancestor-label">${ancestor.label}</span>
+            </button>
+            <wa-tooltip for=${`ancestor-${index}`}
+              >Go to ${ancestor.label} · ${ancestor.id}</wa-tooltip
+            >
+          `,
+        )}
+      </nav>
     `;
   }
 
-  private handleParentLinkKey(event: KeyboardEvent): void {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      this.navigateToParent();
-    }
+  private navigateTo(streamId: StreamTabId): void {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', streamId }));
   }
+}
 
-  private navigateToParent(): void {
-    const parentStreamId = this.stream?.parentStreamId;
-    if (!parentStreamId) return;
-    this.dispatchEvent(
-      ProgressEvents.streamSwitch({ streamId: parentStreamId }),
-    );
+declare global {
+  interface HTMLElementTagNameMap {
+    'stream-header': StreamHeader;
   }
 }

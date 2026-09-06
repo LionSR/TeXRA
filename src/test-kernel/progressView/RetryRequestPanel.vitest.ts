@@ -115,7 +115,14 @@ describe('retry-request-panel', () => {
     expect(element.handleKeyboardShortcut('k')).toBe(false);
     expect(element.handleKeyboardShortcut('r')).toBe(true);
 
-    expect(actions).toEqual([{ action: 'retry' }]);
+    expect(actions).toEqual([
+      {
+        kind: 'decision.retry',
+        streamId: 'stream-1',
+        approvalId: 'retry-1',
+        decision: { action: 'retry' },
+      },
+    ]);
   });
 
   it('offers the API-key switch for an exclusive model on upstream-credit depletion', async () => {

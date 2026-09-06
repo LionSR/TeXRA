@@ -2,7 +2,15 @@
 import '@test/support/defaultSessionTestSetup';
 
 import stripAnsi from 'strip-ansi';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
 import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
@@ -28,9 +36,12 @@ import {
   activeForm,
   requestDraftRestore,
   resetCliState,
-  streams,
 } from '@cli/chat/tui/state/cliState';
-import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
+import {
+  CLI_LOCAL_STREAM_ID,
+  notices,
+  noticesFor,
+} from '@cli/chat/tui/state/transcript';
 import {
   loadInk,
   renderInteractive,
@@ -40,6 +51,7 @@ import {
   createDeferred,
   waitForCondition as waitFor,
 } from '@test/support/asyncTestUtils';
+import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const clipboardMock = vi.hoisted(() => ({
   attachClipboardImage: vi.fn(),
@@ -132,6 +144,7 @@ describe('InputBar history arrow boundaries', () => {
 });
 
 describe('InputBar slash submit', () => {
+  beforeAll(bindTestSessionView);
   it('threads deferred echo through a palette-opened form', async () => {
     const { ink, React } = await loadInk();
     registerSlashCommand({
@@ -155,18 +168,15 @@ describe('InputBar slash submit', () => {
       const form = activeForm.get()?.render(() => undefined, 20) as {
         props?: { onPersist?: () => void };
       };
-      expect(streams.get().get(CLI_LOCAL_STREAM_ID)?.entries ?? []).toEqual([]);
+      expect(noticesFor(notices.get(), CLI_LOCAL_STREAM_ID)).toEqual([]);
 
       form.props?.onPersist?.();
 
       expect(
-        streams
-          .get()
-          .get(CLI_LOCAL_STREAM_ID)
-          ?.entries.map((row) => ({
-            kind: row.kind,
-            text: transcriptRowHeadline(row),
-          })),
+        noticesFor(notices.get(), CLI_LOCAL_STREAM_ID).map(({ row }) => ({
+          kind: row.kind,
+          text: transcriptRowHeadline(row),
+        })),
       ).toEqual([{ kind: 'user', text: '/model' }]);
     } finally {
       instance.unmount();

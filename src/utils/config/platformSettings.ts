@@ -1,7 +1,11 @@
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
-import { readSetting, writeSetting } from '@shared/config/settingsAccess';
+import {
+  readSetting,
+  writeSetting,
+  type SettingsStores,
+} from '@shared/config/settingsAccess';
 
 function requireEntry(key: string) {
   const entry = settingByKey(key);
@@ -26,9 +30,12 @@ export function initProcessSettingHost(host: SettingHost): void {
 
 /**
  * The three setting slots for the calling context: the session's workspace
- * config and state, and the process global state.
+ * config and state, and the process global state. `settingsAccess` resolves
+ * `entry.slots[host]` per row over these, so the git-author keys read and
+ * write `.texra/config.json` (config) on the CLI while other state-backed
+ * keys use the state stores.
  */
-function settingsStores() {
+export function platformSettingsStores(): SettingsStores {
   const roots = workspaceRoots();
   return {
     config: roots.config,
@@ -53,7 +60,7 @@ function settingsStores() {
 export function readPlatformSetting<T>(key: string): T {
   return readSetting(
     requireEntry(key),
-    settingsStores(),
+    platformSettingsStores(),
     processSettingHost,
   ) as T;
 }
@@ -70,7 +77,7 @@ export function writePlatformSetting(
   return writeSetting(
     requireEntry(key),
     value,
-    settingsStores(),
+    platformSettingsStores(),
     processSettingHost,
   );
 }

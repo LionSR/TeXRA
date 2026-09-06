@@ -2,9 +2,8 @@ import type {
   AgentCategory,
   GettingStartedAction,
   SettingsTabPanelName,
-  StreamTabId,
 } from '@shared/schemas';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,
   type DesktopPlatform,
@@ -159,15 +158,12 @@ export interface DesktopCommandMenuEntry {
  * over the same `CommandId` union with their host-specific actions, and both
  * require every action a registered handler can reach, so a miswired host
  * fails to compile instead of producing a menu item that silently does
- * nothing. `showStream` is the one genuine option: it is reachable only from
- * the renderer's palette (stream rows), never from the native menu, so the
- * main-process action set does not implement it.
+ * nothing.
  */
 export interface DesktopCommandActions {
   showLauncher(): void;
   openWorkbench(kind: DesktopWorkbenchKind): void;
   showSettings(tab?: SettingsTabPanelName, agentSubTab?: AgentCategory): void;
-  showStream?(streamId: StreamTabId): void;
   openDesktopDocs(): void;
   openLogFolder(): void;
   openWorkspaceFolder(): void;
@@ -183,11 +179,6 @@ interface DesktopSettingsTabMessage {
   command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
   tab: SettingsTabPanelName;
   agentSubTab?: AgentCategory;
-}
-
-interface DesktopMainViewResetMessage {
-  command: typeof MAIN_VIEW_COMMANDS.STATE_RESTORE;
-  isResetOperation: true;
 }
 
 /**
@@ -388,11 +379,4 @@ export function postDesktopSettingsView(
   });
   if (tab == null) return;
   postToRenderer(buildDesktopSettingsTabMessage(tab, agentSubTab));
-}
-
-export function buildDesktopMainViewResetMessage(): DesktopMainViewResetMessage {
-  return {
-    command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-    isResetOperation: true,
-  };
 }

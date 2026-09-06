@@ -80,7 +80,7 @@ export function createStubDesktopCredentialSettingsController(
     modelSelectionController: new SettingsModelSelectionController({
       globalState: state.globalState,
     }),
-    postMainModelOptionsData: noOp,
+    refreshModelOptions: noOp,
     postProfileData: noOp,
     postStartupData: noOp,
     postSubscriptionUsage: noOp,

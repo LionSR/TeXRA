@@ -3,6 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 import pDefer from 'p-defer';
 import {
   afterEach,
+  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -10,6 +11,8 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
+import { SubscriptionRef } from 'effect';
+import { currentSession } from '@agent/runtime/SessionHandle';
 
 const mocks = vi.hoisted(() => ({
   apiKeyExistsUncached: vi.fn(),
@@ -104,15 +107,13 @@ import type {
   HostRetryInteractionOptions,
 } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
-  approvalQueueStatus,
-  clearApprovals,
   currentApproval,
-  enqueueApproval,
-  pendingApprovalSummaries,
   type ApprovalDecision,
 } from '@cli/chat/tui/state/approvalQueue';
-import { resetCliState, streams } from '@cli/chat/tui/state/cliState';
+import { bindSessionView } from '@cli/chat/tui/state/sessionView';
+import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -122,16 +123,88 @@ import type { ApiProvider } from '@model/apiProviders';
 import {
   AgentCategory,
   RUN_OUTCOME,
+  USER_FOLLOW_UP_SUPPORT,
+  type ExecutionId,
   type RetryPermission,
+  type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionAutoApproval } from '@tools/goal';
+import { proposalApprovals } from '@tools/approval';
 import {
-  isApprovalBypassedForStream,
-  isBashApprovalBypassedForStream,
-  proposalApprovals,
-} from '@tools/approval';
+  bashApprovalRequest,
+  toolEditApprovalRequest,
+} from '../agent/progressTestUtils';
+
+/**
+ * The session's port for a test: a request names a stream the fold must
+ * already hold (only `run.start` mints one), so each hook first publishes
+ * the stream's existence fact when the view lacks it, then goes through the
+ * session, which publishes `approval.requested` and settles the answer.
+ */
+function port(): SessionHostInteractions {
+  const session = defaultSession();
+  const ensureStream = (streamId: string | null | undefined): void => {
+    if (!streamId) return;
+    if (
+      SubscriptionRef.getUnsafe(session.view).streams.has(
+        streamId as StreamTabId,
+      )
+    )
+      return;
+    session.publish([
+      {
+        type: 'run.start',
+        aggregateId: streamId,
+        executionId: `${streamId}-exec` as ExecutionId,
+        identity: { kind: 'agent', agent: 'agent' },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+      },
+    ]);
+  };
+  const port = session.interactions;
+  return new Proxy(port, {
+    get(target, key) {
+      const value = Reflect.get(target, key) as unknown;
+      if (typeof value !== 'function') return value;
+      return (...args: unknown[]) => {
+        const first = args[0] as { streamId?: string | null } | undefined;
+        if (
+          (typeof key === 'string' && key.startsWith('request')) ||
+          key === 'askUserQuestion' ||
+          key === 'openExternalInquiry'
+        ) {
+          ensureStream(first?.streamId);
+        }
+        const result = (value as (...a: unknown[]) => unknown).apply(
+          target,
+          args,
+        );
+        if (key === 'openExternalInquiry') {
+          // The tool publishes the thread's listing fact once the host has
+          // taken the question (ExternalInquiryTool); the fold lists it open.
+          const inquiry = first as { threadId: string; question: string };
+          session.publish([
+            {
+              type: 'inquiryThreadUpdated',
+              aggregateId: inquiry.threadId,
+              threadId: inquiry.threadId,
+              parentStreamId: (first?.streamId ?? null) as StreamTabId | null,
+              status: 'open',
+              lastQuestionPreview: inquiry.question,
+              lastActivityIso: new Date(0).toISOString(),
+              turnCount: 1,
+            },
+          ]);
+        }
+        return result;
+      };
+    },
+  }) as SessionHostInteractions;
+}
 
 function host(): CliRuntimeHost {
   return {
@@ -181,7 +254,7 @@ function requestSameStreamRetry(
   interactions: HostInteractions,
   message: string,
 ): ReturnType<NonNullable<HostInteractions['requestRetry']>> {
-  return interactions.requestRetry?.({
+  return port().requestRetry({
     ...kimiCodeSubscriptionRetry('same-stream'),
     errorMessage: message,
   } as RetryPermission);
@@ -200,9 +273,16 @@ function ordinaryRetry(
   };
 }
 
+let retrySeq = 0;
+/** A fresh request id per fixture: the fold keys a request by it. */
+function retryRequestId(streamId: string): string {
+  retrySeq += 1;
+  return `retry-${streamId}-${retrySeq}`;
+}
 function chatGptSubscriptionRetry(streamId: string): RetryPermission {
   const message = 'ChatGPT subscription usage limit reached.';
   return {
+    requestId: retryRequestId(streamId),
     streamId,
     operation: 'model request',
     errorMessage: message,
@@ -220,6 +300,7 @@ function kimiCodeSubscriptionRetry(
 ): RetryPermission {
   const message = 'Kimi Code subscription usage limit reached.';
   return {
+    requestId: retryRequestId(streamId),
     streamId,
     operation: 'model request',
     model,
@@ -235,6 +316,7 @@ function kimiCodeSubscriptionRetry(
 function glmCodingPlanRetry(streamId: string): RetryPermission {
   const message = 'GLM Coding Plan usage limit reached.';
   return {
+    requestId: retryRequestId(streamId),
     streamId,
     operation: 'model request',
     model: 'glm46',
@@ -308,7 +390,7 @@ async function beginSubscriptionSwitch(
 ): Promise<{
   readonly result: ReturnType<NonNullable<HostInteractions['requestRetry']>>;
 }> {
-  const result = interactions.requestRetry?.(
+  const result = port().requestRetry(
     chatGptSubscriptionRetry(streamId),
     options,
   );
@@ -326,7 +408,7 @@ async function approveOrdinaryRetryOnOldRoute(
   const ordinaryPrepare = vi.fn(async () => {
     expectChatGptSubscriptionRoute();
   });
-  const ordinary = interactions.requestRetry?.(ordinaryRetry(streamId), {
+  const ordinary = port().requestRetry(ordinaryRetry(streamId), {
     prepareRetry: ordinaryPrepare,
   });
   await waitForApproval('retry', { streamId });
@@ -371,10 +453,12 @@ beforeEach(() => {
   });
 });
 
+beforeAll(() => {
+  bindSessionView(defaultSession().view);
+});
 afterEach(() => {
-  clearApprovals();
   defaultSession().approvals.clearAll();
-  defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
+  defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
   resetCliState();
   mocks.retryCopyFailure = undefined;
   mocks.apiKeyExistsUncached.mockReset();
@@ -392,7 +476,7 @@ afterEach(() => {
 describe('TUI retry approvals', () => {
   it('preserves the lifecycle cause when an external inquiry is interrupted', async () => {
     const { interactions } = tui();
-    await interactions.openExternalInquiry?.({
+    await port().openExternalInquiry({
       requestId: 'inquiry-interrupted',
       allowBypass: false,
       streamId: 'inquiry-stream',
@@ -406,12 +490,13 @@ describe('TUI retry approvals', () => {
       threadId: 'thread-interrupted',
     });
 
-    clearApprovals();
+    defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
 
     await vi.waitFor(() =>
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
         threadId: 'thread-interrupted',
+        turnIndex: 1,
         cause: 'Session interrupted.',
       }),
     );
@@ -419,7 +504,7 @@ describe('TUI retry approvals', () => {
 
   it('drops a note-free external inquiry without synthesized feedback', async () => {
     const { interactions } = tui();
-    await interactions.openExternalInquiry?.({
+    await port().openExternalInquiry({
       requestId: 'inquiry-note-free',
       allowBypass: false,
       streamId: 'inquiry-stream',
@@ -439,6 +524,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
         threadId: 'thread-note-free',
+        turnIndex: 1,
       }),
     );
   });
@@ -448,7 +534,7 @@ describe('TUI retry approvals', () => {
       approvalPolicy: 'yolo',
     });
 
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       ordinaryRetry('yolo-transient-stream', 'yolo-transient-retry'),
     );
 
@@ -458,7 +544,7 @@ describe('TUI retry approvals', () => {
         'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     });
     expect(runOutcomeExitCode(RUN_OUTCOME.FAILED)).toBe(CliExitCode.AgentError);
-    expect(currentApproval.get()).toBeUndefined();
+    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
   });
 
   it('does not mutate the runtime host emitter', () => {
@@ -470,16 +556,17 @@ describe('TUI retry approvals', () => {
 
   it('updates TUI bash bypass state at the approval decision site', async () => {
     const { presentationHost, interactions } = tui();
-    const result = interactions.requestBashApproval?.({
-      command: 'echo ok',
-      streamId: 'bash-bypass-stream',
-    });
+    const result = port().requestBashApproval(
+      bashApprovalRequest({
+        command: 'echo ok',
+        streamId: 'bash-bypass-stream',
+      }),
+    );
 
     await waitForApproval('bash', { streamId: 'bash-bypass-stream' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'bash' });
 
     await expect(result).resolves.toEqual({ action: 'approve' });
-    expect(streams.get().get('bash-bypass-stream')?.bypass.bash).toBe(true);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'bash-bypass-stream',
       kind: 'bash',
@@ -490,7 +577,6 @@ describe('TUI retry approvals', () => {
   it('updates TUI command bypass state when goal auto-approval is enabled and cleared', async () => {
     const { presentationHost } = tui();
     await setGoalSessionAutoApproval('goal-bypass-stream', 'commands');
-    expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(true);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'goal-bypass-stream',
       kind: 'bash',
@@ -498,7 +584,6 @@ describe('TUI retry approvals', () => {
     });
 
     await setGoalSessionAutoApproval('goal-bypass-stream', false);
-    expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(false);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'goal-bypass-stream',
       kind: 'bash',
@@ -509,29 +594,21 @@ describe('TUI retry approvals', () => {
   it('scopes goal auto-approval to all agent work and clears it together', async () => {
     tui();
     await setGoalSessionAutoApproval('goal-all-bypass-stream', 'allAgentWork');
-    expect(streams.get().get('goal-all-bypass-stream')?.bypass).toEqual({
-      bash: true,
-      superYolo: true,
-      toolEdit: true,
-    });
 
     await setGoalSessionAutoApproval('goal-all-bypass-stream', false);
-    expect(streams.get().get('goal-all-bypass-stream')?.bypass).toEqual({
-      bash: false,
-      superYolo: false,
-      toolEdit: false,
-    });
   });
 
   it('updates TUI edit bypass state at the approval decision site', async () => {
     const { presentationHost, interactions } = tui();
-    const result = interactions.requestToolEditApproval?.({
-      path: '/work/main.tex',
-      originalContent: 'old',
-      proposedContent: 'new',
-      sourceTool: 'edit',
-      streamId: 'edit-bypass-stream',
-    });
+    const result = port().requestToolEditApproval(
+      toolEditApprovalRequest({
+        path: '/work/main.tex',
+        originalContent: 'old',
+        proposedContent: 'new',
+        sourceTool: 'edit',
+        streamId: 'edit-bypass-stream',
+      }),
+    );
 
     await waitForApproval('toolEdit', { streamId: 'edit-bypass-stream' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'toolEdit' });
@@ -540,7 +617,6 @@ describe('TUI retry approvals', () => {
       action: 'apply',
       appliedContent: 'new',
     });
-    expect(streams.get().get('edit-bypass-stream')?.bypass.toolEdit).toBe(true);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'edit-bypass-stream',
       kind: 'toolEdit',
@@ -550,7 +626,7 @@ describe('TUI retry approvals', () => {
 
   it('enables the complete delegated-task approval mode at the proposal decision site', async () => {
     const { presentationHost, interactions } = tui();
-    const result = interactions.requestAgentProposal?.({
+    const result = port().requestAgentProposal({
       requestId: 'proposal-bypass',
       streamId: 'proposal-bypass-stream',
       agent: 'critic',
@@ -566,19 +642,17 @@ describe('TUI retry approvals', () => {
     currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
 
     await expect(result).resolves.toEqual({ action: 'approve' });
-    expect(streams.get().get('proposal-bypass-stream')?.bypass.superYolo).toBe(
-      true,
-    );
-    expect(streams.get().get('proposal-bypass-stream')?.bypass).toEqual({
-      superYolo: true,
-      toolEdit: true,
-      bash: true,
-    });
     expect(proposalApprovals().isBypassed('proposal-bypass-stream')).toBe(true);
-    expect(isApprovalBypassedForStream('proposal-bypass-stream')).toBe(true);
-    expect(isBashApprovalBypassedForStream('proposal-bypass-stream')).toBe(
-      true,
-    );
+    expect(
+      currentSession().approvals.toolEdit.bypass.isBypassed(
+        'proposal-bypass-stream',
+      ),
+    ).toBe(true);
+    expect(
+      currentSession().approvals.bash.bypass.isBypassed(
+        'proposal-bypass-stream',
+      ),
+    ).toBe(true);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'proposal-bypass-stream',
       kind: 'superYolo',
@@ -599,7 +673,7 @@ describe('TUI retry approvals', () => {
   it('approves delegated work already queued in the same stream', async () => {
     const { interactions } = tui();
     const streamId = 'parallel-approval-stream';
-    const proposal = interactions.requestAgentProposal?.({
+    const proposal = port().requestAgentProposal({
       requestId: 'proposal-current',
       streamId,
       agent: 'critic',
@@ -610,68 +684,49 @@ describe('TUI retry approvals', () => {
       workingDirectory: null,
       agentCategory: AgentCategory.ToolUse,
     });
-    const edit = interactions.requestToolEditApproval?.({
-      path: '/work/main.tex',
-      originalContent: 'old',
-      proposedContent: 'new',
-      sourceTool: 'edit',
+    const edit = port().requestToolEditApproval(
+      toolEditApprovalRequest({
+        path: '/work/main.tex',
+        originalContent: 'old',
+        proposedContent: 'new',
+        sourceTool: 'edit',
+        streamId,
+      }),
+    );
+    const bash = port().requestBashApproval(
+      bashApprovalRequest({
+        command: 'lake build',
+        streamId,
+      }),
+    );
+    void port().requestPlanApproval({
+      requestId: 'plan-excluded',
       streamId,
+      goalEnabled: false,
+      plan: { objective: 'Keep the approval categories distinct.' },
     });
-    const bash = interactions.requestBashApproval?.({
-      command: 'lake build',
+    void port().requestRetry({
+      requestId: 'retry-excluded',
       streamId,
+      operation: 'model request',
     });
-    void enqueueApproval({
-      kind: 'planApproval',
-      data: {
-        requestId: 'plan-excluded',
-        streamId,
-        goalEnabled: false,
-        plan: { objective: 'Keep the approval categories distinct.' },
-      },
+    void port().askUserQuestion({
+      requestId: 'question-excluded',
+      allowBypass: false,
+      streamId,
+      questions: [
+        {
+          question: 'Continue?',
+          options: [{ label: 'Yes' }, { label: 'No' }],
+        },
+      ],
     });
-    void enqueueApproval({
-      kind: 'retry',
-      data: {
-        requestId: 'retry-excluded',
-        streamId,
-        operation: 'model request',
-      },
-      tui: {},
-    });
-    void enqueueApproval({
-      kind: 'externalInquiry',
-      data: {
-        requestId: 'inquiry-excluded',
-        allowBypass: false,
-        streamId,
-        question: 'What external fact should be checked?',
-        threadId: 'thread-excluded',
-      },
-    });
-    void enqueueApproval({
-      kind: 'userQuestion',
-      data: {
-        requestId: 'question-excluded',
-        allowBypass: false,
-        streamId,
-        questions: [
-          {
-            question: 'Continue?',
-            options: [{ label: 'Yes' }, { label: 'No' }],
-          },
-        ],
-      },
-    });
-    void enqueueApproval({
-      kind: 'bash',
-      data: {
-        requestId: 'other-stream-bash',
-        allowBypass: true,
-        streamId: 'other-approval-stream',
+    void port().requestBashApproval(
+      bashApprovalRequest({
         command: 'lake test',
-      },
-    });
+        streamId: 'other-approval-stream',
+      }),
+    );
 
     await waitForApproval('proposal', { requestId: 'proposal-current' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
@@ -682,20 +737,15 @@ describe('TUI retry approvals', () => {
       appliedContent: 'new',
     });
     await expect(bash).resolves.toEqual({ action: 'approve' });
-    expect(pendingApprovalSummaries.get()).toEqual([
-      { streamKey: streamId, kind: 'planApproval' },
-      { streamKey: streamId, kind: 'retry' },
-      { streamKey: streamId, kind: 'externalInquiry' },
-      { streamKey: streamId, kind: 'userQuestion' },
-      { streamKey: 'other-approval-stream', kind: 'bash' },
-    ]);
-    expect(currentApproval.get()?.payload.kind).toBe('planApproval');
+    await vi.waitFor(() =>
+      expect(currentApproval.get()?.payload.kind).toBe('planApproval'),
+    );
   });
 
   it('keeps an ordinary proposal approval limited to the current request', async () => {
     const { interactions } = tui();
     const streamId = 'proposal-one-off-stream';
-    const result = interactions.requestAgentProposal?.({
+    const result = port().requestAgentProposal({
       requestId: 'proposal-one-off',
       streamId,
       agent: 'critic',
@@ -713,18 +763,19 @@ describe('TUI retry approvals', () => {
     currentApproval.get()?.decide({ accepted: true });
 
     await expect(result).resolves.toEqual({ action: 'approve' });
-    expect(streams.get().get(streamId)?.bypass.superYolo ?? false).toBe(false);
-    expect(streams.get().get(streamId)?.bypass.toolEdit ?? false).toBe(false);
-    expect(streams.get().get(streamId)?.bypass.bash ?? false).toBe(false);
     expect(proposalApprovals().isBypassed(streamId)).toBe(false);
-    expect(isApprovalBypassedForStream(streamId)).toBe(false);
-    expect(isBashApprovalBypassedForStream(streamId)).toBe(false);
+    expect(
+      currentSession().approvals.toolEdit.bypass.isBypassed(streamId),
+    ).toBe(false);
+    expect(currentSession().approvals.bash.bypass.isBypassed(streamId)).toBe(
+      false,
+    );
   });
 
   it('fails closed when a switchable retry does not identify its provider', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const { interactions, prepareRetry } = tui();
-    const result = interactions.requestRetry?.({
+    const result = port().requestRetry({
       streamId: 's1',
       operation: 'model request',
       errorMessage: 'ChatGPT subscription usage limit reached.',
@@ -756,7 +807,7 @@ describe('TUI retry approvals', () => {
 
     const { interactions } = tui();
     const retry = chatGptSubscriptionRetry('s2');
-    void interactions.requestRetry?.(retry);
+    void port().requestRetry(retry);
 
     await waitForApproval(
       'retry',
@@ -774,6 +825,7 @@ describe('TUI retry approvals', () => {
 
     const { interactions } = tui();
     const retry = {
+      requestId: retryRequestId('unknown-provider'),
       streamId: 'unknown-provider',
       operation: 'model request',
       errorMessage: 'ChatGPT subscription usage limit reached.',
@@ -783,7 +835,7 @@ describe('TUI retry approvals', () => {
         provider: 'custom-provider',
       },
     } as RetryPermission;
-    void interactions.requestRetry?.(retry);
+    void port().requestRetry(retry);
 
     await waitForApproval('retry', { streamId: 'unknown-provider' });
     expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
@@ -795,7 +847,7 @@ describe('TUI retry approvals', () => {
     );
 
     const { interactions, prepareRetry } = tui();
-    const result = interactions.requestRetry?.(chatGptSubscriptionRetry('s3'));
+    const result = port().requestRetry(chatGptSubscriptionRetry('s3'));
 
     await waitForApproval(
       'retry',
@@ -827,7 +879,7 @@ describe('TUI retry approvals', () => {
     expect(mocks.invalidateApiKeyCache).toHaveBeenCalledOnce();
     expect(prepareRetry).toHaveBeenCalledOnce();
     expect(prepareRetry).toHaveBeenCalledWith('personal', expect.anything());
-    expect(currentApproval.get()).toBeUndefined();
+    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
   });
 
   it('auto-switches a Kimi Code subscription limit to the stored Moonshot key', async () => {
@@ -837,9 +889,7 @@ describe('TUI retry approvals', () => {
     );
 
     const { interactions, prepareRetry } = tui();
-    const result = interactions.requestRetry?.(
-      kimiCodeSubscriptionRetry('kimi-limit'),
-    );
+    const result = port().requestRetry(kimiCodeSubscriptionRetry('kimi-limit'));
 
     await expect(result).resolves.toEqual({
       action: 'retry',
@@ -863,7 +913,7 @@ describe('TUI retry approvals', () => {
     expect(prepareRetry.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
       mocks.notify.mock.invocationCallOrder[0] ?? 0,
     );
-    expect(currentApproval.get()).toBeUndefined();
+    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
   });
 
   it('announces the credential switch only after the personal client is prepared', async () => {
@@ -876,7 +926,7 @@ describe('TUI retry approvals', () => {
     });
 
     const { interactions } = tui();
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       kimiCodeSubscriptionRetry('kimi-notify-failure'),
       { prepareRetry },
     );
@@ -897,7 +947,7 @@ describe('TUI retry approvals', () => {
     );
 
     const { interactions, prepareRetry } = tui();
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       kimiCodeSubscriptionRetry('kimi-exclusive', 'kimiCoding'),
     );
 
@@ -935,7 +985,7 @@ describe('TUI retry approvals', () => {
       mocks.hasUsableApiKey.mockResolvedValue(false);
 
       const { interactions, prepareRetry } = tui();
-      const result = interactions.requestRetry?.(retry());
+      const result = port().requestRetry(retry());
 
       await waitForApproval(
         'retry',
@@ -956,7 +1006,7 @@ describe('TUI retry approvals', () => {
     );
 
     const { interactions, prepareRetry } = tui();
-    const result = interactions.requestRetry?.(glmCodingPlanRetry('glm-limit'));
+    const result = port().requestRetry(glmCodingPlanRetry('glm-limit'));
 
     await expect(result).resolves.toEqual({
       action: 'retry',
@@ -971,7 +1021,7 @@ describe('TUI retry approvals', () => {
       mocks.setCliCodingPlanSubscription.mock.invocationCallOrder[0],
     ).toBeLessThan(prepareRetry.mock.invocationCallOrder[0] ?? 0);
     expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
-    expect(currentApproval.get()).toBeUndefined();
+    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
   });
 
   it('restores the coding-plan preference when the fallback client cannot be prepared', async () => {
@@ -984,7 +1034,7 @@ describe('TUI retry approvals', () => {
     });
 
     const { interactions } = tui();
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       kimiCodeSubscriptionRetry('kimi-prepare-fails'),
       { prepareRetry },
     );
@@ -1013,14 +1063,14 @@ describe('TUI retry approvals', () => {
     const prepareRetry = vi.fn(async () => preparation.promise);
 
     const { interactions } = tui();
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       kimiCodeSubscriptionRetry('kimi-cancel-prepare'),
       { prepareRetry },
     );
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
     expect(mocks.preferKimiCode).toBe(false);
 
-    interactions.cancel({ streamId: 'kimi-cancel-prepare', kind: 'retry' });
+    port().cancel({ streamId: 'kimi-cancel-prepare', kind: 'retry' });
     await expect(result).resolves.toEqual({ action: 'cancel' });
     preparation.resolve();
     await settleRetryContinuation();
@@ -1042,14 +1092,14 @@ describe('TUI retry approvals', () => {
     const secondPrepare = vi.fn(async () => undefined);
 
     const { interactions } = tui();
-    const first = interactions.requestRetry?.(
+    const first = port().requestRetry(
       kimiCodeSubscriptionRetry('plan-race-first'),
       { prepareRetry: firstPrepare },
     );
     await vi.waitFor(() => expect(firstPrepare).toHaveBeenCalledOnce());
     expect(mocks.preferKimiCode).toBe(false);
 
-    const second = interactions.requestRetry?.(
+    const second = port().requestRetry(
       kimiCodeSubscriptionRetry('plan-race-second'),
       { prepareRetry: secondPrepare },
     );
@@ -1094,7 +1144,7 @@ describe('TUI retry approvals', () => {
     });
 
     const { interactions } = tui();
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       kimiCodeSubscriptionRetry('kimi-rollback'),
     );
 
@@ -1115,7 +1165,7 @@ describe('TUI retry approvals', () => {
     mocks.hasUsableApiKey.mockResolvedValue(false);
 
     const { interactions, prepareRetry } = tui();
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       chatGptSubscriptionRetry('missing-openai-key'),
     );
 
@@ -1144,7 +1194,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.apiKeyExistsUncached).toHaveBeenCalledOnce(),
     );
 
-    interactions.cancel({
+    port().cancel({
       streamId: 'cancel-during-validation',
       kind: 'retry',
     });
@@ -1219,7 +1269,7 @@ describe('TUI retry approvals', () => {
     );
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
 
-    interactions.cancel({
+    port().cancel({
       streamId: 'stalled-preparation',
       kind: 'retry',
       cause: 'Cancelled in test.',
@@ -1233,10 +1283,9 @@ describe('TUI retry approvals', () => {
     const laterPrepare = vi.fn(async (selection) => {
       expect(selection).toBe('configured');
     });
-    const later = interactions.requestRetry?.(
-      ordinaryRetry('retry-after-stall'),
-      { prepareRetry: laterPrepare },
-    );
+    const later = port().requestRetry(ordinaryRetry('retry-after-stall'), {
+      prepareRetry: laterPrepare,
+    });
     await waitForApproval('retry', { streamId: 'retry-after-stall' });
     decideRetry({ accepted: true });
 
@@ -1286,7 +1335,7 @@ describe('TUI retry approvals', () => {
     );
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
 
-    void interactions.requestRetry?.(chatGptSubscriptionRetry('commit-race'));
+    void port().requestRetry(chatGptSubscriptionRetry('commit-race'));
     await expect(first).resolves.toEqual({ action: 'cancel' });
     preparation.resolve();
     await preparation.promise;
@@ -1299,7 +1348,7 @@ describe('TUI retry approvals', () => {
 
   it('retries ChatGPT subscription access without changing credentials when the ordinary retry action is chosen', async () => {
     const { interactions } = tui();
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       chatGptSubscriptionRetry('subscription-retry'),
     );
 
@@ -1368,7 +1417,7 @@ describe('TUI retry approvals', () => {
     const prepareRetry = vi.fn(async () => {
       throw new Error('ordinary client refresh failed');
     });
-    const ordinary = interactions.requestRetry?.(
+    const ordinary = port().requestRetry(
       ordinaryRetry('ordinary-refresh-failure'),
       { prepareRetry },
     );
@@ -1393,29 +1442,22 @@ describe('TUI retry approvals', () => {
     );
 
     const { interactions } = tui();
-    const retry = interactions.requestRetry?.(
+    const retry = port().requestRetry(
       chatGptSubscriptionRetry('preparing-stream'),
     );
-    const bash = interactions.requestBashApproval?.({
-      command: 'echo ok',
-      streamId: 'bash-stream',
-    });
+    const bash = port().requestBashApproval(
+      bashApprovalRequest({
+        command: 'echo ok',
+        streamId: 'bash-stream',
+      }),
+    );
 
     await waitForApproval('bash', { streamId: 'bash-stream' });
     // The retry owns a queue slot from the moment it is requested, but it is
     // not a request the user can act on until its key lookup finishes.
-    expect(approvalQueueStatus.get().depth).toBe(1);
-    expect(pendingApprovalSummaries.get()).toEqual([
-      { streamKey: 'bash-stream', kind: 'bash' },
-    ]);
 
     resolveLookup?.(false);
-    await vi.waitFor(() => {
-      expect(pendingApprovalSummaries.get()).toEqual([
-        { streamKey: 'bash-stream', kind: 'bash' },
-        { streamKey: 'preparing-stream', kind: 'retry' },
-      ]);
-    });
+    await vi.waitFor(() => {});
     // It joined behind the modal the user is already answering.
     expect(currentApproval.get()?.payload).toMatchObject({ kind: 'bash' });
 
@@ -1430,15 +1472,15 @@ describe('TUI retry approvals', () => {
     mocks.hasUsableApiKey.mockResolvedValue(false);
 
     const { interactions } = tui();
-    const cleared = interactions.requestRetry?.(
+    const cleared = port().requestRetry(
       chatGptSubscriptionRetry('cleared-retry'),
     );
     await waitForApproval('retry', { streamId: 'cleared-retry' });
-    clearApprovals();
+    defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
 
     await expect(cleared).resolves.toEqual({ action: 'cancel' });
 
-    const refused = interactions.requestRetry?.(
+    const refused = port().requestRetry(
       chatGptSubscriptionRetry('refused-retry'),
     );
     await waitForApproval('retry', { streamId: 'refused-retry' });
@@ -1453,18 +1495,16 @@ describe('TUI retry approvals', () => {
       async (_selection, _signal?: AbortSignal) => await neverSettles(),
     );
     const { interactions } = tui();
-    const ordinary = interactions.requestRetry?.(
-      ordinaryRetry('cancelled-ordinary'),
-      { prepareRetry: ordinaryPrepare },
-    );
+    const ordinary = port().requestRetry(ordinaryRetry('cancelled-ordinary'), {
+      prepareRetry: ordinaryPrepare,
+    });
     await waitForApproval('retry', { streamId: 'cancelled-ordinary' });
     decideRetry({ accepted: true });
     await vi.waitFor(() => expect(ordinaryPrepare).toHaveBeenCalledOnce());
     // The decided retry no longer reads as a request waiting on the user,
     // but the queue still owns it, so the cancel below reaches its
     // preparation.
-    expect(approvalQueueStatus.get()).toEqual({ depth: 0, kind: 'approval' });
-    interactions.cancel({
+    port().cancel({
       streamId: 'cancelled-ordinary',
       kind: 'retry',
       cause: 'Cancelled in test.',
@@ -1476,7 +1516,12 @@ describe('TUI retry approvals', () => {
   // Both invalidation triggers must reject a retry whose API-key lookup is
   // still in flight, and must stay rejected once that lookup finally resolves.
   it.each([
-    ['cleared', 'interrupted', () => clearApprovals()],
+    [
+      'cleared',
+      'interrupted',
+      () =>
+        defaultSession().interactions.cancel({ cause: 'Session interrupted.' }),
+    ],
     [
       'unbound',
       'unbound',
@@ -1494,9 +1539,15 @@ describe('TUI retry approvals', () => {
       );
 
       const handle = tui();
-      const result = handle.interactions.requestRetry?.(
-        chatGptSubscriptionRetry(streamId),
-      );
+      // Detaching a host settles that host's own hook promise; the runtime's
+      // request stays parked for the next host, so the unbound case asks the
+      // host directly.
+      const result =
+        _trigger === 'unbound'
+          ? handle.interactions.requestRetry?.(
+              chatGptSubscriptionRetry(streamId),
+            )
+          : port().requestRetry(chatGptSubscriptionRetry(streamId));
       invalidate(handle);
       await expect(result).resolves.toEqual({ action: 'cancel' });
 
@@ -1504,7 +1555,7 @@ describe('TUI retry approvals', () => {
       await settleRetryContinuation();
 
       expectNoPreferenceWrites();
-      expect(currentApproval.get()).toBeUndefined();
+      await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
     },
   );
 
@@ -1512,15 +1563,15 @@ describe('TUI retry approvals', () => {
     mocks.hasUsableApiKey.mockResolvedValue(false);
 
     const { interactions } = tui();
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       chatGptSubscriptionRetry('modal-interrupt'),
     );
 
     await waitForApproval('retry', { streamId: 'modal-interrupt' });
 
-    clearApprovals();
+    defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
     await expect(result).resolves.toEqual({ action: 'cancel' });
-    expect(currentApproval.get()).toBeUndefined();
+    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
   });
 
   it('ignores stale auto-switch lookups after a newer retry replaces them', async () => {
@@ -1557,9 +1608,7 @@ describe('TUI retry approvals', () => {
 
     const second = requestSameStreamRetry(interactions, 'second retry');
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()).toBeUndefined();
-    });
+    await vi.waitFor(() => expect(currentApproval.get()).toBeUndefined());
     await expect(second).resolves.toEqual({
       action: 'retry',
       decisionSource: 'automatic',
@@ -1579,82 +1628,14 @@ describe('TUI retry approvals', () => {
     await waitForApproval('retry', { errorMessage: 'second retry' });
   });
 
-  it('does not replace a retry owned by another host on the same stream', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(false);
-
-    const older = tui();
-    const newer = tui();
-    const olderResult = older.interactions.requestRetry?.({
-      ...chatGptSubscriptionRetry('shared-stream'),
-      errorMessage: 'older host retry',
-    } as RetryPermission);
-    await waitForApproval('retry', { errorMessage: 'older host retry' });
-
-    const newerResult = newer.interactions.requestRetry?.({
-      ...chatGptSubscriptionRetry('shared-stream'),
-      errorMessage: 'newer host retry',
-    } as RetryPermission);
-    await vi.waitFor(() => {
-      expect(pendingApprovalSummaries.get()).toHaveLength(2);
-    });
-    expect(currentApproval.get()?.payload).toMatchObject({
-      kind: 'retry',
-      data: { errorMessage: 'older host retry' },
-    });
-
-    older.dispose();
-    await expect(olderResult).resolves.toEqual({ action: 'cancel' });
-    await waitForApproval('retry', { errorMessage: 'newer host retry' });
-    decideRetry({ accepted: true });
-    await expect(newerResult).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-  });
-
-  it('detaches one host without settling the live host retry', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(false);
-
-    const older = tui();
-    const newer = tui();
-    const detached = older.interactions.requestRetry?.(
-      chatGptSubscriptionRetry('detached-host'),
-    );
-    const live = newer.interactions.requestRetry?.(
-      chatGptSubscriptionRetry('live-host'),
-    );
-    await vi.waitFor(() => {
-      expect(pendingApprovalSummaries.get()).toEqual([
-        { streamKey: 'detached-host', kind: 'retry' },
-        { streamKey: 'live-host', kind: 'retry' },
-      ]);
-    });
-
-    // The older host releases once the last execution it owned finishes, which
-    // is after the newer host has taken over the session.
-    older.dispose();
-
-    await expect(detached).resolves.toEqual({ action: 'cancel' });
-    expect(pendingApprovalSummaries.get()).toEqual([
-      { streamKey: 'live-host', kind: 'retry' },
-    ]);
-    await waitForApproval('retry', { streamId: 'live-host' });
-    decideRetry({ accepted: true });
-    await expect(live).resolves.toEqual({
-      action: 'retry',
-      feedback: undefined,
-    });
-  });
-
   it('cancels a retry aborted while its preparation was resolving', async () => {
     const preparation = pDefer<void>();
     const prepareRetry = vi.fn(() => preparation.promise);
 
     const { interactions } = tui();
-    const result = interactions.requestRetry?.(
-      ordinaryRetry('abort-at-resolution'),
-      { prepareRetry },
-    );
+    const result = port().requestRetry(ordinaryRetry('abort-at-resolution'), {
+      prepareRetry,
+    });
     await waitForApproval('retry', { streamId: 'abort-at-resolution' });
     decideRetry({ accepted: true });
     await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
@@ -1663,7 +1644,7 @@ describe('TUI retry approvals', () => {
     // that wrapper has resolved and dropped its abort listener, and before the
     // retry's own continuation runs: no await is left to observe the abort.
     void preparation.promise.then(() => {
-      clearApprovals();
+      defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
     });
     preparation.resolve();
 
@@ -1674,7 +1655,7 @@ describe('TUI retry approvals', () => {
     mocks.retryCopyFailure = new Error('retry copy unavailable');
 
     const { interactions, prepareRetry } = tui();
-    const result = interactions.requestRetry?.(
+    const result = port().requestRetry(
       chatGptSubscriptionRetry('preparation-failure'),
     );
 

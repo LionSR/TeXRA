@@ -30,7 +30,7 @@ import {
 } from '@utils/files/fileLocation';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
-const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressBridge';
+const DESKTOP_LATEXDIFF_CHANNEL = 'DesktopProgressFileActions';
 
 type DesktopProgressFileActionUi = Pick<
   DesktopAgentExecutionHost,

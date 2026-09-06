@@ -284,7 +284,6 @@ function detachBackgroundRun(
   parentStreamId: StreamTabId,
   streamToClear?: StreamTabId,
 ): void {
-  recorded.detach();
   if (streamToClear) {
     clearStreamStatusForTest(defaultSession().status, streamToClear);
   }
@@ -666,7 +665,7 @@ describe('BashTool', () => {
       parentStreamId,
       'flow',
     )!;
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
 
     try {
       const launchResult = await launchBackgroundBash(parentStreamId);
@@ -681,7 +680,6 @@ describe('BashTool', () => {
         );
       });
     } finally {
-      recorded.detach();
       defaultSession().followUps.release(parentLease, 'terminal');
     }
 
@@ -720,7 +718,7 @@ describe('BashTool', () => {
       phase: STREAM_PHASE.WAITING,
     });
 
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
 
     try {
       const launchResult = await launchBackgroundBash(parentStreamId);
@@ -771,7 +769,7 @@ describe('BashTool', () => {
       phase: STREAM_PHASE.WAITING,
     });
 
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
 
     try {
       const launchResult = await launchBackgroundBash(parentStreamId);
@@ -807,7 +805,7 @@ describe('BashTool', () => {
     const resolveCommand = holdCommand();
     await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-result-meta-failure' as StreamTabId;
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
 
     const launchResult = await launchBackgroundBash(parentStreamId);
     const { executionId } = launchedIds(launchResult);
@@ -837,7 +835,7 @@ describe('BashTool', () => {
     });
     await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-completion-path-throw' as StreamTabId;
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
 
     const launchResult = await launchBackgroundBash(parentStreamId);
     const { output, executionId, childStreamId } = launchedIds(launchResult);
@@ -861,7 +859,7 @@ describe('BashTool', () => {
     const resolveCommand = holdCommand();
     await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-killed-background' as StreamTabId;
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
 
     const launchResult = await launchBackgroundBash(parentStreamId);
     const { output, executionId, childStreamId } = launchedIds(launchResult);

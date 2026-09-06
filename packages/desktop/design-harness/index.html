@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TeXRA design harness</title>
+  </head>
+  <body>
+    <main id="app"></main>
+    <script>
+      window.__texraHostBridgeApi = {
+        postMessage() {},
+        getState() {
+          return undefined;
+        },
+        setState() {},
+      };
+    </script>
+    <script type="module" src="./harness.ts"></script>
+  </body>
+</html>

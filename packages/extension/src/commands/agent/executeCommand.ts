@@ -10,6 +10,7 @@ import {
 } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
+import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
 import { ExecutionIdSchema } from '@shared/schemas';
 
 const log = createLog('ExecuteCommand');
@@ -61,6 +62,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       modelHandlerCompatibilityKey: wrapped?.modelHandlerCompatibilityKey,
       copilotRouteOverride: wrapped?.copilotRouteOverride,
       onRun,
+      onStreamResolved: presentLaunchedProgressStream,
     });
   } catch (error) {
     if (error instanceof ZodError) {

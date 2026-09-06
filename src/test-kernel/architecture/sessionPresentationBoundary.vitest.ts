@@ -13,19 +13,11 @@ function productionSource(path: string): string {
 }
 
 describe('session and presentation ownership boundary', () => {
-  it('keeps selection and persisted presentation preferences out of SessionState', () => {
-    const source = productionSource('src/controllers/session/SessionState.ts');
-
-    expect(source).not.toMatch(/activeStream|PersistedState|presentation/i);
-  });
-
-  it('keeps focus policy and hydration reactions out of SessionFactApplier', () => {
-    const source = productionSource(
-      'src/controllers/session/SessionFactApplier.ts',
-    );
+  it('keeps draft and recording state out of the shared SessionView', () => {
+    const source = productionSource('src/shared/session/sessionView.ts');
 
     expect(source).not.toMatch(
-      /suppressViewSwitch|hasPendingPermissions|onActiveStreamChanged|syncStreamContent/,
+      /followUpText|recording|polishedText|transcribedText|shouldFocusFollowUp/,
     );
   });
 });

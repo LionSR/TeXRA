@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
+import type { ExecutionStreamReferenceListing } from '@agent/storage/executionListing';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
@@ -41,10 +42,10 @@ vi.mock('@agent/storage/executionLease', async (importActual) => ({
   inspectExecutionLease: inspectExecutionLeaseMock,
 }));
 
-const readExecutionStreamIndexMock = vi.hoisted(() => vi.fn());
+const listExecutionStreamReferencesMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/executionListing', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionListing')>()),
-  readExecutionStreamIndex: readExecutionStreamIndexMock,
+  listExecutionStreamReferences: listExecutionStreamReferencesMock,
 }));
 
 const EXECUTION = 'exec:resume' as ExecutionId;
@@ -99,8 +100,8 @@ describe('resumeRun tool-use queue ownership', () => {
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
     classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
     inspectExecutionLeaseMock.mockReset().mockResolvedValue({ status: 'free' });
-    readExecutionStreamIndexMock.mockReset().mockResolvedValue({
-      byStream: new Map([[STREAM, EXECUTION]]),
+    listExecutionStreamReferencesMock.mockReset().mockResolvedValue({
+      references: [{ executionId: EXECUTION, streamId: STREAM }],
       unreadable: new Map(),
     });
     resumeToolUseFromResumeDataMock.mockReset();
@@ -114,11 +115,8 @@ describe('resumeRun tool-use queue ownership', () => {
 
   it('claims stream recovery before resolving the disk index', async () => {
     const session = createSession();
-    const index = createDeferred<{
-      byStream: ReadonlyMap<StreamTabId, ExecutionId>;
-      unreadable: ReadonlyMap<ExecutionId, string>;
-    }>();
-    readExecutionStreamIndexMock.mockReturnValueOnce(index.promise);
+    const index = createDeferred<ExecutionStreamReferenceListing>();
+    listExecutionStreamReferencesMock.mockReturnValueOnce(index.promise);
 
     const resumed = resumeStream(STREAM, { session, executeWorkflow });
     expect(
@@ -126,7 +124,7 @@ describe('resumeRun tool-use queue ownership', () => {
     ).toEqual({ kind: 'queued' });
 
     index.resolve({
-      byStream: new Map([[STREAM, EXECUTION]]),
+      references: [{ executionId: EXECUTION, streamId: STREAM }],
       unreadable: new Map(),
     });
     await expect(resumed).resolves.toEqual({
@@ -143,18 +141,15 @@ describe('resumeRun tool-use queue ownership', () => {
 
   it('preserves raced input when stream lookup finds no execution', async () => {
     const session = createSession();
-    const index = createDeferred<{
-      byStream: ReadonlyMap<StreamTabId, ExecutionId>;
-      unreadable: ReadonlyMap<ExecutionId, string>;
-    }>();
-    readExecutionStreamIndexMock.mockReturnValueOnce(index.promise);
+    const index = createDeferred<ExecutionStreamReferenceListing>();
+    listExecutionStreamReferencesMock.mockReturnValueOnce(index.promise);
 
     const resumed = resumeStream(STREAM, { session, executeWorkflow });
     expect(
       session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
     ).toEqual({ kind: 'queued' });
 
-    index.resolve({ byStream: new Map(), unreadable: new Map() });
+    index.resolve({ references: [], unreadable: new Map() });
     await expect(resumed).resolves.toEqual({ failed: 'not_resumable' });
     expect(session.followUps.getAll(STREAM)).toEqual(['raced']);
   });
@@ -430,6 +425,6 @@ describe('resumeRun tool-use queue ownership', () => {
     ).resolves.toEqual({ failed: 'owned_elsewhere' });
     expect(onResumeResolved).not.toHaveBeenCalled();
     expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
-    expect(session.status.holdState(STREAM)).toBe(streamHeldMessage(owner));
+    expect(session.status.holdState(STREAM)).toBe(streamHeldMessage(owner.pid));
   });
 });

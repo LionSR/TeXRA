@@ -1,5 +1,6 @@
 import {
-  createCommandHandler,
+  createDesktopErrorReporter,
+  type DesktopCommandMessage,
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
@@ -19,6 +20,7 @@ export function createDesktopLogIpc(
   renderer: DesktopRenderer,
   options: DesktopLogIpcOptions,
 ): DesktopMessageHandler {
+  const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
   function postSnapshot(): DesktopLogSnapshot {
     const log = options.readLog();
     renderer.postToRenderer({
@@ -28,16 +30,21 @@ export function createDesktopLogIpc(
     return log;
   }
 
-  return createCommandHandler(
-    {
-      [DESKTOP_LOG_COMMANDS.REQUEST_LOG]: () => {
-        postSnapshot();
-      },
-      [DESKTOP_LOG_COMMANDS.COPY_LOG]: () =>
-        options.copyLog(postSnapshot().text),
-      [DESKTOP_LOG_COMMANDS.EXPORT_LOG]: () =>
-        options.exportLog(postSnapshot().text),
+  return {
+    handleMessage(message: DesktopCommandMessage): boolean {
+      switch (message.command) {
+        case DESKTOP_LOG_COMMANDS.REQUEST_LOG:
+          postSnapshot();
+          return true;
+        case DESKTOP_LOG_COMMANDS.COPY_LOG:
+          options.copyLog(postSnapshot().text).catch(reportAsyncError);
+          return true;
+        case DESKTOP_LOG_COMMANDS.EXPORT_LOG:
+          options.exportLog(postSnapshot().text).catch(reportAsyncError);
+          return true;
+        default:
+          return false;
+      }
     },
-    { onAsyncError: options.onAsyncError },
-  );
+  };
 }

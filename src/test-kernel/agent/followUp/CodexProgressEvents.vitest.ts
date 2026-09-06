@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { type AgentTrace, TraceEmitter } from '@agent/trace';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   MESSAGE_TYPES,
   CODEX_THREAD_TOOL,
@@ -20,7 +19,7 @@ import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
 import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
-import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
+import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
 import type {
   CommandExecutionItem,
   Thread,
@@ -89,22 +88,18 @@ function toolLogs(store: StreamLogStore): Record<string, unknown>[] {
 describe('codex progress events', () => {
   it('publishes todos and usage as run facts', () => {
     const trace = new TraceEmitter();
-    const hub = new SessionEventHub();
-    const recorded = recordSessionEvents(hub, { scope: 'run' });
-    const detachTrace = trace.subscribe((event) =>
-      hub.emit({ scope: 'run', streamId, event }),
-    );
+    const recorded = recordTraceEvents(trace);
 
     publishCodexTodos(streamId, todos, trace);
     publishAgentCliStreamUsage(streamId, executionId, usage, trace);
 
-    expect(runEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
+    expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
       {
         streamId,
         todos,
       },
     ]);
-    expect(runEventsOfType(recorded.events, 'usage')).toMatchObject([
+    expect(traceEventsOfType(recorded.events, 'usage')).toMatchObject([
       {
         payload: {
           streamId,
@@ -115,9 +110,6 @@ describe('codex progress events', () => {
         },
       },
     ]);
-
-    recorded.detach();
-    detachTrace();
   });
 
   it('updates in-flight Codex command items in place', async () => {

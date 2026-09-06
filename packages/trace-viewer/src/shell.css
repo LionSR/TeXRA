@@ -4,7 +4,7 @@ body {
   height: 100%;
 }
 
-#app.trace-viewer-shell {
+progress-app.trace-viewer-shell {
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -13,7 +13,7 @@ body {
 
 /* Load/parse failure surface rendered by main.ts (kept token-based so it
    tracks the host bridge like the rest of the shell). */
-#app .trace-viewer-error {
+body .trace-viewer-error {
   margin: auto;
   max-width: 40rem;
   padding: var(--wa-space-xl);
@@ -22,7 +22,7 @@ body {
   font-size: var(--wa-font-size-m);
 }
 
-#app .trace-viewer-error h1 {
+body .trace-viewer-error h1 {
   margin-block: 0 var(--wa-space-m);
   font-size: 1.25em;
 }

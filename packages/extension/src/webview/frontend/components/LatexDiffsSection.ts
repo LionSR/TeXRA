@@ -1,9 +1,10 @@
-/** LaTeXDiff section with base/edited file selectors, commit selector, and diff actions. */
+/** LaTeXDiff section with base/edited file selectors, commit selector, and
+ *  diff actions. The Tools sheet is its container (PRD 12.1); it carries no
+ *  disclosure of its own. */
 
-// Side-effect imports - register WA button, button-group, details, select, option & tooltip components
+// Side-effect imports - register WA button, button-group, select, option & tooltip components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
-import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
@@ -23,7 +24,6 @@ import {
   renderLabeledActionButtonParts,
 } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { byString } from '@utils/core';
 import { MainViewEvents } from '../events';
 import { fileSelectLayoutStyles } from '../fileSelectStyles';
@@ -120,49 +120,8 @@ export class LatexDiffsSection extends LitElement {
         display: block;
       }
 
-      .latexdiffs-details {
-        margin-bottom: var(--wa-space-s);
-      }
-
-      .latexdiffs-details::part(base) {
-        background-color: transparent;
-        border: none;
-        border-radius: var(--border-radius);
-        overflow: visible;
-      }
-
-      .latexdiffs-details[open]::part(base) {
-        background-color: var(--background-color);
-        border: var(--border-thin) solid
-          var(--wa-color-surface-border, var(--dropdown-border));
-      }
-
-      .latexdiffs-details::part(header) {
-        padding: var(--wa-space-s) var(--wa-space-xs) 0;
-        min-height: var(--height-control-compact);
-      }
-
-      .latexdiffs-details[open]::part(header) {
-        padding: var(--wa-space-xs) var(--wa-space-xs) var(--wa-space-3xs);
-      }
-
-      .latexdiffs-details::part(content) {
+      .latexdiffs-body {
         padding: 0 var(--wa-space-xs) var(--wa-space-xs);
-        overflow: visible;
-      }
-
-      .latexdiffs-summary {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
-        color: var(--text-color);
-        font-size: var(--font-size);
-        line-height: var(--line-height-normal);
-        white-space: nowrap;
-      }
-
-      .latexdiffs-details[open] .latexdiffs-summary {
-        color: var(--wa-color-text-normal);
       }
 
       #commit::part(listbox) {
@@ -193,9 +152,6 @@ export class LatexDiffsSection extends LitElement {
     `,
   ];
 
-  /** Whether the section is expanded */
-  @property({ attribute: false }) visible = false;
-
   /** Base file value */
   @property({ attribute: false }) baseFile = '';
 
@@ -216,11 +172,6 @@ export class LatexDiffsSection extends LitElement {
 
   /** Whether this is a git repo */
   @property({ attribute: false }) isGitRepo = true;
-
-  private handleDetailsOpenChange(event: Event, visible: boolean): void {
-    if (event.target !== event.currentTarget) return;
-    this.dispatchEvent(MainViewEvents.latexDiffsToggle({ visible }));
-  }
 
   private handleBaseSelectChange(event: Event): void {
     this.dispatchEvent(
@@ -319,147 +270,134 @@ export class LatexDiffsSection extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <wa-details
-        class="latexdiffs-details"
-        ?open=${this.visible}
-        @wa-show=${(event: Event) => this.handleDetailsOpenChange(event, true)}
-        @wa-hide=${(event: Event) => this.handleDetailsOpenChange(event, false)}
-      >
-        <span slot="summary" class="latexdiffs-summary">
-          ${waIcon('code-branch')} LaTeXDiffs
-        </span>
-        <div id="latexdiffsContent">
-          <div class="file-select">
-            <div class="file-select-header">
-              <div class="file-select-label-group">
-                <label for="baseFile">Base</label>
-              </div>
-              <div class="file-select-actions">
-                ${renderIconActionButton({
-                  id: 'currentBaseFileButton',
-                  icon: 'file-code',
-                  label: 'Set current file as base',
-                  tooltip: 'Set current file as base',
-                  onClick: () =>
-                    this.dispatchEvent(
-                      MainViewEvents.getCurrentFile({ type: 'base' }),
-                    ),
-                })}
-                ${renderIconActionButton({
-                  id: 'emptyBaseFileButton',
-                  icon: 'xmark',
-                  label: 'Clear base file',
-                  tooltip: 'Clear base file',
-                  onClick: () =>
-                    this.dispatchEvent(
-                      MainViewEvents.emptyFile({ type: 'base' }),
-                    ),
-                })}
-              </div>
+      <div class="latexdiffs-body">
+        <div class="file-select">
+          <div class="file-select-header">
+            <div class="file-select-label-group">
+              <label for="baseFile">Base</label>
             </div>
-            <wa-select
-              id="baseFile"
-              placement="top"
-              .value=${this.baseFile}
-              @change=${this.handleBaseSelectChange}
-            >
-              ${this.renderFileOptions(this.baseFileOptions)}
-            </wa-select>
-          </div>
-          <div class="file-select">
-            <div class="file-select-header">
-              <div class="file-select-label-group">
-                <label id="editedFileLabel" for="editedFile">Edited</label>
-                <wa-tooltip for="editedFileLabel">
-                  File containing edits to merge into the base file
-                </wa-tooltip>
-              </div>
-              <div class="file-select-actions">
-                ${renderIconActionButton({
-                  id: 'refreshEditedFileButton',
-                  icon: 'pencil',
-                  label: 'Refresh edited files',
-                  tooltip: 'Refresh edited files',
-                  onClick: this.handleRefreshEditedFiles,
-                })}
-                ${renderIconActionButton({
-                  id: 'currentEditedFileButton',
-                  icon: 'file-code',
-                  label: 'Set current file as edited',
-                  tooltip: 'Set current file as edited',
-                  onClick: () =>
-                    this.dispatchEvent(
-                      MainViewEvents.getCurrentFile({ type: 'edited' }),
-                    ),
-                })}
-                ${renderIconActionButton({
-                  id: 'emptyEditedFileButton',
-                  icon: 'xmark',
-                  label: 'Clear edited file',
-                  tooltip: 'Clear edited file',
-                  onClick: () =>
-                    this.dispatchEvent(
-                      MainViewEvents.emptyFile({ type: 'edited' }),
-                    ),
-                })}
-              </div>
-            </div>
-            <wa-select
-              id="editedFile"
-              placement="top"
-              .value=${this.editedFile}
-              @change=${this.handleEditedSelectChange}
-            >
-              ${this.renderFileOptions(this.editedFileOptions)}
-            </wa-select>
-            <div class="diff-actions">
-              ${this.renderDiffActionGroup(
-                'Review changes',
-                EDITED_REVIEW_ACTIONS,
-              )}
-              ${this.renderDiffActionGroup(
-                'Apply changes',
-                EDITED_APPLY_ACTIONS,
-              )}
+            <div class="file-select-actions">
+              ${renderIconActionButton({
+                id: 'currentBaseFileButton',
+                icon: 'file-code',
+                label: 'Set current file as base',
+                tooltip: 'Set current file as base',
+                onClick: () =>
+                  this.dispatchEvent(
+                    MainViewEvents.getCurrentFile({ type: 'base' }),
+                  ),
+              })}
+              ${renderIconActionButton({
+                id: 'emptyBaseFileButton',
+                icon: 'xmark',
+                label: 'Clear base file',
+                tooltip: 'Clear base file',
+                onClick: () =>
+                  this.dispatchEvent(
+                    MainViewEvents.emptyFile({ type: 'base' }),
+                  ),
+              })}
             </div>
           </div>
-          <div class="file-select">
-            <div class="file-select-header">
-              <div class="file-select-label-group">
-                <label for="commit">Commit</label>
-              </div>
-              <div class="file-select-actions">
-                ${renderIconActionButton({
-                  id: 'refreshCommitsButton',
-                  icon: 'circle-dot',
-                  label: 'Refresh commit list',
-                  tooltip: 'Refresh commit list',
-                  onClick: this.handleRefreshCommits,
-                })}
-              </div>
+          <wa-select
+            id="baseFile"
+            placement="top"
+            .value=${this.baseFile}
+            @change=${this.handleBaseSelectChange}
+          >
+            ${this.renderFileOptions(this.baseFileOptions)}
+          </wa-select>
+        </div>
+        <div class="file-select">
+          <div class="file-select-header">
+            <div class="file-select-label-group">
+              <label id="editedFileLabel" for="editedFile">Edited</label>
+              <wa-tooltip for="editedFileLabel">
+                File containing edits to merge into the base file
+              </wa-tooltip>
             </div>
-            <wa-select
-              id="commit"
-              placement="top"
-              .value=${this.commit}
-              ?disabled=${!this.isGitRepo}
-              @change=${this.handleCommitSelectChange}
-            >
-              ${this.renderCommitOptions()}
-            </wa-select>
-            <div class="diff-actions">
-              ${this.renderDiffActionGroup(
-                'Diff against commit',
-                COMMIT_DIFF_ACTIONS,
-              )}
-              ${this.renderDiffActionGroup(
-                'Manage diff output',
-                COMMIT_MANAGE_ACTIONS,
-              )}
+            <div class="file-select-actions">
+              ${renderIconActionButton({
+                id: 'refreshEditedFileButton',
+                icon: 'pencil',
+                label: 'Refresh edited files',
+                tooltip: 'Refresh edited files',
+                onClick: this.handleRefreshEditedFiles,
+              })}
+              ${renderIconActionButton({
+                id: 'currentEditedFileButton',
+                icon: 'file-code',
+                label: 'Set current file as edited',
+                tooltip: 'Set current file as edited',
+                onClick: () =>
+                  this.dispatchEvent(
+                    MainViewEvents.getCurrentFile({ type: 'edited' }),
+                  ),
+              })}
+              ${renderIconActionButton({
+                id: 'emptyEditedFileButton',
+                icon: 'xmark',
+                label: 'Clear edited file',
+                tooltip: 'Clear edited file',
+                onClick: () =>
+                  this.dispatchEvent(
+                    MainViewEvents.emptyFile({ type: 'edited' }),
+                  ),
+              })}
             </div>
+          </div>
+          <wa-select
+            id="editedFile"
+            placement="top"
+            .value=${this.editedFile}
+            @change=${this.handleEditedSelectChange}
+          >
+            ${this.renderFileOptions(this.editedFileOptions)}
+          </wa-select>
+          <div class="diff-actions">
+            ${this.renderDiffActionGroup(
+              'Review changes',
+              EDITED_REVIEW_ACTIONS,
+            )}
+            ${this.renderDiffActionGroup('Apply changes', EDITED_APPLY_ACTIONS)}
           </div>
         </div>
-      </wa-details>
+        <div class="file-select">
+          <div class="file-select-header">
+            <div class="file-select-label-group">
+              <label for="commit">Commit</label>
+            </div>
+            <div class="file-select-actions">
+              ${renderIconActionButton({
+                id: 'refreshCommitsButton',
+                icon: 'circle-dot',
+                label: 'Refresh commit list',
+                tooltip: 'Refresh commit list',
+                onClick: this.handleRefreshCommits,
+              })}
+            </div>
+          </div>
+          <wa-select
+            id="commit"
+            placement="top"
+            .value=${this.commit}
+            ?disabled=${!this.isGitRepo}
+            @change=${this.handleCommitSelectChange}
+          >
+            ${this.renderCommitOptions()}
+          </wa-select>
+          <div class="diff-actions">
+            ${this.renderDiffActionGroup(
+              'Diff against commit',
+              COMMIT_DIFF_ACTIONS,
+            )}
+            ${this.renderDiffActionGroup(
+              'Manage diff output',
+              COMMIT_MANAGE_ACTIONS,
+            )}
+          </div>
+        </div>
+      </div>
     `;
   }
 }

@@ -2,15 +2,15 @@
 
 // Local imports - shared schemas and utilities
 import { type StreamTabId } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
 import { assertNever, groupBy } from '@utils/core';
 
 // Local imports - TUI state
+
 import {
   approvalPayloadStreamId,
-  ROOT_APPROVAL_STREAM_KEY,
   type PendingApproval,
   type PendingApprovalKind,
-  type PendingApprovalSummary,
 } from './state/approvalQueue';
 
 const FORM_FOREGROUND_MAX_ROWS = 18;
@@ -112,16 +112,32 @@ export function foregroundSurfaceKind({
   return undefined;
 }
 
-export function approvalVisibleForActiveStream({
-  activeStreamId,
+/**
+ * Whether the pending request shows on the selected stream: a stream-less
+ * request everywhere, a stream's own request on that stream and on every
+ * ancestor. A descendant's decision is taken from the parent the user is on,
+ * so presenting one never moves the selection (the fold's
+ * `approval: 'descendant'`, PRD 5.2); a request outside the selected subtree
+ * waits behind the status bar's count and the session list's marker until
+ * the user goes to it.
+ */
+export function approvalVisibleForSelection({
   pending,
+  selectedStreamId,
+  view,
 }: {
-  readonly activeStreamId: StreamTabId | undefined;
   readonly pending: PendingApproval | undefined;
+  readonly selectedStreamId: StreamTabId | undefined;
+  readonly view: SessionView;
 }): boolean {
   if (!pending) return false;
   const streamId = approvalPayloadStreamId(pending.payload);
-  return streamId === undefined || streamId === activeStreamId;
+  if (streamId === undefined || streamId === selectedStreamId) return true;
+  const asking = view.streams.get(streamId);
+  return (
+    asking?.ancestors.some((ancestor) => ancestor.id === selectedStreamId) ??
+    false
+  );
 }
 
 export function foregroundEscapeAction({
@@ -204,21 +220,13 @@ export function foregroundMaxRowsForKind({
 // the workflow-dashboard heading while that surface replaces the session
 // list. Grouping from the flat list keeps each row's first shown kind the
 // first-to-present even when bound and stream-less items interleave globally.
+/** The pending approvals of the view, grouped by the list row they badge. */
 export function groupPendingApprovalsByRow(
-  summaries: readonly PendingApprovalSummary[],
-  rootStreamId: StreamTabId | undefined,
+  approvals: SessionView['approvals'],
 ): Map<string, PendingApprovalKind[]> {
-  const keyed: { key: string; summary: PendingApprovalSummary }[] = [];
-  for (const summary of summaries) {
-    const key =
-      summary.streamKey === ROOT_APPROVAL_STREAM_KEY
-        ? rootStreamId
-        : summary.streamKey;
-    if (key !== undefined) keyed.push({ key, summary });
-  }
   return groupBy(
-    keyed,
-    (entry) => entry.key,
-    (entry) => entry.summary.kind,
+    approvals,
+    (approval) => approval.streamId,
+    (approval) => approval.payload.kind,
   );
 }

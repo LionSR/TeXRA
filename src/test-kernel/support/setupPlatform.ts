@@ -53,12 +53,30 @@ export function createFakeHost(
  * must land in the instances the code under test will import next.
  */
 export async function installFakeHost(host: FakeHost): Promise<void> {
-  const [{ initPlatform }, { initProcessWorkspaceRoots }] = await Promise.all([
+  const [
+    { initPlatform },
+    { initProcessWorkspaceRoots },
+    { effectRuntime, initProcessRuntime },
+    { Layer, ManagedRuntime },
+  ] = await Promise.all([
     import('@platform/platform'),
     import('@platform/workspaceRoots'),
+    import('@platform/processRuntime'),
+    import('effect'),
   ]);
   initPlatform(host.platform);
   initProcessWorkspaceRoots(host.roots);
+  // A bare process runtime for the Promise-facing boundaries that run
+  // fibers (the loopback sign-in). The session graph family is not installed
+  // here: `sessionGraphTestSetup` loads the graph's production modules, and
+  // a suite imports it (through `sessionTestUtils` or
+  // `defaultSessionTestSetup`) after its own `vi.mock` registrations, which
+  // this install, called from a setup file or a `beforeEach`, cannot promise.
+  try {
+    effectRuntime();
+  } catch {
+    initProcessRuntime(ManagedRuntime.make(Layer.empty));
+  }
 }
 
 /** Installs a fake host built from `options`/`overrides` right now. */

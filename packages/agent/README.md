@@ -31,7 +31,6 @@ const run = runAgent({
   platform,
   agent: 'polish',
   instruction: 'Tighten the abstract in paper.tex.',
-  interactions: { cancel: () => {} },
 });
 
 for await (const event of run) {
@@ -47,6 +46,7 @@ console.log(result.outcome);
 ```ts
 interface AgentRun extends AsyncIterable<AgentEvent> {
   readonly result: Promise<AgentFlowResult>;
+  readonly view: AsyncIterable<SessionView>;
   interrupt(): void;
 }
 ```
@@ -54,6 +54,46 @@ interface AgentRun extends AsyncIterable<AgentEvent> {
 Event delivery starts at the iterator's first `next()`. Awaiting only `result`
 does not retain trace events, and ending iteration detaches the event source
 while the run itself continues.
+
+`view` is the folded session state every TeXRA host renders, so stream
+status, transcript rows, and pending approvals are read from it rather than
+re-folded from the trace. Each `for await` over it yields the current view
+first, then subsequent changes through the first view containing the run's
+durable outcome. That final view is included even when iteration starts after
+`result` settles, and the first view yielded always holds the run's stream.
+`result` settles only once the final view has folded, independently of whether
+the caller reads it; if the session's fold dies first, `result` and every
+`view` iteration fail with its defect instead of waiting. A run that fails on
+its own settles `result` with its own error without waiting for the fold; the
+fold's defect then reaches `view` iterations only. Breaking the loop
+stops that reader while the run continues. If launch fails before the run
+enters the session, `view` ends without a value and `result` carries the
+failure.
+
+Every yielded view is immutable: an older view stays what it was for as long
+as it is held, and a branch the later level did not touch is the same object
+in both. An older view is stable to read; it is not a fold input, so nothing
+in the package folds onto anything but the latest level. The exported
+`SessionView`, `StreamView`, and
+`TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
+arrays); a write through a cast corrupts the session every later run in the
+process reads. The run's transcript rows (`StreamView.transcript`) are
+subscribed on its behalf, its stream and its descendants as they appear, and
+stay resident for the life of the process.
+
+Runs share one session per workspace storage root. The runtime's session
+owner holds it, the same owner every TeXRA host opens its sessions through, so
+opening a root twice (two runs, or a run beside a host in the same process)
+resolves the one session already open there; a second root gets its own. When the session was opened by a host (the extension, the desktop, or the CLI in the same process), that host's decision delivery applies to every run on it: retries and approvals prompt in the host's UI and the run waits there, as PR #11893 section 8 rules; the package's inline retry denial applies only to sessions the package opened itself. A
+session ends only through `closeSession(roots)`: it refuses new runs on the
+root, interrupts the runs it owns and waits for them to settle within the
+runtime's shutdown budget (or the `signal` you pass, when the close runs under
+a budget of your own), flushes its artifacts, and releases the session,
+returning `{ settled, abandoned }`. `settled` is true when every run ended in
+time; otherwise `abandoned` names the runs still live, and the session stays
+open, refusing new runs, until they end. The platform's shutdown path
+(`lifecycle.runShutdown()`), which an embedder runs before it exits, closes
+the platform's session this way after the runs it owns have settled.
 
 ## Run results
 
@@ -81,11 +121,11 @@ files.
 
 ## Entry points
 
-| Entry                     | Contents                                                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/agent`         | `runAgent`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` types |
-| `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                      |
-| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                    |
+| Entry                     | Contents                                                                                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/agent`         | `runAgent`, `closeSession`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` / `SessionCloseReport` types |
+| `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                                             |
+| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                                           |
 
 ## The platform
 
@@ -117,8 +157,9 @@ These are enforced, not undocumented — each throws or degrades loudly rather
 than failing quietly:
 
 - **Approval-requiring tools are refused.** A tool with `requiresApproval` throws
-  at launch. The public `HostInteractions` is deliberately the minimal
-  `cancel()` shape; there is no interactive approval channel yet.
+  at launch. There is no interactive approval channel yet: the package attaches
+  one headless host to each session for its whole life, so concurrent runs on a
+  root never displace each other's host.
 - **Interactive retry always denies.** A run that would prompt to retry gets a
   denial with a reason instead.
 - **No resume.** `nodePlatform` reports no resumable streams; resuming a

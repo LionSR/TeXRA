@@ -3,7 +3,7 @@ import {
   type HostBridgeApi,
 } from '@shared/hostBridgeTypes';
 
-import { installPlatform } from './setupPlatform';
+import { createFakeHost, installFakeHost } from './setupPlatform';
 
 // Webview modules resolve their host bridge at import time. Production now
 // fails fast without one; the kernel harness provides this inert host before
@@ -17,6 +17,9 @@ const testHostBridge: HostBridgeApi = {
 
 (globalThis as Record<string, unknown>)[HOST_BRIDGE_API_KEY] = testHostBridge;
 
-await installPlatform();
+// Platform and roots only: the session graph family is installed by the
+// test file's own imports (`sessionTestUtils`, `defaultSessionTestSetup`),
+// after its mocks.
+await installFakeHost(createFakeHost());
 
 export {};

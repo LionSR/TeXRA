@@ -22,7 +22,7 @@ import * as vscode from 'vscode';
 import {
   defaultSession,
   type ManualCriticismEntry,
-  type SessionEventHub,
+  type SessionHandle,
 } from '@agent/runtime';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
@@ -44,7 +44,7 @@ const CODE_TOOL = 'criticize:tool';
 /** What {@link registerInlineCriticism} attached the feature to. */
 interface CriticismRegistration {
   readonly context: vscode.ExtensionContext;
-  readonly events: SessionEventHub;
+  readonly session: Pick<SessionHandle, 'events' | 'now'>;
 }
 
 let collection: vscode.DiagnosticCollection | undefined;
@@ -143,12 +143,12 @@ function handleAddOutputFiles(payload: AddOutputFilesPayload): void {
   );
 }
 
-function enable({ context, events }: CriticismRegistration): void {
+function enable({ context, session }: CriticismRegistration): void {
   if (collection) return;
   collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
   context.subscriptions.push(collection);
   runFactUnsubscribe = subscribeAddOutputFilesRunFact(
-    events,
+    session,
     handleAddOutputFiles,
   );
   log.info('Inline criticism diagnostics enabled');
@@ -201,9 +201,9 @@ export function pushManualCriticism(entry: ManualCriticismEntry): boolean {
 
 export function registerInlineCriticism(
   context: vscode.ExtensionContext,
-  events: SessionEventHub = defaultSession().events,
+  session: Pick<SessionHandle, 'events' | 'now'> = defaultSession(),
 ): void {
-  registration = { context, events };
+  registration = { context, session };
   if (isInlineCriticismEnabled()) enable(registration);
   context.subscriptions.push({ dispose: disable });
 }

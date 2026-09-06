@@ -16,7 +16,6 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   commonViewStyles,
   designTokens,
@@ -31,7 +30,7 @@ import type {
   WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
-import { postMessage } from '@shared/hostBridge';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
@@ -138,10 +137,12 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     const hasModelOptions = modelOptions.length > 0;
     const hasAgentOptions = agentOptions.length > 0;
 
-    return this.renderRequestShell({
-      prefix: 'workflow-proposal',
-      details: html`
-        <div class="workflow-proposal__header-row">
+    // The workflow-script card (W0) opens on its own head, 'Proposes a
+    // multi-agent run'; the kind, agent, and model row belongs to the other
+    // proposals, whose head is that row.
+    const headerRow = workflowScript
+      ? nothing
+      : html`<div class="workflow-proposal__header-row">
           <wa-badge
             variant=${isWorkflow ? 'neutral' : 'brand'}
             appearance="filled"
@@ -190,7 +191,11 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                   >${getModelLabel(data.model)}</span
                 >`
           }
-        </div>
+        </div>`;
+    return this.renderRequestShell({
+      prefix: 'workflow-proposal',
+      details: html`
+        ${headerRow}
         ${
           workflowScript
             ? this.renderWorkflowScriptSummary(data, workflowScript)
@@ -199,16 +204,33 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
               ${this.renderProposalFiles(data)}`
         }
       `,
-      approveTitle: 'Approve this proposal (y)',
+      approveTitle: workflowScript
+        ? 'Approve and run this workflow (y)'
+        : 'Approve this proposal (y)',
+      approveLabel: workflowScript ? 'Approve and run' : 'Approve',
       rejectTitle: 'Reject this proposal (n)',
-      trailingActions: renderLabeledActionButton({
+      trailingActions: html`${renderLabeledActionButton({
         id: 'proposal-setup-button',
         icon: 'reply',
-        text: 'Setup',
-        tooltip: 'Setup (s)',
+        text: 'Edit as new task',
+        tooltip: 'Edit as new task (s)',
         action: 'setup',
         onClick: () => this.emitAction({ action: 'setup' }),
-      }),
+      })}${
+        workflowScript
+          ? html`<wa-button
+              id="proposal-skip-button"
+              class="proposal-card__skip"
+              appearance="plain"
+              variant="neutral"
+              size="s"
+              type="button"
+              ?disabled=${this.readOnly}
+              @click=${() => this.approveAllDelegatedWorkHandler()}
+              >Skip proposals this session</wa-button
+            >`
+          : nothing
+      }`,
     });
   }
 
@@ -216,15 +238,17 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   // Proposal-specific rendering
   // ===========================================================================
 
+  /**
+   * The proposal card (board W0): what the run will be, as the run model
+   * folds the plan for a run that has not started. Every declared phase in
+   * order with its declared calls, the proposal's default agent and model,
+   * and the honest note that calls may run concurrently. No cost estimate
+   * (the fold has none) and no script link (the file list below has it).
+   */
   private renderWorkflowScriptSummary(
     data: AgentProposalPermission,
     workflow: NonNullable<WorkflowAgentProposalPermission['workflowScript']>,
   ): TemplateResult {
-    const fullName = `${workflow.name}: ${workflow.description}`;
-    // The plan's phases as the run model folds them for a run that has not
-    // started: every declared phase in order, its declared items under it,
-    // unphased items under the trailing `Unphased` phase — the same shape the
-    // popup and the board show once the run is live.
     const { phases } = workflowRunModel({
       taskGroups: [],
       rows: [],
@@ -233,58 +257,67 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       runDurablyFinal: false,
       childProgress: new Map(),
     });
+    const modelLabel = getModelLabel(data.model);
 
     return html`
-      <div class="workflow-proposal__workflow-summary">
-        ${waIcon('list-ul', { label: 'Proposed' })}
-        <span class="workflow-proposal__workflow-name" title=${fullName}
-          >${workflow.name}</span
-        >
-        <span class="workflow-proposal__workflow-progress"
+      <div class="proposal-card__head">
+        ${waIcon('diagram-project')}
+        <strong>Proposes a multi-agent run</strong>
+        <span class="proposal-card__summary"
           >${workflowScriptPlanSummary(workflow)}</span
         >
       </div>
+      <div class="proposal-card__lede">
+        <span class="workflow-proposal__workflow-name" title=${workflow.name}
+          >${workflow.name}</span
+        >
+        <span aria-hidden="true">·</span>
+        <span>${workflow.description}</span>
+      </div>
+      ${
+        phases.length > 0
+          ? html`<div class="proposal-card__phases" role="list">
+              ${repeat(
+                phases,
+                (phase) => phase.key,
+                (phase) => html`
+                  <div class="proposal-card__phase" role="listitem">
+                    ${waIcon('diagram-project')}
+                    <strong>${phase.heading.phaseLabel}</strong>
+                    <span class="proposal-card__phase-agents"
+                      >${data.agent} · ${modelLabel}</span
+                    >
+                    <span class="proposal-card__phase-calls"
+                      >${
+                        phase.declaredTasks.length > 0
+                          ? `${phase.declaredTasks.length} ${
+                              phase.declaredTasks.length === 1
+                                ? 'call'
+                                : 'calls'
+                            }`
+                          : 'calls at runtime'
+                      }</span
+                    >
+                  </div>
+                `,
+              )}
+            </div>`
+          : nothing
+      }
       <div class="workflow-proposal__cost-warning">
         ${waIcon('triangle-exclamation')}
         ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
-        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
-          data.agent,
-          getModelLabel(data.model),
-        )}
+        ${
+          workflow.tasks.length > 0
+            ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
+            : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote
+        }
       </div>
       <wa-details
         class="workflow-proposal__workflow-details"
-        summary="Workflow details"
+        summary="Instruction and files"
       >
-        ${this.renderInstruction(workflow.description)}
-        ${
-          phases.length > 0
-            ? html`<ul class="workflow-proposal__task-list">
-                ${repeat(
-                  phases,
-                  (phase) => phase.key,
-                  (phase) =>
-                    html`<li>
-                      ${phase.heading.phaseLabel}
-                      <ul>
-                        ${repeat(
-                          phase.declaredTasks,
-                          (task) => task.id,
-                          (task) => html`<li>${task.label}</li>`,
-                        )}
-                      </ul>
-                    </li>`,
-                )}
-              </ul>`
-            : nothing
-        }
-        <div class="workflow-proposal__plan-note">
-          ${
-            workflow.tasks.length > 0
-              ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
-              : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote
-          }
-        </div>
+        ${this.renderInstruction(data.instruction)}
         ${
           getProposalFileGroups(data).length > 0
             ? html`<div class="workflow-proposal__plan-note">
@@ -399,10 +432,14 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
 
   private handleFileClick = (event: MouseEvent): void => {
     const file = (event.target as HTMLElement).dataset.file;
-    if (file) {
-      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file });
-    }
+    if (file) this.openFile(file);
   };
+
+  private openFile(path: string): void {
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'openFile', path, line: null }),
+    );
+  }
 
   // Keyboard activation parity for the clickable file-name spans (Enter/Space),
   // mirroring FileList.ts's handleFileKey delegate for the same job.
@@ -415,9 +452,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     if (!fileEl) return;
     event.preventDefault();
     const file = fileEl.dataset.file;
-    if (file) {
-      postMessage(PROGRESS_VIEW_COMMANDS.OPEN_FILE, { file });
-    }
+    if (file) this.openFile(file);
   };
 
   private handleSelectChange = (event: Event): void => {

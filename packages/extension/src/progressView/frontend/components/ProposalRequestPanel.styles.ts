@@ -83,6 +83,74 @@ export const proposalRequestPanelStyles: CSSResult = css`
     color: var(--color-text-secondary);
   }
 
+  /* The card (board W0): the head, the lede, one row per declared phase. */
+  .proposal-card__head {
+    display: flex;
+    align-items: center;
+    gap: ${sp.small};
+    margin-block-start: ${sp.small};
+    padding: ${sp.small} ${sp.medium};
+    border-radius: var(--wa-border-radius-m);
+    background: var(--wa-color-warning-fill-quiet);
+    color: var(--wa-color-warning-on-quiet);
+    font-size: var(--font-size-sm);
+  }
+
+  .proposal-card__summary {
+    margin-inline-start: auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-secondary);
+  }
+
+  .proposal-card__lede {
+    display: flex;
+    align-items: baseline;
+    gap: ${sp.small};
+    min-width: 0;
+    padding: ${sp.small} ${sp.medium} 0;
+    font-size: var(--font-size-sm);
+  }
+
+  .proposal-card__phases {
+    display: flex;
+    flex-direction: column;
+    margin-block-start: ${sp.small};
+  }
+
+  .proposal-card__phase {
+    display: flex;
+    align-items: center;
+    gap: ${sp.small};
+    min-height: 1.75rem;
+    padding: 0 ${sp.medium};
+    border-top: var(--border-thin) solid var(--wa-color-surface-border);
+    font-size: var(--font-size-sm);
+  }
+
+  .proposal-card__phase wa-icon {
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  .proposal-card__phase-agents {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+  }
+
+  .proposal-card__phase-calls {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-secondary);
+  }
+
+  .proposal-card__skip {
+    margin-inline-start: auto;
+  }
+
   .workflow-proposal__cost-warning {
     display: flex;
     align-items: center;

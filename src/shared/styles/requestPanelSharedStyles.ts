@@ -34,13 +34,13 @@ const truncateTextRule: CSSResult = css`
 
 /**
  * Sizing contract for a prose textarea an agent is written to (no selector),
- * interpolated into the `::part(textarea)` rule of every such box — the
- * request panels' feedback inputs and the progress composer
- * (`FollowUpInput.styles.ts`). Each surface still sets its own
- * `--textarea-min-height` / `--textarea-max-height`, which is the intended
- * per-surface difference.
+ * interpolated into the textarea rule of every such box — the request panels'
+ * feedback inputs (`::part(textarea)` on their wa-textarea) and the progress
+ * composer's plain native textarea (`FollowUpInput.styles.ts`). Each surface
+ * still sets its own `--textarea-min-height` / `--textarea-max-height`, which
+ * is the intended per-surface difference.
  */
-export const proseTextareaPartRule: CSSResult = css`
+const proseTextareaPartRule: CSSResult = css`
   field-sizing: content;
   width: 100%;
   height: auto;

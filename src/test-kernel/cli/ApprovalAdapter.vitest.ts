@@ -61,6 +61,7 @@ import {
 } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
+import { bashApprovalRequest } from '../agent/progressTestUtils';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   const ctx = createTestCliContext({
@@ -208,10 +209,11 @@ describe('shared retry and human-input decisions', () => {
 describe('human input approval policy', () => {
   it('denies external inquiry under never', () => {
     const ctx = context({ approvalPolicy: 'never' });
-    expect(denyExternalInquiryIfNoHumanInput('ei_test', ctx)).toBe(true);
+    expect(denyExternalInquiryIfNoHumanInput('ei_test', 1, ctx)).toBe(true);
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_test',
+      turnIndex: 1,
       reason: texraApprovalDenialMessage('deny-policy'),
     });
   });
@@ -327,6 +329,7 @@ describe('approval prompt hooks', () => {
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_aabbccdd0011',
+      turnIndex: 1,
       cause: expect.stringContaining('non-TUI CLI runs'),
     });
   });
@@ -612,9 +615,11 @@ describe('buildToolEditApprovalContent', () => {
       }),
     );
 
-    const result = await defaultSession().interactions.requestBashApproval({
-      command: 'latexmk paper.tex',
-    });
+    const result = await defaultSession().interactions.requestBashApproval(
+      bashApprovalRequest({
+        command: 'latexmk paper.tex',
+      }),
+    );
 
     expect(result).toEqual({
       action: 'reject',

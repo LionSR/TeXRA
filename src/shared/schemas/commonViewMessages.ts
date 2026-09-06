@@ -17,7 +17,7 @@ export const DESKTOP_THEME_KIND = {
   HIGH_CONTRAST: 'high-contrast',
 } as const satisfies Record<string, Theme>;
 
-export const SetThemeMessageSchema = z.object({
+const SetThemeMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.THEME_SET),
   theme: ThemeSchema,
 });
@@ -39,7 +39,7 @@ export const WebviewReadyMessageSchema = z.object({
   view: z.enum(['main', 'progress', 'settings']).nullish(),
 });
 
-export const SwitchViewMessageSchema = z.object({
+const SwitchViewMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.SWITCH_VIEW),
   view: z.enum(['main', 'progress', 'dashboard']),
   openInEditor: z.boolean().nullish(),

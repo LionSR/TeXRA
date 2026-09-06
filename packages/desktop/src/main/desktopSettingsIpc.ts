@@ -9,8 +9,7 @@ import {
 } from '@controllers/settingsView/githubSubscriptions';
 import { appSignals } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import type { ConfigProvider } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { codingPlanForUsageSetting } from '@shared/codingPlanSubscriptions';
@@ -28,7 +27,6 @@ import {
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
@@ -47,7 +45,6 @@ import {
   type DesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
-import type { DesktopStreamRevealResult } from './desktopAgentExecution.js';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
@@ -62,9 +59,11 @@ export interface DesktopSettingsUiHost extends Pick<
    * presentation that could not be reached at all; the reveal is then reported
    * through {@link DesktopSettingsUiHost.onError} rather than here.
    */
+  /** Select a stream in the shown paper's surface: `missing` when the view
+   *  no longer holds it, `unavailable` when no paper is shown. */
   revealStream(
     streamId: string,
-  ): Promise<DesktopStreamRevealResult | 'unavailable'>;
+  ): Promise<'revealed' | 'missing' | 'unavailable'>;
   /**
    * Display label for a stream, used by the Git tab to name each subscription's
    * owning agent run. Returns undefined when no presentation is attached, in
@@ -86,14 +85,15 @@ export interface DesktopSettingsIpcOptions {
   agentSettingsController: DesktopAgentSettingsController;
   credentialSettingsController: DesktopCredentialSettingsController;
   toolingSettingsController: DesktopToolingSettingsController;
-  state: SettingsStatePorts;
-  config: ConfigProvider;
+  /** Main-process global store, threaded in by the caller (see mainViewIpc). */
+  globalState: StateStore;
   ui: DesktopSettingsUiHost;
   /**
-   * The session of the paper this settings surface serves. Goal mutations are
-   * emitted on it, so the Goals tab follows a run without a manual refresh,
-   * and app-signal listeners re-read the paper's state inside its scope. The
-   * desktop has no process-default session, so it must be passed.
+   * The session of the paper this settings surface serves. Its roots supply
+   * the paper's workspace state and config; goal mutations are emitted on it,
+   * so the Goals tab follows a run without a manual refresh, and app-signal
+   * listeners re-read the paper's state inside its scope. The desktop has no
+   * process-default session, so it must be passed.
    */
   session: SessionHandle;
 }
@@ -116,7 +116,8 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): DesktopSettingsIpc {
-  const { globalState, workspaceState } = options.state;
+  const { globalState } = options;
+  const { workspaceState, config } = options.session.roots;
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
   const onError = createDesktopErrorReporter(options.ui.onError, (error) => {
@@ -141,7 +142,7 @@ export function createDesktopSettingsIpc(
   });
 
   const settingsStores: SettingsStores = {
-    config: options.config,
+    config,
     workspaceState,
     globalState,
   };
@@ -187,9 +188,6 @@ export function createDesktopSettingsIpc(
   }
 
   async function postInitialSettingsData(): Promise<void> {
-    // Model availability can change without a session event (a server-side
-    // tier or subscription flip), so the panel must not paint a stale list.
-    invalidateModelOptionsCache();
     postSettingsSnapshot('git-author');
     options.toolingSettingsController.postLatexConfigValues();
     const goalListPosted = postGoalList();
@@ -219,7 +217,7 @@ export function createDesktopSettingsIpc(
     await settingsHost.setModelEnabled(input, {
       // The options cache is invalidated by the writer itself.
       afterPost: () =>
-        options.credentialSettingsController.postMainModelOptionsData(),
+        options.credentialSettingsController.refreshModelOptions(),
     });
   }
 
@@ -274,7 +272,6 @@ export function createDesktopSettingsIpc(
     const invalidatesModelOptions =
       result.entry.onWrite?.invalidatesModelOptions === true;
     if (invalidatesModelOptions) {
-      invalidateModelOptionsCache();
       await options.credentialSettingsController.refreshAfterProviderSettingChange(
         key,
       );

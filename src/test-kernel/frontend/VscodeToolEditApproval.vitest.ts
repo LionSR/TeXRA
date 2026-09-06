@@ -14,6 +14,7 @@ import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
+import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
 interface TestUri {
   readonly fsPath: string;
@@ -147,7 +148,6 @@ function createApprovalHarness(
   const session = createTestSession();
   sessions.push(session);
   const controller = new ToolEditApprovalController({
-    session,
     host: new VscodeToolEditApprovalHost(storageRoot),
     ...prompts(interactions),
     detachCause: SESSION_DISPOSED_CAUSE,
@@ -160,13 +160,15 @@ function requestApproval(
   filePath: string,
   streamId: string,
 ): Promise<ToolEditApprovalResult> {
-  const approval = controller.requestApproval({
-    path: filePath,
-    originalContent: 'old\n',
-    proposedContent: 'new\n',
-    sourceTool: 'write_file',
-    streamId,
-  });
+  const approval = controller.requestApproval(
+    toolEditApprovalRequest({
+      path: filePath,
+      originalContent: 'old\n',
+      proposedContent: 'new\n',
+      sourceTool: 'write_file',
+      streamId,
+    }),
+  );
   activeApprovals.push(approval);
   return approval;
 }

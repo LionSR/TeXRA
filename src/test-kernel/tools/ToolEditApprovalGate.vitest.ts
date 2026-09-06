@@ -14,7 +14,6 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { WriteFileTool } from '@tools/WriteTool';
-import { setToolEditApprovalSessionBypass } from '@tools/approval';
 import {
   requestToolEditApproval,
   type ToolEditApprovalRequest,
@@ -224,7 +223,9 @@ describe('Tool edit approval gating', () => {
     const tool = new WriteFileTool();
     const write = stubWorkspaceFile({ exists: false, content: '' });
 
-    setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
+    defaultSession().approvals.toolEdit.bypass.setBypass(TEST_STREAM_ID, true, {
+      silent: true,
+    });
 
     // The bypass check requires a streamId on the request; the approval layer
     // picks it up from the active run context.
@@ -270,7 +271,9 @@ describe('Tool edit approval gating', () => {
     await firstPrompted.promise;
 
     assert.strictEqual(handlerCalls, 1);
-    setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
+    defaultSession().approvals.toolEdit.bypass.setBypass(TEST_STREAM_ID, true, {
+      silent: true,
+    });
     firstApproval.resolve({ action: 'apply', appliedContent: 'first.txt' });
 
     const results = await Promise.all([firstRequest, secondRequest]);

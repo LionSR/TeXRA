@@ -21,6 +21,7 @@ import {
   disposeAfterTest,
 } from './desktopAgentExecutionTestHarness.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
+import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
 const approvalTest = (name: string, fn: () => Promise<void>): void => {
   it(name, fn, 30_000);
@@ -64,7 +65,6 @@ function createApprovalController(
   options: ApprovalControllerOptions,
 ): ApprovalController {
   const controller = new modules.controllerModule.ToolEditApprovalController({
-    session: options.session,
     host: new modules.desktopModule.DesktopToolEditApprovalHost({
       ui: options.ui,
       tempRoot: options.tempRoot,
@@ -204,6 +204,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     import('@platform/defaults/nodeFilesystem'),
   ]);
   await installPlatform({ workspacePath }, { fs: nodeFilesystem });
+  await import('@test/support/sessionGraphTestSetup');
 
   const [
     { requestToolEditApproval },
@@ -270,20 +271,24 @@ describe('desktop tool edit approval', () => {
     async () => {
       const { controller, interactions } = await createApprovalFixture();
 
-      const target = controller.requestApproval({
-        path: '/workspace/target.txt',
-        originalContent: 'old target\n',
-        proposedContent: 'new target\n',
-        sourceTool: 'write_file',
-        streamId: 'stream-target',
-      });
-      const other = controller.requestApproval({
-        path: '/workspace/other.txt',
-        originalContent: 'old other\n',
-        proposedContent: 'new other\n',
-        sourceTool: 'write_file',
-        streamId: 'stream-other',
-      });
+      const target = controller.requestApproval(
+        toolEditApprovalRequest({
+          path: '/workspace/target.txt',
+          originalContent: 'old target\n',
+          proposedContent: 'new target\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-target',
+        }),
+      );
+      const other = controller.requestApproval(
+        toolEditApprovalRequest({
+          path: '/workspace/other.txt',
+          originalContent: 'old other\n',
+          proposedContent: 'new other\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-other',
+        }),
+      );
       await vi.waitFor(() =>
         expect(interactions.shownToolEditPermissions).toHaveLength(2),
       );
@@ -327,13 +332,15 @@ describe('desktop tool edit approval', () => {
         },
       });
 
-      const approval = controller.requestApproval({
-        path: '/workspace/isolated.txt',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        streamId: 'stream-isolated',
-      });
+      const approval = controller.requestApproval(
+        toolEditApprovalRequest({
+          path: '/workspace/isolated.txt',
+          originalContent: 'old\n',
+          proposedContent: 'new\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-isolated',
+        }),
+      );
       await vi.waitFor(() => expect(shown).toBeDefined());
 
       controller.handleAction({
@@ -791,13 +798,15 @@ describe('desktop tool edit approval', () => {
         resolvedToolEditPermissions: resolved,
       } = interactions;
 
-      const resultPromise = session.interactions.requestToolEditApproval({
-        path: '/workspace/cleanup.tex',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        streamId: 'stream-cleanup',
-      });
+      const resultPromise = session.interactions.requestToolEditApproval(
+        toolEditApprovalRequest({
+          path: '/workspace/cleanup.tex',
+          originalContent: 'old\n',
+          proposedContent: 'new\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-cleanup',
+        }),
+      );
       await vi.waitFor(() => expect(shown).toHaveLength(1));
 
       // Pending interactions are session-owned: sweep the owning session.

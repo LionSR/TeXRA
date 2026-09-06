@@ -1,7 +1,9 @@
+import { Effect, Fiber, Stream } from 'effect';
+
 import type { SessionHandle } from '@agent/runtime';
 import { createSessionStores } from '@controllers/session/createSessionStores';
 import { createLog } from '@logger/logUtils';
-import type { StreamTabId } from '@shared/schemas';
+import { effectRuntime } from '@platform/processRuntime';
 import { toLogData } from './desktopLogUtils.js';
 
 /**
@@ -10,81 +12,31 @@ import { toLogData } from './desktopLogUtils.js';
 export async function initializeDesktopProcessStores(session: SessionHandle) {
   const logger = createLog('DesktopProcessStores');
   const stores = createSessionStores(session);
-  const streamIncarnations = new Map<StreamTabId, number>();
-  const pendingRemovals = new Map<StreamTabId, number>();
 
-  const detachStreamRemoval = session.events.subscribeSessionFacts((fact) => {
-    if (fact.type === 'setActiveStream') {
-      const { streamId } = fact.payload;
-      if (
-        !streamId ||
-        !pendingRemovals.has(streamId) ||
-        // The summary mirror, not the sidecar record: a finished child's
-        // record is releasable, and reading a released one here would report
-        // no workflow identity, leave the incarnation unbumped, and let a
-        // pending removal delete the stream the relaunch just re-claimed.
-        (
-          session.transcripts.getSummaryMeta(streamId)?.identity ??
-          session.snapshots.getRunMetadata(streamId, { quiet: true }).identity
-        )?.kind !== 'multiAgentWorkflow' ||
-        !session.executions.getAgentHandleByStream(streamId)
-      ) {
-        return;
-      }
-      streamIncarnations.set(
-        streamId,
-        (streamIncarnations.get(streamId) ?? 0) + 1,
-      );
-      return;
-    }
-    if (fact.type === 'removeStream') {
-      const { streamId } = fact.payload;
-      const expectedIncarnation = streamIncarnations.get(streamId) ?? 0;
-      pendingRemovals.set(streamId, expectedIncarnation);
-      // A live ProgressBackend claims this incarnation synchronously during
-      // fact dispatch, before its deletion preparation reaches an await.
-      // Check in the following microtask so the process fallback runs only
-      // when no presentation owns the removal.
-      queueMicrotask(() => {
-        if (stores.hasStreamDeletionClaim(streamId)) {
-          if (pendingRemovals.get(streamId) === expectedIncarnation) {
-            pendingRemovals.delete(streamId);
-          }
-          return;
-        }
-        void stores
-          .deleteStream(streamId, {
-            shouldDelete: () =>
-              (streamIncarnations.get(streamId) ?? 0) === expectedIncarnation,
-            expectedIncarnation,
-          })
-          .then((outcome) => {
-            if (outcome === 'superseded') {
-              logger.info(
-                `Skipped deletion for re-claimed desktop stream ${streamId}`,
-              );
-            }
-          })
-          .catch((error: unknown) => {
-            logger.warn('Failed to delete a headless desktop stream', {
-              data: toLogData(error),
-            });
-          })
-          .finally(() => {
-            if (pendingRemovals.get(streamId) === expectedIncarnation) {
-              pendingRemovals.delete(streamId);
-            }
+  // Every `stream.removed` from now on, in commit order: the process-owned
+  // delete, so a stream removed while no window shows it (a child stream's
+  // auto-close, the leftover sweep) still leaves storage. A `stream.delete`
+  // request deletes through the same store; its per-stream deletion dedup is
+  // the one claim there is, whichever path gets there first.
+  const removals = effectRuntime().runFork(
+    Stream.runForEach(session.events.all(session.now()), (event) =>
+      Effect.sync(() => {
+        if (event.type !== 'stream.removed') return;
+        void stores.deleteStream(event.aggregateId).catch((error: unknown) => {
+          logger.warn('Failed to delete a headless desktop stream', {
+            data: toLogData(error),
           });
-      });
-    }
-  });
+        });
+      }),
+    ),
+  );
   const detachArtifactFlusher = session.useArtifactFlusher(async () => {
     await stores.flushSnapshotsAfterStartedDeletions();
   });
   return {
     stores,
     dispose() {
-      detachStreamRemoval();
+      effectRuntime().runFork(Fiber.interrupt(removals));
       detachArtifactFlusher();
     },
   };

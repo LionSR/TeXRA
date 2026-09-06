@@ -30,7 +30,6 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseCycleNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseCycleNode';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type {
   CyclePrepResult,
   ToolUseRunShared,
@@ -50,8 +49,8 @@ import { isObject } from '@utils/core';
 
 import {
   createRecordingHost,
-  recordSessionEvents,
-  runEventsOfType,
+  recordTraceEvents,
+  traceEventsOfType,
   testRunScope,
   withTestRunContext,
 } from '../progressTestUtils';
@@ -195,34 +194,25 @@ describe('tool-use progress events', () => {
   it('publishes skipped-cycle todo and plan events through the runtime host', async () => {
     const { host } = createRecordingHost();
     const logger = new TraceEmitter();
-    const hub = new SessionEventHub();
-    const recorded = recordSessionEvents(hub, { scope: 'run' });
+    const recorded = recordTraceEvents(logger);
     const streamId = 'stream:tool-use-cycle' as StreamTabId;
-    const detachTrace = logger.subscribe((event) =>
-      hub.emit({ scope: 'run', streamId, event }),
-    );
     const workspaceState = AgentWorkspaceState.create();
     workspaceState.workPlan.updateTodos([todo]);
     workspaceState.workPlan.updatePlan(plan);
 
     const node = createCycleNode(streamId, host, logger);
 
-    try {
-      const result = await withTestRunContext(node.services.runScope, () =>
-        node.exec(createPrepResult(workspaceState)),
-      );
+    const result = await withTestRunContext(node.services.runScope, () =>
+      node.exec(createPrepResult(workspaceState)),
+    );
 
-      expect(result).toEqual({ outcome: 'skipped' });
-      expect(runEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
-        { streamId, todos: [todo] },
-      ]);
-      expect(runEventsOfType(recorded.events, 'updatePlan')).toMatchObject([
-        { streamId, plan },
-      ]);
-    } finally {
-      recorded.detach();
-      detachTrace();
-    }
+    expect(result).toEqual({ outcome: 'skipped' });
+    expect(traceEventsOfType(recorded.events, 'updateTodos')).toMatchObject([
+      { streamId, todos: [todo] },
+    ]);
+    expect(traceEventsOfType(recorded.events, 'updatePlan')).toMatchObject([
+      { streamId, plan },
+    ]);
   });
 
   it('logs outer cycle exceptions before storing the failed outcome', async () => {

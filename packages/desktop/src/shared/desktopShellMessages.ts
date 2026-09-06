@@ -4,6 +4,7 @@ export const DESKTOP_SHELL_COMMANDS = {
   OPEN_WORKBENCH: 'desktop:openWorkbench',
   SAVE_FILE: 'desktop:saveFile',
   SHOW_LAUNCHER: 'desktop:showLauncher',
+  /** Clear the launcher's selections back to their defaults. */
   TOGGLE_LAYOUT: 'desktop:toggleLayout',
 } as const;
 

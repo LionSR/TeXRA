@@ -30,6 +30,7 @@ function statePorts() {
 
 function realAgentController(): DefaultDesktopAgentSettingsController {
   return new DefaultDesktopAgentSettingsController({
+    onCatalogChanged: async () => {},
     ...statePorts(),
     registry: {
       loadAgents: noOp,
@@ -62,6 +63,7 @@ function realAgentController(): DefaultDesktopAgentSettingsController {
 
 function realCredentialController(): DefaultDesktopCredentialSettingsController {
   return new DefaultDesktopCredentialSettingsController({
+    onModelOptionsChanged: async () => {},
     ...statePorts(),
     config: new FakeConfigProvider(),
     secrets: new FakeSecrets(),
@@ -90,6 +92,7 @@ function realCredentialController(): DefaultDesktopCredentialSettingsController 
 function realToolingController(): DefaultDesktopToolingSettingsController {
   return new DefaultDesktopToolingSettingsController({
     ...statePorts(),
+    config: new FakeConfigProvider(),
     onError: () => undefined,
     renderer: { postToRenderer: () => undefined },
     dashboard: {

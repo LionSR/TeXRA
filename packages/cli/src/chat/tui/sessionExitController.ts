@@ -28,19 +28,23 @@ import { createLog } from '@logger/logUtils';
 import type { DisposableStore } from '@platform/disposable';
 import { platform } from '@platform/platform';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import type { StreamTabId } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   resetCliState,
   clearTransientNotice,
+  rootStreamId as rootStreamIdSignal,
   setTransientNotice,
-  streams as streamsSignal,
 } from './state/cliState';
-import {
-  childRosters as childRostersSignal,
-  type ChildRosters,
-} from './state/childExecutions';
+import { currentView } from './state/sessionView';
+
+interface ResumeHintSnapshot {
+  readonly view: SessionView;
+  readonly rootStreamId: StreamTabId | undefined;
+}
 import {
   collectResumeTargets,
   collectResumeUsage,
@@ -144,16 +148,16 @@ export function createSessionExitController(
   // resumable tool-use subagent, so any route can be continued by its own id.
   // Read the streams slice before resetCliState() clears it; the child rosters
   // arrive as a snapshot taken while the session adapter was still bound.
-  const printResumeHintOnExit = (childRosters: ChildRosters): void => {
+  const printResumeHintOnExit = (snapshot: ResumeHintSnapshot): void => {
     if (!ctx.canResume || !session.executionId) return;
-    const streams = streamsSignal.get();
+    const { view, rootStreamId } = snapshot;
     const hint = formatResumeHint(
       collectResumeTargets({
-        childRosters,
+        view,
+        rootStreamId,
         rootExecutionId: session.executionId,
-        streams,
       }),
-      collectResumeUsage(streams),
+      collectResumeUsage(view, rootStreamId),
       ctx.commandName,
       {
         cwd: ctx.cwd,
@@ -298,10 +302,12 @@ export function createSessionExitController(
   const beginTeardown = async (cause: ExitCause): Promise<void> => {
     removeProcessHandlers();
     clearExitConfirmation();
-    // Snapshot the child rosters while the session-signals adapter is still
-    // bound: disposing ctx.disposables below detaches it, after which the
-    // roster signal reads empty — but the resume hint prints later.
-    const childRosters = childRostersSignal.get();
+    // Snapshot the view while it is still bound: disposing ctx.disposables
+    // below unbinds it, but the resume hint prints later.
+    const resumeHint: ResumeHintSnapshot = {
+      view: currentView(),
+      rootStreamId: rootStreamIdSignal.get(),
+    };
     if (cause.kind === 'signal') {
       ctx.suspendTerminalTitle();
       ink.unmount();
@@ -309,7 +315,7 @@ export function createSessionExitController(
       // the terminal before the first await so a stalled flush cannot strand raw
       // mode or emulator keyboard state.
       cleanupTerminalModes();
-      printResumeHintOnExit(childRosters);
+      printResumeHintOnExit(resumeHint);
       return persistBeforePlatformShutdown().finally(() =>
         process.exit(cause.exitCode),
       );
@@ -370,7 +376,7 @@ export function createSessionExitController(
     ctx.disposeTerminalRestoreOnExit();
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.
-    printResumeHintOnExit(childRosters);
+    printResumeHintOnExit(resumeHint);
     resetCliState();
     if (resumableIdle) {
       // The dangling runPromise keeps the event loop alive, so a normal return

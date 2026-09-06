@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   getFileListConfig,
   loadFileListSettings,
-  matchesEditedFile,
   passesFileFilters,
   prepareFileFilters,
   shouldVisitDirectory,
 } from '@common/files/fileListingRules';
+import { matchesEditedFile } from '@shared/launcher/editedFileMatch';
 
 describe('shared file-listing rules', () => {
   it('builds input configs from the product file-handling rules', () => {

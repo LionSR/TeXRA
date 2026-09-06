@@ -40,7 +40,11 @@ import { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  initializeDefaultSession,
+  teardownDefaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
@@ -353,7 +357,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     clearStoreCache();
     clearInlineAgents();
     registerInlineAgents([inlineAgent(PARENT_AGENT), inlineAgent(CHILD_AGENT)]);
-    session = new SessionHandle({ transcripts: await StreamLogStore.open() });
+    // The process session over a persistent store: one session per root,
+    // so the ephemeral default this file's setup installed gives way to it.
+    teardownDefaultSession();
+    session = initializeDefaultSession({
+      transcripts: await StreamLogStore.open(),
+    });
     childId = undefined;
     resumedStreams = [];
     completedResumes = [];
@@ -363,7 +372,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     interruptActiveExecutions(session);
     if (childId) await waitForLeaseRelease(childId);
     await releaseOwnedExecutionLease(PARENT_EXECUTION_ID);
-    session.dispose();
+    teardownDefaultSession();
     clearInlineAgents();
     clearStoreCache();
     vi.restoreAllMocks();

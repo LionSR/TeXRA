@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
-import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
+import { buildBaseModelOption } from '@model/modelOptionsBasic';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { ModelOptionData } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
@@ -13,13 +14,20 @@ function createModelSelectionController(globalState: FakeStateStore) {
   const resolveModelOptions = async (
     models: readonly string[],
   ): Promise<ModelOptionData[]> =>
-    buildBasicModelOptionsData(models).map((option) => ({
-      ...option,
-      availability: 'provider-key',
-      availabilityLabel: 'API key set',
-      requiresKey: false,
-      disabled: false,
-    }));
+    models
+      .map((model) => {
+        const config = getRuntimeModelConfig(model);
+        return config
+          ? buildBaseModelOption(model, config)
+          : { value: model, label: model };
+      })
+      .map((option) => ({
+        ...option,
+        availability: 'provider-key',
+        availabilityLabel: 'API key set',
+        requiresKey: false,
+        disabled: false,
+      }));
 
   return new SettingsModelSelectionController({
     globalState,

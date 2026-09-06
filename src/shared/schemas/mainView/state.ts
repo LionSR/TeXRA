@@ -114,9 +114,7 @@ export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
 /** Open workspace folder offered as an execution working directory. */
 export const WorkspaceRootOptionDataSchema = PickerOptionBaseSchema;
-export type WorkspaceRootOptionData = z.infer<
-  typeof WorkspaceRootOptionDataSchema
->;
+type WorkspaceRootOptionData = z.infer<typeof WorkspaceRootOptionDataSchema>;
 
 /**
  * Team picker option row for the main-view "Run with: Team" target. `value`
@@ -167,7 +165,6 @@ export const MainViewPersistedStateSchema = UIFileFieldsSchema.merge(
     })
     .prefault({}),
   baseFile: z.string().prefault(''),
-  latexdiffsVisible: z.boolean().prefault(false),
   openedFiles: z.array(z.string()).nullish(),
 });
 export type MainViewPersistedState = z.infer<
@@ -215,7 +212,7 @@ export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 // File State Schemas
 // ============================================================
 
-const FileSelectConfigSchema = z.object({
+export const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,
   label: z.string(),
   icon: z.enum(TEXRA_ICON_CANONICAL_NAMES),
@@ -232,9 +229,9 @@ const SingleFilesSchema = z.object({
   baseFile: z.string(),
   editedFile: z.string(),
 });
-export type SingleFiles = z.infer<typeof SingleFilesSchema>;
+type SingleFiles = z.infer<typeof SingleFilesSchema>;
 
-const FileOptionsSchema = z.object({
+export const FileOptionsSchema = z.object({
   baseFile: z.array(z.string()),
   editedFile: z.array(z.string()),
   commit: z.array(z.string()),
@@ -249,37 +246,6 @@ export type MultiFiles = z.infer<typeof MultiFilesSchema>;
 // valid `keyof MultiFiles` values instead of an unconstrained `z.string()`.
 const MultiFilesKeySchema = MultiFilesSchema.keyof();
 
-const FileStateContextSchema = z.object({
-  sessionType: SessionTypeSchema,
-  checkboxValues: ToolConfigFieldsSchema,
-  singleFiles: SingleFilesSchema,
-  fileOptions: FileOptionsSchema,
-  multiFiles: MultiFilesSchema,
-});
-export type FileStateContextValue = z.infer<typeof FileStateContextSchema>;
-
-const SessionContextSchema = z.object({
-  sessionType: SessionTypeSchema,
-  launchTarget: LaunchTargetSchema,
-  selectedTeamId: z.string(),
-  instruction: z.string(),
-  placeholder: z.string(),
-  agent: z.record(AgentCategorySchema, z.string()),
-  model: z.string(),
-  agentOptions: z.record(AgentCategorySchema, z.array(AgentOptionDataSchema)),
-  modelOptions: z.array(ModelOptionDataSchema),
-  teamOptions: z.array(TeamOptionDataSchema),
-  workspaceRootOptions: z.array(WorkspaceRootOptionDataSchema),
-  workingDirectory: z.string(),
-  isRecording: z.boolean(),
-  isPolishing: z.boolean(),
-  debugMode: z.boolean(),
-  isOrchestratorSelected: z.boolean(),
-  /** Last status line pushed to the panel's aria-live region. */
-  statusAnnouncement: z.string(),
-});
-export type SessionContextValue = z.infer<typeof SessionContextSchema>;
-
 const StringValueDetailSchema = z.object({
   value: z.string(),
 });
@@ -287,10 +253,7 @@ type StringValueDetail = z.infer<typeof StringValueDetailSchema>;
 
 export type BaseFileChangeDetail = StringValueDetail;
 export type EditedFileChangeDetail = StringValueDetail;
-export type ModelChangeDetail = StringValueDetail;
-export type InstructionChangeDetail = StringValueDetail;
 export type CommitChangeDetail = StringValueDetail;
-export type WorkingDirectoryChangeDetail = StringValueDetail;
 
 const FileActionDetailSchema = z.object({
   type: CurrentFileTypeSchema,
@@ -406,13 +369,6 @@ const InstallGuideDetailSchema = z.object({
 });
 export type InstallGuideDetail = z.infer<typeof InstallGuideDetailSchema>;
 
-const LatexDiffsToggleDetailSchema = z.object({
-  visible: z.boolean(),
-});
-export type LatexDiffsToggleDetail = z.infer<
-  typeof LatexDiffsToggleDetailSchema
->;
-
 const LatexDiffsActionDetailSchema = z.object({
   action: z.enum([
     'latexdiff',
@@ -427,38 +383,3 @@ const LatexDiffsActionDetailSchema = z.object({
 export type LatexDiffsActionDetail = z.infer<
   typeof LatexDiffsActionDetailSchema
 >;
-
-const FocusInstructionDetailSchema = z.object({
-  key: z.string(),
-  text: z.string(),
-});
-export type FocusInstructionDetail = z.infer<
-  typeof FocusInstructionDetailSchema
->;
-
-const SessionTypeChangeDetailSchema = z.object({
-  value: SessionTypeSchema,
-});
-export type SessionTypeChangeDetail = z.infer<
-  typeof SessionTypeChangeDetailSchema
->;
-
-const AgentChangeDetailSchema = z.object({
-  sessionType: SessionTypeSchema,
-  value: z.string(),
-});
-export type AgentChangeDetail = z.infer<typeof AgentChangeDetailSchema>;
-
-const LaunchTargetChangeDetailSchema = z.object({
-  value: LaunchTargetSchema,
-});
-export type LaunchTargetChangeDetail = z.infer<
-  typeof LaunchTargetChangeDetailSchema
->;
-
-export type TeamChangeDetail = StringValueDetail;
-
-const ActionDetailSchema = z.object({
-  action: z.string(),
-});
-export type ActionDetail = z.infer<typeof ActionDetailSchema>;

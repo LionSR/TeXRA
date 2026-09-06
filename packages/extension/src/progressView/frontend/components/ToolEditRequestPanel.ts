@@ -87,7 +87,7 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   // ===========================================================================
 
   private renderDiffActions(): TemplateResult {
-    const hasMenu = Boolean(this.permission.data.isLatex && !this.archived);
+    const hasMenu = Boolean(this.permission.data.isLatex && !this.readOnly);
     const buttonOptions = {
       id: 'tool-edit-diff-button',
       icon: 'code-compare' as const,
@@ -95,7 +95,7 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
       tooltip: 'Open diff (d)',
       action: 'openDiff',
       className: 'diff-main-button',
-      disabled: this.archived,
+      disabled: this.readOnly,
       onClick: this.handleDiffAction,
     };
 

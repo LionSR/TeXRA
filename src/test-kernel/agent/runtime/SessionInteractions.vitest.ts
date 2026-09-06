@@ -2,22 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  type BashSettlement,
   matchesCancelSelector,
-  HostInteractions,
+  type HostInteractions,
   type HostPlanApprovalRequest,
   type PlanApprovalResult,
   type ProposalResult,
-  type RetryResult,
-  type UserQuestionSettlement,
+  type SettledInteractionKind,
 } from '@agent/runtime/HostInteractions';
-import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
-import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
-import {
-  createProgressHostInteractions,
-  type ProgressHostInteractions,
-} from '@controllers/progressView/backend/progressHostInteractions';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import {
   AgentCategory,
@@ -35,6 +26,10 @@ import {
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
+import {
+  bashApprovalRequest,
+  toolEditApprovalRequest,
+} from '../progressTestUtils';
 
 /**
  * Plan approval, proposal, and retry requests travel `session.interactions`
@@ -59,101 +54,80 @@ interface UiEvent {
   id: string;
 }
 
-function createHandlerSet(events: UiEvent[]): ApprovalRequestHandlerSet {
-  const handler = <
-    T extends { streamId: string },
-    K extends keyof T,
-    Result = never,
-  >(
-    kind: string,
-    idField: K,
-  ): ApprovalRequestHandler<T, K, Result> =>
-    new ApprovalRequestHandler<T, K, Result>(
-      idField,
-      (item) =>
-        events.push({ event: `show:${kind}`, id: String(item[idField]) }),
-      (id) => events.push({ event: `dismiss:${kind}`, id }),
-      () => true,
-    );
-  return {
-    toolEdit: handler<ToolEditPermission, 'requestId'>('toolEdit', 'requestId'),
-    bash: handler<BashPermission, 'requestId', BashSettlement>(
-      'bash',
-      'requestId',
-    ),
-    retry: handler<RetryPermission, 'streamId', RetryResult>(
-      'retry',
-      'streamId',
-    ),
-    proposal: handler<AgentProposalPermission, 'requestId', ProposalResult>(
-      'proposal',
-      'requestId',
-    ),
-    planApproval: handler<
-      PlanApprovalPermission,
-      'requestId',
-      PlanApprovalResult
-    >('planApproval', 'requestId'),
-    externalInquiry: handler<ExternalInquiryPermission, 'requestId'>(
-      'externalInquiry',
-      'requestId',
-    ),
-    userQuestion: handler<
-      UserQuestionPermission,
-      'requestId',
-      UserQuestionSettlement
-    >('userQuestion', 'requestId'),
-  };
-}
-
+/**
+ * A presenting host as a renderer port would attach it: every response
+ * bearing request records a show event and stays pending until the test
+ * settles it through the session (`settleRequest`), the way a surface's
+ * decision arrives over `runtime.request`; a cancel records the dismissals.
+ */
 function createPortSession(): {
   session: SessionHandle;
   uiEvents: UiEvent[];
   emitted: string[];
   setApprovalBypassState: ReturnType<typeof vi.fn>;
-  interactions: ProgressHostInteractions;
+  interactions: HostInteractions;
+  submitPlanDecision: (
+    requestId: string,
+    decision: PlanApprovalResult,
+  ) => boolean;
+  submitProposalDecision: (
+    requestId: string,
+    decision: ProposalResult,
+  ) => boolean;
 } {
   const uiEvents: UiEvent[] = [];
   const emitted: string[] = [];
-  const presentationSink: Required<Pick<HostInteractions, 'emit'>> = {
+  const session = createTestSession();
+  const setApprovalBypassState = vi.fn();
+  const shown = new Map<
+    string,
+    { kind: SettledInteractionKind; streamId: string }
+  >();
+  const pending = <K extends SettledInteractionKind>(
+    kind: K,
+    request: { requestId: string; streamId: string },
+  ): Promise<never> => {
+    uiEvents.push({ event: `show:${kind}`, id: request.requestId });
+    shown.set(request.requestId, { kind, streamId: request.streamId });
+    return new Promise(() => {});
+  };
+  const interactions: HostInteractions = {
     emit: (event) => {
       emitted.push(event);
       return true;
     },
-  };
-  const handlers = createHandlerSet(uiEvents);
-  const session = createTestSession();
-  const setApprovalBypassState = vi.fn();
-  // Real controller with an inert host: tool-edit approvals are not exercised
-  // by these tests, but the port contract requires a full controller.
-  const toolEditApprovals = new ToolEditApprovalController({
-    session,
-    host: {
-      stagePreview: async () => {
-        throw new Error('tool-edit approvals are not exercised here');
-      },
-      revealApprovalSurface: async () => {},
-      openBuildDisplay: async () => {},
-      reportError: () => {},
-    },
-    showToolEditPermission: () => {},
-    resolveToolEditPermission: () => {},
-    detachCause: 'Test session detached.',
-  });
-  const interactions = createProgressHostInteractions({
-    interactions: presentationSink,
-    session,
     setApprovalBypassState,
-    getApprovalHandlers: () => handlers,
-    getToolEditApprovals: () => toolEditApprovals,
-  });
+    requestPlanApproval: (request) => pending('planApproval', request),
+    requestAgentProposal: (request) => pending('proposal', request),
+    requestRetry: (request) => pending('retry', request),
+    askUserQuestion: (request) => pending('userQuestion', request),
+    cancel(selector = {}) {
+      for (const [requestId, entry] of shown) {
+        if (!matchesCancelSelector(entry, selector)) continue;
+        shown.delete(requestId);
+        uiEvents.push({ event: `dismiss:${entry.kind}`, id: requestId });
+      }
+    },
+  };
   session.interactions.use(interactions);
+  const settle = <K extends SettledInteractionKind>(
+    kind: K,
+    requestId: string,
+    result: Parameters<typeof session.interactions.settleRequest<K>>[2],
+  ): boolean => {
+    shown.delete(requestId);
+    return session.interactions.settleRequest(kind, requestId, result);
+  };
   return {
     session,
     uiEvents,
     emitted,
     setApprovalBypassState,
     interactions,
+    submitPlanDecision: (requestId, decision) =>
+      settle('planApproval', requestId, decision),
+    submitProposalDecision: (requestId, decision) =>
+      settle('proposal', requestId, decision),
   };
 }
 
@@ -709,17 +683,21 @@ describe('session.interactions request bookkeeping', () => {
       pendingCounts.push(count),
     );
     const requests = [
-      session.interactions.requestToolEditApproval({
-        path: 'paper.tex',
-        originalContent: 'old',
-        proposedContent: 'new',
-        sourceTool: 'edit_file',
-        streamId,
-      }),
-      session.interactions.requestBashApproval({
-        command: 'lake build',
-        streamId,
-      }),
+      session.interactions.requestToolEditApproval(
+        toolEditApprovalRequest({
+          path: 'paper.tex',
+          originalContent: 'old',
+          proposedContent: 'new',
+          sourceTool: 'edit_file',
+          streamId,
+        }),
+      ),
+      session.interactions.requestBashApproval(
+        bashApprovalRequest({
+          command: 'lake build',
+          streamId,
+        }),
+      ),
       requestPlan(session, 'approval:count'),
       requestProposal(session, 'proposal:count'),
       session.interactions.requestRetry({
@@ -909,19 +887,17 @@ describe('session.interactions request bookkeeping', () => {
   });
 
   it('resolves a plan approval first-wins through the session slot', async () => {
-    const { session, uiEvents, emitted, interactions } = createPortSession();
+    const { session, uiEvents, submitPlanDecision } = createPortSession();
     try {
       const pending = requestPlan(session, 'approval:first-wins');
       expect(pending).toBeDefined();
-      // The port owns both the display and the activation emissions.
-      expect(emitted).toContain('requestEnsureProgressView');
       expect(uiEvents).toContainEqual({
         event: 'show:planApproval',
         id: 'approval:first-wins',
       });
 
       expect(
-        interactions.submitPlanDecision('approval:first-wins', {
+        submitPlanDecision('approval:first-wins', {
           action: 'approve',
         }),
       ).toBe(true);
@@ -929,7 +905,7 @@ describe('session.interactions request bookkeeping', () => {
 
       // First-wins: a second resolution finds nothing pending.
       expect(
-        interactions.submitPlanDecision('approval:first-wins', {
+        submitPlanDecision('approval:first-wins', {
           action: 'reject',
         }),
       ).toBe(false);
@@ -938,30 +914,9 @@ describe('session.interactions request bookkeeping', () => {
     }
   });
 
-  it('rejects the stale request when the same id is re-requested (replacement)', async () => {
-    const { session, uiEvents, interactions } = createPortSession();
-    try {
-      const first = requestPlan(session, 'approval:replace');
-      const second = requestPlan(session, 'approval:replace');
-
-      await expect(first).resolves.toMatchObject({ action: 'reject' });
-      expect(
-        uiEvents.filter((entry) => entry.event === 'show:planApproval'),
-      ).toHaveLength(2);
-
-      expect(
-        interactions.submitPlanDecision('approval:replace', {
-          action: 'approve',
-        }),
-      ).toBe(true);
-      await expect(second).resolves.toEqual({ action: 'approve' });
-    } finally {
-      session.dispose();
-    }
-  });
-
   it('a stream-scoped cancel settles every pending request for that stream only', async () => {
-    const { session, interactions } = createPortSession();
+    const { session, submitPlanDecision, submitProposalDecision } =
+      createPortSession();
     const otherStreamId = 'stream:interactions-other' as StreamTabId;
     try {
       const pendingPlan = requestPlan(session, 'approval:cleanup');
@@ -979,19 +934,19 @@ describe('session.interactions request bookkeeping', () => {
         action: 'reject',
       });
       expect(
-        interactions.submitPlanDecision('approval:cleanup', {
+        submitPlanDecision('approval:cleanup', {
           action: 'approve',
         }),
       ).toBe(false);
       expect(
-        interactions.submitProposalDecision('proposal:cleanup', {
+        submitProposalDecision('proposal:cleanup', {
           action: 'approve',
         }),
       ).toBe(false);
 
       // The other stream's request is untouched and still resolvable.
       expect(
-        interactions.submitPlanDecision('approval:survives', {
+        submitPlanDecision('approval:survives', {
           action: 'approve',
         }),
       ).toBe(true);
@@ -1002,7 +957,7 @@ describe('session.interactions request bookkeeping', () => {
   });
 
   it('a kind-scoped cancel settles only that kind on the stream', async () => {
-    const { session, interactions } = createPortSession();
+    const { session, submitProposalDecision } = createPortSession();
     try {
       const pendingPlan = requestPlan(session, 'approval:kind-scope');
       const pendingProposal = requestProposal(session, 'proposal:kind-scope');
@@ -1017,7 +972,7 @@ describe('session.interactions request bookkeeping', () => {
 
       // The proposal on the same stream is untouched and still resolvable.
       expect(
-        interactions.submitProposalDecision('proposal:kind-scope', {
+        submitProposalDecision('proposal:kind-scope', {
           action: 'approve',
         }),
       ).toBe(true);

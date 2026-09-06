@@ -7,10 +7,6 @@ import {
   chatToolUseAgentUsageError,
 } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
-import {
-  restorePendingSkillActivations,
-  takePendingSkillActivations,
-} from '@cli/chat/tui/chatSubmitDriver';
 import { AgentCategory } from '@shared/schemas';
 
 vi.mock('@agent/index', async (importOriginal) => {
@@ -73,71 +69,6 @@ describe('CLI chat run config', () => {
     expect(sessionMeta.get().teamName).toBeUndefined();
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
     expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
-  });
-
-  it('reserves pending skill activations for only one prepared message', () => {
-    const pending = new Map([
-      ['proof-audit', '<skill_activation>proof</skill_activation>'],
-    ]);
-
-    const first = takePendingSkillActivations(pending, 'first request');
-    const second = takePendingSkillActivations(pending, 'second request');
-
-    expect(first).toMatchObject({
-      displayInstruction: 'first request',
-      reservedSkillActivations: [
-        {
-          name: 'proof-audit',
-          activationPrompt: '<skill_activation>proof</skill_activation>',
-        },
-      ],
-    });
-    expect(first.instruction).toContain(
-      '<skill_activation>proof</skill_activation>',
-    );
-    expect(first.instruction).toContain(
-      '<user_request>\nfirst request\n</user_request>',
-    );
-    expect(second).toEqual({
-      instruction: 'second request',
-      reservedSkillActivations: [],
-    });
-  });
-
-  it('restores reserved skill activations without replacing newer selections', () => {
-    const pending = new Map([
-      ['proof-audit', '<skill_activation>old</skill_activation>'],
-    ]);
-    const reserved = takePendingSkillActivations(
-      pending,
-      'first request',
-    ).reservedSkillActivations;
-
-    restorePendingSkillActivations(pending, reserved);
-    expect(pending.get('proof-audit')).toBe(
-      '<skill_activation>old</skill_activation>',
-    );
-
-    pending.clear();
-    pending.set('proof-audit', '<skill_activation>new</skill_activation>');
-    restorePendingSkillActivations(pending, reserved);
-
-    expect(pending.get('proof-audit')).toBe(
-      '<skill_activation>new</skill_activation>',
-    );
-  });
-
-  it('escapes user request text inside skill activation wrappers', () => {
-    const pending = new Map([
-      ['proof-audit', '<skill_activation>proof</skill_activation>'],
-    ]);
-
-    const prepared = takePendingSkillActivations(pending, 'compare A < B & C');
-
-    expect(prepared.displayInstruction).toBe('compare A < B & C');
-    expect(prepared.instruction).toContain(
-      '<user_request>\ncompare A &lt; B &amp; C\n</user_request>',
-    );
   });
 
   it('accepts valid tool-use root chat agents', () => {

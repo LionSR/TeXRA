@@ -1,0 +1,941 @@
+/**
+ * The composer, one component in two states (PRD 12.1). Expanded, it is the
+ * new-task launcher: the instruction, chips for agent (teams as a section),
+ * model, mode, and working directory (only with two or more roots), and the
+ * polish, dictation, attach, and send controls. Compact, it is the follow-up
+ * line with the same trailing controls, under a "Goes to X" line that offers
+ * the parent instead.
+ *
+ * It reads `Surface` (the draft or the launch selections) and the `host`
+ * snapshot (the catalogs) and dispatches the arm for every change: a
+ * `SurfaceAction` for text and selections, a `HostRequest` for launch,
+ * polish, dictation, pickers, and pasted images, a `RuntimeRequest` for a
+ * follow-up. It holds no draft of its own.
+ */
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import { customElement, property, query, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
+import { live } from 'lit/directives/live.js';
+import { repeat } from 'lit/directives/repeat.js';
+
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import '@awesome.me/webawesome/dist/components/callout/callout.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+
+import type { SessionType, StreamTabId } from '@shared/schemas';
+import { designTokens, commonViewStyles } from '@shared/styles';
+import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import { EMPTY_DRAFT, type Draft, type Surface } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
+import { appendClipboardImageChips } from '@shared/utils/clipboard';
+import {
+  clipboardImageFiles,
+  getExtensionFromMimeType,
+  readFileAsBase64,
+  type ExtractedClipboardImage,
+} from '@shared/utils/clipboardImages';
+import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { filterNotNullish } from '@utils/core';
+import { generatePastedImageName } from '@utils/files/pastedImageName';
+import './QueuedFollowUps';
+
+const MODE_LABELS: Record<SessionType, string> = {
+  toolUse: 'Interactive',
+  workflow: 'Workflow',
+};
+
+/** The hint under the expanded composer, keyed by what the launch is. */
+type SessionHintKey = SessionType | 'orchestrator' | 'team';
+
+const SESSION_HINT_COPY: Record<
+  SessionHintKey,
+  { lede: string; body: string; time: string }
+> = {
+  workflow: {
+    lede: 'Deep pass.',
+    body: 'Drafts, reviews its own work, then revises, across your whole document.',
+    time: 'Typically 5 to 10 min on fast models, 10 to 30 min on frontier reasoning. Pick a smaller model if you need faster turnaround.',
+  },
+  toolUse: {
+    lede: 'Conversational.',
+    body: 'Reads, edits, and searches in a running dialogue you steer turn by turn.',
+    time: 'Turns stream back in seconds; tool-heavy runs take a minute or two. Pick a stronger model for longer chains of reasoning.',
+  },
+  orchestrator: {
+    lede: 'Orchestrator.',
+    body: 'Plans a pipeline of specialized agents and dispatches them for you. Name agents to steer delegation, or ask it which one to use.',
+    time: 'For example, "use polish on the intro, then review the math", or leave it blank. Approve tasks in Sessions as they arrive.',
+  },
+  team: {
+    lede: 'Team run.',
+    body: 'Starts the team lead in an interactive session with delegation limited to this team.',
+    time: '',
+  },
+};
+
+interface ChipMenu {
+  readonly id: string;
+  readonly icon: TeXRAIconName;
+  readonly label: string;
+  readonly title: string;
+  readonly items: TemplateResult;
+  readonly onSelect: (value: string) => void;
+}
+
+function selectedValue(event: Event): string {
+  const item = (event as CustomEvent<{ item?: { value?: unknown } }>).detail
+    ?.item;
+  return typeof item?.value === 'string' ? item.value : '';
+}
+
+@customElement('session-composer')
+export class SessionComposer extends LitElement {
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    css`
+      :host {
+        display: block;
+        min-width: 0;
+        container-type: inline-size;
+      }
+
+      .routing {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+        min-width: 0;
+      }
+      .routing wa-icon {
+        font-size: var(--font-size-xs);
+        flex-shrink: 0;
+      }
+      .routing .routing-target {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .routing .routing-parent {
+        background: none;
+        border: none;
+        padding: 0;
+        margin: 0;
+        font: inherit;
+        color: var(--color-text-link);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .routing .routing-parent:hover {
+        text-decoration: underline;
+      }
+      .routing .routing-note {
+        white-space: nowrap;
+        color: var(--color-text-muted);
+      }
+
+      .composer {
+        display: flex;
+        flex-direction: column;
+        gap: var(--wa-space-2xs);
+        min-width: 0;
+        padding: var(--wa-space-2xs);
+        border: var(--border-thin) solid var(--wa-color-surface-border);
+        border-radius: var(--wa-border-radius-l);
+        background: var(--wa-color-surface-raised);
+        transition: border-color var(--transition-fast);
+      }
+      .composer:focus-within {
+        border-color: color-mix(
+          in srgb,
+          var(--wa-color-focus) 42%,
+          var(--wa-color-surface-border)
+        );
+      }
+      /* Compact: one pill, the follow-up line and its trailing controls on
+         one row; the textarea grows with its content up to a few lines. */
+      .composer.is-compact {
+        flex-direction: row;
+        align-items: flex-end;
+        gap: var(--wa-space-3xs);
+        padding: var(--wa-space-3xs) var(--wa-space-3xs) var(--wa-space-3xs)
+          var(--wa-space-2xs);
+        border-radius: var(--wa-border-radius-xl, 20px);
+      }
+      .composer.is-compact textarea {
+        flex: 1 1 auto;
+        --textarea-min-height: calc(1lh + 2 * var(--wa-space-3xs));
+        --textarea-max-height: 10em;
+      }
+      .composer.is-compact .row {
+        flex: 0 0 auto;
+      }
+      /* Collapsed, the pill is the field and one chevron; the tools and the
+         send button appear once the field has focus or text. */
+      .composer.is-compact .tools,
+      .composer:not(.is-compact) .expand,
+      .composer.is-compact:is(:focus-within, .has-text) .expand {
+        display: none;
+      }
+      .composer.is-compact:is(:focus-within, .has-text) .tools,
+      .composer.is-compact .expand {
+        display: contents;
+      }
+
+      /* A plain native textarea (#11851): the card draws the one focus
+         ring, so the field carries no chrome of its own and grows with its
+         content between the two heights each state sets. */
+      textarea {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: inherit;
+        resize: none;
+        box-sizing: border-box;
+        field-sizing: content;
+        height: auto;
+        min-height: var(--textarea-min-height);
+        max-height: var(--textarea-max-height);
+        padding: var(--wa-space-3xs);
+        overflow-x: hidden;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-family: var(--wa-font-family-body, inherit);
+        font-size: var(--font-size);
+        line-height: var(--line-height-normal);
+      }
+      textarea::placeholder {
+        color: var(--wa-color-text-quiet);
+      }
+      .composer:not(.is-compact) textarea {
+        --textarea-min-height: calc(3lh + 2 * var(--wa-space-3xs));
+        --textarea-max-height: clamp(var(--textarea-min-height), 32vh, 240px);
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        min-width: 0;
+      }
+      .row .spacer {
+        flex: 1 1 auto;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .chip-trigger::part(base) {
+        gap: var(--wa-space-3xs);
+        padding-inline: var(--wa-space-2xs);
+        font-size: var(--font-size-xs);
+        border-radius: var(--wa-border-radius-pill, 999px);
+      }
+      .chip-trigger wa-icon {
+        font-size: var(--font-size-xs);
+      }
+      .chip-label {
+        max-width: 14ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .menu-heading {
+        padding: var(--wa-space-3xs) var(--wa-space-xs);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-semibold);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        color: var(--color-text-muted);
+      }
+      .chips-collapsed {
+        display: none;
+      }
+      @container (max-width: 440px) {
+        .chips {
+          display: none;
+        }
+        .chips-collapsed {
+          display: block;
+        }
+      }
+
+      .composer-primary-action::part(base) {
+        border-radius: var(--wa-border-radius-circle, 50%);
+      }
+      .recording::part(base) {
+        color: var(--wa-color-danger-on-quiet);
+      }
+      queued-follow-ups {
+        display: block;
+        min-width: 0;
+        margin-bottom: var(--wa-space-2xs);
+      }
+
+      /* The session hint under the expanded composer: a brand callout at
+         IDE density, one row. */
+      .session-hint {
+        margin-top: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
+        font-size: var(--font-size-sm);
+        line-height: var(--line-height-relaxed);
+      }
+      .session-hint::part(message) {
+        display: flex;
+        gap: var(--wa-space-2xs);
+        align-items: flex-start;
+        color: var(--wa-color-text-quiet);
+      }
+      .session-hint-lede {
+        color: var(--wa-color-text-normal);
+        font-weight: var(--font-weight-semibold);
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+      }
+      .session-hint-body {
+        flex: 1 1 auto;
+      }
+      .session-hint-time {
+        color: var(--wa-color-text-quiet);
+      }
+    `,
+  ];
+
+  @property({ attribute: false }) view: SessionView | null = null;
+  @property({ attribute: false }) surface: Surface | null = null;
+  /** The stream a follow-up goes to; null is the expanded launch state. */
+  @property({ attribute: false }) stream: StreamView | null = null;
+  @property({ attribute: false }) host: HostSnapshot | null = null;
+
+  @state() private announcement = '';
+
+  @query('textarea') private textArea?: HTMLTextAreaElement;
+
+  private get compact(): boolean {
+    return this.stream !== null;
+  }
+
+  private get draft(): Draft {
+    const stream = this.stream;
+    if (!stream) return EMPTY_DRAFT;
+    return this.surface?.drafts.get(stream.id) ?? EMPTY_DRAFT;
+  }
+
+  private get text(): string {
+    const launch = this.surface?.launch;
+    if (this.compact) return this.draft.text;
+    return launch ? launch.instruction[launch.sessionType] : '';
+  }
+
+  private get recordingTarget(): string {
+    return this.stream?.id ?? 'launch';
+  }
+
+  private get recording(): boolean {
+    const recording = this.host?.recording;
+    return (
+      recording !== null &&
+      recording !== undefined &&
+      recording.session === this.surface?.session &&
+      recording.target === this.recordingTarget
+    );
+  }
+
+  private setText(text: string, patch: Partial<Draft> = {}): void {
+    const stream = this.stream;
+    if (stream) {
+      // A draft's images are the `[name]` chips its text still carries: a
+      // chip the user deleted takes its image with it, so the send reads the
+      // draft as it stands.
+      const images = (patch.images ?? this.draft.images).filter((image) =>
+        text.includes(`[${image.fileName}]`),
+      );
+      this.dispatchEvent(
+        SessionUiEvents.surface({
+          kind: 'draft',
+          streamId: stream.id,
+          patch: { text, images },
+        }),
+      );
+      return;
+    }
+    const launch = this.surface?.launch;
+    if (!launch) return;
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'launch',
+        patch: {
+          instruction: { ...launch.instruction, [launch.sessionType]: text },
+        },
+      }),
+    );
+  }
+
+  private handleInput = (event: Event): void => {
+    this.setText(getTextareaValue(event.target as HTMLElement));
+  };
+
+  private handleKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    this.send();
+  };
+
+  /** A follow-up sends once the host has stored every pasted image. */
+  private get imagesPending(): boolean {
+    return this.draft.images.some((image) => image.path === null);
+  }
+
+  /** Send is the root's decision (`SessionSurfaces.submit`): the same one
+   *  the run accelerator reaches, so the two cannot diverge. */
+  private send = (): void => {
+    this.dispatchEvent(SessionUiEvents.submit());
+  };
+
+  private polish = (): void => {
+    const text = this.text.trim();
+    if (text === '') return;
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'polish', text }));
+  };
+
+  private toggleRecording = (): void => {
+    this.dispatchEvent(
+      SessionUiEvents.host({
+        kind: 'record',
+        action: this.recording
+          ? { kind: 'stop' }
+          : { kind: 'start', target: this.recordingTarget },
+      }),
+    );
+  };
+
+  private attach = (): void => {
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'pickFiles', fileType: 'media' }),
+    );
+  };
+
+  private handlePaste = (event: ClipboardEvent): void => {
+    const files = clipboardImageFiles(event);
+    if (files.length === 0) return;
+    event.preventDefault();
+    const pastedText = event.clipboardData?.getData('text/plain') || '';
+    const target = this.textArea;
+    void Promise.all(
+      files.map(
+        async ({ file, type }): Promise<ExtractedClipboardImage | null> => {
+          const base64 = await readFileAsBase64(file);
+          if (!base64) return null;
+          return {
+            fileName: generatePastedImageName(getExtensionFromMimeType(type)),
+            base64,
+            mediaType: type,
+          };
+        },
+      ),
+    ).then((images) => {
+      const added = images.filter(filterNotNullish);
+      if (added.length === 0) return;
+      for (const image of added) {
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: 'savePastedImage', ...image }),
+        );
+      }
+      const insert = appendClipboardImageChips(
+        pastedText,
+        added.map(({ fileName }) => fileName),
+      );
+      // The draft holds each chip's name now and its stored path once the
+      // host answers (`sessionSurfaces.settleHost`).
+      const pending = added.map(({ fileName }) => ({ fileName, path: null }));
+      if (target && this.isConnected) {
+        insertTextAtCursor(target, insert);
+        this.setText(getTextareaValue(target), {
+          images: [...this.draft.images, ...pending],
+        });
+      } else {
+        this.setText(`${this.text}${insert}`, {
+          images: [...this.draft.images, ...pending],
+        });
+      }
+      this.announcement =
+        added.length === 1
+          ? 'Image attached.'
+          : `${added.length} images attached.`;
+    });
+  };
+
+  private replyToParent(parentId: StreamTabId): void {
+    const stream = this.stream;
+    if (!stream) return;
+    const draft = this.draft;
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'draft',
+        streamId: parentId,
+        patch: draft,
+      }),
+    );
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'draft',
+        streamId: stream.id,
+        patch: EMPTY_DRAFT,
+      }),
+    );
+    this.dispatchEvent(
+      SessionUiEvents.surface({ kind: 'select', streamId: parentId }),
+    );
+  }
+
+  private setLaunch(patch: Partial<Surface['launch']>): void {
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'launch', patch }));
+  }
+
+  private openSettings(
+    section: 'agents' | 'teams' | 'models',
+    sessionType?: SessionType,
+  ): void {
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'openSettings', section, sessionType }),
+    );
+  }
+
+  private chipMenus(): ChipMenu[] {
+    const launch = this.surface?.launch;
+    const host = this.host;
+    if (!launch || !host) return [];
+    const sessionType = launch.sessionType;
+    const agents = host.agentOptions[sessionType] ?? [];
+    const agentId = launch.agent[sessionType];
+    const team = host.teamOptions.find(
+      (option) => option.value === launch.selectedTeamId,
+    );
+    const agentLabel =
+      launch.launchTarget === 'team' && team
+        ? team.label
+        : (agents.find((option) => option.value === agentId)?.label ?? agentId);
+    const model = host.modelOptions.find(
+      (option) => option.value === launch.model,
+    );
+    const menus: ChipMenu[] = [
+      {
+        id: 'composer-agent',
+        icon: 'robot',
+        label: agentLabel,
+        title: 'Agent',
+        items: html`
+          ${repeat(
+            agents,
+            (option) => option.value,
+            (option) =>
+              html`<wa-dropdown-item
+                value=${`agent:${option.value}`}
+                type="checkbox"
+                ?checked=${
+                  launch.launchTarget === 'agent' && option.value === agentId
+                }
+                >${option.label}</wa-dropdown-item
+              >`,
+          )}
+          ${
+            sessionType === 'toolUse' && host.teamOptions.length > 0
+              ? html`<div class="menu-heading">Teams</div>
+                  ${repeat(
+                    host.teamOptions,
+                    (option) => option.value,
+                    (option) =>
+                      html`<wa-dropdown-item
+                        value=${`team:${option.value}`}
+                        type="checkbox"
+                        ?checked=${
+                          launch.launchTarget === 'team' &&
+                          option.value === launch.selectedTeamId
+                        }
+                        >${option.label}</wa-dropdown-item
+                      >`,
+                  )}
+                  <wa-dropdown-item value="settings:teams"
+                    >Manage teams…</wa-dropdown-item
+                  >`
+              : nothing
+          }
+          <wa-dropdown-item value="settings:agents"
+            >Browse all agents…</wa-dropdown-item
+          >
+        `,
+        onSelect: (value) => {
+          if (value.startsWith('agent:')) {
+            this.setLaunch({
+              launchTarget: 'agent',
+              agent: { ...launch.agent, [sessionType]: value.slice(6) },
+            });
+          } else if (value.startsWith('team:')) {
+            this.setLaunch({
+              launchTarget: 'team',
+              selectedTeamId: value.slice(5),
+            });
+          } else if (value === 'settings:teams') {
+            this.openSettings('teams');
+          } else if (value === 'settings:agents') {
+            this.openSettings('agents', sessionType);
+          }
+        },
+      },
+      {
+        id: 'composer-model',
+        icon: 'bolt',
+        label: model?.label ?? launch.model,
+        title: 'Model',
+        items: html`
+          ${repeat(
+            host.modelOptions,
+            (option) => option.value,
+            (option) =>
+              html`<wa-dropdown-item
+                value=${`model:${option.value}`}
+                type="checkbox"
+                ?checked=${option.value === launch.model}
+                ?disabled=${option.disabled === true}
+                >${option.label}</wa-dropdown-item
+              >`,
+          )}
+          <wa-dropdown-item value="settings:models"
+            >Model settings…</wa-dropdown-item
+          >
+        `,
+        onSelect: (value) => {
+          if (value.startsWith('model:')) {
+            this.setLaunch({ model: value.slice(6) });
+          } else if (value === 'settings:models') {
+            this.openSettings('models');
+          }
+        },
+      },
+      {
+        id: 'composer-mode',
+        icon: 'screwdriver-wrench',
+        label: MODE_LABELS[sessionType],
+        title: 'Mode',
+        items: html`
+          ${(Object.keys(MODE_LABELS) as SessionType[]).map(
+            (mode) =>
+              html`<wa-dropdown-item
+                value=${`mode:${mode}`}
+                type="checkbox"
+                ?checked=${mode === sessionType}
+                >${MODE_LABELS[mode]}</wa-dropdown-item
+              >`,
+          )}
+        `,
+        onSelect: (value) => {
+          if (value.startsWith('mode:')) {
+            this.setLaunch({ sessionType: value.slice(5) as SessionType });
+          }
+        },
+      },
+    ];
+    if (host.workspaceRoots.length >= 2) {
+      const root = host.workspaceRoots.find(
+        (option) => option.value === launch.workingDirectory,
+      );
+      menus.push({
+        id: 'composer-root',
+        icon: 'folder-open',
+        label: root?.label ?? host.workspaceRoots[0].label,
+        title: 'Working directory',
+        items: html`${repeat(
+          host.workspaceRoots,
+          (option) => option.value,
+          (option) =>
+            html`<wa-dropdown-item
+              value=${`root:${option.value}`}
+              type="checkbox"
+              ?checked=${option.value === launch.workingDirectory}
+              >${option.label}</wa-dropdown-item
+            >`,
+        )}`,
+        onSelect: (value) => {
+          if (value.startsWith('root:')) {
+            this.setLaunch({ workingDirectory: value.slice(5) });
+          }
+        },
+      });
+    }
+    return menus;
+  }
+
+  private renderChip(menu: ChipMenu): TemplateResult {
+    return html`<wa-dropdown
+        placement="top-start"
+        @wa-select=${(event: Event) => menu.onSelect(selectedValue(event))}
+      >
+        <wa-button
+          slot="trigger"
+          id=${menu.id}
+          class="chip-trigger"
+          appearance="outlined"
+          variant="neutral"
+          size="s"
+          type="button"
+          with-caret
+          >${waIcon(menu.icon, { slot: 'start' })}<span class="chip-label"
+            >${menu.label}</span
+          ></wa-button
+        >
+        ${menu.items}
+      </wa-dropdown>
+      <wa-tooltip for=${menu.id}>${menu.title}</wa-tooltip>`;
+  }
+
+  private renderChips(): TemplateResult {
+    const menus = this.chipMenus();
+    return html`
+      <div class="chips">${menus.map((menu) => this.renderChip(menu))}</div>
+      <div class="chips-collapsed">
+        <wa-dropdown
+          placement="top-start"
+          @wa-select=${(event: Event) => {
+            const value = selectedValue(event);
+            for (const menu of menus) menu.onSelect(value);
+          }}
+        >
+          <wa-button
+            slot="trigger"
+            id="composer-setup"
+            class="chip-trigger"
+            appearance="outlined"
+            variant="neutral"
+            size="s"
+            type="button"
+            with-caret
+            >${waIcon('screwdriver-wrench', { slot: 'start' })}<span
+              class="chip-label"
+              >${menus.map((menu) => menu.label).join(' · ')}</span
+            ></wa-button
+          >
+          ${menus.map(
+            (menu) =>
+              html`<div class="menu-heading">${menu.title}</div>
+                ${menu.items}`,
+          )}
+        </wa-dropdown>
+        <wa-tooltip for="composer-setup">Setup</wa-tooltip>
+      </div>
+    `;
+  }
+
+  private renderRouting(stream: StreamView): TemplateResult {
+    const parent = stream.parentId
+      ? this.view?.streams.get(stream.parentId)
+      : undefined;
+    // The link moves the draft to the parent, or the line states that the
+    // parent takes no replies (a workflow-script run has no chat).
+    const parentAcceptsFollowUps =
+      parent !== undefined && parent.followUpSupport !== 'unsupported';
+    return html`<div class="routing">
+      ${waIcon('code-branch')}
+      <span class="routing-target">Goes to ${stream.label}</span>
+      ${
+        parent === undefined
+          ? nothing
+          : html`<span aria-hidden="true">·</span>${
+                parentAcceptsFollowUps
+                  ? html`<button
+                      type="button"
+                      class="routing-parent"
+                      @click=${() => this.replyToParent(parent.id)}
+                    >
+                      reply to ${parent.label} instead
+                    </button>`
+                  : html`<span class="routing-note"
+                      >${parent.label} takes no replies</span
+                    >`
+              }`
+      }
+    </div>`;
+  }
+
+  /** What the launch is: the team when one is chosen, else an orchestrator
+   *  agent, else the mode. */
+  private renderSessionHint(): TemplateResult | typeof nothing {
+    const launch = this.surface?.launch;
+    const host = this.host;
+    if (!launch || !host) return nothing;
+    const { sessionType } = launch;
+    const agent = host.agentOptions[sessionType]?.find(
+      (option) => option.value === launch.agent[sessionType],
+    );
+    let key: SessionHintKey = sessionType;
+    if (sessionType === 'toolUse' && launch.launchTarget === 'team') {
+      key = 'team';
+    } else if (sessionType === 'toolUse' && agent?.isOrchestrator === true) {
+      key = 'orchestrator';
+    }
+    const copy = SESSION_HINT_COPY[key];
+    return html`<wa-callout
+      class="session-hint"
+      variant="brand"
+      role="note"
+      data-hint-key=${key}
+    >
+      <span class="session-hint-lede">${copy.lede}</span>
+      <span class="session-hint-body">
+        ${copy.body}
+        ${
+          copy.time
+            ? html` <span class="session-hint-time">${copy.time}</span>`
+            : nothing
+        }
+      </span>
+    </wa-callout>`;
+  }
+
+  override render(): TemplateResult | typeof nothing {
+    const stream = this.stream;
+    if (stream && stream.followUpSupport === 'unsupported') return nothing;
+    const compact = this.compact;
+    const readOnly = stream?.readOnly === true;
+    const queued = stream
+      ? (this.view?.queuedFollowUps.get(stream.id) ?? [])
+      : [];
+    const text = this.text;
+    const canSend =
+      !readOnly &&
+      !this.imagesPending &&
+      (text.trim() !== '' || this.draft.images.length > 0);
+    const sendLabel = compact ? 'Send follow-up' : 'Run';
+
+    return html`
+      ${stream ? this.renderRouting(stream) : nothing}
+      ${
+        queued.length > 0
+          ? html`<queued-follow-ups .messages=${queued}></queued-follow-ups>`
+          : nothing
+      }
+      <div
+        class=${classMap({
+          composer: true,
+          'is-compact': compact,
+          'has-text': text.trim() !== '' || this.draft.images.length > 0,
+        })}
+      >
+        <label for="composer-text" class="visually-hidden"
+          >${compact ? 'Follow-up message' : 'Instruction'}</label
+        >
+        <textarea
+          id="composer-text"
+          name=${compact ? 'follow-up-message' : 'instruction'}
+          placeholder=${compact ? 'Follow-up' : 'Describe the outcome you want…'}
+          rows=${compact ? '1' : '3'}
+          autocomplete="off"
+          spellcheck="true"
+          aria-describedby="composer-text-hint"
+          ?disabled=${readOnly}
+          .value=${live(text)}
+          @input=${this.handleInput}
+          @keydown=${this.handleKeydown}
+          @paste=${this.handlePaste}
+        ></textarea>
+        <div id="composer-text-hint" class="visually-hidden">
+          Press Enter to send or Shift+Enter for a new line. Paste images to
+          attach them.
+        </div>
+        <div class="row">
+          ${compact ? html`<span class="spacer"></span>` : this.renderChips()}
+          <span class="expand"
+            >${renderIconActionButton({
+              id: 'composer-expand',
+              icon: 'chevron-up',
+              label: 'Write a follow-up',
+              tooltip: 'Write a follow-up',
+              disabled: readOnly,
+              onClick: () => this.textArea?.focus(),
+            })}</span
+          >
+          <span class="tools"
+            >${renderIconActionButton({
+              id: 'composer-polish',
+              icon: 'wand-magic-sparkles',
+              label: 'Polish',
+              tooltip: 'Polish with AI',
+              busy: this.surface?.polishing.has(
+                this.stream?.id ?? `launch:${this.surface.launch.sessionType}`,
+              ),
+              disabled: readOnly || text.trim() === '',
+              onClick: this.polish,
+            })}
+            ${renderIconActionButton({
+              id: 'composer-record',
+              icon: this.recording ? 'circle-stop' : 'microphone',
+              label: this.recording ? 'Stop recording' : 'Dictate',
+              tooltip: this.recording ? 'Stop recording' : 'Dictate',
+              className: this.recording ? 'recording' : '',
+              disabled: readOnly,
+              onClick: this.toggleRecording,
+            })}
+            ${
+              // The picker fills the launcher's media list; a follow-up
+              // attaches by pasting, which the host stores for it.
+              compact
+                ? nothing
+                : renderIconActionButton({
+                    id: 'composer-attach',
+                    icon: 'file-circle-plus',
+                    label: 'Attach',
+                    tooltip: 'Attach media files',
+                    disabled: readOnly,
+                    onClick: this.attach,
+                  })
+            }
+            ${renderIconActionButton({
+              id: 'composer-send',
+              icon: 'arrow-up',
+              label: sendLabel,
+              tooltip: sendLabel,
+              className: 'composer-primary-action',
+              appearance: 'filled',
+              variant: 'brand',
+              size: compact ? 'm' : 'l',
+              busy:
+                this.stream !== null &&
+                this.surface?.sending.has(this.stream.id),
+              disabled:
+                !canSend ||
+                (this.stream !== null &&
+                  (this.surface?.sending.has(this.stream.id) ?? false)),
+              onClick: this.send,
+            })}</span
+          >
+        </div>
+      </div>
+      ${compact ? nothing : this.renderSessionHint()}
+      <div class="visually-hidden" role="status">${this.announcement}</div>
+    `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'session-composer': SessionComposer;
+  }
+}

@@ -58,7 +58,6 @@ function makeDesktopActions(): MockedDesktopActions {
     showFirstRunWalkthrough: vi.fn(),
     showLauncher: vi.fn(),
     showSettings: vi.fn(),
-    showStream: vi.fn(),
     toggleBottomBar: vi.fn(),
     toggleSidePanel: vi.fn(),
     toggleSummaryBar: vi.fn(),

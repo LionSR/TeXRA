@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createModuleMocks } from '@test/support/moduleMocks';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
@@ -37,6 +38,9 @@ async function loadDesktopPreviewHost(
   checkToolInstalled = vi.fn(async () => true),
 ): Promise<typeof import('@desktop/main/desktopPreviewHost')> {
   vi.resetModules();
+  const { initProcessWorkspaceRoots } =
+    await import('@platform/workspaceRoots');
+  initProcessWorkspaceRoots(createFakeWorkspaceRoots());
   mocks.doMock('@latex/texTools', () => ({ compileLatex2Pdf }));
   mocks.doMock('@latex/latexToolchain', () => ({
     hasLatexCompiler: checkToolInstalled,

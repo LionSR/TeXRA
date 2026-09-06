@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  computeModelOptionsData,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   copilotRouteUnavailableReason,
   preferredCopilotRouteModels,
@@ -89,7 +86,6 @@ function failingDiscoveryPort(): LanguageModelPort {
 
 function resetModelCaches(): void {
   invalidateRuntimeModelRegistry();
-  invalidateModelOptionsCache();
   invalidateApiKeyCache();
 }
 

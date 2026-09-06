@@ -7,6 +7,9 @@
 
 import { z } from 'zod';
 
+/** Auxiliary resources and replies belong to the paper that opened them. */
+const DesktopWorkspaceMessageSchema = z.object({ session: z.string() });
+
 export const DESKTOP_WORKSPACE_COMMANDS = {
   // Editor
   LIST_FILES: 'desktop:workspace:listFiles',
@@ -47,7 +50,7 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
 // cross-resolve. `path`/`directory` still ride along for the main process's
 // own use and for logging context.
 
-const DesktopListFilesMessageSchema = z.object({
+const DesktopListFilesMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES),
   requestId: z.uuid(),
   directory: z.string().prefault(''),
@@ -58,52 +61,57 @@ const DesktopWorkspaceFileEntrySchema = z.object({
   isDirectory: z.boolean(),
 });
 
-export const DesktopFilesListedMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED),
-  requestId: z.uuid(),
-  directory: z.string(),
-  files: z.array(DesktopWorkspaceFileEntrySchema),
-});
+export const DesktopFilesListedMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED),
+    requestId: z.uuid(),
+    directory: z.string(),
+    files: z.array(DesktopWorkspaceFileEntrySchema),
+  });
 
-export const DesktopFilesListErrorMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR),
-  requestId: z.uuid(),
-  directory: z.string(),
-  message: z.string(),
-});
+export const DesktopFilesListErrorMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR),
+    requestId: z.uuid(),
+    directory: z.string(),
+    message: z.string(),
+  });
 
-const DesktopReadFileMessageSchema = z.object({
+const DesktopReadFileMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.READ_FILE),
   requestId: z.uuid(),
   path: z.string(),
 });
 
-export const DesktopFileReadMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_READ),
-  requestId: z.uuid(),
-  path: z.string(),
-  contents: z.string(),
-});
+export const DesktopFileReadMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_READ),
+    requestId: z.uuid(),
+    path: z.string(),
+    contents: z.string(),
+  });
 
-const DesktopWriteFileMessageSchema = z.object({
+const DesktopWriteFileMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE),
   requestId: z.uuid(),
   path: z.string(),
   contents: z.string(),
 });
 
-export const DesktopFileWrittenMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN),
-  requestId: z.uuid(),
-  path: z.string(),
-});
+export const DesktopFileWrittenMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN),
+    requestId: z.uuid(),
+    path: z.string(),
+  });
 
-export const DesktopFileErrorMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR),
-  requestId: z.uuid(),
-  path: z.string(),
-  message: z.string(),
-});
+export const DesktopFileErrorMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR),
+    requestId: z.uuid(),
+    path: z.string(),
+    message: z.string(),
+  });
 
 /**
  * Something outside the editor wrote into the workspace — an accepted run
@@ -112,13 +120,14 @@ export const DesktopFileErrorMessageSchema = z.object({
  * a path list would only tempt the renderer into a partial update it has no
  * way to keep consistent with the directories it has not loaded.
  */
-export const DesktopWorkspaceFilesChangedMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED),
-});
+export const DesktopWorkspaceFilesChangedMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED),
+  });
 
 // ── Terminal ──
 
-const DesktopTerminalStartMessageSchema = z.object({
+const DesktopTerminalStartMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START),
   sessionId: z.string(),
   cols: z.int().positive(),
@@ -126,46 +135,52 @@ const DesktopTerminalStartMessageSchema = z.object({
   initialCommand: z.string().min(1).optional(),
 });
 
-const DesktopTerminalInputMessageSchema = z.object({
+const DesktopTerminalInputMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT),
   sessionId: z.string(),
   data: z.string(),
 });
 
-const DesktopTerminalResizeMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE),
-  sessionId: z.string(),
-  cols: z.int().positive(),
-  rows: z.int().positive(),
-});
+const DesktopTerminalResizeMessageSchema = DesktopWorkspaceMessageSchema.extend(
+  {
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE),
+    sessionId: z.string(),
+    cols: z.int().positive(),
+    rows: z.int().positive(),
+  },
+);
 
-const DesktopTerminalCloseMessageSchema = z.object({
+const DesktopTerminalCloseMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE),
   sessionId: z.string(),
 });
 
-export const DesktopTerminalDataMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA),
-  sessionId: z.string(),
-  data: z.string(),
-});
+export const DesktopTerminalDataMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA),
+    sessionId: z.string(),
+    data: z.string(),
+  });
 
-export const DesktopTerminalExitMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT),
-  sessionId: z.string(),
-  exitCode: z.int(),
-});
+export const DesktopTerminalExitMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT),
+    sessionId: z.string(),
+    exitCode: z.int(),
+  });
 
-export const DesktopTerminalErrorMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR),
-  sessionId: z.string(),
-  message: z.string(),
-});
+export const DesktopTerminalErrorMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR),
+    sessionId: z.string(),
+    message: z.string(),
+  });
 
-export const DesktopTerminalOpenCommandMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND),
-  initialCommand: z.string().min(1),
-});
+export const DesktopTerminalOpenCommandMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND),
+    initialCommand: z.string().min(1),
+  });
 
 // ── Browser ──
 
@@ -178,38 +193,40 @@ const DesktopBrowserBoundsSchema = z.object({
 
 export type DesktopBrowserBounds = z.infer<typeof DesktopBrowserBoundsSchema>;
 
-const DesktopBrowserOpenMessageSchema = z.object({
+const DesktopBrowserOpenMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN),
   tabId: z.string(),
   url: z.string(),
 });
 
-const DesktopBrowserBoundsMessageSchema = z.object({
+const DesktopBrowserBoundsMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS),
   tabId: z.string(),
   bounds: DesktopBrowserBoundsSchema,
 });
 
-const DesktopBrowserHideMessageSchema = z.object({
+const DesktopBrowserHideMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE),
 });
 
-const DesktopBrowserCloseMessageSchema = z.object({
+const DesktopBrowserCloseMessageSchema = DesktopWorkspaceMessageSchema.extend({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE),
   tabId: z.string(),
 });
 
-export const DesktopBrowserStateMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE),
-  tabId: z.string(),
-  title: z.string(),
-});
+export const DesktopBrowserStateMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE),
+    tabId: z.string(),
+    title: z.string(),
+  });
 
 // ── Environment ──
 
-const DesktopEnvironmentRequestMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST),
-});
+const DesktopEnvironmentRequestMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST),
+  });
 
 const DesktopEnvironmentSummarySchema = z.object({
   isGitRepository: z.boolean(),
@@ -235,10 +252,11 @@ export const EMPTY_DESKTOP_ENVIRONMENT_SUMMARY = {
   behind: 0,
 } satisfies DesktopEnvironmentSummary;
 
-export const DesktopEnvironmentStateMessageSchema = z.object({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE),
-  environment: DesktopEnvironmentSummarySchema,
-});
+export const DesktopEnvironmentStateMessageSchema =
+  DesktopWorkspaceMessageSchema.extend({
+    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE),
+    environment: DesktopEnvironmentSummarySchema,
+  });
 
 /** Everything the main process accepts from the renderer. */
 export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(

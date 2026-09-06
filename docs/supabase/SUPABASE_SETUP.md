@@ -595,7 +595,7 @@ Before writing any metadata, `--apply` verifies that every catalog `storage_path
 
 ```bash
 # <source> is the YAML path under prompts/agents/remote/, including any
-# subdirectory (for example "apply.yaml" or "Lean4/lean.yaml").
+# subdirectory (for example "workflow/apply.yaml" or "tool_use/Lean4/lean.yaml").
 # <folder> must match the agent's "folder" in docs/supabase/remote-agents.config.json.
 supabase storage cp "prompts/agents/remote/<source>" "ss:///agent-configs/<folder>/<agent>.yaml" --project-ref <PROJECT-REF>
 ```

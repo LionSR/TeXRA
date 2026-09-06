@@ -27,7 +27,6 @@ import type {
   RetryErrorInfo,
   RunOutcome,
   StreamTabId,
-  UserFollowUpSupport,
 } from '@shared/schemas';
 import {
   agentName as baseAgentName,
@@ -35,7 +34,6 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   toRetryErrorInfo,
-  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import {
   isTerminalOutcomePhase,
@@ -70,8 +68,6 @@ export interface RunFlowLifecycleOptions {
    * has already emitted `child.activity`.
    */
   workflowPhase?: string;
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  userFollowUpSupport?: UserFollowUpSupport;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
   /**
    * Fires once with the live per-run handle, right after it is tracked (F-2) —
@@ -486,8 +482,6 @@ export async function runFlowWithLifecycle(
   const { streamId, executionId, session } = ctx.runScope;
   const agentIdentifier = ctx.config.agent;
   const parentStreamId = options?.parentStreamId ?? streamId;
-  const userFollowUpSupport =
-    options?.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   const handle = new AgentExecutionHandle(
     {
       streamId,
@@ -682,16 +676,11 @@ export async function runFlowWithLifecycle(
     }
   };
   try {
-    // Publish run identity/config before the RUNNING transition so progress
-    // backends can create the initial StreamExecutionState with the real
-    // category when the transition-owned run-start side effects fire.
-    ctx.logger.emit({
-      type: 'run.start',
-      streamId,
-      executionId,
-      identity: handle.identity,
-      userFollowUpSupport,
-    });
+    // `run.start` is already out: the launch context published it at its
+    // reservation commit point. Publish the run config before the RUNNING
+    // transition so progress backends can create the initial
+    // StreamExecutionState with the real category when the transition-owned
+    // run-start side effects fire.
     ctx.logger.emit({
       type: 'run.config',
       streamId,

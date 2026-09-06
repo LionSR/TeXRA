@@ -15,9 +15,7 @@ import type { StreamOutputsSource } from './streamOutputs';
 
 const log = createLog('ProgressWorkflowFileActions');
 
-interface ProgressWorkflowFileActionsState extends StreamOutputsSource {
-  getActiveStream(): StreamTabId | '';
-}
+type ProgressWorkflowFileActionsState = StreamOutputsSource;
 
 interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): Promise<void>;
@@ -86,13 +84,19 @@ export class ProgressWorkflowFileActionsController {
     }
   }
 
-  async compareOriginal(file: string, base?: string): Promise<void> {
+  /** `stream` is the run the file belongs to: it keys the compare-time
+   *  backup that a later Accept reads. */
+  async compareOriginal(
+    file: string,
+    base?: string,
+    stream?: StreamTabId,
+  ): Promise<void> {
     await this.executeWithBaseFile(
       file,
       base,
       'Compare original',
       async (targetFile, baseFile) => {
-        await this.backupModelOutput(file);
+        if (stream !== undefined) await this.backupModelOutput(stream, file);
         await this.deps.host.compareFiles(baseFile, targetFile);
       },
     );
@@ -112,8 +116,11 @@ export class ProgressWorkflowFileActionsController {
     await this.deps.host.compareFiles(previousFile, file);
   }
 
-  async acceptFile(file: string, base?: string): Promise<void> {
-    const activeStream = this.deps.state.getActiveStream();
+  async acceptFile(
+    file: string,
+    base?: string,
+    activeStream?: StreamTabId,
+  ): Promise<void> {
     const backup =
       file && activeStream
         ? this.modelOutputBackups.get(activeStream)?.get(file)
@@ -147,6 +154,7 @@ export class ProgressWorkflowFileActionsController {
     if (!accepted) return;
 
     if (
+      activeStream !== undefined &&
       backup !== undefined &&
       currentContent !== undefined &&
       currentContent !== backup
@@ -217,9 +225,11 @@ export class ProgressWorkflowFileActionsController {
     return (await execute(file, base)) !== false;
   }
 
-  private async backupModelOutput(file: string): Promise<void> {
-    const streamId = this.deps.state.getActiveStream();
-    if (!streamId || !file) return;
+  private async backupModelOutput(
+    streamId: StreamTabId,
+    file: string,
+  ): Promise<void> {
+    if (!file) return;
 
     try {
       const content = await this.deps.host.readFile(file);

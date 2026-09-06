@@ -19,7 +19,6 @@ import {
   type SessionHostInteractions,
 } from '@agent/runtime';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { createLog } from '@logger/logUtils';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -32,7 +31,6 @@ import {
   type RequestShowInstructionPayload,
   type ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'agentEventListeners';
@@ -115,26 +113,12 @@ async function handleRequestShowInstruction(
   }
 }
 
-async function handleShowAgentConfigBanner(
+function handleShowAgentConfigBanner(
   payload: ShowAgentConfigBannerPayload,
-): Promise<boolean> {
-  try {
-    const view = await getMainWebview(CHANNEL);
-    if (!view) return false;
-    return (
-      (await view.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_BANNER,
-        banner: 'agentConfig',
-        visible: true,
-        data: { agentName: payload.agentName, customDirSet: true },
-      })) !== false
-    );
-  } catch (err) {
-    log.warn(
-      `Failed to show agent config banner for "${payload.agentName}": ${toErrorMessage(err)}`,
-    );
-    return false;
-  }
+  progressViewProvider: ProgressViewProvider,
+): boolean {
+  progressViewProvider.showAgentConfigBanner(payload.agentName);
+  return true;
 }
 
 function handleRequestShowError({ message }: RequestShowErrorPayload): boolean {
@@ -227,7 +211,8 @@ export function createAgentPresentationHost(
     {
       requestOpenFile: handleRequestOpenFile,
       requestShowInstruction: handleRequestShowInstruction,
-      showAgentConfigBanner: handleShowAgentConfigBanner,
+      showAgentConfigBanner: (payload) =>
+        handleShowAgentConfigBanner(payload, progressViewProvider),
       requestShowError: handleRequestShowError,
       requestEnsureProgressView: (payload) =>
         handleRequestEnsureProgressView(payload, progressViewProvider).catch(

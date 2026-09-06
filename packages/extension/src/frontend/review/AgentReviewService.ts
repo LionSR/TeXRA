@@ -36,6 +36,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { createLog } from '@logger/logUtils';
+import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -314,6 +315,7 @@ class AgentReviewServiceImpl {
           stopAfterCycle: true,
           session: run.session,
           onRun: (handle) => this.reviewRuns.bind(run, handle),
+          onStreamResolved: presentLaunchedProgressStream,
         },
       );
       outcome = result.outcome;

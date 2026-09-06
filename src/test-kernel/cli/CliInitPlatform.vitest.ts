@@ -81,7 +81,6 @@ const mocks = vi.hoisted(() => ({
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   openTexraConfigStores: vi.fn(),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
-  invalidateModelOptionsCache: vi.fn(),
   tryPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
@@ -112,10 +111,6 @@ vi.mock('@logger/logUtils', () => ({
   warn: vi.fn(),
 }));
 
-vi.mock('@model/computeModelOptions', () => ({
-  invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
-}));
-
 vi.mock('@platform/platform', () => ({
   initPlatform: vi.fn(),
   tryPlatform: mocks.tryPlatform,
@@ -123,6 +118,7 @@ vi.mock('@platform/platform', () => ({
   platform: () => ({
     config: { get: (_key: string, def: unknown) => def },
     globalState: mocks.cliGlobalState,
+    processes: { selfIdentity: async () => 'vitest' },
   }),
 }));
 
@@ -314,7 +310,12 @@ describe('CLI platform init', () => {
     // background `bash` run (spawned detached, in its own process group) and
     // any live codex / claude_agent session outlived `texra` as orphans.
     // Asserted through the real `registerAgentShutdownHandlers` and its
-    // observable effect on shutdown, not by mocking the @agent module.
+    // observable effect on shutdown, not by mocking the @agent module. The
+    // init installs the process runtime the session graph runs on, so the
+    // session is built after it, not on a runtime an earlier case's shutdown
+    // disposed.
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
+    await initCliPlatform(cliContext({ installSignalHandlers: false }));
     const session = createTestSession();
     const interruptCodex = vi
       .spyOn(codexThreadsFor(session), 'interruptAll')
@@ -322,11 +323,8 @@ describe('CLI platform init', () => {
     const interruptClaude = vi
       .spyOn(claudeAgentSessionsFor(session), 'interruptAll')
       .mockImplementation(() => {});
-    mocks.tryPlatform.mockReturnValueOnce(undefined);
 
     try {
-      await initCliPlatform(cliContext({ installSignalHandlers: false }));
-
       // Registration alone must not interrupt anything; the drain belongs to
       // the CLI lifecycle host every exit path runs (bin/texra.ts's finally,
       // the signal handlers, the TUI's exitNow).
@@ -337,7 +335,6 @@ describe('CLI platform init', () => {
     } finally {
       interruptCodex.mockRestore();
       interruptClaude.mockRestore();
-      session.dispose();
     }
   });
 
@@ -368,7 +365,6 @@ describe('CLI platform init', () => {
         cliContext({ quietLogs: false, installSignalHandlers: false }),
       );
 
-      expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
       expect(mocks.cliGlobalState.update).toHaveBeenCalledWith(
         GlobalStateKey.COPILOT_ROUTE_MODELS,
         ['gemini31p'],
@@ -408,7 +404,6 @@ describe('CLI platform init', () => {
     try {
       await initCliPlatform(cliContext({ installSignalHandlers: false }));
 
-      expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
       expect(stderrWrite).toHaveBeenCalledOnce();
       expect(stderrWrite).toHaveBeenCalledWith(
         expect.stringContaining(

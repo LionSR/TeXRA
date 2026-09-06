@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Shared (all surfaces)
+
+#### Features
+
+- **GPT-6 Astra is available** — OpenAI's most capable model joins the model
+  list with a 1M-token context window, reasoning effort up to Max, and vision,
+  and it works with Codex subscriptions on Pro, Enterprise, and Business
+  Premium plans.
+
 ## [0.40.8] - 2026-09-03
 
 ### Shared (all surfaces)

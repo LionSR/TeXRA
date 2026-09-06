@@ -1,33 +1,24 @@
-/** Container component for tool-use agent streams. */
-
-// Third-party imports
 import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-// Local imports - shared schemas
-import {
-  isToolUseState,
-  STREAM_STATUS,
-  type StreamTabInfo,
-  type ToolUseStreamState,
-} from '@shared/schemas';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { streamStatusTooltip } from '@shared/streams/streamStatusDisplay';
-
-// Local imports - progress view
-import { ProgressEvents } from '../events';
-import { getFollowUpInputTransientState } from '../followUpInputState';
+import type { StreamView } from '@shared/session/sessionView';
 import { BaseStreamContent } from './BaseStreamContent';
 import { conversationContentStyles } from './ConversationContent.styles';
-
-// Side-effect import - register the <stream-header> element
 import './StreamHeader';
-
-// Side-effect imports - sibling components
 import './TodoList';
 import './PlanView';
 import './BackgroundTasksPanel';
-import './FollowUpInput';
+import './SessionBanners';
+import './SessionComposer';
+
+const RUN_ENDED_MESSAGE = 'This run has ended.';
+
+/** The follow-up line shows while the run can still take one. */
+function composerVisible(stream: StreamView): boolean {
+  if (stream.followUpSupport === 'unsupported' || stream.readOnly) return false;
+  if (stream.group === 'running' || stream.group === 'waiting') return true;
+  return stream.status === 'ready' && stream.lastTimestamp === null;
+}
 
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends BaseStreamContent {
@@ -40,119 +31,66 @@ export class ToolUseStreamContent extends BaseStreamContent {
     `,
   ];
 
-  private get currentState(): ToolUseStreamState | null {
-    const { streamState } = this.streamContext;
-    return streamState && isToolUseState(streamState) ? streamState : null;
-  }
-
   override render(): TemplateResult | typeof nothing {
-    const currentState = this.currentState;
-    const streamInfo = this.streamContext.streamInfo;
-    if (!currentState || !streamInfo) {
-      return nothing;
-    }
-
+    const stream = this.stream;
+    if (!stream || stream.category !== 'toolUse') return nothing;
+    const showComposer = composerVisible(stream);
     return html`
-      <stream-header
-        .stream=${streamInfo}
-        .state=${currentState}
-        .unsupportedCommands=${this.streamContext.unsupportedCommands}
-      ></stream-header>
-
+      <stream-header .stream=${stream} .view=${this.view}></stream-header>
       <div class="conversation-content">
         ${this.renderApprovalDock()}
-
         <div class="conversation-column conversation-prelude">
           <todo-list
-            .todos=${currentState.todos}
-            .collapseKey=${streamInfo.name}
+            .todos=${stream.todos}
+            .collapseKey=${stream.id}
           ></todo-list>
-
-          <plan-view
-            .plan=${currentState.plan}
-            .collapseKey=${streamInfo.name}
-          ></plan-view>
-
+          <plan-view .plan=${stream.plan} .collapseKey=${stream.id}></plan-view>
           <background-tasks-panel
-            .subagents=${currentState.subagents}
+            .stream=${stream}
+            .view=${this.view}
+            .nowMs=${this.nowMs}
           ></background-tasks-panel>
         </div>
-
         ${this.renderLog()}
-
         <div class="conversation-column conversation-epilogue">
-          ${this.renderUsagePanel(currentState.runUsage, currentState.contextState)}
+          ${this.renderUsagePanel(stream)}
         </div>
       </div>
-
       <div class="conversation-composer-dock">
         <div class="conversation-column">
-          ${this.renderComposerBanner(currentState, streamInfo)}
-          <follow-up-input
-            .visible=${composerVisible(currentState, streamInfo)}
-            .streamId=${streamInfo.name}
-            .transientState=${getFollowUpInputTransientState(streamInfo.name)}
-            .value=${currentState.ui.followUpText}
-            .queuedMessages=${currentState.queuedFollowUps}
-            .shouldFocus=${currentState.ui.shouldFocusFollowUp}
-            .sending=${currentState.ui.followUpSending}
-            .polishedText=${currentState.ui.polishedText}
-            .polishRevision=${currentState.ui.polishRevision}
-            .transcribedText=${currentState.ui.transcribedText}
-            .recording=${currentState.ui.recording}
-            .unsupportedCommands=${this.streamContext.unsupportedCommands}
-            @focus-complete=${this.handleFocusComplete}
-          ></follow-up-input>
+          <session-banners
+            .banners=${this.host.banners}
+            .sessionType=${stream.category}
+          ></session-banners>
+          <div
+            class=${
+              showComposer
+                ? 'conversation-composer-banner conversation-composer-banner--empty'
+                : 'conversation-composer-banner'
+            }
+            role="status"
+            aria-atomic="true"
+          >
+            ${showComposer ? nothing : (stream.statusDetail ?? RUN_ENDED_MESSAGE)}
+          </div>
+          ${
+            showComposer
+              ? html`<session-composer
+                  .view=${this.view}
+                  .surface=${this.surface}
+                  .stream=${stream}
+                  .host=${this.host}
+                ></session-composer>`
+              : nothing
+          }
         </div>
       </div>
     `;
   }
-
-  private renderComposerBanner(
-    state: ToolUseStreamState,
-    streamInfo: StreamTabInfo,
-  ): TemplateResult {
-    const showBanner = !composerVisible(state, streamInfo);
-    const message = showBanner
-      ? streamStatusTooltip(state, RUN_ENDED_MESSAGE)
-      : nothing;
-
-    return html`<div
-      class=${
-        showBanner
-          ? 'conversation-composer-banner'
-          : 'conversation-composer-banner conversation-composer-banner--empty'
-      }
-      role="status"
-      aria-atomic="true"
-    >
-      ${message}
-    </div>`;
-  }
-
-  private handleFocusComplete(): void {
-    this.dispatchEvent(ProgressEvents.followupFocusComplete());
-  }
 }
 
-const RUN_ENDED_MESSAGE = 'This run has ended.';
-
-/**
- * The composer exists only where delivery is possible, decided on positive
- * facts: a run live in this process (RUNNING or WAITING), or a tab that has
- * never run (no execution and no transcript history). `ready` alone is not
- * evidence: it is the prefault for "no phase in this process", which is also
- * what settled history and unclassified tabs carry. Everything else shows a
- * read-only banner; Resume is the only way to continue.
- */
-function composerVisible(
-  state: ToolUseStreamState,
-  streamInfo: StreamTabInfo,
-): boolean {
-  if (isInFlightPhase(state.status)) return true;
-  return (
-    state.status === STREAM_STATUS.READY &&
-    streamInfo.executionId === undefined &&
-    state.lastTimestamp === undefined
-  );
+declare global {
+  interface HTMLElementTagNameMap {
+    'tool-use-stream-content': ToolUseStreamContent;
+  }
 }

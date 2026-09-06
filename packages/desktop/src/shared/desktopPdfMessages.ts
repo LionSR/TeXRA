@@ -28,6 +28,7 @@ export const DESKTOP_PDF_COMMANDS = {
 } as const;
 
 export const DesktopShowPdfMessageSchema = z.object({
+  session: z.string().min(1),
   command: z.literal(DESKTOP_PDF_COMMANDS.SHOW_PDF),
   title: z.string(),
   // Absolute path to the PDF on disk. The renderer prepends `file://`
@@ -39,6 +40,7 @@ export const DesktopShowPdfMessageSchema = z.object({
 export type DesktopShowPdfMessage = z.infer<typeof DesktopShowPdfMessageSchema>;
 
 export const DesktopClosePdfMessageSchema = z.object({
+  session: z.string().min(1),
   command: z.literal(DESKTOP_PDF_COMMANDS.CLOSE_PDF),
 });
 

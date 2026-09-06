@@ -208,8 +208,8 @@ function isUnrecognizedCommand(error: z.ZodError): boolean {
 //
 // Both functions below are no-ops outside `isDevAssertionMode()` — zero
 // `safeParse` cost in production. Some of these boundaries (desktop's single
-// `postToRenderer` channel carries high-frequency progress-stream chunks,
-// e.g. `LOG_DELTA`) are hot enough that even a cheap parse per message is
+// `postToRenderer` channel carries the session frames and their text
+// chunks) are hot enough that even a cheap parse per message is
 // worth avoiding outside dev/test; production keeps sending the
 // TypeScript-typed payload as-is (a compile-time type-assert, not a runtime
 // check) exactly as it did before this validation existed, so there is no
@@ -217,27 +217,6 @@ function isUnrecognizedCommand(error: z.ZodError): boolean {
 // mismatch — schema and producer have drifted — rather than logging, since
 // these are the same runs where `npm test` / CI would otherwise treat drift
 // as silently passing.
-
-/**
- * Asserts that `message` conforms to `schema` — for a send boundary where
- * every message is known to belong to exactly one outbound domain (e.g.
- * `MainViewMessageHandler.postToManagerTarget`, which only ever sends
- * `MainViewMessage`s).
- * Throws on any mismatch, including a `command` the schema doesn't recognize
- * at all.
- */
-export function assertOutboundMessage<TMessage extends CommandMessage>(
-  schema: z.ZodType<TMessage>,
-  message: unknown,
-): void {
-  if (!isDevAssertionMode()) return;
-  const result = schema.safeParse(message);
-  if (!result.success) {
-    throw new Error(
-      `Outbound message failed schema validation: ${result.error.message}`,
-    );
-  }
-}
 
 /**
  * Asserts (dev/test only) that `message` conforms to the outbound schema

@@ -5,7 +5,8 @@ import {
   SettingsModelSelectionController,
   type SettingsModelSelectionControllerDeps,
 } from '@controllers/settingsView/SettingsModelSelectionController';
-import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
+import { buildBaseModelOption } from '@model/modelOptionsBasic';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
@@ -18,13 +19,20 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 const resolveModelOptions = async (
   models: readonly string[],
 ): Promise<ModelOptionData[]> =>
-  buildBasicModelOptionsData(models).map((option) => ({
-    ...option,
-    availability: 'provider-key',
-    availabilityLabel: 'API key set',
-    requiresKey: false,
-    disabled: false,
-  }));
+  models
+    .map((model) => {
+      const config = getRuntimeModelConfig(model);
+      return config
+        ? buildBaseModelOption(model, config)
+        : { value: model, label: model };
+    })
+    .map((option) => ({
+      ...option,
+      availability: 'provider-key',
+      availabilityLabel: 'API key set',
+      requiresKey: false,
+      disabled: false,
+    }));
 
 function createController(
   overrides: Partial<SettingsModelSelectionControllerDeps> = {},

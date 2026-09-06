@@ -8,6 +8,7 @@ import {
 import { agentKeyOf, CLI_STATE_SETTINGS } from '@shared/schemas';
 import { readSetting } from '@shared/config/settingsAccess';
 import { unique } from '@utils/core';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 
 import {
   CliUsageError,
@@ -22,7 +23,6 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeErrorStderr } from '../runtime/logSinks';
 import { setWorkspaceCliChatAgent } from '../runtime/cliConfig';
-import { cliSettingsStores } from '../runtime/settingsStores';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
@@ -58,7 +58,7 @@ async function runAgentRosterTeamAction(
 async function showConfig(context: CliContext): Promise<number> {
   await initLocalCliPlatform(context);
   const agents = await readCliAgentRoster();
-  const stores = cliSettingsStores();
+  const stores = platformSettingsStores();
   const settings = Object.fromEntries(
     CLI_STATE_SETTINGS.map((entry) => [
       entry.key,

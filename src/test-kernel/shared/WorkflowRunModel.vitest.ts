@@ -427,28 +427,33 @@ describe('workflow run model', () => {
           : row.key,
       );
 
-    // Failed, then running — transcript order within each — then the finished
-    // cards as rows, and one row per unstarted group.
+    // Failed, then running, transcript order within each, then one
+    // counted row per collapsed group: finished, queued, declared.
     expect(
       summarize(workflowPhaseRows(phase, { expanded: new Set(), filter: '' })),
     ).toStrictEqual([
       'task:task-bad',
       'task:task-r1',
       'task:task-r2',
-      'task:task-ok1',
-      'task:task-ok2',
+      '▸ 2 finished',
       '▸ 2 queued',
       '▸ 1 declared',
     ]);
-    // An opened group lists its members under its header, in place.
+    // A waiting card outranks a failed one; an opened group lists its
+    // members under its header, in place.
     expect(
       summarize(
-        workflowPhaseRows(phase, { expanded: new Set(['queued']), filter: '' }),
+        workflowPhaseRows(phase, {
+          expanded: new Set(['finished', 'queued']),
+          filter: '',
+          waiting: new Set(['task-r2']),
+        }),
       ),
     ).toStrictEqual([
+      'task:task-r2',
       'task:task-bad',
       'task:task-r1',
-      'task:task-r2',
+      '▾ 2 finished',
       'task:task-ok1',
       'task:task-ok2',
       '▾ 2 queued',

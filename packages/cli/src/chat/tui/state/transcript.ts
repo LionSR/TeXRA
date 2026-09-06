@@ -1,19 +1,41 @@
-import { defaultSession } from '@agent/runtime';
+/**
+ * Local CLI rows: notices the TUI itself prints into a conversation (a model
+ * fallback, a skill activation, a slash-command result). They are not
+ * events and never fold; they are Surface (PRD one-fold-three-renderers,
+ * 9), one list of `{ streamId, afterSeq, row }`, and the conversation panes
+ * merge them into the stream's folded rows by `afterSeq` at render: a join
+ * of two inputs ordered by the same transcript seq, so a row the fold's
+ * residency cap drops never shifts a notice.
+ */
+import { signal } from '@lit-labs/signals';
+
 import type { StreamTabId } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
+import type { RequestError } from '@shared/session/requestErrors';
 import {
   activeStreamId,
   focusStream,
   rootStreamId,
   registerCliStateResetHook,
-  removeStream,
-  patchStream,
-  streams,
 } from './cliState';
-import { parentStream } from './childExecutions';
-import { activeStreamParentOrSelfId } from './streamViews';
+import { currentView, streamViewOf } from './sessionView';
 
+/** Where notices land before the root run has a stream. */
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
+
+export interface LocalNotice {
+  readonly streamId: StreamTabId;
+  /** The settlement seq of the folded row the notice follows; 0 before any. */
+  readonly afterSeq: number;
+  readonly row: TranscriptRow;
+}
+
+/** The transcript seq a folded row settles at, for the notice join. */
+function rowSeq(row: TranscriptRow | undefined): number {
+  return row?.settlementSeqNo ?? row?.seqNo ?? 0;
+}
+
+export const notices = signal<readonly LocalNotice[]>([]);
 
 let localEntrySeq = 0;
 
@@ -32,27 +54,12 @@ export function appendLocalUserTranscript(text: string): void {
   appendLocalTranscriptEntry('user', text);
 }
 
-/**
- * A CLI notice as an ordinary transcript row. `origin: 'local'` is the whole
- * difference from a projected row: it says there is no `StreamLogEntry` behind
- * this one, which is what makes it immutable from birth and what places it
- * after an equal-keyed source row. Its position comes from the two log cursors
- * captured at append time, carried in the row's own ordering fields.
- */
 function localTranscriptRow(
   kind: 'assistant' | 'error' | 'user',
   id: string,
   text: string,
-  seqNo: number,
-  settlementSeqNo: number,
 ): TranscriptRow {
-  const base = {
-    id,
-    origin: 'local',
-    seqNo,
-    settlementSeqNo,
-    timestamp: Date.now(),
-  } as const;
+  const base = { id, origin: 'local', timestamp: Date.now() } as const;
   const body = transcriptText(text);
   if (kind === 'error') {
     return {
@@ -83,80 +90,156 @@ function appendLocalTranscriptEntry(
 ): void {
   const normalized = text.trim();
   if (!normalized) return;
-
+  const view = currentView();
+  const active = activeStreamId.get();
   const streamId =
     explicitStreamId ??
     resolveLocalTranscriptStreamId({
-      activeStreamId: activeStreamId.get(),
+      activeStreamId: active,
       fallbackStreamId: CLI_LOCAL_STREAM_ID,
-      parentStream: parentStream.get(),
+      parentOf: (id) => streamViewOf(view, id)?.parentId ?? undefined,
       rootStreamId: rootStreamId.get(),
     });
   focusStream(streamId, { onlyIfUnset: true });
-  const log = defaultSession().transcripts.get(streamId);
-  const seqNo = log?.head ?? 0;
-  const settlementSeqNo = log?.settlementHead ?? 0;
-
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    entries: [
-      ...slice.entries,
-      localTranscriptRow(
+  const afterSeq = rowSeq(streamViewOf(view, streamId)?.transcript.rows.at(-1));
+  notices.set([
+    ...notices.get(),
+    {
+      streamId,
+      afterSeq,
+      row: localTranscriptRow(
         kind,
-        `local:${localEntrySeq++}:${streamId}:${slice.entries.length}`,
+        `local:${localEntrySeq++}:${streamId}`,
         normalized,
-        seqNo,
-        settlementSeqNo,
       ),
-    ],
-  }));
+    },
+  ]);
 }
 
-/**
- * Local UI notices are root-owned unless a caller explicitly targets a child.
- * A focused child should not receive session-level slash/status/error rows.
- */
 export function resolveLocalTranscriptStreamId({
   activeStreamId,
   fallbackStreamId,
-  parentStream,
+  parentOf,
   rootStreamId,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly fallbackStreamId: StreamTabId;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly parentOf: (streamId: StreamTabId) => StreamTabId | undefined;
   readonly rootStreamId: StreamTabId | undefined;
 }): StreamTabId {
   if (rootStreamId) return rootStreamId;
-  return (
-    activeStreamParentOrSelfId({ activeStreamId, parentStream }) ??
-    fallbackStreamId
-  );
+  if (activeStreamId === undefined) return fallbackStreamId;
+  return parentOf(activeStreamId) ?? activeStreamId;
 }
 
+/** The pre-run notices become the root's opening rows once it has a stream. */
 export function moveLocalTranscriptToStream(streamId: StreamTabId): void {
   if (streamId === CLI_LOCAL_STREAM_ID) return;
-
-  const localSlice = streams.get().get(CLI_LOCAL_STREAM_ID);
-  if (!localSlice?.entries.length) return;
-
-  patchStream(streamId, (slice) => ({
-    ...slice,
-    entries: [...localSlice.entries, ...slice.entries],
-    // The re-homed rows are printable on arrival and land ahead of everything
-    // already promoted, so the promotion cursor shifts with them.
-    finalizedFrontier: slice.finalizedFrontier + localSlice.entries.length,
-  }));
-  if (activeStreamId.get() === CLI_LOCAL_STREAM_ID) {
-    focusStream(streamId);
+  const current = notices.get();
+  if (!current.some((notice) => notice.streamId === CLI_LOCAL_STREAM_ID)) {
+    return;
   }
-  removeStream(CLI_LOCAL_STREAM_ID);
+  notices.set(
+    current.map((notice) =>
+      notice.streamId === CLI_LOCAL_STREAM_ID
+        ? { ...notice, streamId, afterSeq: 0 }
+        : notice,
+    ),
+  );
+  if (activeStreamId.get() === CLI_LOCAL_STREAM_ID) focusStream(streamId);
 }
 
 export function clearLocalTranscript(): void {
-  removeStream(CLI_LOCAL_STREAM_ID);
+  const current = notices.get();
+  const kept = current.filter(
+    (notice) => notice.streamId !== CLI_LOCAL_STREAM_ID,
+  );
+  if (kept.length !== current.length) notices.set(kept);
+  if (activeStreamId.get() === CLI_LOCAL_STREAM_ID) {
+    activeStreamId.set(undefined);
+  }
+}
+
+export function noticesFor(
+  all: readonly LocalNotice[],
+  streamId: StreamTabId | undefined,
+): readonly LocalNotice[] {
+  return streamId === undefined
+    ? []
+    : all.filter((notice) => notice.streamId === streamId);
+}
+
+/**
+ * The stream's folded rows with its notices inserted after the last row
+ * whose seq is at or below their `afterSeq`, in notice order; a notice
+ * takes that row's settlement key so the pane's settlement ordering keeps it
+ * in place.
+ */
+export function mergeLocalNotices(
+  rows: readonly TranscriptRow[],
+  streamNotices: readonly LocalNotice[],
+): readonly TranscriptRow[] {
+  if (streamNotices.length === 0) return rows;
+  const out: TranscriptRow[] = [];
+  let next = 0;
+  const flushThrough = (seq: number): void => {
+    while (next < rows.length && rowSeq(rows[next]) <= seq) {
+      out.push(rows[next]!);
+      next += 1;
+    }
+  };
+  for (const notice of [...streamNotices].sort(
+    (a, b) => a.afterSeq - b.afterSeq,
+  )) {
+    flushThrough(notice.afterSeq);
+    const previous = out.at(-1);
+    const seq = previous?.settlementSeqNo ?? previous?.seqNo;
+    out.push(
+      seq === undefined
+        ? notice.row
+        : { ...notice.row, seqNo: seq, settlementSeqNo: seq },
+    );
+  }
+  for (; next < rows.length; next += 1) out.push(rows[next]!);
+  return out;
+}
+
+/** How many merged rows are settled: the folded prefix plus every notice
+ *  anchored inside it (a notice is immutable the moment it is written). */
+export function mergedSettledRows(
+  rows: readonly TranscriptRow[],
+  settledRows: number,
+  streamNotices: readonly LocalNotice[],
+): number {
+  const settledSeq = settledRows === 0 ? 0 : rowSeq(rows[settledRows - 1]);
+  return (
+    settledRows +
+    streamNotices.filter((notice) => notice.afterSeq <= settledSeq).length
+  );
+}
+
+/** The refusal a request error reads as, for the local transcript. */
+export function describeRequestError(error: RequestError): string {
+  switch (error._tag) {
+    case 'NotOwner':
+      return 'Another process owns this conversation.';
+    case 'Unavailable':
+    case 'Rejected':
+      return error.reason;
+    case 'Internal':
+      return `The request failed inside TeXRA (ref ${error.ref}); see the log.`;
+  }
+}
+
+/** A refused runtime request, worded into the stream it named. */
+export function appendLocalRequestRefusal(
+  error: RequestError,
+  streamId: StreamTabId,
+): void {
+  appendLocalAssistantTranscript(describeRequestError(error), streamId);
 }
 
 registerCliStateResetHook(() => {
   localEntrySeq = 0;
+  notices.set([]);
 });

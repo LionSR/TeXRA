@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { defaultSession, type SessionEventHub } from '@agent/runtime';
+import { defaultSession, type SessionHandle } from '@agent/runtime';
 import { appSignals } from '@eventBus/AppSignals';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
 
@@ -49,12 +49,12 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
 
 export function registerFileDecorations(
   context: vscode.ExtensionContext,
-  events: SessionEventHub = defaultSession().events,
+  session: Pick<SessionHandle, 'events' | 'now'> = defaultSession(),
 ): void {
   const provider = new TeXRAFileDecorationProvider();
 
   const unsubscribeOutputFiles = subscribeAddOutputFilesRunFact(
-    events,
+    session,
     ({ filesByRound }) => {
       // Only mark the primary output location. Lineage entries (original,
       // diffBase) are reference points; marking them would badge the

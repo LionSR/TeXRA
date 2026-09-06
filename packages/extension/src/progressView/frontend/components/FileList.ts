@@ -6,7 +6,7 @@ import {
   type PropertyValues,
   type TemplateResult,
 } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -16,7 +16,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   fileLocationDisplayPath,
   getEffectiveDiffBase,
@@ -25,22 +24,26 @@ import {
   roundIndexedEntries,
   type CompileFailure,
   type OutputFileInfo,
+  type StreamTabId,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
-import { UnsupportedCommandsMixin } from '@shared/wa/unsupportedCommandsMixin';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import type { HostRequest } from '@shared/session/hostRequest';
+import type { Surface } from '@shared/session/surface';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import { ELEMENT_IDS } from '../constants';
-import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
-import { webviewStorage } from '../webviewStorage';
 
 // Local imports - styles
 import { fileListStyles } from './FileList.styles';
+
+/** The `data-command` of a file name: open it in the editor. */
+const OPEN_FILE = 'openFile';
+type FileVerb = Extract<HostRequest, { kind: 'fileAction' }>['action'];
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -88,8 +91,6 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
   `;
 }
 
-const STORAGE_HINT_DISMISS_KEY = 'generatedFilesStorageHint.dismissed';
-
 /** Parse a path into directory and basename components */
 function parsePath(path: string): { dir: string; basename: string } {
   const normalized = normalizeFilePath(path);
@@ -103,8 +104,11 @@ function parsePath(path: string): { dir: string; basename: string } {
 }
 
 @customElement('file-list')
-export class FileList extends UnsupportedCommandsMixin(LitElement) {
+export class FileList extends LitElement {
   static override styles = [designTokens, commonViewStyles, fileListStyles];
+
+  /** The run whose files these are; every verb names it. */
+  @property({ attribute: false }) streamId: StreamTabId | null = null;
 
   @property({ attribute: false }) filesByRound: Record<
     string,
@@ -115,9 +119,8 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     CompileFailure[]
   > = {};
 
-  @state()
-  private storageHintDismissed =
-    webviewStorage.get(STORAGE_HINT_DISMISS_KEY) === true;
+  /** The surface owns the hint's dismissal (PRD 9). */
+  @property({ attribute: false }) surface: Surface | null = null;
 
   // Flattened from failuresByRound to avoid O(rounds) scan per file item in render.
   private failureByPath = new Map<string, CompileFailure>();
@@ -166,11 +169,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
           )}
         </div>
         ${
-          this.failureByPath.size > 0 &&
-          !isKnownUnsupported(
-            this.unsupportedCommands,
-            PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER,
-          )
+          this.failureByPath.size > 0
             ? html`
                 <div class="compile-actions">
                   <wa-button
@@ -191,7 +190,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
   }
 
   private renderStorageHint(): TemplateResult | typeof nothing {
-    if (this.storageHintDismissed) return nothing;
+    if (this.surface?.storageHintDismissed) return nothing;
 
     return html`
       <div class="storage-hint" role="note">
@@ -214,8 +213,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
   }
 
   private handleDismissStorageHint = (): void => {
-    void webviewStorage.update(STORAGE_HINT_DISMISS_KEY, true);
-    this.storageHintDismissed = true;
+    this.dispatchEvent(SessionUiEvents.surface({ kind: 'dismissStorageHint' }));
   };
 
   private renderRound(
@@ -308,7 +306,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
           <span
             id="${idPrefix}-path"
             class="file-path clickable-link"
-            data-command=${PROGRESS_VIEW_COMMANDS.OPEN_FILE}
+            data-command=${OPEN_FILE}
             data-file=${filePath}
             role="button"
             tabindex="0"
@@ -327,7 +325,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
                   label: `Open compile log for ${tooltipPath}`,
                   title: `Open compile log (${failure.logRelativePath})`,
                   className: '',
-                  command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
+                  command: OPEN_FILE,
                   file: failure.log.absolutePath,
                   idPrefix,
                 })
@@ -368,15 +366,34 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
 
   private dispatchFileAction(actionEl: HTMLElement): void {
     const { command, file, base, prev } = actionEl.dataset;
-    if (!command || !file) return;
-
+    const streamId = this.streamId;
+    if (!command || !file || streamId === null) return;
+    if (command === OPEN_FILE) {
+      this.dispatchEvent(
+        SessionUiEvents.host({ kind: 'openFile', path: file, line: null }),
+      );
+      return;
+    }
     this.dispatchEvent(
-      ProgressEvents.fileAction({ command, file, base, prev }),
+      SessionUiEvents.host({
+        kind: 'fileAction',
+        streamId,
+        action: command as FileVerb,
+        file,
+        base: base ?? null,
+        prev: prev ?? null,
+      }),
     );
   }
 
   private runLatexFixer(): void {
-    this.dispatchEvent(ProgressEvents.compileFixerRun());
+    if (this.streamId === null) return;
+    this.dispatchEvent(
+      SessionUiEvents.host({
+        kind: 'runCompileFixer',
+        streamId: this.streamId,
+      }),
+    );
   }
 
   private renderDiffStats(
@@ -413,7 +430,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
         label: `Compare ${displayPath} with base`,
         title: 'Compare with base in a side-by-side diff',
         className: 'compare-btn',
-        command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
+        command: 'compareOriginal',
         file: filePath,
         base: compareBase,
         idPrefix,
@@ -423,7 +440,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
         label: `Run latexdiff for ${displayPath}`,
         title: 'Run latexdiff against the base file',
         className: 'latexdiff-btn',
-        command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
+        command: 'latexdiff',
         file: filePath,
         base: basePath,
         idPrefix,
@@ -433,7 +450,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
         label: `Accept edits for ${displayPath}`,
         title: 'Accept edits into the workspace file',
         className: 'accept-btn',
-        command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
+        command: 'accept',
         file: filePath,
         base: compareBase,
         idPrefix,
@@ -443,7 +460,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
         label: `Merge edits for ${displayPath}`,
         title: 'Merge edits into the workspace file',
         className: 'merge-btn',
-        command: PROGRESS_VIEW_COMMANDS.MERGE_FILE,
+        command: 'merge',
         file: filePath,
         base: basePath,
         idPrefix,
@@ -465,7 +482,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
       label: `Compare ${displayPath} with previous round`,
       title: 'Compare with previous round in a side-by-side diff',
       className: 'prev-btn',
-      command: PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
+      command: 'comparePrevious',
       file: filePath,
       base: basePath,
       prev: previousPath,

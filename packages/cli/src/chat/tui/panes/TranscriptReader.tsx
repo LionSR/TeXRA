@@ -20,6 +20,7 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { StreamTabId } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
+import type { TranscriptView } from '@shared/session/sessionView';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { readTranscriptSpill } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -30,7 +31,7 @@ import {
   scrollableModalTextRowsBudget,
 } from '../modals/ScrollableModalText';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
-import { streams as streamsSignal, type StreamSlice } from '../state/cliState';
+import { sessionView, streamViewOf } from '../state/sessionView';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import {
@@ -47,6 +48,7 @@ type SpillHydration =
   | { readonly kind: 'failed'; readonly notice: string };
 
 const EMPTY_SPILL_HYDRATIONS: ReadonlyMap<string, SpillHydration> = new Map();
+const EMPTY_TRANSCRIPT: Pick<TranscriptView, 'rows'> = { rows: [] };
 
 function spillFailureNotice(verb: string, error: unknown): string {
   return `[Unable to ${verb} full output. Close and reopen the transcript to retry: ${toErrorMessage(error)}]`;
@@ -71,12 +73,17 @@ function withSpillNotice(preview: string, notice: string): string {
   return preview ? `${preview}\n\n${notice}` : notice;
 }
 
+/**
+ * The rows with their spilled bodies restored. Takes the transcript value
+ * rather than its rows: the fold appends rows in place and replaces the
+ * transcript on every change, so the transcript is what a memo of this
+ * result keys on.
+ */
 export function hydratedTranscript(
-  slice: StreamSlice | undefined,
+  transcript: Pick<TranscriptView, 'rows'>,
   spills: ReadonlyMap<string, SpillHydration>,
-): StreamSlice | undefined {
-  if (!slice) return slice;
-  const entries = slice.entries.map((row): TranscriptRow => {
+): readonly TranscriptRow[] {
+  return transcript.rows.map((row): TranscriptRow => {
     if (!row.spillPath) return row;
     const spill = spills.get(row.spillPath);
     if (spill === undefined) return { ...row, spillPath: undefined };
@@ -105,7 +112,6 @@ export function hydratedTranscript(
         : withSpillNotice(transcriptRowHeadline(row), spill.notice);
     return hydrateRowHeadline(row, recovered, spill.kind === 'failed');
   });
-  return { ...slice, entries };
 }
 
 /**
@@ -149,8 +155,14 @@ export function TranscriptReader({
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
-  const streams = useSignal(streamsSignal);
-  const slice = streams.get(streamId);
+  const view = useSignal(sessionView());
+  // The transcript value, never its `rows` array: the fold appends and
+  // patches rows in place and replaces the transcript on every change (a
+  // new row, a patched row, a text chunk), so the transcript is the
+  // identity the effect and memos below key on to stay live while the
+  // reader is open.
+  const transcript =
+    streamViewOf(view, streamId)?.transcript ?? EMPTY_TRANSCRIPT;
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
   const [spillState, setSpillState] = useState<{
@@ -162,24 +174,14 @@ export function TranscriptReader({
     paths: Set<string>;
   }>({ streamId, paths: new Set() });
 
-  const spillPaths = useMemo(
-    () => [
-      ...new Set(
-        slice?.entries.flatMap((entry) => entry.spillPath ?? []) ?? [],
-      ),
-    ],
-    [slice],
-  );
-  const spillPathsKey = spillPaths.join('\0');
-
   useEffect(() => {
     if (requestedSpills.current.streamId !== streamId) {
       requestedSpills.current = { streamId, paths: new Set() };
       setSpillState({ streamId, values: new Map() });
     }
-    const pending = spillPaths.filter(
-      (spillPath) => !requestedSpills.current.paths.has(spillPath),
-    );
+    const pending = [
+      ...new Set(transcript.rows.flatMap((entry) => entry.spillPath ?? [])),
+    ].filter((spillPath) => !requestedSpills.current.paths.has(spillPath));
     if (pending.length === 0) return;
     for (const spillPath of pending) {
       requestedSpills.current.paths.add(spillPath);
@@ -210,28 +212,26 @@ export function TranscriptReader({
         return { streamId, values };
       });
     })();
-    // `spillPathsKey` stands in for `spillPaths`: the key changes exactly
-    // when the path list does.
-  }, [spillPathsKey, streamId]);
+  }, [transcript, streamId]);
 
   const spills =
     spillState.streamId === streamId
       ? spillState.values
       : EMPTY_SPILL_HYDRATIONS;
 
-  const hydratedSlice = useMemo(
-    () => hydratedTranscript(slice, spills),
-    [slice, spills],
+  const hydratedRows = useMemo(
+    () => hydratedTranscript(transcript, spills),
+    [transcript, spills],
   );
 
   // Recomputed as the run appends rows, so the reader stays live rather than
   // freezing at the content present when it opened.
   const text = useMemo(() => {
-    const body = transcriptToLines(hydratedSlice, width, executionLabels)
+    const body = transcriptToLines(hydratedRows, width, executionLabels)
       .join('\n')
       .trimEnd();
     return body || EMPTY_TRANSCRIPT_TEXT;
-  }, [executionLabels, hydratedSlice, width]);
+  }, [executionLabels, hydratedRows, width]);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {

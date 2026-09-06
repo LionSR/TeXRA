@@ -103,6 +103,7 @@ const LANE_SESSION = {
     launchExecution: (_executionId: ExecutionId, start: () => unknown) =>
       start(),
   },
+  transcripts: { ensureLoaded: vi.fn(async () => {}) },
 } as never;
 
 function resumeToolUseFromResumeData(
@@ -125,7 +126,6 @@ function buildResumeContext(
       streamId,
       session: {
         status: {},
-        transcripts: { ensureLoaded: vi.fn(async () => {}) },
         flushArtifacts: vi.fn(async () => {}),
         // The real exit choreography over the fake's flushArtifacts and the
         // mocked lease verbs, so the releaseOwnedExecutionLease assertion
@@ -232,10 +232,12 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     await resumeToolUseFromResumeData(snapshot);
     await resumeToolUseFromResumeData(snapshot);
 
-    expect(mocks.runFlowWithLifecycle).toHaveBeenCalledTimes(2);
+    // The persisted support rides the launch input: `run.start` stamps it at
+    // the reservation commit point, before the lifecycle runs.
+    expect(mocks.buildAgentLaunchContext).toHaveBeenCalledTimes(2);
     expect(
-      mocks.runFlowWithLifecycle.mock.calls.map(
-        (call) => call[2]?.userFollowUpSupport,
+      mocks.buildAgentLaunchContext.mock.calls.map(
+        (call) => call[0]?.userFollowUpSupport,
       ),
     ).toEqual([
       USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
@@ -301,6 +303,12 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   it('rejects a resumed launch that is not a tool-use agent', async () => {
     const resume = createToolUseResumeData();
     mocks.hasPersistedParent.mockResolvedValueOnce(false);
+    // The guard runs inside the lifecycle so its failure ends the started
+    // stream; the mocked lifecycle only has to run the body.
+    mocks.runFlowWithLifecycle.mockImplementationOnce(
+      (_context: unknown, runner: (...args: unknown[]) => unknown) =>
+        runner({}, {}),
+    );
     mocks.buildAgentLaunchContext.mockResolvedValueOnce({
       setting: { agentCategory: AgentCategory.Workflow },
       runScope: {

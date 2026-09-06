@@ -9,6 +9,7 @@ import {
 } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+import type { ExecutionId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
 
 // Local imports - CLI runtime
@@ -29,7 +30,10 @@ export interface CliRuntimeHost {
     event: K,
     payload: RuntimePresentationEventPayloads[K],
   ): boolean;
-  attachRunProgressRenderer(session: SessionHandle): () => void;
+  attachRunProgressRenderer(
+    session: SessionHandle,
+    options?: { readonly executionId?: ExecutionId },
+  ): () => void;
   prepareInteractivePrompt?: () => void;
   emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
   close(): Promise<void>;
@@ -118,8 +122,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     };
 
   return {
-    attachRunProgressRenderer: (session) =>
-      runProgress ? runProgress.attach(session) : () => undefined,
+    attachRunProgressRenderer: (session, options) =>
+      runProgress ? runProgress.attach(session, options) : () => undefined,
     prepareInteractivePrompt: () => runProgress?.preserve(),
     emitApprovalBypassState({ streamId, kind, bypassActive }) {
       if (closed || !ndjson) return;

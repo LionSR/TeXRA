@@ -28,40 +28,61 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
 }));
 
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { InquiryThreadId, StreamTabId } from '@shared/schemas';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+
 import {
   injectContinuationForAnsweredThread,
   type InjectionOutcome,
 } from '@tools/inquiry/inquiryContinuation';
 import type { ExternalInquiryThreadManifest } from '@tools/inquiry/externalInquiryStorage';
+import { recordSessionEvents } from '../agent/progressTestUtils';
 
 const THREAD = 'ei_aabbccdd0011' as InquiryThreadId;
 const STREAM = 'stream:desktop-parent' as StreamTabId;
 
 /**
- * A host-supplied session: only identity plus the event hub the continuation
- * emits on. A real hub, because a session handle always carries one.
+ * A host-supplied session: only identity plus the publisher the continuation
+ * publishes on; every fact lands in `published`.
  */
-function sessionStub(tag?: string): SessionHandle {
+function sessionStub(tag?: string): SessionHandle & { published: unknown[] } {
+  const published: unknown[] = [];
   return {
     ...(tag ? { tag } : {}),
-    events: new SessionEventHub(),
-  } as unknown as SessionHandle;
+    published,
+    publish: (events: readonly unknown[]) => {
+      published.push(...events);
+    },
+  } as unknown as SessionHandle & { published: unknown[] };
 }
 
-/** Collects the session facts emitted on a hub until detached. */
+let paperCount = 0;
+
+/** The roots of one paper: a session's plane is keyed by its storage root. */
+function paperRoots() {
+  paperCount += 1;
+  return createFakeWorkspaceRoots({
+    storagePath: `/workspace/inquiry-${paperCount}/.texra/storage`,
+  });
+}
+
+/** The facts a session published from this call on: a stub's array, or a
+ *  real session's plane read back. */
 function captureFacts(session: SessionHandle): {
-  facts: unknown[];
+  readonly facts: unknown[];
   detach: () => void;
 } {
-  const facts: unknown[] = [];
-  const detach = session.events.subscribe((event) => {
-    facts.push(event);
-  });
-  return { facts, detach };
+  const stub = session as Partial<ReturnType<typeof sessionStub>>;
+  if (stub.published) return { facts: stub.published, detach: () => {} };
+  const recorded = recordSessionEvents(session);
+  return {
+    get facts() {
+      return recorded.events;
+    },
+    detach: () => {},
+  };
 }
 
 function answeredManifest(): ExternalInquiryThreadManifest {
@@ -131,8 +152,8 @@ describe('external inquiry continuation session routing', () => {
     expect(submitFollowUpMock).not.toHaveBeenCalled();
   });
 
-  it('emits inquiry thread updates through the explicit session hub', async () => {
-    const session = createTestSession();
+  it('emits inquiry thread updates through the explicit session plane', async () => {
+    const session = createTestSession({ roots: paperRoots() });
     const explicit = captureFacts(session);
     const fallback = captureFacts(defaultSession());
 
@@ -143,22 +164,18 @@ describe('external inquiry continuation session routing', () => {
         session,
       );
 
-      expect(explicit.facts).toEqual([
+      expect(explicit.facts).toMatchObject([
         {
-          scope: 'session',
-          event: {
-            type: 'inquiryThreadUpdated',
-            payload: {
-              threadId: THREAD,
-              parentStreamId: STREAM,
-              parentExecutionId: null,
-              status: 'answered',
-              lastQuestionPreview: 'Check the boundary case.',
-              lastActivityIso: '2026-06-14T08:01:00.000Z',
-              turnCount: 1,
-              resumeOutcome: 'sent',
-            },
-          },
+          type: 'inquiryThreadUpdated',
+          aggregateId: THREAD,
+          threadId: THREAD,
+          parentStreamId: STREAM,
+          parentExecutionId: null,
+          status: 'answered',
+          lastQuestionPreview: 'Check the boundary case.',
+          lastActivityIso: '2026-06-14T08:01:00.000Z',
+          turnCount: 1,
+          resumeOutcome: 'sent',
         },
       ]);
       expect(fallback.facts).toEqual([]);
@@ -170,7 +187,7 @@ describe('external inquiry continuation session routing', () => {
   });
 
   it("emits inquiry thread updates through the active run's session when no explicit session is provided", async () => {
-    const session = createTestSession();
+    const session = createTestSession({ roots: paperRoots() });
     const run = captureFacts(session);
     const fallback = captureFacts(defaultSession());
 
@@ -182,17 +199,13 @@ describe('external inquiry continuation session routing', () => {
         () => injectContinuationForAnsweredThread(THREAD, answeredManifest()),
       );
 
-      expect(run.facts).toEqual([
-        {
-          scope: 'session',
-          event: {
-            type: 'inquiryThreadUpdated',
-            payload: expect.objectContaining({
-              threadId: THREAD,
-              resumeOutcome: 'sent',
-            }),
-          },
-        },
+      expect(run.facts).toMatchObject([
+        expect.objectContaining({
+          type: 'inquiryThreadUpdated',
+          aggregateId: THREAD,
+          threadId: THREAD,
+          resumeOutcome: 'sent',
+        }),
       ]);
       expect(fallback.facts).toEqual([]);
     } finally {

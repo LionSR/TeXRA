@@ -1,7 +1,6 @@
 import { defaultSession } from '@agent/runtime';
 import {
   assertCliAgentLaunch,
-  chatAgentSupportsDelegation,
   resolveCliAgentInCategory,
 } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
@@ -60,7 +59,6 @@ export function applyInitialCliAgentSelection(
   }
   patchSessionMeta({
     agent: nextAgent,
-    canDelegate: chatAgentSupportsDelegation(nextAgent),
     teamName: undefined,
     cliMultiAgentPresetId: undefined,
     delegationAgentScope: undefined,

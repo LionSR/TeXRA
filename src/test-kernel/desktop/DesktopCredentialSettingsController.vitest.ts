@@ -7,7 +7,7 @@ import type { SubscriptionDeviceCodePrompt } from '@controllers/modelAccess/subs
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import * as logger from '@logger/logUtils';
 import { apiKeySecretName } from '@model/apiProviders';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
@@ -44,7 +44,6 @@ const modelMocks = vi.hoisted(() => ({
   compute: vi.fn(async (models: readonly string[] = []) =>
     models.map((model) => ({ value: model, label: model })),
   ),
-  invalidate: vi.fn(),
 }));
 
 vi.mock('@auth/codex', async (importOriginal) => ({
@@ -67,7 +66,6 @@ vi.mock('@model/codex/codexPreference', () => ({
 vi.mock('@model/computeModelOptions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@model/computeModelOptions')>()),
   computeModelOptionsData: modelMocks.compute,
-  invalidateModelOptionsCache: modelMocks.invalidate,
 }));
 
 type ControllerOptions = ConstructorParameters<
@@ -104,6 +102,9 @@ async function createFixture({
   const signOut = vi.fn(async () => undefined);
   const onCredentialChanged = vi.fn(async () => {
     events.push('credential');
+  });
+  const onModelOptionsChanged = vi.fn(async () => {
+    events.push('modelOptions');
   });
   const subscriptionUsage = {
     getUsage: vi.fn(async (provider: string) => ({
@@ -164,6 +165,7 @@ async function createFixture({
     },
     subscriptionUsage,
     onCredentialChanged,
+    onModelOptionsChanged,
     onError: () => undefined,
     ...overrides,
   });
@@ -181,6 +183,7 @@ async function createFixture({
     signIn,
     signOut,
     onCredentialChanged,
+    onModelOptionsChanged,
     subscriptionUsage,
   };
 }
@@ -251,7 +254,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(fixture.events).toEqual([
       `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
       `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-      `render:${MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS}`,
+      'modelOptions',
       'credential',
     ]);
   });
@@ -324,7 +327,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(fixture.events).toEqual([
       `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
       `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-      `render:${MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS}`,
+      'modelOptions',
       'credential',
     ]);
   });
@@ -367,7 +370,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
     expect(fixture.events).toEqual([
       `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-      `render:${MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS}`,
+      'modelOptions',
       `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
     ]);
     expect(fixture.onCredentialChanged).not.toHaveBeenCalled();
@@ -420,7 +423,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       expect.arrayContaining([
         `render:${SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS}`,
         `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-        `render:${MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS}`,
+        'modelOptions',
       ]),
     );
 

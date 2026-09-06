@@ -103,7 +103,8 @@ vi.mock('vscode', () => {
   };
 });
 
-const { SessionEventHub } = await import('@agent/runtime/SessionEventHub');
+const { createTestSession } = await import('@test/support/sessionTestUtils');
+const { settleSessionEvents } = await import('../agent/progressTestUtils');
 const { appSignals } = await import('@eventBus/AppSignals');
 const { registerInlineCriticism, setInlineCriticismEnabled } =
   await import('@frontend/latex/inlineCriticism');
@@ -114,16 +115,14 @@ const vscode = await import('vscode');
 
 const streamId = 'stream:frontend-run-fact' as StreamTabId;
 
-function emitOutputFiles(
-  hub: InstanceType<typeof SessionEventHub>,
+async function emitOutputFiles(
+  session: ReturnType<typeof createTestSession>,
   absolutePath: string,
-): void {
-  hub.emit({
-    scope: 'run',
-    streamId,
-    event: {
+): Promise<void> {
+  session.publish([
+    {
       type: 'addOutputFiles',
-      streamId,
+      aggregateId: streamId,
       filesByRound: {
         1: [
           {
@@ -140,7 +139,8 @@ function emitOutputFiles(
         ],
       },
     },
-  });
+  ]);
+  await settleSessionEvents();
 }
 
 /** Diagnostics currently recorded for `absolutePath` in the latest collection. */
@@ -172,17 +172,20 @@ describe('output-file run fact frontend subscriptions', () => {
     }
   });
 
-  it('badges run-fact output files and app-scoped workspace writes', () => {
-    const hub = new SessionEventHub();
+  it('badges run-fact output files and app-scoped workspace writes', async () => {
+    const session = createTestSession();
     const context = { subscriptions: [] };
-    registerFileDecorations(context as unknown as VSCode.ExtensionContext, hub);
+    registerFileDecorations(
+      context as unknown as VSCode.ExtensionContext,
+      session,
+    );
     const provider = mocks.registeredProviders.at(-1) as {
       provideFileDecoration(uri: { scheme: string; fsPath: string }): unknown;
     };
     const texraBadge = { badge: 'T', tooltip: 'Modified by TeXRA' };
 
     const runFactPath = '/tmp/texra-run-fact-output.tex';
-    emitOutputFiles(hub, runFactPath);
+    await emitOutputFiles(session, runFactPath);
     expect(
       provider.provideFileDecoration(vscode.Uri.file(runFactPath)),
     ).toMatchObject(texraBadge);
@@ -210,15 +213,18 @@ describe('output-file run fact frontend subscriptions', () => {
       'before\n\\criticize{tighten this argument}{4}{5}\nafter\n',
     );
 
-    const hub = new SessionEventHub();
+    const session = createTestSession();
     const context = { subscriptions: [] };
-    registerInlineCriticism(context as unknown as VSCode.ExtensionContext, hub);
+    registerInlineCriticism(
+      context as unknown as VSCode.ExtensionContext,
+      session,
+    );
 
-    emitOutputFiles(hub, outputPath);
+    await emitOutputFiles(session, outputPath);
     await setInlineCriticismEnabled(true);
     expect(latestDiagnostics(outputPath)).toBe(undefined);
 
-    emitOutputFiles(hub, outputPath);
+    await emitOutputFiles(session, outputPath);
     await waitForCondition(
       () => (latestDiagnostics(outputPath) ?? []).length > 0,
       {
@@ -229,7 +235,7 @@ describe('output-file run fact frontend subscriptions', () => {
     expect(latestDiagnostics(outputPath)).toHaveLength(1);
 
     await setInlineCriticismEnabled(false);
-    emitOutputFiles(hub, outputPath);
+    await emitOutputFiles(session, outputPath);
     expect(latestDiagnostics(outputPath)).toBe(undefined);
 
     disposeContext(context);

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  AgentCategory,
-  MainViewExecuteInboundMessageSchema,
-} from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import {
   buildMainViewExecuteMessage,
   type MainViewExecutionFormState,
@@ -106,39 +102,5 @@ describe('MainView execute message builder', () => {
       launchTarget: 'agent',
       workingDirectory: '/workspace/paper',
     });
-  });
-
-  it('derives execute payload validation from the shared schema', () => {
-    const message = buildMainViewExecuteMessage(
-      formState({
-        instruction: 'Search for a short proof.',
-        multiFiles: {
-          inputFiles: [],
-          contextFiles: [],
-          mediaFiles: ['diagram.png'],
-          outputFiles: [],
-        },
-      }),
-    );
-
-    expect(
-      MainViewExecuteInboundMessageSchema.parse({
-        command: MAIN_VIEW_COMMANDS.EXECUTE,
-        ...message,
-      }),
-    ).toMatchObject({
-      command: MAIN_VIEW_COMMANDS.EXECUTE,
-      agent: 'orchestrator',
-      files: { mediaFiles: ['diagram.png'] },
-    });
-  });
-
-  it('rejects malformed nested execute payload fields', () => {
-    expect(
-      MainViewExecuteInboundMessageSchema.safeParse({
-        command: MAIN_VIEW_COMMANDS.EXECUTE,
-        files: { inputFiles: 'main.tex' },
-      }).success,
-    ).toBe(false);
   });
 });

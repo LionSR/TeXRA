@@ -22,6 +22,7 @@ import type {
 } from '@shared/schemas';
 import { createRunTrace } from '@transcript';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
+import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -30,11 +31,14 @@ interface CreateChildStreamOptions {
   /** What owns this stream — the launch site declares the truth once. */
   run: RunIdentity;
   /** Runtime behavior declared by the launch source, not UI visibility. */
-  userFollowUpSupport?: UserFollowUpSupport;
+  userFollowUpSupport: UserFollowUpSupport;
   description: string;
   config: AgentConfig;
   /** Writer atomically reserved by createRehydratedChildStream. */
   reservedWriter?: TranscriptWriter;
+  /** A workflow-script run's resume anchor, stamped on `run.start`
+   *  (decision 9): the checkpoint it journals into. */
+  checkpointId?: string;
 }
 
 interface FinalizeChildStreamOptions {
@@ -107,26 +111,57 @@ export function createChildStream(
     if (traceDisposed) removeSpillFlusher();
   });
   let detachSessionTrace: (() => void) | undefined;
-  let detachStatus: (() => void) | undefined;
+  let started = false;
   try {
-    detachSessionTrace = session.attachRunTrace(runTrace.trace, childStreamId);
-    // Status is a session fact, not an AgentEvent: bridge the hub's canonical
-    // status rail into the recorder's transcript-boundary port.
-    detachStatus = session.events.subscribeStatus(runTrace.handleStatus);
+    // The trace's durable arms and the recorder's status port, one attachment.
+    detachSessionTrace = session.attachRunTrace(runTrace, childStreamId);
     const disposeTrace = () => {
       traceDisposed = true;
-      detachStatus?.();
       detachSessionTrace?.();
       runTrace.dispose();
     };
 
-    runTrace.trace.emit({
-      type: 'run.start',
-      streamId: childStreamId,
-      executionId,
-      identity: options.run,
-      userFollowUpSupport: options.userFollowUpSupport,
-    });
+    // The existence fact and its activation, one batch on the session (PRD
+    // one-fold-three-renderers, section 6, item 8): a child is activated
+    // exactly once, here, and the frozen NDJSON `setActiveStream` line
+    // projects from that. A background child never takes a host's focus:
+    // which stream a surface shows is that surface's own selection, so the
+    // fact carries no hint about it. `removeStream` permanently tombstones
+    // deterministic IDs in the CLI, so every fallible setup step above ran
+    // before this point; a failure here rolls back below without a fact.
+    session.publish([
+      {
+        type: 'run.start',
+        aggregateId: childStreamId,
+        executionId,
+        identity: options.run,
+        userFollowUpSupport: options.userFollowUpSupport,
+        // Launch facts the fold reads verbatim (item 6). Remoteness is an
+        // agent-registry fact (a `source: 'remote'` entry); a process,
+        // agent-CLI, or workflow-script child has no registry entry and is
+        // never remote.
+        category: options.config.agentCategory,
+        isRemote: false,
+        worktree: launchWorktreeInfo(options.config.workingDirectory),
+        parentStreamId,
+        background: true,
+        // The initial policy snapshot (PRD 6, item 2). Approval ancestry for
+        // the child is registered after this event by the delegation site;
+        // the queue publishes `approval.policy` for every value the edge
+        // changes.
+        approvalPolicy: session.approvalPolicySnapshotFor(childStreamId),
+        ...(options.checkpointId ? { checkpointId: options.checkpointId } : {}),
+      },
+      // No `isRemote`: the wire line never carried one for a child, which
+      // has no agent-registry entry to be remote.
+      {
+        type: 'run.activate',
+        aggregateId: childStreamId,
+        category: options.config.agentCategory,
+        background: true,
+      },
+    ]);
+    started = true;
     runTrace.trace.emit({
       type: 'run.config',
       streamId: childStreamId,
@@ -136,16 +171,13 @@ export function createChildStream(
     // Display-only fan-out: the durable copy is `ExecutionMeta.description`,
     // written by `registerExecution` before this stream exists (#9590 Stage 6).
     const description = childStreamDescription(options.description);
-    session.events.emit({
-      scope: 'session',
-      event: {
+    session.publish([
+      {
         type: 'updateStreamDescription',
-        payload: {
-          streamId: childStreamId,
-          description,
-        },
+        aggregateId: childStreamId,
+        description,
       },
-    });
+    ]);
 
     const handle = new AgentExecutionHandle(
       {
@@ -162,22 +194,6 @@ export function createChildStream(
     // canonical state loading (#8258).
     session.executions.trackAgentExecution(handle, {
       status: STREAM_PHASE.RUNNING,
-    });
-
-    // Make the child visible only after every fallible setup step succeeds.
-    // removeStream permanently tombstones deterministic IDs in the CLI, so a
-    // presentation rollback cannot safely clean up a partially created tab.
-    // Background child streams appear without switching the active tab.
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: {
-          streamId: childStreamId,
-          agentCategory: options.config.agentCategory,
-          suppressViewSwitch: true,
-        },
-      },
     });
 
     return {
@@ -215,11 +231,30 @@ export function createChildStream(
     };
   } catch (error) {
     // Roll back every fallible setup step in reverse-ish order; a cleanup
-    // failure must neither mask the original error nor skip later steps.
+    // failure must neither mask the original error nor skip later steps. A
+    // stream that already published its `run.start` exists for every fold,
+    // so it ends with its terminal `result` instead of lingering as a
+    // started-but-never-run ghost; the child's result stays out of the host
+    // result plane (`isSubagent`), as every child-stream result does.
     const failures: unknown[] = [error];
     const cleanups: (() => void)[] = [
+      () => {
+        if (!started) return;
+        runTrace.trace.emit({
+          type: 'result',
+          outcome: RUN_OUTCOME.FAILED,
+          executionId,
+          streamId: childStreamId,
+          agentName: options.config.agent,
+          category: options.config.agentCategory,
+          isSubagent: true,
+          error: {
+            kind: classifyAgentError(error),
+            message: `Child stream setup failed: ${toErrorMessage(error)}`,
+          },
+        });
+      },
       () => removeSpillFlusher(),
-      () => detachStatus?.(),
       () => detachSessionTrace?.(),
       () => runTrace.dispose(),
     ];
@@ -339,12 +374,8 @@ async function finalizeChildStream(
   disposeTrace();
 
   if (options.autoClose) {
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'removeStream',
-        payload: { streamId: handle.childStreamId },
-      },
-    });
+    session.publish([
+      { type: 'stream.removed', aggregateId: handle.childStreamId },
+    ]);
   }
 }

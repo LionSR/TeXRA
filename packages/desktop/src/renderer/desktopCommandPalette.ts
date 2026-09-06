@@ -7,8 +7,6 @@ import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { streamDisplayLabel } from '@progressView/frontend/utils';
-import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 import {
   formatDesktopAccelerator,
   type DesktopPlatform,
@@ -54,12 +52,9 @@ export interface CommandPaletteController {
 interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
-  getStreams?: () => readonly StreamTabInfo[];
   getShortcuts?: () => readonly DesktopShortcutEntry[];
   platform?: DesktopPlatform;
 }
-
-const DESKTOP_SWITCH_STREAM_COMMAND_PREFIX = 'texra.desktop.switchStream:';
 
 // Combobox wiring lives on the wa-input HOST, not its shadow input: ARIA
 // IDREFs (aria-controls/aria-activedescendant) cannot cross the shadow
@@ -132,25 +127,20 @@ export function executeCommandPaletteEntry(
 export function createDesktopCommandPalette({
   document,
   actions,
-  getStreams,
   getShortcuts,
   platform = getRendererPlatform(document.defaultView),
 }: DesktopCommandPaletteOptions): CommandPaletteController {
   const getEntries = (): CommandPaletteEntry[] => {
-    const streams = actions.showStream == null ? [] : (getStreams?.() ?? []);
     const shortcutsById = new Map(
       (getShortcuts?.() ?? []).map((entry) => [entry.id, entry]),
     );
-    return [
-      ...getDesktopCommandMenuEntries(platform).map((entry) =>
-        toPaletteEntry(entry, shortcutsById.get(entry.id), platform),
-      ),
-      ...streams.map(toStreamPaletteEntry),
-    ];
+    return getDesktopCommandMenuEntries(platform).map((entry) =>
+      toPaletteEntry(entry, shortcutsById.get(entry.id), platform),
+    );
   };
 
   const onExecute = (id: string): boolean | Promise<boolean> =>
-    dispatchDesktopPaletteCommand(id, actions);
+    dispatchDesktopCommand(id as DesktopCommandMenuEntry['id'], actions);
 
   // Reactive state: every mutation calls renderTemplate() to keep the DOM in
   // sync. wa-dialog handles modal backdrop, focus trap, escape key, and focus
@@ -374,49 +364,6 @@ export function createDesktopCommandPalette({
 
   renderTemplate();
   return { element: dialog, open, close };
-}
-
-function dispatchDesktopPaletteCommand(
-  id: string,
-  actions: DesktopCommandActions,
-): boolean | Promise<boolean> {
-  const streamId = parseSwitchStreamCommandId(id);
-  if (streamId != null) {
-    if (!actions.showStream) return false;
-    actions.showStream(streamId);
-    return true;
-  }
-  return dispatchDesktopCommand(id as DesktopCommandMenuEntry['id'], actions);
-}
-
-function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
-  return {
-    id: buildSwitchStreamCommandId(stream.name),
-    label: `Switch to ${stream.label || stream.name}`,
-    // `label` is normally `runIdentityDisplayName(identity)` by construction
-    // (`buildStreamTabInfo`), so the subtitle reads the same cleaned name the
-    // title shows instead of re-deriving it from the raw identity fields,
-    // which printed a source-prefixed id ('custom:reviewer') beside the
-    // cleaned title. The schema still permits an empty label, so both title and
-    // subtitle retain a fallback for that edge case.
-    description:
-      stream.description ||
-      stream.command ||
-      streamDisplayLabel(stream) ||
-      'Stream',
-    icon: 'terminal',
-    category: 'Tasks',
-  };
-}
-
-function buildSwitchStreamCommandId(streamId: StreamTabId): string {
-  return `${DESKTOP_SWITCH_STREAM_COMMAND_PREFIX}${streamId}`;
-}
-
-function parseSwitchStreamCommandId(id: string): StreamTabId | undefined {
-  if (!id.startsWith(DESKTOP_SWITCH_STREAM_COMMAND_PREFIX)) return undefined;
-  const streamId = id.slice(DESKTOP_SWITCH_STREAM_COMMAND_PREFIX.length);
-  return streamId || undefined;
 }
 
 function toPaletteEntry(

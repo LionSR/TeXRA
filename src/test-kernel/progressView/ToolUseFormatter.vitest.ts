@@ -241,7 +241,7 @@ return { papers, question: args.question };`;
 
     // A shell call is described by its command (the shared row model's
     // header rule), so streamed stdout can reach neither the title nor it.
-    expect(title?.textContent).toBe('bash — lake build');
+    expect(title?.textContent).toBe('bash: lake build');
     expect(title?.textContent).not.toContain('Built Mathlib');
     expect(body?.textContent).toContain('Built Mathlib.Example.Module19');
 
@@ -286,7 +286,7 @@ return { papers, question: args.question };`;
     const container = renderTemplate(formatToolUseTemplate(row));
 
     const title = container.querySelector('.tool-use-title')?.textContent;
-    expect(title).toBe('Edit — paper.tex');
+    expect(title).toBe('Edit: paper.tex');
   });
 
   it('renders a diff for a delegated Edit call (old_string/new_string, file_path)', () => {
@@ -339,7 +339,7 @@ return { papers, question: args.question };`;
     const container = renderTemplate(formatToolUseTemplate(row));
 
     expect(container.querySelector('.tool-use-title')?.textContent).toBe(
-      'Bash — npm test',
+      'Bash: npm test',
     );
     expect(
       container.querySelector('terminal-output.tool-output-terminal'),
@@ -432,7 +432,7 @@ return { papers, question: args.question };`;
           ['sub-2', 'leanSolver'],
         ],
       ),
-    ).toBe('executions — wait: reviewer, leanSolver');
+    ).toBe('executions: wait: reviewer, leanSolver');
   });
 
   it('keeps the resource path when labeling an executions target', () => {
@@ -440,7 +440,7 @@ return { papers, question: args.question };`;
       executionsTitle({ path: '/executions/sub-1/workspace-files/review.md' }, [
         ['sub-1', 'reviewer'],
       ]),
-    ).toBe('executions — view: reviewer/workspace-files/review.md');
+    ).toBe('executions: view: reviewer/workspace-files/review.md');
   });
 
   it('keeps the existing executions title for a background process', () => {
@@ -448,7 +448,7 @@ return { papers, question: args.question };`;
       executionsTitle({ action: 'view', path: '/executions/process-1' }, [
         ['sub-1', 'reviewer'],
       ]),
-    ).toBe('executions — view /executions/process-1');
+    ).toBe('executions: view /executions/process-1');
   });
 });
 
@@ -459,7 +459,7 @@ return { papers, question: args.question };`;
  *
  * `<wa-details>`'s own summary click handler already excludes real
  * `<button>`/`<wa-button>` elements from its toggle, but its keydown handler
- * has no such check — every Enter/Space keydown that bubbles to the summary
+ * has no such check: every Enter/Space keydown that bubbles to the summary
  * toggles regardless of origin. `stopSummaryToggleKeydown` (htmlBuilders.ts)
  * stops those keydowns from reaching wa-details' summary at all.
  */

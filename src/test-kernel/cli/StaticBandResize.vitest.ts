@@ -16,12 +16,12 @@ process.env.FORCE_COLOR = '3';
 
 // Third-party imports
 import stripAnsi from 'strip-ansi';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
 import type { SessionMeta } from '@cli/chat/tui/state/cliState';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import {
   FakeStdin,
@@ -35,6 +35,12 @@ import {
   textRowFixture,
   toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
+import {
+  bindTestSessionView,
+  makeStreamView,
+  seedView,
+  viewWith,
+} from './fixtures/sessionViewFixture';
 
 afterAll(() => {
   for (const [name, value] of Object.entries(ORIGINAL_COLOR_ENV)) {
@@ -45,11 +51,9 @@ afterAll(() => {
 
 const TRANSCRIPT_SESSION: Omit<SessionMeta, 'cwd'> = {
   agent: 'research',
-  category: AgentCategory.ToolUse,
   model: 'test-model',
   modelSource: 'builtin-default',
   approvalPolicy: 'ask',
-  canDelegate: false,
   transcriptMode: 'persistent',
   version: '0.0.0-test',
 };
@@ -114,7 +118,19 @@ function seedTranscript(
   entries: TranscriptRow[],
 ): void {
   cliState.resetCliState({ ...TRANSCRIPT_SESSION, cwd });
-  cliState.patchStream(streamId, (slice) => ({ ...slice, entries }));
+  seedView(
+    viewWith([
+      makeStreamView({
+        id: streamId,
+        transcript: {
+          rows: entries,
+          taskGroups: [],
+          settledRows: entries.length,
+          run: null,
+        },
+      }),
+    ]),
+  );
 }
 
 /** A completed tool row; only the fields each case varies are parameters. A
@@ -139,6 +155,7 @@ function completedToolEntry(fields: {
 }
 
 describe('Static band resize', () => {
+  beforeAll(bindTestSessionView);
   it('replaces finalized transcript geometry at the new width', async () => {
     const {
       ink,

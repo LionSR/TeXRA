@@ -108,3 +108,53 @@ export function stringifyPayload(value: unknown): PayloadText {
     language: 'yaml',
   };
 }
+
+/**
+ * `transcriptText(prev.full + chunk)` at O(chunk): the fold's live-text path
+ * calls this once per provider chunk, so a long streaming row must not pay
+ * for its whole text on every append. `prevEnd` is the character `prev.full`
+ * ends with (or '' for an empty text), kept by the caller: reading it from
+ * `prev.full` would flatten the joined text on every chunk, which is the
+ * whole-text copy this exists to avoid. `oneLine` keeps the collapsed form
+ * untrimmed at its tail between calls, so the whitespace a chunk boundary
+ * splits collapses exactly as one pass over the joined text would; the
+ * trimmed value is what the row carries.
+ */
+export function appendTranscriptText(
+  prev: TranscriptText,
+  chunk: string,
+  prevEnd: string,
+): TranscriptText {
+  if (!chunk) return prev;
+  if (!prev.full) return transcriptText(chunk);
+  const full = prev.full + chunk;
+  // `prev.lineCount` already counts an unterminated last line, so the
+  // newlines inside the chunk move the count, plus the line the chunk opens
+  // after a terminating newline, minus the one it leaves unopened. A `\r`
+  // never breaks a line on its own (`normalizeLineEndings` only folds
+  // `\r\n`), so a pair split across the boundary counts its `\n` once.
+  const endedOnNewline = prevEnd === '\n';
+  let newlines = 0;
+  for (let i = 0; i < chunk.length; i += 1) {
+    if (chunk.charCodeAt(i) === 10) newlines += 1;
+  }
+  const lineCount =
+    prev.lineCount +
+    newlines +
+    (endedOnNewline ? 1 : 0) -
+    (chunk.endsWith('\n') ? 1 : 0);
+  // The whitespace `prev.oneLine` trimmed at its tail comes back as the one
+  // space it collapses to, and a chunk that opens on whitespace merges into
+  // it rather than doubling. Only the chunk's own collapsed form is trimmed:
+  // `prev.oneLine` is already trimmed, and trimming the joined string would
+  // flatten it on every append.
+  const collapsed = chunk.replaceAll(/\s+/g, ' ');
+  const prevEndsOnSpace = /^\s$/.test(prevEnd);
+  const body =
+    prevEndsOnSpace && collapsed.startsWith(' ')
+      ? collapsed.slice(1)
+      : collapsed;
+  const tail = prev.oneLine ? body.trimEnd() : body.trim();
+  const joiner = prevEndsOnSpace && prev.oneLine && tail ? ' ' : '';
+  return { full, oneLine: prev.oneLine + joiner + tail, lineCount };
+}

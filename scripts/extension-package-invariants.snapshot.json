@@ -688,15 +688,13 @@
     "resources/walkthroughs",
     "src/common/styles/common.css",
     "src/progressView/index.html",
-    "src/settingsView/index.html",
-    "src/webview/index.html"
+    "src/settingsView/index.html"
   ],
   "requiredVscodeIgnoreLines": [
     "src/**",
     "resources/traceViewerShared/**",
     "!src/common/styles/*.css",
     "!src/progressView/*.html",
-    "!src/settingsView/*.html",
-    "!src/webview/*.html"
+    "!src/settingsView/*.html"
   ]
 }

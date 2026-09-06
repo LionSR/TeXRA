@@ -1,4 +1,3 @@
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { APPROVAL_BYPASS_BADGE } from '@shared/copy/approvalBypass';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
@@ -7,8 +6,6 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 export interface ProgressToolbarButton {
   id: string;
   icon: TeXRAIconName;
-  /** Backend command. Omitted exactly when `localAction` is set. */
-  command?: string;
   /** Which per-stream bypass this toggle reflects and dispatches. */
   bypassKind?: ApprovalBypassKind;
   /**
@@ -49,6 +46,7 @@ export const ELEMENT_IDS = {
   PLAN_VIEW_CONTAINER: 'planViewContainer',
   PLAN_VIEW: 'planView',
   TOOLBAR_CONTAINER: 'toolbarContainer',
+  HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_NEW_BTN: 'runNewBtn',
   RESUME_BTN: 'resumeBtn',
@@ -61,6 +59,7 @@ export const ELEMENT_IDS = {
   COPY_RUN_CONTEXT_BTN: 'copyRunContextBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
+  FOLLOW_UP_HINT: 'followUpHint',
   QUEUED_FOLLOW_UPS_COLLAPSIBLE: 'queuedFollowUpsCollapsible',
   QUEUED_FOLLOW_UPS_LIST: 'queuedFollowUpsList',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
@@ -81,7 +80,6 @@ export const GROUP_DOM_IDS = Object.freeze({
 const STOP_STREAM_BUTTON = Object.freeze({
   id: ELEMENT_IDS.STOP_STREAM_BTN,
   icon: 'circle-stop',
-  command: PROGRESS_VIEW_COMMANDS.STOP_STREAM,
   title:
     'Request task interruption (current API call will be aborted if supported)',
   className: 'stop-button',
@@ -90,15 +88,13 @@ const STOP_STREAM_BUTTON = Object.freeze({
 const RESTORE_STATE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.RESTORE_STATE_BTN,
   icon: 'reply',
-  command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
-  title: 'Setup this configuration in the main view',
+  title: 'Edit as new task',
   className: 'restore-button',
 });
 
 const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   icon: 'folder-open',
-  command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
   title: 'Open in task storage: reveal this run folder and generated files',
   className: 'storage-button',
 });
@@ -106,7 +102,6 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
 const EXPORT_TRANSCRIPT_BUTTON = Object.freeze({
   id: ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   icon: 'file-export',
-  command: PROGRESS_VIEW_COMMANDS.EXPORT_TRANSCRIPT,
   title: 'Export this conversation as Markdown, HTML, or PDF',
   className: 'export-button',
 });
@@ -125,14 +120,12 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
   {
     id: ELEMENT_IDS.RUN_NEW_BTN,
     icon: 'play',
-    command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
     title: 'Start a fresh run (discards previous outputs)',
     className: 'run-button run-new-button',
   },
   {
     id: ELEMENT_IDS.RESUME_BTN,
     icon: 'forward-step',
-    command: PROGRESS_VIEW_COMMANDS.RESUME,
     title: 'Resume from saved outputs (continues where it left off)',
     className: 'run-button resume-button',
   },
@@ -143,21 +136,18 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
     icon: 'code-compare',
-    command: PROGRESS_VIEW_COMMANDS.DIFF_STREAM,
     title: 'Run latexdiff on existing tex files',
     className: 'diff-button',
   },
   {
     id: ELEMENT_IDS.CLEAN_STREAM_BTN,
     icon: 'trash',
-    command: PROGRESS_VIEW_COMMANDS.CLEAN_STREAM,
     title: 'Clean: Delete generated output files from this run',
     className: 'clean-button',
   },
   {
     id: ELEMENT_IDS.PACK_STREAM_BTN,
     icon: 'box-archive',
-    command: PROGRESS_VIEW_COMMANDS.PACK_STREAM,
     title: 'Pack: Archive output files into a timestamped History folder',
     className: 'pack-button',
   },
@@ -166,7 +156,6 @@ const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
 const TOOL_EDIT_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.TOOL_EDIT_TOGGLE_BTN,
   icon: 'pencil',
-  command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
   bypassKind: 'toolEdit',
   label: APPROVAL_BYPASS_BADGE.toolEdit,
   title: `${APPROVAL_BYPASS_BADGE.toolEdit}: Auto-approve file edits in this run`,
@@ -178,7 +167,6 @@ const TOOL_EDIT_TOGGLE_BUTTON = Object.freeze({
 const BASH_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.BASH_TOGGLE_BTN,
   icon: 'terminal',
-  command: PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS,
   bypassKind: 'bash',
   label: APPROVAL_BYPASS_BADGE.bash,
   title: `${APPROVAL_BYPASS_BADGE.bash}: Auto-approve shell commands in this run`,
@@ -190,7 +178,6 @@ const BASH_TOGGLE_BUTTON = Object.freeze({
 const AUTO_TASK_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.AUTO_TASK_TOGGLE_BTN,
   icon: 'rocket',
-  command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
   bypassKind: 'superYolo',
   label: APPROVAL_BYPASS_BADGE.superYolo,
   title: DELEGATION_APPROVAL_COPY.progressViewToggle,
@@ -202,7 +189,6 @@ const AUTO_TASK_TOGGLE_BUTTON = Object.freeze({
 const COMPACT_RESPONSE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   icon: 'compress',
-  command: PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE,
   title:
     'Compact conversation context (summarize history to reduce token usage)',
   className: 'compact-button',

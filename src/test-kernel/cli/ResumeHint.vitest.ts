@@ -1,77 +1,47 @@
 import '@test/support/defaultSessionTestSetup';
-
 import { describe, expect, it } from 'vitest';
-
-import { defaultSession } from '@agent/runtime/SessionHandle';
-
 import {
   collectResumeUsage,
   collectResumeTargets,
   formatResumeCommand,
   formatResumeHint,
-  formatResumeUsage,
   type ResumeCommandOptions,
   type ResumeTarget,
 } from '@cli/chat/tui/state/resumeHint';
-import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
-  type ActiveChildInfo,
-  type ExecutionId,
+  AgentCategory,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { buildChildRosters } from '@test/support/childRosters';
-import { snapshotFacts } from '@test/support/storeTestDrivers';
+import type { StreamView } from '@shared/session/sessionView';
+import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
 
-/** A stream's view slice, with any `usage` accumulated on the snapshot store
- *  instead — the resume summary sums the store's cumulative projection. */
-function makeSlice(
-  over: Partial<StreamSlice> & {
-    streamId: string;
-    readonly usage?: TokenUsageStats;
-  },
-): StreamSlice & { readonly streamId: StreamTabId } {
-  const { usage, streamId: rawStreamId, ...sliceOverrides } = over;
-  const streamId = rawStreamId as StreamTabId;
-  if (usage) {
-    snapshotFacts(defaultSession().snapshots).addUsage(
-      streamId,
-      `${over.streamId}-usage` as ExecutionId,
-      usage,
-    );
-  }
-  // The id rides along for `streamsOf` and roster fixtures; the slice under
-  // test no longer carries it.
-  return { ...emptySlice(), ...sliceOverrides, streamId };
+const ROOT = 'main@m#root' as StreamTabId;
+
+function root(usage?: TokenUsageStats): StreamView {
+  return makeStreamView({
+    id: ROOT,
+    executionId: 'root',
+    label: 'main',
+    usage: usage ? { 'root-usage': usage } : {},
+  });
 }
 
-/** A finished roster row retained for display — the resume-target shape. */
+/** A child of the root, as the fold states it. */
 function child(
-  over: Partial<ActiveChildInfo> & {
-    executionId: string;
-    childStreamId: StreamTabId;
+  over: Partial<StreamView> & {
+    readonly id: string;
+    readonly executionId: string;
   },
-): ActiveChildInfo {
-  return {
-    agentName: 'agent',
-    identity: { kind: 'agent', agent: 'agent' },
-    resumeEligible: true,
-    finishedAt: 1,
+): StreamView {
+  return makeStreamView({
+    parentId: ROOT,
+    ancestors: [{ id: ROOT, label: 'main' }],
     ...over,
-  };
+  });
 }
 
-function streamsOf(
-  ...slices: (StreamSlice & { readonly streamId: StreamTabId })[]
-): ReadonlyMap<StreamTabId, StreamSlice> {
-  return new Map(slices.map((s) => [s.streamId, s]));
-}
-
-const EMPTY_CHILD_ROSTERS = buildChildRosters({
-  parentStreamId: 'main@m#root' as StreamTabId,
-});
-
-/** Root plus one subagent — the shared fixture for multi-line hint cases. */
+/** Root plus one subagent: the shared fixture for multi-line hint cases. */
 const TWO_RESUME_TARGETS: readonly ResumeTarget[] = [
   { executionId: 'root', label: 'main', isRoot: true },
   { executionId: 'rev', label: 'reviewer', isRoot: false },
@@ -79,72 +49,50 @@ const TWO_RESUME_TARGETS: readonly ResumeTarget[] = [
 
 describe('collectResumeTargets', () => {
   it('returns just the main session when there are no subagents', () => {
-    const streams = streamsOf(makeSlice({ streamId: 'main@m#root' }));
     expect(
       collectResumeTargets({
-        childRosters: EMPTY_CHILD_ROSTERS,
+        view: viewWith([root()]),
+        rootStreamId: ROOT,
         rootExecutionId: 'root',
-        streams,
       }),
     ).toEqual([{ executionId: 'root', label: 'main', isRoot: true }]);
   });
 
-  it('lists running and finished resume-eligible subagents', () => {
-    const root = makeSlice({ streamId: 'main@m#root' });
-    const reviewer = makeSlice({ streamId: 'reviewer@m#rev' });
-    const builder = makeSlice({ streamId: 'builder@m#flow' });
-    const childRosters = buildChildRosters({
-      parentStreamId: root.streamId,
-      rows: [
-        child({
-          executionId: 'rev',
-          agentName: 'reviewer',
-          identity: { kind: 'agent', agent: 'reviewer' },
-          childStreamId: 'reviewer@m#rev' as StreamTabId,
-          finishedAt: undefined,
-        }),
-        child({
-          executionId: 'flow',
-          agentName: 'builder',
-          identity: { kind: 'agent', agent: 'builder' },
-          resumeEligible: false,
-          childStreamId: 'builder@m#flow' as StreamTabId,
-        }),
-      ],
-    });
-
+  it('lists running and finished plain tool-use subagents', () => {
+    const view = viewWith([
+      root(),
+      child({ id: 'reviewer@m#rev', executionId: 'rev', label: 'reviewer' }),
+      child({
+        id: 'builder@m#flow',
+        executionId: 'flow',
+        label: 'builder',
+        category: AgentCategory.Workflow,
+      }),
+    ]);
     expect(
       collectResumeTargets({
-        childRosters,
+        view,
+        rootStreamId: ROOT,
         rootExecutionId: 'root',
-        streams: streamsOf(root, reviewer, builder),
       }),
-    ).toEqual([
-      { executionId: 'root', label: 'main', isRoot: true },
-      { executionId: 'rev', label: 'reviewer', isRoot: false },
-    ]);
+    ).toEqual(TWO_RESUME_TARGETS);
   });
 
-  it('skips children whose roster row has no resume eligibility', () => {
-    const root = makeSlice({ streamId: 'main@m#root' });
-    const shell = makeSlice({ streamId: 'bash@tool#sh' });
-    const childRosters = buildChildRosters({
-      parentStreamId: root.streamId,
-      rows: [
-        child({
-          executionId: 'sh',
-          agentName: 'bash',
-          resumeEligible: undefined,
-          childStreamId: 'bash@tool#sh' as StreamTabId,
-        }),
-      ],
-    });
-
+  it('skips children that are not plain agent runs', () => {
+    const view = viewWith([
+      root(),
+      child({
+        id: 'bash@tool#sh',
+        executionId: 'sh',
+        label: 'bash',
+        identity: { kind: 'process', tool: 'bash' },
+      }),
+    ]);
     expect(
       collectResumeTargets({
-        childRosters,
+        view,
+        rootStreamId: ROOT,
         rootExecutionId: 'root',
-        streams: streamsOf(root, shell),
       }),
     ).toEqual([{ executionId: 'root', label: 'main', isRoot: true }]);
   });
@@ -152,9 +100,9 @@ describe('collectResumeTargets', () => {
   it('returns nothing when there is no root execution yet', () => {
     expect(
       collectResumeTargets({
-        childRosters: EMPTY_CHILD_ROSTERS,
+        view: viewWith([]),
+        rootStreamId: undefined,
         rootExecutionId: undefined,
-        streams: new Map(),
       }),
     ).toEqual([]);
   });
@@ -302,23 +250,54 @@ describe('formatResumeHint', () => {
     );
   });
 
-  it('flows the session cost line through the full hint', () => {
-    expect(
-      formatResumeHint([{ executionId: 'root', label: 'main', isRoot: true }], {
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 0.012,
-        usageRoute: 'relay',
-      } satisfies TokenUsageStats),
-    ).toBe(
-      [
-        'Token usage: total=120 input=100 output=20',
-        'Session cost: $0.012 via included access',
-        'Resume this session with:',
-        '  texra resume root  (main)',
-      ].join('\n'),
-    );
-  });
+  it.each<{
+    usageRoute: TokenUsageStats['usageRoute'];
+    cost: number;
+    expected: string;
+  }>([
+    {
+      usageRoute: 'relay',
+      cost: 0.012,
+      expected: '$0.012 via included access',
+    },
+    {
+      usageRoute: 'chatgpt-subscription',
+      cost: 0,
+      expected: 'Free via ChatGPT',
+    },
+    {
+      usageRoute: 'api-key',
+      cost: 0.5,
+      expected: '$0.500 via your own API keys',
+    },
+    {
+      usageRoute: undefined,
+      cost: 0.3,
+      expected: '$0.300',
+    },
+  ])(
+    'includes the $usageRoute session cost in the full hint',
+    ({ usageRoute, cost, expected }) => {
+      expect(
+        formatResumeHint(
+          [{ executionId: 'root', label: 'main', isRoot: true }],
+          {
+            inputTokens: 100,
+            outputTokens: 20,
+            cost,
+            usageRoute,
+          } satisfies TokenUsageStats,
+        ),
+      ).toBe(
+        [
+          'Token usage: total=120 input=100 output=20',
+          `Session cost: ${expected}`,
+          'Resume this session with:',
+          '  texra resume root  (main)',
+        ].join('\n'),
+      );
+    },
+  );
 
   it('is undefined when there is nothing to resume', () => {
     expect(formatResumeHint([])).toBeUndefined();
@@ -326,30 +305,29 @@ describe('formatResumeHint', () => {
 });
 
 describe('collectResumeUsage', () => {
-  it('sums usage from every stream', () => {
-    const streams = streamsOf(
-      makeSlice({
-        streamId: 'main@m#root',
+  it('sums usage from every stream under the root', () => {
+    const view = viewWith([
+      root({
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 0.2,
+        cacheReadInputTokens: 7,
+      }),
+      child({
+        id: 'review@m#rev',
+        executionId: 'rev',
         usage: {
-          inputTokens: 100,
-          outputTokens: 20,
-          cost: 0.2,
-          cacheReadInputTokens: 7,
+          'rev-usage': {
+            inputTokens: 40,
+            outputTokens: 8,
+            cost: 0.3,
+            cacheReadInputTokens: 3,
+            reasoningTokens: 5,
+          } as TokenUsageStats,
         },
       }),
-      makeSlice({
-        streamId: 'review@m#rev',
-        usage: {
-          inputTokens: 40,
-          outputTokens: 8,
-          cost: 0.3,
-          cacheReadInputTokens: 3,
-          reasoningTokens: 5,
-        } as TokenUsageStats,
-      }),
-    );
-
-    expect(collectResumeUsage(streams)).toEqual({
+    ]);
+    expect(collectResumeUsage(view, ROOT)).toEqual({
       inputTokens: 140,
       outputTokens: 28,
       cost: 0.5,
@@ -358,70 +336,5 @@ describe('collectResumeUsage', () => {
       cacheCreationInputTokens: 0,
       reasoningTokens: 5,
     });
-  });
-});
-
-describe('formatResumeUsage', () => {
-  it('omits empty usage', () => {
-    expect(
-      formatResumeUsage({ inputTokens: 0, outputTokens: 0, cost: 0 }),
-    ).toBeUndefined();
-  });
-
-  it('appends the session cost with the relay route label', () => {
-    expect(
-      formatResumeUsage({
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 0.012,
-        usageRoute: 'relay',
-      }),
-    ).toBe(
-      'Token usage: total=120 input=100 output=20\n' +
-        'Session cost: $0.012 via included access',
-    );
-  });
-
-  it('shows a covered subscription as free', () => {
-    expect(
-      formatResumeUsage({
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 0,
-        usageRoute: 'chatgpt-subscription',
-      }),
-    ).toBe(
-      'Token usage: total=120 input=100 output=20\n' +
-        'Session cost: Free via ChatGPT',
-    );
-  });
-
-  it('labels your own API keys', () => {
-    expect(
-      formatResumeUsage({
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 0.5,
-        usageRoute: 'api-key',
-      }),
-    ).toBe(
-      'Token usage: total=120 input=100 output=20\n' +
-        'Session cost: $0.500 via your own API keys',
-    );
-  });
-
-  it('shows the bare cost when no route is stamped', () => {
-    expect(
-      formatResumeUsage({ inputTokens: 100, outputTokens: 20, cost: 0.3 }),
-    ).toBe(
-      'Token usage: total=120 input=100 output=20\n' + 'Session cost: $0.300',
-    );
-  });
-
-  it('omits the cost line when there is no cost and no route', () => {
-    const usage = { inputTokens: 100, outputTokens: 20, cost: 0 };
-    expect(formatResumeUsage(usage)).toBe(
-      'Token usage: total=120 input=100 output=20',
-    );
   });
 });

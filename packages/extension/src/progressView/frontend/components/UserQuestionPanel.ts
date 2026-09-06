@@ -76,7 +76,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
               : 'Select or type at least one answer before submitting',
             action: 'submit',
             kind: 'primary',
-            disabled: this.archived,
+            disabled: this.readOnly,
             onClick: () => this.submitAnswers(),
           })}
           ${this.renderRejectButton('Reject this question (n)')}
@@ -245,7 +245,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   }
 
   private submitAnswers(): void {
-    if (this.archived) return;
+    if (this.readOnly) return;
     const data = this.permission.data;
     if (!this.hasAnyAnswer(data)) {
       this.renderRoot

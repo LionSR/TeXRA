@@ -43,7 +43,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   ];
 
   override handleKeyboardShortcut(key: string): boolean {
-    if (this.archived) return false;
+    if (this.readOnly) return false;
     switch (key) {
       case 'r':
         this.emitAction({ action: 'retry' });
@@ -74,7 +74,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     ];
 
     const detailsText = this.formatRetryDetails(data.errorDetails);
-    const disabled = this.archived;
+    const disabled = this.readOnly;
 
     return html`
       <div class="retry-request">

@@ -27,10 +27,7 @@ import { SettingsProfileKeyController } from '@controllers/settingsView/Settings
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
-import {
-  getMainWebview,
-  safeExecuteCommand,
-} from '@frontend/system/commandUtils';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
   setInlineCriticismEnabled,
@@ -50,7 +47,6 @@ import {
   requestRuntimeModelAccess,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -59,7 +55,8 @@ import {
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { revealProgressStream } from '@progressView/progressNavigation';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   codingPlanForApiProvider,
   codingPlanForUsageSetting,
@@ -83,7 +80,6 @@ import {
 
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import {
   getLastCheckResults,
@@ -94,6 +90,7 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { setToolEnabled } from '@utils/config/constants';
+import { platformSettingsStores } from '@utils/config/platformSettings';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
@@ -433,9 +430,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       commands: unsupportedCommands(this.handlerRegistry),
     });
 
-    // Auth/session changes affect model availability and must not reuse a
-    // pre-login/pre-logout availability snapshot.
-    invalidateModelOptionsCache();
     await this.sendProfileAndModelSelectionData(webview);
 
     await Promise.all([
@@ -500,21 +494,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Catalog-derived settings snapshots
   // ============================================================
 
-  private settingsStores(): SettingsStores {
-    return {
-      config: workspaceRoots().config,
-      workspaceState: workspaceRoots().workspaceState,
-      globalState: platform().globalState,
-    };
-  }
-
   /** Post one catalog-derived snapshot. Every field comes from the catalog. */
   private async sendSettingsSnapshot(
     webview: vscode.Webview,
     snapshot: DerivedSettingsSnapshot,
   ): Promise<void> {
     await webview.postMessage(
-      buildSettingsSnapshotMessage(snapshot, this.settingsStores(), 'vscode'),
+      buildSettingsSnapshotMessage(
+        snapshot,
+        platformSettingsStores(),
+        'vscode',
+      ),
     );
   }
 
@@ -540,7 +530,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
     const result = await applyStateSettingUpdate(key, value, {
       host: 'vscode',
-      stores: this.settingsStores(),
+      stores: platformSettingsStores(),
       // The shared function already gates this hook on
       // `configTarget !== 'global'`; this checks only the workspace half.
       requiresOpenWorkspace: () => !WorkspaceFS.getPath(),
@@ -571,7 +561,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.postStateSettingSnapshot(result.entry.surfaces.settingsView);
     if (result.kind !== 'applied') return;
     if (result.entry.onWrite?.invalidatesModelOptions) {
-      invalidateModelOptionsCache();
       await this.withActiveWebview((w) => this.sendModelSelectionData(w));
       await safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
     }
@@ -609,7 +598,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   /**
    * The shared refresh tail for a credential change (API key or subscription
-   * auth): invalidate caches, re-run the host refresh commands, and push
+   * auth): drop the cached usage, re-run the host refresh commands, and push
    * fresh profile/model/usage data to the active webview. Model selection
    * availability depends on key state, so the key status command is awaited
    * before any model/profile data is sent. `refreshProfileData` selects which
@@ -620,8 +609,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     usageProvider?: SubscriptionUsageProvider;
     refreshProfileData: (webview: vscode.Webview) => Promise<void>;
   }): Promise<void> {
-    // Invalidate caches so downstream refreshes see fresh credential state.
-    invalidateModelOptionsCache();
     if (options.usageProvider) {
       this.subscriptionUsage.invalidate(options.usageProvider);
     }
@@ -647,18 +634,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   public async refreshAfterProviderKeyChange(provider: string): Promise<void> {
     invalidateApiKeyCache();
     const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
-    const mainView = await getMainWebview(this.viewName);
-    if (mainView) {
-      const setupComplete = await hasUsableSetupCredential(
-        platform().secrets,
-        this.log.warn,
-      );
-      mainView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_BANNER,
-        banner: 'apiKey',
-        visible: !setupComplete,
-      });
-    }
+    // The launcher's API-key banner reads the same credential probe from
+    // the host snapshot.
+    await ProgressViewProvider.getInstance()?.refreshHostBanners();
     await this.refreshCredentialDependentSurfaces({
       usageProvider,
       refreshProfileData: (webview) =>
@@ -708,7 +686,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       }
     } finally {
       invalidateRuntimeModelRegistry();
-      invalidateModelOptionsCache();
       await Promise.all([
         safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
         this.withActiveWebview((webview) =>
@@ -722,7 +699,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    * canonical model to direct-provider routing. */
   private async handleClearCopilotRoute(modelName: string): Promise<void> {
     await setCopilotRoutePreference(modelName, false);
-    invalidateModelOptionsCache();
     await Promise.all([
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((webview) => this.sendModelSelectionData(webview)),

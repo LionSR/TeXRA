@@ -5,7 +5,6 @@ import {
   type ExecutionRun,
 } from '@agent/runtime/ExecutionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { AgentCategory } from '@shared/schemas';
@@ -38,14 +37,20 @@ export function testExecutionHandle(input: {
   return new AgentExecutionHandle(run, input.parentStreamId, input.trace);
 }
 
-/** A registry with the canonical status-machine/event-hub pair for tests. */
+/** A registry with a status machine whose facts reach its `handleStatus`. */
 export function testExecutionRegistry(): ExecutionRegistry {
-  const events = new SessionEventHub();
-  return new ExecutionRegistry({
-    events,
-    streamStatus: new StreamStatusMachine(events),
+  // The machine's facts reach the registry built below; the closure runs
+  // only once a transition is published, after the registry exists.
+  const streamStatus = new StreamStatusMachine(
+    (event) => registry.handleStatus(event.streamId),
+    () => {},
+  );
+  const registry = new ExecutionRegistry({
+    publish: () => {},
+    streamStatus,
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     publishResult: () => {},
     releaseRootExecutionLease: async () => {},
   });
+  return registry;
 }

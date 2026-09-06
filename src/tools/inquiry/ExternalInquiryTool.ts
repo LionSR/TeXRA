@@ -315,13 +315,13 @@ export class ExternalInquiryTool extends defineTool({
     // Background Tasks panel: announce the open thread.
     const summary = await getThreadSummary(manifest.threadId);
     if (summary) {
-      session.events.emit({
-        scope: 'session',
-        event: {
+      session.publish([
+        {
           type: 'inquiryThreadUpdated',
-          payload: summary,
+          aggregateId: summary.threadId,
+          ...summary,
         },
-      });
+      ]);
     }
 
     const message =

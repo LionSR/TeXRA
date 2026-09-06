@@ -3,9 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { FileList } from '@progressView/frontend/components/FileList';
-import type { ProgressFileActionDetail } from '@progressView/frontend/events';
-import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { OutputFileInfo } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
 
 // Local file imports
 import {
@@ -42,11 +41,12 @@ describe('file-list keyboard activation', () => {
 
   it('opens file paths on Space without hijacking native action buttons', async () => {
     const element = await mountComponent<FileList>('file-list', {
+      streamId: 'stream-a',
       filesByRound: { '1': [outputFile()] },
     });
-    const actions: ProgressFileActionDetail[] = [];
-    element.addEventListener('file-action', (event) => {
-      actions.push((event as CustomEvent<ProgressFileActionDetail>).detail);
+    const actions: HostRequest[] = [];
+    element.addEventListener('host-request', (event) => {
+      actions.push(event.detail);
     });
 
     const filePath = element.shadowRoot?.querySelector('.file-path');
@@ -60,12 +60,7 @@ describe('file-list keyboard activation', () => {
     dispatchKey(filePath!, ' ');
 
     expect(actions).toEqual([
-      {
-        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
-        file: '/workspace/paper_revised.tex',
-        base: undefined,
-        prev: undefined,
-      },
+      { kind: 'openFile', path: '/workspace/paper_revised.tex', line: null },
     ]);
 
     const nativeButton = element.shadowRoot?.querySelector(

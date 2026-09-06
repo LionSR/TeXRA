@@ -16,7 +16,6 @@ import {
   listThreadsByStatus,
   markDropped,
   manifestToTranscript,
-  persistOpenTurnDraft,
   readExternalInquiryThread,
   recordAnswerForOpenTurn,
   recordOpenQuestion,
@@ -137,6 +136,7 @@ describe('InquiryStorage', () => {
 
     const answered = await recordAnswerForOpenTurn({
       threadId: opened.threadId,
+      turnIndex: 1,
       answer: 'C = (n(n-2))^{-1} * ω_n^{2/n}',
     });
     expect(answered).not.toBeNull();
@@ -160,7 +160,7 @@ describe('InquiryStorage', () => {
     {
       name: 'rejects ask on a dropped thread',
       retire: async (threadId: InquiryThreadId) => {
-        await markDropped({ threadId });
+        await markDropped({ threadId, turnIndex: 1 });
       },
     },
   ])('$name', async ({ retire }) => {
@@ -187,7 +187,11 @@ describe('InquiryStorage', () => {
       parentExecutionId: null,
       question: 'Q1',
     });
-    await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
+    await recordAnswerForOpenTurn({
+      threadId: t.threadId,
+      turnIndex: 1,
+      answer: 'A1',
+    });
 
     const followUp = await recordOpenQuestion({
       threadId: t.threadId,
@@ -199,75 +203,17 @@ describe('InquiryStorage', () => {
     expect(followUp.status).toBe('open');
     expect(followUp.turns).toHaveLength(2);
     expect(followUp.turns.at(-1)?.question).toBe('Q2 (follow-up)');
-  });
-
-  it('keeps first-turn draft context valid for hydrated new inquiries', async () => {
-    const t = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-    const draft = {
-      answer: 'partial answer',
-      sessionLinks: 'https://chat.example/thread',
-    };
-    await persistOpenTurnDraft({
-      threadId: t.threadId,
-      draft,
-    });
-
-    const manifest = await readExternalInquiryThread(t.threadId);
-    expect(manifest).not.toBeNull();
-
-    const permission = ExternalInquiryPermissionSchema.parse({
-      requestId: t.threadId,
-      threadId: t.threadId,
-      question: 'Q1',
-      allowBypass: false,
-      streamId: STREAM_A,
-      sessionLinks: undefined,
-      draft: getOpenTurnDraft(manifest!),
-      transcript: manifestToTranscript(manifest!),
-    });
-
-    expect(permission).toMatchObject({
-      draft,
-      transcript: [{ turnIndex: 1, question: 'Q1', answer: undefined }],
-    });
-  });
-
-  it('persists open-turn drafts and exposes transcript turns', async () => {
-    const t = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-    await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
-    await recordOpenQuestion({
-      threadId: t.threadId,
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q2',
-    });
-
-    await persistOpenTurnDraft({
-      threadId: t.threadId,
-      draft: {
-        answer: 'partial answer',
-        sessionLinks: 'https://chat.example/thread',
-      },
-    });
-
-    const manifest = await readExternalInquiryThread(t.threadId);
-    expect(manifest).not.toBeNull();
-    expect(getOpenTurnDraft(manifest!)).toEqual({
-      answer: 'partial answer',
-      sessionLinks: 'https://chat.example/thread',
-    });
-    expect(manifestToTranscript(manifest!)).toMatchObject([
-      { turnIndex: 1, question: 'Q1', answer: 'A1' },
-      { turnIndex: 2, question: 'Q2', answer: undefined },
-    ]);
+    expect(
+      await recordAnswerForOpenTurn({
+        threadId: t.threadId,
+        turnIndex: 1,
+        answer: 'A delayed answer to Q1',
+      }),
+    ).toBeNull();
+    expect(
+      await markDropped({ threadId: t.threadId, turnIndex: 1 }),
+    ).toBeNull();
+    expect(await readExternalInquiryThread(t.threadId)).toEqual(followUp);
   });
 
   it('updates parentStreamId on cross-stream follow-up', async () => {
@@ -276,7 +222,11 @@ describe('InquiryStorage', () => {
       parentExecutionId: null,
       question: 'Q1',
     });
-    await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
+    await recordAnswerForOpenTurn({
+      threadId: t.threadId,
+      turnIndex: 1,
+      answer: 'A1',
+    });
 
     const fromB = await recordOpenQuestion({
       threadId: t.threadId,
@@ -306,7 +256,11 @@ describe('InquiryStorage', () => {
       parentExecutionId: null,
       question: 'Q1',
     });
-    await recordAnswerForOpenTurn({ threadId: t1.threadId, answer: 'A1' });
+    await recordAnswerForOpenTurn({
+      threadId: t1.threadId,
+      turnIndex: 1,
+      answer: 'A1',
+    });
 
     const t2 = await recordOpenQuestion({
       parentStreamId: STREAM_A,
@@ -319,7 +273,7 @@ describe('InquiryStorage', () => {
       parentExecutionId: null,
       question: 'Q3',
     });
-    await markDropped({ threadId: t3.threadId });
+    await markDropped({ threadId: t3.threadId, turnIndex: 1 });
 
     const openOnA = await listThreadsByStatus({
       status: 'open',

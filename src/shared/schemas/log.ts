@@ -107,7 +107,7 @@ export const FileListEntrySchema = z.object({
 
 export type FileListEntry = z.infer<typeof FileListEntrySchema>;
 
-export const StreamLogTextDeltaSchema = z.strictObject({
+const StreamLogTextDeltaSchema = z.strictObject({
   id: z.string().min(1),
   appendText: z.string().min(1),
 });

@@ -7,7 +7,6 @@ import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
-import type { StreamSlice } from './cliState';
 
 const EMPTY_EXECUTION_LABELS: ExecutionLabels = new Map();
 
@@ -70,15 +69,14 @@ function shouldSeparateEntries({
  *  substantial entries. Tool execution rows stay attached to the prompt or
  *  adjacent compact tools so command-heavy traces do not waste vertical space. */
 export function transcriptToLines(
-  slice: StreamSlice | undefined,
+  rows: readonly TranscriptRow[],
   cols: number,
   executionLabels: ExecutionLabels = EMPTY_EXECUTION_LABELS,
 ): readonly string[] {
-  if (!slice) return [];
   const out: string[] = [];
   let previousEntry: TranscriptRow | undefined;
   let previousLines: readonly string[] = [];
-  for (const entry of slice.entries) {
+  for (const entry of rows) {
     if (!isRenderableTranscriptEntry(entry)) continue;
     const lines = transcriptEntryLines(entry, cols, executionLabels);
     if (lines.length === 0) continue;

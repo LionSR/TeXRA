@@ -19,7 +19,6 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
   return {
     executions: { getToolUseFollowUpTarget: () => target },
     followUps: new ToolUseFollowUpQueue(),
-    events: { emit: vi.fn() },
     snapshots: {
       getRunMetadata: () => ({}),
     },
@@ -74,6 +73,8 @@ describe('submitFollowUp', () => {
   it('reports input admitted by a live flow as sent', async () => {
     const streamId = id('stream:live-flow');
     const session = fakeSession(activeTarget());
+    const sent: StreamTabId[] = [];
+    session.followUps.onSent((sentStreamId) => sent.push(sentStreamId));
     const flow = session.followUps.claimLive(streamId, 'flow')!;
     const tryResumeStream = mockTryResume();
 
@@ -88,18 +89,14 @@ describe('submitFollowUp', () => {
     expect(session.followUps.queue(flow).drainItems()).toMatchObject([
       { text: 'during active turn' },
     ]);
-    expect(session.events.emit).toHaveBeenCalledWith({
-      scope: 'session',
-      event: {
-        type: 'followUpSent',
-        payload: { streamId },
-      },
-    });
+    expect(sent).toEqual([streamId]);
   });
 
   it('does not report an automatic live-flow notification as user input', async () => {
     const streamId = id('stream:live-flow-notification');
     const session = fakeSession(activeTarget());
+    const sent: StreamTabId[] = [];
+    session.followUps.onSent((sentStreamId) => sent.push(sentStreamId));
     const flow = session.followUps.claimLive(streamId, 'flow')!;
 
     await expect(
@@ -112,7 +109,7 @@ describe('submitFollowUp', () => {
     expect(session.followUps.queue(flow).drainItems()).toMatchObject([
       { text: 'child progress' },
     ]);
-    expect(session.events.emit).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
   });
 
   it('enqueues live notifications for a waiting parent without child owner', async () => {

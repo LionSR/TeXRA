@@ -72,14 +72,19 @@ describe('desktop composition root and launch environment', () => {
       readFile(desktopSourcePath('main', 'desktopPapers.ts'), 'utf8'),
     ]);
 
-    // Sessions are constructed in the paper registry only, one per root.
-    expect(source).not.toMatch(/new SessionHandle\(/u);
-    expect(papersSource.match(/new SessionHandle\(/gu)).toHaveLength(1);
+    // Sessions are opened in the paper registry only, one per root, through
+    // the process's session owner.
+    expect(source).not.toMatch(/openSession\(/u);
+    expect(papersSource.match(/openSession\(/gu)).toHaveLength(1);
     expect(
       papersSource.match(/StreamLogStore\.openOrEphemeral\(\)/gu),
     ).toHaveLength(1);
     expect(source).toMatch(/createWindow\(\{[\s\S]*?\bpapers,[\s\S]*?\}\)/u);
-    expect(source).toContain('presentationSignal: abort.signal');
+    // Every open paper is bound to the window: one backend with this
+    // window's port (the framer's), one host snapshot, one presentation each.
+    expect(source).toContain('new SessionBridge({');
+    expect(source).toContain('createHostSnapshotSource({');
+    expect(source).toContain('for (const [key, paper] of open)');
 
     expectOrderedAfter(source, 'installDesktopWindowTitle(', [
       'window.loadURL(',
@@ -95,7 +100,7 @@ describe('desktop composition root and launch environment', () => {
 
     expectOrderedAfter(source, 'registerRuntimeShutdownHandlers(lifecycle', [
       'beforeAgentShutdown:',
-      'agentResumeHandler.dispose()',
+      'processResumeOwner.disable()',
       'afterAgentShutdown:',
       'killActiveRecording()',
       'flushArtifacts:',

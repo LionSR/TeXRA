@@ -135,7 +135,7 @@ function retryServices(
     config: { model: 'openai:test', agentCategory: AgentCategory.Workflow },
     runScope: testRunScope(streamId, { session, signal }),
     streamId,
-    interactions: new SessionHostInteractions(),
+    interactions: sessionWithInteractions(undefined).interactions,
     logger: noopTrace,
     setting: { temperature: 0 },
     modelCell: testRetryModelCell(),

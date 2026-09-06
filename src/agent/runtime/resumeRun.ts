@@ -372,7 +372,7 @@ async function resumeRunWithRecoveryProvenance(
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
     session.status.markUnavailableOrLog(
       streamId,
-      streamHeldMessage(lease.owner),
+      streamHeldMessage(lease.owner.pid),
       log,
     );
     return { failed: 'owned_elsewhere' };
@@ -444,7 +444,7 @@ function refusalFor(
   if (error instanceof ExecutionLeaseActiveError) {
     session.status.markUnavailableOrLog(
       streamId,
-      streamHeldMessage(error.owner),
+      streamHeldMessage(error.owner.pid),
       log,
     );
     return { failed: 'owned_elsewhere' };
@@ -490,10 +490,13 @@ async function resumeQueuedToolUse(
   let resumeError: { error: unknown } | undefined;
   let runResult: AgentRuntimeFlowResult | undefined;
   const notifyQueued = (): void => {
-    session.events.emit({
-      scope: 'session',
-      event: { type: 'updateQueuedFollowUps', payload: { streamId } },
-    });
+    session.publish([
+      {
+        type: 'updateQueuedFollowUps',
+        aggregateId: streamId,
+        messages: session.followUps.getAll(streamId),
+      },
+    ]);
   };
   const restoreFollowUps = (): void => {
     if (followUpsRestored) return;

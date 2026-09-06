@@ -396,12 +396,12 @@ channel and never advance a durable cursor; they are not batch members.
 The write remains in the publish path, never in a subscriber, and no
 publisher waits for a remote renderer.
 
-**C7. Read path.** Five queries and one wake level:
+**C7. Read path.** Five event queries, bounded reads, and one wake level:
 
-- `all(fromCommit)`: every event with `commit > fromCommit` in commit order.
-  The live tail for surfaces that watch a whole session, and the frozen
-  NDJSON projection, which needs every row including transcript rows of
-  unsubscribed streams.
+- `all(fromCommit, throughCommit?)`: events with `commit > fromCommit` in
+  commit order. The optional inclusive upper bound makes one finite read;
+  without it, this supplies the table tail and the frozen NDJSON projection,
+  which needs every row including transcript rows of unsubscribed streams.
 - `listing()`: the cold listing hydrate of C8, one indexed query: the
   latest-of-type row per aggregate over `(aggregate_id, type, seq)` for the
   listing fact types, plus the outstanding-approval set, **returned in
@@ -422,9 +422,10 @@ publisher waits for a remote renderer.
   message-base read in runtime §2.3 uses the same execution index with an
   inclusive base and an upper bound at the snapshot commit.
 - `existing(aggregateIds)`: the subset of resident aggregate ids whose
-  sequence rows still exist, using the primary key. The composed tail below
-  reads this set and the new events in one read transaction. Only the listed
-  or opened aggregate ids are checked; no transcript bodies are read.
+  sequence rows still exist, using the primary key. The finite input read
+  below reads this set and the bounded event prefix in one transaction.
+  Only the listed or opened aggregate ids are checked; no transcript bodies
+  are read.
 - `PRAGMA data_version`: changes when another connection commits. It is
   connection-local and does not move for the connection's own commits, so it
   is a wake trigger only, never a level in the `commit` number space.
@@ -433,59 +434,67 @@ publisher waits for a remote renderer.
   waits for a wake level above the one observed before that drain. Wakes
   carry no rows and are never interpreted as commit values.
 
-`SessionEvents.tail(fromCommit, residentIds)` composes `all` and `existing`;
-it is not another database query or a new persisted event arm. Each drain
-captures its subscription's resident ids and emits one transient fold input:
+The existing `SessionInputs.read(aggregates, cursor)` reader composes these
+queries into ordered finite input batches, as in the view-state PRD §7.2.
+It adds no persisted event or second tail interface. Each live read captures
+its text/local levels and per-subscription resident scope first, then opens
+one read transaction. Within that transaction it captures the log's committed
+`AUTOINCREMENT` high-water mark, reads `all(cursor, bound)`, and reads
+`existing(scope)`. The bound is the SQLite-maintained committed ordinal,
+not `MAX(event.commit)`, which can fall when retention removes rows.
+
+The batch keeps events before text/local inputs and ends with the existing
+transient `Drained` marker, extended by one field:
 
 ```ts
 type ExistenceReconciliation = {
   checkedAggregateIds: readonly AggregateId[];
   removedAggregateIds: readonly AggregateId[];
 };
-type TailBatch = {
-  _tag: 'tail.batch';
+type Drained = {
+  _tag: 'drained';
   cursor: SessionCursor;
-  events: SessionEvent[];
   existence: ExistenceReconciliation;
 };
 ```
 
 `removedAggregateIds` is exactly the captured checked set minus the ids
-returned by `existing` in the same read transaction as `events`. The fold
-applies the events, these removals, and the batch cursor together before
-publishing its view,
-using the same removal rule as a tombstone, including re-rooting surviving
-child streams. Absence is authoritative only for the checked ids; it never
-clears other residents or advances the durable cursor.
+returned by `existing` in that transaction. The fold receives the complete
+ordered batch, then applies the marker's removals and captured bound before
+publishing its view. Removal uses the same rule as a tombstone, including
+re-rooting surviving child streams, and is authoritative only for the
+checked ids. Removing a resident invents no ordinal. `Drained.cursor` is
+always the captured bound: it may equal the prior cursor or exceed it even
+when retention has removed every event in that interval.
 
-The batch cursor is the last event commit drained by that read, or the prior
-cursor if there are no new events. It advances only when the complete batch
-folds, never while some of its events remain buffered.
-
-The same input reaches every renderer. The view-state PRD §8.1 adds
-`existence: ExistenceReconciliation | null` to `EventsFrame`. When a drain
-spans frames, only its final frame carries the reconciliation; the decoder
-buffers that drain and reconstructs one `TailBatch` with the final frame's
-existing `cursor` field. Earlier split frames cannot advance the retained
-view cursor, so reconnecting cannot skip their still-unapplied rows. A deletion-only drain
-still sends a frame with empty events and an unchanged commit cursor. The
+The same batch reaches every renderer. The view-state PRD §8.1 adds
+`existence: ExistenceReconciliation | null` to `EventsFrame`. When a finite
+read spans frames, only its final frame carries the reconciliation; the
+decoder buffers the read, builds `Drained` from that frame's existing
+`cursor` and `existence`, and releases the ordered `SessionInputs` batch.
+Earlier split frames cannot advance the retained view cursor, so reconnecting
+cannot skip their still-unapplied rows. A read with no new materialized
+events still sends the marker, including when its cursor is unchanged. The
 receiver accepts it by frame order and the current `Subscribe` generation,
 not by requiring a larger cursor; obsolete generations are discarded before
-any events or removals fold. Each subscription retains its own checked scope:
-ids introduced by its listing or delivered tail lifecycle/inquiry rows,
-including their stream, execution, and inquiry edges, plus its named transcript aggregates,
-until their removal is delivered or a new generation replaces the scope.
-It must not borrow the database-owning fold's resident set, which may have
-already forgotten a run the renderer still displays. Thus retention remains
-visible even when its tombstone is inserted and collected between polls.
+any inputs fold.
+
+Each subscription retains its own checked scope: ids introduced by its
+listing or delivered tail lifecycle/inquiry rows, including their stream,
+execution, and inquiry edges, plus its named transcript aggregates, until
+their removal is delivered or a new generation replaces the scope. It must
+not borrow the database-owning fold's resident set, which may have already
+forgotten a run the renderer still displays. Thus retention remains visible
+even when its tombstone is inserted and collected between polls.
 
 Cold hydration captures a commit anchor before its listing and aggregate
-reads, then uses `tail(anchor, residentIds)`. The fold handles overlap by latest-of-type
-listing facts and by each aggregate's settled `seq`, as in the view-state
-PRD §7.4. The composed `tail` also reconciles `existing` on local and foreign
-wakes, including when there are no new events. A surface's cursor advances
-only to the completed drain's commit boundary; an aggregate's settled boundary
-is a `seq` value. The reserved migration aggregate is excluded from these
+reads, completes replay, then uses the finite input reader from that anchor.
+The fold handles overlap by latest-of-type listing facts and by each
+aggregate's settled `seq`, as in the view-state PRD §7.2. Local and foreign
+wakes both trigger the bounded event/existence read, including when there
+are no new materialized events. A surface's cursor advances only to the
+completed read's captured commit bound; an aggregate's settled boundary is
+a `seq` value. The reserved migration aggregate is excluded from these
 session queries.
 
 **C8. Two-tier residency.** Listing facts are latest-of-type lookups over the

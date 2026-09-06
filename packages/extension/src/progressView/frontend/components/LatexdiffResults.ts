@@ -19,7 +19,7 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view events
-import { ProgressEvents } from '../events';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
@@ -100,7 +100,9 @@ export class LatexdiffResults extends LitElement {
   @property({ attribute: false }) entries: DiffResultDisplay[] = [];
 
   private handleFileClick(filePath: string): void {
-    this.dispatchEvent(ProgressEvents.fileClick({ file: filePath }));
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'openFile', path: filePath, line: null }),
+    );
   }
 
   private renderFileLink(

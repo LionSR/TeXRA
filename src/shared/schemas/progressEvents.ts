@@ -1,16 +1,13 @@
-import type {
-  UpdateCompileFailuresMessageSchema,
-  UpdateConversationProgressMessageSchema,
-  UpdateFilesMessageSchema,
-  UpdateMissingOutputsMessageSchema,
-  UpdateStreamStatusMessageSchema,
-} from './progressView/outbound';
 import type { z } from 'zod';
 
-import type { AgentCategory } from './agent';
 import type { ExecutionId, StreamTabId } from './identifiers';
 import type { FileLocation } from './output';
-import type { RoundStage } from './streamState';
+import type { StreamPhase, StreamSubstate } from './stream';
+import type {
+  ConversationProgress,
+  RoundKeyedOutputSidecarValueSchemas,
+  RoundStage,
+} from './streamState';
 import type { ExtendedTokenUsageStats } from './usage';
 
 /**
@@ -21,19 +18,6 @@ import type { ExtendedTokenUsageStats } from './usage';
  * runtime-host progress projections. New facts get a named payload here —
  * never a new key on a host compatibility map.
  */
-
-export interface SetActiveStreamPayload {
-  streamId: StreamTabId | null;
-  agentCategory?: AgentCategory;
-  /** Hint whether this is a remote agent (for UI display before the run config arrives) */
-  isRemote?: boolean;
-  /**
-   * When true, register the stream (state, logs, hints) but do NOT switch the
-   * active tab to it. Used by background child streams (bash, codex) so the
-   * stream tab appears without yanking the user away from their current view.
-   */
-  suppressViewSwitch?: boolean;
-}
 
 export interface UpdateStreamDescriptionPayload {
   streamId: StreamTabId;
@@ -49,46 +33,33 @@ export interface RemoveStreamPayload {
   streamId: StreamTabId;
 }
 
-/**
- * A stream's read-only hold was recorded or dropped. The hold itself lives on
- * the status machine and carries no phase, so the fact names only the stream:
- * hosts re-read the resolved phase (and its `statusDetail`) for it.
- */
-export interface StreamHoldChangedPayload {
-  streamId: StreamTabId;
-}
-
-type UpdateStreamStatusMessage = z.infer<
-  typeof UpdateStreamStatusMessageSchema
->;
-
 export interface UpdateStreamStatusPayload {
   streamId: StreamTabId;
-  status: UpdateStreamStatusMessage['status'];
+  status: StreamPhase;
   /** Diagnostic transition cause retained for legacy host/public output. */
   cause?: string;
   /** Previous phase before this update, for detecting transitions. */
-  previousStatus?: UpdateStreamStatusMessage['status'];
+  previousStatus?: StreamPhase;
   /** Narrower in-flight display state for launch/resume overlays. */
-  substate?: UpdateStreamStatusMessage['substate'];
+  substate?: StreamSubstate;
 }
 
 export interface AddOutputFilesPayload {
   streamId: StreamTabId;
-  filesByRound: NonNullable<z.infer<typeof UpdateFilesMessageSchema>['rounds']>;
+  filesByRound: z.infer<typeof RoundKeyedOutputSidecarValueSchemas.outputFiles>;
 }
 
 export interface UpdateMissingOutputsPayload {
   streamId: StreamTabId;
-  filesByRound: NonNullable<
-    z.infer<typeof UpdateMissingOutputsMessageSchema>['rounds']
+  filesByRound: z.infer<
+    typeof RoundKeyedOutputSidecarValueSchemas.missingOutputs
   >;
 }
 
 export interface UpdateCompileFailuresPayload {
   streamId: StreamTabId;
-  filesByRound: NonNullable<
-    z.infer<typeof UpdateCompileFailuresMessageSchema>['rounds']
+  filesByRound: z.infer<
+    typeof RoundKeyedOutputSidecarValueSchemas.compileFailures
   >;
 }
 
@@ -102,7 +73,7 @@ export interface UpdateStreamUsagePayload {
 
 export interface UpdateConversationProgressPayload {
   streamId: StreamTabId;
-  progress: z.infer<typeof UpdateConversationProgressMessageSchema>['progress'];
+  progress: ConversationProgress;
 }
 
 /** Round advance within a run, projected from `stage.start` (kind 'round').
@@ -131,10 +102,6 @@ export interface GoalStateChangedPayload {
 }
 
 export interface UpdateQueuedFollowUpsPayload {
-  streamId: StreamTabId;
-}
-
-export interface FollowUpSentPayload {
   streamId: StreamTabId;
 }
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports - TUI interaction policy
 import {
   appDraftDiscardActive,
-  approvalVisibleForActiveStream,
+  approvalVisibleForSelection,
   digitFromMetaShortcut,
   foregroundEscapeAction,
   foregroundMaxRowsForKind,
@@ -16,6 +16,8 @@ import {
 } from '@cli/chat/tui/appInteractionPolicy';
 import type { PendingApproval } from '@cli/chat/tui/state/approvalQueue';
 import type { StreamTabId } from '@shared/schemas';
+
+import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
 
 type ForegroundSurfaceInput = Parameters<typeof foregroundSurfaceKind>[0];
 type ForegroundEscapeInput = Parameters<typeof foregroundEscapeAction>[0];
@@ -253,15 +255,25 @@ describe('app interaction policy', () => {
     }
   });
 
-  it('shows stream-owned approvals only on their matching tab', () => {
-    const childApproval = bashApproval('child-1');
+  it('shows a stream-owned approval on its stream and its ancestors', () => {
+    const root = 'root' as StreamTabId;
+    const child = 'child-1' as StreamTabId;
+    const sibling = 'child-2' as StreamTabId;
+    const ancestors = [{ id: root, label: 'root' }];
+    const view = viewWith([
+      makeStreamView({ id: root }),
+      makeStreamView({ id: child, parentId: root, ancestors }),
+      makeStreamView({ id: sibling, parentId: root, ancestors }),
+    ]);
+    const childApproval = bashApproval(child);
     const globalApproval = bashApproval();
-    const visible = (activeStreamId: StreamTabId, pending: PendingApproval) =>
-      approvalVisibleForActiveStream({ activeStreamId, pending });
+    const visible = (selectedStreamId: StreamTabId, pending: PendingApproval) =>
+      approvalVisibleForSelection({ pending, selectedStreamId, view });
 
-    expect(visible('child-1', childApproval)).toBe(true);
-    expect(visible('root', childApproval)).toBe(false);
-    expect(visible('root', globalApproval)).toBe(true);
+    expect(visible(child, childApproval)).toBe(true);
+    expect(visible(root, childApproval)).toBe(true);
+    expect(visible(sibling, childApproval)).toBe(false);
+    expect(visible(sibling, globalApproval)).toBe(true);
   });
 
   it('labels foreground escape actions from the owning surface', () => {

@@ -16,6 +16,7 @@ async function newReviewPane(): Promise<ReviewPane> {
 function reviewPayload(path: string, additions = 1, deletions = 1) {
   return {
     command: 'desktop:showDiff' as const,
+    session: 'paper-a',
     title: `Tool edit: ${path}`,
     displayPath: path,
     originalText: 'old\n',

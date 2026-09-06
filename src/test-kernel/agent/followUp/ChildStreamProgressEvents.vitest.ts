@@ -28,10 +28,9 @@ import {
 // Local file imports
 import {
   createRecordingHost,
+  eventsOfType,
+  recordChildRosters,
   recordSessionEvents,
-  runEventsOfType,
-  sessionFactPayloads,
-  sessionFactsOfType,
 } from '../progressTestUtils';
 
 const executionId = 'c11111' as ExecutionId;
@@ -71,6 +70,7 @@ function startBashChild(executionId: ExecutionId) {
   return createChildStream(executionId, parentStreamId, {
     streamPrefix: 'bash',
     run: { kind: 'process', tool: 'bash' },
+    userFollowUpSupport: 'unsupported',
     description: 'Run a background bash command',
     config,
   });
@@ -80,20 +80,10 @@ function startCodexChild(executionId: ExecutionId, description: string) {
   return createChildStream(executionId, parentStreamId, {
     streamPrefix: 'codex',
     run: { kind: 'agent', agent: 'codex', tool: 'codex' },
+    userFollowUpSupport: 'terminalBacked',
     description,
     config,
   });
-}
-
-/** Collect session-scope facts from the default session hub until detached. */
-function collectSessionFacts(onlyType?: string) {
-  const facts: unknown[] = [];
-  const detach = defaultSession().events.subscribe((event) => {
-    if (event.scope !== 'session') return;
-    if (onlyType != null && event.event.type !== onlyType) return;
-    facts.push(event);
-  });
-  return { facts, detach };
 }
 
 describe('child stream progress events', () => {
@@ -104,83 +94,93 @@ describe('child stream progress events', () => {
   });
 
   it('publishes child stream lifecycle events through the session hub', async () => {
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
+    const rosters = recordChildRosters(defaultSession().executions);
 
-    try {
-      const childStream = startBashChild(executionId);
+    const childStream = startBashChild(executionId);
 
-      expect(childStream.childStreamId).toBe(childStreamId);
+    expect(childStream.childStreamId).toBe(childStreamId);
 
-      await childStream.finalize({
-        outcome: RUN_OUTCOME.COMPLETED,
-        autoClose: true,
-      });
+    await childStream.finalize({
+      outcome: RUN_OUTCOME.COMPLETED,
+      autoClose: true,
+    });
 
-      expect(
-        sessionFactPayloads(recorded.events, 'setActiveStream'),
-      ).toContainEqual({
-        streamId: childStreamId,
-        agentCategory: AgentCategory.ToolUse,
-        suppressViewSwitch: true,
-      });
-      expect(runEventsOfType(recorded.events, 'run.config')).toContainEqual(
-        expect.objectContaining({ streamId: childStreamId, executionId }),
-      );
-      expect(
-        sessionFactPayloads(recorded.events, 'updateStreamDescription'),
-      ).toContainEqual({
-        streamId: childStreamId,
-        description: 'Run a background bash command',
-      });
-      expect(sessionFactsOfType(recorded.events, 'status')).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            streamId: childStreamId,
-            phase: STREAM_PHASE.RUNNING,
-            cause: 'lifecycle',
-          }),
-          expect.objectContaining({
-            streamId: childStreamId,
-            phase: STREAM_PHASE.COMPLETED,
-            previousPhase: STREAM_PHASE.RUNNING,
-            cause: 'lifecycle',
-          }),
-        ]),
-      );
-      expect(runEventsOfType(recorded.events, 'child.activity')).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            parentStreamId,
-            items: [
-              expect.objectContaining({
-                executionId,
-                childStreamId,
-                agentName: 'bash',
-                status: STREAM_PHASE.RUNNING,
-                identity: { kind: 'process', tool: 'bash' },
-              }),
-            ],
-          }),
-          expect.objectContaining({
-            parentStreamId,
-            items: [],
-          }),
-        ]),
-      );
-      expect(
-        sessionFactPayloads(recorded.events, 'setParentStream'),
-      ).toContainEqual({
-        childStreamId,
+    expect(eventsOfType(recorded.events, 'run.start')).toContainEqual(
+      expect.objectContaining({
+        aggregateId: childStreamId,
+        executionId,
+        identity: { kind: 'process', tool: 'bash' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
         parentStreamId,
-      });
-      expect(
-        sessionFactPayloads(recorded.events, 'removeStream'),
-      ).toContainEqual({
-        streamId: childStreamId,
-      });
-    } finally {
-      recorded.detach();
-    }
+      }),
+    );
+    // The activation beside the existence fact, with no `isRemote`: the
+    // frozen NDJSON line for a child never carried one.
+    expect(eventsOfType(recorded.events, 'run.activate')).toMatchObject([
+      {
+        type: 'run.activate',
+        aggregateId: childStreamId,
+        category: AgentCategory.ToolUse,
+        background: true,
+      },
+    ]);
+    expect(eventsOfType(recorded.events, 'run.config')).toContainEqual(
+      expect.objectContaining({ aggregateId: childStreamId, executionId }),
+    );
+    expect(
+      eventsOfType(recorded.events, 'updateStreamDescription'),
+    ).toContainEqual(
+      expect.objectContaining({
+        aggregateId: childStreamId,
+        description: 'Run a background bash command',
+      }),
+    );
+    expect(eventsOfType(recorded.events, 'status')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          aggregateId: childStreamId,
+          phase: STREAM_PHASE.RUNNING,
+          cause: 'lifecycle',
+        }),
+        expect.objectContaining({
+          aggregateId: childStreamId,
+          phase: STREAM_PHASE.COMPLETED,
+          previousPhase: STREAM_PHASE.RUNNING,
+          cause: 'lifecycle',
+        }),
+      ]),
+    );
+    expect(rosters.rosters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          parentStreamId,
+          items: [
+            expect.objectContaining({
+              executionId,
+              childStreamId,
+              agentName: 'bash',
+              status: STREAM_PHASE.RUNNING,
+              identity: { kind: 'process', tool: 'bash' },
+            }),
+          ],
+        }),
+        expect.objectContaining({
+          parentStreamId,
+          items: [],
+        }),
+      ]),
+    );
+    expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual(
+      expect.objectContaining({
+        aggregateId: childStreamId,
+        parentStreamId,
+      }),
+    );
+    expect(eventsOfType(recorded.events, 'stream.removed')).toContainEqual(
+      expect.objectContaining({ aggregateId: childStreamId }),
+    );
   });
 
   it('marks a deterministic child-stream relaunch as running', async () => {
@@ -190,6 +190,7 @@ describe('child stream progress events', () => {
       {
         streamPrefix: 'workflow-script',
         run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
+        userFollowUpSupport: 'unsupported',
         description: 'Run a named child task',
         config,
       },
@@ -199,13 +200,14 @@ describe('child stream progress events', () => {
       STREAM_PHASE.COMPLETED,
     );
 
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
     const relaunched = await createRehydratedChildStream(
       workflowRelaunchExecutionId,
       parentStreamId,
       {
         streamPrefix: 'workflow-script',
         run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
+        userFollowUpSupport: 'unsupported',
         description: 'Resume the named child task',
         config,
       },
@@ -224,22 +226,21 @@ describe('child stream progress events', () => {
           status: STREAM_PHASE.RUNNING,
         }),
       );
-      expect(sessionFactsOfType(recorded.events, 'status')).toContainEqual(
+      expect(eventsOfType(recorded.events, 'status')).toContainEqual(
         expect.objectContaining({
           cause: 'resume',
           phase: STREAM_PHASE.RUNNING,
           previousPhase: STREAM_PHASE.COMPLETED,
-          streamId: workflowRelaunchChildStreamId,
+          aggregateId: workflowRelaunchChildStreamId,
         }),
       );
     } finally {
       await relaunched.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      recorded.detach();
     }
   });
 
   it('rolls back a failed rehydrated setup so the same stream can retry', async () => {
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
     const trackExecution = vi
       .spyOn(defaultSession().executions, 'trackAgentExecution')
       .mockImplementationOnce(() => {
@@ -251,6 +252,7 @@ describe('child stream progress events', () => {
         kind: 'multiAgentWorkflow' as const,
         workflowName: 'retry-setup',
       },
+      userFollowUpSupport: 'unsupported' as const,
       description: 'Retry a failed child stream setup',
       config,
     };
@@ -264,12 +266,18 @@ describe('child stream progress events', () => {
         ),
       ).rejects.toThrow('execution setup failed');
       expect(
-        sessionFactPayloads(recorded.events, 'removeStream'),
-      ).not.toContainEqual({ streamId: setupRetryChildStreamId });
-      expect(
-        sessionFactPayloads(recorded.events, 'setActiveStream'),
-      ).not.toContainEqual(
-        expect.objectContaining({ streamId: setupRetryChildStreamId }),
+        eventsOfType(recorded.events, 'stream.removed').map(
+          (event) => event.aggregateId,
+        ),
+      ).not.toContain(setupRetryChildStreamId);
+      // Setup failed after the existence fact, so the started stream ended
+      // with its terminal result instead of lingering as a ghost.
+      expect(eventsOfType(recorded.events, 'result')).toContainEqual(
+        expect.objectContaining({
+          aggregateId: setupRetryChildStreamId,
+          outcome: RUN_OUTCOME.FAILED,
+          isSubagent: true,
+        }),
       );
 
       const retried = await createRehydratedChildStream(
@@ -279,141 +287,116 @@ describe('child stream progress events', () => {
       );
       expect(retried.childStreamId).toBe(setupRetryChildStreamId);
       expect(
-        sessionFactPayloads(recorded.events, 'setActiveStream'),
-      ).toContainEqual(
-        expect.objectContaining({ streamId: setupRetryChildStreamId }),
-      );
+        eventsOfType(recorded.events, 'run.start').filter(
+          (event) => event.aggregateId === setupRetryChildStreamId,
+        ),
+      ).toHaveLength(2);
       await retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
     } finally {
       trackExecution.mockRestore();
-      recorded.detach();
     }
   });
 
   it('emits workflow-script identity independently of its worker config', async () => {
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
     const workerConfig = {
       ...config,
       agent: 'generic',
       agentCategory: AgentCategory.Workflow,
     };
 
-    try {
-      const childStream = createChildStream(
-        workflowRelaunchExecutionId,
-        parentStreamId,
-        {
-          streamPrefix: 'workflow-script',
-          run: {
-            kind: 'multiAgentWorkflow',
-            workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-          },
-          description: 'Audit the repository without editing',
-          config: workerConfig,
+    const childStream = createChildStream(
+      workflowRelaunchExecutionId,
+      parentStreamId,
+      {
+        streamPrefix: 'workflow-script',
+        run: {
+          kind: 'multiAgentWorkflow',
+          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
         },
-      );
+        userFollowUpSupport: 'unsupported',
+        description: 'Audit the repository without editing',
+        config: workerConfig,
+      },
+    );
 
-      expect(runEventsOfType(recorded.events, 'run.start')).toContainEqual(
-        expect.objectContaining({
-          identity: {
-            kind: 'multiAgentWorkflow',
-            workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-          },
-        }),
-      );
-      expect(
-        defaultSession().executions.getAgentHandleByStream(
-          workflowRelaunchChildStreamId,
-        ),
-      ).toMatchObject({
-        agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
-        category: AgentCategory.Workflow,
-      });
+    expect(eventsOfType(recorded.events, 'run.start')).toContainEqual(
+      expect.objectContaining({
+        identity: {
+          kind: 'multiAgentWorkflow',
+          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        },
+      }),
+    );
+    expect(
+      defaultSession().executions.getAgentHandleByStream(
+        workflowRelaunchChildStreamId,
+      ),
+    ).toMatchObject({
+      agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
+      category: AgentCategory.Workflow,
+    });
 
-      await childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-    } finally {
-      recorded.detach();
-    }
+    await childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED });
   });
 
-  it('publishes child stream activation through the session fact hub', async () => {
+  it('publishes child stream existence as a run fact without direct host emission', async () => {
     const active = createRecordingHost();
-    const { facts, detach } = collectSessionFacts('setActiveStream');
+    const recorded = recordSessionEvents(defaultSession());
 
-    try {
-      const childStream = startBashChild(executionId);
+    const childStream = startBashChild(executionId);
 
-      expect(active.events).toEqual([]);
-      expect(facts).toEqual([
-        {
-          scope: 'session',
-          event: {
-            type: 'setActiveStream',
-            payload: {
-              streamId: childStreamId,
-              agentCategory: AgentCategory.ToolUse,
-              suppressViewSwitch: true,
-            },
-          },
-        },
-      ]);
+    expect(active.events).toEqual([]);
+    expect(eventsOfType(recorded.events, 'run.start')).toEqual([
+      expect.objectContaining({
+        type: 'run.start',
+        aggregateId: childStreamId,
+        category: AgentCategory.ToolUse,
+        parentStreamId,
+      }),
+    ]);
 
-      await childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-    } finally {
-      detach();
-    }
+    await childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED });
   });
 
   it('publishes child stream auto-close as a session fact without direct host emission', async () => {
     const active = createRecordingHost();
-    const { facts, detach } = collectSessionFacts();
+    const recorded = recordSessionEvents(defaultSession());
 
-    try {
-      const childStream = startBashChild(noProjectionAutoCloseExecutionId);
+    const childStream = startBashChild(noProjectionAutoCloseExecutionId);
 
-      await childStream.finalize({
-        outcome: RUN_OUTCOME.COMPLETED,
-        autoClose: true,
-      });
+    await childStream.finalize({
+      outcome: RUN_OUTCOME.COMPLETED,
+      autoClose: true,
+    });
 
-      expect(active.events).toEqual([]);
-      expect(facts).toContainEqual({
-        scope: 'session',
-        event: {
-          type: 'removeStream',
-          payload: { streamId: noProjectionAutoCloseChildStreamId },
-        },
-      });
-    } finally {
-      detach();
-    }
+    expect(active.events).toEqual([]);
+    expect(eventsOfType(recorded.events, 'stream.removed')).toContainEqual(
+      expect.objectContaining({
+        aggregateId: noProjectionAutoCloseChildStreamId,
+      }),
+    );
   });
 
   it('emits removeStream for child stream auto-close', async () => {
-    const recorded = recordSessionEvents(defaultSession().events);
+    const recorded = recordSessionEvents(defaultSession());
 
-    try {
-      const childStream = startBashChild(executionId);
+    const childStream = startBashChild(executionId);
 
-      await childStream.finalize({
-        outcome: RUN_OUTCOME.COMPLETED,
-        autoClose: true,
-      });
+    await childStream.finalize({
+      outcome: RUN_OUTCOME.COMPLETED,
+      autoClose: true,
+    });
 
-      expect(
-        sessionFactPayloads(recorded.events, 'removeStream'),
-      ).toContainEqual({
-        streamId: childStreamId,
-      });
-    } finally {
-      recorded.detach();
-    }
+    expect(eventsOfType(recorded.events, 'stream.removed')).toContainEqual(
+      expect.objectContaining({ aggregateId: childStreamId }),
+    );
   });
 
   it('finalizes a child stream when agent CLI loop setup fails synchronously', async () => {
     const setupError = new Error('child loop setup failed');
     const session = defaultSession();
-    const recorded = recordSessionEvents(session.events);
+    const recorded = recordSessionEvents(session);
     let childStream: ChildStream | undefined;
     let childExecutionId: ExecutionId | undefined;
     let handle: ReturnType<typeof session.executions.getAgentHandleByStream>;
@@ -459,7 +442,6 @@ describe('child stream progress events', () => {
         streamId: childStream.childStreamId,
       });
     } finally {
-      recorded.detach();
       if (childStream) {
         clearStreamStatusForTest(session.status, childStream.childStreamId);
       }
@@ -467,8 +449,6 @@ describe('child stream progress events', () => {
   });
 
   it('publishes child loop status changes through the child stream owner', async () => {
-    const recorded = recordSessionEvents(defaultSession().events);
-
     const childStream = startCodexChild(
       loopExecutionId,
       'Run a long-lived Codex child loop',
@@ -476,20 +456,18 @@ describe('child stream progress events', () => {
     const handle =
       defaultSession().executions.getAgentHandleByStream(loopChildStreamId);
     expect(handle).toBeDefined();
-    recorded.events.splice(0);
+    // From here on: the launch's own facts are not the loop's.
+    const recorded = recordSessionEvents(defaultSession());
+    const rosters = recordChildRosters(defaultSession().executions);
 
-    try {
-      childStream.waitForInput();
-      childStream.beginTurn();
-      childStream.failTurn();
-      await childStream.finalize({ outcome: RUN_OUTCOME.FAILED });
-    } finally {
-      recorded.detach();
-    }
+    childStream.waitForInput();
+    childStream.beginTurn();
+    childStream.failTurn();
+    await childStream.finalize({ outcome: RUN_OUTCOME.FAILED });
 
     expect(
-      sessionFactsOfType(recorded.events, 'status')
-        .filter((event) => event.streamId === loopChildStreamId)
+      eventsOfType(recorded.events, 'status')
+        .filter((event) => event.aggregateId === loopChildStreamId)
         .map((event) => event.phase),
     ).toEqual([
       STREAM_PHASE.WAITING,
@@ -499,9 +477,7 @@ describe('child stream progress events', () => {
     expect(defaultSession().status.get(loopChildStreamId)).toBe(
       STREAM_PHASE.FAILED,
     );
-    expect(
-      runEventsOfType(recorded.events, 'child.activity').at(-1),
-    ).toMatchObject({
+    expect(rosters.rosters.at(-1)).toMatchObject({
       parentStreamId,
       items: [],
     });
@@ -520,8 +496,6 @@ describe('child stream progress events', () => {
   // the stream, and `finalizeRunTerminal` resolves the run's terminal outcome
   // from that phase rather than from the failure the child reports.
   it('settles a stopped child loop as cancelled from the stream phase', async () => {
-    const recorded = recordSessionEvents(defaultSession().events);
-
     const childStream = startCodexChild(
       stoppedExecutionId,
       'Run a stopped Codex child loop',
@@ -532,31 +506,28 @@ describe('child stream progress events', () => {
     seedStreamStatusForTest(defaultSession().status, stoppedChildStreamId, {
       phase: STREAM_PHASE.CANCELLED,
     });
-    recorded.events.splice(0);
+    // From here on: the launch's own facts are not the loop's.
+    const recorded = recordSessionEvents(defaultSession());
 
-    try {
-      childStream.waitForInput();
-      childStream.beginTurn();
-      childStream.failTurn();
-      await childStream.finalize({ outcome: RUN_OUTCOME.FAILED });
+    childStream.waitForInput();
+    childStream.beginTurn();
+    childStream.failTurn();
+    await childStream.finalize({ outcome: RUN_OUTCOME.FAILED });
 
-      expect(defaultSession().status.get(stoppedChildStreamId)).toBe(
-        STREAM_PHASE.CANCELLED,
-      );
-      expect(
-        sessionFactsOfType(recorded.events, 'status').filter(
-          (event) => event.streamId === stoppedChildStreamId,
-        ),
-      ).toHaveLength(0);
-      await expect(handle?.result).resolves.toMatchObject({
-        type: 'result',
-        outcome: 'cancelled',
-        executionId: stoppedExecutionId,
-        streamId: stoppedChildStreamId,
-      });
-    } finally {
-      recorded.detach();
-    }
+    expect(defaultSession().status.get(stoppedChildStreamId)).toBe(
+      STREAM_PHASE.CANCELLED,
+    );
+    expect(
+      eventsOfType(recorded.events, 'status').filter(
+        (event) => event.aggregateId === stoppedChildStreamId,
+      ),
+    ).toHaveLength(0);
+    await expect(handle?.result).resolves.toMatchObject({
+      type: 'result',
+      outcome: 'cancelled',
+      executionId: stoppedExecutionId,
+      streamId: stoppedChildStreamId,
+    });
   });
 
   it('settles child handle results as cancelled for stopped finalization', async () => {

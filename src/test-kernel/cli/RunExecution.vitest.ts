@@ -1,3 +1,4 @@
+import '@test/support/sessionGraphTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
@@ -42,6 +43,7 @@ const tempDirs = useTempDirs();
 async function installFreshDefaultSession(): Promise<void> {
   const { installPlatform } = await import('@test/support/setupPlatform');
   await installPlatform();
+  await import('@test/support/sessionGraphTestSetup');
   const [
     { initializeDefaultSession, teardownDefaultSession },
     { StreamLogStore },
@@ -87,7 +89,10 @@ vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
   ),
 }));
 
-vi.mock('@cli/runtime/workflowPlainOutput', () => ({
+vi.mock('@cli/runtime/runProgressRenderer', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@cli/runtime/runProgressRenderer')
+  >()),
   attachWorkflowPlainOutput: mocks.attachWorkflowPlainOutput,
 }));
 
@@ -322,6 +327,7 @@ describe('executeCliRequest', () => {
     expect(mocks.attachWorkflowPlainOutput).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        executionId: 'abcdef',
         writeLine: mocks.writeTextStderr,
       }),
     );
@@ -516,57 +522,33 @@ describe('executeCliRequest', () => {
         timestamp: new Date(0).toISOString(),
         description: 'chat / gpt54',
       });
-      defaultSession().events.emit({
-        scope: 'run',
+      defaultSession().publishRunEvent(streamId, {
+        type: 'run.config',
         streamId,
-        event: {
-          type: 'run.config',
+        executionId,
+        config,
+      });
+      defaultSession().publishRunEvent(streamId, {
+        type: 'updateTodos',
+        streamId,
+        todos: [todo],
+      });
+      defaultSession().publishRunEvent(streamId, {
+        type: 'usage',
+        payload: {
           streamId,
-          executionId,
-          config,
+          storageKey: 'run-1' as ExecutionId,
+          usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
         },
       });
-      defaultSession().events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'updateTodos',
-          streamId,
-          todos: [todo],
-        },
-      });
-      defaultSession().events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'usage',
-          payload: {
-            streamId,
-            storageKey: 'run-1' as ExecutionId,
-            usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
-          },
-        },
-      });
-      defaultSession().events.emit({
-        scope: 'session',
-        event: {
+      defaultSession().publish([
+        {
           type: 'updateStreamDescription',
-          payload: {
-            streamId,
-            description: 'chat / gpt54',
-          },
+          aggregateId: streamId,
+          description: 'chat / gpt54',
         },
-      });
-      defaultSession().events.emit({
-        scope: 'session',
-        event: {
-          type: 'setParentStream',
-          payload: {
-            childStreamId: streamId,
-            parentStreamId,
-          },
-        },
-      });
+        { type: 'setParentStream', aggregateId: streamId, parentStreamId },
+      ]);
       return {
         category: 'toolUse',
         executionId: 'exec-1',

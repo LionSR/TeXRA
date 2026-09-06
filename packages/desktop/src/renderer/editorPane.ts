@@ -76,6 +76,8 @@ interface EditorPane {
   layout(): void;
   hasUnsavedChanges(): boolean;
   save(): Promise<void>;
+  /** Release a closed document and its undo history. */
+  close(path: string): void;
   dispose(): void;
 }
 
@@ -91,6 +93,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   editorHost.className = 'desktop-editor-surface';
   element.append(editorHost);
 
+  let disposed = false;
+  const closedPaths = new Set<string>();
   let monaco: MonacoModule | undefined;
   let editor: CodeEditor | undefined;
   let editorLoad: Promise<CodeEditor | undefined> | undefined;
@@ -111,7 +115,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   // One model per opened file so switching tabs preserves each file's undo
   // history and cursor — recreating a model on every switch would lose both.
   const models = new Map<string, TextModel>();
-  const pendingModelLoads = new Map<string, Promise<TextModel>>();
+  const pendingModelLoads = new Map<string, Promise<TextModel | undefined>>();
   const modelSyncs = new KeyedMutex<string>();
   const writeEpochs = new Map<string, number>();
   const activeWrites = new Map<string, number>();
@@ -312,6 +316,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
     editorLoad = loadMonaco()
       .then((loadedMonaco) => {
+        if (disposed) return undefined;
         monaco = loadedMonaco;
         const editorFontSize = getDesktopChromeFontSize();
         editor = loadedMonaco.editor.create(editorHost, {
@@ -372,13 +377,14 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   function loadModel(
     path: string,
     loadedMonaco: MonacoModule,
-  ): Promise<TextModel> {
+  ): Promise<TextModel | undefined> {
     const loaded = models.get(path);
     if (loaded) return Promise.resolve(loaded);
     const pending = pendingModelLoads.get(path);
     if (pending) return pending;
 
     const load = readCurrentContents(path).then((contents) => {
+      if (disposed || closedPaths.has(path)) return undefined;
       const model = loadedMonaco.editor.createModel(
         contents,
         monacoLanguageForPath(path),
@@ -407,7 +413,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
   function syncCleanModel(path: string, model: TextModel): Promise<void> {
     return modelSyncs.runExclusive(path, async () => {
-      if (dirtyPaths.has(path)) return;
+      if (disposed || models.get(path) !== model || dirtyPaths.has(path))
+        return;
       const version = model.getVersionId();
       const generation = refreshGeneration;
       const writeEpoch = writeEpochs.get(path) ?? 0;
@@ -415,6 +422,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       // The read crosses IPC. Recheck all local state so an edit, save, or
       // newer refresh can supersede this result while it is in flight.
       if (
+        disposed ||
+        models.get(path) !== model ||
         dirtyPaths.has(path) ||
         (activeWrites.get(path) ?? 0) > 0 ||
         model.getVersionId() !== version ||
@@ -434,6 +443,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   }
 
   async function open(path: string): Promise<void> {
+    if (disposed) return;
+    closedPaths.delete(path);
     const request = ++latestOpenRequest;
     const target = await ensureEditor();
     if (!target || !monaco) return;
@@ -447,7 +458,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       // Several tree clicks can race the first Monaco load and IPC reads.
       // Populate every requested model, but only the newest request may choose
       // which one is visible.
-      if (request !== latestOpenRequest) return;
+      if (!model || disposed || request !== latestOpenRequest) return;
       target.setModel(model);
       openPath = path;
       renderTree();
@@ -491,6 +502,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   }
 
   function refresh(): Promise<void> {
+    if (disposed) return Promise.resolve();
     refreshGeneration += 1;
     if (refreshPromise) {
       refreshQueued = true;
@@ -518,7 +530,12 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     writeEpochs.set(path, (writeEpochs.get(path) ?? 0) + 1);
     try {
       await callbacks.writeFile(path, model.getValue());
-      if (model.getVersionId() !== savedVersion) return;
+      if (
+        disposed ||
+        models.get(path) !== model ||
+        model.getVersionId() !== savedVersion
+      )
+        return;
       dirtyPaths.delete(path);
       callbacks.onDirtyChange(path, false);
       renderTree();
@@ -557,7 +574,23 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     hasUnsavedChanges: () => dirtyPaths.size > 0,
     save,
 
+    close(path) {
+      closedPaths.add(path);
+      if (openPath === path) {
+        latestOpenRequest += 1;
+        editor?.setModel(null);
+        openPath = undefined;
+      }
+      models.get(path)?.dispose();
+      models.delete(path);
+      dirtyPaths.delete(path);
+      renderTree();
+    },
+
     dispose() {
+      disposed = true;
+      latestOpenRequest += 1;
+      treeRevision += 1;
       editor?.dispose();
       editor = undefined;
       for (const model of models.values()) model.dispose();

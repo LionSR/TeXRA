@@ -57,11 +57,13 @@ describe('handleExternalInquiryAction', () => {
     await handleExternalInquiryAction({
       action: 'submit',
       threadId: 'thread-submit',
+      turnIndex: 1,
       answer: 'A proof follows by compactness.',
     });
 
     expect(storageMocks.recordAnswerForOpenTurn).toHaveBeenCalledWith({
       threadId: 'thread-submit',
+      turnIndex: 1,
       answer: 'A proof follows by compactness.',
       sessionLinks: undefined,
     });
@@ -77,10 +79,12 @@ describe('handleExternalInquiryAction', () => {
     await handleExternalInquiryAction({
       action: 'drop',
       threadId: 'thread-drop',
+      turnIndex: 1,
     });
 
     expect(storageMocks.markDropped).toHaveBeenCalledWith({
       threadId: 'thread-drop',
+      turnIndex: 1,
     });
     expect(
       continuationMocks.injectContinuationForDroppedThread,
@@ -94,6 +98,7 @@ describe('handleExternalInquiryAction', () => {
     await handleExternalInquiryAction({
       action: 'drop',
       threadId: 'thread-denied',
+      turnIndex: 1,
       reason: 'Human input is disabled by policy.',
     });
 
@@ -109,6 +114,7 @@ describe('handleExternalInquiryAction', () => {
     await handleExternalInquiryAction({
       action: 'drop',
       threadId: 'thread-cancelled',
+      turnIndex: 1,
       cause: 'Session interrupted.',
     });
 

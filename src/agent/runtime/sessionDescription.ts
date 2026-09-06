@@ -133,13 +133,9 @@ export async function generateSessionDescription(
     if (!description) return;
 
     await writeSessionDescription(executionId, description);
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'updateStreamDescription',
-        payload: { streamId, description },
-      },
-    });
+    session.publish([
+      { type: 'updateStreamDescription', aggregateId: streamId, description },
+    ]);
     log.info(`Generated session description for ${executionId}`);
   } catch (err) {
     warnWithoutRejecting(

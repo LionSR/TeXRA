@@ -32,25 +32,6 @@ const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
   'Continue without running it, use a non-shell method, or explain what approval would be needed.';
 
-export function setBashApprovalSessionBypass(
-  streamId: StreamTabId,
-  enabled: boolean,
-  options?: { silent?: boolean; session?: SessionHandle },
-): void {
-  (options?.session ?? currentSession()).approvals.bash.bypass.setBypass(
-    streamId,
-    enabled,
-    { silent: options?.silent },
-  );
-}
-
-export function isBashApprovalBypassedForStream(
-  streamId: StreamTabId,
-  session: SessionHandle = currentSession(),
-): boolean {
-  return session.approvals.bash.bypass.isBypassed(streamId);
-}
-
 /**
  * Build the bash permission payload every host publishes to its approval
  * surface, the bash counterpart of `prepareToolEditApprovalPrompt`.
@@ -61,8 +42,15 @@ export function isBashApprovalBypassedForStream(
  * the host owns one (extension, desktop); the CLI hosts run on the default
  * session.
  */
-export function prepareBashApprovalPrompt(
-  request: HostBashApprovalRequest,
+function isBashApprovalBypassedForStream(
+  streamId: StreamTabId,
+  session: SessionHandle = currentSession(),
+): boolean {
+  return session.approvals.bash.bypass.isBypassed(streamId);
+}
+
+function prepareBashApprovalPrompt(
+  request: Omit<HostBashApprovalRequest, 'permission'>,
   session?: SessionHandle,
 ): BashPermission {
   const streamId = request.streamId ?? undefined;
@@ -80,7 +68,7 @@ export function prepareBashApprovalPrompt(
 }
 
 export async function requestBashApproval(
-  request: HostBashApprovalRequest,
+  request: Omit<HostBashApprovalRequest, 'permission'>,
 ): Promise<BashSettlement> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY);
 
@@ -108,12 +96,16 @@ export async function requestBashApproval(
 
   requireInteractions('bash approval', context);
 
+  const hostRequest: Omit<HostBashApprovalRequest, 'permission'> = {
+    command: request.command,
+    ...(request.cwd && { cwd: request.cwd }),
+    streamId,
+  };
   return session.approvals.bash.enqueue(streamId, {
     prompt: () =>
       session.interactions.requestBashApproval({
-        command: request.command,
-        ...(request.cwd && { cwd: request.cwd }),
-        streamId,
+        ...hostRequest,
+        permission: prepareBashApprovalPrompt(hostRequest, session),
       }),
     bypassed: () => ({ action: 'approve' }),
   });

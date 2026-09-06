@@ -1,4 +1,5 @@
-import { html, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 
 import { renderEmptyState } from '@shared/wa/emptyState';
 
@@ -24,13 +25,19 @@ import {
 } from '../shared/desktopTaskShell';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import type { createEditorPane } from './editorPane';
+import type { createPdfPane } from './pdfPane';
 import type { createTerminalPane } from './terminalPane';
 import type { createReviewPane } from './reviewPane';
 
 interface WorkbenchControllerDeps {
+  session: string;
+  isActive(): boolean;
   editorPane: ReturnType<typeof createEditorPane>;
   terminalPane: ReturnType<typeof createTerminalPane>;
   reviewPane: ReturnType<typeof createReviewPane>;
+  pdfPane: ReturnType<typeof createPdfPane>;
+  /** The Subagents tab's content, read from the active paper's view. */
+  subagentsTemplate(): TemplateResult | typeof nothing;
   settingsView: HTMLElement;
   logsPane: HTMLElement;
   getState(): DesktopTaskShellState;
@@ -50,14 +57,18 @@ interface WorkbenchController {
   ): void;
   layoutVisibleSurfaces(options?: { focus?: boolean }): void;
   syncBrowserViewBounds(): void;
-  template(tab: WorkbenchTab, placement: WorkbenchPlacement): TemplateResult;
+  template(placement: WorkbenchPlacement): TemplateResult;
   takePendingTerminalCommand(sessionId: string): string | undefined;
 }
 
 export function createWorkbenchController({
+  session,
+  isActive,
   editorPane,
   terminalPane,
   reviewPane,
+  pdfPane,
+  subagentsTemplate,
   settingsView,
   logsPane,
   getState,
@@ -90,7 +101,10 @@ export function createWorkbenchController({
     // Measure after layout settles; a workbench that just appeared has no box
     // until the browser has flushed the style change.
     requestAnimationFrame(() => {
-      const slot = document.querySelector(`[data-browser-slot="${tabId}"]`);
+      if (!isActive()) return;
+      const slot = document.querySelector(
+        `[data-workbench-session="${CSS.escape(session)}"] [data-browser-slot="${CSS.escape(tabId)}"]`,
+      );
       if (!slot) return;
       const rect = slot.getBoundingClientRect();
       postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS, {
@@ -184,6 +198,8 @@ export function createWorkbenchController({
     if (terminal?.kind !== 'terminal') return;
     pendingTerminalCommands.set(terminal.id, initialCommand);
     updateShell(next);
+    // An explicit command belongs to its paper even when another paper is shown.
+    if (!isActive()) terminalPane.activate(terminal.id, { focus: false });
   }
 
   /** Toggles a workbench pane, opening `emptyKind` when it holds no tabs yet. */
@@ -229,7 +245,9 @@ export function createWorkbenchController({
     return html`<div class="task-workbench-surface">${content}</div>`;
   }
 
-  function workbenchContentTemplate(tab: WorkbenchTab): TemplateResult {
+  function workbenchContentTemplate(
+    tab: WorkbenchTab,
+  ): TemplateResult | typeof nothing {
     switch (tab.kind) {
       case 'editor':
         return tab.target
@@ -245,14 +263,26 @@ export function createWorkbenchController({
       case 'review':
         return workbenchSurfaceTemplate(reviewPane.element);
       case 'settings':
-        return workbenchSurfaceTemplate(settingsView);
+        return isActive() ? workbenchSurfaceTemplate(settingsView) : nothing;
       case 'logs':
-        return workbenchSurfaceTemplate(logsPane);
+        return isActive() ? workbenchSurfaceTemplate(logsPane) : nothing;
+      case 'pdf':
+        return workbenchSurfaceTemplate(pdfPane.frameFor(tab));
+      case 'subagents':
+        return workbenchSurfaceTemplate(subagentsTemplate());
     }
   }
 
   function disposeWorkbenchTab(tabId: string): void {
     const tab = getState().workbenchTabs.find((entry) => entry.id === tabId);
+    if (tab?.kind === 'editor' && tab.target) {
+      if (
+        tab.dirty &&
+        !window.confirm(`Discard unsaved changes to ${tab.title}?`)
+      )
+        return;
+      editorPane.close(tab.target);
+    }
     if (tab?.kind === 'browser') {
       loadedBrowserTabs.delete(tabId);
       postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE, { tabId });
@@ -261,6 +291,7 @@ export function createWorkbenchController({
       pendingTerminalCommands.delete(tabId);
       terminalPane.dispose(tabId);
     }
+    if (tab?.kind === 'pdf') pdfPane.dispose(tabId);
     updateShell(closeWorkbenchTab(getState(), tabId));
   }
 
@@ -271,10 +302,21 @@ export function createWorkbenchController({
     updateShell(moveWorkbenchTab(getState(), tabId, placement));
   }
 
-  function workbenchTemplate(
-    tab: WorkbenchTab,
-    placement: WorkbenchPlacement,
-  ): TemplateResult {
+  function workbenchTemplate(placement: WorkbenchPlacement): TemplateResult {
+    const state = getState();
+    const tab = activeWorkbenchTab(state, placement);
+    const tabs = workbenchTabsForPlacement(state, placement);
+    // Each shared pane has one mount in the placement that currently owns it.
+    // PDFs have one mount per tab; keeping these nodes connected preserves the viewer.
+    const surfaces = tabs.filter((candidate) => {
+      if (candidate.kind === 'pdf') return true;
+      const owner =
+        WORKBENCH_PLACEMENTS.map((side) =>
+          activeWorkbenchTab(state, side),
+        ).find((active) => active?.kind === candidate.kind) ??
+        state.workbenchTabs.findLast((entry) => entry.kind === candidate.kind);
+      return candidate.id === owner?.id;
+    });
     const placementLabel = placement === 'right' ? 'Right' : 'Bottom';
     return html`
       <aside
@@ -293,15 +335,26 @@ export function createWorkbenchController({
             onHide: () => updateShell(closeWorkbench(getState(), placement)),
             onMove: moveTabToPlacement,
           },
+          session,
         )}
         <div class="task-workbench-body">
           <section
             class="task-workbench-pane"
             role="tabpanel"
-            id=${workbenchPanelDomId(placement)}
-            aria-labelledby=${workbenchTabDomId(tab.id)}
+            id=${workbenchPanelDomId(placement, session)}
+            aria-labelledby=${tab ? workbenchTabDomId(tab.id, session) : nothing}
           >
-            ${workbenchContentTemplate(tab)}
+            ${repeat(
+              surfaces,
+              (entry) => (entry.kind === 'pdf' ? entry.id : entry.kind),
+              (entry) =>
+                html`<div
+                  class="task-workbench-retained-surface"
+                  ?hidden=${entry.id !== tab?.id}
+                >
+                  ${workbenchContentTemplate(entry)}
+                </div>`,
+            )}
           </section>
         </div>
       </aside>

@@ -1,11 +1,6 @@
-// Local imports - common webview
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-
-// Local imports - shared utilities
-import { postMessage } from '@shared/hostBridge';
-
 // Local imports - shared schemas
-import type { MultipleDocumentFileType } from '@shared/schemas';
+import type { DocumentFileType } from '@shared/schemas';
+import { SessionUiEvents } from '@shared/session/uiEvents';
 import { tryParseUrl } from '@utils/core';
 
 // Third-party type imports
@@ -179,8 +174,9 @@ export class FileDropController implements ReactiveController {
 }
 
 export function postDroppedFiles(
+  host: EventTarget,
   paths: string[],
-  target?: MultipleDocumentFileType,
+  category: DocumentFileType,
 ): void {
   // `extractDroppedFilePaths` accumulates into a Set of non-empty paths, and
   // the host re-resolves, re-filters and re-dedupes anyway
@@ -188,8 +184,7 @@ export function postDroppedFiles(
   // empty list still means "the drop yielded nothing" and must not post.
   if (paths.length === 0) return;
 
-  postMessage(MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES, {
-    paths,
-    ...(target ? { target } : {}),
-  });
+  host.dispatchEvent(
+    SessionUiEvents.host({ kind: 'attachDroppedFiles', paths, category }),
+  );
 }

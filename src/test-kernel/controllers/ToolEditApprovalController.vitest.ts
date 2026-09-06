@@ -14,17 +14,18 @@ import {
 import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 
 const STREAM_ID = 'TestAgent@model: paper.tex' as StreamTabId;
 
 function approvalRequest(): ToolEditApprovalRequest {
-  return {
+  return toolEditApprovalRequest({
     path: '/workspace/paper.tex',
     originalContent: 'old',
     proposedContent: 'new',
     sourceTool: 'edit_file',
     streamId: STREAM_ID,
-  };
+  });
 }
 
 /**
@@ -71,7 +72,6 @@ function createController(host: ReturnType<typeof createTestHost>['host']) {
   const prompts: ToolEditPermission[] = [];
   const resolved: string[] = [];
   const controller = new ToolEditApprovalController({
-    session,
     host,
     showToolEditPermission: (payload) => prompts.push(payload),
     resolveToolEditPermission: (requestId) => resolved.push(requestId),

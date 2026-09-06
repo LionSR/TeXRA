@@ -77,6 +77,10 @@ export class ApproveSplitButton extends LitElement {
   /** Tooltip / aria-label for the main Approve button. */
   @property({ attribute: false }) approveTitle = '';
 
+  /** The button's visible text; a prompt whose approval also starts
+   *  something says so ('Approve and run'). */
+  @property({ attribute: false }) approveLabel = 'Approve';
+
   /** When true, surface the edit/bash run-approval menu item. */
   @property({ type: Boolean }) canBypass = false;
 
@@ -98,7 +102,7 @@ export class ApproveSplitButton extends LitElement {
     const approveLabel = accessibleApproveLabel(this.approveTitle);
     const approveButton = renderLabeledActionButton({
       icon: 'check',
-      text: 'Approve',
+      text: this.approveLabel,
       label: approveLabel,
       title: this.approveTitle,
       action: 'approve',

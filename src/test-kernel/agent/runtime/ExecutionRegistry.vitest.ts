@@ -10,11 +10,8 @@ import type {
 } from '@agent/runtime/ExecutionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import {
-  SessionEventHub,
-  type SessionEvent,
-} from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { statusDraft } from '@agent/runtime/SessionEvents';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import {
@@ -25,6 +22,7 @@ import {
   type ExecutionId,
   type StreamTabId,
   AgentCategory,
+  type SessionEventDraft,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
@@ -33,12 +31,7 @@ import { spiedTrace } from '@test/support/spiedTrace';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
 // Local file imports
-import {
-  recordSessionEvents,
-  runEventsOfType,
-  sessionFactPayloads,
-  sessionFactsOfType,
-} from '../progressTestUtils';
+import { eventsOfType, recordChildRosters } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
@@ -115,21 +108,46 @@ function createRegistry(
     releaseRootExecutionLease?: (executionId: ExecutionId) => Promise<void>;
   } = {},
 ): {
-  events: SessionEventHub;
+  events: PublishedEvents;
   streamStatus: StreamStatusMachine;
   registry: ExecutionRegistry;
 } {
-  const events = new SessionEventHub();
-  const streamStatus = new StreamStatusMachine(events);
+  // The session's publish path, in miniature: the machine's status facts
+  // reach the registry's `handleStatus` before they land, and every draft
+  // the registry or the machine publishes is appended in order.
+  const events: PublishedEvents = { published: [] };
+  const streamStatus = new StreamStatusMachine(
+    (event) => {
+      registry.handleStatus(event.streamId);
+      events.published.push(statusDraft(event));
+    },
+    () => {},
+  );
   const registry = new ExecutionRegistry({
     streamStatus,
-    events,
+    publish: (drafts) => events.published.push(...drafts),
     approvals: createSessionApprovals({ setApprovalBypassState() {} }),
     publishResult: () => {},
     releaseRootExecutionLease: async () => {},
     ...options,
   });
   return { events, streamStatus, registry };
+}
+
+interface PublishedEvents {
+  readonly published: SessionEventDraft[];
+}
+
+/** Every draft published from this call on. */
+function recordSessionEvents(events: PublishedEvents): {
+  readonly events: SessionEventDraft[];
+} {
+  const start = events.published.length;
+  return {
+    get events() {
+      return events.published.slice(start);
+    },
+  };
 }
 
 /** Tracks a handle with a live interrupt handler attached. */
@@ -883,7 +901,7 @@ describe('executionRegistry', () => {
 
   it('owns visible stream stop policy for root and children', () => {
     const { events, streamStatus, registry } = createRegistry();
-    const recorded = recordSessionEvents(events, { scope: 'session' });
+    const recorded = recordSessionEvents(events);
     const rootStreamId = 'root-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-stop-policy-test' as StreamTabId;
     const rootInterrupt = vi.fn();
@@ -926,7 +944,7 @@ describe('executionRegistry', () => {
       expect(queuedChildInterrupt).toHaveBeenCalledOnce();
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
-      expect(sessionFactsOfType(recorded.events, 'status')).toEqual(
+      expect(eventsOfType(recorded.events, 'status')).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             phase: STREAM_PHASE.CANCELLED,
@@ -935,7 +953,6 @@ describe('executionRegistry', () => {
       );
     } finally {
       registry.dispose();
-      recorded.detach();
     }
   });
 
@@ -981,7 +998,7 @@ describe('executionRegistry', () => {
 
   it('detaches descendants when killing with detached subagents', () => {
     const { events, streamStatus, registry } = createRegistry();
-    const recorded = recordSessionEvents(events, { scope: 'session' });
+    const recorded = recordSessionEvents(events);
     const rootStreamId = 'root-detach-kill-test' as StreamTabId;
     const childStreamId = 'child-detach-kill-test' as StreamTabId;
     const grandchildStreamId = 'grandchild-detach-kill-test' as StreamTabId;
@@ -1022,21 +1039,19 @@ describe('executionRegistry', () => {
       expect(
         registry.getAgentHandleByStream(grandchildStreamId)?.parentStreamId,
       ).toBe(grandchildStreamId);
-      expect(
-        sessionFactPayloads(recorded.events, 'setParentStream'),
-      ).toContainEqual({
-        childStreamId: grandchildStreamId,
+      expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
+        type: 'setParentStream',
+        aggregateId: grandchildStreamId,
         parentStreamId: null,
       });
     } finally {
       registry.dispose();
-      recorded.detach();
     }
   });
 
   it('detaches children when stopping a stream with detached subagents', () => {
     const { events, streamStatus, registry } = createRegistry();
-    const recorded = recordSessionEvents(events, { scope: 'session' });
+    const recorded = recordSessionEvents(events);
     const rootStreamId = 'root-detach-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-detach-stop-policy-test' as StreamTabId;
     const grandchildStreamId =
@@ -1096,15 +1111,13 @@ describe('executionRegistry', () => {
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBeUndefined();
       expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
-      expect(
-        sessionFactPayloads(recorded.events, 'setParentStream'),
-      ).toContainEqual({
-        childStreamId,
+      expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
+        type: 'setParentStream',
+        aggregateId: childStreamId,
         parentStreamId: null,
       });
     } finally {
       registry.dispose();
-      recorded.detach();
     }
   });
 
@@ -1184,21 +1197,18 @@ describe('executionRegistry', () => {
 
   it('cancels an ownerless stream', () => {
     const { events, streamStatus, registry } = createRegistry();
-    const recorded = recordSessionEvents(events, { scope: 'session' });
+    const recorded = recordSessionEvents(events);
     const streamId = 'ownerless-stop-policy-test' as StreamTabId;
 
     try {
       registry.stopAgentStream(streamId);
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-      expect(
-        sessionFactsOfType(recorded.events, 'status').at(-1),
-      ).toMatchObject({
+      expect(eventsOfType(recorded.events, 'status').at(-1)).toMatchObject({
         phase: STREAM_PHASE.CANCELLED,
       });
     } finally {
       registry.dispose();
-      recorded.detach();
     }
   });
 
@@ -1347,7 +1357,7 @@ describe('executionRegistry', () => {
 
   it('detaches children of an ownerless stream and cancels it', () => {
     const { events, streamStatus, registry } = createRegistry();
-    const recorded = recordSessionEvents(events, { scope: 'session' });
+    const recorded = recordSessionEvents(events);
     const parentStreamId = 'parent-ownerless-detach-test' as StreamTabId;
     const childStreamId = 'child-ownerless-detach-test' as StreamTabId;
     const childInterrupt = vi.fn();
@@ -1372,23 +1382,22 @@ describe('executionRegistry', () => {
       expect(
         registry.getAgentHandleByStream(childStreamId)?.parentStreamId,
       ).toBe(childStreamId);
-      expect(
-        sessionFactPayloads(recorded.events, 'setParentStream'),
-      ).toContainEqual({
-        childStreamId,
+      expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
+        type: 'setParentStream',
+        aggregateId: childStreamId,
         parentStreamId: null,
       });
       expect(streamStatus.get(parentStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBeUndefined();
     } finally {
       registry.dispose();
-      recorded.detach();
     }
   });
 
   it('projects handle updates from session events', () => {
     const { events, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
+    const rosters = recordChildRosters(registry);
     const executionId = 'exec-handle-runtime-host-test';
     const parentStreamId = 'parent-handle-runtime-host-test' as StreamTabId;
     const childStreamId = 'child-handle-runtime-host-test' as StreamTabId;
@@ -1399,7 +1408,7 @@ describe('executionRegistry', () => {
       registry.track(handle);
       registry.untrack(executionId);
 
-      const childActivity = runEventsOfType(recorded.events, 'child.activity');
+      const childActivity = rosters.rosters;
       expect(childActivity[0]).toMatchObject({
         parentStreamId,
         items: [
@@ -1410,10 +1419,9 @@ describe('executionRegistry', () => {
           },
         ],
       });
-      expect(
-        sessionFactPayloads(recorded.events, 'setParentStream'),
-      ).toContainEqual({
-        childStreamId,
+      expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
+        type: 'setParentStream',
+        aggregateId: childStreamId,
         parentStreamId,
       });
       expect(childActivity.at(-1)).toMatchObject({
@@ -1422,14 +1430,12 @@ describe('executionRegistry', () => {
       });
     } finally {
       registry.dispose();
-      recorded.detach();
     }
   });
 
-  it('publishes parent links through the attached session event hub', () => {
+  it('publishes parent links through the session publisher', () => {
     const { events, registry } = createRegistry();
-    const seen: SessionEvent[] = [];
-    const detach = events.subscribe((event) => seen.push(event));
+    const seen = recordSessionEvents(events);
     const executionId = 'exec-session-parent-link-test';
     const parentStreamId = 'parent-session-parent-link-test' as StreamTabId;
     const childStreamId = 'child-session-parent-link-test' as StreamTabId;
@@ -1439,18 +1445,12 @@ describe('executionRegistry', () => {
 
       registry.track(handle);
 
-      expect(seen).toContainEqual({
-        scope: 'session',
-        event: {
-          type: 'setParentStream',
-          payload: {
-            childStreamId,
-            parentStreamId,
-          },
-        },
+      expect(seen.events).toContainEqual({
+        type: 'setParentStream',
+        aggregateId: childStreamId,
+        parentStreamId,
       });
     } finally {
-      detach();
       registry.dispose();
     }
   });
@@ -1601,6 +1601,7 @@ describe('executionRegistry', () => {
   it('projects detach updates from session events', () => {
     const { events, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
+    const rosters = recordChildRosters(registry);
     const executionId = 'exec-detach-runtime-host-test';
     const parentStreamId = 'parent-detach-runtime-host-test' as StreamTabId;
     const childStreamId = 'child-detach-runtime-host-test' as StreamTabId;
@@ -1609,31 +1610,26 @@ describe('executionRegistry', () => {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
 
       registry.track(handle);
-      recorded.events.length = 0;
       expect(handle.deliveryTargetStreamId).toBe(parentStreamId);
+      const sinceTrack = recordSessionEvents(events);
       registry.detachActiveChildren(parentStreamId);
       expect(handle.deliveryTargetStreamId).toBeUndefined();
 
-      expect(recorded.events.map(({ event }) => event.type)).toEqual([
-        'child.activity',
+      expect(sinceTrack.events.map((event) => event.type)).toEqual([
         'setParentStream',
       ]);
 
-      expect(
-        sessionFactPayloads(recorded.events, 'setParentStream'),
-      ).toContainEqual({
-        childStreamId,
+      expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
+        type: 'setParentStream',
+        aggregateId: childStreamId,
         parentStreamId: null,
       });
-      expect(
-        runEventsOfType(recorded.events, 'child.activity').at(-1),
-      ).toMatchObject({
+      expect(rosters.rosters.at(-1)).toMatchObject({
         parentStreamId,
         items: [],
       });
     } finally {
       registry.dispose();
-      recorded.detach();
     }
   });
 
@@ -1663,10 +1659,9 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('publishes detach parent links through the attached session event hub', () => {
+  it('publishes detach parent links through the session publisher', () => {
     const { events, registry } = createRegistry();
-    const seen: SessionEvent[] = [];
-    const detach = events.subscribe((event) => seen.push(event));
+    const seen = recordSessionEvents(events);
     const executionId = 'exec-detach-session-parent-link-test';
     const parentStreamId =
       'parent-detach-session-parent-link-test' as StreamTabId;
@@ -1679,45 +1674,32 @@ describe('executionRegistry', () => {
       registry.track(handle);
       registry.detachActiveChildren(parentStreamId);
 
-      expect(seen).toContainEqual({
-        scope: 'session',
-        event: {
-          type: 'setParentStream',
-          payload: {
-            childStreamId,
-            parentStreamId: null,
-          },
-        },
+      expect(seen.events).toContainEqual({
+        type: 'setParentStream',
+        aggregateId: childStreamId,
+        parentStreamId: null,
       });
     } finally {
-      detach();
       registry.dispose();
     }
   });
 
-  it('detaches its stream-status subscription when disposed', () => {
+  it('ignores status facts once disposed', () => {
     const { events, streamStatus, registry } = createRegistry();
     const executionId = 'exec-dispose-status-subscription';
     const parentStreamId = 'parent-dispose-status-subscription' as StreamTabId;
     const childStreamId = 'child-dispose-status-subscription' as StreamTabId;
 
     registry.track(createHandle(executionId, parentStreamId, childStreamId));
+    const rosters = recordChildRosters(registry);
     registry.dispose();
     const recorded = recordSessionEvents(events);
 
-    try {
-      streamStatus.transition(
-        childStreamId,
-        STREAM_PHASE.CANCELLED,
-        'user-stop',
-      );
+    streamStatus.transition(childStreamId, STREAM_PHASE.CANCELLED, 'user-stop');
 
-      // Only the status machine's own fact remains; the registry contributes
-      // no roster emission once its subscription is gone.
-      expect(runEventsOfType(recorded.events, 'child.activity')).toEqual([]);
-      expect(sessionFactsOfType(recorded.events, 'status')).toHaveLength(1);
-    } finally {
-      recorded.detach();
-    }
+    // Only the status machine's own fact remains; the registry contributes
+    // no roster emission once its subscription is gone.
+    expect(rosters.rosters).toEqual([]);
+    expect(eventsOfType(recorded.events, 'status')).toHaveLength(1);
   });
 });

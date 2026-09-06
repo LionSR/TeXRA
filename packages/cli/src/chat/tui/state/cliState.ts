@@ -3,25 +3,15 @@
  * focus, overlays, exit hints) lives here as signals.
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
-import type { StreamPhaseState } from '@agent/runtime';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type {
-  AgentDelegationScope,
-  StreamLogEntry,
-  StreamTabId,
-  TaskGroup,
-  WorkflowPlanMarker,
-} from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript';
-import type { CompactionActivityProjection } from '@shared/streams/compactionActivityProjection';
+import type { AgentDelegationScope, StreamTabId } from '@shared/schemas';
 import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
 import type { WorkPlanProvenance } from '@transcript';
-import { isChildStreamRemoved, sessionStreamPhase } from './childExecutions';
+import { sessionView } from './sessionView';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------
@@ -41,92 +31,12 @@ import type { PastedImageEntry } from '../input/draftAttachments';
  * sources. `rendered` is replaced in place when the source row changes or the
  * settled-prefix promotion reaches it; the item object itself is stable.
  */
-export interface TranscriptFoldItem {
-  rendered: TranscriptRow;
-  readonly sortSeq: number;
-  readonly tieBreak: number;
-  /** Equal-key source order: 0 = compaction row, 1 = log row, 2 = synthetic. */
-  readonly rank: 0 | 1 | 2;
-}
-
-/**
- * Incremental task-group projection state: the upsert engine's mutable
- * working set plus the immutable `snapshot` the slice holds. `applied`
- * remembers the last log-entry object applied per group row — `StreamLog`
- * replaces the entry object on every update (including the in-place
- * GROUP_START → GROUP_END upsert at stage end), so a reference change is
- * exactly a content change and only new/changed rows are fed to
- * `upsertTaskGroupFromStreamLog`, never a full re-projection. That same
- * reference dedupe makes the memo survive fold rebuilds unchanged: a
- * `getRange(0)` replay skips every already-applied entry.
- */
-interface TaskGroupProjectionState {
-  readonly working: TaskGroup[];
-  readonly index: Map<string, number>;
-  readonly applied: Map<string, StreamLogEntry>;
-  snapshot: readonly TaskGroup[];
-}
-
-/** Incremental compaction-activity projection state, cursored on the source
- *  log (`appliedHead`), so it too survives fold rebuilds. */
-interface CompactionProjectionState {
-  readonly projection: CompactionActivityProjection;
-  appliedHead: number;
-  terminal: boolean;
-}
-
-/**
- * Mutable per-stream transcript-projection working state. Carried on the
- * stream's slice (never rendered) so its lifetime is exactly the stream's:
- * it dies with stream removal and CLI-state reset, and is cleared when the
- * stream's transcript is released. `subscribeStreamLog`'s fold over
- * store-emitted `StreamLogDelta`s maintains it in O(delta); a fresh or gapped
- * consumer rebuilds it from `getRange(0)` through the same application path.
- */
-export interface TranscriptFoldState {
-  /** False until a rebuild has run; cleared again when the stream's transcript is released. */
-  hydrated: boolean;
-  /** The `StreamLog` instance + emission seq `items` reflects. A mismatch
-   *  with the store's current log means fold continuity is broken: rebuild. */
-  logInstanceId: number;
-  emissionSeq: number;
-  /** Final transcript order: log, compaction, and synthetic rows merged. */
-  readonly items: TranscriptFoldItem[];
-  readonly indexById: Map<string, number>;
-  /** First index the contiguous settled-prefix promotion has not covered. */
-  finalizedFrontier: number;
-  /** Projection-mode bit `items` was built under; a flip forces a rebuild. */
-  projectLifecycleToTaskGroups: boolean;
-  /** Local rows reconciled into `items`, in slice order, by identity. */
-  synthetics: readonly TranscriptRow[];
-  /** Incremental task-group / compaction memos. Unlike the fold fields above
-   *  they are NOT cleared by a fold rebuild (each is self-consistent against
-   *  a full replay); they are dropped only when the stream's transcript
-   *  residency is released, and die with the slice like everything here. */
-  taskGroupProjection?: TaskGroupProjectionState;
-  compactionProjection?: CompactionProjectionState;
-  /** Attempt boundary from the newest `workflowPlan` marker, even when its
-   *  declared-plan body is malformed. */
-  workflowAttemptId?: string;
-  /** The newest valid `workflowPlan` marker folded so far (last wins). */
-  workflowPlan?: WorkflowPlanMarker;
-  /** Current-plan task ids known to have issued before transcript eviction.
-   *  Bounded by the already-retained plan, this keeps compact popup fallback
-   *  from reviving cutoff tasks as declared while the full log reloads. */
-  retainedWorkflowIssuedTaskIds?: ReadonlySet<string>;
-  /** Whether the last emitted `entries` was the full transcript or compact;
-   *  undefined until the first emission. */
-  lastOutputFull?: boolean;
-}
-
 export interface SessionMeta {
   readonly agent: string;
-  readonly category: AgentCategory;
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly approvalPolicy: TexraApprovalPolicy;
-  readonly canDelegate: boolean;
   readonly transcriptMode: 'persistent' | 'ephemeral';
   readonly teamName?: string;
   readonly cliMultiAgentPresetId?: string;
@@ -134,156 +44,12 @@ export interface SessionMeta {
   readonly version: string;
 }
 
-export interface BypassState {
-  readonly bash: boolean;
-  readonly toolEdit: boolean;
-  readonly superYolo: boolean;
-}
-
-/**
- * CLI-only per-stream view state. Everything the shared substrate owns —
- * identity/config/description metadata (`streamMetadataFor`), lifecycle phase,
- * substate and run-window start (`streamPhaseFor`), conversation progress and
- * stage (`streamStateFor`), workflow artifacts and cumulative usage
- * (`readStreamArtifacts`/`StreamArtifactProjection`), queued follow-ups
- * (`queuedFollowUpsFor`) — is read from it at paint and has no field here.
- * What remains is transcript-rail projection output (the fold rail stays
- * separate from the fact rail by design) and terminal modality.
- */
-export interface StreamSlice {
-  /** Run/round/phase lifecycle projected from the canonical StreamLog. */
-  readonly taskGroups: readonly TaskGroup[];
-  /** Attempt boundary from the newest transcript marker, independently of
-   *  whether its declared-plan body was readable. */
-  readonly workflowAttemptId: string | undefined;
-  /** The newest attempt's declared phases and tasks, from a valid transcript
-   *  `workflowPlan` marker. What the dashboard lists but has not reached yet. */
-  readonly workflowPlan: WorkflowPlanMarker | undefined;
-  /** CLI-only live status: the newest meaningful transcript line for this
-   *  stream, recomputed on every log sync. Fills the stream-list summary slot
-   *  until the runtime supplies a `description`. */
-  readonly latestLine: string | undefined;
-  /** True while the latest hidden provider-side reasoning/thinking stream is
-   *  the current live activity. The CLI never renders the content directly;
-   *  this only drives a lightweight liveness indicator. */
-  readonly thinkingActive: boolean;
-  /** True while the runtime is summarizing prior conversation context. */
-  readonly compactingActive: boolean;
-  readonly entries: readonly TranscriptRow[];
-  /** How far the append-only `<Static>` promotion has reached in `entries`:
-   *  rows before this index have been printed to terminal scrollback and can
-   *  never be taken back. This is the only home of that fact — a row's own
-   *  immutability is read off the row (`isSelfSettledRow`), and the two
-   *  together answer "is this row finalized" (`isFinalizedTranscriptRow`). */
-  readonly finalizedFrontier: number;
-  /** Transcript-projection working state (see {@link TranscriptFoldState}).
-   *  A mutable box owned by `subscribeStreamLog`; renderers ignore it. */
-  readonly transcriptFold?: TranscriptFoldState;
-  /** YOLO / auto-approval state is stream-scoped upstream (see
-   *  `permissionSlice.ts` in the extension), so concurrent parent/child
-   *  sessions can show distinct badges. */
-  readonly bypass: BypassState;
-}
-
-export const NO_BYPASS: BypassState = {
-  bash: false,
-  toolEdit: false,
-  superYolo: false,
-};
-
-/** The zero value of a stream slice: every field at its pre-run default.
- *  Tests build fixtures from this so a new `StreamSlice` field cannot drift
- *  away from what the store actually seeds. */
-export function emptySlice(): StreamSlice {
-  return {
-    latestLine: undefined,
-    taskGroups: [],
-    workflowAttemptId: undefined,
-    workflowPlan: undefined,
-    thinkingActive: false,
-    compactingActive: false,
-    entries: [],
-    finalizedFrontier: 0,
-    bypass: NO_BYPASS,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// streamsSlice
-// ---------------------------------------------------------------------------
-
-// Per-stream state map plus the status/child-reference update machinery that
-// operates on it. This is the largest slice: every `StreamSlice` field lives
-// behind this one map, patched immutably so `useSignal` subscribers only
-// re-render on an actual change.
-
-/** Per-stream state map, keyed by `StreamTabId`. */
-export const streams = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
-const RETIRED_STREAMS = new Set<StreamTabId>();
-
-/** Whether reset retired this stream identity from the current state lifetime. */
-export function isCliStreamRetired(streamId: StreamTabId): boolean {
-  return RETIRED_STREAMS.has(streamId);
-}
-
-/** Patch one stream's view state. */
-export function patchStream(
-  streamId: StreamTabId,
-  update: (slice: StreamSlice) => StreamSlice,
-): void {
-  RETIRED_STREAMS.delete(streamId);
-  const current = streams.get();
-  const slice = current.get(streamId) ?? emptySlice();
-  const next = update(slice);
-  if (next === slice) return;
-  const out = new Map(current);
-  out.set(streamId, next);
-  streams.set(out);
-}
-
-/** Whether this stream identity is still live in the current state lifetime.
- *  A stream tombstoned by `removeStream`, or retired by `resetCliState`, is
- *  final: it accepts no further status, folds no log, and paints no phase. */
-export function cliStreamAcceptsStatus(streamId: StreamTabId): boolean {
-  return !isChildStreamRemoved(streamId) && !RETIRED_STREAMS.has(streamId);
-}
-
-/**
- * Lifecycle state for a stream at paint: phase, substate, and the run-window
- * start elapsed time is rendered from, all read through the session's one
- * read-time phase rule (`SessionState.resolveStreamPhase`). For a stream this
- * process runs, that rule answers from the status machine, which stamps all
- * three and writes its entry before publishing the matching `status` fact;
- * for a stream it does not run, it answers from the durable facts that
- * stream's hydration read.
- *
- * Gated on this state lifetime holding a slice for the identity, which is how
- * the removed/retired rule the deleted status mirror enforced still holds: the
- * machine remembers the last phase of a stream `removeStream` dropped or
- * `resetCliState` retired, and no slice means no paint.
- */
-export function streamPhaseFor(
-  streamId: StreamTabId | undefined,
-): StreamPhaseState | undefined {
-  if (streamId === undefined || !streams.get().has(streamId)) return undefined;
-  return sessionStreamPhase(streamId);
-}
-
-// ---------------------------------------------------------------------------
-// sessionSlice
-// ---------------------------------------------------------------------------
-
-// Session-identity slice: the agent/model/cwd/approval display snapshot for the
-// current CLI session. One signal, no cross-stream concerns.
-
 const EMPTY_SESSION_META: SessionMeta = {
   agent: '',
-  category: AgentCategory.ToolUse,
   model: '',
   modelSource: 'builtin-default',
   cwd: '',
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
-  canDelegate: false,
   transcriptMode: 'persistent',
   version: '',
 };
@@ -318,8 +84,26 @@ function defaultSessionMeta(): SessionMeta {
 // stream-lifecycle side effects that touch these signals alongside others
 // (e.g. `removeStream`) live in the `removeStream` section below.
 
-/** The stream currently focused in the transcript / status bar. */
+/** The Surface's selection as written by `focusStream`; renders read
+ *  `selectedStreamId`, which resolves it against the view. */
 export const activeStreamId = signal<StreamTabId | undefined>(undefined);
+
+/**
+ * The stream the transcript and status bar show: the Surface's selection
+ * resolved against the view (PRD 9). The selected stream while the view
+ * holds it; the first top-level stream once it has left; the selection
+ * itself while the view holds no stream at all (the pre-run local
+ * conversation is a Surface-only id). A computed rather than an effect that
+ * clears a stale selection, and a signal rather than a per-render derivation
+ * so every component reads one answer.
+ */
+export const selectedStreamId: Signal.Computed<StreamTabId | undefined> =
+  computed(() => {
+    const selected = activeStreamId.get();
+    const view = sessionView().get();
+    if (selected === undefined || view.streams.has(selected)) return selected;
+    return view.streams.size === 0 ? selected : view.order.at(0);
+  });
 
 /**
  * Move transcript/status focus onto a stream. Sole focus writer: a stream
@@ -333,7 +117,6 @@ export function focusStream(
   streamId: StreamTabId,
   options: { readonly onlyIfUnset?: boolean } = {},
 ): void {
-  if (isChildStreamRemoved(streamId) || RETIRED_STREAMS.has(streamId)) return;
   if (options.onlyIfUnset && activeStreamId.get() !== undefined) return;
   activeStreamId.set(streamId);
 }
@@ -434,9 +217,17 @@ type ForegroundReaderTarget =
 
 const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
 let WORK_PLAN_REQUEST_REVISION = 0;
+/** The open reader, resolved against the view like the selection: a reader
+ *  whose stream has left the view is closed. */
 export const foregroundReader: Signal.Computed<
   ForegroundReaderTarget | undefined
-> = computed(() => FOREGROUND_READER.get());
+> = computed(() => {
+  const reader = FOREGROUND_READER.get();
+  return reader !== undefined &&
+    sessionView().get().streams.has(reader.streamId)
+    ? reader
+    : undefined;
+});
 
 export function openTranscriptReader(streamId: StreamTabId): void {
   FOREGROUND_READER.set({ kind: 'transcript', streamId });
@@ -679,45 +470,7 @@ export function bumpCodexPreferenceVersion(): void {
   codexPreferenceVersion.set(codexPreferenceVersion.get() + 1);
 }
 
-// ---------------------------------------------------------------------------
-// removeStream
-// ---------------------------------------------------------------------------
-
-// Cross-slice cleanup when a stream goes away: drops it from the streams map
-// and clears focus if it was active. The removal tombstone itself — what
-// refuses later roster, edge, attachment, and status facts for the identity —
-// is owned by the shared `SessionState` (the applier installs it before this
-// runs), not by CLI view state.
-
-export function removeStream(streamId: StreamTabId): void {
-  const current = streams.get();
-  if (current.has(streamId)) {
-    const out = new Map(current);
-    out.delete(streamId);
-    streams.set(out);
-  }
-  if (activeStreamId.get() === streamId) {
-    activeStreamId.set(undefined);
-  }
-  if (FOREGROUND_READER.get()?.streamId === streamId) {
-    FOREGROUND_READER.set(undefined);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// reset
-// ---------------------------------------------------------------------------
-
-// Full-state reset between CLI sessions (e.g. `/clear`), plus the hook
-// registry other state modules use to reset their own signals in step.
-
 const RESET_HOOKS = new Set<() => void>();
-let CLI_STATE_GENERATION = 0;
-
-/** Identity of the current signal-state lifetime for asynchronous subscribers. */
-export function getCliStateGeneration(): number {
-  return CLI_STATE_GENERATION;
-}
 
 export function registerCliStateResetHook(resetHook: () => void): () => void {
   RESET_HOOKS.add(resetHook);
@@ -744,13 +497,9 @@ registerCliStateResetHook(() => formProgress.set(undefined));
 export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),
 ): void {
-  CLI_STATE_GENERATION += 1;
-  RETIRED_STREAMS.clear();
-  for (const streamId of streams.get().keys()) RETIRED_STREAMS.add(streamId);
   sessionMeta.set(nextSessionMeta);
   activeStreamId.set(undefined);
   rootStreamId.set(undefined);
-  streams.set(new Map());
   rootRunPending.set(false);
   rootRunStreamId.set(undefined);
   activeForm.set(undefined);

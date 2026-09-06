@@ -85,6 +85,7 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   ModelCompactionThresholdPercentSchema,
 } from '@shared/schemas';
+import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
 import { isObject } from '@utils/core';
 import { isImageMimeType } from '@utils/files/mimeUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -104,7 +105,6 @@ import {
   COMPACTION_SUMMARY_PREFIX,
   COMPACTION_SYSTEM_PROMPT,
 } from './contextManagementConstants';
-import { roundedUtilizationPercent } from './support/contextUtilization';
 import { logCompactionEvent } from './support/compactionLogging';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import {

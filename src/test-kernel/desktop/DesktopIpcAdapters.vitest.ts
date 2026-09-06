@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  COMMON_COMMANDS,
-  MAIN_VIEW_COMMANDS,
-  SETTINGS_VIEW_COMMANDS,
-} from '@shared/ipc';
-import { AgentCategory } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
@@ -58,7 +53,6 @@ async function createShellHarness(
       openPath: vi.fn(async () => {}),
       openWorkspaceFolder: vi.fn(async () => {}),
       signIn: vi.fn(async () => {}),
-      getRecentCommits: async () => ({ commits: [], isGitRepo: false }),
       showInfoMessage: vi.fn(),
       ...overrides,
     },
@@ -106,87 +100,21 @@ async function createOnboardingHarness({
   };
 }
 
-function expectLastFunnelState(
-  postToRenderer: ReturnType<typeof vi.fn>,
+function expectFunnelState(
+  onboarding: { funnelState(): string | null },
   state: 'needs-credential' | 'setup' | 'done',
 ): void {
-  expect(postToRenderer).toHaveBeenLastCalledWith({
-    command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-    state,
-  });
+  expect(onboarding.funnelState()).toBe(state);
 }
 
 describe('desktop IPC adapters', () => {
-  it('keeps theme and debug state in the view-state adapter', async () => {
-    let themeListener: (() => void) | undefined;
-    const nativeTheme = {
-      shouldUseDarkColors: true,
-      shouldUseHighContrastColors: false,
-      on: vi.fn((_event: 'updated', listener: () => void) => {
-        themeListener = listener;
-      }),
-      off: vi.fn(),
-    };
-    vi.resetModules();
-    mocks.doMock('electron', () => ({ nativeTheme }));
-    const { createDesktopViewStateIpc } = await loadSourceModule(
-      '@desktop/main/desktopViewStateIpc',
-    );
-    const postToRenderer = vi.fn();
-    const stateIpc = createDesktopViewStateIpc({ postToRenderer });
-
-    // WEBVIEW_READY is a broadcast every webview posts on mount; only the
-    // main webview's readiness should sync theme/debug-mode here.
-    expect(
-      stateIpc.handleMessage({
-        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'progress',
-      }),
-    ).toBe(false);
-    expect(postToRenderer).not.toHaveBeenCalled();
-
-    expect(
-      stateIpc.handleMessage({
-        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'main',
-      }),
-    ).toBe(false);
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: COMMON_COMMANDS.THEME_SET,
-      theme: 'dark',
-    });
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: COMMON_COMMANDS.DEBUG_MODE_SET,
-      debugMode: false,
-    });
-
-    nativeTheme.shouldUseHighContrastColors = true;
-    themeListener?.();
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: COMMON_COMMANDS.THEME_SET,
-      theme: 'high-contrast',
-    });
-
-    stateIpc.dispose();
-    expect(nativeTheme.off).toHaveBeenCalledWith('updated', themeListener);
-  });
-
-  it('keeps shell routing and launcher actions in the shell adapter', async () => {
+  it('opens settings tabs and the custom agent directory from the shell actions', async () => {
     const openPath = vi.fn(async (_filePath: string) => {});
-    const { postToRenderer, shellIpc } = await createShellHarness({ openPath });
+    const { actions, postToRenderer } = await createShellHarness({ openPath });
 
-    shellIpc.handleMessage({
-      command: COMMON_COMMANDS.SWITCH_VIEW,
-      view: 'main',
-    });
-    shellIpc.handleMessage({ command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS });
-    shellIpc.handleMessage({
-      command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
-      sessionType: AgentCategory.ToolUse,
-    });
-    shellIpc.handleMessage({
-      command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
-    });
+    actions.showLauncher();
+    actions.showSettings('models');
+    actions.showSettings('agents', 'toolUse');
     await flushMicrotasks();
 
     expect(postToRenderer).toHaveBeenNthCalledWith(1, {
@@ -205,28 +133,17 @@ describe('desktop IPC adapters', () => {
       kind: 'settings',
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(5, {
-      agentSubTab: AgentCategory.ToolUse,
+      agentSubTab: 'toolUse',
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tab: 'agents',
     });
-    expect(postToRenderer).toHaveBeenNthCalledWith(6, {
-      command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-      commits: [],
-      isGitRepo: false,
-    });
 
-    shellIpc.handleMessage({
-      command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
-      customDirSet: true,
-    });
+    actions.openAgentDirectory(true);
     await flushMicrotasks();
     expect(openPath).toHaveBeenCalledWith('/agents/custom');
 
     postToRenderer.mockClear();
-    shellIpc.handleMessage({
-      command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
-      customDirSet: false,
-    });
+    actions.openAgentDirectory(false);
     expect(postToRenderer).toHaveBeenCalledWith({
       command: 'desktop:openWorkbench',
       kind: 'settings',
@@ -251,124 +168,38 @@ describe('desktop IPC adapters', () => {
     ]);
   });
 
-  it('forwards real recent commits when a git host is wired', async () => {
-    // `getRecentCommits` is a first-class shell option, so the launcher
-    // banner shows the host's actual `git log` output.
-    const getRecentCommits = vi.fn(async () => ({
-      commits: ['abc1234: Add feature (2 days ago)'],
-      isGitRepo: true,
-    }));
-    const { postToRenderer, shellIpc } = await createShellHarness({
-      getRecentCommits,
-    });
+  it('shows the launcher for New Session through the shell messages', async () => {
+    const { actions, postToRenderer } = await createShellHarness();
 
-    expect(
-      shellIpc.handleMessage({
-        command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
-      }),
-    ).toBe(true);
-    await flushMicrotasks();
-    expect(getRecentCommits).toHaveBeenCalledOnce();
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS,
-      commits: ['abc1234: Add feature (2 days ago)'],
-      isGitRepo: true,
-    });
+    actions.resetMainView();
+
+    expect(postToRenderer.mock.calls.map(([message]) => message)).toEqual([
+      { command: 'desktop:showLauncher' },
+    ]);
   });
 
-  it('wires the main login banner to desktop sign-in', async () => {
-    const signIn = vi.fn(async () => {});
-    const { postToRenderer, shellIpc } = await createShellHarness({ signIn });
-
-    expect(
-      shellIpc.handleMessage({
-        command: MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER,
-      }),
-    ).toBe(true);
-    await Promise.resolve();
-
-    expect(signIn).toHaveBeenCalledOnce();
-    expect(postToRenderer).not.toHaveBeenCalled();
-  });
-
-  it('rejects shell payloads that fail the MainView inbound schema', async () => {
+  it('claims only the desktop-local shell commands', async () => {
     const { postToRenderer, shellIpc } = await createShellHarness();
 
-    // SWITCH_VIEW with an invalid `view` value fails the discriminated-union
-    // parse and is no longer dispatched as a real switch — i.e. the single
-    // entry-point parse is the validation boundary, not per-handler reads.
-    expect(
-      shellIpc.handleMessage({
-        command: COMMON_COMMANDS.SWITCH_VIEW,
-        view: 'not-a-real-route',
-      }),
-    ).toBe(false);
-    expect(postToRenderer).not.toHaveBeenCalled();
-
-    // Unknown command falls through entirely (neither a main-view variant
-    // nor a desktop-local command) so the dispatcher chain can keep walking.
     expect(shellIpc.handleMessage({ command: 'texra.totallyUnknown' })).toBe(
       false,
     );
-  });
-
-  it('keeps execution forwarding in the execution adapter', async () => {
-    const { createDesktopExecutionIpc } = await loadSourceModule(
-      '@desktop/main/desktopExecutionIpc',
-    );
-    const executeMessage = {
-      command: MAIN_VIEW_COMMANDS.EXECUTE,
-      agent: 'direct-agent',
-      model: 'gpt-5.4',
-    };
-    const handleExecuteMessage = vi.fn(async (_message: unknown) => {});
-    const executionIpc = createDesktopExecutionIpc({ handleExecuteMessage });
-
-    expect(executionIpc.handleMessage(executeMessage)).toBe(true);
-    await Promise.resolve();
-    expect(handleExecuteMessage).toHaveBeenCalledWith(executeMessage);
-
-    const malformedError = vi.fn();
-    const malformedExecutionIpc = createDesktopExecutionIpc({
-      handleExecuteMessage,
-      onAsyncError: malformedError,
-    });
     expect(
-      malformedExecutionIpc.handleMessage({
-        command: MAIN_VIEW_COMMANDS.EXECUTE,
-        files: { inputFiles: 'main.tex' },
-      }),
+      shellIpc.handleMessage({ command: 'texra.desktop.openDesktopDocs' }),
     ).toBe(true);
-    expect(handleExecuteMessage).toHaveBeenCalledTimes(1);
-    expect(malformedError).toHaveBeenCalledWith(expect.any(Error));
-
-    const error = new Error('execution failed');
-    const onAsyncError = vi.fn();
-    createDesktopExecutionIpc({
-      handleExecuteMessage: vi.fn(async () => {
-        throw error;
-      }),
-      onAsyncError,
-    }).handleMessage(executeMessage);
-    await flushMicrotasks();
-    expect(onAsyncError).toHaveBeenCalledWith(error);
+    expect(postToRenderer).not.toHaveBeenCalled();
   });
 
   it('persists first-run walkthrough dismissal in the onboarding adapter', async () => {
     const { dismissedStateKey, onboarding, postToRenderer, update } =
       await createOnboardingHarness();
 
-    expect(
-      onboarding.handleMessage({
-        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'main',
-      }),
-    ).toBe(false);
+    await onboarding.refreshOnboardingFunnel();
     // The refresh is serialized through a promise chain (concurrency guard), so
-    // drain microtasks before asserting the pushed state.
+    // drain microtasks before asserting the derived state.
     await flushAsync();
-    // Fresh install with no credential → State 0 (welcome card).
-    expectLastFunnelState(postToRenderer, 'needs-credential');
+    // Fresh install with no credential: State 0 (welcome card).
+    expectFunnelState(onboarding, 'needs-credential');
     postToRenderer.mockClear();
 
     expect(
@@ -402,9 +233,7 @@ describe('desktop IPC adapters', () => {
     ).toBe(false);
 
     postToRenderer.mockClear();
-    expect(
-      onboarding.handleMessage({ command: MAIN_VIEW_COMMANDS.ONBOARDING_SKIP }),
-    ).toBe(true);
+    await onboarding.skipOnboarding();
     // The skip persists the declined flag then refreshes through the serialized
     // chain, so drain microtasks before asserting.
     await flushAsync();
@@ -412,89 +241,68 @@ describe('desktop IPC adapters', () => {
       GlobalStateKey.ONBOARDING_DECLINED,
       true,
     );
-    expectLastFunnelState(postToRenderer, 'done');
+    expectFunnelState(onboarding, 'done');
   });
 
   it('derives State 1 (setup) when hasCredential is true on fresh install', async () => {
     const selectSetupAgent = vi.fn(async () => {});
-    const { onboarding, postToRenderer } = await createOnboardingHarness({
+    const { onboarding } = await createOnboardingHarness({
       hasCredential: () => true,
       selectSetupAgent,
     });
 
-    expect(
-      onboarding.handleMessage({
-        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'main',
-      }),
-    ).toBe(false);
+    await onboarding.refreshOnboardingFunnel();
     await flushAsync();
-    // Credential present, firstRunDone not set → State 1 (setup card).
-    expectLastFunnelState(postToRenderer, 'setup');
+    // Credential present, firstRunDone not set: State 1 (setup card).
+    expectFunnelState(onboarding, 'setup');
     // selectSetupAgent callback fires on State 1 entry.
     expect(selectSetupAgent).toHaveBeenCalled();
   });
 
   it('derives State 2 (done) for backfilled veterans with firstRunDone set', async () => {
-    const { onboarding, postToRenderer } = await createOnboardingHarness({
+    const { onboarding } = await createOnboardingHarness({
       seed: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
       hasCredential: () => true,
     });
 
-    expect(
-      onboarding.handleMessage({
-        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'main',
-      }),
-    ).toBe(false);
+    await onboarding.refreshOnboardingFunnel();
     await flushAsync();
-    // Backfilled veteran → State 2 (done), no onboarding UI shown.
-    expectLastFunnelState(postToRenderer, 'done');
+    // Backfilled veteran: State 2 (done), no onboarding UI shown.
+    expectFunnelState(onboarding, 'done');
   });
 
-  it('handles ONBOARDING_SKIP_SETUP by setting firstRunDone and pushing done', async () => {
-    const { onboarding, postToRenderer, update } =
-      await createOnboardingHarness({ hasCredential: () => true });
-
-    onboarding.handleMessage({
-      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
-      view: 'main',
+  it('handles skipSetup by setting firstRunDone and deriving done', async () => {
+    const { onboarding, update } = await createOnboardingHarness({
+      hasCredential: () => true,
     });
+
+    await onboarding.refreshOnboardingFunnel();
     await flushAsync();
-    expectLastFunnelState(postToRenderer, 'setup');
-    postToRenderer.mockClear();
+    expectFunnelState(onboarding, 'setup');
     update.mockClear();
 
-    expect(
-      onboarding.handleMessage({
-        command: MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP,
-      }),
-    ).toBe(true);
+    await onboarding.skipSetup();
     await flushAsync();
     expect(update).toHaveBeenCalledWith(
       GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
       true,
     );
-    expectLastFunnelState(postToRenderer, 'done');
+    expectFunnelState(onboarding, 'done');
   });
 
   it('calls the ChatGPT sign-in callback and refreshes the funnel', async () => {
     const signInCalled = vi.fn(async () => {});
-    const { onboarding, postToRenderer } = await createOnboardingHarness({
+    const { onboarding } = await createOnboardingHarness({
       signInWithChatGpt: signInCalled,
     });
 
-    expect(
-      onboarding.handleMessage({
-        command: MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT,
-      }),
-    ).toBe(true);
+    await onboarding.signInWithChatGpt();
     await flushAsync();
     expect(signInCalled).toHaveBeenCalledOnce();
-    expectLastFunnelState(postToRenderer, 'needs-credential');
+    expectFunnelState(onboarding, 'needs-credential');
   });
 
-  it('runs the real kickoff path on ONBOARDING_RUN_SETUP and refreshes after', async () => {
+  it('runs the real kickoff path on runSetup and refreshes after', async () => {
     const callOrder: string[] = [];
     const selectSetupAgent = vi.fn(async () => {
       callOrder.push('select');
@@ -502,17 +310,13 @@ describe('desktop IPC adapters', () => {
     const kickoffSetup = vi.fn(async () => {
       callOrder.push('kickoff');
     });
-    const { onboarding, postToRenderer } = await createOnboardingHarness({
+    const { onboarding } = await createOnboardingHarness({
       hasCredential: () => true,
       selectSetupAgent,
       kickoffSetup,
     });
 
-    expect(
-      onboarding.handleMessage({
-        command: MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP,
-      }),
-    ).toBe(true);
+    await onboarding.runSetup();
     await flushAsync();
 
     // Real run-setup path: `runSetup` selects the setup agent and kicks off the
@@ -522,29 +326,19 @@ describe('desktop IPC adapters', () => {
     expect(kickoffSetup).toHaveBeenCalledOnce();
     expect(selectSetupAgent).toHaveBeenCalledTimes(2);
     expect(callOrder).toEqual(['select', 'kickoff', 'select']);
-    expectLastFunnelState(postToRenderer, 'setup');
+    expectFunnelState(onboarding, 'setup');
   });
 
-  it('opens the getting-started docs on ONBOARDING_OPEN_GETTING_STARTED', async () => {
+  it('opens the getting-started docs without deriving a funnel state', async () => {
     const openGettingStarted = vi.fn(async () => {});
-    const { onboarding, postToRenderer } = await createOnboardingHarness({
+    const { onboarding } = await createOnboardingHarness({
       openGettingStarted,
     });
 
-    expect(
-      onboarding.handleMessage({
-        command: MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED,
-      }),
-    ).toBe(true);
+    await onboarding.openGettingStarted();
     await flushAsync();
     expect(openGettingStarted).toHaveBeenCalledOnce();
-    // Opening the walkthrough does not push a funnel state (no derivation
-    // change), so no SET_ONBOARDING_FUNNEL is sent for this command.
-    expect(postToRenderer).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      }),
-    );
+    expect(onboarding.funnelState()).toBeNull();
   });
 
   it('serializes overlapping funnel refreshes to one consistent terminal state', async () => {
@@ -562,30 +356,24 @@ describe('desktop IPC adapters', () => {
         }),
     );
     const selectSetupAgent = vi.fn(async () => {});
-    const { onboarding, postToRenderer } = await createOnboardingHarness({
+    const { onboarding } = await createOnboardingHarness({
       hasCredential,
       selectSetupAgent,
     });
+    const funnelStates: string[] = [];
+    onboarding.onFunnelChange((state) => funnelStates.push(state));
 
-    // First refresh: no credential yet → needs-credential. Second refresh: a
-    // credential lands → setup. Fire them overlapping (no await between).
+    // First refresh: no credential yet, needs-credential. Second refresh: a
+    // credential lands, setup. Fire them overlapping (no await between).
     const first = onboarding.refreshOnboardingFunnel();
     credentialPresent = true;
     const second = onboarding.refreshOnboardingFunnel();
     await Promise.all([first, second]);
     await flushAsync();
 
-    const funnelStates = postToRenderer.mock.calls
-      .map(([message]) => message as { command: string; state?: string })
-      .filter(
-        (message) =>
-          message.command === MAIN_VIEW_COMMANDS.SET_ONBOARDING_FUNNEL,
-      )
-      .map((message) => message.state);
-
-    // The terminal state is consistent (setup), and the State 0→1 transition
-    // selected the setup agent exactly once — proof the refreshes did not
-    // interleave and clobber `previousFunnelState`.
+    // The terminal state is consistent (setup), and the State 0 to 1
+    // transition selected the setup agent exactly once: proof the refreshes
+    // did not interleave and clobber `previousFunnelState`.
     expect(funnelStates.at(-1)).toBe('setup');
     expect(selectSetupAgent).toHaveBeenCalledOnce();
   });

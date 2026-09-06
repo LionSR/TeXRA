@@ -46,12 +46,10 @@ import {
   showProgressView as progressShowProgressView,
 } from '@commands/progress/progressViewCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
-import { SIDEBAR_VIEWS, getActiveSidebarView } from '@common/webview';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping/clean';
+import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 
 // Local file imports
@@ -60,11 +58,10 @@ import {
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
 
-const RESET_CHANNEL = 'mainViewCommands';
-
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
   settingsViewProvider: SettingsViewProvider,
+  progressViewProvider: ProgressViewProvider,
 ): ExtensionCommandActions {
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
@@ -73,20 +70,9 @@ export function createExtensionCommandActions(
     showSettings(tab, agentSubTab) {
       return settingsViewProvider.showSettingsView(tab, agentSubTab);
     },
-    async resetMainView() {
-      const webviewView = await getMainWebview(RESET_CHANNEL);
-      if (!webviewView) {
-        void vscode.window.showWarningMessage(
-          'Main view is not available. Please ensure the TeXRA view is open.',
-        );
-        return;
-      }
-      webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-        state: {},
-        isResetOperation: true,
-      });
-    },
+    // New Session is the header's "+" (PRD 12.4): the New-task state into
+    // view with the launcher's selections as they are.
+    resetMainView: () => progressViewProvider.showLauncher(),
     cleanBuild: runCleanBuild,
     cleanOutput: runCleanOutput,
     pack: fileHandlePack,
@@ -123,19 +109,18 @@ export function createExtensionCommandActions(
     cloneOverleafProject: gitCloneOverleafProject,
     removeApiKey: () => apiRemoveApiKey(refreshAfterProviderKeyChange),
     showImportOptions: sysShowImportOptions,
-    async toggleView() {
-      const target =
-        getActiveSidebarView() === SIDEBAR_VIEWS.MAIN
-          ? 'texra.showProgressView'
-          : 'texra.showMainView';
-      await vscode.commands.executeCommand(target);
-    },
+    toggleView: () => progressViewProvider.toggleDrawer(),
     showProgressView: progressShowProgressView,
     setApiKey: (provider) =>
       apiSetApiKey(refreshAfterProviderKeyChange, provider),
     createAgentWithAI: (category) =>
       agentHandleCreateAgentWithAI(context, category),
-    execute: agentRunExecuteCommand,
+    // Without a configuration the command is the composer's accelerator
+    // (Cmd+Alt+E): its Send, in the view the user is in.
+    execute: (input) =>
+      input === undefined
+        ? progressViewProvider.submit()
+        : agentRunExecuteCommand(input),
   };
 }
 

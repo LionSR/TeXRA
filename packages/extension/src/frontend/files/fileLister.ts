@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
 
 import {
-  getEditedFileListConfig,
   getFileListConfig,
   loadFileListSettings,
-  matchesEditedFile,
   type FileFilterConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
@@ -34,11 +32,6 @@ export class FileLister {
 
   public list(fileType: ListableFileType): Promise<string[]> {
     return this.listFiles(getFileListConfig(fileType, this.settings));
-  }
-
-  public async listEditedFiles(baseFileName: string): Promise<string[]> {
-    const files = await this.listFiles(getEditedFileListConfig(this.settings));
-    return files.filter((file) => matchesEditedFile(file, baseFileName));
   }
 
   private async listFiles(config: FileFilterConfig): Promise<string[]> {

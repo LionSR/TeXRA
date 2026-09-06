@@ -8,6 +8,8 @@
 // This reducer is intentionally host-neutral. Electron resources are created
 // and disposed by the renderer; this module only describes what is visible.
 
+import { z } from 'zod';
+
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { clamp, getBasename } from '@utils/core';
 
@@ -63,38 +65,65 @@ export const WORKBENCH_KIND_META = {
     label: 'Logs',
     singleton: true,
   },
+  /** One compiled PDF per tab, keyed by its path (the tab's `target`). */
+  pdf: {
+    defaultPlacement: 'right',
+    icon: 'file-pdf',
+    label: 'PDF',
+    singleton: false,
+  },
+  /** The selected stream's root subtree. While it is open the rail lists
+   *  top-level streams only: the tree has one home at a time. */
+  subagents: {
+    defaultPlacement: 'right',
+    icon: 'diagram-project',
+    label: 'Subagents',
+    singleton: true,
+  },
 } as const satisfies Record<string, WorkbenchKindMeta>;
 
 export type WorkbenchKind = keyof typeof WORKBENCH_KIND_META;
 
-export interface WorkbenchTab {
-  readonly id: string;
-  readonly kind: WorkbenchKind;
-  readonly placement: WorkbenchPlacement;
-  readonly title: string;
-  readonly target?: string;
-  readonly dirty?: boolean;
-}
+const WorkbenchTabSchema = z.object({
+  id: z.string(),
+  kind: z.enum(Object.keys(WORKBENCH_KIND_META) as WorkbenchKind[]),
+  placement: z.enum(WORKBENCH_PLACEMENTS),
+  title: z.string(),
+  target: z.string().optional(),
+  dirty: z.boolean().optional(),
+});
 
-export interface DesktopTaskShellState {
-  readonly activeWorkbenchTabIds: Readonly<
-    Partial<Record<WorkbenchPlacement, string>>
-  >;
-  readonly bottomPanelHeight: number;
-  readonly sidebarCollapsed: boolean;
-  readonly sidebarWidth: number;
-  readonly filesExpanded: boolean;
-  readonly projectSectionPosition: number;
-  readonly summaryBarVisible: boolean;
-  readonly workbenchWidth: number;
-  readonly workbenchTabs: readonly WorkbenchTab[];
-  readonly nextTerminalSerial: number;
-}
+export type WorkbenchTab = z.infer<typeof WorkbenchTabSchema>;
+
+/**
+ * How the rail lists the open papers: every paper as its own section with
+ * its streams nested beneath it, or the active paper in focus with a
+ * switcher on top and the other papers' live streams in one card.
+ */
+const PAPERS_LAYOUTS = ['sections', 'focus'] as const;
+export type PapersLayout = (typeof PAPERS_LAYOUTS)[number];
+
+/** Persisted per paper in Surface.workbench. */
+export const DesktopTaskShellStateSchema = z.object({
+  activeWorkbenchTabIds: z.partialRecord(
+    z.enum(WORKBENCH_PLACEMENTS),
+    z.string().optional(),
+  ),
+  bottomPanelHeight: z.number(),
+  sidebarCollapsed: z.boolean(),
+  sidebarWidth: z.number(),
+  filesExpanded: z.boolean(),
+  papersLayout: z.enum(PAPERS_LAYOUTS),
+  summaryBarVisible: z.boolean(),
+  workbenchWidth: z.number(),
+  workbenchTabs: z.array(WorkbenchTabSchema),
+  nextTerminalSerial: z.int().positive(),
+});
+
+export type DesktopTaskShellState = z.infer<typeof DesktopTaskShellStateSchema>;
 
 const BOTTOM_PANEL_MIN_HEIGHT = 180;
 const BOTTOM_PANEL_MAX_HEIGHT = 560;
-const PROJECT_SECTION_MIN_POSITION = 20;
-const PROJECT_SECTION_MAX_POSITION = 80;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 480;
 const WORKBENCH_MIN_WIDTH = 380;
@@ -107,7 +136,7 @@ export function initialDesktopTaskShellState(): DesktopTaskShellState {
     sidebarCollapsed: false,
     sidebarWidth: 288,
     filesExpanded: true,
-    projectSectionPosition: 52,
+    papersLayout: 'sections',
     summaryBarVisible: true,
     workbenchWidth: 640,
     workbenchTabs: [],
@@ -163,7 +192,7 @@ function tabId(kind: WorkbenchKind, target?: string): string {
 }
 
 function titleFor(kind: WorkbenchKind, target?: string): string {
-  return kind === 'editor' && target
+  return (kind === 'editor' || kind === 'pdf') && target
     ? getBasename(target)
     : WORKBENCH_KIND_META[kind].label;
 }
@@ -387,6 +416,15 @@ export function toggleSidebar(
   return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
 }
 
+export function togglePapersLayout(
+  state: DesktopTaskShellState,
+): DesktopTaskShellState {
+  return {
+    ...state,
+    papersLayout: state.papersLayout === 'sections' ? 'focus' : 'sections',
+  };
+}
+
 export function toggleFiles(
   state: DesktopTaskShellState,
 ): DesktopTaskShellState {
@@ -429,20 +467,6 @@ export function setSidebarWidth(
   };
 }
 
-export function setProjectSectionPosition(
-  state: DesktopTaskShellState,
-  position: number,
-): DesktopTaskShellState {
-  return {
-    ...state,
-    projectSectionPosition: clampedDimension(
-      position,
-      PROJECT_SECTION_MIN_POSITION,
-      PROJECT_SECTION_MAX_POSITION,
-    ),
-  };
-}
-
 export function setWorkbenchWidth(
   state: DesktopTaskShellState,
   width: number,
@@ -455,18 +479,6 @@ export function setWorkbenchWidth(
       WORKBENCH_MAX_WIDTH,
     ),
   };
-}
-
-export function workspaceInitials(workspacePath: string | undefined): string {
-  if (!workspacePath) return 'TX';
-  const name = getBasename(workspacePath);
-  if (!name) return 'TX';
-  const words = name.split(/[\s._-]+/).filter(Boolean);
-  const initials = words
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join('');
-  return initials || 'TX';
 }
 
 export function workspaceName(workspacePath: string | undefined): string {

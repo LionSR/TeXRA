@@ -49,17 +49,16 @@ Things the tree won't tell you:
   `src/test-kernel/architecture/` (including
   `approvalPolicyAuthorityRatchet.vitest.ts`) also pin single-authority
   invariants with hardcoded allowlists rather than baseline JSON.
-- **`src/utils/` is host-agnostic, not universally browser-safe.** Exactly six
+- **`src/utils/` is host-agnostic, not universally browser-safe.** Exactly five
   modules are browser-reachable today: `@utils/core`,
-  `@utils/core/boundedIdSet`, `@utils/core/keyedMutex`,
-  `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, and
-  `@utils/text/stringUtils`. The other 58
+  `@utils/core/keyedMutex`, `@utils/errors/errorMessage`,
+  `@utils/files/pastedImageName`, and `@utils/text/stringUtils`. The other 59
   TypeScript modules are not browser-reachable and must not be assumed
   browser-safe. Side-specific helpers still belong in `frontend/` or `common/`.
   (`scripts/check-browser-safe-utils.mjs` enforces the count and reachable set.)
 - **`src/eventBus/` is `AppSignals` only** — cross-cutting app-lifecycle signals
   (auth, subscriptions, tool availability, workspace-file writes). It is _not_
-  run or session progress; those live in `@agent/trace` and `SessionEventHub`
+  run or session progress; those live in `@agent/trace` and `SessionEvents`
   (`src/agent/runtime/`).
 - **`src/common/webview/` does not exist.** Webview base classes are in
   `packages/extension/src/common/webview/`. <!-- guidance-refs-ignore -->
@@ -115,12 +114,15 @@ Also: `src/shared/` is for wire contracts and UI-shared message types — don't
 add new `@agent/*` imports there; host-neutral orchestration goes in
 `src/controllers/`.
 
-**Event channels.** New run-scoped facts extend `AgentEvent` (trace);
-session-scoped facts extend `SessionFact`. Don't add a new `bus.emit` from a
+**Event channels.** New facts a run's trace emits extend `AgentEvent`
+(trace) and reach the plane through `runEventDraft`; facts the session itself
+authors (lifecycle, status, approvals) extend the `SessionEvent` schema
+(`src/shared/schemas/sessionEvent.ts`) and are published as drafts through
+`SessionHandle.publish`. Don't add a new `bus.emit` from a
 VS Code-free zone and don't add a new subscribe surface. (Ruled in
 `docs/proposals/2026-06-10-error-pipeline-and-ownership.md`. The `src/tools`
 emit sites this once grandfathered have since migrated to session-owned
-emission via `SessionHandle.events` / `SessionEventHub`, so a new direct
+emission via `SessionHandle.publish` / `SessionEvents`, so a new direct
 `bus.emit` is a violation, not a grandfathered pattern.) This does not restrict
 `appSignals.emit(...)` on the separate `AppSignals` bus within its documented
 scope.

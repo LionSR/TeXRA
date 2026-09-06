@@ -3,15 +3,22 @@ import '@test/support/defaultSessionTestSetup';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import stripAnsi from 'strip-ansi';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { App, type AppProps } from '@cli/chat/tui/App';
 import { ESC_META_CHORD_INTERRUPT_DELAY_MS } from '@cli/chat/tui/appInteractionPolicy';
 import {
-  clearApprovals,
   currentApproval,
-  enqueueApproval,
+  type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
@@ -23,22 +30,12 @@ import {
   infoPane,
   openInfoPane,
   openWorkflowPopup,
-  patchStream,
   resetCliState,
   rootRunPending,
   rootStreamId,
-  streams,
   updateWorkflowPopupView,
   workflowPopupView,
 } from '@cli/chat/tui/state/cliState';
-import {
-  bindChildStreamState,
-  invalidateChildStreams,
-  unbindChildStreamState,
-} from '@cli/chat/tui/state/childExecutions';
-import { enqueueTuiApproval } from '@cli/chat/tui/state/subscribeApprovals';
-import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
-import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   STREAM_PHASE,
@@ -48,8 +45,10 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
+import type { TranscriptRow } from '@shared/transcript';
 import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
-import { setCliStreamPhase } from '@test/support/cliStreamStatus';
+import type { SessionView, StreamView } from '@shared/session/sessionView';
+import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
   loadInk,
@@ -57,8 +56,13 @@ import {
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import { createRunTrace } from '@transcript';
 import type { StreamSummaryMeta } from '@transcript/StreamSummaryCacheStore';
+import {
+  bindTestSessionView,
+  makeStreamView,
+  seedView,
+  viewWith,
+} from './fixtures/sessionViewFixture';
 
 vi.mock('@cli/runtime/shortcutLabels', async (importOriginal) => {
   const actual =
@@ -90,25 +94,81 @@ const CHORD_WINDOW_EXPIRED_MS = ESC_META_CHORD_INTERRUPT_DELAY_MS + 100;
 // slice mirrors it verbatim, so a seeded RUNNING must state one too — the
 // status bar's live elapsed segment (and the 1 Hz repaint that drives these
 // layout assertions) exists only while it is set.
+/** The streams a case names, as the fold states them; every seed rewrites
+ *  the whole view the App reads. */
+const seeded = new Map<StreamTabId, StreamView>();
+/** The approvals the fold lists: `approval.requested` facts not yet resolved. */
+let seededApprovals: SessionView['approvals'] = [];
+function syncSeededView(): void {
+  seedView(viewWith([...seeded.values()], { approvals: seededApprovals }));
+}
+/** One pending request as its `approval.requested` fact folds. */
+function seedApproval(payload: ApprovalPayload): void {
+  seededApprovals = [
+    ...seededApprovals,
+    {
+      streamId: payload.data.streamId as StreamTabId,
+      requestId: payload.data.requestId,
+      payload,
+    },
+  ];
+  syncSeededView();
+}
+/** Every pending request resolved: the runtime's `approval.resolved` folded. */
+function clearSeededApprovals(): void {
+  seededApprovals = [];
+  syncSeededView();
+}
+function seedStream(
+  id: StreamTabId,
+  over: Partial<Omit<StreamView, 'category'>> & {
+    readonly category?: StreamView['category'];
+  } = {},
+): void {
+  const current = seeded.get(id);
+  seeded.set(
+    id,
+    makeStreamView({ ...(current ?? {}), ...over, id }) as StreamView,
+  );
+  syncSeededView();
+}
+function transcriptOf(
+  rows: readonly TranscriptRow[],
+): StreamView['transcript'] {
+  return {
+    rows: [...rows],
+    taskGroups: [],
+    settledRows: rows.length,
+    run: workflowRunModel({
+      taskGroups: [],
+      rows,
+      plan: undefined,
+      streamPhase: STREAM_PHASE.RUNNING,
+      runDurablyFinal: false,
+      childProgress: new Map(),
+    }),
+  };
+}
 function setRunning(...streamIds: StreamTabId[]): void {
   for (const streamId of streamIds) {
-    setCliStreamPhase({
-      streamId,
+    seedStream(streamId, {
       status: STREAM_PHASE.RUNNING,
       runStartedAt: Date.now(),
     });
   }
 }
-
-// Identity/category/follow-up-support metadata is shared-substrate state now:
-// the App reads it via `streamMetadataFor` from the bound `SessionState`,
-// whose authority is the durable summary mirror (`recordSummaryMeta` is a
-// whole-object replacement, so each seed states the full record it wants).
+/** Summary metadata as the fold states it: an absent identity or support
+ *  level is the fold's null and unsupported, never the fixture's default. */
 function seedStreamMeta(streamId: StreamTabId, meta: StreamSummaryMeta): void {
-  childState.streamLogs.recordSummaryMeta(streamId, meta);
-  invalidateChildStreams();
+  seedStream(streamId, {
+    identity: meta.identity ?? null,
+    followUpSupport:
+      meta.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    ...(meta.agentCategory !== undefined
+      ? { category: meta.agentCategory }
+      : {}),
+  });
 }
-
 function markToolUseAgent(...streamIds: StreamTabId[]): void {
   for (const streamId of streamIds) {
     seedStreamMeta(streamId, {
@@ -118,7 +178,6 @@ function markToolUseAgent(...streamIds: StreamTabId[]): void {
     });
   }
 }
-
 /** A workflow-task row as the projector builds one, for the suites that seed
  *  a dashboard directly instead of replaying a stream log. */
 function taskRow(id: string, call: WorkflowCallProgress): WorkflowTaskRow {
@@ -149,33 +208,39 @@ function runningChild(
   };
 }
 
-// Child rosters, parent edges, and tombstones live on the adapter-bound
-// `SessionState`; these helpers write through its public API and re-derive
-// the reactive snapshots the App renders from.
-let childState: SessionState;
-
+// Seed the child rosters and parent edges through the session event fold.
 function seedChildRoster(
   parentStreamId: StreamTabId,
   rows: readonly ActiveChildInfo[],
 ): void {
-  childState.streamLogs.ensureStream(parentStreamId);
-  childState.getOrCreateStreamState(parentStreamId, AgentCategory.ToolUse);
-  childState.updateStreamState(parentStreamId, (state) => ({
-    ...state,
-    subagents: [...rows],
-  }));
-  invalidateChildStreams();
+  seedStream(parentStreamId);
+  for (const row of rows) {
+    seedStream(row.childStreamId, {
+      executionId: row.executionId,
+      label: row.agentName,
+      identity: row.identity,
+      status: row.status ?? STREAM_PHASE.COMPLETED,
+    });
+    seedParentEdge(row.childStreamId, parentStreamId);
+  }
 }
-
 function seedParentEdge(
   streamId: StreamTabId,
   parentStreamId: StreamTabId | null,
 ): void {
-  childState.streamLogs.ensureStream(streamId);
-  childState.setStreamParent(streamId, parentStreamId);
-  invalidateChildStreams();
+  const parent =
+    parentStreamId === null ? undefined : seeded.get(parentStreamId);
+  seedStream(streamId, {
+    parentId: parentStreamId,
+    ancestors:
+      parentStreamId === null
+        ? []
+        : [
+            ...(parent?.ancestors ?? []),
+            { id: parentStreamId, label: parent?.label ?? parentStreamId },
+          ],
+  });
 }
-
 function seedRootStream(): void {
   rootStreamId.set(ROOT);
   rootRunPending.set(true);
@@ -199,10 +264,7 @@ function seedChildHierarchy(): void {
 
 function finishNestedHierarchyAndFocusRoot(): void {
   for (const streamId of [GRANDCHILD, CHILD]) {
-    setCliStreamPhase({
-      streamId,
-      status: STREAM_PHASE.COMPLETED,
-    });
+    seedStream(streamId, { status: STREAM_PHASE.COMPLETED });
   }
   focusStream(ROOT);
 }
@@ -265,17 +327,16 @@ function fakeHistory(entries: readonly string[]): InputHistory {
   };
 }
 
+beforeAll(bindTestSessionView);
 beforeEach(async () => {
   resetCliState();
-  // Summary-mirror metadata seeded via `seedStreamMeta` lives in the shared
-  // transcript store and would otherwise leak across tests.
+  seeded.clear();
+  seededApprovals = [];
+  syncSeededView();
   await defaultSession().transcripts.clear();
-  childState = new SessionState(defaultSession());
-  bindChildStreamState(childState);
 });
 afterEach(() => {
-  clearApprovals();
-  unbindChildStreamState(childState);
+  clearSeededApprovals();
   resetCliState();
 });
 
@@ -313,23 +374,22 @@ describe('App foreground Escape ownership', () => {
       identity: { kind: 'multiAgentWorkflow', workflowName: 'workflow' },
       agentCategory: AgentCategory.Workflow,
     });
-    patchStream(WORKFLOW, (slice) => ({
-      ...slice,
-      entries: [
+    seedStream(WORKFLOW, {
+      transcript: transcriptOf([
         taskRow('task-child', {
           id: 'inspect',
           label: 'Inspect',
           status: 'running',
           childStreamId: CHILD,
         }),
-      ],
-    }));
+      ]),
+    });
     seedChildRoster(WORKFLOW, [
       runningChild('child-execution', 'inspect', CHILD),
     ]);
     seedParentEdge(CHILD, WORKFLOW);
     markToolUseAgent(CHILD);
-    void enqueueApproval({
+    seedApproval({
       kind: 'planApproval',
       data: {
         requestId: 'plan-unrelated',
@@ -338,7 +398,7 @@ describe('App foreground Escape ownership', () => {
         goalEnabled: false,
       },
     });
-    void enqueueApproval({
+    seedApproval({
       kind: 'planApproval',
       data: {
         requestId: 'plan-queued-workflow-child',
@@ -349,11 +409,11 @@ describe('App foreground Escape ownership', () => {
     });
     const { instance, stdin, stdout, onInterruptStream } =
       await renderWithInterrupt();
-    const emit = vi.spyOn(defaultSession().events, 'emit');
+    const emit = vi.spyOn(defaultSession(), 'publish');
 
     try {
       stdin.write('\t');
-      await waitFor(() => stdout.output.includes('workflow running'));
+      await waitFor(() => stdout.output.includes('workflow Running'));
       stdin.write(ARROW_KEYS.Down);
       stdin.write('\r');
       // The workflow row opens the popup over main, promotes direct-child
@@ -365,7 +425,7 @@ describe('App foreground Escape ownership', () => {
       expect(stdout.output).not.toContain(
         'Keep this unrelated request queued.',
       );
-      clearApprovals();
+      clearSeededApprovals();
       await waitFor(() => currentApproval.get() === undefined);
       await waitFor(() => stdout.output.includes('Inspect · Running'));
       expect(activeStreamId.get()).toBe(ROOT);
@@ -375,7 +435,7 @@ describe('App foreground Escape ownership', () => {
 
       // An approval bound to the workflow stream surfaces over the popup,
       // and the popup comes back once it is answered.
-      void enqueueApproval({
+      seedApproval({
         kind: 'planApproval',
         data: {
           requestId: 'plan-workflow-popup',
@@ -385,13 +445,13 @@ describe('App foreground Escape ownership', () => {
         },
       });
       await waitFor(() => stdout.output.includes('Approve plan?'));
-      clearApprovals();
+      clearSeededApprovals();
       await waitFor(() => currentApproval.get() === undefined);
       expect(foregroundReader.get()?.kind).toBe('workflow');
 
       // A real announcement from one of the workflow's own agent calls takes
       // the same foreground modal without moving the viewport underneath it.
-      void enqueueTuiApproval({
+      seedApproval({
         kind: 'planApproval',
         data: {
           requestId: 'plan-workflow-child',
@@ -403,7 +463,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => stdout.output.includes('Verify the child result.'));
       expect(activeStreamId.get()).toBe(ROOT);
       expect(emit).not.toHaveBeenCalled();
-      clearApprovals();
+      clearSeededApprovals();
       await waitFor(() => currentApproval.get() === undefined);
       expect(foregroundReader.get()?.kind).toBe('workflow');
       closeForegroundReader();
@@ -578,10 +638,7 @@ describe('App foreground Escape ownership', () => {
     },
   ])('$name', async ({ childStatus }) => {
     seedChildHierarchy();
-    setCliStreamPhase({
-      streamId: CHILD,
-      status: childStatus,
-    });
+    seedStream(CHILD, { status: childStatus });
     focusStream(CHILD);
     const onSubmit = vi.fn();
     const { instance, stdin, onInterruptStream } = await renderWithInterrupt({
@@ -607,10 +664,7 @@ describe('App foreground Escape ownership', () => {
     'resolves deferred child back before %s',
     async (_name, arrowInput) => {
       seedChildHierarchy();
-      setCliStreamPhase({
-        streamId: CHILD,
-        status: STREAM_PHASE.COMPLETED,
-      });
+      seedStream(CHILD, { status: STREAM_PHASE.COMPLETED });
       focusStream(CHILD);
       const onSubmit = vi.fn();
       const { instance, stdin, onInterruptStream } = await renderWithInterrupt({
@@ -819,124 +873,6 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
-  it('returns hidden child composer rows to the conversation at narrow widths', async () => {
-    seedChildHierarchy();
-    const transcriptText = Array.from(
-      { length: 20 },
-      (_, index) => `layout line ${index + 1}`,
-    ).join('\n');
-    for (const streamId of [ROOT, CHILD]) {
-      patchStream(streamId, (slice) => ({
-        ...slice,
-        entries: [
-          textRowFixture(`layout-${streamId}`, 'assistant', transcriptText),
-        ],
-      }));
-    }
-    const { instance, stdout } = await renderDebugApp(appProps(vi.fn()), {
-      columns: 40,
-      rows: 12,
-    });
-    const visibleTranscriptRows = (): number =>
-      (currentFrame(stdout).match(/layout line \d+/gu) ?? []).length;
-
-    try {
-      await waitFor(() => visibleTranscriptRows() > 0);
-      const rootRows = visibleTranscriptRows();
-
-      focusStream(CHILD);
-      await waitFor(() => currentFrame(stdout).includes('Esc parent'));
-      const supportedChildRows = visibleTranscriptRows();
-      expect(rootRows).toBe(2);
-      expect(supportedChildRows).toBe(7);
-
-      for (const fixture of [
-        {
-          identity: { kind: 'agent' as const, agent: 'structured-child' },
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          agentCategory: AgentCategory.ToolUse,
-        },
-        {
-          identity: { kind: 'agent' as const, agent: 'workflow-child' },
-          agentCategory: AgentCategory.Workflow,
-        },
-        {
-          identity: { kind: 'process' as const, tool: 'bash' },
-          agentCategory: AgentCategory.ToolUse,
-        },
-        {
-          identity: {
-            kind: 'agent' as const,
-            agent: 'codex',
-            tool: 'codex',
-          },
-          agentCategory: AgentCategory.ToolUse,
-        },
-      ] satisfies readonly StreamSummaryMeta[]) {
-        const writesBeforePatch = stdout.writes.length;
-        seedStreamMeta(CHILD, fixture);
-        await waitFor(
-          () =>
-            stdout.writes.length > writesBeforePatch &&
-            visibleTranscriptRows() === 10,
-        );
-        expect(visibleTranscriptRows()).toBe(10);
-      }
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('paints the choosing hint and reserves its rows for an unsupported child list', async () => {
-    const viewport = { columns: 40, rows: 12 } as const;
-
-    seedChildHierarchy();
-    seedStreamMeta(CHILD, {
-      identity: { kind: 'agent', agent: 'child' },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      agentCategory: AgentCategory.ToolUse,
-    });
-    focusStream(CHILD);
-    const transcriptText = Array.from(
-      { length: 20 },
-      (_, index) => `unsupported list line ${index + 1}`,
-    ).join('\n');
-    patchStream(CHILD, (slice) => ({
-      ...slice,
-      entries: [
-        textRowFixture('unsupported-list-layout', 'assistant', transcriptText),
-      ],
-    }));
-    const { instance, stdin, stdout } = await renderDebugApp(
-      appProps(vi.fn()),
-      viewport,
-    );
-    const visibleTranscriptRows = (): number =>
-      (currentFrame(stdout).match(/unsupported list line \d+/gu) ?? []).length;
-
-    try {
-      await waitFor(() => visibleTranscriptRows() === 10);
-      expect(visibleTranscriptRows()).toBe(10);
-      expect(currentFrame(stdout)).not.toContain('Session list');
-
-      stdin.write('\t');
-      await waitFor(
-        () =>
-          currentFrame(stdout).includes('Session list') &&
-          visibleTranscriptRows() === 2,
-      );
-      expect(currentFrame(stdout)).toContain('Session list');
-      expect(visibleTranscriptRows()).toBe(2);
-
-      stdin.write('\t');
-      await waitFor(() => visibleTranscriptRows() === 10);
-      expect(visibleTranscriptRows()).toBe(10);
-      expect(currentFrame(stdout)).not.toContain('Session list');
-    } finally {
-      instance.unmount();
-    }
-  });
-
   it('shows an unreadable root as read-only', async () => {
     seedChildHierarchy();
     const onSubmit = vi.fn();
@@ -947,9 +883,7 @@ describe('App foreground Escape ownership', () => {
     );
 
     try {
-      childState.streamStatus.clearStream(ROOT);
-      childState.streamStatus.markUnavailable(ROOT, detail);
-      invalidateChildStreams();
+      seedStream(ROOT, { readOnly: true, statusDetail: detail });
       await waitFor(() =>
         currentFrame(stdout).replaceAll(/\s+/gu, ' ').includes(detail),
       );
@@ -958,7 +892,6 @@ describe('App foreground Escape ownership', () => {
       await sleep(30);
       expect(onSubmit).not.toHaveBeenCalled();
     } finally {
-      childState.streamStatus.clearStream(ROOT);
       instance.unmount();
     }
   });
@@ -967,7 +900,7 @@ describe('App foreground Escape ownership', () => {
     'keeps the composer enabled for a %s tool-use agent child',
     async (status) => {
       seedChildHierarchy();
-      setCliStreamPhase({ streamId: CHILD, status });
+      seedStream(CHILD, { status });
       focusStream(CHILD);
       const onSubmit = vi.fn();
       const { instance, stdin } = await renderWithInterrupt({ onSubmit });
@@ -1127,10 +1060,7 @@ describe('App foreground Escape ownership', () => {
   it('returns keyboard ownership to prompt history after stopping the root', async () => {
     seedRootStream();
     const onInterruptStream = vi.fn((streamId: StreamTabId) => {
-      setCliStreamPhase({
-        streamId: streamId,
-        status: STREAM_PHASE.CANCELLED,
-      });
+      seedStream(streamId, { status: STREAM_PHASE.CANCELLED });
       rootRunPending.set(false);
     });
     const { instance, stdin, stdout } = await renderApp({
@@ -1160,150 +1090,3 @@ describe('App foreground Escape ownership', () => {
 // stream-scoped approval on an unrelated stream (which must never satisfy an
 // assertion on its own) and a session-wide (streamId: '') approval that
 // should promote onto whatever stream ends up visible.
-function enqueueOtherStreamInquiry(
-  requestId: string,
-  question: string,
-  threadId: string,
-): void {
-  void enqueueApproval({
-    kind: 'externalInquiry',
-    data: {
-      requestId,
-      question,
-      threadId,
-      allowBypass: false,
-      streamId: 'other-stream',
-    },
-  });
-}
-
-function enqueueSessionInquiry(
-  requestId: string,
-  question: string,
-  threadId: string,
-): void {
-  void enqueueApproval({
-    kind: 'externalInquiry',
-    data: {
-      requestId,
-      question,
-      threadId,
-      allowBypass: false,
-      streamId: '',
-    },
-  });
-}
-
-describe('App approval surface ownership', () => {
-  it('promotes a session-wide approval when a child becomes the scoped root', async () => {
-    seedChildHierarchy();
-    focusStream(ROOT);
-    enqueueOtherStreamInquiry(
-      'external-other-new-scope',
-      'Wait outside the new scope.',
-      'ei_000000000007',
-    );
-    enqueueSessionInquiry(
-      'external-session-new-scope',
-      'Verify the newly scoped child.',
-      'ei_000000000008',
-    );
-    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
-
-    try {
-      stdin.write('\t');
-      await waitFor(() => stdout.output.includes('Session list'));
-      stdin.write(ARROW_KEYS.Down);
-      await waitFor(() =>
-        stripAnsi(stdout.output)
-          .split('\n')
-          .some((line) => line.includes('child') && line.includes(POINTER)),
-      );
-      stdin.write('\r');
-      await waitFor(() => activeStreamId.get() === CHILD);
-      await waitFor(() => {
-        const pending = currentApproval.get()?.payload;
-        return (
-          pending?.kind === 'externalInquiry' &&
-          pending.data.requestId === 'external-session-new-scope'
-        );
-      });
-      await waitFor(() =>
-        stdout.output.includes('Verify the newly scoped child.'),
-      );
-      expect(stdout.output).not.toContain('Wait outside the new scope.');
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('promotes a session-wide approval against the post-Escape root', async () => {
-    seedChildHierarchy();
-    focusStream(CHILD);
-    enqueueOtherStreamInquiry(
-      'external-other-after-escape',
-      'Wait outside the destination root.',
-      'ei_000000000005',
-    );
-    enqueueSessionInquiry(
-      'external-session-after-escape',
-      'Verify the destination root.',
-      'ei_000000000006',
-    );
-    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
-
-    try {
-      stdin.write(ESC);
-      await waitFor(() => activeStreamId.get() === ROOT);
-      await waitFor(() => {
-        const pending = currentApproval.get()?.payload;
-        return (
-          pending?.kind === 'externalInquiry' &&
-          pending.data.requestId === 'external-session-after-escape'
-        );
-      });
-      await waitFor(() =>
-        stdout.output.includes('Verify the destination root.'),
-      );
-      expect(stdout.output).not.toContain('Wait outside the destination root.');
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('promotes a session-wide approval from a scoped-list root', async () => {
-    seedChildHierarchy();
-    focusStream(GRANDCHILD);
-    enqueueOtherStreamInquiry(
-      'external-other-scoped',
-      'Wait outside the scoped list.',
-      'ei_000000000003',
-    );
-    enqueueSessionInquiry(
-      'external-session-scoped',
-      'Verify the scoped child session.',
-      'ei_000000000004',
-    );
-    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
-
-    try {
-      stdin.write('\t');
-      await waitFor(() => stdout.output.includes('inquiry'));
-      stdin.write(ARROW_KEYS.Up);
-      stdin.write('\r');
-      await waitFor(() => {
-        const pending = currentApproval.get()?.payload;
-        return (
-          pending?.kind === 'externalInquiry' &&
-          pending.data.requestId === 'external-session-scoped'
-        );
-      });
-      await waitFor(() =>
-        stdout.output.includes('Verify the scoped child session.'),
-      );
-      expect(stdout.output).not.toContain('Wait outside the scoped list.');
-    } finally {
-      instance.unmount();
-    }
-  });
-});

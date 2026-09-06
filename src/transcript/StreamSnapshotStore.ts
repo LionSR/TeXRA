@@ -20,9 +20,7 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getExecutionStore, readExecutionMetaCore } from '@agent/storage';
-import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
@@ -56,6 +54,7 @@ import {
   type UserFollowUpSupport,
   type WorkPlanSnapshot,
   formatZodIssuesMessage,
+  type SessionEventDraft,
 } from '@shared/schemas';
 
 import { mapToRecord, throwAggregated } from '@utils/core';
@@ -136,26 +135,6 @@ export class StreamSnapshotPreloadError extends Error {
     super(cause instanceof Error ? cause.message : String(cause), { cause });
   }
 }
-
-/**
- * The run facts this store subscribes to, and the single source of truth for
- * the `attachSessionEvents` run-fact switch.
- *
- * Kept as one frozen tuple (the `RUN_FACT_EVENT_TYPES` idiom in
- * `@agent/trace`) so the runtime subscription filter and the compile-time
- * handled union cannot drift: extend this list and the switch's `default` arm
- * stops type-checking until the new fact is handled.
- */
-const SNAPSHOT_RUN_FACT_TYPES = Object.freeze([
-  'run.start',
-  'run.config',
-  'usage',
-  'updateTodos',
-  'updatePlan',
-  'addOutputFiles',
-  'updateMissingOutputs',
-  'updateCompileFailures',
-] as const satisfies readonly AgentEvent['type'][]);
 
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 interface HydratedRunState {
@@ -691,103 +670,86 @@ export class StreamSnapshotStore {
 
   /**
    * Persist already-migrated durable facts directly from the session event
-   * plane. `summaryMetaSink` rides the same attachment (the surface stays
-   * one member): it wires the summary registry that mirrors this store's
-   * display metadata, invoked on every metadata mutation and hydration.
+   * plane: returns the projection the session calls inside `publish`, for
+   * every fact, in publish order and before the log moves, so the summary
+   * mirror is current for every reader the wake reaches. `summaryMetaSink`
+   * rides the same attachment (the surface stays one member): it wires the
+   * summary registry that mirrors this store's display metadata, invoked on
+   * every metadata mutation and hydration.
    */
-  attachSessionEvents(
-    events: SessionEventHub,
-    options?: {
-      summaryMetaSink?: (stream: StreamTabId, meta: StreamSummaryMeta) => void;
-      summaryMetaSource?: (
-        stream: StreamTabId,
-      ) => StreamSummaryMeta | undefined;
-    },
-  ): () => void {
+  attachSessionEvents(options?: {
+    summaryMetaSink?: (stream: StreamTabId, meta: StreamSummaryMeta) => void;
+    summaryMetaSource?: (stream: StreamTabId) => StreamSummaryMeta | undefined;
+  }): (event: SessionEventDraft) => void {
     if (options?.summaryMetaSink) {
       this.summaryMetaSink = options.summaryMetaSink;
     }
     if (options?.summaryMetaSource) {
       this.summaryMetaSource = options.summaryMetaSource;
     }
-    const detachRunEvents = events.subscribeRunFacts(
-      ({ event }) => {
-        switch (event.type) {
-          case 'run.start':
-            this.setRunStart(
-              event.streamId,
-              event.executionId,
-              event.identity,
-              event.userFollowUpSupport,
-            );
-            return;
-          case 'run.config':
-            this.setRunConfig(event.streamId, event.config, event.executionId);
-            return;
-          case 'usage':
-            // `addUsage`'s safeParse is the wire→domain narrowing boundary.
-            void this.addUsage(
-              event.payload.streamId,
-              event.payload.storageKey,
-              event.payload.usage,
-            );
-            return;
-          case 'updateTodos':
-            this.setTodos(event.streamId, event.todos);
-            return;
-          case 'updatePlan':
-            this.setPlan(event.streamId, event.plan);
-            return;
-          case 'addOutputFiles':
-            this.applyRoundFieldFact(
-              event.streamId,
-              'outputFiles',
-              event.filesByRound,
-            );
-            return;
-          case 'updateMissingOutputs':
-            this.applyRoundFieldFact(
-              event.streamId,
-              'missingOutputs',
-              event.filesByRound,
-            );
-            return;
-          case 'updateCompileFailures':
-            this.applyRoundFieldFact(
-              event.streamId,
-              'compileFailures',
-              event.filesByRound,
-            );
-            return;
-          default: {
-            // Exhaustiveness check: adding a type to `SNAPSHOT_RUN_FACT_TYPES`
-            // without handling it here is a compile error, not a silent drop.
-            const unhandled: never = event;
-            return unhandled;
-          }
-        }
-      },
-      { types: SNAPSHOT_RUN_FACT_TYPES },
-    );
-    const detachSessionEvents = events.subscribeSessionFacts((fact) => {
-      switch (fact.type) {
+    return (event) => {
+      switch (event.type) {
+        case 'run.start':
+          // Identity is nullish only on the pre-cutover importer's rows,
+          // which enter the plane directly and never this projection.
+          if (event.identity == null) return;
+          this.setRunStart(
+            event.aggregateId,
+            event.executionId,
+            event.identity,
+            event.userFollowUpSupport,
+          );
+          return;
+        case 'run.config':
+          // The live draft carries the trace's whole `AgentConfig`
+          // (`runEventDraft` passes it through); the plane's schema names the
+          // fields the fold reads, the sidecar keeps the run's full config.
+          this.setRunConfig(
+            event.aggregateId,
+            event.config as AgentConfig,
+            event.executionId,
+          );
+          return;
+        case 'usage':
+          // `addUsage`'s safeParse is the wire→domain narrowing boundary.
+          void this.addUsage(event.aggregateId, event.storageKey, event.usage);
+          return;
+        case 'updateTodos':
+          this.setTodos(event.aggregateId, event.todos);
+          return;
+        case 'updatePlan':
+          this.setPlan(event.aggregateId, event.plan);
+          return;
+        case 'addOutputFiles':
+          this.applyRoundFieldFact(
+            event.aggregateId,
+            'outputFiles',
+            event.filesByRound,
+          );
+          return;
+        case 'updateMissingOutputs':
+          this.applyRoundFieldFact(
+            event.aggregateId,
+            'missingOutputs',
+            event.filesByRound,
+          );
+          return;
+        case 'updateCompileFailures':
+          this.applyRoundFieldFact(
+            event.aggregateId,
+            'compileFailures',
+            event.filesByRound,
+          );
+          return;
         case 'updateStreamDescription':
-          this.setDescription(fact.payload.streamId, fact.payload.description);
+          this.setDescription(event.aggregateId, event.description);
           return;
         case 'setParentStream':
-          this.setParentStream(
-            fact.payload.childStreamId,
-            fact.payload.parentStreamId,
-          );
+          this.setParentStream(event.aggregateId, event.parentStreamId);
           return;
         default:
           return;
       }
-    });
-
-    return () => {
-      detachSessionEvents();
-      detachRunEvents();
     };
   }
 
@@ -885,7 +847,7 @@ export class StreamSnapshotStore {
   // Every mutator below is private: durable display facts enter this store
   // only through `attachSessionEvents`, so the session event plane is the
   // single mutation authority. Tests exercise them by emitting the
-  // corresponding session/run facts on an attached `SessionEventHub`.
+  // corresponding session facts through the session's `publish`.
   // ==========================================================================
 
   /**
@@ -1626,7 +1588,7 @@ export class StreamSnapshotStore {
       // Per-record loudness: a resident record without established disk
       // provenance may be missing its persisted executionId here. Streams
       // with no record at all are outside this accessor's contract (callers
-      // merge `readExecutionStreamIndex` for those), so only
+      // merge `listExecutionStreamReferences` for those), so only
       // resident-but-unknown records warrant a warning.
       this.warnIfUnseeded('getExecutionIdMap', stream);
       const executionId = record.runExecutionId;

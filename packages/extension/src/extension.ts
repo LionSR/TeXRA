@@ -28,6 +28,10 @@ import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProj
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
+import {
+  disposeProcessRuntime,
+  installProcessRuntime,
+} from '@controllers/session/sessionLayer';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { appSignals } from '@eventBus/AppSignals';
@@ -65,17 +69,18 @@ import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog, setOutputChannelFactory } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
-import { initPlatform } from '@platform/platform';
+import { initPlatform, platform } from '@platform/platform';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
   createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
+  type NodePlatformServices,
+  type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -125,6 +130,55 @@ let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let lifecycleHost: LifecycleHost | undefined;
 let extensionShutdownPromise: Promise<void> | undefined;
 
+/**
+ * Make the process runtime over the process identity and install it beside
+ * the platform: the session graphs and every Promise-facing fiber run on it.
+ */
+async function installRuntime(): Promise<void> {
+  installProcessRuntime(await platform().processes.selfIdentity());
+}
+
+/**
+ * The platform, the process runtime, and the process roots, wired once for
+ * both activation paths: the credential-only path without a folder and the
+ * workspace path, which adds the ports only a folder can answer.
+ */
+async function initVscodePlatform(
+  context: vscode.ExtensionContext,
+  lifecycle: LifecycleHost,
+  workspaceRoot: string | undefined,
+  workspaceState: NodeWorkspaceRootsInit['workspaceState'],
+  extras: Pick<
+    NodePlatformServices,
+    'toolAvailability' | 'languageModel' | 'toolMissingHandler'
+  > = {},
+): Promise<void> {
+  const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
+  const config = await createExtensionTexraConfig(storage, workspaceRoot);
+  initPlatform(
+    createNodePlatform({
+      globalState: context.globalState,
+      storage,
+      secrets: new VscodeSecrets(context),
+      lifecycle,
+      agentDirectories,
+      agentResume: {
+        tryResumeStream: tryResumeFromResumeData,
+      },
+      ...extras,
+    }),
+  );
+  await installRuntime();
+  initProcessWorkspaceRoots(
+    createNodeWorkspaceRoots({
+      workspacePath: workspaceRoot,
+      storage: storage.getStoragePath(),
+      config,
+      workspaceState,
+    }),
+  );
+}
+
 function shutdownExtension(): Promise<void> {
   if (extensionShutdownPromise) return extensionShutdownPromise;
 
@@ -135,6 +189,8 @@ function shutdownExtension(): Promise<void> {
     } finally {
       if (lifecycleHost === host) lifecycleHost = undefined;
       teardownDefaultSession();
+      // After the session: its graph releases on the runtime it runs on.
+      await disposeProcessRuntime();
     }
   })();
   extensionShutdownPromise = shutdownPromise;
@@ -343,27 +399,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
     const lifecycle = createLifecycleHost();
     lifecycleHost = lifecycle;
     agentDirectories.initialize();
-    const storage = createNodeStorageProvider();
-    const config = await createExtensionTexraConfig(storage, undefined);
-    initPlatform(
-      createNodePlatform({
-        globalState: context.globalState,
-        storage,
-        secrets: new VscodeSecrets(context),
-        lifecycle,
-        agentDirectories,
-        agentResume: {
-          tryResumeStream: tryResumeFromResumeData,
-        },
-      }),
-    );
-    initProcessWorkspaceRoots(
-      createNodeWorkspaceRoots({
-        workspacePath: undefined,
-        storage: storage.getStoragePath(),
-        config,
-        workspaceState: context.workspaceState,
-      }),
+    await initVscodePlatform(
+      context,
+      lifecycle,
+      undefined,
+      context.workspaceState,
     );
     registerSupabaseAuth(context);
     // The full command surface (including the workspace-backed
@@ -423,54 +463,30 @@ async function activateExtension(context: vscode.ExtensionContext) {
   lifecycleHost = lifecycle;
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearVscodeLeanServerEntries());
   const languageModel = createLanguageModelPort(context);
-  // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
-  // #8622).
-  const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
-  const config = await createExtensionTexraConfig(storage, workspaceRoot);
   // Shared by the `Platform` tool-availability port and the setup platform's
   // extensions port, which both answer the same question.
   const isVscodeExtensionInstalled = (id: string) =>
     vscode.extensions.getExtension(id) !== undefined;
-  initPlatform(
-    createNodePlatform({
-      globalState: context.globalState,
-      storage,
-      secrets: new VscodeSecrets(context),
-      lifecycle,
-      agentDirectories,
-      agentResume: {
-        tryResumeStream: tryResumeFromResumeData,
-      },
-      toolAvailability: { isVscodeExtensionInstalled },
-      languageModel,
-      toolMissingHandler: async (message, openDocsCommand) => {
-        const actions = openDocsCommand ? ['View Installation Guide'] : [];
-        log.error(message);
-        const choice = await vscode.window.showErrorMessage(
-          message,
-          ...actions,
-        );
-        if (choice === 'View Installation Guide' && openDocsCommand) {
-          const [command, ...args] = openDocsCommand.split(',');
-          void vscode.commands.executeCommand(command, ...args);
-        }
-      },
-    }),
-  );
-  initProcessWorkspaceRoots(
-    createNodeWorkspaceRoots({
-      workspacePath: workspaceRoot,
-      storage: storage.getStoragePath(),
-      config,
-      workspaceState,
-    }),
-  );
+  // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
+  // #8622).
+  await initVscodePlatform(context, lifecycle, workspaceRoot, workspaceState, {
+    toolAvailability: { isVscodeExtensionInstalled },
+    languageModel,
+    toolMissingHandler: async (message, openDocsCommand) => {
+      const actions = openDocsCommand ? ['View Installation Guide'] : [];
+      log.error(message);
+      const choice = await vscode.window.showErrorMessage(message, ...actions);
+      if (choice === 'View Installation Guide' && openDocsCommand) {
+        const [command, ...args] = openDocsCommand.split(',');
+        void vscode.commands.executeCommand(command, ...args);
+      }
+    },
+  });
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes();
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
-    invalidateModelOptionsCache();
     appSignals.emit('languageModelsChanged', undefined);
   };
   context.subscriptions.push(
@@ -634,19 +650,13 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(), 0);
-  const mainViewProvider = registerCommands(context);
+  registerCommands(context, progressViewProvider);
   // The leftover-stream sweep reads the whole storage root, so it runs after
   // the commands and views are wired rather than in front of them; nothing
   // here awaits it, and deactivation cancels it if it has not started.
   const cancelLeftoverStreamSweep = scheduleLeftoverStreamSweep(runtimeSession);
   context.subscriptions.push({ dispose: cancelLeftoverStreamSweep });
   registerWalkthroughWorkspaceAction(context, true);
-  // Wire the two sidebar surfaces to each other before anything can invoke a
-  // placement command: `texra.showProgressView` is registered above and is
-  // also the status bar item's command, and a progress view without its main
-  // view provider would claim the sidebar placement without swapping content.
-  progressViewProvider.setMainViewProvider(mainViewProvider);
-  mainViewProvider.setProgressViewProvider(progressViewProvider);
   registerFileDecorations(context);
 
   setLeanLanguageServices(vscodeLeanLanguageServices);
@@ -852,7 +862,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       // palette, walkthrough, welcome card), so the onboarding funnel must
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
-      await mainViewProvider.refreshOnboardingFunnel().catch((err) => {
+      await progressViewProvider.refreshOnboardingFunnel().catch((err) => {
         log.warn(`Onboarding funnel refresh failed: ${toErrorMessage(err)}`);
       });
     }),

@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
-import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { TeamOptionDataSchema } from '@shared/schemas';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 
@@ -41,6 +39,8 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
   const workspaceState = options.workspaceState ?? new FakeStateStore();
   const globalState = options.globalState ?? new FakeStateStore();
   const posted: unknown[] = [];
+  /** One entry per catalog change: the applied team's tool-use root, else undefined. */
+  const catalogChanges: (string | undefined)[] = [];
   const opened: string[] = [];
   const infoMessages: string[] = [];
   const errorMessages: string[] = [];
@@ -79,6 +79,9 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       revealPath: async () => undefined,
     },
     renderer: { postToRenderer: (message) => posted.push(message) },
+    onCatalogChanged: async (selectedToolUseAgent) => {
+      catalogChanges.push(selectedToolUseAgent);
+    },
     prompts: {
       promptText: options.promptText ?? (async () => undefined),
       confirm: async (input) => {
@@ -103,6 +106,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
     resourcesPath: '/test/resources',
   });
   return {
+    catalogChanges,
     confirmed,
     controller,
     errorMessages,
@@ -194,9 +198,10 @@ describe('DefaultDesktopAgentSettingsController', () => {
   });
 
   it('updates source-qualified visibility state and both renderer surfaces', async () => {
-    const { controller, posted, workspaceState } = createControllerFixture({
-      catalog: physicistCatalog(),
-    });
+    const { catalogChanges, controller, posted, workspaceState } =
+      createControllerFixture({
+        catalog: physicistCatalog(),
+      });
     const setEnabled = assertSupported(controller.handlers.setAgentEnabled);
 
     await setEnabled({
@@ -213,44 +218,24 @@ describe('DefaultDesktopAgentSettingsController', () => {
       kind: 'custom',
       agentKeys: { workflow: ['builtInWorkflow:correct'], toolUse: 'all' },
     });
-    expect(postedCommands(posted)).toEqual(
-      expect.arrayContaining([
-        SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-        MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      ]),
+    expect(postedCommands(posted)).toContain(
+      SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
     );
+    expect(catalogChanges).toEqual([undefined]);
   });
 
-  it('posts well-formed team options when the catalog refreshes', async () => {
-    const { controller, posted } = createControllerFixture({
+  it('reports a catalog change when the catalog refreshes', async () => {
+    const { catalogChanges, controller } = createControllerFixture({
       catalog: physicistCatalog(),
     });
 
     await controller.refreshCatalogData();
 
-    expect(postedCommands(posted)).toContain(
-      MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-    );
-    const teamOptionsMessage = posted.find(
-      (message) => commandOf(message) === MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-    ) as { optionsData?: unknown } | undefined;
-    expect(teamOptionsMessage).toBeDefined();
-    const teamOptions = z
-      .array(TeamOptionDataSchema)
-      .parse(teamOptionsMessage?.optionsData);
-    expect(teamOptions.map((option) => option.value)).toEqual(
-      expect.arrayContaining([
-        'lean-project',
-        'physicist',
-        'mathematician',
-        'cs-ml',
-        'software-engineer',
-      ]),
-    );
+    expect(catalogChanges).toEqual([undefined]);
   });
 
-  it('posts team options when the custom agent directory changes', async () => {
-    const { controller, posted } = createControllerFixture({
+  it('reports a catalog change when the custom agent directory changes', async () => {
+    const { catalogChanges, controller, posted } = createControllerFixture({
       catalog: physicistCatalog(),
       selectCustomAgentDirectory: async () => '/agents/selected',
     });
@@ -260,17 +245,14 @@ describe('DefaultDesktopAgentSettingsController', () => {
       command: SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR,
     });
 
-    expect(postedCommands(posted)).toEqual(
-      expect.arrayContaining([
-        SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-        MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-        MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-      ]),
+    expect(postedCommands(posted)).toContain(
+      SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
     );
+    expect(catalogChanges).toEqual([undefined]);
   });
 
   it('applies source-qualified teams and selects the tool-use root', async () => {
-    const { controller, infoMessages, posted, workspaceState } =
+    const { catalogChanges, controller, infoMessages, posted, workspaceState } =
       createControllerFixture({
         catalog: physicistCatalog(),
         chooseTeamAvailability: async () => 'continue',
@@ -281,18 +263,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({ kind: 'team', teamId: 'physicist' });
-    expect(
-      posted.find(
-        (message) =>
-          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      ),
-    ).toMatchObject({
-      command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-      selectedToolUseAgent: 'orchestrator',
-    });
-    expect(postedCommands(posted)).toContain(
-      MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-    );
+    expect(catalogChanges).toContain('orchestrator');
     expect(postedCommands(posted)).toContain(
       SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
     );
@@ -394,7 +365,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       workflow: [catalog.workflow[0]],
       toolUse: [catalog.toolUse[3]],
     };
-    const { controller, infoMessages, posted, workspaceState } =
+    const { catalogChanges, controller, infoMessages, posted, workspaceState } =
       createControllerFixture({
         catalog,
         visibleCatalog,
@@ -413,9 +384,8 @@ describe('DefaultDesktopAgentSettingsController', () => {
       }),
     ]);
     expect(infoMessages).toEqual(['Saved team "Paper Team"']);
-    expect(posted.at(-1)).toMatchObject({
-      command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-    });
+    expect(catalogChanges.at(-1)).toBeUndefined();
+    expect(catalogChanges.length).toBeGreaterThan(0);
     expect(posted).toContainEqual(
       expect.objectContaining({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
@@ -451,18 +421,17 @@ describe('DefaultDesktopAgentSettingsController', () => {
 
   it('deletes custom teams and reports unknown team ids', async () => {
     const workspaceState = savedTeamState();
-    const { controller, errorMessages, posted } = createControllerFixture({
-      workspaceState,
-    });
+    const { catalogChanges, controller, errorMessages, posted } =
+      createControllerFixture({
+        workspaceState,
+      });
 
     await deleteAgentPreset(controller, 'custom-team');
 
     expect(workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)).toEqual(
       [],
     );
-    expect(posted.at(-1)).toMatchObject({
-      command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-    });
+    expect(catalogChanges.length).toBeGreaterThan(0);
     expect(posted).toContainEqual(
       expect.objectContaining({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,

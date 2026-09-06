@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   loginWithLoopback: vi.fn(),
-  invalidateModelOptionsCache: vi.fn(),
   setPreferCodexSubscription: vi.fn(),
   showLoggedErrorMessage: vi.fn(),
   showInformationMessage: vi.fn(),
@@ -43,10 +42,6 @@ vi.mock('@model/codex/codexPreference', async (importOriginal) => ({
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedErrorMessage: mocks.showLoggedErrorMessage,
-}));
-
-vi.mock('@model/computeModelOptions', () => ({
-  invalidateModelOptionsCache: mocks.invalidateModelOptionsCache,
 }));
 
 const { signInWithSubscription } =
@@ -194,7 +189,6 @@ describe('signInWithSubscription (ChatGPT)', () => {
     const signedIn = await signInWithChatGptSubscription('TestChannel');
 
     expect(signedIn).toBe(true);
-    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(mocks.showInformationMessage).toHaveBeenCalledWith(
       'Signed in with ChatGPT as person@example.com. ChatGPT subscription is enabled for Codex models.',
     );

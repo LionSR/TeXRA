@@ -3,7 +3,7 @@ import {
   classifyRun,
   type RunClassification,
 } from '@agent/runtime/runClassification';
-import { readExecutionStreamIndex } from '@agent/storage/executionListing';
+import { listExecutionStreamReferences } from '@agent/storage/executionListing';
 import {
   currentSession,
   type SessionHandle,
@@ -109,10 +109,7 @@ export function notifyFollowUpSent(
   streamId: StreamTabId,
   session?: SessionHandle,
 ): void {
-  (session ?? currentSession()).events.emit({
-    scope: 'session',
-    event: { type: 'followUpSent', payload: { streamId } },
-  });
+  (session ?? currentSession()).followUps.notifySent(streamId);
 }
 
 interface PendingResume {
@@ -198,7 +195,9 @@ export async function lookupStreamExecutionId(
 ): Promise<ExecutionId | undefined> {
   return (
     session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-    (await readExecutionStreamIndex()).byStream.get(streamId)
+    (await listExecutionStreamReferences()).references.findLast(
+      (reference) => reference.streamId === streamId,
+    )?.executionId
   );
 }
 
@@ -237,14 +236,14 @@ export function recordRunRefusal(
     case 'held_elsewhere':
       session.status.markUnavailableOrLog(
         streamId,
-        streamHeldMessage(classification.owner),
+        streamHeldMessage(classification.owner.pid),
         logger,
       );
       return 'owned_elsewhere';
     case 'owned_here':
       // A lease this process holds for a stream with no live flow context is
       // a registry/lease disagreement, not a free run: it stays read-only
-      // with the same diagnostic restart repair writes for it.
+      // with a diagnostic naming that disagreement.
       session.status.markUnavailableOrLog(
         streamId,
         streamUnreadableMessage('lease owned by this process with no live run'),

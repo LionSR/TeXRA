@@ -7,35 +7,25 @@ import { z } from 'zod';
 
 import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { StreamTabIdSchema } from '../identifiers';
+import {
+  AgentOptionDataSchema,
+  ModelOptionDataSchema,
+} from '../mainView/state';
+import {
+  AgentProposalPermissionSchema,
+  BashPermissionSchema,
+  ExternalInquiryPermissionSchema,
+  PlanApprovalPermissionSchema,
+  RetryPermissionSchema,
+  ToolEditPermissionSchema,
+  UserQuestionPermissionSchema,
+} from '../prompts';
 import { WorkflowScriptDeliverySummarySchema } from '../workflowScriptDelivery';
 
 // ============================================================
 // Shared Field Schemas
-// ============================================================
-
-export const ProgressViewPlacementSchema = z.enum(['sidebar', 'editor']);
-export type ProgressViewPlacement = z.infer<typeof ProgressViewPlacementSchema>;
-
-/**
- * Base schema for stream-scoped messages: those carrying a single `stream` tab
- * id. Compose with `.extend(...)` so the `stream` field is declared once and
- * inbound/outbound message schemas stay consistent.
- */
-export const StreamScopedBaseSchema = z.object({ stream: StreamTabIdSchema });
-
-/**
- * StreamScopedBaseSchema plus a `command` literal, with no extra fields.
- * Lives here (not in a per-view message module) so inbound and outbound
- * message schemas that echo the same command — e.g. DELETE_STREAM — compose
- * the identical shape instead of hand-declaring it in each direction.
- */
-export function streamScopedCommand<T extends string>(command: T) {
-  return StreamScopedBaseSchema.extend({ command: z.literal(command) });
-}
-
-// ============================================================
-// Progress View Data Schemas
 // ============================================================
 
 export const MissingOutputsPayloadSchema = z.object({
@@ -146,3 +136,38 @@ export const WebFetchPayloadSchema = z.object({
   /** Fetched document text, size-capped at the source (#7508). */
   content: z.string().optional(),
 });
+
+const PermissionKindSchema = z.enum(PERMISSION_KIND);
+/**
+ * The one approval/prompt kind vocabulary. The `approval.requested` fact,
+ * the runtime host-interaction kinds, and the CLI approval queue all key
+ * off this union, so a spelling that drifts fails to compile.
+ */
+export type ProgressPermissionKind = z.infer<typeof PermissionKindSchema>;
+
+/** What a pending approval shows (diff, command, question), never host
+ *  handles: the payload of `approval.requested`. */
+export const PermissionPayloadSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('toolEdit'), data: ToolEditPermissionSchema }),
+  z.object({ kind: z.literal('bash'), data: BashPermissionSchema }),
+  z.object({ kind: z.literal('retry'), data: RetryPermissionSchema }),
+  z.object({
+    kind: z.literal('proposal'),
+    data: AgentProposalPermissionSchema,
+    modelOptionsData: z.array(ModelOptionDataSchema).optional(),
+    agentOptionsData: z.array(AgentOptionDataSchema).optional(),
+  }),
+  z.object({
+    kind: z.literal('planApproval'),
+    data: PlanApprovalPermissionSchema,
+  }),
+  z.object({
+    kind: z.literal('externalInquiry'),
+    data: ExternalInquiryPermissionSchema,
+  }),
+  z.object({
+    kind: z.literal('userQuestion'),
+    data: UserQuestionPermissionSchema,
+  }),
+]);
+export type PermissionPayload = z.infer<typeof PermissionPayloadSchema>;

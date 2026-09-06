@@ -10,10 +10,10 @@ import {
   buildErrorLogData,
   getSdkErrorMessage,
 } from '@common/errors/sdkError/providerErrorFormat';
+import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
 import { clamp } from '@utils/core';
 
 // Local file imports
-import { roundedUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import {
@@ -132,7 +132,7 @@ interface OpenAICompactionHost {
  * The compaction lane of {@link ModelHandlerOpenAIResponse}: the pending
  * compaction-result cache (whose reference-equality and clear-on-success
  * lifetime semantics move here intact), the threshold/routing trigger
- * predicates, both compaction transports (stateful `/responses/compact` and
+ * predicates, both compaction transports (standalone `/responses/compact` and
  * the client-side summarize-and-resend fallback), the token-count failure
  * fallback, and the one-shot retry-source guard. The handler constructs this
  * once per instance and keeps thin delegates where tests reach the seam.
@@ -227,15 +227,14 @@ export class OpenAICompactionCoordinator {
   }
 
   /**
-   * Compact the conversation to reduce context size via OpenAI's stateful
-   * `/responses/compact` endpoint, which replaces prior assistant messages,
-   * tool calls, and results with a single encrypted compaction item.
+   * Compact the conversation via OpenAI's stateless `/responses/compact`
+   * endpoint. Preserve its entire returned window, including the encrypted
+   * compaction item and any retained messages.
    *
-   * Only usable when {@link storesResponsesServerSide} is true — the compact
-   * endpoint acts on a stored server-side response, which a `store: false`
-   * backend (the ChatGPT-subscription/Codex profile) never has. That backend
-   * is compacted via {@link compactConversationClientSide} instead, a
-   * distinct code path that never calls this endpoint.
+   * The handler currently selects this path for its direct-API profile and
+   * uses {@link compactConversationClientSide} for ChatGPT subscriptions.
+   * This is a route choice, not a public-API storage requirement: the
+   * standalone endpoint accepts the full input without a stored response.
    *
    * State updates are stored in compactionResult but NOT applied immediately.
    * The caller must apply them only after successful API call to prevent
@@ -376,12 +375,9 @@ export class OpenAICompactionCoordinator {
   }
 
   /**
-   * Client-side compaction fallback for backends that cannot use the
-   * stateful `/responses/compact` endpoint (see {@link compactConversation})
-   * because they don't store responses server-side — the ChatGPT-subscription
-   * (Codex) backend forces `store: false` on every request, so there is no
-   * stored response for the compact endpoint to act on (#7213). Summarizes
-   * the conversation locally via a throwaway system-prompt-swap call to the
+   * Client-side compaction fallback used by the ChatGPT-subscription profile
+   * (#7213). Public-API compaction support does not establish support on
+   * that separate backend. Summarizes the conversation via a throwaway call to the
    * same Responses API, then resends a single summary message instead of the
    * full history. Reuses the `ModelHandler.runClientCompaction` scaffold
    * already shared by the Chat Completions, OpenRouter-native, and Google
@@ -505,14 +501,14 @@ export class OpenAICompactionCoordinator {
     // CRITICAL: clear now, before this handler builds the next request —
     // the compacted messages replace the discarded history, so a stale
     // previousResponseId must never be resent alongside them (same reason as
-    // compactConversation()'s stateful path).
+    // compactConversation()'s standalone path).
     this.host.chainState.clearChainForCompaction();
     this.result = {
       compactedMessages,
       // Bookkeeping must reflect the INPUT cost of resending the compacted
       // payload next turn (system items + the summary message with its
       // "[Previous conversation summary]" prefix), not the OUTPUT cost of
-      // generating the summary — mirroring the stateful path, which counts the
+      // generating the summary — mirroring the standalone path, which counts the
       // compacted items' input tokens. `applyTokenCountFailureFallback()`
       // prefers this value over the chain's cumulative count, and on the Codex
       // profile it is load-bearing: token counting
@@ -532,7 +528,7 @@ export class OpenAICompactionCoordinator {
    * ChatGPT-subscription (Codex) profile — the only backend that reaches
    * {@link compactConversationClientSide} — exposes no token-counting endpoint
    * (`supportsTokenCounting: false`), so {@link estimateTokenCount} throws and
-   * the stateful path's exact API count is unavailable; fall back to a
+   * the standalone path's exact API count is unavailable; fall back to a
    * text-length heuristic over exactly what gets resent.
    */
   private estimateResentInputTokens(messages: ResponseInputItem[]): number {

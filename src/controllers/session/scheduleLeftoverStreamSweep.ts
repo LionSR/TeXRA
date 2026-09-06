@@ -64,12 +64,12 @@ export function scheduleLeftoverStreamSweep(
     void createSessionStores(session)
       .sweepLeftoverStreams({ runningStreams: runningStreams(session) })
       .then((sweptStreams) => {
-        for (const streamId of sweptStreams) {
-          session.events.emit({
-            scope: 'session',
-            event: { type: 'removeStream', payload: { streamId } },
-          });
-        }
+        session.publish(
+          sweptStreams.map((streamId) => ({
+            type: 'stream.removed' as const,
+            aggregateId: streamId,
+          })),
+        );
       })
       .catch((error: unknown) => {
         log.warn(

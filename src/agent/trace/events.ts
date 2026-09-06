@@ -87,15 +87,6 @@ export interface StageStartEvent extends StageStamp {
   readonly total?: number;
 }
 
-/** Immutable run identity emitted once when a stream enters RUNNING. */
-interface RunStartEvent extends StageStamp {
-  readonly type: 'run.start';
-  readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
-  readonly identity: RunIdentity;
-  readonly userFollowUpSupport?: UserFollowUpSupport;
-}
-
 /** Mutable persisted run config changed after run.start, e.g. model switch. */
 interface RunConfigEvent extends StageStamp {
   readonly type: 'run.config';
@@ -172,7 +163,7 @@ interface UsageEvent extends StageStamp {
 /**
  * Stream lifecycle phase change emitted by the session-owned status machine.
  * Not an {@link AgentEvent} arm: status travels only as a canonical session
- * fact on the `SessionEventHub` rail. The type stays here because the trace
+ * fact on the session's event plane (`SessionHandle.publishStatus`). The type stays here because the trace
  * package owns the event vocabulary the fact reuses.
  */
 export interface StatusEvent extends StageStamp {
@@ -374,7 +365,6 @@ export interface ResultEvent extends StageStamp {
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =
   | LogEvent
-  | RunStartEvent
   | RunConfigEvent
   | StageStartEvent
   | StageEndEvent
@@ -394,29 +384,3 @@ export type AgentEvent =
   | ResponseFinalizedEvent
   | DomainEvent
   | ResultEvent;
-
-/**
- * Event types consumed by both progress-view and headless CLI projections.
- * This host subscription vocabulary is intentionally broader than
- * `RunFactEvent`: it also includes transient runtime events that hosts project.
- *
- * `status` is not an `AgentEvent` at all: `StreamStatusMachine` publishes
- * every transition as a canonical `status` session fact, and every consumer —
- * including `TexraTranscriptRecorder`, via its `handleStatus` port — reads
- * that one rail.
- */
-export const RUN_FACT_EVENT_TYPES = Object.freeze([
-  'conversation.progress',
-  'updateTodos',
-  'updatePlan',
-  'addOutputFiles',
-  'updateMissingOutputs',
-  'updateCompileFailures',
-  'goalPaused',
-  'run.start',
-  'run.config',
-  'usage',
-  'context.state',
-  'stage.start',
-  'child.activity',
-] as const satisfies readonly AgentEvent['type'][]);

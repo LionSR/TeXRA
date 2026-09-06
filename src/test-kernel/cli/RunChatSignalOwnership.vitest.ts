@@ -4,11 +4,21 @@ import { createRequire } from 'node:module';
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import '@test/support/sessionGraphTestSetup';
+
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { ExecutionId } from '@shared/schemas';
+import { rootStreamId as rootStreamIdSignal } from '@cli/chat/tui/state/cliState';
+import { currentView } from '@cli/chat/tui/state/sessionView';
+import {
+  AgentCategory,
+  USER_FOLLOW_UP_SUPPORT,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
@@ -18,10 +28,10 @@ const cliRequire = createRequire(
 
 const mocks = vi.hoisted(() => ({
   callOrder: [] as string[],
-  chatAgentSupportsDelegation: vi.fn(),
   chatToolUseAgentUsageError: vi.fn(),
   cleanupTerminalModes: vi.fn(),
   createChatSessionController: vi.fn(),
+  submit: vi.fn(async () => undefined),
   discoverTerminalCapabilities: vi.fn(),
   handOffCliShutdownSignalHandlers: vi.fn(),
   initCliPlatform: vi.fn(),
@@ -41,7 +51,6 @@ const mocks = vi.hoisted(() => ({
   selectCliRunnableModel: vi.fn(),
   setCliHelperModel: vi.fn(),
   startRootRun: vi.fn(),
-  subscribeStreamLog: vi.fn(),
   supportsTerminalJobControl: vi.fn(),
   terminalTitleDispose: vi.fn(),
   terminalTitleResume: vi.fn(),
@@ -106,7 +115,6 @@ vi.mock(
       >();
     return {
       ...actual,
-      chatAgentSupportsDelegation: mocks.chatAgentSupportsDelegation,
       chatToolUseAgentUsageError: mocks.chatToolUseAgentUsageError,
     };
   },
@@ -157,14 +165,6 @@ vi.mock('@cli/tui/noColorOutput', async (importOriginal) => {
     ...actual,
     tuiOutputStreamForColor: mocks.tuiOutputStreamForColor,
   };
-});
-
-vi.mock('@cli/chat/tui/state/subscribeStreamLog', async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import('@cli/chat/tui/state/subscribeStreamLog')
-    >();
-  return { ...actual, subscribeStreamLog: mocks.subscribeStreamLog };
 });
 
 vi.mock('@cli/chat/tui/commands/registerBuiltins', async (importOriginal) => {
@@ -267,7 +267,6 @@ describe('runChat signal ownership wiring', () => {
       modelSource: 'default',
     });
     mocks.chatToolUseAgentUsageError.mockReturnValue(undefined);
-    mocks.chatAgentSupportsDelegation.mockReturnValue(false);
     mocks.selectCliRunnableModel.mockResolvedValue({ model: 'gpt-test' });
     mocks.loadInputHistory.mockResolvedValue({
       at: vi.fn(),
@@ -285,7 +284,6 @@ describe('runChat signal ownership wiring', () => {
       resume: mocks.terminalTitleResume,
       suspend: mocks.terminalTitleSuspend,
     });
-    mocks.subscribeStreamLog.mockReturnValue(() => undefined);
     mocks.onSkillSelect = undefined;
     mocks.registerBuiltinSlashCommands.mockImplementation(
       (options: {
@@ -305,7 +303,11 @@ describe('runChat signal ownership wiring', () => {
       resume: vi.fn(async () => undefined),
       startRootRun: mocks.startRootRun,
       stop: vi.fn(),
+      stopStream: vi.fn(),
       tryResumeStream: vi.fn(async () => false),
+      submit: mocks.submit,
+      activateSkill: vi.fn(),
+      clearPendingSkills: vi.fn(),
     });
     mocks.render.mockImplementation(() => {
       mocks.callOrder.push('ink.render');
@@ -397,14 +399,13 @@ describe('runChat signal ownership wiring', () => {
       expect(mocks.terminalTitleResume).toHaveBeenCalledTimes(1);
 
       submit.current?.('check the ordinary case', []);
-      await vi.waitFor(() => expect(mocks.startRootRun).toHaveBeenCalled());
-      expect(mocks.startRootRun).toHaveBeenCalledWith({
-        agent: 'assistant',
-        model: 'gpt-test',
-        instruction: 'check the ordinary case',
-        agentCategory: 'toolUse',
-        workingDirectory: '/tmp/texra-chat',
-      });
+      await vi.waitFor(() =>
+        expect(mocks.submit).toHaveBeenCalledWith(
+          'check the ordinary case',
+          [],
+          undefined,
+        ),
+      );
 
       mocks.callOrder.length = 0;
       mocks.terminalTitleSuspend.mockImplementationOnce(() => {
@@ -448,7 +449,7 @@ describe('runChat signal ownership wiring', () => {
     }
   }, 20_000);
 
-  it('constructs the exact initial run configuration for a resumed team', async () => {
+  it('routes the composer and skill activations through the session controller', async () => {
     const exitTui = createDeferred();
     const submit = captureNextRenderOnSubmit();
     mocks.waitUntilExit.mockReturnValue(exitTui.promise);
@@ -485,24 +486,63 @@ describe('runChat signal ownership wiring', () => {
       mocks.onSkillSelect?.({ name: 'proof-audit', activationPrompt });
       submit.current?.('', mediaFiles);
 
-      await vi.waitFor(() => expect(mocks.startRootRun).toHaveBeenCalled());
-      mediaFiles.push('/tmp/late.png');
-      expect(mocks.startRootRun).toHaveBeenCalledWith({
-        agent: 'assistant',
-        model: 'gpt-test',
-        instruction: [
-          activationPrompt,
-          '<user_request>',
-          '',
-          '</user_request>',
-        ].join('\n'),
-        displayInstruction: '',
-        agentCategory: 'toolUse',
-        workingDirectory: '/tmp/texra-chat',
-        mediaFiles: ['/tmp/diagram.png'],
-        cli: { multiAgentPresetId: 'physicist' },
-        delegationAgentScope,
-      });
+      await vi.waitFor(() =>
+        expect(mocks.submit).toHaveBeenCalledWith('', mediaFiles, undefined),
+      );
+    } finally {
+      exitTui.resolve();
+      await runPromise;
+      restoreAgentRegistry();
+    }
+  }, 20_000);
+
+  it('drops only the current conversation on /clear and keeps hydrated history', async () => {
+    const exitTui = createDeferred();
+    mocks.waitUntilExit.mockReturnValue(exitTui.promise);
+    const restoreAgentRegistry = await stubAgentRegistry();
+    const { runChat } = await import('@cli/chat/tui/runChatTui');
+    const runPromise = runChat(INTERACTIVE_CONTEXT, {});
+
+    try {
+      await vi.waitFor(() =>
+        expect(mocks.createChatSessionController).toHaveBeenCalled(),
+      );
+      const session = defaultSession();
+      const ownRoot = 'stream:clear-own-root' as StreamTabId;
+      const history = 'stream:clear-history' as StreamTabId;
+      // Both land the way the transcript summary's runs hydrate: top-level
+      // streams in the view, only one of them this chat's root.
+      session.publish(
+        [history, ownRoot].map((streamId) => ({
+          type: 'run.start' as const,
+          aggregateId: streamId,
+          executionId: `execution:${streamId}` as ExecutionId,
+          identity: { kind: 'agent' as const, agent: 'assistant' },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+          worktree: null,
+          parentStreamId: null,
+          background: false,
+          approvalPolicy: null,
+          checkpointId: null,
+        })),
+      );
+      await vi.waitFor(() =>
+        expect(currentView().streams.has(ownRoot)).toBe(true),
+      );
+      rootStreamIdSignal.set(ownRoot);
+      const deleted = vi
+        .spyOn(session.transcripts, 'delete')
+        .mockResolvedValue(undefined);
+
+      const { getSlashCommandContext } =
+        mocks.createChatSessionController.mock.calls[0]![0];
+      getSlashCommandContext().resetSession();
+
+      expect(deleted.mock.calls.map(([streamId]) => streamId)).toEqual([
+        ownRoot,
+      ]);
     } finally {
       exitTui.resolve();
       await runPromise;

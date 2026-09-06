@@ -7,8 +7,7 @@
       "@agent/followUp",
       "@agent/index",
       "@agent/runtime",
-      "@agent/storage",
-      "@agent/trace"
+      "@agent/storage"
     ],
     "desktop": [
       "@agent/core/state/executionRequests",

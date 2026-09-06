@@ -204,8 +204,7 @@ function normalizeSessionLinks(links?: string[] | null): string[] | undefined {
  * Read a thread manifest under its lock, require the last turn to be open,
  * and replace it via `update`. Returns null without calling `update` if the
  * thread is missing, not open, has no turns, or its last turn isn't open —
- * the shared guard behind `recordAnswerForOpenTurn` and
- * `persistOpenTurnDraft`.
+ * the shared guard behind `recordAnswerForOpenTurn`.
  */
 async function withOpenTurnUpdate(
   threadId: InquiryThreadId,
@@ -330,12 +329,14 @@ export async function recordOpenQuestion(params: {
  */
 export async function recordAnswerForOpenTurn(params: {
   threadId: InquiryThreadId;
+  turnIndex: number;
   answer: string;
   sessionLinks?: string[] | null;
 }): Promise<ExternalInquiryThreadManifest | null> {
   return withOpenTurnUpdate(
     params.threadId,
     (existing, lastTurn, timestamp) => {
+      if (lastTurn.turnIndex !== params.turnIndex) return null;
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
       // `draft` is open-turn-only state and must not survive the transition.
@@ -373,11 +374,13 @@ export async function recordAnswerForOpenTurn(params: {
  */
 export async function markDropped(params: {
   threadId: InquiryThreadId;
+  turnIndex: number;
 }): Promise<ExternalInquiryThreadManifest | null> {
   return threadMutex.runExclusive(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing) return null;
     if (existing.status !== 'open') return null;
+    if (existing.turns.at(-1)?.turnIndex !== params.turnIndex) return null;
 
     const timestamp = new Date().toISOString();
     const nextManifest: ExternalInquiryThreadManifest = {
@@ -387,33 +390,6 @@ export async function markDropped(params: {
     };
 
     await writeThreadManifest(nextManifest);
-    return nextManifest;
-  });
-}
-
-/**
- * Persist (or clear) the open-turn draft for the inquiry panel. No-op
- * if the thread has no open turn.
- */
-export async function persistOpenTurnDraft(params: {
-  threadId: InquiryThreadId;
-  draft: InquiryDraft | null;
-}): Promise<void> {
-  await withOpenTurnUpdate(params.threadId, (existing, lastTurn) => {
-    const nextTurn: OpenInquiryTurn = {
-      ...lastTurn,
-      draft: params.draft ?? undefined,
-    };
-
-    // Deliberately does not bump updatedAt: a draft autosave is not a state
-    // transition (unlike open/answer/drop), and updatedAt drives listing
-    // sort order and the "Updated: ..." text shown to the model — neither of
-    // which should react to the user still typing an unsent answer.
-    const nextManifest: ExternalInquiryThreadManifest = {
-      ...existing,
-      turns: [...existing.turns.slice(0, -1), nextTurn],
-    };
-
     return nextManifest;
   });
 }

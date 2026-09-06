@@ -26,10 +26,10 @@ export interface RunTrace {
   readonly trace: AgentTrace;
   /**
    * The transcript recorder's status port. Status travels only as a canonical
-   * session fact (it is not an `AgentEvent`), so the launch path must bridge
-   * the owning session's status subscription into this — e.g.
-   * `session.events.subscribeStatus((e) => runTrace.handleStatus(e))` —
-   * and detach it alongside `dispose`.
+   * session fact (it is not an `AgentEvent`), so the launch path hands this
+   * to the owning session with the trace (`session.attachRunTrace`), which
+   * calls it for every status fact it publishes, in publish order, and
+   * detaches it with the trace.
    */
   readonly handleStatus: (event: StatusEvent) => void;
   readonly flushSpills: () => Promise<void>;

@@ -56,10 +56,11 @@ export function configureDelegatedChildApprovals(
   if (parentStreamId) {
     session.approvals.registerStreamParent(childStreamId, parentStreamId);
   }
+  // The child's `run.start` is published by the time this runs, so the
+  // write is not pre-activation setup: it notifies the host and publishes
+  // the child's `approval.policy` like any other bypass change.
   if (policy === 'auto-approved') {
-    session.approvals.toolEdit.bypass.setBypass(childStreamId, true, {
-      silent: true,
-    });
+    session.approvals.toolEdit.bypass.setBypass(childStreamId, true);
   }
 }
 
@@ -85,37 +86,3 @@ export function releaseStreamResources(
   session.approvals.forgetStreamAncestry(streamId);
   session.followUps.terminalize(streamId);
 }
-
-/**
- * Cancel pending host interactions in `session` that have no concrete stream
- * context (streamId is undefined or empty). These would otherwise survive a
- * per-stream {@link releaseStreamResources} loop because they do not equal
- * any concrete StreamTabId. Bypass and proposal state are always
- * streamId-keyed and are not affected here.
- *
- * Desktop `deleteAllStreams` calls this after the per-stream sweep so that
- * an approval emitted without a concrete stream is rejected rather than left
- * pending with no UI prompt to answer. Interaction state is session-owned, so
- * sibling windows' streamless approvals stay intact.
- */
-export function cleanupUnscopedApprovals(
-  session: SessionHandle = defaultSession(),
-): void {
-  session.interactions.cancel({
-    streamId: null,
-    cause: 'Streamless approval cleanup.',
-  });
-}
-
-// Re-export commonly used functions from individual modules
-export {
-  // Bash approval
-  setBashApprovalSessionBypass,
-  isBashApprovalBypassedForStream,
-} from './bashApproval';
-
-export {
-  // Tool edit approval
-  setToolEditApprovalSessionBypass,
-  isApprovalBypassedForStream,
-} from './toolEditApproval';

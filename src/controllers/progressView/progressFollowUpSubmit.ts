@@ -50,10 +50,13 @@ export function submitProgressFollowUp(
       }
     };
     const emitQueuedFollowUpsChanged = (): void => {
-      session.events.emit({
-        scope: 'session',
-        event: { type: 'updateQueuedFollowUps', payload: { streamId } },
-      });
+      session.publish([
+        {
+          type: 'updateQueuedFollowUps',
+          aggregateId: streamId,
+          messages: session.followUps.getAll(streamId),
+        },
+      ]);
     };
 
     void (async () => {

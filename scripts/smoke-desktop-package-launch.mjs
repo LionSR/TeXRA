@@ -175,7 +175,7 @@ async function waitForReadiness(application) {
       // could never resolve.
       const shell = document.querySelector('main#app');
       const mainApp = document.querySelector(
-        'main-app[data-desktop-view="main"]',
+        'progress-app[data-desktop-view="progress"]',
       );
       const shellReady =
         shell instanceof HTMLElement &&

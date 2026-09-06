@@ -27,18 +27,13 @@ export {
   tryDefaultSession,
 } from './SessionHandle';
 
+// sessionGraph: the process's session owner, as the hosts and the SDK open
+// and close sessions through it (one session per workspace storage root).
+export { closeSession, openSession, openSessionAsync } from './sessionGraph';
+
 // RunContext: the session scope a host enters around every touch of a
 // session's storage when it holds several sessions in one process.
 export { runInSession } from './RunContext';
-
-// SessionEventHub
-export { SessionEventHub } from './SessionEventHub';
-export type { SessionFact } from './SessionEventHub';
-
-// StreamStatusMachine — the per-stream lifecycle record hosts render from
-// (`SessionState.streamStatus.getStreamState`). Type only: the machine itself
-// is reached through the session, never constructed by a host.
-export type { StreamPhaseState } from './StreamStatusService';
 
 // HostInteractions
 export {
@@ -101,8 +96,6 @@ export type {
 } from './runtimePresentationEvents';
 
 // textEnhancement
-export { polishTextWithAI } from './textEnhancement';
-export type { FileContext } from './textEnhancement';
 
 // selectAutoOpenFinalOutput
 export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';
