@@ -17,15 +17,14 @@ import {
   StreamLogEntrySchema,
   type StreamLogEntry,
 } from '@shared/schemas';
+import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import { createDeferred, waitForCondition } from '@test/support/asyncTestUtils';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import {
-  ephemeralTranscriptWarning,
   StreamLogStore,
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
 } from '@transcript';
-import type { StreamLogAppendInput } from '@transcript/StreamLog';
 import { clearPersistedSummaryParentStream } from '@transcript/StreamLogStore';
 import { delay } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
@@ -679,30 +678,6 @@ describe('StreamLogStore load', () => {
 
     await expect(StreamLogStore.open()).rejects.toThrow(
       'storage permission denied',
-    );
-  });
-
-  it('degrades to an ephemeral store instead of failing an interactive host startup', async () => {
-    vi.spyOn(StorageFS, 'ensureDir').mockRejectedValue(
-      new Error('storage permission denied'),
-    );
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-
-    const { mode } = await StreamLogStore.openOrEphemeral();
-
-    expect(mode).toEqual({
-      kind: 'ephemeral',
-      reason: 'Persistent transcript opening failed: storage permission denied',
-    });
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      'Persistent transcript opening failed: storage permission denied',
-    );
-    if (mode.kind !== 'ephemeral') throw new Error('expected ephemeral mode');
-    // The warning an interactive host shows is the one that tells the user
-    // this session cannot be resumed.
-    expect(ephemeralTranscriptWarning(mode.reason)).toContain(
-      'cannot be resumed',
     );
   });
 
@@ -1812,6 +1787,75 @@ describe('StreamLogStore save throttle', () => {
     await store.flush();
 
     expect(store.get('unknown')).toBeDefined();
+  });
+
+  it('hydrates retained spill output for cold reads and resident histories', async () => {
+    const toolPath = 'executions/ab12cd/toolOutput/tool.txt';
+    const modelPath = 'executions/ab12cd/toolOutput/model.txt';
+    const full = 'retained output '.repeat(5000);
+    const rows = [
+      {
+        ...logEntry('alpha', 1, 100),
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: { toolName: 'test', output: 'preview', spillPath: toolPath },
+      },
+      {
+        ...logEntry('alpha', 2, 101),
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+        text: 'preview',
+        data: { status: 'completed', spillPath: modelPath },
+      },
+    ];
+    mockStorage({
+      logs: { alpha: rows },
+      summaries: { alpha: summary(100, 101) },
+    });
+    const read = vi.mocked(StorageFS.read).getMockImplementation()!;
+    vi.mocked(StorageFS.read).mockImplementation(async (target) =>
+      target === toolPath || target === modelPath ? full : read(target),
+    );
+    const store = await StreamLogStore.open();
+    const expected = [
+      expect.objectContaining({ data: { toolName: 'test', output: full } }),
+      expect.objectContaining({ text: full, data: { status: 'completed' } }),
+    ];
+    await expect(store.readEntries('alpha')).resolves.toEqual(expected);
+    expect(store.get('alpha')).toBeUndefined();
+    await store.ensureLoaded('alpha');
+    expect(store.get('alpha')?.toJSON()).toEqual(expected);
+  });
+
+  it('keeps a missing spill preview readable and allows guarded deletion', async () => {
+    const spillPath = 'executions/ab12cd/toolOutput/missing.txt';
+    mockStorage({
+      logs: {
+        alpha: [
+          {
+            ...logEntry('alpha', 1, 100),
+            messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+            text: 'stored preview',
+            data: { status: 'completed', spillPath },
+          },
+        ],
+      },
+      summaries: { alpha: summary(100, 100) },
+    });
+    const read = vi.mocked(StorageFS.read).getMockImplementation()!;
+    vi.mocked(StorageFS.read).mockImplementation(async (target) => {
+      if (target === spillPath) throw notFound();
+      return read(target);
+    });
+    const store = await StreamLogStore.open();
+    await expect(store.readEntries('alpha')).resolves.toEqual([
+      expect.objectContaining({
+        text: 'stored preview\n\n[Full output unavailable: the retained artifact was deleted.]',
+        data: { status: 'completed', spillPath },
+      }),
+    ]);
+    await expect(
+      store.delete('alpha', { shouldDelete: () => true }),
+    ).resolves.toBeUndefined();
+    expect(store.has('alpha')).toBe(false);
   });
 
   it('reads cold entries without making the stream resident', async () => {

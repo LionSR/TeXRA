@@ -16,9 +16,7 @@ import {
   isRenderableTranscriptEntry,
   orderedStaticTranscriptEntries,
   transcriptRowHeadline,
-  trimAssistantTranscriptLead,
 } from '@cli/chat/tui/panes/transcriptEntries';
-import { hydratedTranscript } from '@cli/chat/tui/panes/TranscriptReader';
 import {
   advanceStaticTranscriptState,
   buildStaticTranscriptItems,
@@ -80,7 +78,6 @@ const SESSION_META = {
   cwd: '/tmp/project',
   apiMode: 'personal',
   approvalPolicy: 'ask',
-  transcriptMode: 'persistent',
   version: '0.38.0',
 } as const;
 
@@ -621,13 +618,17 @@ describe('CLI conversation transcript', () => {
 
     const invisibleText = transcriptRowHeadline(invisibleAssistant);
     expect(isRenderableTranscriptEntry(invisibleAssistant)).toBe(false);
-    expect(trimAssistantTranscriptLead(invisibleText)).toBe('');
-    expect(trimAssistantTranscriptLead('\u001B[2m\u200B\nvisible')).toBe(
-      '\u001B[2mvisible',
-    );
-    expect(trimAssistantTranscriptLead('\n\u001B[31mvisible')).toBe(
-      '\u001B[31mvisible',
-    );
+    expect(invisibleText).toBe('');
+    expect(
+      transcriptRowHeadline(
+        entry('dim', 'assistant', '\u001B[2m\u200B\nvisible', true),
+      ),
+    ).toBe('\u001B[2mvisible');
+    expect(
+      transcriptRowHeadline(
+        entry('red', 'assistant', '\n\u001B[31mvisible', true),
+      ),
+    ).toBe('\u001B[31mvisible');
     expect(
       splitTranscriptEntries(
         [user, invisibleAssistant, tool],
@@ -1317,52 +1318,6 @@ describe('CLI conversation transcript', () => {
     expect(lines.some((line) => line.includes('⎿ wide-output'))).toBe(true);
     expect(lines.some((line) => line.includes('segment segment'))).toBe(true);
     expect(lines.some((line) => line.length > 40)).toBe(false);
-  });
-
-  it('prints hydrated spill output once for detailed and compact tools', () => {
-    const bash = {
-      ...toolEntry('bash', 'completed', 'complete bash output'),
-      spillPath: 'executions/abcdef123456/toolOutput/bash.txt',
-    };
-    const read = {
-      ...toolEntry('read', 'completed', 'complete read output', {
-        toolName: 'read_file',
-      }),
-      spillPath: 'executions/abcdef123456/toolOutput/read.txt',
-    };
-
-    const lines = transcriptToLines([bash, read], 80);
-
-    expect(
-      lines.filter((line) => line.includes('complete bash output')),
-    ).toHaveLength(1);
-    expect(
-      lines.filter((line) => line.includes('complete read output')),
-    ).toHaveLength(1);
-    expect(lines).toContain('Full output:');
-  });
-
-  it('keeps a failed compact-tool spill visible in the full transcript', () => {
-    const spillPath = 'executions/abcdef123456/toolOutput/read.txt';
-    const read = {
-      ...toolEntry('read', 'completed', 'preview', { toolName: 'read_file' }),
-      spillPath,
-    };
-    const notice =
-      '[Full output is unavailable because this run artifact was deleted.]';
-
-    const hydrated = hydratedTranscript(
-      { rows: [read] },
-      new Map([[spillPath, { kind: 'failed' as const, notice }]]),
-    );
-
-    expect(hydrated[0]?.spillPath).toBe(spillPath);
-    expect(hydrated[0]?.spillFailed).toBe(true);
-    const lines = transcriptToLines(hydrated, 80);
-    // The failure notice renders without a "Full output:" header — the header
-    // promises recovered output that a failed spill does not have.
-    expect(lines).toContainEqual(expect.stringContaining(notice));
-    expect(lines).not.toContain('Full output:');
   });
 
   it('uses the full print width without Ink-only role padding', () => {

@@ -52,39 +52,7 @@ describe('CLI transcript session policy', () => {
     expect(runAgent).not.toHaveBeenCalled();
   });
 
-  it('selects ephemeral mode only through the explicit interactive policy', async () => {
-    vi.resetModules();
-    await import('@test/support/sessionGraphTestSetup');
-    const { installPlatform } = await import('@test/support/setupPlatform');
-    await installPlatform();
-    const { initializeCliTranscriptSession } =
-      await import('@cli/runtime/transcriptSession');
-    const warning = vi.fn();
-
-    const result = await initializeCliTranscriptSession(
-      {
-        onPersistentOpenFailure: 'use-ephemeral',
-        showPersistentWarning: warning,
-      },
-      async () => {
-        throw new Error('permission denied');
-      },
-    );
-
-    try {
-      expect(result.canResume).toBe(false);
-      expect(result.session.transcripts.mode).toEqual({
-        kind: 'ephemeral',
-        reason: 'Persistent transcript opening failed: permission denied',
-      });
-      expect(warning).toHaveBeenCalledOnce();
-      expect(result.warning).toContain('cannot be resumed');
-    } finally {
-      result.session.dispose();
-    }
-  });
-
-  it('does not fall back when the interactive policy requires persistence', async () => {
+  it('rejects persistent open failure', async () => {
     vi.resetModules();
     await import('@test/support/sessionGraphTestSetup');
     const { initializeCliTranscriptSession } =
@@ -92,12 +60,9 @@ describe('CLI transcript session policy', () => {
     const failure = new Error('permission denied');
 
     await expect(
-      initializeCliTranscriptSession(
-        { onPersistentOpenFailure: 'fail' },
-        async () => {
-          throw failure;
-        },
-      ),
+      initializeCliTranscriptSession({}, async () => {
+        throw failure;
+      }),
     ).rejects.toBe(failure);
   });
 
@@ -142,7 +107,7 @@ describe('CLI transcript session policy', () => {
 
     const transcripts = await StreamLogStore.open();
     const result = await initializeCliTranscriptSession(
-      { onPersistentOpenFailure: 'fail' },
+      { delayMs: 0 },
       async () => transcripts,
     );
 
@@ -152,9 +117,9 @@ describe('CLI transcript session policy', () => {
     // are awaited together rather than asserting the second one early.
     await vi.waitFor(
       async () => {
-        await expect(
-          result.session.snapshots.listPersistedStreams(),
-        ).resolves.toEqual([]);
+        await expect(result.snapshots.listPersistedStreams()).resolves.toEqual(
+          [],
+        );
         expect(GoalStore.getForStream(orphan)).toBeNull();
       },
       { timeout: 10_000, interval: 100 },

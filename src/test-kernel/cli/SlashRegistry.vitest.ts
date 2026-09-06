@@ -52,7 +52,6 @@ const CHAT_SESSION: SessionMeta = {
   modelSource: 'builtin-default',
   cwd: '/tmp/workspace',
   approvalPolicy: 'ask',
-  transcriptMode: 'persistent',
   version: 'test',
 };
 

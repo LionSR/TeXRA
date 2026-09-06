@@ -57,6 +57,8 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
+  aggregateId as qualifyAggregateId,
+  aggregateTarget,
   AgentCategory,
   type SessionEvent,
 } from '@shared/schemas';
@@ -113,7 +115,6 @@ async function captureStartedLaunch(
   mocks.createTrace.mockReturnValueOnce({
     trace,
     handleStatus: vi.fn(),
-    flushSpills: vi.fn(async () => undefined),
     dispose: vi.fn(),
   });
   mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);
@@ -154,7 +155,9 @@ function expectStartedThenFailed(
     category: AgentCategory.ToolUse,
     isRemote: false,
     background: isSubagent,
-    approvalPolicy: launch.session.approvalPolicySnapshotFor(start.aggregateId),
+    approvalPolicy: launch.session.approvalPolicySnapshotFor(
+      aggregateTarget(start.aggregateId).id,
+    ),
   });
   expectActivatedThenFailed(launch, isSubagent);
   expect(launch.result).toMatchObject({ executionId: start.executionId });
@@ -176,9 +179,9 @@ function expectActivatedThenFailed(
     aggregateId: launch.activate.aggregateId,
     isSubagent,
   });
-  expect(launch.session.status.get(launch.activate.aggregateId)).toBe(
-    STREAM_PHASE.FAILED,
-  );
+  expect(
+    launch.session.status.get(aggregateTarget(launch.activate.aggregateId).id),
+  ).toBe(STREAM_PHASE.FAILED);
 }
 
 describe('native agent launch activation', () => {
@@ -247,7 +250,9 @@ describe('native agent launch activation', () => {
       // fact, one activation on the same failure path.
       expectActivatedThenFailed(launch, isSubagent);
       expect(launch.start).toBeUndefined();
-      expect(launch.activate.aggregateId).toBe(streamId);
+      expect(launch.activate.aggregateId).toBe(
+        qualifyAggregateId('stream', streamId),
+      );
     },
   );
 });

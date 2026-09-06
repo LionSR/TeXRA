@@ -1222,21 +1222,4 @@ describe('handleTuiSlashCommand', () => {
     expect(handled).toBe(true);
     expect(lastEntryText()).toBe('Credential store unavailable');
   });
-
-  it('does not advertise the current ephemeral session as resumable', async () => {
-    registerBuiltinSlashCommands();
-    const session = createSession();
-    const streamId = 'stream-ephemeral' as StreamTabId;
-    session.streamId = streamId;
-    session.executionId = 'exec-ephemeral' as ExecutionId;
-    activeStreamId.set(streamId);
-    patchSessionMeta({ transcriptMode: 'ephemeral' });
-    ensureStream(streamId, { status: STREAM_PHASE.WAITING });
-
-    await handleTuiSlashCommand('/status', createContext(session));
-
-    const statusText = lastEntryText(streamId);
-    expect(statusText).not.toContain('session: exec-ephemeral');
-    expect(statusText).not.toContain('resume later with:');
-  });
 });

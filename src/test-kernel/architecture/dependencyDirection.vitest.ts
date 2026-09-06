@@ -93,12 +93,11 @@ const HOST_LAYER_IMPORT_PREFIXES = [
 /**
  * Effect run boundary (PRD R1, docs/prds/2026-08-26-effect-4-runtime-migration.md
  * "Execution strategy" rule 3): production code enters Effect through the
- * host-owned runtime, `effectRuntime()` from `@platform/processRuntime`. A
- * bare `Effect.run*` call is allowed only where the program must run before
- * `installProcessRuntime` — today the platform stores every host opens in its
- * `initPlatform` (`JsonStore`) and the file-lock provider those stores flush
- * through. The pins are exact counts: a new site anywhere fails, and a removed
- * site is recorded by lowering (then deleting) its pin.
+ * host-owned runtime, `effectRuntime()` from `@platform/processRuntime`, and
+ * the SDK public entry. The pre-runtime exemption this once carried (the platform
+ * stores every host opens in its `initPlatform`, and the file-lock provider
+ * those stores flush through) is gone: each host now installs the process
+ * runtime before it opens a store. Only the SDK public entry sites are pinned.
  */
 const EFFECT_RUN_ROOTS = [
   ...ALL_HOST_PRODUCTION_ROOTS,
@@ -258,7 +257,7 @@ describe('Effect run boundaries', () => {
 
     expect(
       sites,
-      'bare Effect.run* sites must go through effectRuntime() from @platform/processRuntime; a site that has to run before installProcessRuntime is pinned in BARE_EFFECT_RUN_SITES in this PR, and a removed site lowers its pin',
+      'bare Effect.run* sites must use the process runtime except for the SDK public entry sites pinned in BARE_EFFECT_RUN_SITES',
     ).toEqual(BARE_EFFECT_RUN_SITES);
   });
 

@@ -23,7 +23,7 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { processMarkdownContent } from '../markdownRenderer';
-import { buildDetailsSummary, buildSpillArtifactButton } from '../htmlBuilders';
+import { buildDetailsSummary } from '../htmlBuilders';
 import type { FormatResult } from '../baseLogFormatter';
 
 type BannerConfig = {
@@ -76,7 +76,7 @@ const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
 export function formatBannerContentTemplate(
   row: StreamingTextRow,
 ): FormatResult {
-  const { id, groupId, timestamp, verbose, level, kind, spillPath } = row;
+  const { id, groupId, timestamp, verbose, level, kind } = row;
   const trimmedContent = row.text.full.trim();
   if (!trimmedContent) return null;
 
@@ -115,8 +115,5 @@ export function formatBannerContentTemplate(
       title: config.copyTitle,
       content: trimmedContent,
     },
-    extraContent: spillPath
-      ? buildSpillArtifactButton(spillPath)
-      : undefined,
   })}${contentTemplate}</wa-details>`;
 }

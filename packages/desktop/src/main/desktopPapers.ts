@@ -215,12 +215,8 @@ async function openPaperSession(
 ): Promise<DesktopPaper> {
   const resources = new DisposableStore();
   try {
-    // A broken transcript directory must not reject startup: degrade to an
-    // in-memory store and warn once the window exists, exactly as the CLI
-    // TUI does. The degraded session also cannot resume: nothing is
-    // persisted for a later launch to pick up.
     const transcripts = await runWithWorkspaceRoots(roots, () =>
-      StreamLogStore.openOrEphemeral(),
+      StreamLogStore.open(),
     );
     const session = openSession({
       transcripts,

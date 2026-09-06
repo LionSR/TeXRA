@@ -1,5 +1,6 @@
 import { SessionStores } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { aggregateId as qualifyAggregateId } from '@shared/schemas';
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 
@@ -37,7 +38,7 @@ export function createSessionStores(session: SessionHandle): SessionStores {
           .filter((child) => !detached.has(child))
           .map((child) => ({
             type: 'setParentStream' as const,
-            aggregateId: child,
+            aggregateId: qualifyAggregateId('stream', child),
             parentStreamId: null,
           })),
       );

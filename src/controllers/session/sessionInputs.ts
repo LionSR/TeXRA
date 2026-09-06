@@ -13,6 +13,7 @@ import {
   LocalRuntimeSource,
   TextChunkSource,
   type InflightText,
+  type InflightTextChunk,
 } from './sessionSources';
 
 export const sessionInputsLayer = Layer.effect(
@@ -86,18 +87,26 @@ export const sessionInputsLayer = Layer.effect(
                     ]);
                     const inputs: FoldInput[] = [];
                     for (const [key, value] of nextText) {
-                      const held = previous.text.get(key) ?? '';
+                      const held = previous.text.get(key);
                       if (value === held) continue;
-                      const slash = key.indexOf('/');
-                      const from = value.startsWith(held) ? held.length : 0;
+                      // Visit only appends since this reader's captured tail.
+                      // A replacement row starts a new chain and reads from 0.
+                      const parts: string[] = [];
+                      let at: InflightTextChunk | undefined = value;
+                      while (at !== undefined && at !== held) {
+                        parts.push(at.text);
+                        at = at.previous;
+                      }
+                      const from = at === held ? (held?.length ?? 0) : 0;
                       if (value.length <= from) continue;
+                      const slash = key.indexOf('/');
                       const chunk: TextChunk = {
                         _tag: 'chunk',
                         streamId: key.slice(0, slash),
                         rowId: key.slice(slash + 1),
                         from,
                         to: value.length,
-                        text: value.slice(from),
+                        text: parts.toReversed().join(''),
                       };
                       inputs.push(chunk);
                     }

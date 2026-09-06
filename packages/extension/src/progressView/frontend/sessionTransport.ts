@@ -15,6 +15,7 @@ import {
   installWebviewRuntime,
   WebviewSessions,
 } from '@controllers/session/webviewSessionLayer';
+import { aggregateId as qualifyAggregateId } from '@shared/schemas';
 import { hostBridge } from '@shared/hostBridge';
 import { toSignal, type StreamSignal } from '@shared/signals';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -233,7 +234,10 @@ export function transcriptAggregates(
   if (streamId === null) return [];
   const stream = view.streams.get(streamId);
   if (!stream) return [];
-  return [streamId, stream.executionId].map((id) => ({
+  return [
+    qualifyAggregateId('stream', streamId),
+    qualifyAggregateId('execution', stream.executionId),
+  ].map((id) => ({
     id,
     fromSeq: view.folded.get(id) ?? 0,
   }));

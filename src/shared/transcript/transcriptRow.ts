@@ -63,12 +63,6 @@ export interface TranscriptRowBase {
   /** Source vocabulary. Absent on the two rows with no message type of their
    *  own: `phase` (a group row) and `compactionActivity` (a projection). */
   readonly messageType?: MessageType;
-  /** Recorder-owned full artifact for a text this row abbreviates. */
-  readonly spillPath?: string;
-  /** Set by a host's on-demand full-output reader when the {@link spillPath}
-   *  artifact could not be loaded, so the painter shows the failure notice
-   *  without the "full output" affordance. */
-  readonly spillFailed?: boolean;
   /** Present when a host synthesized this row rather than projecting it from a
    *  `StreamLogEntry` — a local notice the run itself never recorded. Such a
    *  row is immutable from birth, carries the host's own id, and anchors into

@@ -294,7 +294,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     modelAccess,
     subscriptionProbeFailed,
     subscriptionQuota,
-    transcriptMode: sessionMeta.transcriptMode,
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,
     ctrlCAction: target.ctrlCAction,

@@ -21,12 +21,13 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import type {
-  InquiryThreadId,
-  InquiryThreadSummary,
-  InquiryThreadUpdatedEvent,
-  InquiryResumeOutcome,
-  StreamTabId,
+import {
+  aggregateId as qualifyAggregateId,
+  type InquiryThreadId,
+  type InquiryThreadSummary,
+  type InquiryThreadUpdatedEvent,
+  type InquiryResumeOutcome,
+  type StreamTabId,
 } from '@shared/schemas';
 import {
   formatRelativeTime,
@@ -117,7 +118,11 @@ async function emitInquiryThreadUpdate(
   if (!summary) return;
   const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
   (session ?? currentSession()).publish([
-    { type: 'inquiryThreadUpdated', aggregateId: payload.threadId, ...payload },
+    {
+      type: 'inquiryThreadUpdated',
+      aggregateId: qualifyAggregateId('inquiry', payload.threadId),
+      ...payload,
+    },
   ]);
 }
 

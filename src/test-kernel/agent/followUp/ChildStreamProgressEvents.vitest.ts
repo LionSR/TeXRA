@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
+  aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
@@ -108,7 +109,7 @@ describe('child stream progress events', () => {
 
     expect(eventsOfType(recorded.events, 'run.start')).toContainEqual(
       expect.objectContaining({
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         executionId,
         identity: { kind: 'process', tool: 'bash' },
         category: AgentCategory.ToolUse,
@@ -121,31 +122,34 @@ describe('child stream progress events', () => {
     expect(eventsOfType(recorded.events, 'run.activate')).toMatchObject([
       {
         type: 'run.activate',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         category: AgentCategory.ToolUse,
         background: true,
       },
     ]);
     expect(eventsOfType(recorded.events, 'run.config')).toContainEqual(
-      expect.objectContaining({ aggregateId: childStreamId, executionId }),
+      expect.objectContaining({
+        aggregateId: qualifyAggregateId('stream', childStreamId),
+        executionId,
+      }),
     );
     expect(
       eventsOfType(recorded.events, 'updateStreamDescription'),
     ).toContainEqual(
       expect.objectContaining({
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         description: 'Run a background bash command',
       }),
     );
     expect(eventsOfType(recorded.events, 'status')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          aggregateId: childStreamId,
+          aggregateId: qualifyAggregateId('stream', childStreamId),
           phase: STREAM_PHASE.RUNNING,
           cause: 'lifecycle',
         }),
         expect.objectContaining({
-          aggregateId: childStreamId,
+          aggregateId: qualifyAggregateId('stream', childStreamId),
           phase: STREAM_PHASE.COMPLETED,
           previousPhase: STREAM_PHASE.RUNNING,
           cause: 'lifecycle',
@@ -174,12 +178,14 @@ describe('child stream progress events', () => {
     );
     expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual(
       expect.objectContaining({
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         parentStreamId,
       }),
     );
     expect(eventsOfType(recorded.events, 'stream.removed')).toContainEqual(
-      expect.objectContaining({ aggregateId: childStreamId }),
+      expect.objectContaining({
+        aggregateId: qualifyAggregateId('stream', childStreamId),
+      }),
     );
   });
 
@@ -231,7 +237,10 @@ describe('child stream progress events', () => {
           cause: 'resume',
           phase: STREAM_PHASE.RUNNING,
           previousPhase: STREAM_PHASE.COMPLETED,
-          aggregateId: workflowRelaunchChildStreamId,
+          aggregateId: qualifyAggregateId(
+            'stream',
+            workflowRelaunchChildStreamId,
+          ),
         }),
       );
     } finally {
@@ -269,12 +278,12 @@ describe('child stream progress events', () => {
         eventsOfType(recorded.events, 'stream.removed').map(
           (event) => event.aggregateId,
         ),
-      ).not.toContain(setupRetryChildStreamId);
+      ).not.toContain(qualifyAggregateId('stream', setupRetryChildStreamId));
       // Setup failed after the existence fact, so the started stream ended
       // with its terminal result instead of lingering as a ghost.
       expect(eventsOfType(recorded.events, 'result')).toContainEqual(
         expect.objectContaining({
-          aggregateId: setupRetryChildStreamId,
+          aggregateId: qualifyAggregateId('stream', setupRetryChildStreamId),
           outcome: RUN_OUTCOME.FAILED,
           isSubagent: true,
         }),
@@ -288,7 +297,9 @@ describe('child stream progress events', () => {
       expect(retried.childStreamId).toBe(setupRetryChildStreamId);
       expect(
         eventsOfType(recorded.events, 'run.start').filter(
-          (event) => event.aggregateId === setupRetryChildStreamId,
+          (event) =>
+            event.aggregateId ===
+            qualifyAggregateId('stream', setupRetryChildStreamId),
         ),
       ).toHaveLength(2);
       await retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
@@ -350,7 +361,7 @@ describe('child stream progress events', () => {
     expect(eventsOfType(recorded.events, 'run.start')).toEqual([
       expect.objectContaining({
         type: 'run.start',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         category: AgentCategory.ToolUse,
         parentStreamId,
       }),
@@ -373,7 +384,10 @@ describe('child stream progress events', () => {
     expect(active.events).toEqual([]);
     expect(eventsOfType(recorded.events, 'stream.removed')).toContainEqual(
       expect.objectContaining({
-        aggregateId: noProjectionAutoCloseChildStreamId,
+        aggregateId: qualifyAggregateId(
+          'stream',
+          noProjectionAutoCloseChildStreamId,
+        ),
       }),
     );
   });
@@ -389,7 +403,9 @@ describe('child stream progress events', () => {
     });
 
     expect(eventsOfType(recorded.events, 'stream.removed')).toContainEqual(
-      expect.objectContaining({ aggregateId: childStreamId }),
+      expect.objectContaining({
+        aggregateId: qualifyAggregateId('stream', childStreamId),
+      }),
     );
   });
 
@@ -467,7 +483,11 @@ describe('child stream progress events', () => {
 
     expect(
       eventsOfType(recorded.events, 'status')
-        .filter((event) => event.aggregateId === loopChildStreamId)
+        .filter(
+          (event) =>
+            event.aggregateId ===
+            qualifyAggregateId('stream', loopChildStreamId),
+        )
         .map((event) => event.phase),
     ).toEqual([
       STREAM_PHASE.WAITING,
@@ -519,7 +539,9 @@ describe('child stream progress events', () => {
     );
     expect(
       eventsOfType(recorded.events, 'status').filter(
-        (event) => event.aggregateId === stoppedChildStreamId,
+        (event) =>
+          event.aggregateId ===
+          qualifyAggregateId('stream', stoppedChildStreamId),
       ),
     ).toHaveLength(0);
     await expect(handle?.result).resolves.toMatchObject({

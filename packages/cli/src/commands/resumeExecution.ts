@@ -156,7 +156,7 @@ export async function runResumeExecution(
 
   // `resumeRun`'s guards need the live session planes; the headless skeleton
   // adopts this session rather than re-initializing.
-  const { session } = await initializeCliTranscriptSession();
+  const session = await initializeCliTranscriptSession();
   let exitCode: number = CliExitCode.Usage;
   try {
     const result = await resumeRun(id, {

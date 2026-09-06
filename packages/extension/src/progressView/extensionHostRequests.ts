@@ -73,11 +73,7 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import {
-  findTranscriptSpillFile,
-  spillArtifactOpenFailedMessage,
-  SPILL_ARTIFACT_DELETED_MESSAGE,
-} from '@transcript/spillArtifacts';
+
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -286,23 +282,6 @@ export function createExtensionHostRequests(
           'index.html',
         ),
     });
-  }
-
-  async function openSpillArtifact(spillPath: string): Promise<void> {
-    let file: string | undefined;
-    try {
-      await session.flushArtifacts();
-      file = await findTranscriptSpillFile(spillPath);
-    } catch (error) {
-      throw new Rejected({
-        reason: spillArtifactOpenFailedMessage(toErrorMessage(error)),
-      });
-    }
-    if (!file) throw new Rejected({ reason: SPILL_ARTIFACT_DELETED_MESSAGE });
-    const document = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(file),
-    );
-    await vscode.window.showTextDocument(document, { preview: true });
   }
 
   /** A run's saved setup into the launcher, and the launcher into view. */
@@ -630,9 +609,6 @@ export function createExtensionHostRequests(
           request.path,
           request.line ?? undefined,
         );
-        return done;
-      case 'openSpillArtifact':
-        await openSpillArtifact(request.spillPath);
         return done;
       case 'openLabel': {
         const opened = await runCommand<boolean>(

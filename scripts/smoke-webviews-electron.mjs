@@ -25,7 +25,7 @@ const nonce = 'texra-webview-smoke';
 // transcript tier for the aggregates the subscribe named), the way
 // `SessionFramer` cuts a frame.
 const SESSION_KEY = '/tmp/texra-smoke/paper';
-const OWNER = '4242:2026-09-04T00:00:00.000Z';
+const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
 const NOW = 1_783_353_600_000;
 const STREAM = 'research#smoke0000001';
 const EXECUTION = 'a1b2c3d4e5f6';
@@ -97,7 +97,8 @@ function sessionLog() {
   const seqs = new Map();
   const entrySeqs = new Map();
   let commit = 0;
-  const emit = (aggregateId, at, body) => {
+  const emit = (logicalId, at, body) => {
+    const aggregateId = JSON.stringify(['stream', logicalId]);
     const seq = (seqs.get(aggregateId) ?? 0) + 1;
     seqs.set(aggregateId, seq);
     commit += 1;

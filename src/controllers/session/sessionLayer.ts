@@ -21,8 +21,6 @@
  * from the summary tier when a reader subscribes; the event table replaces
  * that.
  */
-import * as os from 'node:os';
-
 import {
   Context,
   Duration,
@@ -44,7 +42,6 @@ import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
-  ownerProcessStart,
   processOwnerId,
   SessionEventLog,
   sessionEventsLayer,
@@ -64,6 +61,8 @@ import {
 } from '@platform/processRuntime';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
+  aggregateId as qualifyAggregateId,
+  ownerIdentity,
   type OwnerId,
   type SessionCloseReport,
   type StreamTabId,
@@ -75,7 +74,7 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 import {
   isRunningStreamingTextEntry,
   type StreamLogDelta,
-} from '@transcript/StreamLog';
+} from '@shared/session/traceEntries';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { sessionRequests } from './SessionRequests';
 import {
@@ -160,11 +159,7 @@ const ownerLiveness = Layer.effectDiscard(
       const held: OwnerId[] = [];
       for (const owner of owners) {
         const liveness = yield* Effect.promise(() =>
-          proveOwnerLiveness({
-            pid: Number(owner.slice(0, owner.indexOf(':'))),
-            processStart: ownerProcessStart(owner),
-            hostname: os.hostname(),
-          }),
+          proveOwnerLiveness(ownerIdentity(owner)),
         );
         if (liveness !== 'dead') held.push(owner);
       }
@@ -229,7 +224,7 @@ const transcriptBridge = (transcripts: StreamLogStore) =>
               yield* events.publish(
                 rows.map((entry) => ({
                   type: 'transcript.entry',
-                  aggregateId: streamId,
+                  aggregateId: qualifyAggregateId('stream', streamId),
                   entry,
                 })),
               );
@@ -240,12 +235,22 @@ const transcriptBridge = (transcripts: StreamLogStore) =>
               for (const entry of rows) {
                 const key = `${streamId}/${entry.id}`;
                 if (isRunningStreamingTextEntry(entry)) {
-                  next.set(key, entry.text ?? '');
+                  const text = entry.text ?? '';
+                  next.set(key, {
+                    previous: undefined,
+                    text,
+                    length: text.length,
+                  });
                 } else next.delete(key);
               }
               for (const chunk of delta.textChunks) {
                 const key = `${streamId}/${chunk.id}`;
-                next.set(key, (next.get(key) ?? '') + chunk.appendText);
+                const previous = next.get(key);
+                next.set(key, {
+                  previous,
+                  text: chunk.appendText,
+                  length: (previous?.length ?? 0) + chunk.appendText.length,
+                });
               }
               return next;
             });

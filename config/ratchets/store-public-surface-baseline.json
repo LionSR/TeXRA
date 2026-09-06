@@ -20,7 +20,6 @@
       "loadAndAcquireWriter",
       "onChange",
       "open",
-      "openOrEphemeral",
       "openReadOnlyForStream",
       "readEntries",
       "recordSummaryMeta",

@@ -56,6 +56,7 @@ import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
+  aggregateId as qualifyAggregateId,
   type ExecutionId,
   type SessionCloseReport,
   type StreamTabId,
@@ -446,7 +447,10 @@ function start(
             subscribed = key;
             return session.subscriptions.set(
               port,
-              ids.map((id) => ({ id, fromSeq: 0 })),
+              ids.map((id) => ({
+                id: qualifyAggregateId('stream', id),
+                fromSeq: 0,
+              })),
             );
           });
         yield* interest([streamId]);

@@ -15,7 +15,7 @@ project. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/packa
 
 ## Install
 
-Install the CLI globally from npm (requires Node.js >=22.9.0):
+Install the CLI globally from npm (requires Node.js >=22.13.0):
 
 ```bash
 npm install -g @texra-ai/cli

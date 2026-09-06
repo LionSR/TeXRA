@@ -12,7 +12,11 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { classifyAgentError } from '@common/errors';
-import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  RUN_OUTCOME,
+  STREAM_PHASE,
+} from '@shared/schemas';
 import type {
   ExecutionId,
   RunIdentity,
@@ -105,18 +109,12 @@ export function createChildStream(
     executionId,
     options.reservedWriter,
   );
-  let traceDisposed = false;
-  const removeSpillFlusher = session.useArtifactFlusher(async () => {
-    await runTrace.flushSpills();
-    if (traceDisposed) removeSpillFlusher();
-  });
   let detachSessionTrace: (() => void) | undefined;
   let started = false;
   try {
     // The trace's durable arms and the recorder's status port, one attachment.
     detachSessionTrace = session.attachRunTrace(runTrace, childStreamId);
     const disposeTrace = () => {
-      traceDisposed = true;
       detachSessionTrace?.();
       runTrace.dispose();
     };
@@ -132,7 +130,7 @@ export function createChildStream(
     session.publish([
       {
         type: 'run.start',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         executionId,
         identity: options.run,
         userFollowUpSupport: options.userFollowUpSupport,
@@ -156,7 +154,7 @@ export function createChildStream(
       // has no agent-registry entry to be remote.
       {
         type: 'run.activate',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         category: options.config.agentCategory,
         background: true,
       },
@@ -174,7 +172,7 @@ export function createChildStream(
     session.publish([
       {
         type: 'updateStreamDescription',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         description,
       },
     ]);
@@ -254,7 +252,6 @@ export function createChildStream(
           },
         });
       },
-      () => removeSpillFlusher(),
       () => detachSessionTrace?.(),
       () => runTrace.dispose(),
     ];
@@ -375,7 +372,10 @@ async function finalizeChildStream(
 
   if (options.autoClose) {
     session.publish([
-      { type: 'stream.removed', aggregateId: handle.childStreamId },
+      {
+        type: 'stream.removed',
+        aggregateId: qualifyAggregateId('stream', handle.childStreamId),
+      },
     ]);
   }
 }

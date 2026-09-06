@@ -13,9 +13,16 @@
  */
 import '@test/support/sessionGraphTestSetup';
 
+// Node imports
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+
+// Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { Clock, Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
+import { afterAll, describe, expect, vi } from 'vitest';
 
 import {
   SessionEventLog,
@@ -26,6 +33,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { closeSession, openSession } from '@agent/runtime/sessionGraph';
+import { Database } from '@controllers/session/Database';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -36,6 +44,7 @@ import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   STREAM_PHASE,
   type ExecutionId,
@@ -49,8 +58,8 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
-const SELF = '4242:self-start';
-const OTHER = '4343:other-start';
+const SELF = '["test-host",4242,"self-start"]';
+const OTHER = '["test-host",4343,"other-start"]';
 const STREAM = 'stream:framing' as StreamTabId;
 const EXECUTION = 'ab12cd' as ExecutionId;
 const OLDER = 'stream:older' as StreamTabId;
@@ -83,7 +92,7 @@ const settle = (
 
 const runStart: SessionEventDraft = {
   type: 'run.start',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   executionId: EXECUTION,
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
@@ -93,14 +102,14 @@ const runStart: SessionEventDraft = {
 
 const waiting: SessionEventDraft = {
   type: 'status',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   phase: STREAM_PHASE.WAITING,
   cause: 'wait',
 };
 
 const requested: SessionEventDraft = {
   type: 'approval.requested',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   requestId: 'req-1',
   payload: {
     kind: 'bash',
@@ -177,6 +186,38 @@ function drawnSequence(states: Iterable<ReturnType<typeof drawn>>) {
 
 describe('session events and view', () => {
   it.effect(
+    'keeps an inquiry independent of a removed stream with the same logical id',
+    () =>
+      Effect.gen(function* () {
+        const events = yield* SessionEvents;
+        const log = yield* SessionEventLog;
+        const logicalId = 'ei_012345abcdef';
+        const stream = qualifyAggregateId('stream', logicalId);
+        const inquiry = qualifyAggregateId('inquiry', logicalId);
+        yield* events.publish([
+          { ...runStart, aggregateId: stream },
+          {
+            type: 'inquiryThreadUpdated',
+            aggregateId: inquiry,
+            threadId: logicalId,
+            parentStreamId: null,
+            status: 'open',
+            lastQuestionPreview: 'Which boundary condition applies?',
+            lastActivityIso: '2026-09-06T12:00:00.000Z',
+            turnCount: 1,
+          },
+          { type: 'stream.removed', aggregateId: stream },
+        ]);
+        expect(yield* log.exists(stream)).toBe(false);
+        expect(yield* log.exists(inquiry)).toBe(true);
+        const rows = yield* Stream.runCollect(events.aggregate(inquiry, 0));
+        expect(rows.map(({ type, seq }) => ({ type, seq }))).toEqual([
+          { type: 'inquiryThreadUpdated', seq: 1 },
+        ]);
+      }).pipe(Effect.provide(graph([]))),
+  );
+
+  it.effect(
     'publishes nothing before the marker, then every commit in order',
     () =>
       Effect.gen(function* () {
@@ -200,14 +241,14 @@ describe('session events and view', () => {
         yield* events.publish([
           {
             type: 'approval.resolved',
-            aggregateId: STREAM,
+            aggregateId: qualifyAggregateId('stream', STREAM),
             requestId: 'req-1',
           },
         ]);
         yield* events.publish([
           {
             type: 'status',
-            aggregateId: STREAM,
+            aggregateId: qualifyAggregateId('stream', STREAM),
             phase: STREAM_PHASE.RUNNING,
             previousPhase: STREAM_PHASE.WAITING,
             cause: 'resume',
@@ -305,7 +346,9 @@ describe('session events and view', () => {
         // A stream born after the build enters through its own row alone,
         // above the reserved space, so a renderer attached at open sees it
         // as new.
-        yield* events.publish([{ ...runStart, aggregateId: STREAM }]);
+        yield* events.publish([
+          { ...runStart, aggregateId: qualifyAggregateId('stream', STREAM) },
+        ]);
         yield* settle(view.ref, (v) => v.streams.has(STREAM));
         const live = yield* SubscriptionRef.get(view.ref);
         expect(live.streams.get(STREAM)?.createdAt).toBeGreaterThan(
@@ -391,5 +434,324 @@ describe('Sessions owner', () => {
     expect(isLive(session)).toBe(true);
     session.executions.untrack('exec:slow');
     await vi.waitFor(() => expect(isLive(session)).toBe(false));
+  });
+});
+
+/**
+ * The cutover substrate (persistence-substrate-decision 6.1, stage 1): the
+ * C1 tables and the C6 write path. Nothing production reads them yet, so
+ * these assertions are the whole acceptance for the schema and the
+ * publisher.
+ */
+describe('the C1 event table and the C6 publisher', () => {
+  const roots: string[] = [];
+  const workspace = (): string => {
+    const root = mkdtempSync(join(tmpdir(), 'texra-substrate-'));
+    roots.push(root);
+    return root;
+  };
+  afterAll(() => {
+    for (const root of roots) rmSync(root, { recursive: true, force: true });
+  });
+
+  const substrate = (storage: string) =>
+    Database.layer.pipe(
+      Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+      Layer.provide(ProcessIdentity.layer(SELF)),
+    );
+
+  const olderStart: SessionEventDraft = {
+    ...runStart,
+    aggregateId: qualifyAggregateId('stream', OLDER),
+  };
+
+  /** A connection of the kind another host process would open, on the file
+   *  name a session root gives its database. */
+  const reader = (storage: string): DatabaseSync => {
+    const db = new DatabaseSync(join(storage, 'texra.db'));
+    db.exec('PRAGMA busy_timeout = 5000');
+    db.exec('PRAGMA foreign_keys = ON');
+    return db;
+  };
+
+  it.effect(
+    'assigns a dense seq per aggregate and one commit order across them',
+    () => {
+      const storage = workspace();
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        const now = yield* Clock.currentTimeMillis;
+        const first = yield* db.appendAll([runStart, olderStart, waiting]);
+        const second = yield* db.appendAll([requested]);
+
+        expect(
+          [...first, ...second].map((e) => [e.aggregateId, e.seq, e.commit]),
+        ).toEqual([
+          [runStart.aggregateId, 1, 1],
+          [olderStart.aggregateId, 1, 2],
+          [runStart.aggregateId, 2, 3],
+          [runStart.aggregateId, 3, 4],
+        ]);
+        // The writer is the process, stamped by the layer (C5), and `at` is
+        // the layer's own clock: no caller passes either.
+        expect(first.every((e) => e.ownerId === SELF && e.at === now)).toBe(
+          true,
+        );
+        // The wake level is the last commit, and carries no payload (C6).
+        expect(yield* SubscriptionRef.get(db.level)).toBe(4);
+      }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
+  it.effect(
+    'commits rows another connection reads back, on a verified WAL connection',
+    () => {
+      const storage = workspace();
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        const now = yield* Clock.currentTimeMillis;
+        // A stamped event is structurally assignable to a draft; its envelope
+        // must not leak into the payload or replace the new assigned values.
+        const stamped = {
+          ...runStart,
+          seq: 99,
+          commit: 99,
+          ownerId: OTHER,
+          at: -1,
+        };
+        yield* db.appendAll([stamped, olderStart]);
+
+        const observed = yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            return {
+              journal: raw.prepare('PRAGMA journal_mode').get()?.journal_mode,
+              foreignKeys: raw.prepare('PRAGMA foreign_keys').get()
+                ?.foreign_keys,
+              events: raw
+                .prepare(
+                  `SELECT "commit" AS "commit", aggregate_id AS aggregateId,
+                          seq, type, owner_id AS ownerId, at, data
+                   FROM event ORDER BY "commit"`,
+                )
+                .all(),
+              sequences: raw
+                .prepare(
+                  `SELECT aggregate_id AS aggregateId, seq,
+                          owner_id AS ownerId, parent_id AS parentId, closed
+                   FROM event_sequence ORDER BY aggregate_id`,
+                )
+                .all(),
+              integrity: raw.prepare('PRAGMA integrity_check').get()
+                ?.integrity_check,
+            };
+          } finally {
+            raw.close();
+          }
+        });
+
+        expect(observed.journal).toBe('wal');
+        expect(observed.foreignKeys).toBe(1);
+        expect(observed.integrity).toBe('ok');
+        // The envelope C1 gives its own columns is in those columns, and the
+        // payload holds the arm and nothing the envelope already carries.
+        expect(observed.events).toEqual([
+          {
+            commit: 1,
+            aggregateId: runStart.aggregateId,
+            seq: 1,
+            type: 'run.start',
+            ownerId: SELF,
+            at: now,
+            data: JSON.stringify({
+              executionId: EXECUTION,
+              identity: runStart.identity,
+              userFollowUpSupport: 'unsupported',
+              category: AgentCategory.ToolUse,
+              isRemote: false,
+            }),
+          },
+          {
+            commit: 2,
+            aggregateId: olderStart.aggregateId,
+            seq: 1,
+            type: 'run.start',
+            ownerId: SELF,
+            at: now,
+            data: JSON.stringify({
+              executionId: EXECUTION,
+              identity: runStart.identity,
+              userFollowUpSupport: 'unsupported',
+              category: AgentCategory.ToolUse,
+              isRemote: false,
+            }),
+          },
+        ]);
+        // A sequence row per aggregate: an independent root, open (C9's
+        // closure is stage 6), and unclaimed, because a claim is one atomic
+        // acquire or takeover under C5 and stage 6 owns it.
+        expect(observed.sequences).toEqual([
+          {
+            aggregateId: runStart.aggregateId,
+            seq: 1,
+            ownerId: null,
+            parentId: null,
+            closed: 0,
+          },
+          {
+            aggregateId: olderStart.aggregateId,
+            seq: 1,
+            ownerId: null,
+            parentId: null,
+            closed: 0,
+          },
+        ]);
+      }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
+  it.effect('rolls a rejected batch back whole, leaving nothing behind', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const db = yield* Database;
+      yield* db.appendAll([runStart]);
+      // C1 gives `aggregate_id` its own NOT NULL column, so a draft with no
+      // aggregate is an error at insert rather than a row nothing can read.
+      // C6 is all-or-nothing: the valid member ahead of it in the same batch
+      // does not survive either.
+      const failure = yield* Effect.flip(
+        db.appendAll([
+          waiting,
+          {
+            ...waiting,
+            aggregateId: null as unknown as SessionEventDraft['aggregateId'],
+          },
+        ]),
+      );
+
+      expect(failure._tag).toBe('DatabaseWriteFailed');
+      const rows = yield* Effect.sync(() => {
+        const raw = reader(storage);
+        try {
+          return raw.prepare('SELECT seq FROM event').all();
+        } finally {
+          raw.close();
+        }
+      });
+      expect(rows).toEqual([{ seq: 1 }]);
+      expect(yield* SubscriptionRef.get(db.level)).toBe(1);
+    }).pipe(Effect.provide(substrate(storage)));
+  });
+
+  it.effect(
+    'reports non-JSON payloads as typed write failures before assigning ordinals',
+    () => {
+      const storage = workspace();
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        const failure = yield* Effect.flip(
+          db.appendAll([
+            {
+              type: 'transcript.entry',
+              aggregateId: runStart.aggregateId,
+              entry: {
+                seqNo: 1,
+                id: 'non-json',
+                type: 'log',
+                level: 'info',
+                timestamp: 1,
+                messageType: 'internal',
+                data: 1n,
+              },
+            },
+          ]),
+        );
+        expect(failure._tag).toBe('DatabaseWriteFailed');
+        expect(yield* SubscriptionRef.get(db.level)).toBe(0);
+        expect((yield* db.appendAll([runStart]))[0]?.commit).toBe(1);
+      }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
+  it.effect('reopens at the committed ordinal and never reuses one', () => {
+    const storage = workspace();
+    const append = Effect.gen(function* () {
+      const db = yield* Database;
+      return yield* db.appendAll([runStart, waiting]);
+    }).pipe(Effect.provide(substrate(storage)));
+    return Effect.gen(function* () {
+      yield* append;
+      // A second host process deletes the whole aggregate: the C1 cascade
+      // takes its events with it, and the AUTOINCREMENT high-water mark
+      // stays where it was, so no cursor already handed out is invalidated.
+      yield* Effect.sync(() => {
+        const raw = reader(storage);
+        try {
+          raw.exec('PRAGMA foreign_keys = ON');
+          raw
+            .prepare('DELETE FROM event_sequence WHERE aggregate_id = ?')
+            .run(runStart.aggregateId);
+          expect(raw.prepare('SELECT COUNT(*) AS n FROM event').get()?.n).toBe(
+            0,
+          );
+        } finally {
+          raw.close();
+        }
+      });
+
+      const reopened = yield* Effect.gen(function* () {
+        const db = yield* Database;
+        return {
+          level: yield* SubscriptionRef.get(db.level),
+          next: yield* db.appendAll([runStart]),
+        };
+      }).pipe(Effect.provide(substrate(storage)));
+
+      expect(reopened.level).toBe(2);
+      expect(reopened.next.map((e) => e.commit)).toEqual([3]);
+    });
+  });
+
+  it.effect('provides indexes for the planned C7 reads', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const db = yield* Database;
+      yield* db.appendAll([runStart, olderStart, waiting]);
+
+      const plans = yield* Effect.sync(() => {
+        const raw = reader(storage);
+        const plan = (sql: string): string =>
+          raw
+            .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+            .all()
+            .map((row) => String(row.detail))
+            .join(' | ');
+        try {
+          return {
+            latestOfType: plan(
+              'SELECT * FROM event WHERE aggregate_id = ? AND type = ? ORDER BY seq DESC LIMIT 1',
+            ),
+            fromCommit: plan(
+              'SELECT * FROM event WHERE aggregate_id = ? AND "commit" > ?',
+            ),
+            listing: plan(
+              'SELECT * FROM event WHERE type = ? ORDER BY "commit"',
+            ),
+            aggregateFromSeq: plan(
+              'SELECT * FROM event WHERE aggregate_id = ? AND seq >= ? ORDER BY seq',
+            ),
+          };
+        } finally {
+          raw.close();
+        }
+      });
+
+      expect(plans.latestOfType).toContain('event_agg_type_seq');
+      expect(plans.fromCommit).toContain('event_agg_commit');
+      expect(plans.listing).toContain('event_type_commit');
+      // The UNIQUE(aggregate_id, seq) constraint is also the index one
+      // aggregate's history reads from its seq.
+      expect(plans.aggregateFromSeq).toContain('sqlite_autoindex_event_1');
+    }).pipe(Effect.provide(substrate(storage)));
   });
 });

@@ -29,7 +29,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     path: z.string().min(1),
     line: z.int().positive().nullish(),
   }),
-  z.object({ kind: z.literal('openSpillArtifact'), spillPath: z.string() }),
   z.object({ kind: z.literal('openLabel'), label: z.string() }),
   z.object({ kind: z.literal('openTaskStorage'), ...streamScoped }),
   z.object({ kind: z.literal('exportTranscript'), ...streamScoped }),

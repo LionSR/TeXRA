@@ -11,7 +11,7 @@
  *   `StreamStatusMachine` through the session).
  * - `TextChunkSource`: the in-flight text per streaming row, keyed
  *   `${streamId}/${rowId}`; the ordered input reader derives suffixes from
- *   successive values after reading the events committed before them.
+ *   successive chunk tails after reading the events committed before them.
  * - `TranscriptSubscriptions`: the aggregates some surface holds a
  *   transcript subscription on, the union of one set per port.
  *
@@ -22,6 +22,7 @@
 import { Context, Effect, Layer, SubscriptionRef } from 'effect';
 
 import type {
+  AggregateId,
   LocalRuntimeState,
   TranscriptSubscription,
 } from '@shared/schemas';
@@ -47,8 +48,15 @@ export class LocalRuntimeSource extends Context.Service<
   );
 }
 
-/** The `${streamId}/${rowId}` key of one streaming row's in-flight text. */
-export type InflightText = ReadonlyMap<string, string>;
+/** An immutable append and its preceding text, shared by successive reads. */
+export interface InflightTextChunk {
+  readonly previous: InflightTextChunk | undefined;
+  readonly text: string;
+  readonly length: number;
+}
+
+/** The `${streamId}/${rowId}` key of one streaming row's current chunk tail. */
+export type InflightText = ReadonlyMap<string, InflightTextChunk>;
 
 export class TextChunkSource extends Context.Service<
   TextChunkSource,
@@ -89,7 +97,7 @@ export class TranscriptSubscriptions extends Context.Service<
       const union = (): TranscriptSubscription[] => {
         // The lowest `fromSeq` any port asks for: a port that already holds
         // an aggregate's history must not shorten another's read.
-        const byId = new Map<string, TranscriptSubscription>();
+        const byId = new Map<AggregateId, TranscriptSubscription>();
         for (const set of ports.values()) {
           for (const entry of set) {
             const held = byId.get(entry.id);

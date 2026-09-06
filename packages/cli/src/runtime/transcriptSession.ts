@@ -6,28 +6,15 @@ import {
 } from '@agent/runtime';
 import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
+import { StreamLogStore } from '@transcript';
 
 const responseTextProcessing = createTexraResponseTextProcessing(
   agentResponseTextConnector,
 );
 
-type InteractiveTranscriptPolicy =
-  | { readonly onPersistentOpenFailure: 'fail' }
-  | {
-      readonly onPersistentOpenFailure: 'use-ephemeral';
-      readonly showPersistentWarning: (message: string) => void;
-    };
-
-interface CliTranscriptSession {
-  readonly session: SessionHandle;
-  readonly canResume: boolean;
-  readonly warning?: string;
-}
-
 type OpenPersistentStore = () => Promise<StreamLogStore>;
 
-function persistentSession(session: SessionHandle): CliTranscriptSession {
+function persistentSession(session: SessionHandle): SessionHandle {
   if (session.transcripts.mode.kind !== 'persistent') {
     const detail =
       session.transcripts.mode.kind === 'ephemeral'
@@ -37,83 +24,25 @@ function persistentSession(session: SessionHandle): CliTranscriptSession {
       `Persistent transcripts are required, but the default session is ${detail}.`,
     );
   }
-  return { session, canResume: true };
+  return session;
 }
 
-function initializePersistentSession(
-  transcripts: StreamLogStore,
-  sweep: { readonly delayMs?: number } = {},
-): CliTranscriptSession {
-  const result = persistentSession(
+/** Open the CLI's persistent session and schedule its leftover-stream sweep. */
+export async function initializeCliTranscriptSession(
+  sweep: { readonly delayMs?: number } = { delayMs: 0 },
+  openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
+): Promise<SessionHandle> {
+  const existing = tryDefaultSession();
+  if (existing) return persistentSession(existing);
+
+  const session = persistentSession(
     initializeDefaultSession({
-      transcripts,
+      transcripts: await openPersistentStore(),
       responseTextProcessing,
     }),
   );
-  // Off the ready path: the sweep reads the whole storage root, and no prompt
-  // waits for it. The TUI takes the default delay, which keeps the read off
-  // its first paint. A headless `texra run` has no paint to protect and can
-  // finish inside that delay — the unref'd timer would never fire, leaving
-  // its shells for a launch that may not come — so it schedules with none.
-  // Overlapping the run is safe: the sweep excludes the streams this process
-  // is running, and it is idempotent if the process exits first.
-  scheduleLeftoverStreamSweep(result.session, sweep);
-  return result;
-}
-
-function ephemeralSession(
-  session: SessionHandle,
-  reason: string,
-  showPersistentWarning: (message: string) => void,
-): CliTranscriptSession {
-  const warning = ephemeralTranscriptWarning(reason);
-  showPersistentWarning(warning);
-  return { session, canResume: false, warning };
-}
-
-/**
- * Prepare the process session under an explicit persistence policy. The
- * default `fail` policy is what every noninteractive run needs; only the
- * `use-ephemeral` arm permits an in-memory session after open failure.
- */
-export async function initializeCliTranscriptSession(
-  policy: InteractiveTranscriptPolicy = { onPersistentOpenFailure: 'fail' },
-  openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
-): Promise<CliTranscriptSession> {
-  const existing = tryDefaultSession();
-  if (existing) {
-    if (
-      existing.transcripts.mode.kind !== 'ephemeral' ||
-      policy.onPersistentOpenFailure === 'fail'
-    ) {
-      return persistentSession(existing);
-    }
-    return ephemeralSession(
-      existing,
-      existing.transcripts.mode.reason,
-      policy.showPersistentWarning,
-    );
-  }
-
-  if (policy.onPersistentOpenFailure === 'fail') {
-    // The headless shape: no interactive paint to defer the sweep behind.
-    return initializePersistentSession(await openPersistentStore(), {
-      delayMs: 0,
-    });
-  }
-
-  const transcripts = await StreamLogStore.openOrEphemeral(openPersistentStore);
-  if (transcripts.mode.kind !== 'ephemeral') {
-    return initializePersistentSession(transcripts);
-  }
-
-  const session = initializeDefaultSession({
-    transcripts,
-    responseTextProcessing,
-  });
-  return ephemeralSession(
-    session,
-    transcripts.mode.reason,
-    policy.showPersistentWarning,
-  );
+  // The TUI delays this read until after its first paint. Headless callers
+  // schedule it immediately because they may finish before that delay ends.
+  scheduleLeftoverStreamSweep(session, sweep);
+  return session;
 }

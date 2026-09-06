@@ -42,11 +42,12 @@ import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { DisposableStore } from '@platform/disposable';
-import type {
-  AgentSource,
-  ExecutionId,
-  StreamTabId,
-  UserFollowUpSupport,
+import {
+  aggregateId as qualifyAggregateId,
+  type AgentSource,
+  type ExecutionId,
+  type StreamTabId,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import {
   AgentCategory,
@@ -388,7 +389,6 @@ async function assembleAgentLaunchContext(
   const runTrace = resources.add<RunTrace>({
     trace: rawRunTrace.trace,
     handleStatus: rawRunTrace.handleStatus,
-    flushSpills: rawRunTrace.flushSpills,
     dispose: () => {
       try {
         attachment.detach?.();
@@ -397,30 +397,8 @@ async function assembleAgentLaunchContext(
       }
     },
   });
-  {
-    let traceDisposed = false;
-    const removeSpillFlusher = session.useArtifactFlusher(async () => {
-      await rawRunTrace.flushSpills();
-      if (traceDisposed) removeSpillFlusher();
-    });
-    let detachTrace: (() => void) | undefined;
-    try {
-      // The trace's durable arms and the recorder's status port, one
-      // attachment: status is a session fact, not an AgentEvent, and the
-      // recorder hears it through the session in transcript order.
-      detachTrace = session.attachRunTrace(rawRunTrace, streamId);
-      attachment.detach = () => {
-        // Keep the flusher through the execution lease's post-dispose drain.
-        // Its next successful flush removes it from the session.
-        traceDisposed = true;
-        detachTrace?.();
-      };
-    } catch (error) {
-      detachTrace?.();
-      removeSpillFlusher();
-      throw error;
-    }
-  }
+  attachment.detach = session.attachRunTrace(rawRunTrace, streamId);
+
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
@@ -444,7 +422,7 @@ async function assembleAgentLaunchContext(
       : [
           {
             type: 'run.start' as const,
-            aggregateId: streamId,
+            aggregateId: qualifyAggregateId('stream', streamId),
             executionId,
             identity: { kind: 'agent' as const, agent: config.agent },
             userFollowUpSupport:
@@ -469,7 +447,7 @@ async function assembleAgentLaunchContext(
     // Every activation, first launch and resume alike (PRD 6, item 8).
     {
       type: 'run.activate',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       category: setting.agentCategory,
       isRemote,
       background,

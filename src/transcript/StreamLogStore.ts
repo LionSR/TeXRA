@@ -1,12 +1,16 @@
+import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import pMap from 'p-map';
 import PQueue from 'p-queue';
 
+import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
 import {
   END_GROUP_STATUS,
+  ExecutionIdSchema,
+  MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
@@ -15,13 +19,6 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { createFlushableDebounce, isObject } from '@utils/core';
-import { createListenerSet } from '@utils/core/listenerSet';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { StorageFS } from '@utils/files/storageFS';
-import { formatResultCount } from '@utils/text/stringUtils';
-
-import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
@@ -30,7 +27,14 @@ import {
   type StreamLogAppendInput,
   type StreamLogDelta,
   type StreamLogUpdatePatch,
-} from './StreamLog';
+} from '@shared/session/traceEntries';
+import { createFlushableDebounce, isObject } from '@utils/core';
+import { createListenerSet } from '@utils/core/listenerSet';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { StorageFS } from '@utils/files/storageFS';
+import { formatResultCount } from '@utils/text/stringUtils';
+
+import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 import {
   parseSummaryShape,
   StreamSummaryCacheStore,
@@ -80,14 +84,6 @@ type StreamLogStoreMode =
   | { readonly kind: 'persistent' }
   | { readonly kind: 'read-only' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
-
-/**
- * The user-facing warning an interactive host shows once it is running on an
- * ephemeral transcript store, built from that store's `mode.reason`.
- */
-export function ephemeralTranscriptWarning(reason: string): string {
-  return `Transcript persistence is unavailable for this session. Its conversation cannot be resumed. ${reason}`;
-}
 
 /**
  * Delete one known persisted transcript without opening or parsing the
@@ -427,29 +423,6 @@ export class StreamLogStore {
     return store;
   }
 
-  /**
-   * Open the persistent transcript store, degrading to an in-memory store
-   * when the open fails.
-   *
-   * Interactive hosts (VS Code extension, desktop app, CLI TUI) use this so a
-   * broken transcript directory warns instead of aborting startup. The
-   * degradation is loud: the cause is logged here and recorded in
-   * `mode.reason`, which callers render through
-   * {@link ephemeralTranscriptWarning}. A non-persistent store also disables
-   * resume — nothing was persisted to resume from.
-   */
-  static async openOrEphemeral(
-    open: () => Promise<StreamLogStore> = () => StreamLogStore.open(),
-  ): Promise<StreamLogStore> {
-    try {
-      return await open();
-    } catch (error) {
-      const reason = `Persistent transcript opening failed: ${toErrorMessage(error)}`;
-      log.warn(reason);
-      return StreamLogStore.ephemeral(reason);
-    }
-  }
-
   /** Create an explicitly non-persistent transcript store. */
   static ephemeral(reason: string): StreamLogStore {
     const normalizedReason = reason.trim();
@@ -478,7 +451,7 @@ export class StreamLogStore {
       return [];
     }
     const raw = await this.logsKv.read<unknown[]>(streamId);
-    const parsed = this.parsePersistedEntries(streamId, raw);
+    const parsed = await this.hydratePersistedEntries(streamId, raw);
     return new StreamLog(parsed.entries, parsed.preservedRawEntries).toJSON();
   }
 
@@ -774,6 +747,7 @@ export class StreamLogStore {
     const work = (async () => {
       try {
         const raw = await this.logsKv.read<unknown[]>(streamId);
+        const diskEntries = await this.hydratePersistedEntries(streamId, raw);
         // If `delete` or `clear` ran during the read, don't resurrect it.
         if (
           this.clearing ||
@@ -782,7 +756,6 @@ export class StreamLogStore {
         ) {
           return;
         }
-        const diskEntries = this.parsePersistedEntries(streamId, raw);
         const live = this.streams.get(streamId)?.log;
         if (live && live.head > 0) {
           // A concurrent `append` populated the log during the disk read.
@@ -935,7 +908,7 @@ export class StreamLogStore {
         ) {
           const raw = await this.logsKv.read<unknown[]>(streamId);
           if (raw !== undefined) {
-            releasedEntries = this.parsePersistedEntries(streamId, raw);
+            releasedEntries = await this.hydratePersistedEntries(streamId, raw);
           }
           if (!options.shouldDelete()) {
             throw new StreamDeletionSupersededError(streamId);
@@ -1356,6 +1329,78 @@ export class StreamLogStore {
     for (const listener of this.listeners) {
       listener(streamId, delta);
     }
+  }
+
+  /**
+   * Retained file-backed histories can contain pre-0.41 spill references.
+   * Inline them at hydration so every renderer/export receives full content.
+   * Keep this reader until the cutover history importer has converted these
+   * rows; retire it with that importer (three months after its release).
+   * Missing artifacts retain the preview with an unavailable notice; invalid
+   * paths and other I/O failures reject hydration. Summary reads skip spills.
+   */
+  private async hydratePersistedEntries(
+    streamId: StreamTabId,
+    raw: unknown,
+  ): Promise<ParsedPersistedEntries> {
+    const parsed = this.parsePersistedEntries(streamId, raw);
+    parsed.entries = await pMap(
+      parsed.entries,
+      async (entry) => {
+        if (
+          entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
+          (entry.messageType !== MESSAGE_TYPES.TOOL_USE &&
+            entry.messageType !== MESSAGE_TYPES.MODEL_RESPONSE &&
+            entry.messageType !== MESSAGE_TYPES.THINKING &&
+            entry.messageType !== MESSAGE_TYPES.SCRATCHPAD)
+        )
+          return entry;
+        const spillPath = entry.data?.spillPath;
+        if (spillPath === undefined) return entry;
+        // Preserve the old reader's confinement to recorder-owned artifacts.
+        const segments = spillPath.replaceAll('\\', '/').split('/');
+        if (
+          segments.length !== 4 ||
+          segments[0] !== WORKSPACE_STORAGE_LAYOUT.runs ||
+          segments[2] !== 'toolOutput' ||
+          path.posix.isAbsolute(spillPath) ||
+          path.win32.isAbsolute(spillPath) ||
+          segments.some(
+            (part) => part === '..' || part === '.' || part === '',
+          ) ||
+          !segments[3]?.endsWith('.txt') ||
+          !ExecutionIdSchema.safeParse(segments[1]).success
+        )
+          throw new Error(`Stream ${streamId}: invalid transcript spill path.`);
+        let full: string | undefined;
+        try {
+          full = await StorageFS.read(segments.join('/'));
+        } catch (error) {
+          if (!isFileNotFoundError(error)) throw error;
+        }
+        let preview = entry.text ?? '';
+        if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
+          preview =
+            typeof entry.data.output === 'string'
+              ? entry.data.output
+              : (JSON.stringify(entry.data.output) ?? '');
+        }
+        const notice =
+          '[Full output unavailable: the retained artifact was deleted.]';
+        const content =
+          full ??
+          (preview.endsWith(notice) ? preview : `${preview}\n\n${notice}`);
+        // Keep a missing attachment's reference and preview for a possible
+        // restore; repeated hydration must not multiply the notice.
+        if (full !== undefined && entry.data) delete entry.data.spillPath;
+        if (entry.messageType === MESSAGE_TYPES.TOOL_USE)
+          entry.data.output = content;
+        else entry.text = content;
+        return entry;
+      },
+      { concurrency: STREAM_LOG_LOAD_CONCURRENCY },
+    );
+    return parsed;
   }
 
   private parsePersistedEntries(

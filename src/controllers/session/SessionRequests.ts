@@ -26,6 +26,7 @@ import type {
 import type { SessionEventLog } from '@agent/runtime/SessionEvents';
 import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { aggregateId as qualifyAggregateId } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 import {
   NotOwner,
@@ -74,7 +75,7 @@ function admit(
   const streamId =
     req.kind === 'policy.set' ? req.change.streamId : req.streamId;
   return Effect.flatMap(
-    log.exists(streamId),
+    log.exists(qualifyAggregateId('stream', streamId)),
     (exists): Effect.Effect<void, RequestError> => {
       if (!exists) {
         return Effect.fail(

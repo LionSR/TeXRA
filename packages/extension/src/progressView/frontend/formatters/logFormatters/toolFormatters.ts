@@ -37,7 +37,6 @@ import {
   buildToolUseSection,
   wrapInPre,
   getToolIconName,
-  buildSpillArtifactButton,
   stopSummaryToggleKeydown,
   SPINNER_ICON_NAME,
 } from '../htmlBuilders';
@@ -167,7 +166,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
     ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" @click=${(event: Event) => { event.preventDefault(); event.currentTarget?.dispatchEvent(SessionUiEvents.host({ kind: 'restoreProposalConfig', proposal })); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Restore setup</button>`
     : nothing;
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${row.spillPath ? buildSpillArtifactButton(row.spillPath) : nothing}${setupButton}`;
+  const extraContent = html`${timerTemplate ?? nothing}${setupButton}`;
 
   return buildToolUseDetails({
     row,

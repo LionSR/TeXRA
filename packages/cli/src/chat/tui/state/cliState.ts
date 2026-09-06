@@ -42,7 +42,6 @@ export interface SessionMeta {
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly approvalPolicy: TexraApprovalPolicy;
-  readonly transcriptMode: 'persistent' | 'ephemeral';
   readonly teamName?: string;
   readonly cliMultiAgentPresetId?: string;
   readonly delegationAgentScope?: AgentDelegationScope;
@@ -55,7 +54,6 @@ const EMPTY_SESSION_META: SessionMeta = {
   modelSource: 'builtin-default',
   cwd: '',
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
-  transcriptMode: 'persistent',
   version: '',
 };
 
@@ -75,7 +73,6 @@ function defaultSessionMeta(): SessionMeta {
   const current = sessionMeta.get();
   return {
     ...EMPTY_SESSION_META,
-    transcriptMode: current.transcriptMode,
     version: current.version,
   };
 }

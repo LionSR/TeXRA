@@ -162,7 +162,6 @@ export interface StatusBarDisplayInput {
   /** Latest quota snapshot for the subscription serving this model. */
   readonly subscriptionQuota?: SubscriptionUsageSnapshot;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
-  readonly transcriptMode?: 'persistent' | 'ephemeral';
   readonly approvalPolicy?: TexraApprovalPolicy;
   /** Terminal width in columns. */
   readonly width?: number;
@@ -348,7 +347,6 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   usage: 40,
   queuedFollowUp: 50,
   approvalPolicy: 55,
-  ephemeralBadge: 58,
   approvalDepth: 60,
   rootActive: 65,
   subscriptionQuota: 67,
@@ -964,15 +962,6 @@ export function buildStatusBarDisplay(
   const left: StatusBarSegment[] = [
     { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
   ];
-  if (input.transcriptMode === 'ephemeral') {
-    left.push({
-      text: 'EPHEMERAL TRANSCRIPT',
-      compactText: 'EPHEMERAL',
-      badge: true,
-      badgeColor: COLOR_WARNING,
-      compactPriority: STATUS_BAR_COMPACT_PRIORITY.ephemeralBadge,
-    });
-  }
 
   // No stream yet: a child row has no status column, the root keeps its slot.
   const statusLabel = input.statusLabel ?? (input.isChildStream ? '' : '-');

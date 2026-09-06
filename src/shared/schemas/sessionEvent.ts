@@ -15,7 +15,10 @@
  * transport stay free of `@agent/*` (`dependencyDirection.vitest.ts` keeps the
  * shared-to-agent allowlist empty).
  */
+import { Result } from 'effect';
 import { z } from 'zod';
+
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
@@ -43,28 +46,95 @@ import { StageKindSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
 import { ExtendedTokenUsageStatsSchema } from './usage';
 
+/** C5's complete process identity, encoded canonically without losing null. */
+const OwnerIdentitySchema = z.tuple([
+  z.string().min(1),
+  z.int().positive(),
+  z.string().min(1).nullable(),
+]);
+
 /**
- * The identity of a TeXRA process: `${pid}:${processStart}`, the
- * `owner_id` the substrate stamps at insert from the writing process
- * (contract C5). One value per process, stamped on every run it launched;
- * liveness is probed per owner, never per run (PRD 5.2). Never a lease token.
+ * JSON.stringify([hostname.toLowerCase(), pid, processStart]). Host identity
+ * is necessary: a missing local pid cannot prove a foreign process dead.
  */
-export const OwnerIdSchema = z.string().regex(/^\d+:.+$/);
+export const OwnerIdSchema = z.string().refine(
+  (value) =>
+    Result.match(parseJsonWith(value, OwnerIdentitySchema), {
+      onSuccess: (identity) =>
+        identity[0] === identity[0].toLowerCase() &&
+        JSON.stringify(identity) === value,
+      onFailure: () => false,
+    }),
+  'Expected a canonical [hostname, pid, processStart] process identity',
+);
 export type OwnerId = z.infer<typeof OwnerIdSchema>;
 
-/** The pid half of an owner id, the one part of a process identity a user
- *  can act on (`kill`, Activity Monitor). */
-export function ownerPid(ownerId: string): number {
-  return Number(ownerId.slice(0, ownerId.indexOf(':')));
+/** Decode an owner already validated at the event or transport boundary. */
+export function ownerIdentity(ownerId: OwnerId): {
+  hostname: string;
+  pid: number;
+  processStart: string | null;
+} {
+  const [hostname, pid, processStart] = JSON.parse(ownerId) as z.infer<
+    typeof OwnerIdentitySchema
+  >;
+  return { hostname, pid, processStart };
 }
 
-/** A stream id or an inquiry thread id: the `aggregate_id` half of the
- *  event key (contract C2). The fold resolves a stream aggregate by its id
- *  alone; the execution aggregate arrives with the cutover's flow rows. */
-export const AggregateIdSchema = z.string().min(1);
+/** The recorded pid shown when another process holds a run. */
+export function ownerPid(ownerId: OwnerId): number {
+  return ownerIdentity(ownerId).pid;
+}
+
+/** C2 separates independent lifecycles even when their logical ids coincide. */
+const AggregateKeySchema = z.tuple([
+  z.enum([
+    'stream',
+    'execution',
+    'workflow-checkpoint',
+    'inquiry',
+    'session',
+    'migration',
+  ]),
+  z.string().min(1),
+]);
+
+/** The canonical JSON encoding of an aggregate kind and its logical id. */
+export const AggregateIdSchema = z
+  .string()
+  .refine(
+    (value) =>
+      Result.match(parseJsonWith(value, AggregateKeySchema), {
+        onSuccess: (key) => JSON.stringify(key) === value,
+        onFailure: () => false,
+      }),
+    {
+      error: 'Expected a canonical [kind, logicalId] aggregate key',
+      abort: true,
+    },
+  )
+  .brand<'AggregateId'>();
 export type AggregateId = z.infer<typeof AggregateIdSchema>;
 
-/** Per-aggregate append order; `run.start` is seq 1 of its stream. */
+/** Qualify a logical id once. An already-qualified key is not an input. */
+export function aggregateId(
+  kind: z.infer<typeof AggregateKeySchema>[0],
+  logicalId: string & { readonly [z.$brand]?: never },
+): AggregateId {
+  return AggregateIdSchema.parse(JSON.stringify([kind, logicalId]));
+}
+
+/** Decode a validated aggregate key at a logical-id boundary. */
+export function aggregateTarget(key: AggregateId): {
+  kind: z.infer<typeof AggregateKeySchema>[0];
+  id: string;
+} {
+  const [kind, id] = JSON.parse(key) as z.infer<typeof AggregateKeySchema>;
+  return { kind, id };
+}
+
+/** Per-aggregate append order; `run.start` is seq 1 of its stream. Dense
+ *  from 1, assigned by the substrate's publisher and by nothing else. */
 const SeqSchema = z.int().positive();
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
@@ -98,11 +168,26 @@ const envelope = {
   commit: CommitOrdinalSchema,
   /** Owner of the process that appended the event; null on legacy imports. */
   ownerId: OwnerIdSchema.nullable(),
-  at: z.number(),
+  /** The publish clock in whole milliseconds: C1 stores it in an `INTEGER`
+   *  column of a `STRICT` table, so the vocabulary states that rule here and
+   *  the substrate restates it nowhere. */
+  at: z.int(),
 };
 
-function durable<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
-  return z.object({ ...envelope, type: z.literal(type), ...shape });
+function durable<T extends string, S extends z.ZodRawShape>(
+  type: T,
+  shape: S,
+  kind: z.infer<typeof AggregateKeySchema>[0] = 'stream',
+) {
+  return z.object({
+    ...envelope,
+    aggregateId: AggregateIdSchema.refine(
+      (key) => aggregateTarget(key).kind === kind,
+      `Expected a ${kind} aggregate for ${type}`,
+    ),
+    type: z.literal(type),
+    ...shape,
+  });
 }
 
 /**
@@ -231,7 +316,11 @@ const SessionEventSchema = z.discriminatedUnion('type', [
    *  `GoalStore`. */
   durable('goalStateChanged', { state: GoalStateSchema }),
   /** Aggregate is the thread id; `parentStreamId` is the payload's edge. */
-  durable('inquiryThreadUpdated', InquiryThreadUpdatedEventSchema.shape),
+  durable(
+    'inquiryThreadUpdated',
+    InquiryThreadUpdatedEventSchema.shape,
+    'inquiry',
+  ),
   durable('updateQueuedFollowUps', { messages: z.array(z.string()) }),
   durable('approval.requested', {
     requestId: z.string(),

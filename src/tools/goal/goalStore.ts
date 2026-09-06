@@ -12,6 +12,8 @@ import {
 import { effectRuntime } from '@platform/processRuntime';
 import { tryWorkspaceRoots, workspaceRoots } from '@platform/workspaceRoots';
 import {
+  aggregateId as qualifyAggregateId,
+  aggregateTarget,
   GoalSchema,
   isGoalInFlight,
   type ExecutionId,
@@ -67,7 +69,7 @@ function emitGoalStateChanged(
   target.publish([
     {
       type: 'goalStateChanged',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       state: goalStateOf(current),
     },
   ]);
@@ -186,7 +188,7 @@ export function subscribeGoalStateChanges(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {
         if (event.type === 'goalStateChanged') {
-          listener({ streamId: event.aggregateId });
+          listener({ streamId: aggregateTarget(event.aggregateId).id });
         }
       }),
     ),

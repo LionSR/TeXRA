@@ -12,9 +12,9 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
 } from '@shared/schemas';
+import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import { StreamLogStore, STREAM_LOGS_DIR } from '@transcript';
-import type { StreamLogAppendInput } from '@transcript/StreamLog';
 import { StorageFS } from '@utils/files/storageFS';
 
 function notFound(): NodeJS.ErrnoException {

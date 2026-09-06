@@ -2,18 +2,19 @@ import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { createLog } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
-import type {
-  AgentProposalPermission,
-  BashPermission,
-  FileLocation,
-  PermissionPayload,
-  PlanApprovalPermission,
-  ProgressPermissionKind,
-  RetryPermission,
-  StreamTabId,
-  UserQuestionAnswers,
-  ExternalInquiryPermission,
-  UserQuestionPermission,
+import {
+  aggregateId as qualifyAggregateId,
+  type AgentProposalPermission,
+  type BashPermission,
+  type FileLocation,
+  type PermissionPayload,
+  type PlanApprovalPermission,
+  type ProgressPermissionKind,
+  type RetryPermission,
+  type StreamTabId,
+  type UserQuestionAnswers,
+  type ExternalInquiryPermission,
+  type UserQuestionPermission,
 } from '@shared/schemas';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
@@ -833,7 +834,7 @@ export class SessionHostInteractions implements HostInteractions {
     this.session.publish([
       {
         type: 'approval.requested',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         requestId,
         payload: redactedForFact(payload),
       },
@@ -968,7 +969,7 @@ export class SessionHostInteractions implements HostInteractions {
       this.session.publish([
         {
           type: 'approval.resolved',
-          aggregateId: pending.fact.streamId,
+          aggregateId: qualifyAggregateId('stream', pending.fact.streamId),
           requestId: pending.fact.requestId,
         },
       ]);

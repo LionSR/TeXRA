@@ -422,12 +422,6 @@
       "name": "toolDisplaySpanTextProps"
     },
     {
-      "file": "packages/cli/src/chat/tui/panes/TranscriptReader.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "hydratedTranscript"
-    },
-    {
       "file": "packages/cli/src/chat/tui/panes/WorkPlanReader.tsx",
       "category": "production-dead",
       "kind": "exports",
@@ -1692,12 +1686,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "STREAM_LOG_SUMMARIES_DIR"
-    },
-    {
-      "file": "src/transcript/spillArtifacts.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveTranscriptSpillPath"
     },
     {
       "file": "src/utils/files/pastedImageUtils.ts",

@@ -23,7 +23,7 @@ import type {
 export type SessionCursor = CommitOrdinal;
 
 /**
- * The identity of this process, `${pid}:${processStart}` (contract C5): the
+ * The canonical hostname, pid, and nullable process-start tuple (C5): the
  * `ownerId` stamped on every event the process appends and the `self` entry
  * of its local runtime snapshot. Resolved once at each process entry, where
  * the start identity can be awaited, and provided to the process layer.

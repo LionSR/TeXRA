@@ -10,7 +10,7 @@
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Layer, Queue, Stream, SubscriptionRef } from 'effect';
 import { TestClock } from 'effect/testing';
-import { describe, expect } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import {
   SessionEventLog,
@@ -24,13 +24,17 @@ import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
+  type InflightTextChunk,
 } from '@controllers/session/sessionSources';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SessionBridge } from '@controllers/session/SessionBridge';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
+  FoldEventSchema,
   STREAM_PHASE,
   type ExecutionId,
   type SessionEventDraft,
@@ -42,9 +46,17 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
-const SELF = '4242:self-start';
+function textTail(
+  text: string,
+  previous?: InflightTextChunk,
+): InflightTextChunk {
+  return { previous, text, length: (previous?.length ?? 0) + text.length };
+}
+
+const SELF = '["test-host",4242,"self-start"]';
 const KEY = '/workspace/framing';
 const STREAM = 'stream:framing' as StreamTabId;
 const EXECUTION = 'ab12cd' as ExecutionId;
@@ -52,7 +64,7 @@ const PORT = 'sidebar';
 
 const runStart: SessionEventDraft = {
   type: 'run.start',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   executionId: EXECUTION,
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
@@ -62,14 +74,14 @@ const runStart: SessionEventDraft = {
 
 const waiting: SessionEventDraft = {
   type: 'status',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   phase: STREAM_PHASE.WAITING,
   cause: 'wait',
 };
 
 const running: SessionEventDraft = {
   type: 'status',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   phase: STREAM_PHASE.RUNNING,
   previousPhase: STREAM_PHASE.WAITING,
   cause: 'resume',
@@ -144,7 +156,7 @@ const subscribe: Subscribe = {
   session: KEY,
   generation: 1,
   cursor: 0,
-  aggregates: [{ id: STREAM, fromSeq: 0 }],
+  aggregates: [{ id: qualifyAggregateId('stream', STREAM), fromSeq: 0 }],
 };
 
 /** A framer source over the runtime graph in context. */
@@ -162,6 +174,56 @@ const framerSource = Effect.gen(function* () {
 });
 
 describe('session framer', () => {
+  it('rejects a stream event carried by an inquiry aggregate at the wire boundary', () => {
+    const input = {
+      _tag: 'event',
+      read: 'listing',
+      event: {
+        ...runStart,
+        aggregateId: qualifyAggregateId('inquiry', STREAM),
+        seq: 1,
+        commit: 1,
+        ownerId: SELF,
+        at: 0,
+      },
+    };
+    expect(FoldEventSchema.safeParse(input).success).toBe(false);
+    expect(
+      FoldEventSchema.safeParse({
+        ...input,
+        event: { ...input.event, aggregateId: runStart.aggregateId },
+      }).success,
+    ).toBe(true);
+  });
+  it('preserves stream and execution subscription keys across the webview bridge', async () => {
+    const session = createTestSession();
+    const bridge = new SessionBridge({
+      session,
+      onPortClosed: () => {},
+      handleHostRequest: async () => {
+        throw new Error('No host request is expected.');
+      },
+    });
+    const keys = [
+      qualifyAggregateId('stream', STREAM),
+      qualifyAggregateId('execution', EXECUTION),
+    ];
+    try {
+      bridge.attach({ id: PORT, send: () => {} }).receive({
+        ...subscribe,
+        session: session.roots.storage,
+        aggregates: keys.map((id) => ({ id, fromSeq: 0 })),
+      });
+      await vi.waitFor(() => {
+        expect(
+          [...SubscriptionRef.getUnsafe(session.view).folded.keys()].toSorted(),
+        ).toEqual(keys.toSorted());
+      });
+    } finally {
+      bridge.dispose();
+      session.dispose();
+    }
+  });
   it.effect(
     'answers a Subscribe with the replay, then frames the tail every 16 ms with one chunk per row',
     () =>
@@ -200,15 +262,16 @@ describe('session framer', () => {
         // to one row in one window merge into one chunk, never two; a chunk
         // of an aggregate the Subscribe did not name is left out.
         yield* events.publish([running]);
+        const first = textTail('Hel');
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, 'Hel']]),
+          new Map([[`${STREAM}/row-1`, first]]),
         );
         yield* SubscriptionRef.set(
           chunks.ref,
           new Map([
-            [`${STREAM}/row-1`, 'Hello'],
-            ['stream:unnamed/row-1', 'hidden'],
+            [`${STREAM}/row-1`, textTail('lo', first)],
+            ['stream:unnamed/row-1', textTail('hidden')],
           ]),
         );
         const tail: EventsFrame[] = [];
@@ -249,7 +312,7 @@ describe('session framer', () => {
         const chunks = yield* TextChunkSource;
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, 'Hello']]),
+          new Map([[`${STREAM}/row-1`, textTail('Hello')]]),
         );
         const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
         const webview = yield* WebviewSessions.open(KEY);
@@ -260,7 +323,10 @@ describe('session framer', () => {
         const child = 'stream:second';
         const named: Subscribe = {
           ...subscribe,
-          aggregates: [...subscribe.aggregates, { id: child, fromSeq: 0 }],
+          aggregates: [
+            ...subscribe.aggregates,
+            { id: qualifyAggregateId('stream', child), fromSeq: 0 },
+          ],
         };
         // The shell: begin the generation and set its transcript set, then
         // post the Subscribe; the decoder feeds every frame that answers it.
@@ -285,7 +351,7 @@ describe('session framer', () => {
               read: 'all',
               event: {
                 type: 'stream.removed',
-                aggregateId: STREAM,
+                aggregateId: qualifyAggregateId('stream', STREAM),
                 seq: 9,
                 commit: 99,
                 ownerId: SELF,
@@ -314,7 +380,7 @@ describe('session framer', () => {
         yield* events.publish([running]);
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, 'Hello again']]),
+          new Map([[`${STREAM}/row-1`, textTail('Hello again')]]),
         );
         yield* settle(
           view.ref,
@@ -334,11 +400,15 @@ describe('session framer', () => {
 
         // A new stream and its first prefix can become ready in one turn.
         yield* events.publish([
-          { ...runStart, aggregateId: child, executionId: 'second' },
+          {
+            ...runStart,
+            aggregateId: qualifyAggregateId('stream', child),
+            executionId: 'second',
+          },
         ]);
         yield* SubscriptionRef.update(
           chunks.ref,
-          (held) => new Map([...held, [`${child}/row-2`, 'First']]),
+          (held) => new Map([...held, [`${child}/row-2`, textTail('First')]]),
         );
         yield* settle(
           view.ref,
@@ -346,7 +416,14 @@ describe('session framer', () => {
         );
         yield* SubscriptionRef.update(
           chunks.ref,
-          (held) => new Map([...held, [`${child}/row-2`, 'First suffix']]),
+          (held) =>
+            new Map([
+              ...held,
+              [
+                `${child}/row-2`,
+                textTail(' suffix', held.get(`${child}/row-2`)),
+              ],
+            ]),
         );
         yield* settle(
           view.ref,

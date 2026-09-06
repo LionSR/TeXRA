@@ -10,13 +10,11 @@
  * subscriber via `trace.subscribe(...)` and persist however they need.
  */
 export {
-  ephemeralTranscriptWarning,
   StreamLogStore,
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
 } from './StreamLogStore';
 export { createRunTrace, type RunTrace } from './runTrace';
-export { readTranscriptSpill } from './spillArtifacts';
 export {
   StreamSnapshotPreloadError,
   StreamSnapshotStore,

@@ -122,6 +122,7 @@ import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import type { ApiProvider } from '@model/apiProviders';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
@@ -157,7 +158,7 @@ function port(): SessionHostInteractions {
     session.publish([
       {
         type: 'run.start',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         executionId: `${streamId}-exec` as ExecutionId,
         identity: { kind: 'agent', agent: 'agent' },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
@@ -191,7 +192,7 @@ function port(): SessionHostInteractions {
           session.publish([
             {
               type: 'inquiryThreadUpdated',
-              aggregateId: inquiry.threadId,
+              aggregateId: qualifyAggregateId('inquiry', inquiry.threadId),
               threadId: inquiry.threadId,
               parentStreamId: (first?.streamId ?? null) as StreamTabId | null,
               status: 'open',
