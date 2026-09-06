@@ -6,6 +6,7 @@ import { Text } from 'ink';
 import {
   CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
+  runCliMemory,
 } from '@cli/runtime/memory';
 import type { MemoryViewItem } from '@shared/schemas';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
@@ -24,7 +25,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
       title="/memory"
       loadingLabel="Loading memories..."
       load={async () =>
-        (await loadMemoryItems()).slice(0, CLI_MEMORY_LIST_LIMIT)
+        (await runCliMemory(loadMemoryItems())).slice(0, CLI_MEMORY_LIST_LIMIT)
       }
       items={(entries) =>
         entries.map((item) => ({

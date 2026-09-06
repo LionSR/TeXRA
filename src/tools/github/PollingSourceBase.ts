@@ -11,7 +11,16 @@
  * 24 h detach gate) lives here once.
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import {
+  Cause,
+  Clock,
+  Data,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Schedule,
+} from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
@@ -62,6 +71,62 @@ export function createBasePollState(
     lastSuccessAt: now,
     consecutiveFailures: 0,
     skipPollUntilMs: 0,
+  };
+}
+
+/**
+ * A subclass hook (`pollOne` or `afterTick`) failed. `cause` is whatever the
+ * GitHub call raised — one of the GitHub error classes or a transport
+ * failure that {@link PollingSourceBase.handleFailure} classifies. It is the
+ * only failure a poll hook may report, so the base can classify every one of
+ * them without inspecting a wider channel.
+ */
+export class PollHookRejected extends Data.TaggedError('PollHookRejected')<{
+  readonly cause: unknown;
+}> {}
+
+/**
+ * The one wrap of the GitHub client for a poll hook: a rejected request
+ * becomes a {@link PollHookRejected} carrying the error the client raised, so
+ * `handleFailure`'s `instanceof` classification still sees the GitHub error
+ * class itself.
+ */
+export const pollRequest = <A>(
+  request: (signal: AbortSignal) => Promise<A>,
+): Effect.Effect<A, PollHookRejected> =>
+  Effect.tryPromise({
+    try: request,
+    catch: (cause) => new PollHookRejected({ cause }),
+  });
+
+/**
+ * The ambient clock with a sleep that does not hold the event loop.
+ *
+ * The poll loop sleeps between rounds, and the process clock's sleep
+ * schedules a referenced timer, so the loop alone would keep a short-lived
+ * host (the CLI) alive until shutdown interrupted it. This clock is what the
+ * loop sleeps on: the same readings as the clock in scope, a timer the loop
+ * does not wait for, still interrupted through the clock rather than a timer
+ * handle this class holds. It replaces the `setInterval` + `timer.unref()`
+ * pair this file used to keep off Effect's clock.
+ */
+function unrefSleepClock(clock: Clock.Clock): Clock.Clock {
+  return {
+    currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe(),
+    currentTimeMillis: clock.currentTimeMillis,
+    currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe(),
+    currentTimeNanos: clock.currentTimeNanos,
+    monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
+    monotonicTimeNanos: clock.monotonicTimeNanos,
+    sleep: (duration) =>
+      Effect.callback<void>((resume) => {
+        const handle = setTimeout(
+          () => resume(Effect.void),
+          Duration.toMillis(duration),
+        );
+        handle.unref?.();
+        return Effect.sync(() => clearTimeout(handle));
+      }),
   };
 }
 
@@ -185,23 +250,28 @@ export abstract class PollingSourceBase<
   private readonly keysChangedListeners = new Set<
     (keys: readonly K[]) => void
   >();
-  private timer: ReturnType<typeof setInterval> | undefined;
+  /** The stop request for the owned poll loop; absent while it is stopped. */
+  private pollLoopStop: Deferred.Deferred<void> | undefined;
   private shutdownRegistration: Disposable | undefined;
   private shutdownLifecycle: LifecycleHost | undefined;
-  private tickInFlight = false;
 
   constructor(protected readonly config: PollingSourceConfig) {
     this.logger = createChannelTrace(config.name);
   }
 
   /** Subclass: poll the endpoints for one subscription and emit any new events. */
-  protected abstract pollOne(key: K, state: S): Promise<void>;
+  protected abstract pollOne(
+    key: K,
+    state: S,
+  ): Effect.Effect<void, PollHookRejected>;
 
   /** Optional subclass hook that runs after all subscription polls settle. */
-  protected async afterTick(
+  protected afterTick(
     _entries: ReadonlyArray<readonly [K, S]>,
     _now: number,
-  ): Promise<void> {}
+  ): Effect.Effect<void, PollHookRejected> {
+    return Effect.void;
+  }
 
   /** Subclass: format a halted-subscription error event for the listener. */
   protected abstract formatErrorEvent(state: S, detail: string): string;
@@ -229,7 +299,7 @@ export abstract class PollingSourceBase<
 
   disposeAll(): void {
     this.subscriptions.clear();
-    this.stopTimer();
+    this.stopPolling();
     // Release before notifying: a synchronous listener may re-subscribe, and
     // that fresh subscription must register with the active lifecycle. The
     // disposable's dispose is idempotent and never re-enters disposeAll.
@@ -262,7 +332,7 @@ export abstract class PollingSourceBase<
     }
     state.listeners.add(onEvent);
     if (created) this.notifyKeysChanged();
-    this.ensureTimer();
+    this.ensurePolling();
     return {
       dispose: () => this.removeListener(key, onEvent),
     };
@@ -294,7 +364,7 @@ export abstract class PollingSourceBase<
   /**
    * Validate a 200-path payload without ever throwing. The policy behind every
    * poller's use of this helper: a throw on the 200 path is a defect — pollOne
-   * runs inside pollEntry's try/catch, where a throw routes to handleFailure
+   * runs inside pollEntry, whose catchDefect routes a throw to handleFailure
    * and bumps consecutiveFailures every tick without advancing lastSuccessAt,
    * so a persistently-odd-but-200 payload would trip the 24 h detach gate and
    * unilaterally detach a live subscription. Validation is therefore always
@@ -386,7 +456,7 @@ export abstract class PollingSourceBase<
       this.logger.info(`Unsubscribed from ${key}`);
       this.notifyKeysChanged();
     }
-    if (this.subscriptions.size === 0) this.stopTimer();
+    if (this.subscriptions.size === 0) this.stopPolling();
   }
 
   private notifyKeysChanged(): void {
@@ -401,32 +471,78 @@ export abstract class PollingSourceBase<
   }
 
   /**
-   * @adapter-until 2026-11-05 (introduced 2026-09-06). The setInterval
-   * cadence is the one timer this file keeps off Effect's clock (PRD R8):
-   * "a polling timer must never keep a host process alive on its own", and
-   * rc.112 has no unref-capable scheduler (no `unref` anywhere in
-   * node_modules/effect/dist), so a Schedule-driven fiber would pin the CLI
-   * process. Retire when Effect gains an unref-capable clock or the hosts
-   * decide at process level that a live poller may keep the process alive;
-   * the interval only drives {@link PollingSourceBase.tick}.
+   * Start the poll loop if it is not already running: one fiber, forked from
+   * the process runtime, that runs a round and then repeats on
+   * `Schedule.fixed(pollIntervalMs)`. `Effect.repeat` evaluates the round
+   * once before the schedule steps, so first-subscribe polls immediately
+   * instead of waiting a full interval, and a single sequential fiber makes
+   * overlapping rounds impossible — the in-flight guard the `setInterval`
+   * cadence needed is gone with it. A round that outruns the interval is
+   * followed immediately by the next one, as the interval's skip-then-fire
+   * behaviour did.
+   *
+   * The loop sleeps on {@link unrefSleepClock}: a polling timer must never
+   * keep a host process alive on its own. Its readings are the ambient
+   * clock's, so `Clock.currentTimeMillis` inside a round is unaffected.
    */
-  private ensureTimer(): void {
+  private ensurePolling(): void {
     this.registerShutdownIfNeeded();
-    if (this.timer) return;
-    this.timer = setInterval(() => {
-      void this.tick();
-    }, this.config.pollIntervalMs);
-    // A polling timer must never keep a host process alive on its own.
-    this.timer.unref?.();
-    // Fire an immediate tick so first-subscribe doesn't wait a full interval.
-    void this.tick();
+    if (this.pollLoopStop) return;
+    const stop = Deferred.makeUnsafe<void>();
+    this.pollLoopStop = stop;
+    effectRuntime().runFork(
+      Effect.raceFirst(this.pollLoopProgram(), Deferred.await(stop)).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            // A stopped loop may finish after a new subscription has started.
+            if (this.pollLoopStop === stop) this.pollLoopStop = undefined;
+          }),
+        ),
+      ),
+    );
   }
 
-  private stopTimer(): void {
-    if (!this.timer) return;
-    clearInterval(this.timer);
-    this.timer = undefined;
+  private readonly pollLoopProgram = Effect.fn('PollingSourceBase.pollLoop')(
+    function* (this: PollingSourceBase<K, S>) {
+      const clock = yield* Clock.Clock;
+      yield* Effect.repeat(this.runRound(), {
+        schedule: Schedule.fixed(Duration.millis(this.config.pollIntervalMs)),
+        while: () => {
+          if (this.subscriptions.size > 0) return true;
+          // Retire before yielding so a new subscription starts a fresh loop.
+          this.stopPolling();
+          return false;
+        },
+      }).pipe(Effect.provideService(Clock.Clock, unrefSleepClock(clock)));
+    },
+  );
+
+  private stopPolling(): void {
+    const stop = this.pollLoopStop;
+    if (!stop) return;
+    this.pollLoopStop = undefined;
+    Deferred.doneUnsafe(stop, Effect.void);
   }
+
+  /**
+   * One round, with its failures contained so the poller survives them. A
+   * round only ever fails by a defect — a throwing `handleFailure` or
+   * listener — which used to reject `tick()`'s promise with nobody watching;
+   * it is logged here and the loop continues. An interrupt (shutdown, the
+   * last unsubscribe) is re-raised so the fiber ends.
+   */
+  private readonly runRound = Effect.fn('PollingSourceBase.runRound')(
+    function* (this: PollingSourceBase<K, S>) {
+      const exit = yield* Effect.exit(this.pollRound());
+      if (Exit.isSuccess(exit)) return;
+      if (Cause.hasInterrupts(exit.cause)) {
+        return yield* Effect.failCause(exit.cause);
+      }
+      this.logger.warn('Poll round failed; polling continues.', {
+        data: Cause.squash(exit.cause),
+      });
+    },
+  );
 
   /**
    * Register `disposeAll` with the platform shutdown registry exactly once per
@@ -458,38 +574,16 @@ export abstract class PollingSourceBase<
   }
 
   /**
-   * One poll round, run on the process runtime. setInterval fires every
-   * pollIntervalMs regardless of prior completion; overlapping ticks would
-   * double-emit events. The guard is process-local (one timer per source) so
-   * the synchronous check-and-set is race-free, and `ensuring` releases it
-   * however the round ends.
-   */
-  private tick(): Promise<void> {
-    if (this.tickInFlight) return Promise.resolve();
-    this.tickInFlight = true;
-    return effectRuntime().runPromise(
-      this.pollRound().pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            this.tickInFlight = false;
-          }),
-        ),
-      ),
-    );
-  }
-
-  /**
    * Poll every subscription with at most `maxConcurrent` in flight, then run
-   * the post-poll hook. Each hook rejection is classified or logged at its
-   * own site, so no expected failure short-circuits the round. A defect in
-   * one entry (a throwing `handleFailure`) does not either: every started
-   * poll is joined through its Exit before the combined cause is re-raised,
-   * so `tick`'s in-flight guard never clears while a `pollOne` is still
-   * running and the next interval cannot start an overlapping poll.
+   * the post-poll hook. Each hook failure is classified or logged at its own
+   * site, so no expected failure short-circuits the round. A defect in one
+   * entry (a throwing `handleFailure`) does not either: every started poll is
+   * joined through its Exit before the combined cause is re-raised, so the
+   * round cannot end while a `pollOne` is still running.
    */
   private readonly pollRound = Effect.fn('PollingSourceBase.pollRound')(
     function* (this: PollingSourceBase<K, S>) {
-      const now = Date.now();
+      const now = yield* Clock.currentTimeMillis;
       const entries = [...this.subscriptions.entries()];
       const exits = yield* Effect.forEach(
         entries,
@@ -504,37 +598,69 @@ export abstract class PollingSourceBase<
             .reduce((left, right) => Cause.combine(left, right)),
         );
       }
-      yield* Effect.tryPromise(() => this.afterTick(entries, now)).pipe(
-        Effect.catch((error) =>
+      yield* this.afterTick(entries, now).pipe(
+        Effect.catchTag('PollHookRejected', (rejection) =>
           Effect.sync(() => {
             this.logger.warn('Post-poll hook failed', {
-              data: error.cause,
+              data: rejection.cause,
             });
           }),
         ),
       );
-      if (this.subscriptions.size === 0) this.stopTimer();
     },
   );
 
-  /** Poll one subscription, routing any failure through handleFailure. */
+  /**
+   * Poll one subscription, routing every failure of that subscription through
+   * handleFailure and never past this entry.
+   *
+   * A defect is contained here, not propagated. When `pollOne` was a Promise
+   * its synchronous throws were caught by `Effect.tryPromise` and classified
+   * per subscription; now that it is an Effect they would be defects, and
+   * `pollRound` re-raises a failed entry before `afterTick`, so one
+   * subclass's bug would skip annotation draining for every subscription in
+   * the round and leave the offending one with no backoff and no path to the
+   * 24 h detach gate. Interruption is not caught (`catchDefect`, not
+   * `catchCause`), so stopping the loop still stops it, and the defect is
+   * logged rather than silently folded into the backoff.
+   */
   private readonly pollEntry = Effect.fn('PollingSourceBase.pollEntry')(
     function* (this: PollingSourceBase<K, S>, key: K, state: S, now: number) {
       if (state.skipPollUntilMs > now) return;
-      yield* Effect.tryPromise(() => this.pollOne(key, state)).pipe(
-        Effect.map(() => {
-          state.lastSuccessAt = Date.now();
-          state.consecutiveFailures = 0;
-        }),
-        Effect.catch((error) =>
-          Effect.sync(() => this.handleFailure(key, state, error.cause)),
+      yield* this.pollOne(key, state).pipe(
+        Effect.flatMap(() =>
+          Effect.map(Clock.currentTimeMillis, (completedAt) => {
+            state.lastSuccessAt = completedAt;
+            state.consecutiveFailures = 0;
+          }),
+        ),
+        Effect.catchTag('PollHookRejected', (rejection) =>
+          Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
+            Effect.sync(() =>
+              this.handleFailure(key, state, rejection.cause, failedAt),
+            ),
+          ),
+        ),
+        Effect.catchDefect((defect) =>
+          Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
+            Effect.sync(() => {
+              this.logger.warn('Poll threw a defect', { data: defect });
+              this.handleFailure(key, state, defect, failedAt);
+            }),
+          ),
         ),
       );
     },
   );
 
-  protected handleFailure(key: K, state: S, err: unknown): void {
-    const now = Date.now();
+  /**
+   * Classify one poll failure at `now`, the reading the round took from the
+   * clock. The caller supplies it so this stays a pure function of the state
+   * and that reading — the rate-limit branch compares it against GitHub's own
+   * epoch (`resetAt`), which only a wall-clock reading can be measured
+   * against.
+   */
+  protected handleFailure(key: K, state: S, err: unknown, now: number): void {
     if (err instanceof GitHubAuthError) {
       this.logger.warn(`Auth error for ${key}; stopping subscription.`, {
         data: err,

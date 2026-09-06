@@ -575,12 +575,16 @@ describe('handleTuiSlashCommand', () => {
   );
 
   it('opens memory list and preview output in the reference pane', async () => {
-    vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockResolvedValue([]);
-    vi.spyOn(memoryFileSystem, 'loadMemoryPreview').mockResolvedValue({
-      storagePath: 'memory/note.md',
-      lineCount: 1,
-      preview: 'Remember this.',
-    });
+    vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockReturnValue(
+      Effect.succeed([]),
+    );
+    vi.spyOn(memoryFileSystem, 'loadMemoryPreview').mockReturnValue(
+      Effect.succeed({
+        storagePath: 'memory/note.md',
+        lineCount: 1,
+        preview: 'Remember this.',
+      }),
+    );
 
     await showCliMemoryList();
     expect(infoPane.get()).toEqual({
