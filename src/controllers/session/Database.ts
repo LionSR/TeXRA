@@ -1,6 +1,6 @@
 /**
  * The persistence substrate
- * (`docs/proposals/2026-09-03-persistence-substrate-decision.md`): the C1
+ * (`.agents/docs/proposed/architecture/2026-09-03-persistence-substrate-decision.md`): the C1
  * schema, the connection that owns it, and the C6 write path. One database
  * per session root, parameterized by `WorkspaceRoots` (section 7) and never a
  * process singleton; Effect code reads its root from `Context`, never from

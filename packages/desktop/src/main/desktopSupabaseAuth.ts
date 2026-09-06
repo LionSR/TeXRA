@@ -4,6 +4,7 @@ import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
+import { installAuthProgramEdge, runAuthProgram } from '@auth/authProgram';
 import {
   AUTH_CALLBACK_TIMEOUT_MS,
   DEFAULT_OAUTH_PROVIDER,
@@ -23,6 +24,7 @@ import {
 import type { AuthCallbackUriParts } from '@auth/authCallback';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
+import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { TEXRA_PROTOCOL } from '../shared/desktopProtocol.js';
@@ -401,10 +403,21 @@ export function createDesktopAuthCoordinator(options: {
   secrets: PlatformSecrets;
   log: DesktopAuthLog;
 }): DesktopAuthCoordinator {
-  return createHostAuthCoordinator({
+  // The auth subsystem's run edge lives at this host entry (PRD R1); the
+  // coordinator's surface is Effect-typed and this module settles it through
+  // `runAuthProgram` for the Promise interface above.
+  installAuthProgramEdge((program) => effectRuntime().runPromiseExit(program));
+  const coordinator = createHostAuthCoordinator({
     secrets: options.secrets,
     log: createSessionLog(options.log),
   });
+  return {
+    storeSession: (session) =>
+      runAuthProgram(coordinator.storeSession(session)),
+    clearSession: () => runAuthProgram(coordinator.clearSession()),
+    createSessionFromCallback: (uri) =>
+      runAuthProgram(coordinator.createSessionFromCallback(uri)),
+  };
 }
 
 async function processProtocolCallback(

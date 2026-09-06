@@ -2,7 +2,7 @@
 
 Status: implemented (D3/T5 of the runtime gold-standard program). This note
 records the accepted shape only; the retired
-`docs/prds/2026-06-29-prd-runtime-gold-standard.md` must not be implemented
+`.agents/docs/rejected/architecture/2026-06-29-prd-runtime-gold-standard.md` must not be implemented
 from.
 
 ## The fact being owned

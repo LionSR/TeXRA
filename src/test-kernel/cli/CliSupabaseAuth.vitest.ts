@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const authCoordinator = {
     clearSession: vi.fn(),
-    storeSession: vi.fn(async () => undefined),
+    storeSession: vi.fn(),
   };
   return {
     authCoordinator,
@@ -71,6 +71,13 @@ vi.mock('@cli/runtime/supabaseAuthDeviceCode', () => ({
 
 async function loadSupabaseAuth() {
   vi.resetModules();
+  // `vi.resetModules()` gives the module graph a fresh `@platform/processRuntime`
+  // whose runtime the shared fake-host install never reached; the module's own
+  // `initializeCliSupabaseAuth` installs the auth run edge from it.
+  const [{ initProcessRuntime }, { Layer, ManagedRuntime }] = await Promise.all(
+    [import('@platform/processRuntime'), import('effect')],
+  );
+  initProcessRuntime(ManagedRuntime.make(Layer.empty));
   return import('@cli/runtime/supabaseAuth');
 }
 
@@ -122,6 +129,8 @@ function stubSuccessfulSignIns(session: {
 describe('CLI Supabase auth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.authCoordinator.clearSession.mockReturnValue(Effect.void);
+    mocks.authCoordinator.storeSession.mockReturnValue(Effect.void);
     mocks.platform.mockReturnValue({ secrets: { kind: 'platform-secrets' } });
     mocks.invalidateRemoteAgentsAfterSignOut.mockResolvedValue(undefined);
   });

@@ -460,7 +460,7 @@ over-abstraction** — they independently re-confirmed the prior conclusions.
 
 **Landed since the 2026-05-30 pass — Step 6 (run-entry naming/curation, behavior-neutral):**
 
-The proposal's refined Step 6 (`docs/proposals/2026-05-30-agent-sdk-readiness.md` §6) is **now in
+The proposal's refined Step 6 (`.agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md` §6) is **now in
 tree** (commit `da131dc`, PR #4781):
 
 - `runtime/runExecutionRequest.ts` → **`runtime/runAgent.ts`**; `runValidatedExecutionRequest`
@@ -2547,7 +2547,7 @@ candidate is behavior-touching, so each is recorded for a future tidy pass, not 
   into a `getApiKey()`-style injected collaborator, by analogy to the already-extracted
   `MediaAttachmentProcessor` / `ProxyConfigResolver`. **This is the exact extraction the companion
   proposals doc already evaluated, adversarially verified, and rejected as a trap** —
-  [`docs/proposals/2026-05-30-agent-sdk-readiness.md`](../../proposals/2026-05-30-agent-sdk-readiness.md) "Rejected findings
+  [`.agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md`](../../../.agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md) "Rejected findings
   (traps — do not pursue)", line 46: _"`ModelHandler` and `@auth/*` are **already vscode-free**; the
   relay/tier logic is shared core consumed identically by CLI and extension (not host-specific);
   `getServerSideKeyService()` is already a swappable, test-mocked singleton. The 'extract a port'

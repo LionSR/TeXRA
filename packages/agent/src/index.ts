@@ -2,7 +2,7 @@
  * `@texra-ai/agent` — the package's Promise surface, and nothing else.
  *
  * This module is the boundary the Effect migration's rule R1 names
- * (`docs/prds/2026-08-26-effect-4-runtime-migration.md`, §7 R1, boundary
+ * (`.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md`, §7 R1, boundary
  * kind 3: the published SDK speaks Promises). Every decision this package
  * makes is stated once, in Effect, on `@texra-ai/agent/effect`; what
  * follows renders those services as Promises and AsyncIterables and adds no

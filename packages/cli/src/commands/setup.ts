@@ -44,7 +44,7 @@ export async function runSetup(context: CliContext): Promise<number> {
   // signals until the TUI mounts and takes over (see
   // initInteractiveCliPlatform).
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
-  // State 0 first (docs/prds/2026-06-11-agent-native-onboarding.md): a credential is the
+  // State 0 first (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): a credential is the
   // one step no agent can do for the user. With a credential already in place
   // the picker is skipped — credentials-only (re)configuration is
   // `texra login`'s job under the new vocabulary.

@@ -1,5 +1,5 @@
 {
-  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip\u2019s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
+  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip’s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
   "findings": [
     {
       "file": "packages/cli/src/chat/tui/commands/SlashPalette.tsx",
@@ -1290,6 +1290,12 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "selectSetupCredentialModelExcludingOpenRouter"
+    },
+    {
+      "file": "src/controllers/session/Database.ts",
+      "category": "production-dead",
+      "kind": "files",
+      "name": "src/controllers/session/Database.ts"
     },
     {
       "file": "src/controllers/settingsView/LatexToolingController.ts",

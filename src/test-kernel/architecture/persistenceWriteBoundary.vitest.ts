@@ -15,7 +15,7 @@ import {
 
 /**
  * Architecture ratchet for the persistence cutover
- * (`docs/proposals/2026-09-03-persistence-substrate-decision.md`, stage 1):
+ * (`.agents/docs/proposed/architecture/2026-09-03-persistence-substrate-decision.md`, stage 1):
  * the substrate has exactly one writer. The rule is one sentence, and section
  * 9 rules out adding a second mechanism to state it: all app-owned durable
  * state lives in the database, and the database is written in one place.
