@@ -3,13 +3,22 @@
  *
  * RFC 8628: the user opens a URL and types a one-time code; we poll the token
  * endpoint until they approve. Host-neutral: the host renders the prompt.
+ *
+ * One Effect program per sign-in: the requests, the spaced poll with
+ * `slow_down` growth, and the expiry bound run on one fiber, and the caller's
+ * `AbortSignal` becomes fiber interruption at the single run boundary in
+ * {@link loginWithDeviceCode}. The Promise API and the errors it rejects with
+ * are unchanged.
  */
-// Local imports - oauth
+// Third-party imports
+import { Cause, Effect, Exit } from 'effect';
+
+// Local imports - oauth, platform
 import {
-  deviceCodeAuthorized,
-  deviceCodePending,
-  pollUntilDeviceAuthorized,
-} from '@auth/oauth/deviceCodePoll';
+  deviceAuthorizationThrowable,
+  pollDeviceAuthorization,
+} from '@auth/oauth/deviceAuthorization';
+import { effectRuntime } from '@platform/processRuntime';
 
 // Local imports - xai
 import {
@@ -37,53 +46,59 @@ export interface XaiDeviceLoginOptions {
   signal?: AbortSignal;
 }
 
+const loginProgram = Effect.fn('xaiDeviceLogin.loginWithDeviceCode')(
+  function* (options: XaiDeviceLoginOptions) {
+    const device = yield* requestDeviceCode();
+    // Floor to 1s so a misbehaving endpoint cannot busy-loop us.
+    const intervalMs = Math.max(
+      (device.interval ?? XAI_DEVICE_DEFAULT_INTERVAL_SEC) * 1000,
+      1000,
+    );
+
+    options.onPrompt({
+      userCode: device.user_code,
+      verificationUrl: device.verification_uri,
+      verificationUrlComplete: device.verification_uri_complete ?? undefined,
+    });
+
+    return yield* pollDeviceAuthorization({
+      poll: pollDeviceToken(device.device_code),
+      complete: (tokens) => options.coordinator.storeTokens(tokens),
+      intervalMs,
+      expiresInMs: (device.expires_in ?? XAI_DEVICE_DEFAULT_EXPIRES_SEC) * 1000,
+      slowDownIncrementMs: XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC * 1000,
+    });
+  },
+  Effect.mapError((error) => {
+    switch (error._tag) {
+      case 'DeviceAuthorizationDenied':
+        return new XaiAuthError(error.message, 'fatal', error.status);
+      case 'DeviceCodeExpired':
+        return new XaiAuthError(error.message, 'expired', error.status);
+      default:
+        return deviceAuthorizationThrowable(error, XaiAuthError);
+    }
+  }),
+);
+
 /**
  * Run the device-code flow end to end and persist the session.
  */
 export async function loginWithDeviceCode(
   options: XaiDeviceLoginOptions,
 ): Promise<XaiSession> {
-  const device = await requestDeviceCode(options.signal);
-  // Floor to 1s so a misbehaving endpoint cannot busy-loop us.
-  const intervalMs = Math.max(
-    (device.interval ?? XAI_DEVICE_DEFAULT_INTERVAL_SEC) * 1000,
-    1000,
-  );
-
-  options.onPrompt({
-    userCode: device.user_code,
-    verificationUrl: device.verification_uri,
-    verificationUrlComplete: device.verification_uri_complete ?? undefined,
-  });
-
-  const expiresInMs =
-    (device.expires_in ?? XAI_DEVICE_DEFAULT_EXPIRES_SEC) * 1000;
-
-  return pollUntilDeviceAuthorized({
-    intervalMs,
-    deadlineMs: Date.now() + expiresInMs,
-    signal: options.signal,
-    createTimeoutError: () =>
-      new Error('Device-code sign-in timed out. Run sign-in again.'),
-    attempt: async () => {
-      try {
-        const tokens = await pollDeviceToken(
-          device.device_code,
-          options.signal,
-        );
-        options.signal?.throwIfAborted();
-        const session = await options.coordinator.storeTokens(tokens);
-        return deviceCodeAuthorized(session);
-      } catch (error) {
-        if (error instanceof XaiAuthError && error.kind === 'pending') {
-          return deviceCodePending(
-            error.message === 'slow_down'
-              ? XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC * 1000
-              : undefined,
-          );
-        }
-        throw error;
-      }
-    },
-  });
+  const { signal } = options;
+  signal?.throwIfAborted();
+  let exit: Exit.Exit<XaiSession, unknown>;
+  try {
+    exit = await effectRuntime().runPromiseExit(loginProgram(options), {
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted) throw signal.reason;
+    throw error;
+  }
+  if (Exit.isSuccess(exit)) return exit.value;
+  if (signal?.aborted) throw signal.reason;
+  throw Cause.squash(exit.cause);
 }

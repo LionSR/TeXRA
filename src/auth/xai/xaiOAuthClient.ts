@@ -1,21 +1,30 @@
 /**
  * Network calls against xAI's auth endpoints for the Grok OAuth flow.
  *
- * Token grants + RFC 8628 device form posts share a declarative
- * {@link OAuthFormEndpoint} and pure helpers from `@auth/oauth`.
+ * Token grants share a declarative {@link OAuthFormEndpoint} and the
+ * Promise-facing helpers from `@auth/oauth` for the coordinator. The RFC 8628
+ * device form posts are Effect programs the device-login flow runs on one
+ * fiber.
  */
+// Third-party imports
+import { Data, Effect } from 'effect';
+
 // Local imports
 import { isObject } from '@utils/core';
 
+import { DeviceAuthorizationPending } from '../oauth/deviceAuthorization';
 import {
   exchangeAuthorizationCode as exchangeFormAuthorizationCode,
   oauthTokenErrorKind,
-  parseOAuthJson,
-  postOAuthForm,
   refreshOAuthTokens,
-  throwOAuthHttpError,
   type OAuthFormEndpoint,
 } from '../oauth/formTokenClient';
+import {
+  OAuthHttpError,
+  oauthHttpError,
+  parseOAuthJson,
+  postOAuth,
+} from '../oauth/oauthRequest';
 import {
   XAI_CLIENT_ID,
   XAI_DEVICE_AUTHORIZATION_URL,
@@ -27,13 +36,17 @@ import {
   XaiAuthError,
   XaiDeviceCodeSchema,
   XaiTokenResponseSchema,
-  type XaiDeviceCode,
   type XaiTokenResponse,
 } from './xaiSessionTypes';
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
-/** Declarative xAI form OAuth endpoint (token + device form posts). */
+const FORM_HEADERS = {
+  'Content-Type': 'application/x-www-form-urlencoded',
+  Accept: 'application/json',
+} as const;
+
+/** Declarative xAI form OAuth endpoint (token grants). */
 const XAI_FORM_ENDPOINT: OAuthFormEndpoint<XaiTokenResponse> = {
   tokenUrl: XAI_TOKEN_URL,
   clientId: XAI_CLIENT_ID,
@@ -41,6 +54,20 @@ const XAI_FORM_ENDPOINT: OAuthFormEndpoint<XaiTokenResponse> = {
   tokenResponseSchema: XaiTokenResponseSchema,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 };
+
+/** The user refused the device authorization (terminal, re-auth required). */
+class DeviceAuthorizationDenied extends Data.TaggedError(
+  'DeviceAuthorizationDenied',
+)<{
+  readonly message: string;
+  readonly status: number;
+}> {}
+
+/** The server expired the device code before the user approved. */
+class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
+  readonly message: string;
+  readonly status: number;
+}> {}
 
 export function exchangeAuthorizationCode(params: {
   code: string;
@@ -54,109 +81,111 @@ export function refreshTokens(refreshToken: string): Promise<XaiTokenResponse> {
   return refreshOAuthTokens(XAI_FORM_ENDPOINT, refreshToken);
 }
 
-/** Begin the RFC 8628 device-code flow. */
-export async function requestDeviceCode(
-  signal?: AbortSignal,
-): Promise<XaiDeviceCode> {
-  const response = await postOAuthForm(
-    XAI_FORM_ENDPOINT,
-    XAI_DEVICE_AUTHORIZATION_URL,
-    new URLSearchParams({
-      client_id: XAI_CLIENT_ID,
-      scope: XAI_SCOPE,
-    }),
-    signal,
-  );
-  if (!response.ok) {
-    await throwOAuthHttpError(
-      XAI_FORM_ENDPOINT,
-      response,
-      'Device code request',
-    );
-  }
-  return parseOAuthJson(
-    XAI_FORM_ENDPOINT,
-    response,
-    XaiDeviceCodeSchema,
-    'Device code request returned an unexpected response',
-  );
+function postForm(url: string, body: URLSearchParams) {
+  return postOAuth({
+    url,
+    headers: FORM_HEADERS,
+    body,
+    timeoutMs: REQUEST_TIMEOUT_MS,
+    networkErrorMessage: `Network error contacting ${url}`,
+  });
 }
 
+/** Begin the RFC 8628 device-code flow. */
+export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
+  function* () {
+    const response = yield* postForm(
+      XAI_DEVICE_AUTHORIZATION_URL,
+      new URLSearchParams({
+        client_id: XAI_CLIENT_ID,
+        scope: XAI_SCOPE,
+      }),
+    );
+    if (!response.ok) {
+      return yield* oauthHttpError(response, 'Device code request');
+    }
+    return yield* parseOAuthJson(
+      response,
+      XaiDeviceCodeSchema,
+      'Device code request returned an unexpected response',
+    );
+  },
+);
+
+/** Best-effort read of an RFC 6749 error body; anything else is `{}`. */
+const readErrorBody = Effect.fn('xaiOAuthClient.readErrorBody')(function* (
+  response: Response,
+) {
+  const raw = yield* Effect.tryPromise((): Promise<unknown> =>
+    response.json(),
+  ).pipe(Effect.orElseSucceed((): unknown => ({})));
+  const body: Record<string, unknown> = isObject(raw) ? raw : {};
+  return body;
+});
+
 /**
- * Poll once for the device authorization result. Resolves to tokens on success,
- * or throws XaiAuthError('pending') while the user has not yet approved.
- * Terminal device errors (access_denied, expired_token) are fatal.
+ * Poll once for the device authorization result. Succeeds with tokens, or
+ * fails with {@link DeviceAuthorizationPending} while the user has not yet
+ * approved (a network blip mid-poll is also pending so the loop keeps trying).
+ * Terminal device errors are {@link DeviceAuthorizationDenied} and
+ * {@link DeviceCodeExpired}.
  */
-export async function pollDeviceToken(
-  deviceCode: string,
-  signal?: AbortSignal,
-): Promise<XaiTokenResponse> {
-  let response: Response;
-  try {
-    response = await postOAuthForm(
-      XAI_FORM_ENDPOINT,
+export const pollDeviceToken = Effect.fn('xaiOAuthClient.pollDeviceToken')(
+  function* (deviceCode: string) {
+    const response = yield* postForm(
       XAI_TOKEN_URL,
       new URLSearchParams({
         grant_type: XAI_DEVICE_CODE_GRANT_TYPE,
         client_id: XAI_CLIENT_ID,
         device_code: deviceCode,
       }),
-      signal,
+    ).pipe(
+      Effect.catchTag('OAuthNetworkError', () =>
+        Effect.fail(new DeviceAuthorizationPending({ slowDown: false })),
+      ),
     );
-  } catch (error) {
-    signal?.throwIfAborted();
-    // Network blip mid-poll: report pending so the loop keeps trying.
-    if (error instanceof XaiAuthError && error.kind === 'transient') {
-      throw new XaiAuthError(error.message, 'pending', error.status, {
-        cause: error,
+
+    if (response.ok) {
+      return yield* parseOAuthJson(
+        response,
+        XaiTokenResponseSchema,
+        'Device authorization returned an unexpected token response',
+      );
+    }
+
+    const body = yield* readErrorBody(response);
+    const oauthError = typeof body.error === 'string' ? body.error : undefined;
+    const errorDescription =
+      typeof body.error_description === 'string'
+        ? body.error_description
+        : undefined;
+    if (oauthError === 'authorization_pending' || oauthError === 'slow_down') {
+      return yield* new DeviceAuthorizationPending({
+        slowDown: oauthError === 'slow_down',
       });
     }
-    throw error;
-  }
-
-  if (response.ok) {
-    return parseOAuthJson(
-      XAI_FORM_ENDPOINT,
-      response,
-      XaiTokenResponseSchema,
-      'Device authorization returned an unexpected token response',
-    );
-  }
-
-  const bodyRaw: unknown = await response.json().catch(() => ({}));
-  const body: Record<string, unknown> = isObject(bodyRaw) ? bodyRaw : {};
-  const oauthError = typeof body.error === 'string' ? body.error : undefined;
-  const errorDescription =
-    typeof body.error_description === 'string'
-      ? body.error_description
-      : undefined;
-  if (oauthError === 'authorization_pending' || oauthError === 'slow_down') {
-    throw new XaiAuthError(
-      oauthError === 'slow_down' ? 'slow_down' : 'Authorization pending',
-      'pending',
-      response.status,
-    );
-  }
-  if (oauthError === 'access_denied' || oauthError === 'authorization_denied') {
-    throw new XaiAuthError(
-      'Grok device authorization was denied',
-      'fatal',
-      response.status,
-    );
-  }
-  if (oauthError === 'expired_token') {
-    throw new XaiAuthError(
-      'Grok device code expired — please sign in again',
-      'expired',
-      response.status,
-    );
-  }
-  const detail = errorDescription ?? oauthError ?? '';
-  throw new XaiAuthError(
-    `Device token exchange failed (HTTP ${response.status})${
-      detail ? `: ${detail}` : ''
-    }`,
-    oauthTokenErrorKind(response.status),
-    response.status,
-  );
-}
+    if (
+      oauthError === 'access_denied' ||
+      oauthError === 'authorization_denied'
+    ) {
+      return yield* new DeviceAuthorizationDenied({
+        message: 'Grok device authorization was denied',
+        status: response.status,
+      });
+    }
+    if (oauthError === 'expired_token') {
+      return yield* new DeviceCodeExpired({
+        message: 'Grok device code expired — please sign in again',
+        status: response.status,
+      });
+    }
+    const detail = errorDescription ?? oauthError ?? '';
+    return yield* new OAuthHttpError({
+      message: `Device token exchange failed (HTTP ${response.status})${
+        detail ? `: ${detail}` : ''
+      }`,
+      status: response.status,
+      kind: oauthTokenErrorKind(response.status),
+    });
+  },
+);

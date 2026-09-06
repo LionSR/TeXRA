@@ -3,7 +3,8 @@
  *
  * Declarative: providers declare an {@link OAuthFormEndpoint} and call pure
  * functions. No factory-built client objects. Device flows stay provider-
- * specific (OpenAI custom JSON vs RFC 8628).
+ * specific (OpenAI custom JSON vs RFC 8628) and run as Effect programs over
+ * `oauthRequest.ts`.
  */
 // Third-party imports
 import { z } from 'zod';
@@ -31,7 +32,7 @@ export function oauthTokenErrorKind(
 
 /**
  * Provider-declared form OAuth endpoint. Data only — no methods.
- * Used for token grants and (when form-encoded) device authorization.
+ * Used for token grants (code exchange + refresh).
  */
 export interface OAuthFormEndpoint<
   TTokens extends SubscriptionTokenResponse = SubscriptionTokenResponse,
@@ -44,7 +45,7 @@ export interface OAuthFormEndpoint<
 }
 
 /** Combine an optional caller signal with a request timeout. */
-export function oauthRequestSignal(
+function oauthRequestSignal(
   timeoutMs: number,
   signal?: AbortSignal,
 ): AbortSignal {
@@ -53,7 +54,7 @@ export function oauthRequestSignal(
 }
 
 /** Form-urlencoded POST. Throws the provider error type on network failure. */
-export async function postOAuthForm(
+async function postOAuthForm(
   endpoint: Pick<OAuthFormEndpoint, 'ErrorType' | 'requestTimeoutMs'>,
   url: string,
   body: URLSearchParams,
@@ -79,7 +80,7 @@ export async function postOAuthForm(
 }
 
 /** Throw a provider error for a non-ok HTTP response. */
-export async function throwOAuthHttpError(
+async function throwOAuthHttpError(
   endpoint: Pick<OAuthFormEndpoint, 'ErrorType'>,
   response: Response,
   label: string,
@@ -93,7 +94,7 @@ export async function throwOAuthHttpError(
 }
 
 /** Parse a successful JSON body through a schema, or throw transient. */
-export async function parseOAuthJson<T>(
+async function parseOAuthJson<T>(
   endpoint: Pick<OAuthFormEndpoint, 'ErrorType'>,
   response: Response,
   schema: z.ZodType<T>,
