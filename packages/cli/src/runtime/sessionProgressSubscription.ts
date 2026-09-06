@@ -3,10 +3,11 @@ import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import { agentConfigToTaskState, type SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { effectRuntime } from '@platform/processRuntime';
-import type {
-  ActiveChildInfo,
-  SessionEvent,
-  StreamTabId,
+import {
+  aggregateTarget,
+  type ActiveChildInfo,
+  type SessionEvent,
+  type StreamTabId,
 } from '@shared/schemas';
 import { roundStageFromStageStart } from '@shared/streams/stage';
 import { assertNever } from '@utils/core';
@@ -67,7 +68,7 @@ export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 function projectCliSessionEvent(
   event: SessionEvent,
 ): CliProjectedNdjsonProgressEvent | undefined {
-  const streamId = event.aggregateId as StreamTabId;
+  const streamId = aggregateTarget(event.aggregateId).id;
   switch (event.type) {
     case 'run.activate':
       return {

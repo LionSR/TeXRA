@@ -6,6 +6,7 @@
  * immutable, so every `Subscribe` is answered from these rows in full.
  */
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   END_GROUP_STATUS,
   runIdentityDisplayName,
@@ -146,7 +147,7 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
   const bodies: SessionEventDraft[] = [
     {
       type: 'run.start',
-      aggregateId: trace.streamId,
+      aggregateId: qualifyAggregateId('stream', trace.streamId),
       executionId,
       identity,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
@@ -157,7 +158,7 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
     },
     {
       type: 'run.config',
-      aggregateId: trace.streamId,
+      aggregateId: qualifyAggregateId('stream', trace.streamId),
       executionId,
       config: {
         model: trace.config.model,
@@ -170,21 +171,21 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
   if (trace.meta?.description) {
     bodies.push({
       type: 'updateStreamDescription',
-      aggregateId: trace.streamId,
+      aggregateId: qualifyAggregateId('stream', trace.streamId),
       description: trace.meta.description,
     });
   }
   if (snapshot.conversationProgress) {
     bodies.push({
       type: 'conversation.progress',
-      aggregateId: trace.streamId,
+      aggregateId: qualifyAggregateId('stream', trace.streamId),
       progress: snapshot.conversationProgress,
     });
   }
   for (const [storageKey, usage] of Object.entries(snapshot.runUsage)) {
     bodies.push({
       type: 'usage',
-      aggregateId: trace.streamId,
+      aggregateId: qualifyAggregateId('stream', trace.streamId),
       storageKey,
       usage,
     });
@@ -193,17 +194,17 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
     bodies.push(
       {
         type: 'addOutputFiles',
-        aggregateId: trace.streamId,
+        aggregateId: qualifyAggregateId('stream', trace.streamId),
         filesByRound: snapshot.outputFilesByRound,
       },
       {
         type: 'updateMissingOutputs',
-        aggregateId: trace.streamId,
+        aggregateId: qualifyAggregateId('stream', trace.streamId),
         filesByRound: snapshot.missingOutputsByRound,
       },
       {
         type: 'updateCompileFailures',
-        aggregateId: trace.streamId,
+        aggregateId: qualifyAggregateId('stream', trace.streamId),
         filesByRound: snapshot.compileFailuresByRound,
       },
     );
@@ -211,10 +212,14 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
     bodies.push(
       {
         type: 'updateTodos',
-        aggregateId: trace.streamId,
+        aggregateId: qualifyAggregateId('stream', trace.streamId),
         todos: snapshot.todos,
       },
-      { type: 'updatePlan', aggregateId: trace.streamId, plan: snapshot.plan },
+      {
+        type: 'updatePlan',
+        aggregateId: qualifyAggregateId('stream', trace.streamId),
+        plan: snapshot.plan,
+      },
     );
   }
   const outcome = traceOutcome(trace);
@@ -222,7 +227,7 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
     bodies.push(
       {
         type: 'status',
-        aggregateId: trace.streamId,
+        aggregateId: qualifyAggregateId('stream', trace.streamId),
         phase: outcome,
         previousPhase: null,
         cause: 'trace',
@@ -231,7 +236,7 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
       },
       {
         type: 'result',
-        aggregateId: trace.streamId,
+        aggregateId: qualifyAggregateId('stream', trace.streamId),
         outcome,
         executionId,
         category,
@@ -264,7 +269,11 @@ function traceEvents(trace: TraceDocument): {
   };
   const listing = listingBodies(trace).map(stamp);
   const transcript = trace.entries.map((entry) =>
-    stamp({ type: 'transcript.entry', aggregateId: trace.streamId, entry }),
+    stamp({
+      type: 'transcript.entry',
+      aggregateId: qualifyAggregateId('stream', trace.streamId),
+      entry,
+    }),
   );
   return { listing, transcript };
 }

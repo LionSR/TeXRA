@@ -1,16 +1,17 @@
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type {
-  CompileFailure,
-  ExecutionId,
-  ExtendedTokenUsageStats,
-  OutputFileInfo,
-  Plan,
-  RoundIndexed,
-  RunIdentity,
-  StreamLogEntry,
-  StreamTabId,
-  TodoItem,
+import {
+  aggregateId as qualifyAggregateId,
+  type CompileFailure,
+  type ExecutionId,
+  type ExtendedTokenUsageStats,
+  type OutputFileInfo,
+  type Plan,
+  type RoundIndexed,
+  type RunIdentity,
+  type StreamLogEntry,
+  type StreamTabId,
+  type TodoItem,
 } from '@shared/schemas';
 import type { StreamSnapshotStore } from '@transcript';
 import type { StreamLogAppendInput } from '@transcript/StreamLog';
@@ -129,7 +130,7 @@ export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
     setRunStart: ({ streamId, executionId, identity }) => {
       apply({
         type: 'run.start',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         executionId,
         identity,
         category: 'toolUse',
@@ -138,45 +139,67 @@ export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
       });
     },
     setRunConfig: (streamId, config, executionId) => {
-      apply({ type: 'run.config', aggregateId: streamId, executionId, config });
+      apply({
+        type: 'run.config',
+        aggregateId: qualifyAggregateId('stream', streamId),
+        executionId,
+        config,
+      });
     },
     setTodos: (streamId, todos) => {
-      apply({ type: 'updateTodos', aggregateId: streamId, todos });
+      apply({
+        type: 'updateTodos',
+        aggregateId: qualifyAggregateId('stream', streamId),
+        todos,
+      });
     },
     setPlan: (streamId, plan) => {
-      apply({ type: 'updatePlan', aggregateId: streamId, plan });
+      apply({
+        type: 'updatePlan',
+        aggregateId: qualifyAggregateId('stream', streamId),
+        plan,
+      });
     },
     addOutputFiles: (streamId, filesByRound) => {
-      apply({ type: 'addOutputFiles', aggregateId: streamId, filesByRound });
+      apply({
+        type: 'addOutputFiles',
+        aggregateId: qualifyAggregateId('stream', streamId),
+        filesByRound,
+      });
     },
     updateMissingOutputs: (streamId, filesByRound) => {
       apply({
         type: 'updateMissingOutputs',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         filesByRound,
       });
     },
     updateCompileFailures: (streamId, filesByRound) => {
       apply({
         type: 'updateCompileFailures',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         filesByRound,
       });
     },
     addUsage: (streamId, storageKey, usage) => {
-      apply({ type: 'usage', aggregateId: streamId, storageKey, usage });
+      apply({
+        type: 'usage',
+        aggregateId: qualifyAggregateId('stream', streamId),
+        storageKey,
+        usage,
+      });
     },
     setDescription: (streamId, description) => {
       apply({
         type: 'updateStreamDescription',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         description,
       });
     },
     setParentStream: (child, parent) => {
       apply({
         type: 'setParentStream',
-        aggregateId: child,
+        aggregateId: qualifyAggregateId('stream', child),
         parentStreamId: parent,
       });
     },

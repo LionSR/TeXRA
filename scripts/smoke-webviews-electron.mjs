@@ -97,7 +97,8 @@ function sessionLog() {
   const seqs = new Map();
   const entrySeqs = new Map();
   let commit = 0;
-  const emit = (aggregateId, at, body) => {
+  const emit = (logicalId, at, body) => {
+    const aggregateId = JSON.stringify(['stream', logicalId]);
     const seq = (seqs.get(aggregateId) ?? 0) + 1;
     seqs.set(aggregateId, seq);
     commit += 1;

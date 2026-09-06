@@ -28,6 +28,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
+  aggregateId as qualifyAggregateId,
   InquiryThreadIdSchema,
   ToolError,
   type ExecutionId,
@@ -318,7 +319,7 @@ export class ExternalInquiryTool extends defineTool({
       session.publish([
         {
           type: 'inquiryThreadUpdated',
-          aggregateId: summary.threadId,
+          aggregateId: qualifyAggregateId('inquiry', summary.threadId),
           ...summary,
         },
       ]);

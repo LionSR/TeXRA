@@ -12,6 +12,7 @@ import {
   type CliNdjsonProgressRecordWriter,
 } from '@cli/runtime/sessionProgressSubscription';
 import {
+  aggregateId as qualifyAggregateId,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -80,7 +81,7 @@ function draft(draft: SessionEventDraft): Source {
 function statusDraft(payload: RunStatusProjectionPayload): Source {
   return draft({
     type: 'status',
-    aggregateId: payload.streamId,
+    aggregateId: qualifyAggregateId('stream', payload.streamId),
     phase: payload.status,
     cause: payload.cause,
     ...(payload.previousStatus
@@ -114,7 +115,7 @@ const PROGRESS_PROJECTION_CASES = {
   setActiveStream: {
     source: draft({
       type: 'run.activate',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       category: AgentCategory.Workflow,
       isRemote: false,
       background: false,
@@ -203,7 +204,7 @@ const PROGRESS_PROJECTION_CASES = {
   inquiryThreadUpdated: {
     source: draft({
       type: 'inquiryThreadUpdated',
-      aggregateId: inquiryThread.threadId,
+      aggregateId: qualifyAggregateId('inquiry', inquiryThread.threadId),
       ...inquiryThread,
     }),
     payload: inquiryThread,
@@ -263,7 +264,7 @@ const PROGRESS_PROJECTION_CASES = {
   updateQueuedFollowUps: {
     source: draft({
       type: 'updateQueuedFollowUps',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       messages: ['queued'],
     }),
     payload: { streamId },
@@ -275,7 +276,7 @@ const PROGRESS_PROJECTION_CASES = {
   updateStreamDescription: {
     source: draft({
       type: 'updateStreamDescription',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       description: 'Checking the compactness lemma',
     }),
     payload: { streamId, description: 'Checking the compactness lemma' },
@@ -283,19 +284,22 @@ const PROGRESS_PROJECTION_CASES = {
   setParentStream: {
     source: draft({
       type: 'setParentStream',
-      aggregateId: childStreamId,
+      aggregateId: qualifyAggregateId('stream', childStreamId),
       parentStreamId: streamId,
     }),
     payload: { childStreamId, parentStreamId: streamId },
   },
   removeStream: {
-    source: draft({ type: 'stream.removed', aggregateId: childStreamId }),
+    source: draft({
+      type: 'stream.removed',
+      aggregateId: qualifyAggregateId('stream', childStreamId),
+    }),
     payload: { streamId: childStreamId },
   },
   goalStateChanged: {
     source: draft({
       type: 'goalStateChanged',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       state: { active: false },
     }),
     payload: { streamId },
@@ -363,7 +367,7 @@ const resumingStatusPayload: RunStatusProjectionPayload = {
 
 const activation: SessionEventDraft = {
   type: 'run.activate',
-  aggregateId: streamId,
+  aggregateId: qualifyAggregateId('stream', streamId),
   category: AgentCategory.ToolUse,
   background: true,
 };
@@ -378,7 +382,7 @@ describe('attachCliSessionProgressProjection', () => {
       await publish(
         draft({
           type: 'run.start',
-          aggregateId: streamId,
+          aggregateId: qualifyAggregateId('stream', streamId),
           executionId,
           identity: { kind: 'process', tool: 'bash' },
           category: AgentCategory.ToolUse,
@@ -413,7 +417,7 @@ describe('attachCliSessionProgressProjection', () => {
     session.publish([
       {
         type: 'run.start',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         executionId,
         identity: { kind: 'agent', agent: 'polish' },
         category: AgentCategory.ToolUse,
@@ -422,14 +426,14 @@ describe('attachCliSessionProgressProjection', () => {
       },
       {
         type: 'run.activate',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         category: AgentCategory.ToolUse,
         isRemote: false,
         background: false,
       },
       {
         type: 'updateStreamDescription',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         description: 'Recorded before the resume',
       },
     ]);
@@ -441,7 +445,7 @@ describe('attachCliSessionProgressProjection', () => {
       await publish(
         draft({
           type: 'run.activate',
-          aggregateId: streamId,
+          aggregateId: qualifyAggregateId('stream', streamId),
           category: AgentCategory.ToolUse,
           isRemote: false,
           background: false,
@@ -571,7 +575,7 @@ describe('attachCliSessionProgressProjection', () => {
     await publish(
       draft({
         type: 'updateStreamDescription',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         description: 'Proofread the introduction',
       }),
     );
@@ -587,7 +591,7 @@ describe('attachCliSessionProgressProjection', () => {
     await publish(
       draft({
         type: 'updateStreamDescription',
-        aggregateId: 'stream:after-detach',
+        aggregateId: qualifyAggregateId('stream', 'stream:after-detach'),
         description: 'after detach',
       }),
     );
@@ -604,7 +608,7 @@ describe('attachCliSessionProgressProjection', () => {
     await publish(
       draft({
         type: 'transcript.entry',
-        aggregateId: 'stream:evicted',
+        aggregateId: qualifyAggregateId('stream', 'stream:evicted'),
         entry: {
           type: STREAM_LOG_ENTRY_TYPES.LOG,
           id: 'row-1',

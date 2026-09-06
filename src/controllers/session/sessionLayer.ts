@@ -57,6 +57,7 @@ import { createLog } from '@logger/logUtils';
 import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
+  aggregateId as qualifyAggregateId,
   ownerIdentity,
   type OwnerId,
   type SessionCloseReport,
@@ -219,7 +220,7 @@ const transcriptBridge = (transcripts: StreamLogStore) =>
               yield* events.publish(
                 rows.map((entry) => ({
                   type: 'transcript.entry',
-                  aggregateId: streamId,
+                  aggregateId: qualifyAggregateId('stream', streamId),
                   entry,
                 })),
               );

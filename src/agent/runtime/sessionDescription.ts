@@ -16,7 +16,11 @@ import {
 } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -134,7 +138,11 @@ export async function generateSessionDescription(
 
     await writeSessionDescription(executionId, description);
     session.publish([
-      { type: 'updateStreamDescription', aggregateId: streamId, description },
+      {
+        type: 'updateStreamDescription',
+        aggregateId: qualifyAggregateId('stream', streamId),
+        description,
+      },
     ]);
     log.info(`Generated session description for ${executionId}`);
   } catch (err) {

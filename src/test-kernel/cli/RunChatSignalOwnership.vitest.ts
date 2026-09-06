@@ -14,6 +14,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { rootStreamId as rootStreamIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
@@ -515,7 +516,7 @@ describe('runChat signal ownership wiring', () => {
       session.publish(
         [history, ownRoot].map((streamId) => ({
           type: 'run.start' as const,
-          aggregateId: streamId,
+          aggregateId: qualifyAggregateId('stream', streamId),
           executionId: `execution:${streamId}` as ExecutionId,
           identity: { kind: 'agent' as const, agent: 'assistant' },
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

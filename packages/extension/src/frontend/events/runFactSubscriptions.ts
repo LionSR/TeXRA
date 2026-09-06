@@ -3,7 +3,7 @@ import { Effect, Fiber, Stream } from 'effect';
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
 import { effectRuntime } from '@platform/processRuntime';
-import type { AddOutputFilesPayload } from '@shared/schemas';
+import { aggregateTarget, type AddOutputFilesPayload } from '@shared/schemas';
 
 /** Read a session's `addOutputFiles` facts from now on. */
 export function subscribeAddOutputFilesRunFact(
@@ -15,7 +15,7 @@ export function subscribeAddOutputFilesRunFact(
       Effect.sync(() => {
         if (event.type !== 'addOutputFiles') return;
         listener({
-          streamId: event.aggregateId,
+          streamId: aggregateTarget(event.aggregateId).id,
           filesByRound: event.filesByRound,
         });
       }),

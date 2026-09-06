@@ -86,11 +86,49 @@ export function ownerPid(ownerId: OwnerId): number {
   return ownerIdentity(ownerId).pid;
 }
 
-/** A stream id or an inquiry thread id: the `aggregate_id` half of the
- *  event key (contract C2). The fold resolves a stream aggregate by its id
- *  alone; the execution aggregate arrives with the cutover's flow rows. */
-export const AggregateIdSchema = z.string().min(1);
+/** C2 separates independent lifecycles even when their logical ids coincide. */
+const AggregateKeySchema = z.tuple([
+  z.enum([
+    'stream',
+    'execution',
+    'workflow-checkpoint',
+    'inquiry',
+    'session',
+    'migration',
+  ]),
+  z.string().min(1),
+]);
+
+/** The canonical JSON encoding of an aggregate kind and its logical id. */
+export const AggregateIdSchema = z
+  .string()
+  .refine(
+    (value) =>
+      Result.match(parseJsonWith(value, AggregateKeySchema), {
+        onSuccess: (key) => JSON.stringify(key) === value,
+        onFailure: () => false,
+      }),
+    'Expected a canonical [kind, logicalId] aggregate key',
+  )
+  .brand<'AggregateId'>();
 export type AggregateId = z.infer<typeof AggregateIdSchema>;
+
+/** Qualify a logical id once. An already-qualified key is not an input. */
+export function aggregateId(
+  kind: z.infer<typeof AggregateKeySchema>[0],
+  logicalId: string & { readonly [z.$brand]?: never },
+): AggregateId {
+  return AggregateIdSchema.parse(JSON.stringify([kind, logicalId]));
+}
+
+/** Decode a validated aggregate key at a logical-id boundary. */
+export function aggregateTarget(key: AggregateId): {
+  kind: z.infer<typeof AggregateKeySchema>[0];
+  id: string;
+} {
+  const [kind, id] = JSON.parse(key) as z.infer<typeof AggregateKeySchema>;
+  return { kind, id };
+}
 
 /** Per-aggregate append order; `run.start` is seq 1 of its stream. */
 const SeqSchema = z.int().positive();

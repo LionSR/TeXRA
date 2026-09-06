@@ -30,6 +30,7 @@ import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   STREAM_PHASE,
   type ExecutionId,
@@ -52,7 +53,7 @@ const PORT = 'sidebar';
 
 const runStart: SessionEventDraft = {
   type: 'run.start',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   executionId: EXECUTION,
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
@@ -62,14 +63,14 @@ const runStart: SessionEventDraft = {
 
 const waiting: SessionEventDraft = {
   type: 'status',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   phase: STREAM_PHASE.WAITING,
   cause: 'wait',
 };
 
 const running: SessionEventDraft = {
   type: 'status',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   phase: STREAM_PHASE.RUNNING,
   previousPhase: STREAM_PHASE.WAITING,
   cause: 'resume',
@@ -144,7 +145,7 @@ const subscribe: Subscribe = {
   session: KEY,
   generation: 1,
   cursor: 0,
-  aggregates: [{ id: STREAM, fromSeq: 0 }],
+  aggregates: [{ id: qualifyAggregateId('stream', STREAM), fromSeq: 0 }],
 };
 
 /** A framer source over the runtime graph in context. */
@@ -260,7 +261,10 @@ describe('session framer', () => {
         const child = 'stream:second';
         const named: Subscribe = {
           ...subscribe,
-          aggregates: [...subscribe.aggregates, { id: child, fromSeq: 0 }],
+          aggregates: [
+            ...subscribe.aggregates,
+            { id: qualifyAggregateId('stream', child), fromSeq: 0 },
+          ],
         };
         // The shell: begin the generation and set its transcript set, then
         // post the Subscribe; the decoder feeds every frame that answers it.
@@ -285,7 +289,7 @@ describe('session framer', () => {
               read: 'all',
               event: {
                 type: 'stream.removed',
-                aggregateId: STREAM,
+                aggregateId: qualifyAggregateId('stream', STREAM),
                 seq: 9,
                 commit: 99,
                 ownerId: SELF,
@@ -334,7 +338,11 @@ describe('session framer', () => {
 
         // A new stream and its first prefix can become ready in one turn.
         yield* events.publish([
-          { ...runStart, aggregateId: child, executionId: 'second' },
+          {
+            ...runStart,
+            aggregateId: qualifyAggregateId('stream', child),
+            executionId: 'second',
+          },
         ]);
         yield* SubscriptionRef.update(
           chunks.ref,

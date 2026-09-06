@@ -27,6 +27,7 @@ import {
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { platform } from '@platform/platform';
 import {
+  aggregateId as qualifyAggregateId,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
@@ -461,7 +462,7 @@ describe('runFlowWithLifecycle', () => {
       const runningIndex = recorded.events.findIndex(
         (event) =>
           event.type === 'status' &&
-          event.aggregateId === streamId &&
+          event.aggregateId === qualifyAggregateId('stream', streamId) &&
           event.phase === STREAM_PHASE.RUNNING,
       );
 

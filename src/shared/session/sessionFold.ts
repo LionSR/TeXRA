@@ -57,6 +57,8 @@
  * followed by "no change" would be dropped, not shared.
  */
 import {
+  aggregateTarget,
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -216,7 +218,8 @@ function foldWith(
       // was away and no later read can deliver the deletion.
       const { listed } = sessionIndexesOf(next);
       for (const id of [...next.streams.keys()]) {
-        if (!listed.has(id)) foldStreamRemoved(next, id, deferred);
+        if (!listed.has(qualifyAggregateId('stream', id)))
+          foldStreamRemoved(next, id, deferred);
       }
       listed.clear();
       return next;
@@ -410,7 +413,7 @@ const NO_ROUNDS = Object.freeze({});
 
 /** A stream in its initial shape, minted by its `run.start` alone. */
 function createStream(event: RunStartEvent): StreamView {
-  const id = event.aggregateId as StreamTabId;
+  const id = aggregateTarget(event.aggregateId).id;
   const status = STREAM_STATUS.READY;
   const identity = event.identity ?? null;
   const common = {
@@ -1562,7 +1565,7 @@ function relink(
 function streamOf(event: SessionEvent): StreamTabId | null {
   return event.type === 'inquiryThreadUpdated'
     ? null
-    : (event.aggregateId as StreamTabId);
+    : aggregateTarget(event.aggregateId).id;
 }
 
 /** Returns whether the event changed anything. */
@@ -1662,7 +1665,7 @@ function foldTranscriptRow(
 ): boolean {
   const retained = view.folded.get(event.aggregateId);
   if (retained === undefined || event.seq <= retained) return false;
-  const stream = view.streams.get(event.aggregateId as StreamTabId);
+  const stream = view.streams.get(aggregateTarget(event.aggregateId).id);
   if (!stream) return false;
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
   const withEntry: StreamView = {
@@ -1700,7 +1703,7 @@ function foldStreamRemoved(
   if (view.queuedFollowUps.has(stream.id)) {
     writableMap(view, 'queuedFollowUps').delete(stream.id);
   }
-  if (view.folded.has(stream.id)) writableMap(view, 'folded').delete(stream.id);
+  writableMap(view, 'folded').delete(qualifyAggregateId('stream', stream.id));
   if (view.approvals.some((a) => a.streamId === stream.id)) {
     view.approvals = view.approvals.filter((a) => a.streamId !== stream.id);
   }
@@ -1798,7 +1801,7 @@ function foldSubscriptions(
   for (const id of [...view.folded.keys()]) {
     if (subscribed.has(id)) continue;
     writableMap(view, 'folded').delete(id);
-    const stream = view.streams.get(id as StreamTabId);
+    const stream = view.streams.get(aggregateTarget(id).id);
     if (!stream) continue;
     clearInflight(view, stream);
     const evicted = withTranscriptFacts({

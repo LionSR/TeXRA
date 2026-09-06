@@ -7,6 +7,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -48,10 +49,15 @@ function foldTrace(trace: TraceDocument) {
     session: 'trace',
     generation: 1,
     cursor: 0,
-    aggregates: [{ id: trace.streamId, fromSeq: 0 }],
+    aggregates: [
+      { id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 },
+    ],
   });
   const view = fold(emptySessionView('trace', 0), [
-    { _tag: 'subscriptions', set: [{ id: trace.streamId, fromSeq: 0 }] },
+    {
+      _tag: 'subscriptions',
+      set: [{ id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 }],
+    },
     ...frame.events,
     { _tag: 'local', local: { self: [], heldBy: [], unreadable: [] } },
   ]);

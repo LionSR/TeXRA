@@ -15,6 +15,7 @@ import { statusDraft } from '@agent/runtime/SessionEvents';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import {
+  aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_STATUS,
@@ -1041,7 +1042,7 @@ describe('executionRegistry', () => {
       ).toBe(grandchildStreamId);
       expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
         type: 'setParentStream',
-        aggregateId: grandchildStreamId,
+        aggregateId: qualifyAggregateId('stream', grandchildStreamId),
         parentStreamId: null,
       });
     } finally {
@@ -1113,7 +1114,7 @@ describe('executionRegistry', () => {
       expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
       expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
         type: 'setParentStream',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         parentStreamId: null,
       });
     } finally {
@@ -1384,7 +1385,7 @@ describe('executionRegistry', () => {
       ).toBe(childStreamId);
       expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
         type: 'setParentStream',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         parentStreamId: null,
       });
       expect(streamStatus.get(parentStreamId)).toBe(STREAM_PHASE.CANCELLED);
@@ -1421,7 +1422,7 @@ describe('executionRegistry', () => {
       });
       expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
         type: 'setParentStream',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         parentStreamId,
       });
       expect(childActivity.at(-1)).toMatchObject({
@@ -1447,7 +1448,7 @@ describe('executionRegistry', () => {
 
       expect(seen.events).toContainEqual({
         type: 'setParentStream',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         parentStreamId,
       });
     } finally {
@@ -1621,7 +1622,7 @@ describe('executionRegistry', () => {
 
       expect(eventsOfType(recorded.events, 'setParentStream')).toContainEqual({
         type: 'setParentStream',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         parentStreamId: null,
       });
       expect(rosters.rosters.at(-1)).toMatchObject({
@@ -1676,7 +1677,7 @@ describe('executionRegistry', () => {
 
       expect(seen.events).toContainEqual({
         type: 'setParentStream',
-        aggregateId: childStreamId,
+        aggregateId: qualifyAggregateId('stream', childStreamId),
         parentStreamId: null,
       });
     } finally {

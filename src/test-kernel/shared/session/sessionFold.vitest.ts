@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -142,11 +143,13 @@ describe('sessionFold', () => {
     );
     expect(root.transcript.rows).toStrictEqual(rowsOf(scenario.rootEntries));
     // The transcript tier retained the rows: the aggregate's newest seq.
-    expect(view.folded.get(ROOT)).toBe(
+    expect(view.folded.get(qualifyAggregateId('stream', ROOT))).toBe(
       Math.max(
         ...scenario.log.events
           .filter(
-            (e) => e.aggregateId === ROOT && e.type === 'transcript.entry',
+            (e) =>
+              e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+              e.type === 'transcript.entry',
           )
           .map((e) => e.seq),
       ),
@@ -456,13 +459,19 @@ describe('sessionFold', () => {
   it('keeps listing facts in commit order and transcript rows in seq order, whichever read delivers them', () => {
     const settled = foldAll(scenario.events);
     const rootStatus = scenario.log.events.find(
-      (e) => e.aggregateId === ROOT && e.type === 'status',
+      (e) =>
+        e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+        e.type === 'status',
     )!;
     const rootStart = scenario.log.events.find(
-      (e) => e.aggregateId === ROOT && e.type === 'run.start',
+      (e) =>
+        e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+        e.type === 'run.start',
     )!;
     const rootEntry = scenario.log.events.find(
-      (e) => e.aggregateId === ROOT && e.type === 'transcript.entry',
+      (e) =>
+        e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+        e.type === 'transcript.entry',
     )!;
     // An aggregate read replaying an older status, start, or row after the
     // tail folded the current one changes nothing, and the cursor stays.
@@ -497,8 +506,8 @@ describe('sessionFold', () => {
     // Subscribing later reopens from the seq the subscription names.
     const full = foldAll(scenario.events);
     const evicted = fold(full, subscribe(CHILD));
-    expect(evicted.folded.has(ROOT)).toBe(false);
-    expect(evicted.folded.has(CHILD)).toBe(true);
+    expect(evicted.folded.has(qualifyAggregateId('stream', ROOT))).toBe(false);
+    expect(evicted.folded.has(qualifyAggregateId('stream', CHILD))).toBe(true);
     const root = stream(evicted, ROOT);
     expect(root.transcript.rows).toStrictEqual([]);
     expect(root.transcript.taskGroups).toStrictEqual([]);
@@ -515,7 +524,7 @@ describe('sessionFold', () => {
     const view = foldAll([tail(removed)], foldAll(scenario.events));
     expect(view.streams.has(ROOT)).toBe(false);
     expect(view.policy.has(ROOT)).toBe(false);
-    expect(view.folded.has(ROOT)).toBe(false);
+    expect(view.folded.has(qualifyAggregateId('stream', ROOT))).toBe(false);
     expect(view.order).toStrictEqual([PROCESS, CHILD]);
     expect(stream(view, CHILD).parentId).toBeNull();
     expect(stream(view, CHILD).ancestors).toStrictEqual([]);
@@ -526,7 +535,9 @@ describe('sessionFold', () => {
     // A read replaying the run.start beneath the tombstone does not
     // recreate the stream: the lifecycle pair shares one latest entry.
     const rootStart = scenario.log.events.find(
-      (e) => e.aggregateId === ROOT && e.type === 'run.start',
+      (e) =>
+        e.aggregateId === qualifyAggregateId('stream', ROOT) &&
+        e.type === 'run.start',
     )!;
     const replayed = fold(view, {
       _tag: 'event',
@@ -538,7 +549,9 @@ describe('sessionFold', () => {
     // Listing hydration is authoritative: at the marker, a stream no
     // listing row named is gone with everything a tombstone clears.
     const processStart = scenario.log.events.find(
-      (e) => e.aggregateId === PROCESS && e.type === 'run.start',
+      (e) =>
+        e.aggregateId === qualifyAggregateId('stream', PROCESS) &&
+        e.type === 'run.start',
     )!;
     const pruned = foldAll(
       [
@@ -560,13 +573,13 @@ describe('sessionFold', () => {
     const facts: FoldInput[] = [
       tail({
         ...stamp,
-        aggregateId: ghost,
+        aggregateId: qualifyAggregateId('stream', ghost),
         type: 'updateStreamDescription',
         description: 'boo',
       }),
       tail({
         ...stamp,
-        aggregateId: PROCESS,
+        aggregateId: qualifyAggregateId('stream', PROCESS),
         seq: 3,
         commit: 100,
         type: 'setParentStream',
@@ -598,8 +611,8 @@ describe('sessionFold', () => {
     const key = `${CHILD}/late`;
     const after = fold(before, [
       tail({
-        aggregateId: CHILD,
-        seq: before.folded.get(CHILD)! + 1,
+        aggregateId: qualifyAggregateId('stream', CHILD),
+        seq: before.folded.get(qualifyAggregateId('stream', CHILD))! + 1,
         commit: 200,
         ownerId: OWNER,
         at: 4000,
@@ -648,8 +661,8 @@ describe('sessionFold', () => {
     const logged = fold(
       after,
       tail({
-        aggregateId: CHILD,
-        seq: before.folded.get(CHILD)! + 2,
+        aggregateId: qualifyAggregateId('stream', CHILD),
+        seq: before.folded.get(qualifyAggregateId('stream', CHILD))! + 2,
         commit: 201,
         ownerId: OWNER,
         at: 4100,
