@@ -3,11 +3,13 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import PQueue from 'p-queue';
+import { Effect } from 'effect';
 
 // Local imports
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { tryProcessRuntime } from '@platform/processRuntime';
 import type { LogLevel } from '@shared/schemas';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -86,34 +88,73 @@ function openStream(key: StreamKey): (typeof process)[StreamKey] | undefined {
   return stream.destroyed ? undefined : stream;
 }
 
-// CLI output is best effort: throwing from an async write callback would bypass
-// the command error boundary and can crash the process.
+// CLI output is best effort: a synchronous throw from `stream.write` or a
+// write error reported to its callback marks the stream closed and settles
+// instead of throwing — throwing from here would bypass the command error
+// boundary and can crash the process.
+function guardedStreamWrite(
+  key: StreamKey,
+  stream: (typeof process)[StreamKey],
+  text: string,
+  onSettled: () => void,
+): Effect.Effect<void> {
+  return Effect.try({
+    try: () => {
+      stream.write(text, (error) => {
+        if (error) closed[key] = true;
+        onSettled();
+      });
+    },
+    catch: (cause) => cause,
+  }).pipe(
+    Effect.catch(() =>
+      Effect.sync(() => {
+        closed[key] = true;
+        onSettled();
+      }),
+    ),
+  );
+}
+
+// The Effect programs here run on the process runtime when one is installed.
+// Both edges where none is — an early command error before
+// `installCliProcessRuntime`, and the exit-path flushes after
+// `disposeProcessRuntime` (`bin/texra.ts`, the platform shutdown sequence) —
+// take a direct path: the `openStream` destroyed-check and the write share
+// one synchronous tick, so the stream cannot die between them and the write
+// needs no guard.
 function writeRaw(key: StreamKey, text: string): void {
   const stream = openStream(key);
   if (!stream) return;
-  try {
+  const runtime = tryProcessRuntime();
+  if (!runtime) {
     stream.write(text, (error) => {
       if (error) closed[key] = true;
     });
-  } catch {
-    closed[key] = true;
+    return;
   }
+  runtime.runSync(guardedStreamWrite(key, stream, text, () => undefined));
 }
 
 function writeRawAndWait(key: StreamKey, text: string): Promise<void> {
   const stream = openStream(key);
   if (!stream) return Promise.resolve();
-  return new Promise<void>((resolve) => {
-    try {
+  const runtime = tryProcessRuntime();
+  if (!runtime) {
+    return new Promise<void>((resolve) => {
       stream.write(text, (error) => {
         if (error) closed[key] = true;
         resolve();
       });
-    } catch {
-      closed[key] = true;
-      resolve();
-    }
-  });
+    });
+  }
+  return runtime.runPromise(
+    Effect.callback<void>((resume) => {
+      runtime.runSync(
+        guardedStreamWrite(key, stream, text, () => resume(Effect.void)),
+      );
+    }),
+  );
 }
 
 export function writeTextStdout(text: string): void {
@@ -228,8 +269,14 @@ const processStdoutTarget: NdjsonWritable = {
   off: (event, listener) => process.stdout.off(event, listener),
 };
 
+/**
+ * One FIFO write lane per sink: records land on stdout strictly in call
+ * order, and a backpressured write holds the lane until its drain arrives.
+ * Keyed weakly by the sink, whose lifetime bounds it.
+ */
+const sinkLanes = new WeakMap<NdjsonStdoutSink, PerKeyLane>();
+
 export class NdjsonStdoutSink implements LogSink {
-  private readonly queue = new PQueue({ concurrency: 1 });
   private stdoutClosed = false;
 
   constructor(private readonly stdout: NdjsonWritable = processStdoutTarget) {}
@@ -240,64 +287,93 @@ export class NdjsonStdoutSink implements LogSink {
 
   writeRecord(record: CliNdjsonRecord): void {
     if (this.isClosed()) return;
-    void this.queue.add(() => this.writeLine(record)).catch(() => undefined);
+    const runtime = tryProcessRuntime();
+    if (!runtime) {
+      // No-runtime edge (`texra version --output-format ndjson` builds no
+      // platform; post-disposal nothing queues): no lane fiber can be waiting
+      // ahead of this record, so a direct write keeps the lane's call order.
+      // The `isClosed()` check above and this write share one synchronous
+      // tick, so the stream cannot die between them.
+      this.stdout.write(`${JSON.stringify(record)}\n`);
+      return;
+    }
+    runtime.runFork(withPerKeyLane(sinkLanes, this)(this.writeLine(record)));
   }
 
+  /** Resolves once every record queued before this call has landed: the FIFO
+   *  lane runs this no-op only after them. */
   flush(): Promise<void> {
-    return this.queue.onIdle();
+    const runtime = tryProcessRuntime();
+    if (!runtime) {
+      // Before `installCliProcessRuntime` every write took the direct path
+      // and already landed; after `disposeProcessRuntime` the runtime's
+      // scope close has interrupted any lane fiber still waiting on a drain.
+      // Either way nothing remains to wait for.
+      return Promise.resolve();
+    }
+    return runtime.runPromise(withPerKeyLane(sinkLanes, this)(Effect.void));
   }
 
   /**
-   * Writes one queued record, honouring backpressure. Never rejects: the
-   * queued promise is voided, so a throw here would surface as an unhandled
-   * rejection. A failed write or an unserializable record closes the sink.
+   * Writes one queued record, honouring backpressure. Never fails: the fiber
+   * is forked unobserved, so a failure would die unreported. A failed write
+   * or an unserializable record closes the sink.
    */
-  private async writeLine(record: CliNdjsonRecord): Promise<void> {
-    if (this.isClosed()) {
-      this.closeQueue();
-      return;
-    }
-    let canContinue: boolean;
-    try {
-      canContinue = this.stdout.write(`${JSON.stringify(record)}\n`);
-    } catch {
-      this.closeQueue();
-      return;
-    }
-    if (!canContinue && !(await this.waitForStdoutDrain())) {
-      this.closeQueue();
-    }
+  private writeLine(record: CliNdjsonRecord): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.isClosed()) {
+        this.closeQueue();
+        return;
+      }
+      const canContinue = yield* Effect.try({
+        try: () => this.stdout.write(`${JSON.stringify(record)}\n`),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.catch(() =>
+          Effect.sync(() => {
+            this.closeQueue();
+            return false;
+          }),
+        ),
+      );
+      if (!canContinue && !(yield* this.waitForStdoutDrain())) {
+        this.closeQueue();
+      }
+    });
   }
 
   private isClosed(): boolean {
     return this.stdoutClosed || !this.stdout.usable;
   }
 
-  /** Drops every record still queued: stdout is gone, nothing more can land. */
+  /** Records still queued behind a closed stdout write nothing when they run. */
   private closeQueue(): void {
     this.stdoutClosed = true;
-    this.queue.clear();
   }
 
-  private waitForStdoutDrain(): Promise<boolean> {
-    if (!this.stdout.usable) return Promise.resolve(false);
-    return new Promise<boolean>((resolve) => {
-      const onDrain = (): void => {
-        cleanup();
-        resolve(true);
-      };
-      const onClosed = (): void => {
-        cleanup();
-        resolve(false);
-      };
-      const cleanup = (): void => {
-        this.stdout.off('drain', onDrain);
-        this.stdout.off('error', onClosed);
-        this.stdout.off('close', onClosed);
-      };
-      this.stdout.once('drain', onDrain);
-      this.stdout.once('error', onClosed);
-      this.stdout.once('close', onClosed);
+  private waitForStdoutDrain(): Effect.Effect<boolean> {
+    return Effect.suspend(() => {
+      if (!this.stdout.usable) return Effect.succeed(false);
+      const stdout = this.stdout;
+      return Effect.callback<boolean>((resume) => {
+        const onDrain = (): void => {
+          cleanup();
+          resume(Effect.succeed(true));
+        };
+        const onClosed = (): void => {
+          cleanup();
+          resume(Effect.succeed(false));
+        };
+        const cleanup = (): void => {
+          stdout.off('drain', onDrain);
+          stdout.off('error', onClosed);
+          stdout.off('close', onClosed);
+        };
+        stdout.once('drain', onDrain);
+        stdout.once('error', onClosed);
+        stdout.once('close', onClosed);
+        return Effect.sync(cleanup);
+      });
     });
   }
 }
