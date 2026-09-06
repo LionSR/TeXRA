@@ -11,7 +11,7 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 
 - Read `AGENTS.md` — especially "Code quality rules" (earned from the 2026-07 simplification campaign), "Pragmatic implementations", "Discouraged factory patterns", "Flattening abstraction layers", "Compatibility and format retirement", and "Testing discipline". These are the standing rules a simplification proposal is judged against.
 - Read the review-checklist sections that encode past over-corrections: [§13 abstraction-cost guardrails](../code-review/references/review-checklist.md) (the Refactor-LOC lesson: 22 "reduction" PRs netted +5,046 LoC) and §14 fewer-elements rulings (R1, R5–R8). A proposal that would net-add elements needs its justification built in from the start.
-- Skim `docs/architecture/` before judging anything under `src/agent/`, `src/platform/`, or the PocketFlow flows; simplifications that fight the host/agnostic split or the event-ownership model need extra evidence. `.agents/docs/` and `docs/dev/audits/` record settled design decisions — check them before proposing to collapse a seam.
+- Skim `docs/architecture/` before judging anything under `src/agent/`, `src/platform/`, or the PocketFlow flows; simplifications that fight the host/agnostic split or the event-ownership model need extra evidence. `.agents/docs/implemented/` and `docs/dev/audits/` record settled design decisions — check them before proposing to collapse a seam. Notes under `proposed/` or `rejected/` are history, not current justification.
 - Search `is:issue label:tech-debt` (open and closed) and the relevant per-proposal `Tracking:` issues before writing anything new — a recently rejected or already-filed candidate is a duplicate, not a find.
 
 ## Settled Surfaces — Do Not Propose Collapsing
@@ -78,7 +78,7 @@ Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config k
 Reject or downgrade a candidate when:
 
 - A production caller exists and the simplification would be a feature decision rather than a cleanup.
-- The design is explicitly justified by a dated note in `.agents/docs/`, a ratchet, or a hard-won rule in `AGENTS.md`/the review checklist, and the new evidence does not beat that reason.
+- The design is explicitly justified by a dated note in `.agents/docs/implemented/`, a ratchet, or a hard-won rule in `AGENTS.md`/the review checklist, and the new evidence does not beat that reason. Proposed and rejected notes are not current authority.
 - The removal would force unrelated churn without actually reducing the public API or required behavior (churn-class ban, checklist §14 R5).
 - The idea is correct but tiny — batch it with related finds in one proposal or issue instead of standing alone.
 
@@ -86,7 +86,7 @@ Reject or downgrade a candidate when:
 
 This repo has no inline-TODO convention and no notes tree; durable findings go to one of two places:
 
-- **A dated proposal** under `.agents/docs/`, named yyyy-mm-dd-topic.md, for a design-level simplification (collapsing a seam, retiring a format, replacing machinery). Follow the existing proposals' style: problem with consumer evidence, exact proposal, what we give up, acceptance criteria, risks.
+- **A dated proposal** under `.agents/docs/proposed/simplification/`, named yyyy-mm-dd-topic.md, for a design-level simplification (collapsing a seam, retiring a format, replacing machinery). Follow the existing proposals' style: problem with consumer evidence, exact proposal, what we give up, acceptance criteria, risks.
 - **A GitHub issue** labeled `tech-debt` for a bounded deletion, in the style of the tournament's children (e.g. #8746): title, evidence with `path:line` citations and grepped consumer counts, estimated net LoC and element delta, risk level. Dedupe against existing `label:tech-debt` issues (open *and* closed) first; consolidate into the existing issue that owns the topic rather than filing a duplicate.
 
 Be concrete enough that an implementing PR can follow the trail. Avoid vague "simplify this package" write-ups. One proposal or issue per durable candidate; do not pad the count with thin finds.

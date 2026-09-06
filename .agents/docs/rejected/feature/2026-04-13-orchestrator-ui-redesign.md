@@ -1,7 +1,7 @@
 ---
 created: 2026-04-13
 updated: 2026-04-15
-status: rejected
+status: rejected — not adopted; the conversation-shell UI shipped a different launcher/progress split than this orchestrator-first layout
 ---
 
 # PRD: Orchestrator-First UI Redesign

@@ -1,7 +1,7 @@
 ---
 created: 2026-08-18
 updated: 2026-08-18
-status: rejected
+status: rejected — superseded by the merged SQLite persistence-substrate decision; journal follow-ups closed not-planned
 ---
 
 # PRD: The session event journal — single-authority transcript persistence

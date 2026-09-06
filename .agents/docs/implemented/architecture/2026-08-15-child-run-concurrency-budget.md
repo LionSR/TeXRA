@@ -1,9 +1,8 @@
 # One child-run concurrency budget
 
-Status: landed (see #10640). Originally a design note / Wave-4 prerequisite
+Status: implemented — landed (see #10640). Originally a design note / Wave-4 prerequisite
 for item 4 of `2026-08-14-delegation-flow-substrate-consolidation.md`.
 Date: 2026-08-15
-Archived: 2026-09-06
 
 ## The resource being budgeted
 

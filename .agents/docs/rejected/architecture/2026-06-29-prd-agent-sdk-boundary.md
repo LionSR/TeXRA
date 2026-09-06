@@ -1,7 +1,7 @@
 ---
 created: 2026-06-29
 updated: 2026-08-01
-status: rejected
+status: rejected — retired; main folded the coordinator into session.interactions instead of this SDK-boundary design
 ---
 
 # PRD: The Agent-SDK Boundary - Publishing the Runtime the UIs Sit On

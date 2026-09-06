@@ -1,7 +1,7 @@
 ---
 created: 2026-06-27
 updated: 2026-08-01
-status: rejected
+status: rejected — retired; main folded the coordinator into session.interactions instead of this decoupling design
 ---
 
 # PRD: Runtime/Host Decoupling by Deep Modules

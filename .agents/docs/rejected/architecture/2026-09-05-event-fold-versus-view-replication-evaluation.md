@@ -1,6 +1,6 @@
 ---
 created: 2026-09-05
-status: rejected
+status: rejected — not adopted; main shipped one fold per renderer, the opposite transport
 ---
 
 # Event folding versus authoritative view replication

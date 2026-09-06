@@ -1,7 +1,7 @@
 ---
 created: 2026-02-05
 updated: 2026-02-10
-status: rejected
+status: rejected — not taken; the compactization PRD chose client-side summarization over this server-side API
 ---
 
 # Plan: Server-Side Compaction via `compact_20260112` API

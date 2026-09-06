@@ -47,6 +47,10 @@ const GUIDANCE_FILES = [
 ];
 // Standing docs: architecture notes and the published guide. Dated proposals
 // and PRDs stay out — they are historical by design (see issue #9730).
+// Implemented notes under `.agents/docs/implemented/` are current authority
+// for citations *to* them (PATH_PREFIXES includes `.agents/`); they are not
+// scanned as sources here because several still inventory deleted files as
+// the work that landed.
 const GUIDANCE_DIRS = [
   '.claude/skills',
   'docs/dev',
@@ -99,6 +103,9 @@ const PATH_PREFIXES = [
   'supabase/',
   '.github/',
   '.claude/',
+  // Hidden note tree. Do not add a bare `agents/` prefix: that matches
+  // skill sidecars like `agents/openai.yaml`, which are not repo-root paths.
+  '.agents/',
   // Both are cited from CLAUDE.md/AGENTS.md and both are shipped surfaces:
   // skills/ is packaged into the client, prompts/agents/remote/ is the declared
   // public home for the hosted agent YAMLs. Without these prefixes a stale

@@ -1,7 +1,7 @@
 ---
 created: 2026-06-29
 updated: 2026-08-01
-status: rejected
+status: rejected — retired; main folded the coordinator into session.interactions instead of this gold-standard runtime design
 ---
 
 # PRD: Runtime Gold-Standard - The SDK Core (PocketFlow / Lifecycle / Injection / Retry)
