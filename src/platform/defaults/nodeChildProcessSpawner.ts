@@ -14,8 +14,11 @@
  * with a `PlatformError` carrying that errno when the child has no stdio at
  * all (EMFILE/ENFILE), and otherwise returns the handle so `exitCode` fails
  * with the errno (ENOENT), letting the consumer race its handshake against
- * the exit. Piped commands, extra file descriptors, and non-`pipe` stdio
- * configurations are rejected loudly rather than approximated.
+ * the exit. Piped commands, extra file descriptors, non-`pipe` stdio
+ * configurations, and detached children are rejected loudly rather than
+ * approximated: children run in the spawning process's group, which is what
+ * the Lean lane's SIGTERM-then-SIGKILL shutdown assumes, so the contract's
+ * `detached` default does not hold here and asking for it is an error.
  *
  * Provided locally by the Lean layer graph (`directLspAdapter.ts`), not by
  * the process runtime: a process-wide spawner is a later lane's call.
@@ -183,6 +186,13 @@ const spawn = Effect.fn('nodeChildProcessSpawner.spawn')(function* (
     });
   }
   const { options } = command;
+  if (options.detached === true) {
+    return yield* PlatformError.badArgument({
+      module: MODULE,
+      method: 'spawn',
+      description: 'Detached child processes are not supported',
+    });
+  }
   if (
     options.additionalFds !== undefined ||
     (options.stdin !== undefined && options.stdin !== 'pipe') ||

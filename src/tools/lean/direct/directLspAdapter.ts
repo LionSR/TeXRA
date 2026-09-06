@@ -11,11 +11,13 @@
  * down on platform shutdown.
  *
  * This file is the Promise edge: the pool is built once into the adapter's
- * scope, every method is one `runPromise` of the pool's Effect, and
- * `dispose()` closes the scope, which ends the pool and every server.
+ * scope, every method is one run of the pool's Effect, and `dispose()` closes
+ * the scope, which ends the pool and every server. Closing that scope
+ * interrupts whatever is still in flight, and interruption is not a failure
+ * the pool can fold into its total results, so the fold happens here.
  */
 
-import { Context, Duration, Effect, Exit, Layer, Scope } from 'effect';
+import { Cause, Context, Duration, Effect, Exit, Layer, Scope } from 'effect';
 
 import {
   getRunContextExecutionId,
@@ -26,12 +28,21 @@ import { effectRuntime } from '@platform/processRuntime';
 import { nodeChildProcessSpawnerLayer } from '@platform/defaults/nodeChildProcessSpawner';
 import type { ExecutionId } from '@shared/schemas';
 
-import { LeanServerPool, resolveWorkspaceRoot } from './leanServerPool';
+import {
+  LeanAdapterStopped,
+  LeanServerPool,
+  resolveWorkspaceRoot,
+} from './leanServerPool';
 import {
   setLeanLanguageServices,
   type LeanLanguageServices,
 } from '../leanLanguageServices';
-import type { LspHover, PlainGoal, PlainTermGoal } from '../leanTypes';
+import type {
+  LspHover,
+  LspResult,
+  PlainGoal,
+  PlainTermGoal,
+} from '../leanTypes';
 
 /** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
 const DEFAULT_LEAN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -66,7 +77,9 @@ export function registerDirectLeanLanguageServices(
 /**
  * Build a {@link LeanLanguageServices} implementation that talks directly to
  * `lake env lean --server`. Register the returned object with
- * `setLeanLanguageServices(...)` during platform startup.
+ * `setLeanLanguageServices(...)` during platform startup, after
+ * `installProcessRuntime(...)`: the pool's layer graph is built into the
+ * adapter's scope here, on the process runtime.
  */
 export function createDirectLspLeanAdapter(
   options: DirectLspLeanAdapterOptions = {},
@@ -96,9 +109,11 @@ export function createDirectLspLeanAdapter(
   // fiber resumes on.
   return {
     fetchDiagnosticsForFile: (file) =>
-      effectRuntime().runPromise(
-        pool.fetchDiagnosticsForFile(file, currentRunId()),
-      ),
+      run(pool.fetchDiagnosticsForFile(file, currentRunId()), () => ({
+        ok: false,
+        kind: 'toolchain_unavailable',
+        message: STOPPED_MESSAGE,
+      })),
 
     // No navigateToFirstError here: CLI/desktop have no editor to move the
     // cursor, and the interface declares it an optional host capability so
@@ -107,17 +122,18 @@ export function createDirectLspLeanAdapter(
     // on.
 
     executeFileCommand: (command, filePath) =>
-      effectRuntime().runPromise(
+      run(
         pool.executeFileCommand(command, filePath, currentRunId()),
+        () => false,
       ),
 
     executeProjectCommand: (command) =>
-      effectRuntime().runPromise(
-        pool.executeProjectCommand(command, currentRunId()),
-      ),
+      run(pool.executeProjectCommand(command, currentRunId()), () => {
+        throw new LeanAdapterStopped();
+      }),
 
     getGoalState: (filePath, line, column) =>
-      effectRuntime().runPromise(
+      run(
         pool.positionRequest<PlainGoal>(
           filePath,
           line,
@@ -125,10 +141,11 @@ export function createDirectLspLeanAdapter(
           '$/lean/plainGoal',
           currentRunId(),
         ),
+        stoppedLspResult<PlainGoal>,
       ),
 
     getTermGoal: (filePath, line, column) =>
-      effectRuntime().runPromise(
+      run(
         pool.positionRequest<PlainTermGoal>(
           filePath,
           line,
@@ -136,10 +153,11 @@ export function createDirectLspLeanAdapter(
           '$/lean/plainTermGoal',
           currentRunId(),
         ),
+        stoppedLspResult<PlainTermGoal>,
       ),
 
     getHoverInfo: (filePath, line, column) =>
-      effectRuntime().runPromise(
+      run(
         pool.positionRequest<LspHover>(
           filePath,
           line,
@@ -147,13 +165,45 @@ export function createDirectLspLeanAdapter(
           'textDocument/hover',
           currentRunId(),
         ),
+        stoppedLspResult<LspHover>,
       ),
 
     stopSessionsForRun: (runId) =>
-      effectRuntime().runPromise(pool.stopSessionsForRun(runId)),
+      run(pool.stopSessionsForRun(runId), () => undefined),
 
     dispose: () => effectRuntime().runPromise(Scope.close(scope, Exit.void)),
   };
+}
+
+/** The one message a stopped adapter reports, however the call was stopped. */
+const STOPPED_MESSAGE = new LeanAdapterStopped().message;
+
+const stoppedLspResult = <T>(): LspResult<T> => ({
+  data: null,
+  error: STOPPED_MESSAGE,
+});
+
+/**
+ * Run one pool operation to its `Exit`. A success and a typed failure keep
+ * exactly what `runPromise` gives them (the failure is squashed and thrown, as
+ * it is there). An interrupted exit is the only new outcome: `dispose()`
+ * closes the pool's scope, which interrupts an in-flight build and, with it,
+ * the fiber awaiting it. Interruption is not catchable inside the pool, so it
+ * is folded here into the value that same call gets after `dispose()` has
+ * returned, keeping {@link LeanAdapterStopped} the one shape a stopped adapter
+ * reports and the total methods total.
+ */
+function run<A, E>(
+  operation: Effect.Effect<A, E>,
+  whenStopped: () => A,
+): Promise<A> {
+  return effectRuntime()
+    .runPromiseExit(operation)
+    .then((exit) => {
+      if (Exit.isSuccess(exit)) return exit.value;
+      if (Cause.hasInterrupts(exit.cause)) return whenStopped();
+      throw Cause.squash(exit.cause);
+    });
 }
 
 /** The agent run the current tool call executes for, when it runs inside one. */

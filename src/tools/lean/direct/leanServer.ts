@@ -229,7 +229,6 @@ const make = ({
     const closed = yield* Deferred.make<void>();
     const ended = yield* Deferred.make<ServerEnd>();
     const openFiles = new Map<string, OpenedFile>();
-    const clock = yield* Clock.clockWith(Effect.succeed);
 
     registerLeanServer({
       id,
@@ -482,7 +481,10 @@ const make = ({
           if (openFiles.get(absolute) !== state) {
             return yield* new LeanSessionDisposed();
           }
-          const now = yield* clock.currentTimeMillis;
+          // The ambient clock, the one `handlePublishDiagnostics` stamps
+          // `lastDiagnosticsAt` with: a handle captured at layer build would
+          // compare this window against another fiber's timeline.
+          const now = yield* Clock.currentTimeMillis;
           if (
             state.lastDiagnosticsAt &&
             now - state.lastDiagnosticsAt >= DIAGNOSTICS_QUIET_WINDOW_MS

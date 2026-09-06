@@ -756,6 +756,41 @@ describe('createDirectLspLeanAdapter', () => {
   });
 
   fakeLakeIt(
+    'reports requests a dispose interrupted mid-start as stopped',
+    async () => {
+      let spawnCount = 0;
+      // The handshake never answers, so every request below is still waiting
+      // on the server's build when `dispose()` closes the scope under it. The
+      // interruption that follows is not a failure the pool can fold, so the
+      // methods stay total only if the Promise edge folds it.
+      spawnOverride.current = () => {
+        spawnCount += 1;
+        return createFakeLeanChild({
+          initializeGate: new Promise<void>(() => {}),
+        });
+      };
+      const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });
+      const diagnostics = adapter.fetchDiagnosticsForFile(filePath);
+      const fileCommand = adapter.executeFileCommand('restart', filePath);
+      const hover = adapter.getHoverInfo(filePath, 0, 0);
+      await vi.waitFor(() => expect(spawnCount).toBe(1));
+
+      await adapter.dispose();
+
+      await expect(diagnostics).resolves.toEqual({
+        ok: false,
+        kind: 'toolchain_unavailable',
+        message: 'Lean adapter was stopped.',
+      });
+      await expect(fileCommand).resolves.toBe(false);
+      await expect(hover).resolves.toEqual({
+        data: null,
+        error: 'Lean adapter was stopped.',
+      });
+    },
+  );
+
+  fakeLakeIt(
     'stops every server when disposed, and disposes twice',
     async () => {
       const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });

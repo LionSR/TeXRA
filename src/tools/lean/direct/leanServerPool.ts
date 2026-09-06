@@ -157,16 +157,29 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       new Map(map).set(root, f(map.get(root) ?? EMPTY_ENTRY)),
     );
 
-  /** Roots whose server is live or still starting, dropping closed and never-started ones. */
+  /**
+   * Roots whose server is live or still starting, dropping closed and
+   * never-started ones. The prune removes exactly the roots this scan saw
+   * closed: writing the scanned snapshot back would erase a root another
+   * fiber leased while the scan yielded, and that root's run would then never
+   * be an owner of the server it started.
+   */
   const liveEntries = Effect.gen(function* () {
     const live = new Map<string, RootEntry>();
+    const closedRoots = new Set<string>();
     for (const [root, entry] of yield* Ref.get(entries)) {
       const gone = entry.server
         ? yield* Deferred.isDone(entry.server.closed)
         : entry.leases === 0;
-      if (!gone) live.set(root, entry);
+      if (gone) closedRoots.add(root);
+      else live.set(root, entry);
     }
-    yield* Ref.set(entries, live);
+    if (closedRoots.size > 0) {
+      yield* Ref.update(
+        entries,
+        (map) => new Map([...map].filter(([root]) => !closedRoots.has(root))),
+      );
+    }
     return live;
   });
 
@@ -315,17 +328,28 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     function* (runId: ExecutionId) {
       const live = yield* liveEntries;
       const roots: string[] = [];
-      for (const [root, entry] of live) {
-        if (!entry.owners.has(runId)) continue;
-        const owners = new Set(entry.owners);
-        owners.delete(runId);
-        const stopNow = owners.size === 0 && entry.leases === 0;
-        yield* updateEntry(root, (current) => ({
-          ...current,
-          owners,
-          stopWhenIdle:
-            owners.size === 0 && entry.leases > 0 ? true : current.stopWhenIdle,
-        }));
+      for (const root of live.keys()) {
+        // Decided from the entry inside the update, not from the scan's copy:
+        // a lease taken meanwhile must keep its server alive rather than be
+        // invalidated as if the root were idle.
+        const stopNow = yield* Ref.modify(entries, (map) => {
+          const current = map.get(root);
+          if (!current?.owners.has(runId)) return [false, map] as const;
+          const owners = new Set(current.owners);
+          owners.delete(runId);
+          const next: RootEntry = {
+            ...current,
+            owners,
+            stopWhenIdle:
+              owners.size === 0 && current.leases > 0
+                ? true
+                : current.stopWhenIdle,
+          };
+          return [
+            owners.size === 0 && current.leases === 0,
+            new Map(map).set(root, next),
+          ] as const;
+        });
         if (stopNow) roots.push(root);
       }
       yield* Effect.forEach(roots, (root) => servers.invalidate(root), {

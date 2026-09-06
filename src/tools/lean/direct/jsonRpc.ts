@@ -278,6 +278,14 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     yield* Ref.update(pending, (map) =>
       new Map(map).set(id, { method, deferred }),
     );
+    // `close` fails the table it drained, so a close that landed between the
+    // check above and this insert leaves this entry with nobody to fail it and
+    // no frame on the wire: re-read and fail it here rather than await forever.
+    const closedSince = yield* Ref.get(closedReason);
+    if (closedSince !== undefined) {
+      yield* takePending(id);
+      return yield* new JsonRpcConnectionDisposed({ message: closedSince });
+    }
     yield* send({
       jsonrpc: '2.0',
       id,
