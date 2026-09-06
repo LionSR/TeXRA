@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -75,10 +76,8 @@ describe('arXiv processor logger channel', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const downloadedPath = await ArxivProcessor.downloadFile(
-      SOURCE_URL,
-      destBasePath,
-      5000,
+    const downloadedPath = await Effect.runPromise(
+      ArxivProcessor.downloadFile(SOURCE_URL, destBasePath, 5000),
     );
 
     expect(downloadedPath).toBe(destBasePath);
@@ -93,7 +92,9 @@ describe('arXiv processor logger channel', () => {
     const dir = await makeTempDir('texra-arxiv-', tempDirs);
     const missingTar = path.join(dir, 'missing.tar');
 
-    const fallback = await ArxivProcessor.extractTarFile(missingTar, dir);
+    const fallback = await Effect.runPromise(
+      ArxivProcessor.extractTarFile(missingTar, dir),
+    );
 
     expect(fallback.success).toBe(false);
     expect(error).toHaveBeenCalledWith(
@@ -109,10 +110,8 @@ describe('arXiv source download filenames', () => {
     const fetchMock = vi.fn(async () => sourceResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    const downloadedPath = await ArxivProcessor.downloadFile(
-      SOURCE_URL,
-      destBasePath,
-      5000,
+    const downloadedPath = await Effect.runPromise(
+      ArxivProcessor.downloadFile(SOURCE_URL, destBasePath, 5000),
     );
 
     expect(downloadedPath).toBe(destBasePath);
@@ -135,10 +134,8 @@ describe('arXiv source download retry classification', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const downloadedPath = await ArxivProcessor.downloadFile(
-      SOURCE_URL,
-      destBasePath,
-      5000,
+    const downloadedPath = await Effect.runPromise(
+      ArxivProcessor.downloadFile(SOURCE_URL, destBasePath, 5000),
     );
 
     expect(attempt).toBe(2);
@@ -151,7 +148,9 @@ describe('arXiv source download retry classification', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(
-      ArxivProcessor.downloadFile(SOURCE_URL, destBasePath, 5000),
+      Effect.runPromise(
+        ArxivProcessor.downloadFile(SOURCE_URL, destBasePath, 5000),
+      ),
     ).rejects.toThrow('HTTP 400');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
