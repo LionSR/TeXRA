@@ -90,6 +90,11 @@ function showLifecycleError(message: string): void {
   writeTextStderr(`[error] [cli.lifecycle] ${message}`);
 }
 
+/** `Effect.tryPromise` with the identity catch every Promise boundary below
+ *  wants: the rejection value flows through unchanged as the error. */
+const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: run, catch: (error) => error });
+
 const cliPlatformLog: SupabaseSessionLog = {
   debug: (channel, message) => logAt('debug', channel, message),
   info: (channel, message) => logAt('info', channel, message),
@@ -106,25 +111,27 @@ const cliPlatformLog: SupabaseSessionLog = {
  * take over SIGINT/SIGTERM exclusively once mounted and must perform the
  * same sequence the platform's own (now handed-off) handlers would have. One
  * definition means the two paths can't drift.
+ *
+ * Runs on the default runtime rather than `effectRuntime()`: the lifecycle
+ * shutdown below disposes the process runtime (`disposeProcessRuntime`)
+ * before the flushes run, and a teardown path must not depend on the thing
+ * it is tearing down.
  */
 export async function runCliPlatformShutdownSequence(
   lifecycle: LifecycleHost | undefined,
 ): Promise<void> {
-  try {
-    await lifecycle?.runShutdown();
-  } catch {
-    // Signal shutdown is best effort; output still gets one final flush.
-  }
-  try {
-    await flushTextStderr();
-  } catch {
-    // A closed stderr pipe must not prevent signal-based termination.
-  }
-  try {
-    await flushNdjsonStdout();
-  } catch {
-    // A closed stdout pipe must not prevent signal-based termination.
-  }
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      // Signal shutdown is best effort; output still gets one final flush.
+      yield* Effect.ignoreCause(
+        tryPromise(() => lifecycle?.runShutdown() ?? Promise.resolve()),
+      );
+      // A closed stderr pipe must not prevent signal-based termination.
+      yield* Effect.ignoreCause(tryPromise(flushTextStderr));
+      // A closed stdout pipe must not prevent signal-based termination.
+      yield* Effect.ignoreCause(tryPromise(flushNdjsonStdout));
+    }),
+  );
 }
 
 export function installCliShutdownSignalHandlers(
@@ -330,18 +337,25 @@ export async function initCliPlatform(
     // defaults, as the extension and desktop hosts do at startup. The list
     // lives in shared `~/.texra` state. Preferred defaults reconcile when
     // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
-    try {
-      const { messages } = await refreshModelListAndLog(
-        stateStores.globalState,
-      );
-      for (const message of messages) logAt('info', 'cli.models', message);
-    } catch (error) {
-      logAt(
-        'error',
-        'cli.models',
-        `Failed to refresh model list: ${toErrorMessage(error)}`,
-      );
-    }
+    await effectRuntime().runPromise(
+      tryPromise(() => refreshModelListAndLog(stateStores.globalState)).pipe(
+        Effect.tap(({ messages }) =>
+          Effect.sync(() => {
+            for (const message of messages)
+              logAt('info', 'cli.models', message);
+          }),
+        ),
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            logAt(
+              'error',
+              'cli.models',
+              `Failed to refresh model list: ${toErrorMessage(error)}`,
+            );
+          }),
+        ),
+      ),
+    );
 
     // Seed first-install defaults (e.g. disabled tools) before anything
     // writes CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION (the bundled-agent sync
