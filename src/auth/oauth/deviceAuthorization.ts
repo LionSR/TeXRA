@@ -13,6 +13,8 @@
  */
 import { Clock, Data, Duration, Effect, Ref, Schedule } from 'effect';
 
+import { assertNever } from '@utils/core';
+
 import type { ProviderAuthErrorCtor } from './providerAuthBridge';
 import type {
   OAuthHttpError,
@@ -145,5 +147,7 @@ export function deviceAuthorizationThrowable(
       return new Error(error.message);
     case 'SessionCompletionFailed':
       return error.cause;
+    default:
+      return assertNever(error, 'Unknown device-authorization error');
   }
 }
