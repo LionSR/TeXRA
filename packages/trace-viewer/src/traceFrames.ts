@@ -307,7 +307,8 @@ export function traceFrame(
 ): EventsFrame {
   const { listing, transcript } = traceEvents(trace);
   const named = subscribe.aggregates.some(
-    (aggregate) => aggregate.id === trace.streamId,
+    (aggregate) =>
+      aggregate.id === qualifyAggregateId('stream', trace.streamId),
   );
   return {
     kind: 'events',
