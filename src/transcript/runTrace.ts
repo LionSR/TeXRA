@@ -54,7 +54,7 @@ function collectFailure(failures: unknown[], action: () => void): void {
  * Produce a trace wired with the standard agent-run subscribers: per-channel
  * channel output AND the transcript recorder.
  *
- * `store` is caller-supplied, production launch paths pass the owning
+ * `store` is caller-supplied. Production launch paths pass the owning
  * session's `transcripts` store (`session.transcripts`); there is no
  * process-wide default to fall back to (`@transcript` never imports
  * `@agent/runtime`, so it cannot reach `defaultSession()` itself).

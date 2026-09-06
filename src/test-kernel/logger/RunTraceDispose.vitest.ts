@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as logUtils from '@logger/logUtils';
-import { MESSAGE_TYPES, type StreamTabId } from '@shared/schemas';
+import { MESSAGE_TYPES, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
@@ -60,7 +60,7 @@ describe('createRunTrace dispose', () => {
 
   it('keeps a cleanup failure for the final durability flush', () => {
     vi.useFakeTimers();
-    const failure = new Error('delayed transcript write failed');
+    const failure = new Error('transcript write failed');
     const writer: TranscriptWriter = {
       streamId: 'failed-stream' as StreamTabId,
       append: vi.fn((entry) => ({ ...entry, seqNo: 0 })),
@@ -83,7 +83,22 @@ describe('createRunTrace dispose', () => {
     const stream = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     stream.append('first');
     stream.append('second');
-    vi.advanceTimersByTime(50);
+    expect(() =>
+      handle.handleStatus({
+        type: 'status',
+        streamId: writer.streamId,
+        phase: STREAM_PHASE.WAITING,
+        cause: 'wait',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      handle.handleStatus({
+        type: 'status',
+        streamId: writer.streamId,
+        phase: STREAM_PHASE.COMPLETED,
+        cause: 'lifecycle',
+      }),
+    ).not.toThrow();
 
     expect(() => handle.dispose()).not.toThrow();
     expect(flushers.has('execution-failed')).toBe(true);

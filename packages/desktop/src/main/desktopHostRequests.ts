@@ -425,7 +425,6 @@ export function createDesktopHostRequests(
     options.postSurfaceAction({ kind: 'selectNew' });
   }
 
-
   /**
    * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
    * them: latexdiff-vc over the base file against a commit, and the pack

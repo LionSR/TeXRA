@@ -166,7 +166,7 @@ export function createTranscriptFold(
       case 'tool.start': {
         if (transcriptBoundaryClosed) return;
         pendingModelResponseId = undefined;
-        // event.logId is the canonical id , SDK consumers correlate
+        // event.logId is the canonical id. SDK consumers correlate
         // tool.start/end by it and the store entry shares the same id so
         // callers can lookup with store.get(streamId).find(e => e.id === logId).
         const data = {
@@ -198,7 +198,7 @@ export function createTranscriptFold(
                 input: redactToolInputForLog(result.toolName, result.input),
               }
             : result;
-        // Omit groupId on update , undefined would clobber the canonical
+        // Omit groupId on update: undefined would clobber the canonical
         // value stamped at tool.start (deferred tools never copy the
         // resolved id back into their ref).
         const patch = {

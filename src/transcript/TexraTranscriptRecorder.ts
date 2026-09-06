@@ -50,7 +50,7 @@ export function attachTranscriptRecorder(
         },
       );
     } catch (error) {
-      pendingFailure = error;
+      pendingFailure ??= error;
       throw error;
     }
   };
@@ -63,12 +63,13 @@ export function attachTranscriptRecorder(
     flushPending,
     handleStatus: (event) => {
       if (event.streamId !== streamId) return;
-      flushPending();
       try {
+        flushPending();
         fold.status(event.phase);
       } catch (error) {
-        pendingFailure = error;
-        throw error;
+        // The status hub cannot surface recorder failures to the run owner.
+        // Keep the first failure for the final durability flush instead.
+        pendingFailure ??= error;
       }
     },
   };

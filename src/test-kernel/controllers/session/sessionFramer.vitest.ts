@@ -187,7 +187,6 @@ describe('session framer', () => {
       }).success,
     ).toBe(true);
   });
-
   it('preserves stream and execution subscription keys across the webview bridge', async () => {
     const session = createTestSession();
     const bridge = new SessionBridge({
