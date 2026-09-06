@@ -6,6 +6,7 @@ import { glob } from 'glob';
 import pMap from 'p-map';
 import { ZodError, type ZodIssue } from 'zod';
 
+import { Result } from 'effect';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import {
   AgentDefinitionSchema,
@@ -135,17 +136,17 @@ async function readYamlDefinition(
   try {
     const content = await AbsoluteFS.read(yamlPath);
     const parsed = parseYamlWith(content, AgentDefinitionSchema);
-    if (parsed.isErr()) {
-      const message = formatScanFailure(parsed.error);
+    if (Result.isFailure(parsed)) {
+      const message = formatScanFailure(parsed.failure);
       log.warn(`Failed to scan ${yamlPath}: ${message}`);
       return { ok: false, issue: { path: displayPath, message } };
     }
     return {
       ok: true,
       value: {
-        name: parsed.value.name,
+        name: parsed.success.name,
         path: yamlPath,
-        definition: parsed.value,
+        definition: parsed.success,
       },
     };
   } catch (err) {

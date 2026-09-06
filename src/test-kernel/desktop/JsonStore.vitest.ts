@@ -134,6 +134,25 @@ describe('shared JsonStore', () => {
     });
   });
 
+  it('flushes chained sets in call order, not in wake-up order', async () => {
+    const JsonStore = await loadJsonStore();
+    const filePath = await createTempFile('state.json', '{}\n');
+    const store = await JsonStore.open(filePath);
+
+    // The third set is issued from the continuation of the first, while the
+    // second is still queued behind it. A lane that wakes waiters in a
+    // scheduled task lets the third flush barge ahead of the second and
+    // leaves the file at 2 while memory says 3.
+    const first = store.set('k', 1);
+    const second = store.set('k', 2);
+    await first;
+    const third = store.set('k', 3);
+    await Promise.all([second, third]);
+
+    expect(store.get('k')).toBe(3);
+    expect(await readStoredJson(filePath)).toEqual({ k: 3 });
+  });
+
   it('keeps the lock function callable in a split ESM bundle', async () => {
     tempDir = await makeTempDir('texra-json-store-bundle-', tempDirs);
     const outdir = join(tempDir, 'bundle');

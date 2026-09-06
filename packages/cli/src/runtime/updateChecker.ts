@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
 import { z } from 'zod';
 
+import { Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -175,8 +176,8 @@ function parseHomebrewFormulaVersion(
   formula = CLI_HOMEBREW_FORMULA,
 ): string | undefined {
   const parsed = parseJsonWith(stdout, HomebrewInfoSchema);
-  if (parsed.isErr()) return undefined;
-  const entry = parsed.value.formulae?.find((f) => f?.name === formula);
+  if (Result.isFailure(parsed)) return undefined;
+  const entry = parsed.success.formulae?.find((f) => f?.name === formula);
   return entry?.versions?.stable ?? undefined;
 }
 
