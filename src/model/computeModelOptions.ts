@@ -6,7 +6,11 @@ import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
-import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
+import {
+  REASONING_LEVEL_LABELS,
+  type ModelAvailabilityKind,
+  type ModelOptionData,
+} from '@shared/schemas';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import {
   DEFAULT_HELPER_MODEL,
@@ -23,6 +27,7 @@ import {
 } from '@utils/config/providerConfig';
 
 import { hasUsableApiKey, type ApiProvider } from './apiProviders';
+import { LEVEL_TO_EFFORT, supportsReasoningLevel } from './reasoningLevel';
 import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
   resolveCodexSubscriptionCapabilities,
@@ -257,6 +262,7 @@ async function getPersonalAccessKindForModel(
 }
 
 interface ModelAvailabilityContext {
+  reasoningLevels: Readonly<Record<string, string>>;
   hasUsableApiKey(provider: ApiProvider): Promise<boolean>;
   hasOpenRouter: boolean;
   useOpenRouter: boolean;
@@ -358,6 +364,7 @@ async function resolveModelAvailability(
 }
 
 async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
+  const { secrets, globalState } = platform();
   const useOpenRouter = getUseOpenRouter();
   // One key check per provider per context: `apiProviders` coalesces the
   // secret read, but a rejection reaches every awaiting model, and the picker
@@ -366,15 +373,13 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
   const hasApiKey = (provider: ApiProvider): Promise<boolean> => {
     let check = keyChecks.get(provider);
     if (!check) {
-      check = hasUsableApiKey(platform().secrets, provider).catch(
-        (error: unknown) => {
-          warnModelAvailability(
-            `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-            error,
-          );
-          return false;
-        },
-      );
+      check = hasUsableApiKey(secrets, provider).catch((error: unknown) => {
+        warnModelAvailability(
+          `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
+          error,
+        );
+        return false;
+      });
       keyChecks.set(provider, check);
     }
     return check;
@@ -388,6 +393,10 @@ async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
       hasApiKey('kimiCode'),
     ]);
   return {
+    reasoningLevels: globalState.get<Record<string, string>>(
+      GlobalStateKey.REASONING_LEVELS,
+      {},
+    ),
     hasUsableApiKey: hasApiKey,
     hasOpenRouter,
     useOpenRouter,
@@ -526,6 +535,27 @@ async function buildModelOptionData(
         outputPrice: availability.providerCapabilities.outputPrice,
       }
     : (copilotConfig ?? config);
+  let reasoning: string | undefined;
+  if (optionConfig.capabilities.supportsReasoning) {
+    if (availability.kind === 'copilot-access') {
+      reasoning = 'Default (provider managed)';
+    } else {
+      const defaultLevel =
+        REASONING_LEVEL_LABELS[optionConfig.capabilities.reasoningEffort];
+      if (supportsReasoningLevel(optionConfig)) {
+        const override = ctx.reasoningLevels[model];
+        const effort = override ? LEVEL_TO_EFFORT[override] : undefined;
+        reasoning =
+          effort === undefined
+            ? `Default (${defaultLevel})`
+            : REASONING_LEVEL_LABELS[effort];
+      } else {
+        reasoning = optionConfig.capabilities.supportsReasoningEffort
+          ? `${defaultLevel} (fixed)`
+          : 'Default';
+      }
+    }
+  }
   let routeLabel: string | undefined;
   if (availability.kind === 'copilot-access') {
     // The row's identity stays the base model; the badge names the route.
@@ -542,6 +572,7 @@ async function buildModelOptionData(
   return withAvailabilityFields(
     {
       ...buildBaseModelOption(model, optionConfig, config),
+      ...(reasoning ? { reasoning } : {}),
       ...(routeLabel ? { routeLabel } : {}),
     },
     availability,

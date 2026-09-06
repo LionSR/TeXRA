@@ -96,11 +96,13 @@ async function loginToSubscription(
   output: SlashCommandOutput,
   signal: AbortSignal,
 ): Promise<void> {
-  const account = await signInCliSubscription(providerId, args, {
-    writeProgress: (message) =>
-      output.writeProgress(message, { copyable: true }),
-    signal,
-  });
+  const account = await effectRuntime().runPromise(
+    signInCliSubscription(providerId, args, {
+      writeProgress: (message) =>
+        output.writeProgress(message, { copyable: true }),
+    }),
+    { signal },
+  );
   const update = await setCliSubscriptionPreference(providerId, true);
   const auth = SUBSCRIPTION_AUTH_COPY[providerId];
   output.appendOutcome(
