@@ -410,14 +410,15 @@ export abstract class PollingSourceBase<
   }
 
   /**
-   * @adapter-until 2026-11-05 (introduced 2026-09-06). The setInterval
-   * cadence is the one timer this file keeps off Effect's clock (PRD R8):
-   * "a polling timer must never keep a host process alive on its own", and
-   * rc.112 has no unref-capable scheduler (no `unref` anywhere in
-   * node_modules/effect/dist), so a Schedule-driven fiber would pin the CLI
-   * process. Retire when Effect gains an unref-capable clock or the hosts
-   * decide at process level that a live poller may keep the process alive;
-   * the interval only drives {@link PollingSourceBase.tick}.
+   * The setInterval cadence is the one timer this file keeps off Effect's
+   * clock (PRD R8): "a polling timer must never keep a host process alive
+   * on its own", and rc.112 has no unref-capable scheduler (no `unref`
+   * anywhere in node_modules/effect/dist), so a Schedule-driven fiber would
+   * pin the CLI process. This is a standing exception, not a temporary
+   * adapter with a date, which is why it carries no retirement marker: it
+   * ends when Effect gains an unref-capable clock, or when the hosts decide
+   * at process level that a live poller may keep the process alive. The
+   * interval only drives {@link PollingSourceBase.tick}.
    */
   private ensureTimer(): void {
     this.registerShutdownIfNeeded();
