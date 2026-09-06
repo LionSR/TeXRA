@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import pMap from 'p-map';
+import { Deferred, Duration, Effect } from 'effect';
 
 // Local imports
 import {
@@ -31,6 +31,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   ExecutionIdSchema,
@@ -105,6 +106,52 @@ import {
 import { workflowExecutionView } from './executions/workflowSummaryView';
 
 const log = createLog('ExecutionsTool');
+
+/**
+ * Bound on the durable reads one listing page or one children block fans
+ * out at once: every row asks for its own metadata (and, when the row
+ * recorded no outcome, its execution lease and a checkpoint stat), so the
+ * fan-out is bounded rather than page-wide.
+ */
+const DURABLE_READ_CONCURRENCY = 16;
+
+/**
+ * Block until one of `executionIds` changes status, the caller's stream
+ * receives a follow-up (the user breaking the wait), or `timeoutSeconds`
+ * elapse — whichever comes first. `settled` is re-checked once the change
+ * listeners are registered, closing the window between the caller's
+ * pre-check and registration. Interrupting the winner-less racers aborts
+ * the registry wait's signal and disposes the follow-up listener.
+ */
+const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
+  function* (
+    timeoutSeconds: number,
+    executionIds: string[],
+    settled: () => boolean,
+  ) {
+    const followUp = yield* Deferred.make<void>();
+    yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        listenForFollowUp(() => {
+          Deferred.doneUnsafe(followUp, Effect.void);
+        }),
+      ),
+      (stop) => Effect.sync(stop),
+    );
+    const statusChange = Effect.promise((signal) =>
+      currentSession().executions.waitForAnyChange(executionIds, signal),
+    );
+    const alreadySettled = Effect.suspend(() =>
+      settled() ? Effect.void : Effect.never,
+    );
+    yield* Effect.raceAll([
+      statusChange,
+      alreadySettled,
+      Deferred.await(followUp),
+    ]).pipe(Effect.timeoutOption(Duration.seconds(timeoutSeconds)));
+  },
+  Effect.scoped,
+);
 
 function getRunningTodos(
   session: SessionHandle,
@@ -274,11 +321,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const pendingIds = candidateIds.filter((id) => !shouldSkipWait(id));
     if (pendingIds.length === 0) return;
 
-    await this.waitWithTimeout(
-      timeout,
-      (signal) =>
-        currentSession().executions.waitForAnyChange(pendingIds, signal),
-      () => pendingIds.every(shouldSkipWait),
+    await effectRuntime().runPromise(
+      awaitStatusChange(timeout, pendingIds, () =>
+        pendingIds.every(shouldSkipWait),
+      ),
     );
   }
 
@@ -288,36 +334,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     timeout: number,
   ): Promise<void> {
     if (shouldSkipWait(executionId)) return;
-    await this.waitWithTimeout(
-      timeout,
-      (signal) =>
-        currentSession().executions.waitForAnyChange([executionId], signal),
-      () => shouldSkipWait(executionId),
+    await effectRuntime().runPromise(
+      awaitStatusChange(timeout, [executionId], () =>
+        shouldSkipWait(executionId),
+      ),
     );
-  }
-
-  /**
-   * Shared wait choreography: arm a timeout and a follow-up listener that both
-   * abort the wait, register the change callback, then re-check `settled` to
-   * close the race window between the initial pre-check and registration.
-   */
-  private async waitWithTimeout(
-    timeout: number,
-    register: (signal: AbortSignal) => Promise<unknown>,
-    settled: () => boolean,
-  ): Promise<void> {
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), timeout * 1000);
-    // Abort early if a follow-up is sent to this stream (user wants to break the wait).
-    const cleanupFollowUp = listenForFollowUp(ac);
-    try {
-      const waitPromise = register(ac.signal);
-      if (settled()) ac.abort();
-      await waitPromise;
-    } finally {
-      clearTimeout(timer);
-      cleanupFollowUp();
-    }
   }
 
   private async listExecutions(
@@ -335,13 +356,14 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       offset,
       limit,
     );
-    // One page, not one directory: each line asks the durable facts about its
-    // run (a lease read only for a row that recorded no outcome, and a
-    // checkpoint stat only when that lease turns out to be free), so the
-    // fan-out is bounded rather than 200 wide.
-    const lines = await pMap(page, (entry) => formatListingLine(entry), {
-      concurrency: 16,
-    });
+    // One page, not one directory — see DURABLE_READ_CONCURRENCY.
+    const lines = await effectRuntime().runPromise(
+      Effect.forEach(
+        page,
+        (entry) => Effect.promise(() => formatListingLine(entry)),
+        { concurrency: DURABLE_READ_CONCURRENCY },
+      ),
+    );
 
     return executed(
       `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
@@ -496,17 +518,22 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   }
 
   /**
-   * Fetch metas and format each child as a summary line. Bounded like the
-   * listing page: every child reads its own metadata and, when that row
-   * recorded no outcome, its execution lease — statting the checkpoint only
-   * when that lease is free — so a wide fan-out is a wide burst of file I/O.
+   * Fetch metas and format each child as a summary line, bounded like the
+   * listing page (DURABLE_READ_CONCURRENCY).
    */
   private formatChildren(children: ChildRecord[]): Promise<string[]> {
-    return pMap(
-      children,
-      async (child) =>
-        formatChildLine(child, await getExecutionStore(child.id).readMeta()),
-      { concurrency: 16 },
+    return effectRuntime().runPromise(
+      Effect.forEach(
+        children,
+        (child) =>
+          Effect.promise(async () =>
+            formatChildLine(
+              child,
+              await getExecutionStore(child.id).readMeta(),
+            ),
+          ),
+        { concurrency: DURABLE_READ_CONCURRENCY },
+      ),
     );
   }
 

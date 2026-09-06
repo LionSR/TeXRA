@@ -7,8 +7,7 @@
 
 import * as path from 'node:path';
 
-import { pMapIterable, pMapSkip } from 'p-map';
-import PQueue from 'p-queue';
+import { Data, Effect, Semaphore, Stream } from 'effect';
 
 import { debug } from '@logger/logUtils';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -82,25 +81,41 @@ async function readStoragePrefix(
   };
 }
 
-async function readMemoryMeta(storagePath: string, stats: { size: number }) {
-  try {
-    const { text: raw } = await readStoragePrefix(
-      storagePath,
-      FRONTMATTER_SCAN_BYTES,
-      stats,
-    );
-    return parseFrontmatter(raw).meta;
-  } catch (error) {
-    // Unreadable file (race deletion, permission error) — skip attribution
-    // rather than failing the whole walk; the entry itself still lists.
-    debug(
-      'memory',
-      `Skipping attribution for unreadable memory file ${storagePath}`,
-      { data: error },
-    );
-    return null;
-  }
-}
+/**
+ * The frontmatter head of a memory file could not be read or parsed (race
+ * deletion, permission error). Attribution is skipped rather than failing
+ * the whole walk; the entry itself still lists.
+ */
+class MemoryMetaUnreadable extends Data.TaggedError('MemoryMetaUnreadable')<{
+  readonly storagePath: string;
+  readonly cause: unknown;
+}> {}
+
+const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
+  (storagePath: string, stats: { size: number }) =>
+    Effect.tryPromise({
+      try: async () => {
+        const { text: raw } = await readStoragePrefix(
+          storagePath,
+          FRONTMATTER_SCAN_BYTES,
+          stats,
+        );
+        return parseFrontmatter(raw).meta;
+      },
+      catch: (cause) => new MemoryMetaUnreadable({ storagePath, cause }),
+    }).pipe(
+      Effect.catchTag('MemoryMetaUnreadable', (error) =>
+        Effect.sync(() => {
+          debug(
+            'memory',
+            `Skipping attribution for unreadable memory file ${error.storagePath}`,
+            { data: error.cause },
+          );
+          return null;
+        }),
+      ),
+    ),
+);
 
 /**
  * Read the head of a memory file and project it into the bounded preview the
@@ -135,99 +150,98 @@ export async function loadMemoryPreview(
   return { storagePath, preview, lineCount };
 }
 
-async function* walkDir(
+/** Stat one directory entry and, for a file, read its attribution head. */
+const describeEntry = Effect.fn('memoryFileSystem.describeEntry')(function* (
+  storagePath: string,
+  relativePath: string,
+  type: number,
+) {
+  const stats = yield* Effect.promise(() => StorageFS.stat(storagePath));
+  const entry = {
+    relativePath,
+    storagePath,
+    size: stats.size,
+    mtime: stats.mtime,
+  };
+  if (isDirectory(type)) {
+    return { ...entry, isDir: true, meta: null } satisfies MemoryWalkEntry;
+  }
+  const meta = yield* readMemoryMeta(storagePath, stats);
+  return { ...entry, isDir: false, meta } satisfies MemoryWalkEntry;
+});
+
+/**
+ * One directory level of the walk. Entries are described in listing order
+ * with at most {@link MEMORY_LISTING_CONCURRENCY} in flight per level, and
+ * `permits` bounds the metadata reads across every level of the recursion
+ * so a deep tree cannot multiply that bound.
+ */
+function walkLevel(
   storagePath: string,
   relativeRoot: string,
   depth: number,
   options: MemoryWalkOptions,
-  queue: PQueue,
-): AsyncGenerator<MemoryWalkEntry> {
-  const entries = await StorageFS.readDir(storagePath);
-
-  const results = pMapIterable(
-    entries,
-    async ([name, type]): Promise<MemoryWalkEntry | typeof pMapSkip> => {
-      if (shouldSkipEntry(name)) {
-        return pMapSkip;
-      }
-
-      // Skip symlinks to avoid cycles; we have no realpath/visited guard.
-      if (isSymlink(type)) {
-        return pMapSkip;
-      }
-
-      return queue.add(async () => {
-        const nextRelative = relativeRoot
-          ? path.join(relativeRoot, name)
-          : name;
-        const nextStoragePath = path.join(storagePath, name);
-        const stats = await StorageFS.stat(nextStoragePath);
-
-        if (isDirectory(type)) {
-          return {
-            relativePath: nextRelative,
-            storagePath: nextStoragePath,
-            size: stats.size,
-            mtime: stats.mtime,
-            isDir: true,
-            meta: null,
-          };
-        }
-
-        const meta = await readMemoryMeta(nextStoragePath, stats);
-        return {
-          relativePath: nextRelative,
-          storagePath: nextStoragePath,
-          size: stats.size,
-          mtime: stats.mtime,
-          isDir: false,
-          meta,
-        };
-      }) as Promise<MemoryWalkEntry>;
-    },
-    { concurrency: MEMORY_LISTING_CONCURRENCY },
+  permits: Semaphore.Semaphore,
+): Stream.Stream<MemoryWalkEntry> {
+  return Stream.fromEffect(
+    Effect.promise(() => StorageFS.readDir(storagePath)),
+  ).pipe(
+    Stream.flatMap(Stream.fromIterable),
+    // Skip symlinks to avoid cycles; we have no realpath/visited guard.
+    Stream.filter(([name, type]) => !shouldSkipEntry(name) && !isSymlink(type)),
+    Stream.mapEffect(
+      ([name, type]) =>
+        permits.withPermits(1)(
+          describeEntry(
+            path.join(storagePath, name),
+            relativeRoot ? path.join(relativeRoot, name) : name,
+            type,
+          ),
+        ),
+      { concurrency: MEMORY_LISTING_CONCURRENCY },
+    ),
+    Stream.flatMap((entry) => {
+      if (!entry.isDir) return Stream.make(entry);
+      const self = options.includeDirs ? Stream.make(entry) : Stream.empty;
+      const descend =
+        options.maxDepth === undefined || depth + 1 < options.maxDepth;
+      return descend
+        ? Stream.concat(
+            self,
+            walkLevel(
+              entry.storagePath,
+              entry.relativePath,
+              depth + 1,
+              options,
+              permits,
+            ),
+          )
+        : self;
+    }),
   );
-
-  for await (const entry of results) {
-    if (entry.isDir) {
-      if (options.includeDirs) {
-        yield entry;
-      }
-      if (options.maxDepth === undefined || depth + 1 < options.maxDepth) {
-        yield* walkDir(
-          entry.storagePath,
-          entry.relativePath,
-          depth + 1,
-          options,
-          queue,
-        );
-      }
-    } else {
-      yield entry;
-    }
-  }
 }
 
 /**
  * Walks the memory directory tree in depth-first order, skipping dotfiles,
  * `node_modules`, and symlinks (no realpath/visited guard, so a symlink is
- * never followed rather than risking a cycle).
+ * never followed rather than risking a cycle). Breaking out of the iteration
+ * early interrupts the walk, so no further entries are read.
  * @param storagePath - Directory to start walking from
  * @param relativeRoot - Path prefix used to build each entry's relativePath
  * @param options - `maxDepth` (levels below the root; unlimited if omitted)
  *   and `includeDirs` (whether directory entries themselves are yielded)
  */
-export function walkMemoryDirectory(
+export async function* walkMemoryDirectory(
   storagePath: string,
   relativeRoot = '',
   options: MemoryWalkOptions = {},
 ): AsyncGenerator<MemoryWalkEntry> {
-  return walkDir(
-    storagePath,
-    relativeRoot,
-    0,
-    options,
-    new PQueue({ concurrency: MEMORY_LISTING_CONCURRENCY }),
+  yield* Stream.toAsyncIterable(
+    Stream.unwrap(
+      Effect.map(Semaphore.make(MEMORY_LISTING_CONCURRENCY), (permits) =>
+        walkLevel(storagePath, relativeRoot, 0, options, permits),
+      ),
+    ),
   );
 }
 
