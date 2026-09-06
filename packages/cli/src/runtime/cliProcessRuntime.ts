@@ -1,14 +1,15 @@
 /**
  * The CLI's install of the process Effect runtime (PRD 7.7).
  *
- * Two CLI entries need one, and either may be first: `initCliPlatform`, which
- * opens the state and config stores as Effect programs before it wires the
- * platform, and `notifyCliUpdate`, which runs before any platform exists and
- * opens the global state store on its own. `initCliPlatform` installs a
- * runtime for every fresh platform init (the previous one is disposed on that
- * platform's shutdown path); the update check installs one only when nothing
- * has yet, so a normal run still ends with exactly the runtime the platform
- * owns.
+ * Three CLI entries need one, and any of them may be first: `initCliPlatform`,
+ * which opens the state and config stores as Effect programs before it wires
+ * the platform; `notifyCliUpdate`, which runs before any platform exists and
+ * opens the global state store on its own; and `clone`, which never builds a
+ * platform at all yet reads and writes its remote's token through
+ * `CliSecrets`. `initCliPlatform` installs a runtime for every fresh platform
+ * init (the previous one is disposed on that platform's shutdown path); the
+ * other two install one only when nothing has yet, so a normal run still ends
+ * with exactly the runtime the platform owns.
  *
  * The identity is the Node default `createNodePlatform` wires as
  * `platform().processes`, read before installing: the CLI's default session

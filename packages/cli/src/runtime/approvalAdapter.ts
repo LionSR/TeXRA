@@ -167,10 +167,21 @@ const askHeadlessUserQuestion = Effect.fn(
   const asked = yield* Effect.result(
     Effect.forEach(payload.questions, (question) =>
       Effect.gen(function* () {
-        hooks.beforePrompt?.();
-        const formatted = formatUserQuestionPrompt({
-          ...payload,
-          questions: [question],
+        // The hook prepares the terminal and the two helpers parse caller
+        // content, so any of the three can throw. Left as bare calls their
+        // throw is a defect, which `Effect.result` does not capture — the
+        // fallback below would be skipped and the whole session would abort
+        // on what used to settle as a rejection. `Effect.try` puts them back
+        // in the failure channel, where interruption still passes through.
+        const formatted = yield* Effect.try({
+          try: () => {
+            hooks.beforePrompt?.();
+            return formatUserQuestionPrompt({
+              ...payload,
+              questions: [question],
+            });
+          },
+          catch: (cause) => cause,
         });
         const answer = yield* queueCliApprovalQuestion(context, {
           kind: 'approval',
@@ -179,7 +190,10 @@ const askHeadlessUserQuestion = Effect.fn(
             : formatted,
           prompt: 'Answer (blank to skip): ',
         });
-        const parsed = parseUserQuestionAnswer(answer, question);
+        const parsed = yield* Effect.try({
+          try: () => parseUserQuestionAnswer(answer, question),
+          catch: (cause) => cause,
+        });
         if (parsed != null) answers[question.question] = parsed;
       }),
     ),
