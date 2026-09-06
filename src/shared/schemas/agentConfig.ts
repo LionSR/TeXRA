@@ -25,8 +25,8 @@ const CliOutputFieldsSchema = z.object({
   /**
    * Team preset id this execution was launched from (`texra multi-agent run
    * <preset>` in the CLI; the main-view launcher also sets it for team runs so
-   * resume retains team identity). Used so a team run , whose root is an
-   * orchestrator agent , is not inferred as the default agent for a plain
+   * resume retains team identity). Used so a team run — whose root is an
+   * orchestrator agent — is not inferred as the default agent for a plain
    * `texra chat` session. Preserved across resume.
    */
   multiAgentPresetId: z.string().nullish(),
@@ -40,7 +40,7 @@ const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
    * (`getVisibleAgent`). Launch resolves the exact `(source, name)` entry by key
    * instead of re-resolving the ambiguous bare name, so it lands on the same
    * entry validation picked. Absent for legacy records and direct launches that
-   * don't pin a source , those fall back to name-based resolution.
+   * don't pin a source — those fall back to name-based resolution.
    */
   agentSource: AgentSourceSchema.nullish(),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
