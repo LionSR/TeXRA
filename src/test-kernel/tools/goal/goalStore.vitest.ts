@@ -1,5 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect, Fiber, Stream } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -8,6 +9,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { StateStore } from '@platform/interfaces';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
@@ -21,7 +23,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
-import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
+import { GoalStore, goalStateChanges } from '@tools/goal';
 
 const STREAM_A = 'stream:forget-a' as StreamTabId;
 const STREAM_B = 'stream:forget-b' as StreamTabId;
@@ -103,15 +105,21 @@ function collectGoalChanges(session: SessionHandle): {
   detach: () => void;
 } {
   const seen: unknown[] = [];
-  const detach = subscribeGoalStateChanges(session, (change) => {
-    seen.push(change);
-  });
+  const fiber = effectRuntime().runFork(
+    Stream.runForEach(goalStateChanges(session), (change) =>
+      Effect.sync(() => {
+        seen.push(change);
+      }),
+    ),
+  );
   return {
     seen,
     clear: () => {
       seen.length = 0;
     },
-    detach,
+    detach: () => {
+      effectRuntime().runFork(Fiber.interrupt(fiber));
+    },
   };
 }
 
@@ -271,7 +279,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 });
 
-describe('subscribeGoalStateChanges', () => {
+describe('goalStateChanges', () => {
   setupPlatform();
 
   it('delivers only goal changes from the supplied session', async () => {

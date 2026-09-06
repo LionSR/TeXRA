@@ -8,7 +8,7 @@
  * future internal split does not create a second public surface accidentally.
  */
 export { isGoalEnabled } from './goalFeatureFlag';
-export { GoalStore, subscribeGoalStateChanges } from './goalStore';
+export { GoalStore, goalStateChanges, type GoalStateChange } from './goalStore';
 export {
   setGoalSessionAutoApproval,
   type GoalAutoApprovalScope,

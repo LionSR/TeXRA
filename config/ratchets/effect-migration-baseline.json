@@ -99,7 +99,6 @@
       "packages/cli/src/chat/tui/runChatTui.tsx": 1,
       "packages/cli/src/chat/tui/sessionExitController.ts": 1,
       "packages/cli/src/chat/tui/state/subscribeApprovals.ts": 1,
-      "packages/cli/src/runtime/logSinks.ts": 1,
       "packages/desktop/src/main/desktopSupabaseAuth.ts": 1,
       "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/extension.ts": 1,
@@ -120,7 +119,6 @@
       "src/utils/core/perKeyQueue.ts": 1
     },
     "import:p-map": {
-      "packages/cli/src/runtime/history.ts": 1,
       "src/agent/index/agentYamlScanner.ts": 1,
       "src/agent/modelHandlers/support/MediaAttachmentProcessor.ts": 1,
       "src/agent/storage/executionListing.ts": 1,
@@ -138,7 +136,6 @@
     },
     "import:p-timeout": {
       "packages/cli/src/chat/tui/input/BaseTextInput.tsx": 1,
-      "packages/cli/src/runtime/clipboardText.ts": 1,
       "src/agent/workflowScript/runWorkflowScript.ts": 1
     },
     "import:p-defer": {
@@ -177,7 +174,6 @@
       "src/telemetry/UsageLogService.ts": 5,
       "src/tools/agentCliSessionRegistry.ts": 2,
       "src/tools/github/PollingSourceBase.ts": 1,
-      "src/tools/goal/goalStore.ts": 2,
       "src/tools/lean/direct/directLspAdapter.ts": 3
     },
     "catch:effect-importer": {
@@ -225,7 +221,6 @@
     "src/telemetry/UsageLogService.ts": "wave-1 rebuild — controllers, telemetry and session drafts",
     "src/tools/agentCliSessionRegistry.ts": "wave-1 rebuild — tools: memory, executions, polling sources",
     "src/tools/github/PollingSourceBase.ts": "wave-1 rebuild — tools: memory, executions, polling sources",
-    "src/tools/goal/goalStore.ts": "Phase 5 — tools subsystem",
     "src/tools/lean/direct/directLspAdapter.ts": "Lean LSP follow-up — the port is Effect-typed and the tool-facing runs moved to the tools' execute(); what remains is pool construction/disposal (the platform-lifetime seam) and the run-end hook's Promise seam, both owned by lane D"
   }
 }

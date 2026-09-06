@@ -1,12 +1,12 @@
 import { execFile } from 'node:child_process';
 import { platform as osPlatform } from 'node:os';
 import { basename } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { promisify } from 'node:util';
 
 import clipboard from 'clipboardy';
-import pTimeout, { TimeoutError } from 'p-timeout';
+import { Cause, Effect, Exit } from 'effect';
 
+import { effectRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const execFileAsync = promisify(execFile);
@@ -40,42 +40,51 @@ const POSIX_COPY_HELPERS: ReadonlySet<string> = new Set([
   'termux-clipboar',
 ]);
 
-async function reapPosixCopyHelpers(): Promise<void> {
-  const { stdout } = await execFileAsync('ps', ['-Ao', 'pid=,ppid=,comm='], {
-    timeout: HELPER_REAP_TIMEOUT_MS,
+const reapPosixCopyHelpers = Effect.gen(function* () {
+  const { stdout } = yield* Effect.tryPromise({
+    try: () =>
+      execFileAsync('ps', ['-Ao', 'pid=,ppid=,comm='], {
+        timeout: HELPER_REAP_TIMEOUT_MS,
+      }),
+    catch: (cause) => cause as Error,
   });
   for (const line of stdout.split('\n')) {
     const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line);
     if (!match) continue;
     if (Number(match[2]) !== process.pid) continue;
     if (!POSIX_COPY_HELPERS.has(basename(match[3].trim()))) continue;
-    try {
-      process.kill(Number(match[1]), 'SIGKILL');
-    } catch {
-      // The helper exited between listing and killing.
-    }
+    // The helper may exit between listing and killing.
+    yield* Effect.ignore(
+      Effect.try({
+        try: () => process.kill(Number(match[1]), 'SIGKILL'),
+        catch: (cause) => cause as Error,
+      }),
+    );
   }
-}
+});
 
-async function reapWindowsCopyHelpers(): Promise<void> {
-  // clipboardy copies via `powershell.exe -EncodedCommand …` (powershell-utils)
-  // or its bundled `clipboard_<arch>.exe` fallback; both are direct children.
-  // This reap script is itself a direct-child powershell.exe, so it must not
-  // match its own filter: `$_.ProcessId -ne $PID` excludes it, and splitting
-  // the '-EncodedCommand' literal keeps this script's command line (and a
-  // concurrent reap's) from containing the very substring it greps for.
-  const script =
-    `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${process.pid}' | ` +
-    `Where-Object { $_.ProcessId -ne $PID -and ` +
-    `($_.Name -like 'clipboard_*.exe' -or ` +
-    `($_.Name -eq 'powershell.exe' -and $_.CommandLine -match ('-Encoded' + 'Command'))) } | ` +
-    `ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
-  await execFileAsync(
-    'powershell',
-    ['-NoProfile', '-NonInteractive', '-Command', script],
-    { timeout: HELPER_REAP_TIMEOUT_MS, windowsHide: true },
-  );
-}
+const reapWindowsCopyHelpers = Effect.tryPromise({
+  try: () => {
+    // clipboardy copies via `powershell.exe -EncodedCommand …` (powershell-utils)
+    // or its bundled `clipboard_<arch>.exe` fallback; both are direct children.
+    // This reap script is itself a direct-child powershell.exe, so it must not
+    // match its own filter: `$_.ProcessId -ne $PID` excludes it, and splitting
+    // the '-EncodedCommand' literal keeps this script's command line (and a
+    // concurrent reap's) from containing the very substring it greps for.
+    const script =
+      `Get-CimInstance Win32_Process -Filter 'ParentProcessId=${process.pid}' | ` +
+      `Where-Object { $_.ProcessId -ne $PID -and ` +
+      `($_.Name -like 'clipboard_*.exe' -or ` +
+      `($_.Name -eq 'powershell.exe' -and $_.CommandLine -match ('-Encoded' + 'Command'))) } | ` +
+      `ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
+    return execFileAsync(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { timeout: HELPER_REAP_TIMEOUT_MS, windowsHide: true },
+    );
+  },
+  catch: (cause) => cause as Error,
+});
 
 // Killing a wedged helper makes clipboardy retry with its bundled fallback
 // binary (Windows `clipboard_<arch>.exe`, Linux bundled `xsel`) — a new direct
@@ -85,19 +94,18 @@ async function reapWindowsCopyHelpers(): Promise<void> {
 // wedges exactly like the helper it replaced.
 const FALLBACK_REAP_DELAY_MS = 300;
 
-async function reapWedgedCopyHelpers(platform: NodeJS.Platform): Promise<void> {
-  for (let sweep = 0; sweep < 2; sweep += 1) {
-    if (sweep > 0) {
-      await sleep(FALLBACK_REAP_DELAY_MS);
-    }
-    try {
-      await (platform === 'win32'
-        ? reapWindowsCopyHelpers()
-        : reapPosixCopyHelpers());
-    } catch {
+function reapWedgedCopyHelpers(platform: NodeJS.Platform): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    for (let sweep = 0; sweep < 2; sweep += 1) {
+      if (sweep > 0) {
+        yield* Effect.sleep(FALLBACK_REAP_DELAY_MS);
+      }
       // Best effort: a reap failure must not mask the timeout result.
+      yield* Effect.ignore(
+        platform === 'win32' ? reapWindowsCopyHelpers : reapPosixCopyHelpers,
+      );
     }
-  }
+  });
 }
 
 function normalizeClipboardText(
@@ -108,24 +116,51 @@ function normalizeClipboardText(
   return platform === 'win32' ? lf.replaceAll('\n', '\r\n') : lf;
 }
 
-export async function writeClipboardText(
+export function writeClipboardText(
   text: string,
   options: ClipboardTextWriteOptions = {},
 ): Promise<ClipboardTextWriteResult> {
   const platform = options.platform ?? osPlatform();
   const normalized = normalizeClipboardText(text, platform);
-  try {
-    await pTimeout(clipboard.write(normalized), {
-      milliseconds: CLIPBOARD_WRITE_TIMEOUT_MS,
-      message: `Clipboard write timed out after ${CLIPBOARD_WRITE_TIMEOUT_MS}ms`,
+  // Timeout and ordinary Fail settle inside the effect. Runtime dispose
+  // interrupts the fiber while it is still interruptible, which skips
+  // cause-matching on the fiber; fold that Exit at `runPromiseExit` so the
+  // TUI's `void copyQuestion()` caller gets `{ ok: false }` instead of a
+  // rejection. Clipboardy has no cancellation hook, so interrupt reaps on
+  // the default runtime — the process runtime is already disposing.
+  return effectRuntime()
+    .runPromiseExit(
+      Effect.tryPromise({
+        try: () => clipboard.write(normalized),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.timeout(CLIPBOARD_WRITE_TIMEOUT_MS),
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Cause.isTimeoutError(error)
+              ? Effect.as(reapWedgedCopyHelpers(platform), {
+                  ok: false as const,
+                  reason: `Clipboard write timed out after ${CLIPBOARD_WRITE_TIMEOUT_MS}ms`,
+                })
+              : Effect.succeed({
+                  ok: false as const,
+                  reason: toErrorMessage(error),
+                }),
+          onSuccess: () => Effect.succeed({ ok: true as const }),
+        }),
+      ),
+    )
+    .then(async (exit) => {
+      if (Exit.isSuccess(exit)) return exit.value;
+      if (Cause.hasInterrupts(exit.cause)) {
+        await Effect.runPromise(
+          Effect.uninterruptible(reapWedgedCopyHelpers(platform)),
+        );
+        return {
+          ok: false as const,
+          reason: 'Clipboard write interrupted',
+        };
+      }
+      throw Cause.squash(exit.cause);
     });
-    return { ok: true };
-  } catch (error) {
-    if (error instanceof TimeoutError) {
-      // Reap before reporting failure so a wedged helper cannot land a stale
-      // write on the clipboard after the UI has already shown 'failed'.
-      await reapWedgedCopyHelpers(platform);
-    }
-    return { ok: false, reason: toErrorMessage(error) };
-  }
 }

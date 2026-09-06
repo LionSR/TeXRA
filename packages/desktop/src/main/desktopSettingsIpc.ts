@@ -29,7 +29,7 @@ import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
+import { GoalStore } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
   GITHUB_TOKEN_CREATE_URL,
@@ -46,6 +46,7 @@ import {
   type DesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
+import { subscribeDesktopGoalChanges } from './desktopGoalSubscription.js';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
@@ -303,8 +304,8 @@ export function createDesktopSettingsIpc(
   // needs the push. The session outlives the window, so the subscription is
   // window-scoped and released in `dispose` below.
   const subscriptions = [
-    subscribeGoalStateChanges(options.session, () =>
-      runAsyncInPaper(postGoalList),
+    subscribeDesktopGoalChanges(options.session, () =>
+      runAsync(postGoalList()),
     ),
   ];
 

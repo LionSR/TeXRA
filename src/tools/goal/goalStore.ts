@@ -1,5 +1,5 @@
 import { Mutex } from 'async-mutex';
-import { Effect, Fiber, Stream } from 'effect';
+import { Stream } from 'effect';
 
 import {
   getRunContextSession,
@@ -9,7 +9,6 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { effectRuntime } from '@platform/processRuntime';
 import { tryWorkspaceRoots, workspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
@@ -31,11 +30,10 @@ const INDEX_KEY = 'goals:index';
 // without calling `forget()` leave dangling entries until next manual cleanup.
 const indexMutex = new Mutex();
 
-interface GoalStateChange {
+/** One goal mutation as observed on a session's event plane. */
+export interface GoalStateChange {
   readonly streamId: StreamTabId;
 }
-
-type GoalStateChangeListener = (change: GoalStateChange) => void;
 
 function streamKey(streamId: StreamTabId): string {
   return `${STREAM_KEY_PREFIX}${streamId}`;
@@ -176,26 +174,22 @@ function requireNonEmpty(value: string, label: string): string {
 }
 
 /**
- * Subscribe to goal mutations in one explicitly-owned session, from now on.
- * Goal state is session-scoped: consumers must pass the session they render,
- * rather than listening on a process-wide compatibility event.
+ * Goal mutations in one explicitly-owned session, from now on. Goal state is
+ * session-scoped: consumers must pass the session they render, rather than
+ * listening on a process-wide compatibility event. The stream is the whole
+ * surface — the subscriber's host forks it at its own R1 boundary and
+ * interrupts that fork when the view it renders closes, so this module owns
+ * no fiber and no runtime.
  */
-export function subscribeGoalStateChanges(
+export function goalStateChanges(
   session: Pick<SessionHandle, 'events' | 'now'>,
-  listener: GoalStateChangeListener,
-): () => void {
-  const fiber = effectRuntime().runFork(
-    Stream.runForEach(session.events.all(session.now()), (event) =>
-      Effect.sync(() => {
-        if (event.type === 'goalStateChanged') {
-          listener({ streamId: aggregateTarget(event.aggregateId).id });
-        }
-      }),
-    ),
+): Stream.Stream<GoalStateChange> {
+  return session.events.all(session.now()).pipe(
+    Stream.filter((event) => event.type === 'goalStateChanged'),
+    Stream.map((event) => ({
+      streamId: aggregateTarget(event.aggregateId).id,
+    })),
   );
-  return () => {
-    effectRuntime().runFork(Fiber.interrupt(fiber));
-  };
 }
 
 export const GoalStore = Object.freeze({
