@@ -1155,7 +1155,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- Multi-agent coordination --------------------------------------------
   // Both child-work policy toggles live in `globalState` per the 2026-08-15
-  // maintainer ruling (docs/proposals/2026-08-15-shared-contracts-and-retirement.md
+  // maintainer ruling (agents/docs/archived/simplification/2026-08-15-shared-contracts-and-retirement.md
   // §2.1): they describe how *this user* wants child runs handled, not anything
   // about a particular checkout, so no worktree-scoping need is documented on
   // either row. Before the move the extension smuggled that same intent past a

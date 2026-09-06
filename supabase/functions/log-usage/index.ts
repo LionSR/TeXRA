@@ -223,7 +223,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 2. Validate user with Supabase. CI relay tokens went away with the
-    // relay (2026-08, see docs/proposals/2026-08-18-relay-removal-and-recovery.md);
+    // relay (2026-08, see agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md);
     // only signed-in sessions log usage now.
     const auth = await authenticateJwt(jwtToken);
     if (!auth) {

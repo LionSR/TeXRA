@@ -41,7 +41,7 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * 'error') a pre-cutover exported trace file's raw entries still carry:
  * the standalone trace-viewer frames `trace.entries` verbatim into the
  * same fold, a permanent second boundary
- * (docs/proposals/2026-07-03-session-scoped-runtime-architecture.md §8.3). Now that
+ * (agents/docs/archived/architecture/2026-07-03-session-scoped-runtime-architecture.md §8.3). Now that
  * `TaskGroupStatus` is itself retyped to the native vocabulary, `RunOutcome`
  * is a strict subset of it and needs no separate union member; only the
  * still-disjoint legacy `EndGroupStatus` vocabulary does. The shared

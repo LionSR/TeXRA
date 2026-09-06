@@ -172,7 +172,7 @@ interest changes, when its drain ends, which failure wins. `@texra-ai/agent`
 above is that surface rendered as Promises and AsyncIterables, and holds no
 logic of its own. It stays the Promise entry because the published SDK is one
 of the three boundary kinds rule R1 of TeXRA's Effect migration names
-(`docs/prds/2026-08-26-effect-4-runtime-migration.md`, §7): host entries, the
+(`agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md`, §7): host entries, the
 tool `execute()` contract, and this package's public API speak Promises;
 everything below them is Effect-typed.
 

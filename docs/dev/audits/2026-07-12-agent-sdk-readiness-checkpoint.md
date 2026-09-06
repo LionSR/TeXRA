@@ -1,10 +1,10 @@
 # Agent SDK Readiness — Verification Checkpoint (2026-07-12)
 
 **Status:** Verification checkpoint. Read alongside the canonical
-[`2026-05-30-agent-sdk-readiness.md`](../../proposals/2026-05-30-agent-sdk-readiness.md), the plan of record
-[`2026-07-09-agent-sdk-north-star.md`](../../proposals/2026-07-09-agent-sdk-north-star.md), the detailed
+[`2026-05-30-agent-sdk-readiness.md`](../../../agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md), the plan of record
+[`2026-07-09-agent-sdk-north-star.md`](../../../agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md), the detailed
 [`./2026-05-29-agent-sdk-readiness-audit.md`](./2026-05-29-agent-sdk-readiness-audit.md), the
-[`2026-06-24-agent-sdk-readiness-delta.md`](../../proposals/2026-06-24-agent-sdk-readiness-delta.md)
+[`2026-06-24-agent-sdk-readiness-delta.md`](../../../agents/docs/archived/architecture/2026-06-24-agent-sdk-readiness-delta.md)
 addendum, and the `-2026-06-25` → `-2026-07-10` checkpoints (most recently
 [`-2026-07-10`](./2026-07-10-agent-sdk-readiness-checkpoint.md)).
 

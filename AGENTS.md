@@ -565,7 +565,7 @@ default to reach for, it's `settingsView`'s pattern specifically:
   there is no `BaseViewContentProvider` class, despite the file name) for
   shared webview boilerplate — and routes through `SessionBridge` /
   `HostDraftRequests` as typed `runtime.request` / `host.request` calls (see
-  `docs/proposals/2026-09-03-one-view-state-three-renderers.md`). Its Lit
+  `agents/docs/implemented/architecture/2026-09-03-one-view-state-three-renderers.md`). Its Lit
   components (`progressView/frontend/components/`) read the `SessionView` fold
   (`src/shared/session/sessionView.ts`) and `Surface` records as properties
   directly; there is no command-constant registry or slice layer here.

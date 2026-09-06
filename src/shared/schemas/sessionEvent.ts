@@ -1,5 +1,5 @@
 /**
- * The fold's input vocabulary (docs/prds/2026-09-03-prd-one-fold-three-renderers.md
+ * The fold's input vocabulary (agents/docs/proposed/architecture/2026-09-03-prd-one-fold-three-renderers.md
  * sections 5.2 and 6): the durable session events every process folds into
  * `SessionView`, plus the transient arms (live text chunks, the local runtime
  * snapshot, the transcript subscription set, the replay marker) that never

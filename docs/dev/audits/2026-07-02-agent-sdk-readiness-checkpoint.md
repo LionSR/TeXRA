@@ -5,9 +5,9 @@
 > not current workspace layout.
 
 **Status:** Verification checkpoint, not a new audit. Read alongside the canonical
-[`2026-05-30-agent-sdk-readiness.md`](../../proposals/2026-05-30-agent-sdk-readiness.md), the detailed
+[`2026-05-30-agent-sdk-readiness.md`](../../../agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md), the detailed
 [`./2026-05-29-agent-sdk-readiness-audit.md`](./2026-05-29-agent-sdk-readiness-audit.md), the
-[`2026-06-24-agent-sdk-readiness-delta.md`](../../proposals/2026-06-24-agent-sdk-readiness-delta.md)
+[`2026-06-24-agent-sdk-readiness-delta.md`](../../../agents/docs/archived/architecture/2026-06-24-agent-sdk-readiness-delta.md)
 addendum, and the `-2026-06-25` / `-2026-06-26` / `-2026-06-30` /
 [`-2026-07-01`](./2026-07-01-agent-sdk-readiness-checkpoint.md) checkpoints.
 
@@ -157,18 +157,18 @@ reviewed-train class (ranked by value/effort); none is unattended-safe.
 The uninformed audit raised, and the standing rulings correctly filter, all of
 the following. No change.
 
-| Re-surfaced candidate                                                               | Ruling                                                                                                                                            |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                           | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing; removal breaks `tsc`.             |
-| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table | **Trap** — each carries ~12 real per-provider override points.                                                                                    |
-| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger`                  | **Keep** — each layer is a real override seam.                                                                                                    |
-| Collapse `runAgent` / `runAgentStream` dual entry                                   | **Trap** — Step-6 deliberate naming; facade merge hits a real type wall.                                                                          |
-| Add a `src/agent/runtime/index.ts` public barrel                                    | **Trap** — `@texra/core` **is** the curated barrel.                                                                                               |
-| Inline the cycle-wrapper nodes / `createXCycleFlow` factories                       | **Keep** — this _is_ the mandated `Node.exec → createFlow → flow.run` shape.                                                                      |
-| `@logger` not routed through `platform()`                                           | **Intentional, documented** — logging is its own host-injected subsystem.                                                                         |
-| Two logging idioms (`logUtils` vs `createChannelTrace`) are "redundant"             | **Known / tracked** — the run-scope vs module-singleton split is targeted by `docs/prds/2026-05-17-logger-surface-cleanup.md`; not a new finding. |
-| `isOReasoningModel` / `isGrokReasoningModel` are "dead getters"                     | **VERIFIED FALSE** (detailed audit line 2940) — they are used; see new candidate #7 for the distinct layering angle.                              |
-| Sweep knip's "unused exports"                                                       | **Trap** — dominated by dynamically-wired false positives (string-registered commands, webview signals, channel IDs, test helpers).               |
+| Re-surfaced candidate                                                               | Ruling                                                                                                                                                                      |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remove `IModelHandler` as a "duplicate" of `ModelHandler`                           | **Trap** — optional `createBatchedToolUseFollowUpMessages?` + `Pick<>` consumer narrowing make it load-bearing; removal breaks `tsc`.                                       |
+| Collapse OpenAI-compatible subclasses (DeepSeek/Kimi/MiniMax/GLM) to a config table | **Trap** — each carries ~12 real per-provider override points.                                                                                                              |
+| Inline `createResponse → withCreateResponseGuard → sdkErrorTagger`                  | **Keep** — each layer is a real override seam.                                                                                                                              |
+| Collapse `runAgent` / `runAgentStream` dual entry                                   | **Trap** — Step-6 deliberate naming; facade merge hits a real type wall.                                                                                                    |
+| Add a `src/agent/runtime/index.ts` public barrel                                    | **Trap** — `@texra/core` **is** the curated barrel.                                                                                                                         |
+| Inline the cycle-wrapper nodes / `createXCycleFlow` factories                       | **Keep** — this _is_ the mandated `Node.exec → createFlow → flow.run` shape.                                                                                                |
+| `@logger` not routed through `platform()`                                           | **Intentional, documented** — logging is its own host-injected subsystem.                                                                                                   |
+| Two logging idioms (`logUtils` vs `createChannelTrace`) are "redundant"             | **Known / tracked** — the run-scope vs module-singleton split is targeted by `agents/docs/archived/simplification/2026-05-17-logger-surface-cleanup.md`; not a new finding. |
+| `isOReasoningModel` / `isGrokReasoningModel` are "dead getters"                     | **VERIFIED FALSE** (detailed audit line 2940) — they are used; see new candidate #7 for the distinct layering angle.                                                        |
+| Sweep knip's "unused exports"                                                       | **Trap** — dominated by dynamically-wired false positives (string-registered commands, webview signals, channel IDs, test helpers).                                         |
 
 ## Carried backlog — re-confirmed at HEAD
 

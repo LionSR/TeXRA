@@ -144,7 +144,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // "login required" models — same opt-out behavior as `texra chat`.
     return CliExitCode.Success;
   }
-  // State 1 continuation (docs/prds/2026-06-11-agent-native-onboarding.md): on a true
+  // State 1 continuation (agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): on a true
   // first run the picker hands straight to a chat session owned by the setup
   // agent instead of the launcher. Existing users (firstRunDone backfilled or
   // earned) and users who pinned an agent via env land on the launcher as

@@ -272,8 +272,8 @@ launch resolution searches only the requested category
 
 ## 2. `AgentDirectoriesPort` is three directory paths, not agent values
 
-`docs/proposals/2026-07-09-agent-sdk-north-star.md:79-85` and
-`docs/proposals/2026-07-09-state-of-the-architecture.md:815-824` present
+`agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md:79-85` and
+`agents/docs/archived/architecture/2026-07-09-state-of-the-architecture.md:815-824` present
 "inject `AgentDirectoriesPort`" as the answer to "load agent X from a YAML" for
 an embedder. That is correct only in a narrow sense, and the phrasing invites a
 wrong reading. State it plainly:
@@ -369,7 +369,7 @@ one agent, an embedder cannot either.
   means _only_ your YAML is resolvable. Whether any runtime feature hard-requires
   a specific built-in agent name is an open question — the state-of-the-architecture
   note flags it as a residual unknown
-  (`docs/proposals/2026-07-09-state-of-the-architecture.md:825-826`) and this
+  (`agents/docs/archived/architecture/2026-07-09-state-of-the-architecture.md:825-826`) and this
   document does not resolve it.
 
 **Bottom line for an SDK conversation:** the port is a _directory redirect_,
@@ -681,12 +681,12 @@ desktop also calls
 
 ## 7. Related documents
 
-- `docs/proposals/2026-07-09-agent-sdk-north-star.md` — NS-4 (`:79-85`,
+- `agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md` — NS-4 (`:79-85`,
   `:164`) is the item this document discharges. Its acceptance table
   (`:166-176`, rows at `:170-171`) counts "Ordered post-init registrations to first run: 9-10,
   untyped" and "Deep imports for a minimal embedder: ~20 modules"; §1 and §5
   above are the concrete baseline those metrics need.
-- `docs/proposals/2026-07-09-state-of-the-architecture.md:815-826` — the NS-4
+- `agents/docs/archived/architecture/2026-07-09-state-of-the-architecture.md:815-826` — the NS-4
   finding, including the empty-`builtIn()` trick and the residual unknown about
   hard-required built-in agent names.
 - `docs/architecture/2026-06-20-agent-trace.md` — the run-scoped event channel an embedder

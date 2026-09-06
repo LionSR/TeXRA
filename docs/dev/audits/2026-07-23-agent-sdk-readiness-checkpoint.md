@@ -1,11 +1,11 @@
 # Agent SDK Readiness — Verification Checkpoint (2026-07-23)
 
 **Status:** Verification checkpoint. Read alongside the canonical
-[`2026-05-30-agent-sdk-readiness.md`](../../proposals/2026-05-30-agent-sdk-readiness.md), the plan of record
-[`2026-07-09-agent-sdk-north-star.md`](../../proposals/2026-07-09-agent-sdk-north-star.md), the detailed
+[`2026-05-30-agent-sdk-readiness.md`](../../../agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md), the plan of record
+[`2026-07-09-agent-sdk-north-star.md`](../../../agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md), the detailed
 [`./2026-05-29-agent-sdk-readiness-audit.md`](./2026-05-29-agent-sdk-readiness-audit.md), the
 trace-surface companion
-[`2026-05-22-agent-trace-sdk-surface.md`](../../proposals/2026-05-22-agent-trace-sdk-surface.md), and the
+[`2026-05-22-agent-trace-sdk-surface.md`](../../../agents/docs/archived/architecture/2026-05-22-agent-trace-sdk-surface.md), and the
 `-2026-06-25` → `-2026-07-22` checkpoint chain (most recently
 [`-2026-07-22`](./2026-07-22-agent-sdk-readiness-checkpoint.md)).
 
@@ -130,7 +130,7 @@ and deliberately not applied.
    `GoalPausedPayload`, `UpdateMissingOutputsPayload`, …) while the file's own
    doc points app-specific events at a `domain` escape hatch. This is **not a
    new finding — it is the entire premise of
-   [`2026-05-22-agent-trace-sdk-surface.md`](../../proposals/2026-05-22-agent-trace-sdk-surface.md)**, which
+   [`2026-05-22-agent-trace-sdk-surface.md`](../../../agents/docs/archived/architecture/2026-05-22-agent-trace-sdk-surface.md)**, which
    specifies migrating TeXRA payloads to `{type:'domain', key, data}` "to keep
    the SDK union clean," one domain at a time. Tracked; not re-opened here.
 

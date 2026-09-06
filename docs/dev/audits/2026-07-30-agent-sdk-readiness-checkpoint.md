@@ -4,10 +4,10 @@
 [`2026-07-29-agent-sdk-readiness-checkpoint.md`](./2026-07-29-agent-sdk-readiness-checkpoint.md)
 (this pass reconciles against its §New-1…§New-7 and [TRACKED] items rather than
 re-deriving them), the foundation-gap analysis
-[`2026-07-26-agent-sdk-foundation-gap.md`](../../proposals/2026-07-26-agent-sdk-foundation-gap.md)
+[`2026-07-26-agent-sdk-foundation-gap.md`](../../../agents/docs/archived/architecture/2026-07-26-agent-sdk-foundation-gap.md)
 (§6 absorption sequence, §7 acceptance criteria, §9 the real ceiling), the audit
 of record [`../dev/audits/2026-07-25-agent-sdk-readiness-audit.md`](./2026-07-25-agent-sdk-readiness-audit.md),
-the plan of record [`2026-07-09-agent-sdk-north-star.md`](../../proposals/2026-07-09-agent-sdk-north-star.md),
+the plan of record [`2026-07-09-agent-sdk-north-star.md`](../../../agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md),
 and the `-06-25` → `-07-29` checkpoint chain.
 
 This pass inspected the tree afresh at HEAD `8116ce9`

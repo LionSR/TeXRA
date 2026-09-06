@@ -284,7 +284,7 @@ const REFUTER_LENSES = [
   {
     key: 'load-bearing-precedent',
     brief:
-      'Attack the premise. Is the indirection a contract (Platform port, PocketFlow hook, test seam)? Was this tried and reverted (search git log), or adjudicated in docs/proposals or the do-not-do ledger? Refute if the seam is load-bearing or previously rejected.',
+      'Attack the premise. Is the indirection a contract (Platform port, PocketFlow hook, test seam)? Was this tried and reverted (search git log), or adjudicated in agents/docs or the do-not-do ledger? Refute if the seam is load-bearing or previously rejected.',
   },
 ]
 

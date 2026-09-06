@@ -119,7 +119,7 @@ is ever observed; prefer a
 terminal is present, and handle EPIPE globally.
 
 Full rationale and citations:
-`docs/proposals/2026-07-03-ink-practices-from-claude-code.md`.
+`agents/docs/archived/process/2026-07-03-ink-practices-from-claude-code.md`.
 
 ## CLI design (clig.dev)
 

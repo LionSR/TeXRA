@@ -11,8 +11,8 @@
  *
  * The surface is derived from use — exactly the symbols the three hosts reach
  * for today — per the Agent-SDK north star
- * (`docs/proposals/2026-07-09-agent-sdk-north-star.md`, §2) and the fold-in
- * plan (`docs/proposals/2026-08-04-agent-sdk-readiness-review.md`, §3/§5).
+ * (`agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md`, §2) and the fold-in
+ * plan (`agents/docs/archived/architecture/2026-08-04-agent-sdk-readiness-review.md`, §3/§5).
  * Internal runtime modules keep importing each other by direct path; nothing
  * inside `src/agent` imports this barrel, so it introduces no import cycle.
  */

@@ -1,4 +1,4 @@
-// State 1 continuation for the CLI (docs/prds/2026-06-11-agent-native-onboarding.md).
+// State 1 continuation for the CLI (agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md).
 //
 // The moment a credential lands on a true first run, the setup agent owns the
 // session: the post-picker continuation enters chat with `setup` selected

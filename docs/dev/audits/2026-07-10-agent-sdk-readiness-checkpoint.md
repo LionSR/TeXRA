@@ -1,10 +1,10 @@
 # Agent SDK Readiness — Verification Checkpoint (2026-07-10)
 
 **Status:** Verification checkpoint. Read alongside the canonical
-[`2026-05-30-agent-sdk-readiness.md`](../../proposals/2026-05-30-agent-sdk-readiness.md), the plan of record
-[`2026-07-09-agent-sdk-north-star.md`](../../proposals/2026-07-09-agent-sdk-north-star.md), the detailed
+[`2026-05-30-agent-sdk-readiness.md`](../../../agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md), the plan of record
+[`2026-07-09-agent-sdk-north-star.md`](../../../agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md), the detailed
 [`./2026-05-29-agent-sdk-readiness-audit.md`](./2026-05-29-agent-sdk-readiness-audit.md), the
-[`2026-06-24-agent-sdk-readiness-delta.md`](../../proposals/2026-06-24-agent-sdk-readiness-delta.md)
+[`2026-06-24-agent-sdk-readiness-delta.md`](../../../agents/docs/archived/architecture/2026-06-24-agent-sdk-readiness-delta.md)
 addendum, and the `-2026-06-25` → `-2026-07-09` checkpoints (most recently
 [`-2026-07-09`](./2026-07-09-agent-sdk-readiness-checkpoint.md)).
 
@@ -52,7 +52,7 @@ four host-side setter call sites (`packages/cli/.../approvalAdapter.ts`,
 approval now flows through `session.interactions.requestToolEditApproval`
 (`src/tools/approval/toolEditApproval.ts:245`, with an explicit guard at `:251`
 if the session interactions port is unwired). This is the precise fix
-`docs/proposals/2026-07-03-agent-runtime-ui-coupling-audit.md` finding #4 prescribed
+`agents/docs/archived/architecture/2026-07-03-agent-runtime-ui-coupling-audit.md` finding #4 prescribed
 ("fold `setToolEditApprovalHandler` into a `SessionHandle`-scoped field"), now
 landed. **This is why the surface reader's re-flag of it as "still open" is a
 stale finding** (see below).

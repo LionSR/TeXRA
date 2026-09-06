@@ -3,9 +3,9 @@
 **Status:** Verification checkpoint. Read alongside the current audit of record
 [`../dev/audits/2026-07-25-agent-sdk-readiness-audit.md`](./2026-07-25-agent-sdk-readiness-audit.md)
 (the post-retirement snapshot), the canonical
-[`2026-05-30-agent-sdk-readiness.md`](../../proposals/2026-05-30-agent-sdk-readiness.md), the plan of
-record [`2026-07-09-agent-sdk-north-star.md`](../../proposals/2026-07-09-agent-sdk-north-star.md), the
-trace-surface companion [`2026-05-22-agent-trace-sdk-surface.md`](../../proposals/2026-05-22-agent-trace-sdk-surface.md),
+[`2026-05-30-agent-sdk-readiness.md`](../../../agents/docs/archived/architecture/2026-05-30-agent-sdk-readiness.md), the plan of
+record [`2026-07-09-agent-sdk-north-star.md`](../../../agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md), the
+trace-surface companion [`2026-05-22-agent-trace-sdk-surface.md`](../../../agents/docs/archived/architecture/2026-05-22-agent-trace-sdk-surface.md),
 and the `-2026-06-25` → `-2026-07-23` checkpoint chain (most recently
 [`-2026-07-23`](./2026-07-23-agent-sdk-readiness-checkpoint.md)).
 

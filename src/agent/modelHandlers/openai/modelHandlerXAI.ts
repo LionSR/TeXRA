@@ -34,7 +34,7 @@ const XAI_SUBSCRIPTION_BASE_URL = 'https://api.x.ai/v1';
  * authenticate with the OAuth access token as the SDK `apiKey` (Bearer) against
  * the trusted `api.x.ai` surface only. Prefer-on without a session falls through
  * to the API-key path (preference is not a hard requirement).
- * EXPERIMENTAL: see docs/proposals/2026-08-04-xai-grok-oauth-subscription.md.
+ * EXPERIMENTAL: see agents/docs/archived/feature/2026-08-04-xai-grok-oauth-subscription.md.
  *
  * Note: the legacy grok-4 generation (deprecated May 2026) rejected the
  * reasoning_effort parameter outright. Current reasoning models (grok-4.3,

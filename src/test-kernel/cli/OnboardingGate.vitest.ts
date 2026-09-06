@@ -135,7 +135,7 @@ describe('maybeRunCliOnboarding gate', () => {
   });
 });
 
-// State 1 continuation (docs/prds/2026-06-11-agent-native-onboarding.md): after the gate
+// State 1 continuation (agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): after the gate
 // configures a credential on a true first run, chat/orchestrate start the
 // session with the setup agent instead of the default agent / launcher.
 describe('firstRunSetupAgentOverride', () => {
