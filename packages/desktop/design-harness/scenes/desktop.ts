@@ -3,6 +3,16 @@
 // of these are the verification for the desktop boards.
 import { html, nothing, type TemplateResult } from 'lit';
 
+import { createPdfPane } from '@desktop/renderer/pdfPane.js';
+import { subagentsPaneTemplate } from '@desktop/renderer/subagentsPane.js';
+import {
+  conversationDockTemplate,
+  paperChipTemplate,
+  taskSidebarTemplate,
+  workbenchTabsTemplate,
+  type RailPaper,
+} from '@desktop/renderer/taskShell.js';
+import type { WorkbenchTab } from '@desktop/shared/desktopTaskShell.js';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -29,17 +39,6 @@ import {
   tail,
   withWaitingCall,
 } from '@test/shared/session/fanOutScenario';
-
-import type { WorkbenchTab } from '../../src/shared/desktopTaskShell.js';
-import { createPdfPane } from '../../src/renderer/pdfPane.js';
-import { subagentsPaneTemplate } from '../../src/renderer/subagentsPane.js';
-import {
-  conversationDockTemplate,
-  paperChipTemplate,
-  taskSidebarTemplate,
-  workbenchTabsTemplate,
-  type RailPaper,
-} from '../../src/renderer/taskShell.js';
 
 // ── fixtures: three papers, three folded views ────────────────────────────
 
@@ -256,12 +255,13 @@ const tab = (
 });
 
 const workbench = (
+  session: string,
   tabs: readonly WorkbenchTab[],
   activeId: string,
   content: TemplateResult | HTMLElement,
 ) =>
   html`<aside class="task-workbench" data-placement="right">
-    ${workbenchTabsTemplate(tabs, activeId, 'right', workbenchCallbacks)}
+    ${workbenchTabsTemplate(tabs, activeId, 'right', workbenchCallbacks, session)}
     <div class="task-workbench-body">
       <section class="task-workbench-pane">
         <div class="task-workbench-surface">${content}</div>
@@ -296,7 +296,7 @@ function sceneDesktopPapers(): TemplateResult {
       stream,
       stream ? transcriptBody(lp, stream) : nothing,
     ),
-    workbench(tabs, tabs[0].id, pdfPane.frameFor(tabs[0])),
+    workbench(lp.display.key, tabs, tabs[0].id, pdfPane.frameFor(tabs[0])),
   );
 }
 
@@ -382,6 +382,7 @@ function sceneDesktopSubagents(): TemplateResult {
       stream ? transcriptBody(lp, stream) : nothing,
     ),
     workbench(
+      lp.display.key,
       tabs,
       tabs[0].id,
       subagentsPaneTemplate({

@@ -3,13 +3,19 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { StreamTabId } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
 import { createModuleMocks } from '@test/support/moduleMocks';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import {
+  createFakeWorkspaceRoots,
+  FakeStateStore,
+} from '@test/support/FakePlatform';
 import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { createExternalLocation } from '@utils/files/fileLocation';
+import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.ts';
 
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -86,6 +92,108 @@ describe('desktop preview host', () => {
     if (withPdf) await writeFile(pdfPath, 'pdf');
     return { dir, texPath, pdfPath };
   }
+
+  it.each([
+    { kind: 'openFile', path: '/missing/output.pdf' },
+    { kind: 'apiKeyBanner', action: 'guide' },
+    { kind: 'compileInputPdf' },
+    { kind: 'latexdiffs', action: 'compare' },
+    { kind: 'exportTranscript', streamId: 'missing:stream' as StreamTabId },
+    { kind: 'polish', text: 'A conserved quantity.' },
+  ] satisfies HostRequest[])(
+    'presents $kind failure once through the request dispatcher',
+    async (request) => {
+      const { createDesktopPreviewHost } = await loadDesktopPreviewHost();
+      const { createDesktopHostRequests } =
+        await import('@desktop/main/desktopHostRequests');
+      const { createFakeHost, installFakeHost } =
+        await import('@test/support/setupPlatform');
+      await installFakeHost(createFakeHost());
+      const { createTestSession } =
+        await import('@test/support/sessionTestUtils');
+      const { createHostSnapshotSource } =
+        await import('@controllers/session/hostSnapshotSource');
+      const session = createTestSession();
+      const present = vi.fn<(...args: unknown[]) => boolean>(() => true);
+      const detachPresentation = session.interactions.use({
+        emit: present,
+        cancel: () => {},
+      });
+      const { createDesktopFileSelection } =
+        await import('@desktop/main/desktopFileSelection');
+      const { HostDraftRequests } =
+        await import('@controllers/session/hostDraftRequests');
+      const showErrorMessage = vi.fn<(message: string) => Promise<void>>(
+        async () => {},
+      );
+      const shell = makeShell();
+      shell.openExternal.mockRejectedValue(new Error('Browser unavailable'));
+      const preview = createDesktopPreviewHost({ shell });
+      const draftRequests = new HostDraftRequests();
+      vi.spyOn(draftRequests, 'handle').mockRejectedValue(
+        new Error('Text service unavailable'),
+      );
+      const files = createDesktopFileSelection({
+        workspacePath: undefined,
+        showOpenFileDialog: async () => undefined,
+      });
+      const handler = createDesktopHostRequests({
+        session,
+        host: createStubDesktopAgentExecutionHost({
+          ...preview,
+          showErrorMessage,
+        }),
+        execution: {} as Parameters<
+          typeof createDesktopHostRequests
+        >[0]['execution'],
+        files,
+        snapshot: createHostSnapshotSource({
+          paper: {
+            key: 'paper',
+            name: 'Paper',
+            initials: 'P',
+            subtitle: '/paper',
+          },
+          globalState: new FakeStateStore(),
+          fileOptions: () => files.fileOptions(),
+          readRecentCommits: async () => ({ commits: [], isGitRepo: false }),
+          isAuthenticated: async () => false,
+          onError: () => {},
+        }),
+        draftRequests,
+        workspacePath: undefined,
+        resourcesPath: '/resources',
+        postToRenderer: () => {},
+        postSurfaceAction: () => {},
+        signIn: async () => {},
+        getCustomAgentDirectory: async () => '/agents',
+        showFirstRunWalkthrough: () => {},
+        onboarding: {} as Parameters<
+          typeof createDesktopHostRequests
+        >[0]['onboarding'],
+        openExternalUrl: preview.openExternal,
+        recheckTools: async () => {},
+        logger: { warn: () => {}, error: () => {} },
+      });
+      try {
+        await expect(handler.handle(request, 'window')).rejects.toBeDefined();
+        expect(present).toHaveBeenCalledOnce();
+        expect(present).toHaveBeenCalledWith('requestShowError', {
+          message: expect.stringMatching(/\S/),
+        });
+        expect(showErrorMessage).not.toHaveBeenCalled();
+        present.mockClear();
+        await expect(
+          handler.handle({ kind: 'pickFiles', fileType: 'input' }, 'window'),
+        ).rejects.toMatchObject({ _tag: 'Cancelled' });
+        expect(present).not.toHaveBeenCalled();
+      } finally {
+        handler.dispose();
+        detachPresentation();
+        session.dispose();
+      }
+    },
+  );
 
   it('opens existing files through Electron shell.openPath', async () => {
     const { createDesktopPreviewHost } = await loadDesktopPreviewHost();

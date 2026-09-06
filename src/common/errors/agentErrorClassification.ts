@@ -1,4 +1,10 @@
-import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import {
+  INSTRUCTION_ACTION,
+  RUN_OUTCOME,
+  type RequestShowErrorPayload,
+  type RequestShowInstructionPayload,
+  type RunOutcome,
+} from '@shared/schemas';
 
 import { isDiskFullError } from './errorPredicates';
 import { hasMissingApiKeyErrorMarker } from './sdkError/errorMetadata';
@@ -22,6 +28,15 @@ export const AGENT_ERROR_OUTCOME: Readonly<Record<AgentErrorKind, RunOutcome>> =
   };
 
 /**
+ * Runtime aggregates put the primary failure first and retain later cleanup
+ * failures for diagnostics. Follow that ordering through nested aggregates.
+ */
+export function primaryAgentError(err: unknown): unknown {
+  while (err instanceof AggregateError) err = err.errors[0];
+  return err;
+}
+
+/**
  * Classify agent execution errors for consistent runtime notification policy.
  *
  * Every kind is decided by a typed signal — an SDK/abort predicate, an errno,
@@ -30,10 +45,77 @@ export const AGENT_ERROR_OUTCOME: Readonly<Record<AgentErrorKind, RunOutcome>> =
  * third-party providers whose SDKs expose no error code for the overflow.
  */
 export function classifyAgentError(err: unknown): AgentErrorKind {
-  if (isUserAbort(err)) return 'abort';
-  if (isDiskFullError(err)) return 'disk-full';
-  if (hasMissingApiKeyErrorMarker(err)) return 'missing-api-key';
-  if (isContextWindowError(err)) return 'context-window';
+  const primary = primaryAgentError(err);
+  if (isUserAbort(primary)) return 'abort';
+  if (isDiskFullError(primary)) return 'disk-full';
+  if (hasMissingApiKeyErrorMarker(primary)) return 'missing-api-key';
+  if (isContextWindowError(primary)) return 'context-window';
 
   return 'unexpected';
+}
+
+type AgentErrorPresentation =
+  | {
+      readonly type: 'instruction';
+      readonly payload: RequestShowInstructionPayload;
+    }
+  | {
+      readonly type: 'error';
+      readonly payload: RequestShowErrorPayload;
+    };
+
+const MISSING_API_KEY_MESSAGE =
+  'API key not found. Set your API key in Settings and run again.';
+
+/** Map a classified error to host guidance, with no notification for aborts. */
+export function agentErrorPresentation(error: {
+  kind: AgentErrorKind;
+  message?: string;
+}): AgentErrorPresentation | null {
+  switch (error.kind) {
+    case 'missing-api-key':
+      return {
+        type: 'instruction',
+        payload: {
+          key: 'missingApiKey',
+          message: MISSING_API_KEY_MESSAGE,
+          actions: [
+            INSTRUCTION_ACTION.SET_API_KEY,
+            INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
+          ],
+          showSuppress: false,
+        },
+      };
+    case 'context-window':
+      // A supplied message already carries the run's specific remediation.
+      return {
+        type: 'error',
+        payload: {
+          message:
+            error.message ??
+            'Conversation exceeds the model context window. Start a new ' +
+              'session, or reduce attached files and tool output.',
+        },
+      };
+    case 'disk-full':
+      return {
+        type: 'error',
+        payload: { message: error.message ?? 'Disk full.' },
+      };
+    case 'unexpected':
+      return {
+        type: 'error',
+        payload: {
+          message: error.message ?? 'Unexpected error executing agent.',
+        },
+      };
+    case 'abort':
+      return null;
+    default: {
+      // Every error kind must choose an explicit presentation policy.
+      const _exhaustive: never = error.kind;
+      void _exhaustive;
+      return null;
+    }
+  }
 }
