@@ -4,7 +4,7 @@ Deterministic, script-driven multi-agent orchestration: the orchestrator LLM
 writes a small JS script **once**, and this engine executes its control flow
 (loops, fan-out, joins, reduction) as plain code — zero model round-trips
 between steps. Design rationale and the full findings that motivated it:
-`docs/proposals/2026-07-05-workflow-script-engine.md`.
+`.agents/docs/archived/feature/2026-07-05-workflow-script-engine.md`.
 
 ## Glossary
 
@@ -129,7 +129,7 @@ return await parallel(
   Code's Workflow tool uses): such a log cannot distinguish "never
   finished" from a `null` result, and beside the checkpoint, the commit
   fence, and the child attempt ledger it would be a second owner of the
-  same fact. Ruled 2026-08-28 (docs/proposals/2026-08-28-workflow-plan-vs-issued-calls.md §Study).
+  same fact. Ruled 2026-08-28 (.agents/docs/archived/feature/2026-08-28-workflow-plan-vs-issued-calls.md §Study).
 - **Cost ownership**: child costs remain in the persisted typed results. The
   future tool surface must aggregate the final journal at its tool-result
   boundary, rather than mutating parent totals during child launch; this keeps

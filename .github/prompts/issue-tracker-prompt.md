@@ -94,7 +94,7 @@ A fix can be common, correct, and still wrong to file, because it patches a
 design the repository is already leaving. Two checks before filing:
 
 1. **Is the area doomed?** Look for signals that the code the finding touches
-   is slated for removal, replacement, or retirement: a `docs/proposals/` or
+   is slated for removal, replacement, or retirement: an `.agents/docs/` or
    `docs/architecture/` document that names the area as being deleted or
    superseded; an open `tracking` issue scheduling its removal; comments
    such as "delete after", "compatibility window", "retire", "legacy", or a

@@ -5,13 +5,13 @@
 (this pass reconciles against its §New-12…§New-18, its re-affirmed [TRACKED] set,
 and the standing §9 ceiling rather than re-deriving them), the foundation-gap
 analysis
-[`2026-07-26-agent-sdk-foundation-gap.md`](../../proposals/2026-07-26-agent-sdk-foundation-gap.md)
+[`2026-07-26-agent-sdk-foundation-gap.md`](../../../.agents/docs/archived/architecture/2026-07-26-agent-sdk-foundation-gap.md)
 (§9 the real ceiling), the audit of record
 [`2026-07-25-agent-sdk-readiness-audit.md`](./2026-07-25-agent-sdk-readiness-audit.md),
 the package-cut measurement
-[`2026-07-27-agent-npm-package-step3.md`](../../proposals/2026-07-27-agent-npm-package-step3.md),
+[`2026-07-27-agent-npm-package-step3.md`](../../../.agents/docs/archived/process/2026-07-27-agent-npm-package-step3.md),
 the plan of record
-[`2026-07-09-agent-sdk-north-star.md`](../../proposals/2026-07-09-agent-sdk-north-star.md),
+[`2026-07-09-agent-sdk-north-star.md`](../../../.agents/docs/archived/architecture/2026-07-09-agent-sdk-north-star.md),
 and the `-06-25` → `-08-01` checkpoint chain.
 
 This pass inspected the tree afresh at HEAD `e263b01`

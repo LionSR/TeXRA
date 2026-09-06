@@ -9,7 +9,7 @@ distilled from ~200 merged simplification PRs and ~25 rejected ones
 (2025-05 → 2026-08), including a −11,212-line sweep with zero post-merge
 regressions (#9472) and every closure the maintainer ever handed down. The
 full evidence base lives in
-`docs/proposals/2026-08-06-code-simplifier-campaign-stats.md`.
+`.agents/docs/archived/simplification/2026-08-06-code-simplifier-campaign-stats.md`.
 
 ## Prime directive: minimal, universal, proven
 

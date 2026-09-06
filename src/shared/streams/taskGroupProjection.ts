@@ -24,7 +24,7 @@ import {
  * read projection maps it to the same canonical value used by persistence.
  *
  * Permanent, not a dated shim (ruled in
- * docs/proposals/2026-07-03-session-scoped-runtime-architecture.md §8.3 and
+ * .agents/docs/archived/architecture/2026-07-03-session-scoped-runtime-architecture.md §8.3 and
  * recorded in §8.6). In-app this arm is unreachable — `StreamLogStore`
  * normalizes every persisted row at read (`normalizeGroupStatusEntry`). Its
  * one live input is the standalone trace viewer, which forwards a static
