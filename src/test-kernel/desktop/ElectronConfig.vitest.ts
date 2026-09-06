@@ -1,4 +1,5 @@
 // Node imports
+import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -20,17 +21,17 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     provider: JsonConfigProvider;
     globalStore: JsonStore;
     workspaceStore: JsonStore;
+    files: readonly string[];
   }> {
     const [{ JsonStore }, { JsonConfigProvider }] = await Promise.all([
       loadSourceModule('@platform/defaults/jsonStore'),
       loadSourceModule('@platform/defaults/jsonConfigProvider'),
     ]);
     const tempDir = await makeTempDir('texra-electron-config-', tempDirs);
+    const globalPath = join(tempDir, 'global.json');
+    const workspacePath = join(tempDir, 'workspace.json');
     const [globalStore, workspaceStore] = await Effect.runPromise(
-      Effect.all([
-        JsonStore.open(join(tempDir, 'global.json')),
-        JsonStore.open(join(tempDir, 'workspace.json')),
-      ]),
+      Effect.all([JsonStore.open(globalPath), JsonStore.open(workspacePath)]),
     );
     return {
       provider: new JsonConfigProvider({
@@ -39,8 +40,35 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       }),
       globalStore,
       workspaceStore,
+      files: [globalPath, workspacePath],
     };
   }
+
+  it('returns schema defaults without creating empty config files', async () => {
+    const { provider, files } = await createProvider();
+    for (const file of files) {
+      await expect(access(file)).rejects.toThrow();
+    }
+
+    expect(provider.get('texra.bib.zoteroPort')).toBe(23119);
+    expect(provider.inspect('texra.bib.zoteroPort')).toStrictEqual({
+      globalValue: undefined,
+      workspaceValue: undefined,
+    });
+    for (const file of files) {
+      await expect(access(file)).rejects.toThrow();
+    }
+  });
+
+  it('returns isolated copies of mutable schema defaults', async () => {
+    const { provider } = await createProvider();
+    const key = 'texra.latex.enabledReplacements';
+    const first = provider.get<string[]>(key);
+
+    first.push('mutated');
+
+    expect(provider.get<string[]>(key)).not.toContain('mutated');
+  });
 
   it('lets workspace values override global values', async () => {
     const { provider, globalStore, workspaceStore } = await createProvider();
