@@ -222,7 +222,10 @@ export class Database extends Context.Service<
                 // spends blocked; the spike measured a deliberately held
                 // transaction blocking the other process for its full
                 // duration.
-                const payloads = drafts.map(payloadOf);
+                const payloads = yield* Effect.try({
+                  try: () => drafts.map(payloadOf),
+                  catch: writeFailed,
+                });
                 const committed = yield* Effect.acquireUseRelease(
                   Effect.try({
                     try: () => db.exec('BEGIN IMMEDIATE'),

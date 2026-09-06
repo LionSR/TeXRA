@@ -195,7 +195,11 @@ import {
   type AgentPlatform,
   type SessionView,
 } from '../../../packages/agent/src/index';
-import { Runtime, Sessions } from '../../../packages/agent/src/effect';
+import {
+  aggregateId,
+  Runtime,
+  Sessions,
+} from '../../../packages/agent/src/effect';
 import { nodePlatform } from '../../../packages/agent/src/node';
 
 /** The embedder's shutdown path, as the package reads it: `shutdownRan`
@@ -563,12 +567,12 @@ describe('agent package run lifecycle', () => {
 
   it('a scoped reader holds its own transcript interest and clears it at the scope, leaving the run its own', async () => {
     await runAgent(INPUT).result;
-    const interest = [{ id: '["stream","stream-1"]', fromSeq: 0 }];
+    const interest = [{ id: aggregateId('stream', 'stream-1'), fromSeq: 0 }];
 
     const program = Effect.gen(function* () {
       const sessions = yield* Sessions;
       const session = yield* sessions.open();
-      yield* Effect.scoped(session.subscribe(interest as never));
+      yield* Effect.scoped(session.subscribe(interest));
     }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
     await Effect.runPromise(program);
 
@@ -673,7 +677,7 @@ describe('agent package run lifecycle', () => {
     // The run's stream is subscribed as soon as it exists in the session.
     expect(mocks.setTranscriptSubscriptions).toHaveBeenCalledWith(
       'sdk/stream-1',
-      [{ id: '["stream","stream-1"]', fromSeq: 0 }],
+      [{ id: aggregateId('stream', 'stream-1'), fromSeq: 0 }],
     );
     enterRun?.();
     const view = (await first).value as SessionView;

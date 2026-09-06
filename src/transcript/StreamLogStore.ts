@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import pMap from 'p-map';
 import PQueue from 'p-queue';
 
+import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
@@ -1335,8 +1336,8 @@ export class StreamLogStore {
    * Inline them at hydration so every renderer/export receives full content.
    * Keep this reader until the cutover history importer has converted these
    * rows; retire it with that importer (three months after its release).
-   * Missing/invalid artifacts fail hydration and keep saves from replacing
-   * the source with a preview. Summary reads deliberately do not open spills.
+   * Missing artifacts retain the preview with an unavailable notice; invalid
+   * paths and other I/O failures reject hydration. Summary reads skip spills.
    */
   private async hydratePersistedEntries(
     streamId: StreamTabId,
@@ -1371,15 +1372,31 @@ export class StreamLogStore {
           !ExecutionIdSchema.safeParse(segments[1]).success
         )
           throw new Error(`Stream ${streamId}: invalid transcript spill path.`);
-        const full = await StorageFS.read(segments.join('/'));
-        if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
-          const data = { ...entry.data, output: full };
-          delete data.spillPath;
-          return { ...entry, data };
+        let full: string | undefined;
+        try {
+          full = await StorageFS.read(segments.join('/'));
+        } catch (error) {
+          if (!isFileNotFoundError(error)) throw error;
         }
-        const data = { ...entry.data };
-        delete data.spillPath;
-        return { ...entry, text: full, data };
+        let preview = entry.text ?? '';
+        if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
+          preview =
+            typeof entry.data.output === 'string'
+              ? entry.data.output
+              : (JSON.stringify(entry.data.output) ?? '');
+        }
+        const notice =
+          '[Full output unavailable: the retained artifact was deleted.]';
+        const content =
+          full ??
+          (preview.endsWith(notice) ? preview : `${preview}\n\n${notice}`);
+        // Keep a missing attachment's reference and preview for a possible
+        // restore; repeated hydration must not multiply the notice.
+        if (full !== undefined && entry.data) delete entry.data.spillPath;
+        if (entry.messageType === MESSAGE_TYPES.TOOL_USE)
+          entry.data.output = content;
+        else entry.text = content;
+        return entry;
       },
       { concurrency: STREAM_LOG_LOAD_CONCURRENCY },
     );

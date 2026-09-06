@@ -178,8 +178,8 @@ now resolves those artifacts at the storage boundary for cold reads, resident
 hydration and deletion rollback preservation. It replaces previews with full
 text/tool output and removes the reference from the hydrated row; every
 renderer receives the same canonical content. No spill writer or host-specific
-reader is restored. Summary listing does not open artifacts. Invalid paths or
-unreadable artifacts reject hydration, preserving the original stored history.
+reader is restored. Summary listing does not open artifacts. Invalid paths and I/O failures reject hydration. Missing artifacts preserve
+the stored preview and reference with an explicit unavailable notice.
 The reader is limited to recorder-owned `executions/<id>/toolOutput/*.txt`
 paths and retires with the cutover's retained-history importer.
 
@@ -194,3 +194,18 @@ Follow-up local validation: full lint, full typecheck, formatting and extension
 build passed. The full suite with `--maxWorkers=4` passed on the repair tree:
 765 suites / 9,085 tests passed; one suite / five tests skipped. Logs are under
 `/private/tmp/texra-11972-review-*.log`.
+
+The second review pass corrected missing-artifact handling: ENOENT preserves
+preview content and permits guarded deletion; other I/O failures still surface.
+It also exports `aggregateId` and `AggregateId` beside the Effect SDK's public
+subscription type, and maps pre-transaction JSON serialization errors to
+`DatabaseWriteFailed`. Existing suites cover missing-spill reads/deletion,
+public-constructor subscription without a cast, and typed non-JSON failure
+without consuming an ordinal.
+
+Second-pass validation: all 92 focused tests passed, followed by the full suite
+with `--maxWorkers=8`: 765 suites / 9,087 tests passed, one suite / five tests
+skipped. Full lint, typecheck, formatting and extension build passed. The first
+focused attempt used a generic-error mock instead of ENOENT; that fixture was
+corrected, and a full run that had already loaded it was stopped and restarted.
+These figures are from the completed final run, not the interrupted one.
