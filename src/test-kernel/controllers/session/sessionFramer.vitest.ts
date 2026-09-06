@@ -10,7 +10,7 @@
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Layer, Queue, Stream, SubscriptionRef } from 'effect';
 import { TestClock } from 'effect/testing';
-import { describe, expect } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import {
   SessionEventLog,
@@ -29,6 +29,7 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SessionBridge } from '@controllers/session/SessionBridge';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -43,6 +44,7 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 const SELF = '["test-host",4242,"self-start"]';
@@ -163,6 +165,35 @@ const framerSource = Effect.gen(function* () {
 });
 
 describe('session framer', () => {
+  it('preserves stream and execution subscription keys across the webview bridge', async () => {
+    const session = createTestSession();
+    const bridge = new SessionBridge({
+      session,
+      onPortClosed: () => {},
+      handleHostRequest: async () => {
+        throw new Error('No host request is expected.');
+      },
+    });
+    const keys = [
+      qualifyAggregateId('stream', STREAM),
+      qualifyAggregateId('execution', EXECUTION),
+    ];
+    try {
+      bridge.attach({ id: PORT, send: () => {} }).receive({
+        ...subscribe,
+        session: session.roots.storage,
+        aggregates: keys.map((id) => ({ id, fromSeq: 0 })),
+      });
+      await vi.waitFor(() => {
+        expect(
+          [...SubscriptionRef.getUnsafe(session.view).folded.keys()].toSorted(),
+        ).toEqual(keys.toSorted());
+      });
+    } finally {
+      bridge.dispose();
+      session.dispose();
+    }
+  });
   it.effect(
     'answers a Subscribe with the replay, then frames the tail every 16 ms with one chunk per row',
     () =>

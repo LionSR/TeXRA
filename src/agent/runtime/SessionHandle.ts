@@ -162,6 +162,8 @@ export class SessionHandle {
   readonly folded: SessionGraph['folded'];
   /** Ordered replay and live inputs for each transport subscription. */
   readonly inputs: SessionGraph['inputs'];
+  /** Qualified aggregate subscriptions, owned by the session graph. */
+  readonly subscriptions: SessionGraph['subscriptions'];
   /** Session-scoped status plane. */
   readonly status: StreamStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
@@ -241,6 +243,7 @@ export class SessionHandle {
     this.folded = graph.folded;
     this.requests = graph.requests;
     this.inputs = graph.inputs;
+    this.subscriptions = graph.subscriptions;
     const status = new StreamStatusMachine(
       (event) => this.publishStatus(event),
       (streamId, detail) => this.setUnreadable(streamId, detail),
@@ -621,7 +624,7 @@ export class SessionHandle {
   ): void {
     if (this.disposed) return;
     effectRuntime().runFork(
-      this.graph.subscriptions.set(
+      this.subscriptions.set(
         port,
         set.map(({ id, fromSeq }) => ({
           id: qualifyAggregateId('stream', id),
