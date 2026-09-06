@@ -28,6 +28,7 @@ import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -493,7 +494,7 @@ async function resumeQueuedToolUse(
     session.publish([
       {
         type: 'updateQueuedFollowUps',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         messages: session.followUps.getAll(streamId),
       },
     ]);

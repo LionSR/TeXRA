@@ -245,7 +245,7 @@ two permanent settings files (`state.json`, `config.json`).
 
 ```
 event
-  commit        INTEGER PRIMARY KEY AUTOINCREMENT   -- database-wide total order, never reused
+  "commit"      INTEGER PRIMARY KEY AUTOINCREMENT   -- database-wide total order, never reused
   aggregate_id  TEXT NOT NULL REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE
   seq           INTEGER NOT NULL                    -- per-aggregate, dense from 1
   type          TEXT NOT NULL                       -- versioned, e.g. "run.start.1"
@@ -254,8 +254,8 @@ event
   data          TEXT NOT NULL                       -- Zod-validated JSON payload
   UNIQUE (aggregate_id, seq)
   INDEX (aggregate_id, type, seq)                   -- latest-of-type per stream
-  INDEX (aggregate_id, commit)                      -- bounded cross-aggregate resume reads
-  INDEX (type, commit)                              -- listing tier across streams
+  INDEX (aggregate_id, "commit")                    -- bounded cross-aggregate resume reads
+  INDEX (type, "commit")                            -- listing tier across streams
 
 event_sequence
   aggregate_id  TEXT PRIMARY KEY                    -- kind-qualified AggregateId (C2)
@@ -265,6 +265,19 @@ event_sequence
   closed        INTEGER NOT NULL DEFAULT 0          -- 1 after the aggregate's tombstone (C9)
   INDEX (parent_id)
 ```
+
+The ordinal column is named `commit` in the event vocabulary and quoted as
+`"commit"` at every SQL declaration and reference, including all C7 queries.
+The stage 0 host measurements rejected the unquoted SQLite keyword on every
+supported floor.
+
+Every connection sets a nonzero `PRAGMA busy_timeout` before any other
+configuration statement, including `PRAGMA journal_mode = WAL`, which can
+itself contend with another opener. Stage 0 measured 26 to 55 percent failed
+appends with no busy timeout and zero failures with it across 800 concurrent
+four-kilobyte appends. The initial timeout is 5000 ms. Exhausting it fails the
+transaction explicitly; it never permits dropping an event or assigning an
+ordinal outside the transaction.
 
 Every connection enables and verifies `PRAGMA foreign_keys = ON` before any
 transaction. Parents are inserted before dependents and an aggregate's
@@ -486,7 +499,7 @@ publisher waits for a remote renderer.
 
 **C7. Read path.** Five read queries, bounded reads, and one wake level:
 
-- `all(fromCommit, throughCommit?)`: events with `commit > fromCommit` in
+- `all(fromCommit, throughCommit?)`: events with `"commit" > fromCommit` in
   commit order. The optional inclusive upper bound makes one finite read;
   without it, this supplies the table tail and the frozen NDJSON projection,
   which needs every row including transcript rows of unsubscribed streams.
@@ -503,8 +516,8 @@ publisher waits for a remote renderer.
   aggregates, not streams: the stream aggregate plus its execution aggregate
   (via the `run.start` edge), each with its own `fromSeq`.
 - `aggregatesAfterCommit(aggregateIds, afterCommit)`: rows of only the named
-  aggregates with `commit > afterCommit`, returned in commit order through
-  `(aggregate_id, commit)`. Resume supplies the stream and execution ids and
+  aggregates with `"commit" > afterCommit`, returned in commit order through
+  `(aggregate_id, "commit")`. Resume supplies the stream and execution ids and
   the latest snapshot's commit. Execution `seq` is never reused as a stream
   cursor, and a dormant run never scans unrelated session history. The
   message-base read in runtime §2.3 uses the same execution index with an
@@ -537,7 +550,7 @@ before closing the transaction. The typed edges include a workflow's
 `checkpointId` under its `workflow-checkpoint` kind. Newly delivered streams
 and their execution, checkpoint, or inquiry aggregates receive current claims in the same batch,
 without waiting for another event. The bound is the SQLite-maintained committed ordinal,
-not `MAX(event.commit)`, which can fall when retention removes rows.
+not `MAX(event."commit")`, which can fall when retention removes rows.
 
 The batch keeps events before text/local inputs and ends with the existing
 transient `Drained` marker, extended by one field:
@@ -612,7 +625,7 @@ a `seq` value. The reserved migration aggregate is excluded from these
 session queries.
 
 **C8. Two-tier residency.** Listing facts are latest-of-type lookups over the
-`(aggregate_id, type, seq)` index, or a `GROUP BY` over `(type, commit)` for
+`(aggregate_id, type, seq)` index, or a `GROUP BY` over `(type, "commit")` for
 the whole session; they never fold transcripts. One listing fact is a set,
 not a latest: outstanding approvals are every `approval.requested` on the
 aggregate without a matching `approval.resolved`, keyed by request id, over

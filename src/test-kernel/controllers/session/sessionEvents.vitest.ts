@@ -44,6 +44,7 @@ import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   STREAM_PHASE,
   type ExecutionId,
@@ -57,8 +58,8 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
-const SELF = '4242:self-start';
-const OTHER = '4343:other-start';
+const SELF = '["test-host",4242,"self-start"]';
+const OTHER = '["test-host",4343,"other-start"]';
 const STREAM = 'stream:framing' as StreamTabId;
 const EXECUTION = 'ab12cd' as ExecutionId;
 const OLDER = 'stream:older' as StreamTabId;
@@ -91,7 +92,7 @@ const settle = (
 
 const runStart: SessionEventDraft = {
   type: 'run.start',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   executionId: EXECUTION,
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
@@ -101,14 +102,14 @@ const runStart: SessionEventDraft = {
 
 const waiting: SessionEventDraft = {
   type: 'status',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   phase: STREAM_PHASE.WAITING,
   cause: 'wait',
 };
 
 const requested: SessionEventDraft = {
   type: 'approval.requested',
-  aggregateId: STREAM,
+  aggregateId: qualifyAggregateId('stream', STREAM),
   requestId: 'req-1',
   payload: {
     kind: 'bash',
@@ -185,6 +186,38 @@ function drawnSequence(states: Iterable<ReturnType<typeof drawn>>) {
 
 describe('session events and view', () => {
   it.effect(
+    'keeps an inquiry independent of a removed stream with the same logical id',
+    () =>
+      Effect.gen(function* () {
+        const events = yield* SessionEvents;
+        const log = yield* SessionEventLog;
+        const logicalId = 'ei_012345abcdef';
+        const stream = qualifyAggregateId('stream', logicalId);
+        const inquiry = qualifyAggregateId('inquiry', logicalId);
+        yield* events.publish([
+          { ...runStart, aggregateId: stream },
+          {
+            type: 'inquiryThreadUpdated',
+            aggregateId: inquiry,
+            threadId: logicalId,
+            parentStreamId: null,
+            status: 'open',
+            lastQuestionPreview: 'Which boundary condition applies?',
+            lastActivityIso: '2026-09-06T12:00:00.000Z',
+            turnCount: 1,
+          },
+          { type: 'stream.removed', aggregateId: stream },
+        ]);
+        expect(yield* log.exists(stream)).toBe(false);
+        expect(yield* log.exists(inquiry)).toBe(true);
+        const rows = yield* Stream.runCollect(events.aggregate(inquiry, 0));
+        expect(rows.map(({ type, seq }) => ({ type, seq }))).toEqual([
+          { type: 'inquiryThreadUpdated', seq: 1 },
+        ]);
+      }).pipe(Effect.provide(graph([]))),
+  );
+
+  it.effect(
     'publishes nothing before the marker, then every commit in order',
     () =>
       Effect.gen(function* () {
@@ -208,14 +241,14 @@ describe('session events and view', () => {
         yield* events.publish([
           {
             type: 'approval.resolved',
-            aggregateId: STREAM,
+            aggregateId: qualifyAggregateId('stream', STREAM),
             requestId: 'req-1',
           },
         ]);
         yield* events.publish([
           {
             type: 'status',
-            aggregateId: STREAM,
+            aggregateId: qualifyAggregateId('stream', STREAM),
             phase: STREAM_PHASE.RUNNING,
             previousPhase: STREAM_PHASE.WAITING,
             cause: 'resume',
@@ -313,7 +346,9 @@ describe('session events and view', () => {
         // A stream born after the build enters through its own row alone,
         // above the reserved space, so a renderer attached at open sees it
         // as new.
-        yield* events.publish([{ ...runStart, aggregateId: STREAM }]);
+        yield* events.publish([
+          { ...runStart, aggregateId: qualifyAggregateId('stream', STREAM) },
+        ]);
         yield* settle(view.ref, (v) => v.streams.has(STREAM));
         const live = yield* SubscriptionRef.get(view.ref);
         expect(live.streams.get(STREAM)?.createdAt).toBeGreaterThan(

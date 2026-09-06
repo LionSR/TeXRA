@@ -48,6 +48,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -680,7 +681,7 @@ function seedStream(
   };
   publish({
     type: 'run.start',
-    aggregateId: streamId,
+    aggregateId: qualifyAggregateId('stream', streamId),
     executionId,
     identity,
     category: options.category ?? AgentCategory.ToolUse,
@@ -694,7 +695,7 @@ function seedStream(
   if (identity.kind === 'agent') {
     publish({
       type: 'run.config',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       executionId,
       config: { model: HARNESS_MODEL },
     });
@@ -710,7 +711,7 @@ function seedPhase(
   seedStream(streamId);
   publish({
     type: 'status',
-    aggregateId: streamId,
+    aggregateId: qualifyAggregateId('stream', streamId),
     phase,
     cause: 'harness',
     ...(runStartedAt !== undefined ? { runStartedAt } : {}),
@@ -720,13 +721,16 @@ function seedPhase(
 function seedDescription(streamId: StreamTabId, description: string): void {
   publish({
     type: 'updateStreamDescription',
-    aggregateId: streamId,
+    aggregateId: qualifyAggregateId('stream', streamId),
     description,
   });
 }
 
 function removeStream(streamId: StreamTabId): void {
-  publish({ type: 'stream.removed', aggregateId: streamId });
+  publish({
+    type: 'stream.removed',
+    aggregateId: qualifyAggregateId('stream', streamId),
+  });
   harnessStreams.delete(streamId);
 }
 
@@ -1263,7 +1267,7 @@ seedRows(STREAM_ID, harnessInitialEntries());
 if (QUEUED_FOLLOW_UPS.length > 0) {
   publish({
     type: 'updateQueuedFollowUps',
-    aggregateId: STREAM_ID,
+    aggregateId: qualifyAggregateId('stream', STREAM_ID),
     messages: QUEUED_FOLLOW_UPS,
   });
 }
@@ -1440,7 +1444,7 @@ if (SHOW_CHILDREN) {
     if (child.agentName === 'reviewer') {
       publish({
         type: 'usage',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         storageKey: child.executionId as ExecutionId,
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
@@ -1501,8 +1505,16 @@ if (SHOW_TODOS) {
     },
   };
   publish(
-    { type: 'updateTodos', aggregateId: STREAM_ID, todos: [...workPlan.todos] },
-    { type: 'updatePlan', aggregateId: STREAM_ID, plan: workPlan.plan },
+    {
+      type: 'updateTodos',
+      aggregateId: qualifyAggregateId('stream', STREAM_ID),
+      todos: [...workPlan.todos],
+    },
+    {
+      type: 'updatePlan',
+      aggregateId: qualifyAggregateId('stream', STREAM_ID),
+      plan: workPlan.plan,
+    },
   );
 }
 
@@ -1611,7 +1623,7 @@ if (SHOW_EXTERNAL_INQUIRY) {
   });
   publish({
     type: 'inquiryThreadUpdated',
-    aggregateId: EXTERNAL_INQUIRY_THREAD_ID,
+    aggregateId: qualifyAggregateId('inquiry', EXTERNAL_INQUIRY_THREAD_ID),
     threadId: EXTERNAL_INQUIRY_THREAD_ID,
     parentStreamId: STREAM_ID,
     status: 'open',

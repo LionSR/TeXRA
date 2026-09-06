@@ -42,11 +42,12 @@ import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { DisposableStore } from '@platform/disposable';
-import type {
-  AgentSource,
-  ExecutionId,
-  StreamTabId,
-  UserFollowUpSupport,
+import {
+  aggregateId as qualifyAggregateId,
+  type AgentSource,
+  type ExecutionId,
+  type StreamTabId,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import {
   AgentCategory,
@@ -444,7 +445,7 @@ async function assembleAgentLaunchContext(
       : [
           {
             type: 'run.start' as const,
-            aggregateId: streamId,
+            aggregateId: qualifyAggregateId('stream', streamId),
             executionId,
             identity: { kind: 'agent' as const, agent: config.agent },
             userFollowUpSupport:
@@ -469,7 +470,7 @@ async function assembleAgentLaunchContext(
     // Every activation, first launch and resume alike (PRD 6, item 8).
     {
       type: 'run.activate',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       category: setting.agentCategory,
       isRemote,
       background,

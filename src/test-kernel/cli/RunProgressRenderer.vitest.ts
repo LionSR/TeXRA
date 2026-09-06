@@ -19,6 +19,7 @@ import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgress
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import type { CliContext } from '@cli/runtime/cliContext';
 import {
+  aggregateId as qualifyAggregateId,
   STREAM_PHASE,
   type ActiveChildInfo,
   type ConversationProgress,
@@ -303,7 +304,7 @@ async function publishRun(
   session.publish([
     {
       type: 'run.start',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       executionId,
       identity: { kind: 'agent', agent },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

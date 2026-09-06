@@ -21,8 +21,6 @@
  * from the summary tier when a reader subscribes; the event table replaces
  * that.
  */
-import * as os from 'node:os';
-
 import {
   Context,
   Duration,
@@ -44,7 +42,6 @@ import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
-  ownerProcessStart,
   processOwnerId,
   SessionEventLog,
   sessionEventsLayer,
@@ -60,6 +57,8 @@ import { createLog } from '@logger/logUtils';
 import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
+  aggregateId as qualifyAggregateId,
+  ownerIdentity,
   type OwnerId,
   type SessionCloseReport,
   type StreamTabId,
@@ -156,11 +155,7 @@ const ownerLiveness = Layer.effectDiscard(
       const held: OwnerId[] = [];
       for (const owner of owners) {
         const liveness = yield* Effect.promise(() =>
-          proveOwnerLiveness({
-            pid: Number(owner.slice(0, owner.indexOf(':'))),
-            processStart: ownerProcessStart(owner),
-            hostname: os.hostname(),
-          }),
+          proveOwnerLiveness(ownerIdentity(owner)),
         );
         if (liveness !== 'dead') held.push(owner);
       }
@@ -225,7 +220,7 @@ const transcriptBridge = (transcripts: StreamLogStore) =>
               yield* events.publish(
                 rows.map((entry) => ({
                   type: 'transcript.entry',
-                  aggregateId: streamId,
+                  aggregateId: qualifyAggregateId('stream', streamId),
                   entry,
                 })),
               );

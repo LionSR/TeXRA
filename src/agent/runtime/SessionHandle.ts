@@ -58,6 +58,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
+  aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
@@ -161,6 +162,8 @@ export class SessionHandle {
   readonly folded: SessionGraph['folded'];
   /** Ordered replay and live inputs for each transport subscription. */
   readonly inputs: SessionGraph['inputs'];
+  /** Qualified aggregate subscriptions, owned by the session graph. */
+  readonly subscriptions: SessionGraph['subscriptions'];
   /** Session-scoped status plane. */
   readonly status: StreamStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
@@ -240,6 +243,7 @@ export class SessionHandle {
     this.folded = graph.folded;
     this.requests = graph.requests;
     this.inputs = graph.inputs;
+    this.subscriptions = graph.subscriptions;
     const status = new StreamStatusMachine(
       (event) => this.publishStatus(event),
       (streamId, detail) => this.setUnreadable(streamId, detail),
@@ -353,7 +357,7 @@ export class SessionHandle {
     this.publish([
       {
         type: 'approval.policy',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         snapshot: this.approvalPolicySnapshotFor(streamId),
       },
     ]);
@@ -610,15 +614,24 @@ export class SessionHandle {
 
   /**
    * Replace one port's transcript subscription set (PRD 7.2, 8.1): the
-   * aggregates whose transcript tier the view folds for that port. An empty
+   * logical stream ids whose transcript tier the view folds for that port.
+   * Qualify them once when entering the event graph. An empty
    * set removes the port; the view's set is the union over every port.
    */
   setTranscriptSubscriptions(
     port: string,
-    set: readonly TranscriptSubscription[],
+    set: readonly (Omit<TranscriptSubscription, 'id'> & { id: StreamTabId })[],
   ): void {
     if (this.disposed) return;
-    effectRuntime().runFork(this.graph.subscriptions.set(port, set));
+    effectRuntime().runFork(
+      this.subscriptions.set(
+        port,
+        set.map(({ id, fromSeq }) => ({
+          id: qualifyAggregateId('stream', id),
+          fromSeq,
+        })),
+      ),
+    );
   }
 
   /** The status machine's hold on a stream this process cannot read, or its

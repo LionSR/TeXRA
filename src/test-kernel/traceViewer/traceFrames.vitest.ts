@@ -7,6 +7,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -48,10 +49,15 @@ function foldTrace(trace: TraceDocument) {
     session: 'trace',
     generation: 1,
     cursor: 0,
-    aggregates: [{ id: trace.streamId, fromSeq: 0 }],
+    aggregates: [
+      { id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 },
+    ],
   });
   const view = fold(emptySessionView('trace', 0), [
-    { _tag: 'subscriptions', set: [{ id: trace.streamId, fromSeq: 0 }] },
+    {
+      _tag: 'subscriptions',
+      set: [{ id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 }],
+    },
     ...frame.events,
     { _tag: 'local', local: { self: [], heldBy: [], unreadable: [] } },
   ]);
@@ -110,6 +116,16 @@ function legacyTrace(
 describe('traceEvents legacy-status fallback (issue #7188)', () => {
   it('replays workflow content without tool-use state', () => {
     const trace = legacyTrace(undefined);
+    trace.entries.push(
+      StreamLogEntrySchema.parse({
+        id: 'archived-log',
+        seqNo: 1,
+        timestamp: 1,
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: LOG_LEVELS.INFO,
+        text: 'Archived derivation',
+      }),
+    );
 
     const replayed = foldTrace(trace);
     expect(replayed).toMatchObject({
@@ -119,6 +135,13 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
       compileFailures: {},
     });
     expect(replayed).not.toHaveProperty('todos');
+    expect(replayed?.transcript.rows).toContainEqual(
+      expect.objectContaining({
+        id: 'archived-log',
+        kind: 'log',
+        text: expect.objectContaining({ full: 'Archived derivation' }),
+      }),
+    );
   });
 
   it('replays tool-use content without workflow output state', () => {

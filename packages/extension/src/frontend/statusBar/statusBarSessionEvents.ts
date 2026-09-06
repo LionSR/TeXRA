@@ -3,6 +3,7 @@ import { Effect, Fiber, Stream } from 'effect';
 // Local imports - runtime events
 import type { SessionHandle } from '@agent/runtime';
 import { effectRuntime } from '@platform/processRuntime';
+import { aggregateTarget } from '@shared/schemas';
 
 interface StatusBarSessionEventOptions {
   session: Pick<SessionHandle, 'events' | 'now' | 'status'>;
@@ -31,7 +32,7 @@ export function subscribeStatusBarSessionEvents({
         // total, so stale async events skip the refresh.
         if (
           event.type === 'usage' &&
-          session.status.isInFlight(event.aggregateId)
+          session.status.isInFlight(aggregateTarget(event.aggregateId).id)
         ) {
           onUsageChanged();
         }

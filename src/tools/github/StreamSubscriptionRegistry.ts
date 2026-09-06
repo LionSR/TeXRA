@@ -21,7 +21,10 @@ import {
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
 import type { Disposable } from '@platform/interfaces';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  type StreamTabId,
+} from '@shared/schemas';
 
 export interface SubscriptionBinding<K extends string> {
   key: K;
@@ -113,7 +116,7 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
           owner.publish([
             {
               type: 'updateQueuedFollowUps',
-              aggregateId: streamId,
+              aggregateId: qualifyAggregateId('stream', streamId),
               messages: owner.followUps.getAll(streamId),
             },
           ]);

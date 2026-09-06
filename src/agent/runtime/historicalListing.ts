@@ -21,6 +21,7 @@
  */
 import { createLog } from '@logger/logUtils';
 import {
+  aggregateId as qualifyAggregateId,
   USER_FOLLOW_UP_SUPPORT,
   type OwnerId,
   type SessionEvent,
@@ -150,7 +151,7 @@ function historicalStream(
   const drafts: SessionEventDraft[] = [
     {
       type: 'run.start',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       executionId,
       identity: meta.identity ?? null,
       userFollowUpSupport:
@@ -165,7 +166,7 @@ function historicalStream(
   if (meta.model !== undefined || meta.command !== undefined) {
     drafts.push({
       type: 'run.config',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       executionId,
       config: { model: meta.model, instruction: meta.command },
     });
@@ -173,7 +174,7 @@ function historicalStream(
   if (meta.description) {
     drafts.push({
       type: 'updateStreamDescription',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       description: meta.description,
     });
   }
