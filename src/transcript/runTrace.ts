@@ -14,10 +14,8 @@ import {
   type AgentTrace,
   type StatusEvent,
 } from '@agent/trace';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import type { StreamTabId } from '@shared/schemas';
 import { aggregateError } from '@utils/core';
-import { StorageFS } from '@utils/files/storageFS';
 
 import { attachTranscriptRecorder } from './TexraTranscriptRecorder';
 import type { StreamLogStore, TranscriptWriter } from './StreamLogStore';
@@ -32,7 +30,6 @@ export interface RunTrace {
    * detaches it with the trace.
    */
   readonly handleStatus: (event: StatusEvent) => void;
-  readonly flushSpills: () => Promise<void>;
   readonly dispose: () => void;
 }
 
@@ -57,7 +54,7 @@ function collectFailure(failures: unknown[], action: () => void): void {
  * Produce a trace wired with the standard agent-run subscribers: per-channel
  * channel output AND the transcript recorder.
  *
- * `store` is caller-supplied — production launch paths pass the owning
+ * `store` is caller-supplied, production launch paths pass the owning
  * session's `transcripts` store (`session.transcripts`); there is no
  * process-wide default to fall back to (`@transcript` never imports
  * `@agent/runtime`, so it cannot reach `defaultSession()` itself).
@@ -84,19 +81,12 @@ export function createRunTrace(
   const trace = new TraceEmitter();
   let unsubscribeChannel: (() => void) | undefined;
   let transcript: ReturnType<typeof attachTranscriptRecorder>;
-  const toolOutputDir = `${WORKSPACE_STORAGE_LAYOUT.runs}/${ownerKey}/toolOutput`;
   try {
     unsubscribeChannel = attachChannelSubscriber(trace, {
       channel: streamId,
       isAgent: true,
     });
-    transcript = attachTranscriptRecorder(trace, writer, {
-      pathFor: (entryId) => `${toolOutputDir}/${entryId}.txt`,
-      write: async (path, content) => {
-        await StorageFS.ensureDir(toolOutputDir);
-        await StorageFS.writeAtomic(path, content);
-      },
-    });
+    transcript = attachTranscriptRecorder(trace, writer);
   } catch (error) {
     const failures = [error];
     collectFailure(failures, () => unsubscribeChannel?.());
@@ -130,7 +120,6 @@ export function createRunTrace(
   return {
     trace,
     handleStatus: (event) => transcript.handleStatus(event),
-    flushSpills: () => transcript.flushSpills(),
     dispose: () => {
       if (disposed) return;
       disposed = true;

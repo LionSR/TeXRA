@@ -109,18 +109,12 @@ export function createChildStream(
     executionId,
     options.reservedWriter,
   );
-  let traceDisposed = false;
-  const removeSpillFlusher = session.useArtifactFlusher(async () => {
-    await runTrace.flushSpills();
-    if (traceDisposed) removeSpillFlusher();
-  });
   let detachSessionTrace: (() => void) | undefined;
   let started = false;
   try {
     // The trace's durable arms and the recorder's status port, one attachment.
     detachSessionTrace = session.attachRunTrace(runTrace, childStreamId);
     const disposeTrace = () => {
-      traceDisposed = true;
       detachSessionTrace?.();
       runTrace.dispose();
     };
@@ -258,7 +252,6 @@ export function createChildStream(
           },
         });
       },
-      () => removeSpillFlusher(),
       () => detachSessionTrace?.(),
       () => runTrace.dispose(),
     ];

@@ -1,3 +1,4 @@
+// Shared contracts and utilities
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -37,7 +38,7 @@ export interface StreamLogDelta {
    * Streaming-text appends since the previous emission, merged to one chunk
    * per entry id. An `appendText` mutation emits here *instead of* `dirtied`.
    * An entry present in `appended`/`dirtied` already carries its full current
-   * text, so no id appears both by value and as a chunk within one delta —
+   * text, so no id appears both by value and as a chunk within one delta ,
    * and across deltas, an entry-by-value supersedes any chunks a consumer
    * has buffered for its id.
    */
@@ -107,7 +108,7 @@ export function isRunningGroupEntry(entry: StreamLogEntry): boolean {
 
 /**
  * True while a thinking/scratchpad/model-response entry is at
- * `data.status: 'running'` — either genuinely still streaming, or orphaned
+ * `data.status: 'running'` , either genuinely still streaming, or orphaned
  * because its stream never got a `stream.end` (run cancelled, crashed, or
  * the host reloaded mid-stream). Used both for live in-memory tracking
  * (`hasRunningStreamingText`) and, by the same predicate, to identify
@@ -157,7 +158,7 @@ export class StreamLog {
   private readonly pendingDirtiedIds = new Set<string>();
   /**
    * Streaming-text appends since the last drain, per id in arrival order.
-   * Drained into the emission's `textChunks` arm — except for ids the same
+   * Drained into the emission's `textChunks` arm , except for ids the same
    * emission carries by value (`appended`/`dirtied`), whose current text
    * already includes them.
    */
@@ -241,7 +242,7 @@ export class StreamLog {
       [...this.pendingDirtiedIds].filter((id) => !appendedIds.has(id)),
     ).sort((a, b) => a.seqNo - b.seqNo);
     // An entry emitted by value resolves to its *current* object, whose text
-    // already includes every chunk accumulated in this window — emitting its
+    // already includes every chunk accumulated in this window , emitting its
     // chunks too would double-apply them, so they are dropped here. This is
     // the precedence rule consumers rely on: value supersedes chunks.
     const textChunks: StreamLogTextDelta[] = [];
@@ -342,7 +343,7 @@ export class StreamLog {
       return undefined;
     }
 
-    // Direct merge — no Zod parse. update() is on the streaming hot path
+    // Direct merge , no Zod parse. update() is on the streaming hot path
     // (tool output chunks at ~200/sec) and receives trusted data from
     // AgentTrace. Persisted entries are parsed when loaded from storage.
     // Spreading `current` reads its (possibly lazy) text getter, so this is

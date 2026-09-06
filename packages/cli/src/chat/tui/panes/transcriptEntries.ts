@@ -34,7 +34,7 @@ export function isInquiryContinuationText(text: string): boolean {
   return INQUIRY_CONTINUATION_RE.test(text);
 }
 
-export function trimAssistantTranscriptLead(text: string): string {
+function trimAssistantTranscriptLead(text: string): string {
   let index = 0;
   let consumedInvisibleLead = false;
   let leadingAnsi = '';

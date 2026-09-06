@@ -72,6 +72,7 @@ import type { SessionEventDraft } from '@shared/schemas/sessionEvent';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
+import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   buildScenario,
   foldAll,
@@ -85,7 +86,6 @@ import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace, StreamLogStore } from '@transcript';
-import type { StreamLogAppendInput } from '@transcript/StreamLog';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

@@ -40,22 +40,14 @@ describe('createRunTrace dispose', () => {
     const stream = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
     stream.append('a');
-    // Chunk is throttled (49ms window), but the owning session set reaches it.
     for (const entry of flushers.values()) entry.flush();
     expect(store.get('disposed-stream')?.getRange(0)[0]?.text).toBe('a');
 
     handle.dispose();
 
-    // After dispose: more chunks should not reach the store via the global
-    // flusher (because the flusher was removed from `activeFlushers`).
-    // Append another chunk and confirm the owning set no longer pushes
-    // it through. The chunk would still flush via its own per-stream timer,
-    // so we verify by sampling before the timer fires.
+    // Detaching the recorder prevents subsequent chunks from reaching the store.
     stream.append('b');
     for (const entry of flushers.values()) entry.flush();
-    // Only the 'a' chunk should be visible — the 'b' chunk hasn't been
-    // pushed because the flusher was unregistered and the throttled timer
-    // hasn't fired.
     expect(store.get('disposed-stream')?.getRange(0)[0]?.text).toBe('a');
   });
 

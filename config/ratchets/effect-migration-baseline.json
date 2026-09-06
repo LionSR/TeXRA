@@ -123,7 +123,6 @@
       "src/transcript/StagedDeletionCoordinator.ts": 1,
       "src/transcript/StreamLogStore.ts": 1,
       "src/transcript/StreamSnapshotStore.ts": 1,
-      "src/transcript/TexraTranscriptRecorder.ts": 1,
       "src/utils/core/perKeyQueue.ts": 1
     },
     "import:p-map": {

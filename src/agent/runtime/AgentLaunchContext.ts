@@ -389,7 +389,6 @@ async function assembleAgentLaunchContext(
   const runTrace = resources.add<RunTrace>({
     trace: rawRunTrace.trace,
     handleStatus: rawRunTrace.handleStatus,
-    flushSpills: rawRunTrace.flushSpills,
     dispose: () => {
       try {
         attachment.detach?.();
@@ -398,30 +397,8 @@ async function assembleAgentLaunchContext(
       }
     },
   });
-  {
-    let traceDisposed = false;
-    const removeSpillFlusher = session.useArtifactFlusher(async () => {
-      await rawRunTrace.flushSpills();
-      if (traceDisposed) removeSpillFlusher();
-    });
-    let detachTrace: (() => void) | undefined;
-    try {
-      // The trace's durable arms and the recorder's status port, one
-      // attachment: status is a session fact, not an AgentEvent, and the
-      // recorder hears it through the session in transcript order.
-      detachTrace = session.attachRunTrace(rawRunTrace, streamId);
-      attachment.detach = () => {
-        // Keep the flusher through the execution lease's post-dispose drain.
-        // Its next successful flush removes it from the session.
-        traceDisposed = true;
-        detachTrace?.();
-      };
-    } catch (error) {
-      detachTrace?.();
-      removeSpillFlusher();
-      throw error;
-    }
-  }
+  attachment.detach = session.attachRunTrace(rawRunTrace, streamId);
+
   const agentLogger = runTrace.trace;
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);

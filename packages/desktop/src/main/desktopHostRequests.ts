@@ -55,11 +55,7 @@ import type {
   HostOutcome,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
-import {
-  findTranscriptSpillFile,
-  spillArtifactOpenFailedMessage,
-  SPILL_ARTIFACT_DELETED_MESSAGE,
-} from '@transcript/spillArtifacts';
+
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -429,21 +425,6 @@ export function createDesktopHostRequests(
     options.postSurfaceAction({ kind: 'selectNew' });
   }
 
-  async function openSpillArtifact(spillPath: string): Promise<void> {
-    let file: string | undefined;
-    try {
-      await session.flushArtifacts();
-      file = await findTranscriptSpillFile(spillPath);
-    } catch (error) {
-      throw new Rejected({
-        reason: spillArtifactOpenFailedMessage(toErrorMessage(error)),
-      });
-    }
-    if (!file) {
-      throw new Rejected({ reason: SPILL_ARTIFACT_DELETED_MESSAGE });
-    }
-    await host.openPath(file);
-  }
 
   /**
    * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
@@ -586,9 +567,6 @@ export function createDesktopHostRequests(
     switch (request.kind) {
       case 'openFile':
         await host.openPath(request.path, request.line ?? undefined);
-        return done;
-      case 'openSpillArtifact':
-        await openSpillArtifact(request.spillPath);
         return done;
       case 'openLabel': {
         const opened = await fileActions.findAndOpenLabel(request.label);

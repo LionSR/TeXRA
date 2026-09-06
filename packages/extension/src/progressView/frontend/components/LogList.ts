@@ -153,20 +153,6 @@ export class LogList extends LitElement {
   };
 
   private activateLinkFromEvent(event: Event): void {
-    const spillLink = getComposedPathElement<HTMLElement>(
-      event,
-      '.spill-artifact-link',
-    );
-    if (spillLink?.dataset.spillPath) {
-      event.preventDefault();
-      this.dispatchEvent(
-        SessionUiEvents.host({
-          kind: 'openSpillArtifact',
-          spillPath: spillLink.dataset.spillPath,
-        }),
-      );
-      return;
-    }
     const fileLink = getComposedPathElement<HTMLElement>(event, '.file-link');
     if (fileLink?.dataset.file) {
       const line = Number(fileLink.dataset.fileLine);

@@ -15,13 +15,6 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { createFlushableDebounce, isObject } from '@utils/core';
-import { createListenerSet } from '@utils/core/listenerSet';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { StorageFS } from '@utils/files/storageFS';
-import { formatResultCount } from '@utils/text/stringUtils';
-
-import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
@@ -30,7 +23,14 @@ import {
   type StreamLogAppendInput,
   type StreamLogDelta,
   type StreamLogUpdatePatch,
-} from './StreamLog';
+} from '@shared/session/traceEntries';
+import { createFlushableDebounce, isObject } from '@utils/core';
+import { createListenerSet } from '@utils/core/listenerSet';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { StorageFS } from '@utils/files/storageFS';
+import { formatResultCount } from '@utils/text/stringUtils';
+
+import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 import {
   parseSummaryShape,
   StreamSummaryCacheStore,

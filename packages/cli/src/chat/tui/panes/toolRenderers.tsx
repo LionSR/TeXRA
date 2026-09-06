@@ -84,9 +84,8 @@ interface DisplayLineOptions {
   readonly width?: number;
   /** Retained subagent identities used by executions wait/view headers. */
   readonly executionLabels?: ExecutionLabels;
-  /** Full-transcript spill hydration: 'loaded' prepends the "Full output:"
-   *  header; 'failed' retains the bounded preview and failure notice. */
-  readonly compactOutput?: 'loaded' | 'failed';
+  /** Include complete output even when the ordinary tool card omits it. */
+  readonly showFullOutput?: boolean;
 }
 
 /** One styled fragment of a tool row. */
@@ -338,18 +337,8 @@ function buildStyledLines(
       : cornerRows(sectionLines(section, elide)),
   );
 
-  // Output text is read from the payload rather than `model.output` so the
-  // on-demand spill reader's substitution (which rewrites `toolUse.outputText`)
-  // reaches the paint; the model still owns whether it is shown at all. Name a
-  // successfully hydrated spill even when the ordinary output block is visible,
-  // so compact and non-compact tools share the same full-output affordance.
   const outputRows = model.showOutput
-    ? [
-        ...(options.compactOutput === 'loaded'
-          ? [row([{ text: 'Full output:' }])]
-          : []),
-        ...cornerRows(elidedLines(transcriptText(toolUse.outputText), elide)),
-      ]
+    ? cornerRows(elidedLines(transcriptText(toolUse.outputText), elide))
     : [];
   const exitCode = model.isError ? model.exitCode : undefined;
   const errorRows = cornerRows(toolErrorLines(model, elide), COLOR_ERROR);
@@ -365,10 +354,8 @@ function buildStyledLines(
     (isBashKind || isMcpToolName(toolUse.toolName));
 
   const compactOutput: ToolDisplayLine[] = [];
-  if (options.compactOutput !== undefined && !model.showOutput) {
-    if (options.compactOutput === 'loaded') {
-      compactOutput.push(row([{ text: 'Full output:' }]));
-    }
+  if (options.showFullOutput && !model.showOutput && toolUse.outputText) {
+    compactOutput.push(row([{ text: 'Full output:' }]));
     for (const line of toolUse.outputText.split('\n')) {
       compactOutput.push(row([{ text: line }]));
     }
@@ -442,7 +429,7 @@ export function toolUseStyledLines(
           executionLabels: options.executionLabels,
         })
       : toolRow.model.headerPreview;
-  const key = `${options.elide === false ? 'f' : 'e'}|${options.compactOutput ?? 'n'}|${options.width ?? 'd'}|${headerPreview}`;
+  const key = `${options.elide === false ? 'f' : 'e'}|${options.showFullOutput ? 'f' : 'n'}|${options.width ?? 'd'}|${headerPreview}`;
   let cached = styledLinesCache.get(toolRow);
   const hit = cached?.get(key);
   if (hit) return hit;

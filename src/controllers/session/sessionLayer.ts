@@ -74,7 +74,7 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 import {
   isRunningStreamingTextEntry,
   type StreamLogDelta,
-} from '@transcript/StreamLog';
+} from '@shared/session/traceEntries';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { sessionRequests } from './SessionRequests';
 import {
