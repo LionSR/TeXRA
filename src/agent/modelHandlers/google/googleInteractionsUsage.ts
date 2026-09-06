@@ -19,11 +19,7 @@ interface GoogleTokenCounts {
 }
 
 /** Map Interactions totals onto TeXRA's unified token model. */
-function tokenCounts(usage: InteractionsUsage | null): GoogleTokenCounts {
-  if (!usage) {
-    return { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
-  }
-
+function tokenCounts(usage: InteractionsUsage): GoogleTokenCounts {
   const inputTokens =
     (usage.total_input_tokens ?? 0) + (usage.total_tool_use_tokens ?? 0);
   const reasoningTokens = usage.total_thought_tokens ?? 0;
@@ -43,45 +39,26 @@ function tokenCounts(usage: InteractionsUsage | null): GoogleTokenCounts {
   };
 }
 
-/** Compute Google cost from Interactions token totals. */
-function computeGoogleInteractionsPrice(
-  usage: InteractionsUsage | null,
-  config: StandardPricingConfig,
-): number {
-  const { inputTokens, outputTokens } = tokenCounts(usage);
-  return computeStandardPrice(
-    {
-      inputTokens,
-      outputTokens,
-      cachedTokens: usage?.total_cached_tokens ?? 0,
-    },
-    config,
-  );
-}
-
 /** Normalize Google Interactions usage into TeXRA's provider-neutral shape. */
 export function normalizeGoogleInteractionsUsage(
   usage: InteractionsUsage | null,
   responseTimeMs: number,
   config: StandardPricingConfig,
 ): NormalizedUsage {
-  return normalizeUsage(
-    {
-      provider: 'google',
-      computePrice: (value) => computeGoogleInteractionsPrice(value, config),
-      extract: (value) => {
-        const { inputTokens, outputTokens, reasoningTokens } =
-          tokenCounts(value);
-        return {
-          inputTokens,
-          outputTokens,
-          cachedTokens: value.total_cached_tokens ?? 0,
-          reasoningTokens,
-          toolUsePromptTokens: value.total_tool_use_tokens ?? 0,
-        };
-      },
-    },
-    usage,
-    responseTimeMs,
-  );
+  if (!usage) return normalizeUsage('google', responseTimeMs, null);
+
+  const { inputTokens, outputTokens, reasoningTokens } = tokenCounts(usage);
+  const tokens = {
+    inputTokens,
+    outputTokens,
+    cachedTokens: usage.total_cached_tokens ?? 0,
+  };
+  return normalizeUsage('google', responseTimeMs, {
+    ...tokens,
+    rawUsage: usage,
+    reasoningTokens,
+    toolUsePromptTokens: usage.total_tool_use_tokens ?? 0,
+    // Output already includes thought tokens; do not add a reasoning surcharge.
+    cost: computeStandardPrice(tokens, config),
+  });
 }
