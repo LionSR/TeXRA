@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { Data, Effect, Semaphore, Stream } from 'effect';
 
 import { debug } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
 import {
@@ -225,7 +226,9 @@ function walkLevel(
  * Walks the memory directory tree in depth-first order, skipping dotfiles,
  * `node_modules`, and symlinks (no realpath/visited guard, so a symlink is
  * never followed rather than risking a cycle). Breaking out of the iteration
- * early interrupts the walk, so no further entries are read.
+ * early interrupts the walk, so no further entries are read. The walk's
+ * fibers are forked from the process runtime's context, like every other
+ * Promise edge in this module's neighbours.
  * @param storagePath - Directory to start walking from
  * @param relativeRoot - Path prefix used to build each entry's relativePath
  * @param options - `maxDepth` (levels below the root; unlimited if omitted)
@@ -236,10 +239,12 @@ export async function* walkMemoryDirectory(
   relativeRoot = '',
   options: MemoryWalkOptions = {},
 ): AsyncGenerator<MemoryWalkEntry> {
-  yield* Stream.toAsyncIterable(
-    Stream.unwrap(
-      Effect.map(Semaphore.make(MEMORY_LISTING_CONCURRENCY), (permits) =>
-        walkLevel(storagePath, relativeRoot, 0, options, permits),
+  yield* await effectRuntime().runPromise(
+    Stream.toAsyncIterableEffect(
+      Stream.unwrap(
+        Effect.map(Semaphore.make(MEMORY_LISTING_CONCURRENCY), (permits) =>
+          walkLevel(storagePath, relativeRoot, 0, options, permits),
+        ),
       ),
     ),
   );

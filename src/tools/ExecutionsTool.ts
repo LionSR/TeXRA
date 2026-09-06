@@ -120,8 +120,11 @@ const DURABLE_READ_CONCURRENCY = 16;
  * receives a follow-up (the user breaking the wait), or `timeoutSeconds`
  * elapse — whichever comes first. `settled` is re-checked once the change
  * listeners are registered, closing the window between the caller's
- * pre-check and registration. Interrupting the winner-less racers aborts
- * the registry wait's signal and disposes the follow-up listener.
+ * pre-check and registration. The race settles on the first completion,
+ * success or defect, so a throw inside the registry wait surfaces at once
+ * instead of stalling until the deadline. Interrupting the winner-less
+ * racers aborts the registry wait's signal and disposes the follow-up
+ * listener.
  */
 const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   function* (
@@ -144,7 +147,7 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     const alreadySettled = Effect.suspend(() =>
       settled() ? Effect.void : Effect.never,
     );
-    yield* Effect.raceAll([
+    yield* Effect.raceAllFirst([
       statusChange,
       alreadySettled,
       Deferred.await(followUp),

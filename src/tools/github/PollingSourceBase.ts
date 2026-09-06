@@ -11,7 +11,7 @@
  * 24 h detach gate) lives here once.
  */
 
-import { Data, Effect } from 'effect';
+import { Cause, Data, Effect, Exit } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
@@ -409,6 +409,16 @@ export abstract class PollingSourceBase<
     }
   }
 
+  /**
+   * @adapter-until 2026-11-05 (introduced 2026-09-06). The setInterval
+   * cadence is the one timer this file keeps off Effect's clock (PRD R8):
+   * "a polling timer must never keep a host process alive on its own", and
+   * rc.112 has no unref-capable scheduler (no `unref` anywhere in
+   * node_modules/effect/dist), so a Schedule-driven fiber would pin the CLI
+   * process. Retire when Effect gains an unref-capable clock or the hosts
+   * decide at process level that a live poller may keep the process alive;
+   * the interval only drives {@link PollingSourceBase.tick}.
+   */
   private ensureTimer(): void {
     this.registerShutdownIfNeeded();
     if (this.timer) return;
@@ -479,18 +489,30 @@ export abstract class PollingSourceBase<
 
   /**
    * Poll every subscription with at most `maxConcurrent` in flight, then run
-   * the post-poll hook. Neither step fails: each hook rejection is classified
-   * or logged at its own site, so the round itself never short-circuits.
+   * the post-poll hook. Each hook rejection is classified or logged at its
+   * own site, so no expected failure short-circuits the round. A defect in
+   * one entry (a throwing `handleFailure`) does not either: every started
+   * poll is joined through its Exit before the combined cause is re-raised,
+   * so `tick`'s in-flight guard never clears while a `pollOne` is still
+   * running and the next interval cannot start an overlapping poll.
    */
   private readonly pollRound = Effect.fn('PollingSourceBase.pollRound')(
     function* (this: PollingSourceBase<K, S>) {
       const now = Date.now();
       const entries = [...this.subscriptions.entries()];
-      yield* Effect.forEach(
+      const exits = yield* Effect.forEach(
         entries,
-        ([key, state]) => this.pollEntry(key, state, now),
-        { concurrency: this.config.maxConcurrent, discard: true },
+        ([key, state]) => Effect.exit(this.pollEntry(key, state, now)),
+        { concurrency: this.config.maxConcurrent },
       );
+      const failures = exits.filter(Exit.isFailure);
+      if (failures.length > 0) {
+        yield* Effect.failCause(
+          failures
+            .map((exit) => exit.cause)
+            .reduce((left, right) => Cause.combine(left, right)),
+        );
+      }
       yield* Effect.tryPromise({
         try: () => this.afterTick(entries, now),
         catch: (cause) => new PollHookRejected({ cause }),
@@ -508,21 +530,23 @@ export abstract class PollingSourceBase<
   );
 
   /** Poll one subscription, routing any failure through handleFailure. */
-  private pollEntry(key: K, state: S, now: number): Effect.Effect<void> {
-    if (state.skipPollUntilMs > now) return Effect.void;
-    return Effect.tryPromise({
-      try: () => this.pollOne(key, state),
-      catch: (cause) => new PollHookRejected({ cause }),
-    }).pipe(
-      Effect.map(() => {
-        state.lastSuccessAt = Date.now();
-        state.consecutiveFailures = 0;
-      }),
-      Effect.catchTag('PollHookRejected', (rejection) =>
-        Effect.sync(() => this.handleFailure(key, state, rejection.cause)),
-      ),
-    );
-  }
+  private readonly pollEntry = Effect.fn('PollingSourceBase.pollEntry')(
+    function* (this: PollingSourceBase<K, S>, key: K, state: S, now: number) {
+      if (state.skipPollUntilMs > now) return;
+      yield* Effect.tryPromise({
+        try: () => this.pollOne(key, state),
+        catch: (cause) => new PollHookRejected({ cause }),
+      }).pipe(
+        Effect.map(() => {
+          state.lastSuccessAt = Date.now();
+          state.consecutiveFailures = 0;
+        }),
+        Effect.catchTag('PollHookRejected', (rejection) =>
+          Effect.sync(() => this.handleFailure(key, state, rejection.cause)),
+        ),
+      );
+    },
+  );
 
   protected handleFailure(key: K, state: S, err: unknown): void {
     const now = Date.now();
