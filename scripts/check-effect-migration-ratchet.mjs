@@ -636,6 +636,25 @@ function unassignedDebt(current, lanes, toolExecuteFiles) {
     });
 }
 
+/**
+ * Lane entries the register no longer needs: a file the map names that is no
+ * longer below the boundary — converted, moved into a recognized `execute()`,
+ * or deleted. `diffRows` cannot see this, because a run that merely moves
+ * inside its own file leaves the counted total untouched; only the lane map
+ * goes stale. Rejecting it keeps the register a statement about the debt that
+ * exists now rather than an archive of debt that once did.
+ */
+function staleDebtLanes(current, lanes, toolExecuteFiles) {
+  const below = new Set(
+    Object.keys(current).filter(
+      (file) => !isBoundaryPath(file, toolExecuteFiles),
+    ),
+  );
+  return Object.keys(lanes ?? {})
+    .filter((file) => !below.has(file))
+    .toSorted(compareCodePoints);
+}
+
 /** Fail the ratchet itself if the marker scan or the boundary gate regresses. */
 function selfTestBoundaryAndMarkers() {
   const markerFailures = checkAdapterMarkers(
@@ -738,6 +757,23 @@ function selfTestBoundaryAndMarkers() {
     JSON.stringify(['src/agent/runtime/newRunner.ts'])
   ) {
     console.error('unassignedDebt self-test failed');
+    process.exit(1);
+  }
+  const stale = staleDebtLanes(
+    debtRow,
+    {
+      'src/agent/runtime/newRunner.ts': UNASSIGNED_LANE,
+      'src/tools/goal/goalStore.ts': 'lane D',
+      'src/tools/lean/lspTools.ts': 'Lean LSP follow-up',
+      'packages/cli/src/main.ts': 'host entry',
+    },
+    new Set(),
+  );
+  if (
+    JSON.stringify(stale) !==
+    JSON.stringify(['packages/cli/src/main.ts', 'src/tools/lean/lspTools.ts'])
+  ) {
+    console.error('staleDebtLanes self-test failed:', JSON.stringify(stale));
     process.exit(1);
   }
 }
@@ -967,6 +1003,26 @@ function main() {
     }
     console.error(
       `\nName the lane that deletes each one in the baseline's debtLanes map (replace ${UNASSIGNED_LANE}), or convert the file and its callers in this PR.`,
+    );
+  }
+
+  const staleLanes = staleDebtLanes(
+    rows[ROW_RUN_BOUNDARY],
+    debtLanes,
+    toolExecuteFiles,
+  );
+  if (staleLanes.length > 0) {
+    failed = true;
+    console.error(
+      `\nEffect migration ratchet failed: debtLanes names ${staleLanes.length} file(s) that are no longer below the boundary.`,
+    );
+    for (const file of staleLanes) {
+      console.error(
+        `  - ${file}: ${debtLanes[file]} — the debt is gone, the entry is not.`,
+      );
+    }
+    console.error(
+      '\nGood news; lock it in: run `node scripts/check-effect-migration-ratchet.mjs --update` and commit the baseline in this PR.',
     );
   }
 
