@@ -5,15 +5,12 @@ import { Cause, Effect, Exit, Result } from 'effect';
 import { lock, type LockOptions } from 'proper-lockfile';
 
 import { aggregateError } from '@utils/core';
-import {
-  type PerKeySemaphore,
-  withPerKeyPermit,
-} from '@utils/core/perKeyQueue';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { FileLockProvider } from '../interfaces';
 
 /** In-process lane per canonical lock path, shared by every provider. */
-const localLocks = new Map<string, PerKeySemaphore>();
+const localLocks = new Map<string, PerKeyLane>();
 
 /** Per-caller tuning for {@link createNodeFileLocks}. */
 export interface FileLockTuning {
@@ -33,7 +30,9 @@ export interface FileLockTuning {
  * caller's tuning; the returned release step gives it back. Failures keep
  * their identity — `mkdir`'s `NodeJS.ErrnoException`, `proper-lockfile`'s
  * `Error` with its `code` (ELOCKED, ECOMPROMISED, …) — because hosts match
- * on them; the mappers only name the type. A compromise
+ * on them; the mappers only name the type. This is the migration's
+ * foreign-boundary adapter case (PRD R7): the lock and fs errors are the
+ * caller-facing identities, so no tagged error wraps them. A compromise
  * fires from `proper-lockfile`'s renewal timer, outside any fiber, so its
  * callback only records the error; the release step then reports it in place
  * of the ERELEASED cleanup error the release call raises for a lock already
@@ -91,7 +90,7 @@ export function withFileLock(
 ): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E | Error, R> {
   const canonicalPath = path.resolve(lockPath);
   return <A, E, R>(self: Effect.Effect<A, E, R>) =>
-    withPerKeyPermit(
+    withPerKeyLane(
       localLocks,
       canonicalPath,
     )(

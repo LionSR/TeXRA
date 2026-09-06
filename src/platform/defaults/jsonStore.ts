@@ -5,10 +5,7 @@ import { Cause, Effect, Exit } from 'effect';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
-import {
-  type PerKeySemaphore,
-  withPerKeyPermit,
-} from '@utils/core/perKeyQueue';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { StateStore } from '../interfaces';
 import type { FileLockTuning } from './fileLocks';
@@ -56,7 +53,8 @@ function dirModeFor(fileMode: number): number {
  * Read the store file as a JSON object. A missing file reads as a copy of
  * `missingFallback`; unreadable or non-object content fails with the
  * original error (`SyntaxError`, `TypeError`, or the fs error). The mappers
- * only name those types: `JsonStore.open` rethrows the same instances.
+ * only name those types — the foreign-boundary adapter case of PRD R7, kept
+ * untagged because `JsonStore.open` rethrows the same instances.
  */
 const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
   filePath: string,
@@ -107,7 +105,7 @@ const ensureDir = Effect.fn('JsonStore.ensureDir')(function* (
  * instance) so writers holding separate `JsonStore` instances on the same
  * file preserve call order before entering the cross-process lock.
  */
-const writeLanes = new Map<string, PerKeySemaphore>();
+const writeLanes = new Map<string, PerKeyLane>();
 
 /**
  * Persist one mutation as a read-modify-write under the file's cross-process
@@ -224,7 +222,7 @@ export class JsonStore implements StateStore {
     // `installProcessRuntime` has run. Pinned by the same "Effect run
     // boundaries" ratchet.
     const exit = await Effect.runPromiseExit(
-      withPerKeyPermit(
+      withPerKeyLane(
         writeLanes,
         this.filePath,
       )(flush(this.filePath, this.options.mode, key, value, this.snapshot())),

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Semaphore } from 'effect';
+import { Deferred, Effect } from 'effect';
 import PQueue from 'p-queue';
 
 interface QueueMap<Key> {
@@ -47,43 +47,64 @@ export async function runOnPerKeyQueue<Key, T>(
 }
 
 /**
- * One in-process exclusive lane per key for Effect programs: a single-permit
- * semaphore plus the number of fibers holding or waiting on it. The count is
- * what lets the entry leave its map once the last fiber settles — a
- * `Semaphore` exposes no waiter count of its own.
+ * One in-process exclusive lane per key for Effect programs: the `Deferred`
+ * the most recent entrant completes when it leaves, plus the number of
+ * fibers holding or waiting on the lane. The count is what lets the entry
+ * leave its map once the last fiber settles.
  */
-export interface PerKeySemaphore {
-  readonly semaphore: Semaphore.Semaphore;
+export interface PerKeyLane {
+  tail: Deferred.Deferred<void>;
   fibers: number;
 }
 
 /**
- * Run `self` holding `key`'s permit — the Effect-side sibling of
- * {@link runOnPerKeyQueue}. The lane is created on first use and deleted from
- * `semaphores` once the last fiber holding or waiting on it settles, whether
- * `self` succeeded, failed, or was interrupted. The lane is claimed
- * synchronously when the effect starts, so fibers started in sequence enter
- * in that order.
+ * Run `self` on `key`'s lane — the Effect-side sibling of
+ * {@link runOnPerKeyQueue}, and FIFO like it: each entrant claims the lane
+ * synchronously when its effect starts by swapping its own `Deferred` in as
+ * the tail, waits for its predecessor's, and hands off in `ensuring` once
+ * `self` succeeds, fails, or is interrupted. The wait itself is
+ * interruptible; a waiter interrupted before entering hands its successor
+ * the wait for its own predecessor, so the successor still waits for whoever
+ * actually holds the lane. A hand-off through a `Deferred` resumes the next
+ * fiber directly, so fibers started in sequence enter in that order — a
+ * `Semaphore` barges: its release wakes waiters in a scheduled task, and a
+ * fiber started in between takes the free permit ahead of them. The lane is
+ * created on first use and deleted from `lanes` once the last fiber holding
+ * or waiting on it settles.
  */
-export function withPerKeyPermit<Key>(
-  semaphores: Map<Key, PerKeySemaphore>,
+export function withPerKeyLane<Key>(
+  lanes: Map<Key, PerKeyLane>,
   key: Key,
 ): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
   return (self) =>
     Effect.suspend(() => {
-      let lane = semaphores.get(key);
-      if (!lane) {
-        lane = { semaphore: Semaphore.makeUnsafe(1), fibers: 0 };
-        semaphores.set(key, lane);
-      }
-      const held = lane;
+      const mine = Deferred.makeUnsafe<void>();
+      const existing = lanes.get(key);
+      const previous = existing?.tail;
+      const held = existing ?? { tail: mine, fibers: 0 };
+      if (!existing) lanes.set(key, held);
+      held.tail = mine;
       held.fibers += 1;
-      return held.semaphore.withPermit(self).pipe(
+      let entered = previous === undefined;
+      const run =
+        previous === undefined
+          ? self
+          : Effect.flatMap(Deferred.await(previous), () => {
+              entered = true;
+              return self;
+            });
+      return run.pipe(
         Effect.ensuring(
           Effect.sync(() => {
+            Deferred.doneUnsafe(
+              mine,
+              previous === undefined || entered
+                ? Effect.void
+                : Deferred.await(previous),
+            );
             held.fibers -= 1;
-            if (held.fibers === 0 && semaphores.get(key) === held) {
-              semaphores.delete(key);
+            if (held.fibers === 0 && lanes.get(key) === held) {
+              lanes.delete(key);
             }
           }),
         ),

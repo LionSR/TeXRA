@@ -70,4 +70,40 @@ describe('nodeFileLocks', () => {
     await Promise.all([first, second]);
     expect(secondEntered).toBe(true);
   });
+
+  it('admits waiting callers in arrival order ahead of a later one', async () => {
+    const root = await makeTempDir('texra-file-lock-fifo-', tempDirs);
+    const lockPath = join(root, 'executionLocks', 'a8644c');
+    const entered: string[] = [];
+    let releaseFirst!: () => void;
+    const firstPaused = new Promise<void>(
+      (resolve) => (releaseFirst = resolve),
+    );
+    let firstEntered!: () => void;
+    const firstIn = new Promise<void>((resolve) => (firstEntered = resolve));
+
+    const first = nodeFileLocks.runExclusive(lockPath, async () => {
+      entered.push('first');
+      firstEntered();
+      await firstPaused;
+    });
+    await firstIn;
+    const second = nodeFileLocks.runExclusive(lockPath, async () => {
+      entered.push('second');
+    });
+    for (let turn = 0; turn < 5; turn += 1) {
+      await setImmediate();
+    }
+    releaseFirst();
+    await first;
+    // Issued from the first caller's continuation while the second is still
+    // waiting: a lane that wakes waiters in a scheduled task would admit it
+    // first.
+    const third = nodeFileLocks.runExclusive(lockPath, async () => {
+      entered.push('third');
+    });
+    await Promise.all([second, third]);
+
+    expect(entered).toEqual(['first', 'second', 'third']);
+  });
 });
