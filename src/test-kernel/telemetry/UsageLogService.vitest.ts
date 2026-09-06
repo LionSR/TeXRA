@@ -198,6 +198,24 @@ describe('UsageLogService', () => {
     expect(batches.map(batchModels)).toEqual([['timer']]);
   });
 
+  // The ticker must not keep a short-lived host alive by itself: a process
+  // that reaches initialize() and exits without dispose() still exits on an
+  // empty loop, so the ticker's timer is unref'd while the request a flush
+  // sends holds the loop on its own.
+  it('schedules the ticker on a timer that does not hold the event loop', () => {
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    UsageLogService.initialize({
+      batchSize: 100,
+      flushIntervalMs: 12_345,
+      enabled: true,
+    });
+
+    const tick = timers.mock.calls.findIndex(([, delay]) => delay === 12_345);
+    expect(tick).toBeGreaterThanOrEqual(0);
+    const handle = timers.mock.results[tick]?.value as NodeJS.Timeout;
+    expect(handle.hasRef()).toBe(false);
+  });
+
   it('warns after five seconds without bounding disposal', async () => {
     stubAccessToken();
     const warn = vi.spyOn(logger, 'warn');

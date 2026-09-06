@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Data, Duration, Effect, Fiber, Semaphore } from 'effect';
+import { Clock, Data, Duration, Effect, Fiber, Semaphore } from 'effect';
 import ky from 'ky';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -69,6 +69,38 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
 
 function isTelemetryDisabledByEnv(): boolean {
   return TELEMETRY_OPT_OUT_ENV_VARS.some((name) => isEnvFlagEnabled(name));
+}
+
+/**
+ * The ambient clock with a sleep that does not hold the event loop.
+ *
+ * The flush ticker sleeps forever between ticks, and the process clock's
+ * sleep schedules a referenced timer, so a ticker alone would keep a
+ * short-lived host (the CLI) alive until `dispose()` interrupted it. This
+ * clock is what the ticker sleeps on: the same readings as the clock in
+ * scope, a timer the loop does not wait for, still interrupted through the
+ * clock rather than a timer handle the service holds. Only the ticker's
+ * sleep sees it; a flush the ticker forks runs on the process clock, and the
+ * request it sends holds the loop on its own.
+ */
+function unrefSleepClock(clock: Clock.Clock): Clock.Clock {
+  return {
+    currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe(),
+    currentTimeMillis: clock.currentTimeMillis,
+    currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe(),
+    currentTimeNanos: clock.currentTimeNanos,
+    monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
+    monotonicTimeNanos: clock.monotonicTimeNanos,
+    sleep: (duration) =>
+      Effect.callback<void>((resume) => {
+        const handle = setTimeout(
+          () => resume(Effect.void),
+          Duration.toMillis(duration),
+        );
+        handle.unref?.();
+        return Effect.sync(() => clearTimeout(handle));
+      }),
+  };
 }
 
 /**
@@ -465,9 +497,12 @@ class UsageLogServiceImpl {
   private startFlushTimer(): void {
     const runtime = effectRuntime();
     if (this.flushTimer) runtime.runFork(Fiber.interrupt(this.flushTimer));
-    // The ticker lives until dispose() interrupts it: every host disposes on
-    // its shutdown path, and a short-lived host (the CLI) exits through that
-    // path rather than by an empty event loop.
+    // The ticker lives until dispose() interrupts it, and it must not keep a
+    // short-lived host (the CLI) alive on its own: an active run keeps the
+    // loop running so the tick still fires, but at exit dispose() flushes and
+    // interrupts it rather than the ticker pinning the process. Its sleep
+    // therefore runs on `unrefSleepClock`; a host that never disposes exits
+    // on an empty loop as before, with whatever the queue holds unsent.
     //
     // Detached on purpose: a flush belongs to the lane, not to the tick that
     // scheduled it. `sendNextBatch` takes the batch before the request goes
@@ -476,11 +511,14 @@ class UsageLogServiceImpl {
     // on its own fiber keeps a dispose (or re-initialize) that lands mid-send
     // from reaching it: dispose waits behind the send on the lane instead.
     // The flush ends with its drain and is observed by nothing else.
+    const tick = Clock.clockWith((clock) =>
+      Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
+        Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
+      ),
+    );
     this.flushTimer = runtime.runFork(
       Effect.forever(
-        Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
-          Effect.andThen(Effect.forkDetach(this.backgroundFlush())),
-        ),
+        tick.pipe(Effect.andThen(Effect.forkDetach(this.backgroundFlush()))),
       ),
     );
   }
