@@ -4,9 +4,10 @@
  * itself and every provider binding come from the shared
  * `SUBSCRIPTION_PROVIDERS` catalog.
  */
+import { Effect } from 'effect';
+
 import {
   subscriptionProvider,
-  type SubscriptionAccount,
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
@@ -24,10 +25,9 @@ export interface CliSubscriptionLoginTransportInit {
   readonly noBrowser: boolean;
 }
 
-/** Progress sink + cancellation signal shared by every provider login. */
+/** Progress sink shared by every provider login. */
 export interface CliSubscriptionLoginOptions {
   readonly writeProgress: (message: string) => void;
-  readonly signal?: AbortSignal;
 }
 
 /**
@@ -87,16 +87,19 @@ type CliSubscriptionSignOutResult =
     };
 
 /**
- * One subscription sign-in for every OAuth provider: device-code when the
- * terminal asked for it, loopback + browser otherwise. Everything
+ * One subscription sign-in program for every OAuth provider: device-code when
+ * the terminal asked for it, loopback + browser otherwise. Everything
  * provider-specific is a catalog row; this file owns only the terminal
- * rendering of the two prompts.
+ * rendering of the two prompts. The command action or slash handler runs it,
+ * where its cancellation signal (if any) becomes fiber interruption.
  */
-export async function signInCliSubscription(
+export const signInCliSubscription = Effect.fn(
+  'subscriptionLogin.signInCliSubscription',
+)(function* (
   providerId: SubscriptionProviderId,
   init: CliSubscriptionLoginTransportInit,
   options: CliSubscriptionLoginOptions,
-): Promise<SubscriptionAccount> {
+) {
   const provider = subscriptionProvider(providerId);
   const { displayName } = provider;
   const present: SubscriptionSignInPresenter = {
@@ -119,12 +122,11 @@ export async function signInCliSubscription(
       }),
   };
 
-  return provider.signIn({
+  return yield* provider.signIn({
     transport: init.device ? 'device' : 'loopback',
     present,
-    signal: options.signal,
   });
-}
+});
 
 /**
  * Sign out of a subscription provider and disable its preference, converting

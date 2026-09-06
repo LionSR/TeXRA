@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -315,10 +316,12 @@ describe('CLI model access routes', () => {
   it('enables Kimi Code routing on a personal fallback when a key exists', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
 
-    const result = await updateCliModelAccess(
-      context,
-      subscriptionPreference('kimi-code', 'on'),
-      { writeProgress: vi.fn() },
+    const result = await Effect.runPromise(
+      await updateCliModelAccess(
+        context,
+        subscriptionPreference('kimi-code', 'on'),
+        { writeProgress: vi.fn() },
+      ),
     );
 
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
@@ -333,10 +336,12 @@ describe('CLI model access routes', () => {
   });
 
   it('guides to key entry when Kimi Code is selected without a key', async () => {
-    const result = await updateCliModelAccess(
-      context,
-      subscriptionPreference('kimi-code', 'on'),
-      { writeProgress: vi.fn() },
+    const result = await Effect.runPromise(
+      await updateCliModelAccess(
+        context,
+        subscriptionPreference('kimi-code', 'on'),
+        { writeProgress: vi.fn() },
+      ),
     );
 
     expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
@@ -366,10 +371,12 @@ describe('CLI model access routes', () => {
   it('enables GLM Coding Plan routing on a personal fallback when a key exists', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
 
-    const result = await updateCliModelAccess(
-      context,
-      subscriptionPreference('glm-code', 'on'),
-      { writeProgress: vi.fn() },
+    const result = await Effect.runPromise(
+      await updateCliModelAccess(
+        context,
+        subscriptionPreference('glm-code', 'on'),
+        { writeProgress: vi.fn() },
+      ),
     );
 
     expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(true);
@@ -384,10 +391,12 @@ describe('CLI model access routes', () => {
   });
 
   it('guides to key entry when GLM Coding Plan is selected without a key', async () => {
-    const result = await updateCliModelAccess(
-      context,
-      subscriptionPreference('glm-code', 'on'),
-      { writeProgress: vi.fn() },
+    const result = await Effect.runPromise(
+      await updateCliModelAccess(
+        context,
+        subscriptionPreference('glm-code', 'on'),
+        { writeProgress: vi.fn() },
+      ),
     );
 
     expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
@@ -396,10 +405,12 @@ describe('CLI model access routes', () => {
   });
 
   it('turns off GLM Coding Plan without requiring a key', async () => {
-    const result = await updateCliModelAccess(
-      context,
-      subscriptionPreference('glm-code', 'off'),
-      { writeProgress: vi.fn() },
+    const result = await Effect.runPromise(
+      await updateCliModelAccess(
+        context,
+        subscriptionPreference('glm-code', 'off'),
+        { writeProgress: vi.fn() },
+      ),
     );
 
     expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
@@ -412,28 +423,31 @@ describe('CLI model access routes', () => {
   });
 
   it('signs in when needed and enables ChatGPT without an API key', async () => {
-    mocks.signInCliSubscription.mockResolvedValue({
-      signedIn: true,
-      email: 'user@example.com',
-      label: 'user@example.com',
-    });
+    mocks.signInCliSubscription.mockReturnValue(
+      Effect.succeed({
+        signedIn: true,
+        email: 'user@example.com',
+        label: 'user@example.com',
+      }),
+    );
     mocks.setPreferCodexSubscription.mockResolvedValue({
       effective: true,
       target: 'global',
     });
     const writeProgress = vi.fn();
-    const controller = new AbortController();
 
-    const result = await updateCliModelAccess(
-      context,
-      subscriptionPreference('chatgpt', 'on'),
-      { writeProgress, signal: controller.signal },
+    const result = await Effect.runPromise(
+      await updateCliModelAccess(
+        context,
+        subscriptionPreference('chatgpt', 'on'),
+        { writeProgress },
+      ),
     );
 
     expect(mocks.signInCliSubscription).toHaveBeenCalledWith(
       'chatgpt',
       { device: false, noBrowser: false },
-      { signal: controller.signal, writeProgress },
+      { writeProgress },
     );
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(true);
     expect(mocks.updateGlobalState).toHaveBeenCalledWith(
@@ -456,10 +470,12 @@ describe('CLI model access routes', () => {
       target: 'global',
     });
 
-    const result = await updateCliModelAccess(
-      context,
-      subscriptionPreference('chatgpt', 'off'),
-      { writeProgress: vi.fn() },
+    const result = await Effect.runPromise(
+      await updateCliModelAccess(
+        context,
+        subscriptionPreference('chatgpt', 'off'),
+        { writeProgress: vi.fn() },
+      ),
     );
 
     expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
@@ -501,10 +517,12 @@ describe('CLI model access routes', () => {
       'glm-code': 'Off · key configured',
     });
 
-    await updateCliModelAccess(
-      context,
-      subscriptionPreference('kimi-code', 'off'),
-      { writeProgress: vi.fn() },
+    await Effect.runPromise(
+      await updateCliModelAccess(
+        context,
+        subscriptionPreference('kimi-code', 'off'),
+        { writeProgress: vi.fn() },
+      ),
     );
     expect(mocks.writePlatformSetting).toHaveBeenCalledWith(
       GlobalStateKey.KIMI_CODE_PREFER,
@@ -523,10 +541,12 @@ describe('CLI model access routes', () => {
       effective: false,
       target: 'global',
     });
-    await updateCliModelAccess(
-      context,
-      subscriptionPreference('chatgpt', 'off'),
-      { writeProgress: vi.fn() },
+    await Effect.runPromise(
+      await updateCliModelAccess(
+        context,
+        subscriptionPreference('chatgpt', 'off'),
+        { writeProgress: vi.fn() },
+      ),
     );
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
     expect(mocks.writePlatformSetting).not.toHaveBeenCalled();
@@ -551,9 +571,11 @@ describe('CLI model access routes', () => {
     );
     expect(selection?.description).toBe('On · sign in required');
     if (!selection) throw new Error('Expected ChatGPT preference item');
-    await updateCliModelAccess(context, selection.value, {
-      writeProgress: vi.fn(),
-    });
+    await Effect.runPromise(
+      await updateCliModelAccess(context, selection.value, {
+        writeProgress: vi.fn(),
+      }),
+    );
 
     expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
@@ -574,7 +596,9 @@ describe('CLI model access routes', () => {
     if (!selection) throw new Error('Expected Kimi preference item');
 
     vi.clearAllMocks();
-    await updateCliModelAccess(context, selection.value);
+    await Effect.runPromise(
+      await updateCliModelAccess(context, selection.value),
+    );
 
     expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
     expect(mocks.writePlatformSetting).toHaveBeenCalledWith(

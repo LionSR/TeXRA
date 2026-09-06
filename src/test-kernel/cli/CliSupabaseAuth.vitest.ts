@@ -64,10 +64,7 @@ vi.mock('@cli/runtime/supabaseAuthCallbackServer', () => ({
   startLoopbackCallbackServer: mocks.startLoopbackCallbackServer,
 }));
 
-vi.mock('@cli/runtime/supabaseAuthDeviceCode', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@cli/runtime/supabaseAuthDeviceCode')
-  >()),
+vi.mock('@cli/runtime/supabaseAuthDeviceCode', () => ({
   pollForDeviceSession: mocks.pollForDeviceSession,
   requestDeviceAuthorization: mocks.requestDeviceAuthorization,
 }));
@@ -167,21 +164,30 @@ describe('CLI Supabase auth', () => {
     expect(mocks.authCoordinator.storeSession).not.toHaveBeenCalled();
   });
 
-  it('forwards interactive cancellation to the browser transport and stores a device session', async () => {
+  it('forwards interactive cancellation to both TeXRA transports', async () => {
     const controller = new AbortController();
-    const session = { access_token: 'token' };
-    const callbackServer = stubSuccessfulSignIns(session);
+    const callbackServer = stubSuccessfulSignIns({ access_token: 'token' });
+    let pollInterrupted = false;
+    mocks.pollForDeviceSession.mockReturnValue(
+      Effect.never.pipe(
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            pollInterrupted = true;
+          }),
+        ),
+      ),
+    );
     const { signInCliSupabase, signInCliSupabaseDeviceCode } =
       await loadSupabaseAuth();
     await signInCliSupabase({
       openBrowser: false,
       signal: controller.signal,
     });
-    await expect(
-      Effect.runPromise(signInCliSupabaseDeviceCode(), {
-        signal: controller.signal,
-      }),
-    ).resolves.toBe(session);
+    const deviceSignIn = Effect.runPromise(signInCliSupabaseDeviceCode(), {
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(deviceSignIn).rejects.toThrow(/interrupted/);
 
     expect(callbackServer.waitForSession).toHaveBeenCalledWith(
       controller.signal,
@@ -190,7 +196,7 @@ describe('CLI Supabase auth', () => {
     expect(mocks.pollForDeviceSession).toHaveBeenCalledWith(
       DEVICE_AUTHORIZATION,
     );
-    expect(mocks.authCoordinator.storeSession).toHaveBeenCalledWith(session);
+    expect(pollInterrupted).toBe(true);
   });
 
   it('settles browser sign-in cancellation while its launcher remains pending', async () => {

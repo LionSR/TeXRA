@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 import { TestClock } from 'effect/testing';
-import { describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import {
   CLI_DEVICE_AUTH_URL_PROMPT,
@@ -31,66 +31,68 @@ const AUTHORIZATION = {
 
 type FetchCall = { url: string; body: unknown };
 
-/** Fetch fake that serves one queued result per call (Response or throw). */
-function queuedFetch(queue: Array<Response | Error>): {
-  fetchImpl: typeof fetch;
-  calls: FetchCall[];
-} {
+/** Stub `fetch` to serve one queued result per call (Response or throw). */
+function queuedFetch(queue: Array<Response | Error>): FetchCall[] {
   const calls: FetchCall[] = [];
-  const fetchImpl = ((input: RequestInfo | URL, init?: RequestInit) => {
-    calls.push({
-      url: String(input),
-      body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
-    });
-    const next = queue.shift();
-    if (!next) throw new Error('queuedFetch ran out of responses');
-    if (next instanceof Error) return Promise.reject(next);
-    return Promise.resolve(next);
-  }) as typeof fetch;
-  return { fetchImpl, calls };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>((input, init) => {
+      calls.push({
+        url: String(input),
+        body:
+          typeof init?.body === 'string' && init.body !== ''
+            ? JSON.parse(init.body)
+            : undefined,
+      });
+      const next = queue.shift();
+      if (!next) throw new Error('queuedFetch ran out of responses');
+      if (next instanceof Error) return Promise.reject(next);
+      return Promise.resolve(next);
+    }),
+  );
+  return calls;
 }
 
-/** Let a settled fetch resume the poll, then move the clock one interval. */
-const tick = Effect.gen(function* () {
-  yield* Effect.promise(
-    () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-  );
-  yield* TestClock.adjust(`${AUTHORIZATION.interval} seconds`);
-});
+/** Let the poll's fiber cross its pending `fetch` promise and reach its next wait. */
+const settle = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
 
-/** Forks a poll over a queued fetch on the test clock. */
-const pollWithQueue = (
-  queue: Array<Response | Error>,
-  authorization: Parameters<typeof pollForDeviceSession>[0] = AUTHORIZATION,
+/** Advance the clock through `count` poll intervals, one poll per step. */
+const advancePolls = (
+  count: number,
+  intervalSeconds = AUTHORIZATION.interval,
 ) =>
   Effect.gen(function* () {
-    const { fetchImpl, calls } = queuedFetch(queue);
-    const fiber = yield* Effect.forkChild(
-      pollForDeviceSession(authorization, { fetchImpl }),
-    );
-    return { fiber, calls };
+    for (let index = 0; index < count; index += 1) {
+      yield* TestClock.adjust(`${intervalSeconds} seconds`);
+      yield* settle;
+    }
   });
 
-/** Tick until the poll settles (bounded), then its exit. */
-const settle = <A, E>(fiber: Fiber.Fiber<A, E>, ticks = 12) =>
-  Effect.gen(function* () {
-    for (let i = 0; i < ticks; i++) {
-      yield* tick;
-    }
-    return yield* Fiber.await(fiber);
-  });
+/** The failure an exit carries, or undefined when it succeeded. */
+const failureOf = (exit: Exit.Exit<unknown, unknown>): unknown =>
+  Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
 
 describe('CLI device-code sign-in (texra login --device)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it.effect('cancels a pending poll before its first network request', () =>
     Effect.gen(function* () {
-      const fetchImpl = vi.fn() as unknown as typeof fetch;
+      const calls = queuedFetch([jsonResponse(SESSION_PAYLOAD)]);
       const fiber = yield* Effect.forkChild(
-        pollForDeviceSession(AUTHORIZATION, { fetchImpl }),
+        pollForDeviceSession(AUTHORIZATION),
       );
+
       yield* Fiber.interrupt(fiber);
+
       const exit = yield* Fiber.await(fiber);
-      expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
-      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(
+        true,
+      );
+      expect(calls).toHaveLength(0);
     }),
   );
 
@@ -105,8 +107,8 @@ describe('CLI device-code sign-in (texra login --device)', () => {
 
   it.effect('requests a device authorization from the auth server', () =>
     Effect.gen(function* () {
-      const { fetchImpl, calls } = queuedFetch([jsonResponse(AUTHORIZATION)]);
-      const authorization = yield* requestDeviceAuthorization({ fetchImpl });
+      const calls = queuedFetch([jsonResponse(AUTHORIZATION)]);
+      const authorization = yield* requestDeviceAuthorization();
       expect(authorization.device_code).toBe('device-code-secret');
       expect(calls[0].url).toMatch(/\/auth-device\/code$/);
     }),
@@ -114,11 +116,13 @@ describe('CLI device-code sign-in (texra login --device)', () => {
 
   it.effect('reports an unavailable device endpoint with a recovery hint', () =>
     Effect.gen(function* () {
-      const { fetchImpl } = queuedFetch([jsonResponse({ error: 'nope' }, 503)]);
-      const error = yield* Effect.flip(
-        requestDeviceAuthorization({ fetchImpl }),
-      );
-      expect(error.message).toMatch(/unavailable.*--no-browser/s);
+      queuedFetch([jsonResponse({ error: 'nope' }, 503)]);
+      const exit = yield* Effect.exit(requestDeviceAuthorization());
+      expect(failureOf(exit)).toMatchObject({
+        _tag: 'DeviceSignInError',
+        reason: 'request',
+        message: expect.stringMatching(/unavailable.*--no-browser/s),
+      });
     }),
   );
 
@@ -126,26 +130,26 @@ describe('CLI device-code sign-in (texra login --device)', () => {
     'polls through pending and slow_down, honoring the growing interval',
     () =>
       Effect.gen(function* () {
-        const { fiber, calls } = yield* pollWithQueue([
+        const calls = queuedFetch([
           jsonResponse({ error: 'authorization_pending' }, 400),
           jsonResponse({ error: 'slow_down' }, 400),
           jsonResponse(SESSION_PAYLOAD),
         ]);
+        const fiber = yield* Effect.forkChild(
+          pollForDeviceSession(AUTHORIZATION),
+        );
 
-        // 5s, 5s, then 10s after the slow_down bump: the third poll needs two
-        // intervals.
-        yield* tick;
-        expect(calls).toHaveLength(1);
-        yield* tick;
+        // 5s, 5s, then 10s after the slow_down bump.
+        yield* advancePolls(2);
         expect(calls).toHaveLength(2);
-        yield* tick;
+        yield* advancePolls(1);
         expect(calls).toHaveLength(2);
-        yield* tick;
-        expect(calls).toHaveLength(3);
+        yield* advancePolls(1);
 
         const exchange = yield* Fiber.join(fiber);
         expect(exchange.access_token).toBe('access-token');
         expect(exchange.user.email).toBe('user@example.edu');
+        expect(calls).toHaveLength(3);
         expect(
           calls.every((call) => call.url.endsWith('/auth-device/token')),
         ).toBe(true);
@@ -155,70 +159,89 @@ describe('CLI device-code sign-in (texra login --device)', () => {
 
   it.effect('surfaces a denial from the browser as a clear error', () =>
     Effect.gen(function* () {
-      const { fiber } = yield* pollWithQueue([
-        jsonResponse({ error: 'access_denied' }, 400),
-      ]);
-      yield* settle(fiber, 1);
-      const error = yield* Effect.flip(Fiber.join(fiber));
-      expect(error.message).toBe('Sign-in was denied in the browser.');
+      queuedFetch([jsonResponse({ error: 'access_denied' }, 400)]);
+      const fiber = yield* Effect.forkChild(
+        pollForDeviceSession(AUTHORIZATION),
+      );
+      yield* advancePolls(1);
+      expect(failureOf(yield* Fiber.await(fiber))).toMatchObject({
+        reason: 'denied',
+        message: 'Sign-in was denied in the browser.',
+      });
     }),
   );
 
   it.effect('maps expired_token to a fresh-code suggestion', () =>
     Effect.gen(function* () {
-      const { fiber } = yield* pollWithQueue([
-        jsonResponse({ error: 'expired_token' }, 400),
-      ]);
-      yield* settle(fiber, 1);
-      const error = yield* Effect.flip(Fiber.join(fiber));
-      expect(error.message).toMatch(/expired before it was approved/);
+      queuedFetch([jsonResponse({ error: 'expired_token' }, 400)]);
+      const fiber = yield* Effect.forkChild(
+        pollForDeviceSession(AUTHORIZATION),
+      );
+      yield* advancePolls(1);
+      expect(failureOf(yield* Fiber.await(fiber))).toMatchObject({
+        reason: 'expired',
+        message: expect.stringMatching(/expired before it was approved/),
+      });
     }),
   );
 
   it.effect('stops polling when the code expires locally', () =>
     Effect.gen(function* () {
-      const { fiber, calls } = yield* pollWithQueue(
-        [jsonResponse({ error: 'authorization_pending' }, 400)],
-        { ...AUTHORIZATION, expires_in: 10 },
+      const calls = queuedFetch([
+        jsonResponse({ error: 'authorization_pending' }, 400),
+      ]);
+      const fiber = yield* Effect.forkChild(
+        pollForDeviceSession({ ...AUTHORIZATION, expires_in: 10 }),
       );
-      yield* settle(fiber, 2);
-      const error = yield* Effect.flip(Fiber.join(fiber));
-      expect(error.message).toMatch(/expired before it was approved/);
+      yield* advancePolls(2);
+      expect(failureOf(yield* Fiber.await(fiber))).toMatchObject({
+        reason: 'expired',
+        message: expect.stringMatching(/expired before it was approved/),
+      });
       expect(calls).toHaveLength(1);
     }),
   );
 
   it.effect('tolerates transient poll failures but not persistent ones', () =>
     Effect.gen(function* () {
-      const tolerated = yield* pollWithQueue([
+      queuedFetch([
         new Error('socket hang up'),
         new Error('socket hang up'),
         jsonResponse(SESSION_PAYLOAD),
       ]);
-      yield* settle(tolerated.fiber, 3);
-      const transient = yield* Fiber.join(tolerated.fiber);
-      expect(transient.access_token).toBe('access-token');
+      const tolerant = yield* Effect.forkChild(
+        pollForDeviceSession(AUTHORIZATION),
+      );
+      yield* advancePolls(3);
+      expect((yield* Fiber.join(tolerant)).access_token).toBe('access-token');
 
-      const persistent = yield* pollWithQueue([
+      queuedFetch([
         new Error('socket hang up'),
         new Error('socket hang up'),
         new Error('socket hang up'),
       ]);
-      yield* settle(persistent.fiber, 3);
-      const error = yield* Effect.flip(Fiber.join(persistent.fiber));
-      expect(error.message).toBe('socket hang up');
+      const persistent = yield* Effect.forkChild(
+        pollForDeviceSession(AUTHORIZATION),
+      );
+      yield* advancePolls(3);
+      expect(failureOf(yield* Fiber.await(persistent))).toMatchObject({
+        reason: 'poll',
+        message: 'Device sign-in poll failed: socket hang up',
+      });
     }),
   );
 
   it.effect('treats rate-limited poll responses as transient', () =>
     Effect.gen(function* () {
-      const { fiber } = yield* pollWithQueue([
+      queuedFetch([
         jsonResponse({ error: 'rate_limited' }, 429),
         jsonResponse(SESSION_PAYLOAD),
       ]);
-      yield* settle(fiber, 2);
-      const exchange = yield* Fiber.join(fiber);
-      expect(exchange.access_token).toBe('access-token');
+      const fiber = yield* Effect.forkChild(
+        pollForDeviceSession(AUTHORIZATION),
+      );
+      yield* advancePolls(2);
+      expect((yield* Fiber.join(fiber)).access_token).toBe('access-token');
     }),
   );
 
