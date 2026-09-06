@@ -14,6 +14,7 @@ import {
   type SupabaseSessionStorage,
 } from '@auth/SupabaseSession';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { delay } from '@utils/core';
 import type {
   Session as SupabaseNativeSession,
   SupabaseClient as Client,
@@ -510,6 +511,39 @@ describe('SupabaseSession', () => {
 
       assert.equal(await tokenPromise, null);
       assert.equal(read(), null);
+    });
+
+    it('does not return a refreshed token when a clear is queued behind its store', async () => {
+      const storeStarted = createDeferred();
+      const allowStore = createDeferred();
+      let value: string | undefined = JSON.stringify(expiredSession());
+      const storage: SupabaseSessionStorage = {
+        get: async () => value,
+        store: async (sessionData) => {
+          storeStarted.resolve();
+          await allowStore.promise;
+          value = sessionData;
+        },
+        delete: async () => {
+          value = undefined;
+        },
+      };
+      const coordinator = new SupabaseSessionCoordinator({
+        ...COORDINATOR_CONFIG,
+        storage,
+        getClient: () => createClient(),
+      });
+
+      const tokenPromise = coordinator.ensureFreshToken();
+      await storeStarted.promise;
+      // The refresh's store is blocked mid-write; the clear queues behind it.
+      const clearPromise = coordinator.clearSession();
+      await delay(0);
+      allowStore.resolve();
+
+      assert.equal(await tokenPromise, null);
+      await clearPromise;
+      assert.equal(parseStoredSupabaseSession(value), null);
     });
 
     it('reclassifies when a new session replaces one whose refresh failed', async () => {

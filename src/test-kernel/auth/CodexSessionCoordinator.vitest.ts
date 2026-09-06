@@ -1,3 +1,4 @@
+import { Exit } from 'effect';
 import pDefer from 'p-defer';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +13,7 @@ import type {
   CodexTokenResponse,
 } from '@auth/codex/codexSessionTypes';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
+import { effectRuntime } from '@platform/processRuntime';
 import { delay } from '@utils/core';
 
 const NOW = 1_900_000_000_000;
@@ -295,6 +297,52 @@ describe('CodexSessionCoordinator', () => {
     expect(await token).toBe('access-new');
     expect(refreshTokens).not.toHaveBeenCalled();
     expect(storage.peek()?.accessToken).toBe('access-new');
+  });
+
+  it('finishes an interrupted login store before a later sign-out runs', async () => {
+    const gated = gatedStorage('store');
+    const ops: string[] = [];
+    const storage: CodexSessionStorage = {
+      get: gated.get,
+      store: async (value) => {
+        ops.push('store');
+        await gated.store(value);
+      },
+      delete: async () => {
+        ops.push('delete');
+        await gated.delete();
+      },
+    };
+    const exchangeAuthorizationCode = vi.fn(async () =>
+      newLoginTokenResponse(),
+    );
+    const coordinator = makeCoordinator(storage, { exchangeAuthorizationCode });
+    const controller = new AbortController();
+
+    // The loopback login's run boundary: the host signal interrupts the
+    // login's fiber while its session store is blocked mid-write.
+    const login = effectRuntime().runPromiseExit(
+      coordinator.loginWithCode({
+        code: 'new-code',
+        verifier: 'new-verifier',
+        redirectUri: 'http://localhost:1455/auth/callback',
+      }),
+      { signal: controller.signal },
+    );
+    await gated.gateReached;
+    controller.abort();
+    const signOut = coordinator.signOut();
+    await delay(0);
+
+    // The store cannot be cancelled, so it keeps the permit: the sign-out
+    // queues behind it instead of running beside it.
+    expect(ops).toEqual(['store']);
+    gated.release();
+
+    expect(Exit.isSuccess(await login)).toBe(false);
+    await signOut;
+    expect(ops).toEqual(['store', 'delete']);
+    expect(gated.peek()).toBeUndefined();
   });
 
   it('retries a session read superseded while storage is blocked', async () => {

@@ -29,12 +29,13 @@ export function callPort<A>(
 
 /**
  * Serialized storage writes with an idle barrier — what a coordinator's
- * `p-queue` serializer was: one write at a time, and a reader can wait for
- * every write queued before it. A single-permit semaphore alone cannot give
- * the barrier: it frees its permit before it wakes its waiters, so a fiber
- * that just released it and asks again barges ahead of a queued write. The
- * barrier therefore counts queued writes itself and waits on a `Deferred`
- * the last one settles; it depends on no scheduler wake ordering.
+ * `p-queue` serializer was: one write at a time, a write that holds the
+ * permit runs to completion, and a reader can wait for every write queued
+ * before it. A single-permit semaphore alone cannot give the barrier: it
+ * frees its permit before it wakes its waiters, so a fiber that just
+ * released it and asks again barges ahead of a queued write. The barrier
+ * therefore counts queued writes itself and waits on a `Deferred` the last
+ * one settles; it depends on no scheduler wake ordering.
  */
 export class SerializedWrites {
   private readonly permit = Semaphore.makeUnsafe(1);
@@ -54,10 +55,27 @@ export class SerializedWrites {
     return Effect.suspend(() => {
       onQueue?.();
       this.queued += 1;
+      // Interruption is observed while waiting for the permit, never once it
+      // is held. A port write cannot be cancelled — `callPort` never aborts
+      // the Promise it wraps — so an interruptible write would release the
+      // permit and leave the barrier idle while the storage write is still
+      // pending, and the next write would run beside it. The p-queue job it
+      // replaces always finished, with later jobs queued behind it.
       return this.permit
-        .withPermits(1)(write)
+        .withPermits(1)(Effect.uninterruptible(write))
         .pipe(Effect.ensuring(Effect.sync(() => this.dequeue())));
     });
+  }
+
+  /**
+   * Whether a write is queued behind the one holding the permit. Read from
+   * inside that write, once its own port call has returned, it says the value
+   * just written is about to be replaced — what a p-queue caller could see in
+   * the version counter because the next job started synchronously on the
+   * previous one's return, and a fiber that bumps under the permit cannot.
+   */
+  get hasWaiters(): boolean {
+    return this.queued > 1;
   }
 
   private dequeue(): void {

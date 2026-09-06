@@ -68,13 +68,24 @@ export interface SubscriptionAuthorizeRequest {
   redirectUri: string;
 }
 
+/**
+ * Token-endpoint calls. `signal` is the calling fiber's: it aborts the request
+ * when the program is interrupted (an aborted loopback login), so the fetch
+ * does not run on in the background.
+ */
 export interface SubscriptionOAuthClient {
-  exchangeAuthorizationCode(params: {
-    code: string;
-    verifier: string;
-    redirectUri: string;
-  }): Promise<SubscriptionTokenResponse>;
-  refreshTokens(refreshToken: string): Promise<SubscriptionTokenResponse>;
+  exchangeAuthorizationCode(
+    params: {
+      code: string;
+      verifier: string;
+      redirectUri: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<SubscriptionTokenResponse>;
+  refreshTokens(
+    refreshToken: string,
+    signal?: AbortSignal,
+  ): Promise<SubscriptionTokenResponse>;
 }
 
 export interface SubscriptionSessionStatus {
@@ -114,6 +125,13 @@ export interface SubscriptionOAuthCoordinatorInit<
   storage: SubscriptionSessionStorage;
   policy: SubscriptionOAuthPolicy<S>;
   client: SubscriptionOAuthClient;
+  /**
+   * Wall clock for the expiry decision. It is not `Clock` (PRD R8) because
+   * `isExpiringSoon` is a public synchronous method and the coordinator
+   * suites fix the time by injecting it here; a `TestClock` would have to
+   * reach the process runtime those suites run on. It converts when that
+   * runtime's clock is injectable from a test.
+   */
   now?: () => number;
   /**
    * Provider error type. The public mutating/refreshing methods (signOut,
@@ -270,8 +288,13 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     return callPort(() => this.storage.store(JSON.stringify(session)));
   }
 
+  /**
+   * Adapt one token-endpoint call. The callback receives the fiber's abort
+   * signal, so interrupting the program cancels the request instead of
+   * leaving it to finish in the background.
+   */
   private clientCall<A>(
-    call: () => Promise<A>,
+    call: (signal: AbortSignal) => Promise<A>,
   ): Effect.Effect<A, MachineFailure> {
     return Effect.tryPromise({ try: call, catch: asMachineFailure });
   }
@@ -375,8 +398,8 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     this: SubscriptionOAuthCoordinator<S>,
     params: { code: string; verifier: string; redirectUri: string },
   ) {
-    const tokens = yield* this.clientCall(() =>
-      this.client.exchangeAuthorizationCode(params),
+    const tokens = yield* this.clientCall((signal) =>
+      this.client.exchangeAuthorizationCode(params, signal),
     );
     return yield* this.adoptTokens(tokens);
   });
@@ -428,8 +451,8 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     previous: S,
     generation: number,
   ) {
-    const tokens = yield* this.clientCall(() =>
-      this.client.refreshTokens(previous.refreshToken),
+    const tokens = yield* this.clientCall((signal) =>
+      this.client.refreshTokens(previous.refreshToken, signal),
     ).pipe(
       // A fatal rejection means the stored session is dead: clear it, unless
       // a concurrent login or sign-out already replaced it.

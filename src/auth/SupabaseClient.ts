@@ -157,8 +157,14 @@ export class SupabaseClient {
   // port (src/auth/TokenProvider.ts), which this subsystem's own
   // SupabaseSessionCoordinator implements behind a Promise edge, so running
   // them as programs here would put Effect on both sides of a Promise.
-  // Retirement condition (R10): the port becomes Effect-typed, and these
-  // convert with it in that PR. @adapter-until 2026-11-05
+  // `runPkceOperation` is the same seam from the other side: the host passes
+  // `SupabaseSessionCoordinator.createSessionFromCallback`, a Promise edge
+  // over a program, so that call nests Promise → Effect → Promise → Effect
+  // (execution-strategy rule 1). Retirement condition (R10): the port becomes
+  // Effect-typed, these convert with it in that PR, and the host hands the
+  // coordinator's exchange program to an Effect-typed sibling of
+  // `runPkceOperation` composed under the same permit, retiring the Promise
+  // callback with its suite. @adapter-until 2026-11-05
   /**
    * Check if auth system is fully initialized and ready for use.
    */

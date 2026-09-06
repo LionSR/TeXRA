@@ -351,19 +351,27 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
 
     this.lastRefreshFailure = null;
     const refreshed = toStorableSupabaseSession(data.session);
-    // Decided under the permit: a mutation queued behind this refresh has not
-    // bumped the version yet, and the refreshed session must not overwrite
-    // what that mutation is about to write.
-    const stored = yield* this.sessionMutations.run(
+    // Both decisions are made under the permit. Before the write: a mutation
+    // that ran ahead of this refresh has bumped the version, and the
+    // refreshed session must not overwrite what it wrote. After the write,
+    // still under the permit: a mutation queued behind it has not bumped the
+    // version yet but is about to replace what was just stored, so the
+    // refreshed session is not the answer either — the caller gets the
+    // post-mutation snapshot, as it did when the ledger checked after the
+    // store.
+    const current = yield* this.sessionMutations.run(
       Effect.suspend((): Effect.Effect<boolean, AuthPortError> => {
         if (this.sessionMutationVersion !== expectedVersion) {
           return Effect.succeed(false);
         }
         this.sessionMutationVersion += 1;
-        return Effect.as(this.write(refreshed), true);
+        return Effect.map(
+          this.write(refreshed),
+          () => !this.sessionMutations.hasWaiters,
+        );
       }),
     );
-    if (stored) return refreshed;
+    if (current) return refreshed;
     return (yield* this.stableSnapshot()).session;
   });
 
