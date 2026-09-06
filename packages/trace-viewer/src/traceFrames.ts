@@ -166,7 +166,7 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
       executionId,
       config: agentConfig,
     });
-  } else {
+  } else if ('name' in trace.config) {
     // Process and workflow-container exports persist a non-agent RunRecord
     // (name/instruction/model, no agentCategory). Project that into the
     // durable config arm the fold already reads for `command` / `model`.
