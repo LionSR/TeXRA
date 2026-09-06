@@ -16,10 +16,13 @@
  * internal, and no host widget here.
  */
 
-// The services and their layer.
-export { composeProcess, Runtime } from './effect/runtime.js';
+// The services and their layer. `Runtime.layer(platform)` is the only way
+// in: the composition root and the session factory under it stay internal,
+// because a caller that reached them directly would hold a composed process
+// and an open session with no scope to end either.
+export { Runtime } from './effect/runtime.js';
 export type { AgentPlatform, AgentRuntime } from './effect/runtime.js';
-export { makeSessions, Sessions } from './effect/sessions.js';
+export { Sessions } from './effect/sessions.js';
 export type {
   Run,
   Session,

@@ -17,7 +17,18 @@ Not on the registry yet. Inside this workspace, depend on it by name:
 { "dependencies": { "@texra-ai/agent": "workspace:*" } }
 ```
 
-`zod` (v4) is a peer dependency.
+`effect` and `zod` (v4) are peer dependencies, and they are peers of the
+**whole package**, not only of the `@texra-ai/agent/effect` subpath: the root
+entry's bundle imports `effect` at runtime too (`dist/index.js` opens with
+`import ... from 'effect'`). Install both alongside it, `effect` at the exact
+version the package pins (`4.0.0-rc.112`). Two copies of `effect` in one
+process do not work at all: Streams, Fibers and Context built by one copy do
+not interoperate with another's, and a peer dependency is how a consumer gets
+one copy rather than a second nested one.
+
+```jsonc
+{ "dependencies": { "effect": "4.0.0-rc.112", "zod": "^4.4.3" } }
+```
 
 ## Usage
 
@@ -149,6 +160,10 @@ files.
 | `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                                           |
 | `@texra-ai/agent/effect`  | `Runtime`, `Sessions`, `Session`, `Run` and the tagged errors: the services the entry above renders                                                      |
 
+Every entry needs the `effect` and `zod` peers installed, the root one
+included: `@texra-ai/agent` is the Effect surface rendered as Promises, and
+its bundle imports `effect` at runtime like the subpath does.
+
 ## Effect
 
 `@texra-ai/agent/effect` is the surface. Everything this package decides is
@@ -161,9 +176,8 @@ of the three boundary kinds rule R1 of TeXRA's Effect migration names
 tool `execute()` contract, and this package's public API speak Promises;
 everything below them is Effect-typed.
 
-`effect` is a peer dependency. Install the same version the package pins
-(`4.0.0-rc.112`): Streams, Fibers and Context built by one copy of Effect do
-not interoperate with another's.
+`effect` is a peer dependency of every entry, not only this one. See
+[Install](#install).
 
 ```ts
 import { Effect, Stream } from 'effect';
@@ -185,25 +199,27 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped, Effect.provide(Runtime.layer(nodePlatform(options))));
 ```
 
-| Service    | What it is                                                                                                                                                                                                                                                                                               |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Runtime`  | The composed process: the platform, its workspace roots, and whether this composition installed the process runtime. `Runtime.layer(platform)` provides it and `Sessions`; its scope closes what this composition opened, and nothing when it composed beside a host's or an earlier run's installation. |
-| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?, signal?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                                                                                                                                |
-| `Session`  | `start`, `request`, `view.changes`, `events`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                             |
-| `Run`      | `executionId`, `streamId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its stream published and its trace live.                                                                                                                               |
+| Service    | What it is                                                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Runtime`  | The composed process: the platform and its workspace roots. `Runtime.layer(platform)` provides it and `Sessions`, with this scope as the lifetime of the hold it takes on that composition. |
+| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?, signal?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                   |
+| `Session`  | `start`, `request`, `view.changes`, `events`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                |
+| `Run`      | `executionId`, `streamId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its stream published and its trace live.                  |
 
 `session.view.changes` publishes the fold's levels as values: each is
 immutable, an older level stays exactly what it was for as long as it is held,
 and a branch the later level did not touch is the same object in both.
 
-A scope that composed the process ends it: leaving it closes the runtime's
-session and disposes the runtime the owner ran on, and a later program in the
-same process composes again over the platform already installed. That is what
-the Promise entry cannot do, and why it composes once: its owner is the
-embedder's shutdown path, which runs once. A scope that
-found a host (or an earlier `runAgent`) already composed closes nothing, so it
-never kills runs it does not own; close a root such a scope opened of its own
-through `Sessions.close`.
+The composition is held, not owned: each `Runtime.layer` scope takes a hold on
+it, and the last hold to end is what closes every session the owner holds,
+each settling its runs and flushing its artifacts, and then disposes the
+runtime they ran on. So two overlapping scopes over one platform are safe, the
+first one out ends nothing the second is still using, and a later program in
+the same process composes again over the platform already installed. That is
+what the Promise entry cannot do, and why it composes once: its owner is the
+embedder's shutdown path, which runs once. A composition that found a host's
+own installation ends nothing however its holds end: those sessions are the
+host's, and killing its live runs is not this package's to do.
 
 Failures are `Data.TaggedError`s: `PlatformConflict`, `AgentNotFound`,
 `ToolsRefused`, and `RunFailure`, whose `cause` is exactly what the launch path

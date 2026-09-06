@@ -8,18 +8,24 @@
  * of a root happens before the first yield of a run, so a close issued the
  * moment a launch returns settles that launch too.
  *
+ * That composition is one installation, however many callers reach it, so
+ * it is held rather than owned: every {@link composeProcess} returns a
+ * {@link ProcessHold} on it, and the last hold to be released is what closes
+ * the owner's sessions and disposes the runtime under them.
+ *
  * {@link Runtime.layer} is the Effect embedder's entry: it composes the
- * process once and provides both this service and `Sessions`. Its scope
- * owns what this composition installed, so leaving `Effect.scoped` closes
- * the runtime's session and disposes the runtime the owner runs on when
- * this composition was the one that installed them, and closes nothing
- * when it composed beside a host's (or an earlier run's) installation. A
- * Promise embedder reaches the same closure through
- * `lifecycle.runShutdown()`, which `packages/agent/src/index.ts` wires.
+ * process once per scope and provides both this service and `Sessions`,
+ * with the scope as the lifetime of its hold. A Promise embedder's hold is
+ * the one `packages/agent/src/index.ts` takes, released by
+ * `lifecycle.runShutdown()`.
  */
 import { Context, Effect, Layer } from 'effect';
 
-import { sessionOwnerInstalled } from '@agent/runtime';
+import {
+  closeSession as closeOwnedSession,
+  listSessions as listOwnedSessions,
+  sessionOwnerInstalled,
+} from '@agent/runtime';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -47,36 +53,68 @@ export interface AgentPlatform extends Platform {
 export interface AgentRuntime {
   readonly platform: AgentPlatform;
   readonly roots: WorkspaceRoots;
+}
+
+/** One composition's hold on the composed process: what it reads, and the
+ *  end of its claim on what it found or installed. */
+export interface ProcessHold {
+  readonly runtime: AgentRuntime;
   /**
-   * This call installed the process runtime and the session owner on it, so
-   * it owns their disposal and the end of the session it opened. False
-   * beside a host (or an earlier composition whose closure has not run)
-   * that installed its own.
+   * End this hold (R6). The last hold to end closes every session the owner
+   * holds and then disposes the runtime they ran on; every earlier one ends
+   * nothing, because something else is still working on it. A hold on a
+   * host's own installation ends nothing either: the session belongs to the
+   * host that opened it, and killing its live runs is not this package's to
+   * do.
+   *
+   * The disposal is the close's finalizer, not its continuation: the close
+   * flushes each session's artifacts, and a flush that defects must not
+   * leave the owner and the runtime under it installed with no hold left to
+   * end them. The defect still propagates, so the embedder sees the failed
+   * close; what it cannot do is skip the disposal.
+   *
+   * Ending a hold twice ends it once. A hold is one composition's and the
+   * count is the process's, so a second release must not spend another
+   * composition's claim.
    */
-  readonly composed: boolean;
+  readonly release: Effect.Effect<void>;
 }
 
 /**
- * Compose the process, or recognize the one already composed. Synchronous
- * and idempotent: a run beside a host that already ran its own composition
- * root (the same platform object) reuses all four installations, its
- * session included, and nothing here is installed twice.
+ * How many live holds there are on the process this package composed. The
+ * session owner and the runtime under it are one installation shared by
+ * every composition that found it already there, so they end when the last
+ * hold ends and not before: a scope that disposed them at its own exit
+ * would tear them out from under an overlapping scope, or from under the
+ * Promise entry's runs, which is precisely what a borrowing composition has
+ * no standing to do.
+ */
+let holds = 0;
+
+/**
+ * Whether the installation those holds share is this package's. What says a
+ * process is composed is the session owner, not the platform: `initPlatform`
+ * has no inverse and holds for the life of the process, while the owner and
+ * the runtime under it end with the holds on them. A composition that found
+ * a host's own installation disposes nothing, however its holds end.
+ */
+let installedHere = false;
+
+/**
+ * Compose the process, or take a hold on the one already composed.
+ * Synchronous and idempotent: a run beside a host that already ran its own
+ * composition root (the same platform object) reuses all four
+ * installations, its session included, and nothing here is installed twice.
  *
- * What says a process is composed is the session owner, not the platform.
- * `initPlatform` has no inverse and holds for the life of the process,
- * while the owner and the runtime under it end with the composition that
- * installed them (`disposeProcessRuntime`). Reading the platform instead
- * would leave a process whose first closure has run permanently without an
- * owner; reading the owner composes again over the platform already
- * installed, which is what makes the Effect surface usable more than once
- * per process: there each scope owns the composition it made. The Promise
- * entry composes once, because the owner it hands a composition to is the
- * embedder's shutdown path, which runs once (`../index.ts`).
+ * Every call takes a hold, and every hold is ended by exactly one
+ * {@link releaseProcess}. That is what makes the Effect surface usable more
+ * than once per process and safe to use twice at once: each scope holds the
+ * composition it found, and the last one out ends it.
  *
  * Throws {@link PlatformConflict} when a second, different platform reaches
  * a process the package already composed.
  */
-export function composeProcess(platform: AgentPlatform): AgentRuntime {
+export function composeProcess(platform: AgentPlatform): ProcessHold {
   const active = tryPlatform();
   if (active && active !== platform) {
     throw new PlatformConflict({
@@ -84,8 +122,7 @@ export function composeProcess(platform: AgentPlatform): AgentRuntime {
         'The agent package is already using another platform in this process.',
     });
   }
-  const composed = !sessionOwnerInstalled();
-  if (composed) {
+  if (!sessionOwnerInstalled()) {
     // The process-wide installations, once for the life of the process.
     if (!active) {
       initPlatform(platform);
@@ -102,15 +139,45 @@ export function composeProcess(platform: AgentPlatform): AgentRuntime {
     if (!active) {
       initNodeAgentRuntime(platform.lifecycle);
     }
+    installedHere = true;
   }
-  return { platform, roots: platform.roots, composed };
+  holds += 1;
+  let held = true;
+  return {
+    runtime: { platform, roots: platform.roots },
+    release: Effect.suspend(() => {
+      if (!held) return Effect.void;
+      held = false;
+      holds -= 1;
+      if (holds > 0 || !installedHere) return Effect.void;
+      installedHere = false;
+      return closeOwnedSessions().pipe(
+        Effect.ensuring(Effect.promise(() => disposeProcessRuntime())),
+      );
+    }),
+  };
+}
+
+/** Every session the owner still holds, closed one at a time: a root some
+ *  composition opened of its own settles its runs and flushes its artifacts
+ *  exactly as the runtime's own root does, rather than going down with the
+ *  runtime unwritten. */
+function closeOwnedSessions(): Effect.Effect<void> {
+  return Effect.flatMap(listOwnedSessions(), (open) =>
+    Effect.forEach(
+      open,
+      (session) => closeOwnedSession(session.roots.storage),
+      { discard: true },
+    ),
+  );
 }
 
 /** The composed process. */
 export class Runtime extends Context.Service<Runtime, AgentRuntime>()(
   '@texra-ai/agent/Runtime',
 ) {
-  /** Compose the process once and provide both services. */
+  /** Compose the process once and provide both services, with this scope as
+   *  the lifetime of the hold it takes. */
   static layer(
     platform: AgentPlatform,
   ): Layer.Layer<Runtime | Sessions, PlatformConflict> {
@@ -118,52 +185,30 @@ export class Runtime extends Context.Service<Runtime, AgentRuntime>()(
       Layer.provideMerge(
         Layer.effect(
           Runtime,
-          Effect.try({
-            try: () => composeProcess(platform),
-            catch: (thrown) => thrown,
-          }).pipe(
-            // The one refusal this composition states; anything else
-            // thrown by an installation is a defect, not a condition.
-            Effect.catch((thrown) =>
-              thrown instanceof PlatformConflict
-                ? Effect.fail(thrown)
-                : Effect.die(thrown),
-            ),
-          ),
+          Effect.gen(function* () {
+            const hold = yield* Effect.try({
+              try: () => composeProcess(platform),
+              catch: (thrown) => thrown,
+            }).pipe(
+              // The one refusal this composition states; anything else
+              // thrown by an installation is a defect, not a condition.
+              Effect.catch((thrown) =>
+                thrown instanceof PlatformConflict
+                  ? Effect.fail(thrown)
+                  : Effect.die(thrown),
+              ),
+            );
+            // Registered where the hold is taken, so no path leaves the
+            // scope holding one.
+            yield* Effect.addFinalizer(() => hold.release);
+            return hold.runtime;
+          }),
         ),
       ),
     );
   }
 }
 
-/**
- * The sessions of the composed process, with the scope as the lifetime of
- * what this composition installed (R6): a composition that installed the
- * process runtime closes the runtime's session and disposes the runtime the
- * owner runs on when its scope leaves. A composition that found both
- * already installed closes nothing: the session belongs to the host (or the
- * earlier run) that opened it, and killing its live runs is not this scope's
- * to do; a root such a scope opened of its own ends through
- * `Sessions.close`.
- *
- * The disposal is the close's finalizer, not its continuation: the close
- * flushes the session's artifacts, and a flush that defects must not leave
- * the owner and the runtime under it installed with no later scope to end
- * them. The defect still leaves the scope, so the embedder sees the failed
- * close; what it cannot do is skip the disposal.
- */
-const sessionsLayer = Layer.effect(
-  Sessions,
-  Effect.gen(function* () {
-    const runtime = yield* Runtime;
-    const sessions = makeSessions(runtime);
-    if (runtime.composed) {
-      yield* Effect.addFinalizer(() =>
-        sessions
-          .close()
-          .pipe(Effect.ensuring(Effect.promise(() => disposeProcessRuntime()))),
-      );
-    }
-    return sessions;
-  }),
-);
+/** The sessions of the composed process. They outlive no hold on it: what
+ *  ends them is the last {@link ProcessHold.release}. */
+const sessionsLayer = Layer.effect(Sessions, Effect.map(Runtime, makeSessions));

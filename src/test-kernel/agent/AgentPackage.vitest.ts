@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 
 // Third-party imports
-import { Deferred, Effect, Stream, SubscriptionRef } from 'effect';
+import { Deferred, Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 interface RunAgentOptions {
@@ -33,7 +33,7 @@ const mocks = vi.hoisted(() => ({
     abandoned: [] as string[],
   })),
   detachEvents: vi.fn(),
-  disposeRuntime: vi.fn(),
+  disposeRuntime: vi.fn(async () => {}),
   executionId: 'execution-1',
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
@@ -287,7 +287,7 @@ describe('agent package run lifecycle', () => {
     mocks.installRuntime.mockImplementation(() => {
       mocks.ownerInstalled = true;
     });
-    mocks.disposeRuntime.mockImplementation(() => {
+    mocks.disposeRuntime.mockImplementation(async () => {
       mocks.ownerInstalled = false;
     });
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
@@ -366,6 +366,12 @@ describe('agent package run lifecycle', () => {
       'The agent package cannot run approval-requiring tools: dangerous_tool',
     );
     expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
+    // The refusal the package states from the input alone precedes the
+    // composition: a caller being refused does not install a platform, a
+    // process runtime or a session owner, and opens no session.
+    expect(mocks.initPlatform).not.toHaveBeenCalled();
+    expect(mocks.installRuntime).not.toHaveBeenCalled();
+    expect(mocks.sessionInits).toHaveLength(0);
     await expect(run.view[Symbol.asyncIterator]().next()).resolves.toEqual({
       done: true,
       value: undefined,
@@ -481,13 +487,78 @@ describe('agent package run lifecycle', () => {
       throw new Error('artifact flush defect');
     });
     const program = Effect.gen(function* () {
-      yield* Sessions;
+      const sessions = yield* Sessions;
+      yield* sessions.open();
     }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
 
     await expect(Effect.runPromise(program)).rejects.toThrow(
       'artifact flush defect',
     );
     expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
+  });
+
+  it('holds the runtime for an overlapping scope: the composing scope leaving closes nothing', async () => {
+    // Two independently provided scopes over one platform. The first
+    // composes the process; the second finds that composition and borrows
+    // it. The first leaving must not close the session the second is still
+    // working on, nor dispose the runtime under it.
+    const firstComposed = Effect.runSync(Deferred.make<void>());
+    const secondComposed = Effect.runSync(Deferred.make<void>());
+    const secondMayLeave = Effect.runSync(Deferred.make<void>());
+
+    const first = Effect.runFork(
+      Effect.gen(function* () {
+        const sessions = yield* Sessions;
+        yield* sessions.open();
+        yield* Deferred.succeed(firstComposed, undefined);
+        yield* Deferred.await(secondComposed);
+      }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM))),
+    );
+    await Effect.runPromise(Deferred.await(firstComposed));
+
+    const second = Effect.runFork(
+      Effect.gen(function* () {
+        const sessions = yield* Sessions;
+        yield* sessions.open();
+        yield* Deferred.succeed(secondComposed, undefined);
+        yield* Deferred.await(secondMayLeave);
+      }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM))),
+    );
+    await Effect.runPromise(Deferred.await(secondComposed));
+
+    await Effect.runPromise(Fiber.join(first));
+    expect(mocks.closeSession).not.toHaveBeenCalled();
+    expect(mocks.disposeRuntime).not.toHaveBeenCalled();
+
+    await Effect.runPromise(Deferred.succeed(secondMayLeave, undefined));
+    await Effect.runPromise(Fiber.join(second));
+    // The last hold out is what ends the composition the two shared.
+    expect(mocks.closeSession).toHaveBeenCalledExactlyOnceWith(
+      PLATFORM.roots.storage,
+    );
+    expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
+  });
+
+  it('closes every root the owner holds before it disposes the runtime', async () => {
+    const otherRoots = { storage: '/other-storage' };
+    const program = Effect.gen(function* () {
+      const sessions = yield* Sessions;
+      yield* sessions.open();
+      yield* sessions.open(otherRoots as never);
+    }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
+
+    await Effect.runPromise(program);
+
+    // A root this composition opened of its own settles and flushes like
+    // the runtime's, rather than going down with the runtime unwritten.
+    expect(mocks.closeSession.mock.calls.map(([root]) => root)).toEqual([
+      PLATFORM.roots.storage,
+      otherRoots.storage,
+    ]);
+    const [disposal] = mocks.disposeRuntime.mock.invocationCallOrder;
+    for (const order of mocks.closeSession.mock.invocationCallOrder) {
+      expect(order).toBeLessThan(disposal as number);
+    }
   });
 
   it('a scoped reader holds its own transcript interest and clears it at the scope, leaving the run its own', async () => {

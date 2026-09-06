@@ -154,7 +154,9 @@ export interface Session {
   /**
    * Admission: succeeds when the run exists in the session, with its stream
    * published and its trace live. Interrupting the caller before admission
-   * aborts the launch.
+   * aborts the launch; interrupting it during the handoff that follows ends
+   * the run too, so a caller that does not receive a {@link Run} has none
+   * running.
    */
   readonly start: (
     input: StartInput,
@@ -244,6 +246,30 @@ function runStreamIds(view: SessionView, streamId: StreamTabId): StreamTabId[] {
   return ids;
 }
 
+/**
+ * The refusal the package states from the caller's own input, before
+ * anything of the process is touched: it has no approval channel, so a tool
+ * that requires one cannot run here whatever the agent turns out to be.
+ * {@link admitInput} states it in its own order; the Promise entry states
+ * it first, because there a composition is a side effect of the call and a
+ * caller being refused must not pay for one (`../index.ts`).
+ */
+export function admitTools(
+  tools: readonly ITool[] | undefined,
+): Effect.Effect<void, ToolsRefused> {
+  const needApproval = (tools ?? [])
+    .filter((tool) => tool.requiresApproval)
+    .map((tool) => tool.definition.name);
+  return needApproval.length > 0
+    ? Effect.fail(
+        new ToolsRefused({
+          tools: needApproval,
+          message: `The agent package cannot run approval-requiring tools: ${needApproval.join(', ')}`,
+        }),
+      )
+    : Effect.void;
+}
+
 /** The run's configuration, or the refusal that stops it before any model
  *  work: the three the package states. */
 function admitInput(
@@ -254,15 +280,7 @@ function admitInput(
 > {
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
-    const needApproval = tools
-      .filter((tool) => tool.requiresApproval)
-      .map((tool) => tool.definition.name);
-    if (needApproval.length > 0) {
-      return yield* new ToolsRefused({
-        tools: needApproval,
-        message: `The agent package cannot run approval-requiring tools: ${needApproval.join(', ')}`,
-      });
-    }
+    yield* admitTools(tools);
     // The agent scan reads the configured directories through the
     // platform, so it can fail on the environment. That is a failure of
     // `start`, in the vocabulary the surface already names, not a defect
@@ -285,12 +303,21 @@ function admitInput(
         message: `Custom tools are supported only for tool-use agents; "${input.agent}" is a workflow agent.`,
       });
     }
-    return AgentConfigSchema.parse({
-      agent: resolved.entry.name,
-      agentCategory: resolved.entry.category,
-      agentSource: resolved.entry.source,
-      instruction: input.instruction,
-      ...(input.model ? { model: input.model } : {}),
+    // The schema is the launch's last refusal, and it is a refusal rather
+    // than a defect: an instruction this surface will not accept reaches an
+    // embedder's `catchTag` in the vocabulary the surface names, as the
+    // agent scan's failure above does.
+    return yield* Effect.try({
+      try: () =>
+        AgentConfigSchema.parse({
+          agent: resolved.entry.name,
+          agentCategory: resolved.entry.category,
+          agentSource: resolved.entry.source,
+          instruction: input.instruction,
+          ...(input.model ? { model: input.model } : {}),
+        }),
+      catch: (cause) =>
+        new RunFailure({ cause, message: toErrorMessage(cause) }),
     });
   });
 }
@@ -300,6 +327,11 @@ function admitInput(
  * there. The launch itself is the one foreign boundary this subpath wraps
  * (`runAgent` is Promise-native until lane D converts the run loops): its
  * abort signal is what an interruption before admission reaches.
+ *
+ * The handoff is all-or-nothing, which is what lets a caller treat the
+ * `Run` as the only handle on the run: this either returns one, or it ends
+ * every fiber it started. There is no exit in which a run keeps working
+ * with nobody holding it.
  */
 function start(
   session: RuntimeSessionHandle,
@@ -342,105 +374,122 @@ function start(
         );
         yield* Queue.end(trace);
       });
-    const runFiber = yield* Effect.forkDetach(
-      Effect.tryPromise({
-        try: (signal) =>
-          runValidatedAgent(
-            { kind: 'fresh', config, executionId },
-            {
-              approvalPromptsUnavailable: true,
-              launchSignal: signal,
-              onRun: (live) => {
-                handle = live;
-              },
-              onStreamResolved: (streamId, runTrace) => {
-                detach = runTrace.subscribe((event) => {
-                  if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
-                    log.warn(
-                      `Run ${executionId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; detaching its trace. Iterate the run's events in the turn that starts it, or await only its result.`,
-                    );
-                    release();
-                    return;
-                  }
-                  Queue.offerUnsafe(trace, event);
-                });
-                Deferred.doneUnsafe(admitted, Effect.succeed(streamId));
-              },
-              session,
-              stopAfterCycle: true,
-              tools: input.tools,
-            },
-          ),
-        catch: (cause) =>
-          new RunFailure({ cause, message: toErrorMessage(cause) }),
-      }).pipe(Effect.onExit(settle)),
-      { startImmediately: true },
-    );
-    // The launch is the run fiber's; interrupting the admission wait is
-    // what reaches its abort signal, and after admission the fiber is the
-    // caller's no longer.
-    const streamId = yield* Deferred.await(admitted).pipe(
-      Effect.onInterrupt(() => Fiber.interrupt(runFiber)),
-    );
-    const view = session.viewChanges.pipe(
-      // The level replays on subscribe, and the fold lands the run's
-      // `run.start` asynchronously, so a replayed level can predate the run.
-      Stream.dropWhile((level) => !level.streams.has(streamId)),
-      // The view is the end condition: the first level holding the run's
-      // durable outcome is the last element.
-      Stream.takeUntil(
-        (level) => level.streams.get(streamId)?.durableOutcome != null,
-      ),
-    );
-    // The transcript tier folds only for subscribed aggregates, on a port
-    // of this run's own: its stream now, its descendants as the view gains
-    // them. The port is never cleared, by choice: the run's rows stay
-    // resident for the life of the package session, as a TUI's do.
-    const port = `sdk/${streamId}`;
-    let subscribed = '';
-    const interest = (ids: readonly StreamTabId[]): Effect.Effect<void> =>
-      Effect.suspend(() => {
-        const key = ids.join('\0');
-        if (key === subscribed) return Effect.void;
-        subscribed = key;
-        return session.subscriptions.set(
-          port,
-          ids.map((id) => ({ id, fromSeq: 0 })),
+    // The launch and the drain are the run's, and until the caller holds
+    // the `Run` that names them they are nobody's: whatever ends this
+    // handoff short of that ends them too. So the handoff is
+    // uninterruptible but for the admission wait, where the launch's own
+    // abort signal is what an interruption reaches, and the exit handler
+    // outside the mask covers the rest, the boundary included: an interrupt
+    // that lands while the tail runs is raised the moment the mask lifts,
+    // with a `Run` built that reaches no one.
+    const spawned: Fiber.Fiber<unknown, unknown>[] = [];
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const runFiber = yield* Effect.forkDetach(
+          Effect.tryPromise({
+            try: (signal) =>
+              runValidatedAgent(
+                { kind: 'fresh', config, executionId },
+                {
+                  approvalPromptsUnavailable: true,
+                  launchSignal: signal,
+                  onRun: (live) => {
+                    handle = live;
+                  },
+                  onStreamResolved: (streamId, runTrace) => {
+                    detach = runTrace.subscribe((event) => {
+                      if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
+                        log.warn(
+                          `Run ${executionId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; detaching its trace. Iterate the run's events in the turn that starts it, or await only its result.`,
+                        );
+                        release();
+                        return;
+                      }
+                      Queue.offerUnsafe(trace, event);
+                    });
+                    Deferred.doneUnsafe(admitted, Effect.succeed(streamId));
+                  },
+                  session,
+                  stopAfterCycle: true,
+                  tools: input.tools,
+                },
+              ),
+            catch: (cause) =>
+              new RunFailure({ cause, message: toErrorMessage(cause) }),
+          }).pipe(Effect.onExit(settle)),
+          { startImmediately: true },
         );
-      });
-    yield* interest([streamId]);
-    // The package owns this drain: the descendants join the subscription as
-    // the view gains them, and the run's `result` waits for its final fold
-    // even when nobody reads `view`, and fails if the fold dies first.
-    const drain = yield* Effect.forkDetach(
-      Stream.runDrain(
-        view.pipe(
-          Stream.tap((level) => interest(runStreamIds(level, streamId))),
-        ),
+        spawned.push(runFiber);
+        const streamId = yield* restore(Deferred.await(admitted));
+        const view = session.viewChanges.pipe(
+          // The level replays on subscribe, and the fold lands the run's
+          // `run.start` asynchronously, so a replayed level can predate the
+          // run.
+          Stream.dropWhile((level) => !level.streams.has(streamId)),
+          // The view is the end condition: the first level holding the
+          // run's durable outcome is the last element.
+          Stream.takeUntil(
+            (level) => level.streams.get(streamId)?.durableOutcome != null,
+          ),
+        );
+        // The transcript tier folds only for subscribed aggregates, on a
+        // port of this run's own: its stream now, its descendants as the
+        // view gains them. The port is never cleared, by choice: the run's
+        // rows stay resident for the life of the package session, as a
+        // TUI's do.
+        const port = `sdk/${streamId}`;
+        let subscribed = '';
+        const interest = (ids: readonly StreamTabId[]): Effect.Effect<void> =>
+          Effect.suspend(() => {
+            const key = ids.join('\0');
+            if (key === subscribed) return Effect.void;
+            subscribed = key;
+            return session.subscriptions.set(
+              port,
+              ids.map((id) => ({ id, fromSeq: 0 })),
+            );
+          });
+        yield* interest([streamId]);
+        // The package owns this drain: the descendants join the
+        // subscription as the view gains them, and the run's `result` waits
+        // for its final fold even when nobody reads `view`, and fails if
+        // the fold dies first.
+        const drain = yield* Effect.forkDetach(
+          Stream.runDrain(
+            view.pipe(
+              Stream.tap((level) => interest(runStreamIds(level, streamId))),
+            ),
+          ),
+          { startImmediately: true },
+        );
+        spawned.push(drain);
+        return {
+          executionId,
+          streamId,
+          result: Fiber.join(runFiber).pipe(
+            Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
+          ),
+          view,
+          events: Stream.unwrap(
+            Effect.sync(() => {
+              reading = true;
+              return Stream.fromQueue(trace);
+            }),
+          ).pipe(Stream.ensuring(Effect.sync(release))),
+          interrupt: Effect.suspend(() =>
+            handle
+              ? Effect.sync(() => {
+                  handle?.interrupt();
+                })
+              : Fiber.interrupt(runFiber),
+          ),
+        };
+      }),
+    ).pipe(
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit) ? Effect.void : Fiber.interruptAll(spawned),
       ),
-      { startImmediately: true },
     );
-    return {
-      executionId,
-      streamId,
-      result: Fiber.join(runFiber).pipe(
-        Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
-      ),
-      view,
-      events: Stream.unwrap(
-        Effect.sync(() => {
-          reading = true;
-          return Stream.fromQueue(trace);
-        }),
-      ).pipe(Stream.ensuring(Effect.sync(release))),
-      interrupt: Effect.suspend(() =>
-        handle
-          ? Effect.sync(() => {
-              handle?.interrupt();
-            })
-          : Fiber.interrupt(runFiber),
-      ),
-    };
   });
 }
 

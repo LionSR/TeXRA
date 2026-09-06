@@ -33,7 +33,6 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - host services this boundary wires
-import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SessionCloseReport } from '@shared/schemas';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
@@ -41,7 +40,11 @@ import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 // Local imports - the Effect surface this entry renders
 import { RunFailure } from './effect/errors.js';
 import { composeProcess, type AgentPlatform } from './effect/runtime.js';
-import { makeSessions, type SessionView } from './effect/sessions.js';
+import {
+  admitTools,
+  makeSessions,
+  type SessionView,
+} from './effect/sessions.js';
 
 /**
  * The owner's session effects supply their own context, so every run site
@@ -135,6 +138,27 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
 }
 
 /**
+ * The Promise entry's one composition of the process, and the hold it took
+ * on it.
+ *
+ * This entry's owner for a composition is the embedder's shutdown path, and
+ * a lifecycle host drains each phase exactly once and caches its shutdown,
+ * so there is one such owner per process and therefore one composition: a
+ * later `runAgent` on the same platform reuses this rather than taking a
+ * second hold nothing would release. The shutdown releases the hold and
+ * clears this, and `shutdownRan` refuses a run that arrives after it, so no
+ * run composes a session with no shutdown path left to close and flush it.
+ * The Effect surface has no such limit: there the owner is the scope, so a
+ * new `Runtime.layer` scope composes the process again.
+ */
+let composition:
+  | {
+      readonly platform: AgentPlatform;
+      readonly sessions: ReturnType<typeof makeSessions>;
+    }
+  | undefined;
+
+/**
  * The package's services over the process it composes.
  *
  * `composeProcess` is synchronous, so everything from the platform check to
@@ -146,19 +170,11 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
  * The composing call also puts the session on the embedder's shutdown path:
  * the session's agent-spawned children and agent-CLI sessions are stopped,
  * then the platform's session is closed through its owner under the phase's
- * own budget, then the runtime that held it goes, and its owner with it
- * (#11913 ends the two in one step), so a later `closeSession` answers as a
- * process with none does. An Effect embedder reaches the same closure
- * through `Runtime.layer`'s scope.
- *
- * That path is this entry's only owner for a composition, and it can be
- * drawn once: a lifecycle host drains each phase exactly once and caches
- * its shutdown, so a handler registered after `runShutdown()` began is
- * never run. A run on a platform whose shutdown has run is therefore
- * refused, rather than installing a runtime and an owner with nothing left
- * to dispose them. The lifecycle says so itself, through `shutdownRan`,
- * which also covers the shutdown a host ran over its own composition. The Effect surface has no such limit: there the owner is the
- * scope, so a new `Runtime.layer` scope composes the process again.
+ * own budget, then this entry's hold on the composition ends. The runtime
+ * and the owner on it go with that hold when it is the last one, so a later
+ * `closeSession` answers as a process with none does, and they stay while an
+ * Effect scope of the same process still holds them. An Effect embedder
+ * reaches the same closure through `Runtime.layer`'s scope.
  */
 function agentServices(
   platform: AgentPlatform,
@@ -168,16 +184,23 @@ function agentServices(
       "This platform's shutdown has already run, and it runs once: a session opened now would have no shutdown path to close and flush it, and the runtime under it none to dispose it. Run further agents in a new process, or take the Effect surface (@texra-ai/agent/effect), whose scope owns each composition.",
     );
   }
-  const runtime = composeProcess(platform);
-  const sessions = makeSessions(runtime);
-  if (runtime.composed) {
-    registerRuntimeShutdownHandlers(platform.lifecycle, {
-      flushArtifacts: async (signal) => {
-        await Effect.runPromise(sessions.close(platform.roots, signal));
+  if (composition?.platform === platform) return composition.sessions;
+  // A different platform reaches `composeProcess`, which is what states the
+  // refusal.
+  const hold = composeProcess(platform);
+  const sessions = makeSessions(hold.runtime);
+  composition = { platform, sessions };
+  registerRuntimeShutdownHandlers(platform.lifecycle, {
+    flushArtifacts: async (signal) => {
+      await Effect.runPromise(sessions.close(platform.roots, signal));
+    },
+    afterExecutionSettlement: [
+      async () => {
+        composition = undefined;
+        await Effect.runPromise(hold.release);
       },
-      afterExecutionSettlement: [() => disposeProcessRuntime()],
-    });
-  }
+    ],
+  });
   return sessions;
 }
 
@@ -217,10 +240,18 @@ export function runAgent(input: RunAgentInput): AgentRun {
   // `result`, where every other launch refusal arrives, rather than
   // throwing from a call whose declared shape is an `AgentRun`.
   const started = Effect.runFork(
-    Effect.try({
-      try: () => agentServices(input.platform),
-      catch: (refusal) => refusal,
-    }).pipe(
+    // The refusal the package can state from the input alone comes first,
+    // as it did before this entry composed inside the fiber: a caller that
+    // hands over an approval-requiring tool is refused without a process
+    // runtime, a session owner, or a session being composed on its behalf.
+    // `start` states it again in its own order, over the agent it resolved.
+    admitTools(input.tools).pipe(
+      Effect.andThen(
+        Effect.try({
+          try: () => agentServices(input.platform),
+          catch: (refusal) => refusal,
+        }),
+      ),
       Effect.flatMap((sessions) => sessions.open()),
       Effect.flatMap((session) => session.start(input)),
     ),
@@ -250,7 +281,12 @@ export function runAgent(input: RunAgentInput): AgentRun {
     ),
     interrupt: () => {
       // Two windows, one expression: before admission the interrupt reaches
-      // the launch's abort signal; after it, the live run's handle.
+      // the launch's abort signal; after it, the live run's handle. The
+      // exits are exhaustive because `start`'s handoff is: a success holds
+      // the `Run` and its `interrupt` is the live run's, and any other exit
+      // is either a launch that already failed or one this interrupt ended
+      // in the admission wait, where `start` ended the run with it. There
+      // is no exit that leaves a run for this to miss.
       Effect.runFork(
         Fiber.interrupt(started).pipe(
           Effect.andThen(Fiber.await(started)),
