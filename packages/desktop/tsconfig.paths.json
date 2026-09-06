@@ -2,9 +2,6 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "vscode-jsonrpc/node": [
-        "./../../node_modules/vscode-jsonrpc/lib/node/main"
-      ],
       "@shared/*": [
         "./../../src/shared/*",
         "./../../src/shared/*.ts",
