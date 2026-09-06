@@ -8,8 +8,6 @@
 // here: a surface answers an approval with `runtime.request`, and the
 // session settles the pending request itself.
 
-import { Effect, Fiber, Stream } from 'effect';
-
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -28,13 +26,11 @@ import {
 } from '@agent/core/state/executionRequests';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { effectRuntime } from '@platform/processRuntime';
 import type {
   MainViewExecuteMessage,
   RequestOpenFilePayload,
   StreamTabId,
 } from '@shared/schemas';
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { Rejected } from '@shared/session/requestErrors';
 
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
@@ -153,21 +149,8 @@ export function createDesktopAgentExecution(
   // resolves, whichever way.
   const toolEditApprovals = new ToolEditApprovalController({
     host: new DesktopToolEditApprovalHost({ ui: host }),
-    showToolEditPermission: () => undefined,
-    resolveToolEditPermission: () => undefined,
-    detachCause: SESSION_DISPOSED_CAUSE,
+    session,
   });
-  const resolvedApprovals = effectRuntime().runFork(
-    Stream.runForEach(session.events.all(session.now()), (event) =>
-      Effect.sync(() => {
-        if (event.type !== 'approval.resolved') return;
-        toolEditApprovals.handleAction({
-          requestId: event.requestId,
-          action: 'reject',
-        });
-      }),
-    ),
-  );
   // Attached for the window's life: the runtime parks a request until a
   // host is attached, so the presentation must be there before the first
   // run of this window asks anything.
@@ -243,7 +226,6 @@ export function createDesktopAgentExecution(
       if (disposed) return;
       disposed = true;
       detachHostInteractions();
-      effectRuntime().runFork(Fiber.interrupt(resolvedApprovals));
       toolEditApprovals.dispose();
       launchListeners.clear();
     },
