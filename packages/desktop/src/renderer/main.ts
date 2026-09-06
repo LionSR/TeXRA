@@ -81,7 +81,6 @@ import {
   type WorkbenchTab,
   type WorkbenchPlacement,
 } from '../shared/desktopTaskShell';
-import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import { DESKTOP_PAPER_COMMANDS } from '../shared/desktopPaperMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';

@@ -32,25 +32,19 @@ import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
 const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
 
 /**
+ * Bridge a session's view level into the TUI's signal; returns the unbind.
  * The only meeting point between Effect and the components (PRD 7.5): the
  * view's change stream bridged onto the process runtime by `toSignal`.
  */
-function viewSignal(
-  view: SubscriptionRef.SubscriptionRef<SessionView>,
-): StreamSignal<SessionView> {
-  return toSignal(
-    effectRuntime(),
-    SubscriptionRef.changes(view),
-    SubscriptionRef.getUnsafe(view),
-  );
-}
-
-/** Bridge a session's view level into the TUI's signal; returns the unbind. */
 export function bindSessionView(
   view: SubscriptionRef.SubscriptionRef<SessionView>,
 ): () => void {
   bound.get()?.dispose();
-  const bridgedBound = viewSignal(view);
+  const bridgedBound = toSignal(
+    effectRuntime(),
+    SubscriptionRef.changes(view),
+    SubscriptionRef.getUnsafe(view),
+  );
   bound.set(bridgedBound);
   return () => {
     if (bound.get() !== bridgedBound) return;

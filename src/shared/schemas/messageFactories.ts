@@ -11,8 +11,3 @@ import { z } from 'zod';
 export function commandOnly<T extends string>(command: T) {
   return z.object({ command: z.literal(command) });
 }
-
-/** Schema with `command` + required `files` string array. */
-function withFilesArray<T extends string>(command: T) {
-  return z.object({ command: z.literal(command), files: z.array(z.string()) });
-}

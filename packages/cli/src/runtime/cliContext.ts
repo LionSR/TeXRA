@@ -221,16 +221,19 @@ async function readCliPackageManifest(): Promise<
   return undefined;
 }
 
-let cachedVersion: Promise<string> | undefined;
+let cachedManifest: Promise<CliPackageManifest | undefined> | undefined;
 
-export function readCliVersion(): Promise<string> {
-  cachedVersion ??= readCliPackageManifest().then(
-    (pkg) => pkg?.version ?? 'unknown',
-  );
-  return cachedVersion;
+/** The one cached read of the CLI's `package.json`; `readCliVersion` and
+ *  `readCliBugsUrl` both derive from it instead of each keeping (and
+ *  re-reading from disk behind) its own cache. */
+function loadCliPackageManifest(): Promise<CliPackageManifest | undefined> {
+  cachedManifest ??= readCliPackageManifest();
+  return cachedManifest;
 }
 
-let cachedBugsUrl: Promise<string | undefined> | undefined;
+export function readCliVersion(): Promise<string> {
+  return loadCliPackageManifest().then((pkg) => pkg?.version ?? 'unknown');
+}
 
 /**
  * The issue-tracker URL declared in the CLI's `package.json` (`bugs.url`), used
@@ -238,8 +241,7 @@ let cachedBugsUrl: Promise<string | undefined> | undefined;
  * manifest rather than hard-coded so it tracks the published metadata.
  */
 export function readCliBugsUrl(): Promise<string | undefined> {
-  cachedBugsUrl ??= readCliPackageManifest().then((pkg) => pkg?.bugs?.url);
-  return cachedBugsUrl;
+  return loadCliPackageManifest().then((pkg) => pkg?.bugs?.url);
 }
 
 /**

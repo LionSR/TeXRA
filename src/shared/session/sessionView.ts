@@ -165,6 +165,10 @@ const StreamViewCommonSchema = z.object({
    *  any other run's newest user instruction or settled model reply. */
   latestLine: z.string().nullable(),
   transcript: TranscriptViewSchema,
+  // Shared by both categories: `updateMissingOutputs` and
+  // `updateCompileFailures` apply to either arm alike (sessionFold.ts).
+  missingOutputs: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
+  compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures,
 });
 
 const ToolUseStreamViewSchema = StreamViewCommonSchema.extend({
@@ -174,15 +178,11 @@ const ToolUseStreamViewSchema = StreamViewCommonSchema.extend({
   /** Per stream: concurrent streams hold independent goals. */
   goal: GoalStateSchema,
   outputs: RoundKeyedOutputSidecarValueSchemas.outputFiles,
-  missingOutputs: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
-  compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures,
 });
 
 const WorkflowStreamViewSchema = StreamViewCommonSchema.extend({
   category: z.literal(AgentCategory.Workflow),
   files: RoundKeyedOutputSidecarValueSchemas.outputFiles,
-  missingOutputs: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
-  compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures,
 });
 
 const StreamViewSchema = z.discriminatedUnion('category', [

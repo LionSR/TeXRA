@@ -214,6 +214,6 @@ export function createDesktopOnboardingIpc(
     skipSetup,
     runSetup,
     signInWithChatGpt,
-    openGettingStarted: () => options.openGettingStarted(),
+    openGettingStarted: options.openGettingStarted,
   };
 }

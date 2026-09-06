@@ -35,6 +35,11 @@ interface Take {
   cancelled: boolean;
 }
 
+/** `Effect.tryPromise` with the identity catch every call below wants: the
+ *  rejection value flows through unchanged as the error. */
+const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: run, catch: (error) => error });
+
 /** One instance per host process, shared by its session request handlers. */
 export class HostDraftRequests {
   private take: Take | null = null;
@@ -80,10 +85,9 @@ export class HostDraftRequests {
   ): Effect.fn.Return<HostOutcome, unknown> {
     switch (request.kind) {
       case 'polish': {
-        const result = yield* Effect.tryPromise({
-          try: () => polishTextWithAI(request.text, undefined, session),
-          catch: (error) => error,
-        });
+        const result = yield* tryPromise(() =>
+          polishTextWithAI(request.text, undefined, session),
+        );
         if (!result.success) {
           return yield* new Rejected({
             reason: result.error ?? 'Polishing failed.',
@@ -94,10 +98,9 @@ export class HostDraftRequests {
       case 'savePastedImage':
         return {
           kind: 'savedImage',
-          fileName: yield* Effect.tryPromise({
-            try: () => savePastedImageBase64(request.base64, request.fileName),
-            catch: (error) => error,
-          }),
+          fileName: yield* tryPromise(() =>
+            savePastedImageBase64(request.base64, request.fileName),
+          ),
         };
       case 'record':
         if (request.action.kind === 'start') {
@@ -161,10 +164,9 @@ export class HostDraftRequests {
   ) {
     const takeProgram: Effect.Effect<HostOutcome, unknown> = Effect.gen(
       function* () {
-        const started = yield* Effect.tryPromise({
-          try: async () => runInSession(take.session, startRecording),
-          catch: (error) => error,
-        });
+        const started = yield* tryPromise(async () =>
+          runInSession(take.session, startRecording),
+        );
         if (!started.success) {
           return yield* new Rejected({
             reason: started.error ?? 'Recording could not start.',
@@ -177,11 +179,9 @@ export class HostDraftRequests {
             reason: 'The recording was cancelled.',
           });
         }
-        const result = yield* Effect.tryPromise({
-          try: async () =>
-            runInSession(take.session, stopRecordingAndTranscribe),
-          catch: (error) => error,
-        });
+        const result = yield* tryPromise(async () =>
+          runInSession(take.session, stopRecordingAndTranscribe),
+        );
         if (!result.success) {
           return yield* new Rejected({
             reason: result.error ?? 'Transcription failed.',
