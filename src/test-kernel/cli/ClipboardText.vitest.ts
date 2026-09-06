@@ -1,3 +1,4 @@
+import { Layer, ManagedRuntime } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const writeMock = vi.hoisted(() => vi.fn());
@@ -21,6 +22,8 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 import { writeClipboardText } from '@cli/runtime/clipboardText';
+import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
+import { initProcessRuntime } from '@platform/processRuntime';
 
 describe('CLI clipboard text writer', () => {
   beforeEach(() => {
@@ -64,9 +67,30 @@ describe('CLI clipboard text writer', () => {
     });
 
     expect(result).toEqual({ ok: false, reason: 'pbcopy not found' });
-    // Only a timeout reaps helpers; an ordinary rejection means the helper
-    // already exited.
+    // Timeout and interrupt reap helpers; an ordinary rejection means the
+    // helper already exited.
     expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it('settles a pending write when the process runtime is disposed', async () => {
+    writeMock.mockReturnValue(new Promise<void>(() => {}));
+    const resultPromise = writeClipboardText('question', {
+      platform: 'darwin',
+    });
+    await vi.waitFor(() => {
+      expect(writeMock).toHaveBeenCalled();
+    });
+    try {
+      await disposeProcessRuntime();
+      await expect(resultPromise).resolves.toEqual({
+        ok: false,
+        reason: 'Clipboard write interrupted',
+      });
+      expect(execFileMock).toHaveBeenCalled();
+    } finally {
+      await disposeProcessRuntime();
+      initProcessRuntime(ManagedRuntime.make(Layer.empty));
+    }
   });
 
   describe('when the write never settles', () => {
