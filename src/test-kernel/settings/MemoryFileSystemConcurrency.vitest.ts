@@ -133,4 +133,27 @@ describe('memory filesystem listing', () => {
     await expect(countPinnedMemories(1)).resolves.toBe(1);
     expect(readStream.mock.calls.length).toBeLessThan(files.length);
   });
+
+  it('rejects the iteration with the filesystem error itself', async () => {
+    const cause = Object.assign(
+      new Error('ENOENT: no such file or directory'),
+      {
+        code: 'ENOENT',
+      },
+    );
+    vi.spyOn(StorageFS, 'readDir').mockRejectedValue(cause);
+
+    const walk = async () => {
+      for await (const entry of walkMemoryDirectory(MEMORY_STORAGE_DIR)) {
+        throw new Error(`Unexpected entry: ${entry.relativePath}`);
+      }
+    };
+    const rejection: unknown = await walk().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBe(cause);
+    expect(rejection).toMatchObject({ code: 'ENOENT' });
+  });
 });

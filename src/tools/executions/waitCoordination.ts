@@ -47,8 +47,8 @@ export function shouldSkipWait(executionId: string): boolean {
 }
 
 /**
- * Listen for follow-up messages on the current stream and abort the given
- * AbortController when one arrives. This lets users break out of a blocking
+ * Listen for follow-up messages on the current stream and call `onFollowUp`
+ * when one arrives. This lets users break out of a blocking
  * `executions wait` by sending a follow-up message.
  *
  * Observes the owning session's follow-up queue (`ToolUseFollowUpQueue.onSent`,
@@ -57,12 +57,12 @@ export function shouldSkipWait(executionId: string): boolean {
  *
  * Returns a cleanup function that removes the listener.
  */
-export function listenForFollowUp(ac: AbortController): () => void {
+export function listenForFollowUp(onFollowUp: () => void): () => void {
   const context = tryUseRunContext();
   const streamId = getRunContextStreamId(context);
   if (!streamId) return () => {};
 
   return currentSession().followUps.onSent((sentStreamId) => {
-    if (sentStreamId === streamId) ac.abort();
+    if (sentStreamId === streamId) onFollowUp();
   });
 }
