@@ -119,32 +119,51 @@ function guardedStreamWrite(
 // The Effect programs here run on the process runtime when one is installed.
 // Both edges where none is — an early command error before
 // `installCliProcessRuntime` (`bin/texra.ts` top-level catch), and the
-// exit-path flushes after `disposeProcessRuntime` — run the same guarded
-// write on Effect's default runtime. A synchronous throw from `stream.write`
-// still has to mark the stream closed and settle, not crash: this path is
-// production, not a debug fallback.
-function runSyncWrite(effect: Effect.Effect<void>): void {
-  const runtime = tryProcessRuntime();
-  if (runtime) runtime.runSync(effect);
-  else Effect.runSync(effect);
-}
-
+// exit-path flushes after `disposeProcessRuntime` — take a direct path.
+// A synchronous throw from `stream.write` still has to mark the stream
+// closed and settle, not crash: this path is production, not a debug
+// fallback.
 function writeRaw(key: StreamKey, text: string): void {
   const stream = openStream(key);
   if (!stream) return;
-  runSyncWrite(guardedStreamWrite(key, stream, text, () => undefined));
+  const runtime = tryProcessRuntime();
+  if (!runtime) {
+    try {
+      stream.write(text, (error) => {
+        if (error) closed[key] = true;
+      });
+    } catch {
+      closed[key] = true;
+    }
+    return;
+  }
+  runtime.runSync(guardedStreamWrite(key, stream, text, () => undefined));
 }
 
 function writeRawAndWait(key: StreamKey, text: string): Promise<void> {
   const stream = openStream(key);
   if (!stream) return Promise.resolve();
   const runtime = tryProcessRuntime();
-  const program = Effect.callback<void>((resume) => {
-    runSyncWrite(
-      guardedStreamWrite(key, stream, text, () => resume(Effect.void)),
-    );
-  });
-  return runtime ? runtime.runPromise(program) : Effect.runPromise(program);
+  if (!runtime) {
+    return new Promise<void>((resolve) => {
+      try {
+        stream.write(text, (error) => {
+          if (error) closed[key] = true;
+          resolve();
+        });
+      } catch {
+        closed[key] = true;
+        resolve();
+      }
+    });
+  }
+  return runtime.runPromise(
+    Effect.callback<void>((resume) => {
+      runtime.runSync(
+        guardedStreamWrite(key, stream, text, () => resume(Effect.void)),
+      );
+    }),
+  );
 }
 
 export function writeTextStdout(text: string): void {
@@ -283,14 +302,11 @@ export class NdjsonStdoutSink implements LogSink {
       // platform; post-disposal nothing queues): no lane fiber can be waiting
       // ahead of this record, so a direct write keeps the lane's call order.
       // A synchronous stringify/write throw still closes the sink.
-      Effect.runSync(
-        Effect.try({
-          try: () => {
-            this.stdout.write(`${JSON.stringify(record)}\n`);
-          },
-          catch: (cause) => cause,
-        }).pipe(Effect.catch(() => Effect.sync(() => this.closeQueue()))),
-      );
+      try {
+        this.stdout.write(`${JSON.stringify(record)}\n`);
+      } catch {
+        this.closeQueue();
+      }
       return;
     }
     runtime.runFork(withPerKeyLane(sinkLanes, this)(this.writeLine(record)));
