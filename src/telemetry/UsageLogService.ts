@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-import { Clock, Data, Duration, Effect, Fiber, Semaphore } from 'effect';
+import {
+  Clock,
+  Data,
+  Deferred,
+  Duration,
+  Effect,
+  Fiber,
+  Semaphore,
+} from 'effect';
 import ky from 'ky';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -228,6 +236,10 @@ class UsageLogServiceImpl {
   /** One permit: a flush holds it while it drains, so batches leave in order
    *  and a second caller (or `dispose`) waits behind the one in flight. */
   private readonly flushLane = Semaphore.makeUnsafe(1);
+  /** The drain in flight, if any: a `flush()` arriving while it runs joins
+   *  its outcome, so a rejection the drain hit is not hidden behind the
+   *  ACCEPTED an empty queue would report. */
+  private inFlightDrain: Deferred.Deferred<UsageLogFlushOutcome> | null = null;
   // Copied, never aliased: `dispose()` writes `config.enabled`, so a
   // dispose-before-initialize would otherwise flip DEFAULT_CONFIG for good.
   private config: UsageLogConfig = { ...DEFAULT_CONFIG };
@@ -287,11 +299,28 @@ class UsageLogServiceImpl {
   }
 
   flush(): Promise<UsageLogFlushOutcome> {
-    return effectRuntime().runPromise(this.flushLane.withPermit(this.drain()));
+    return effectRuntime().runPromise(this.sharedDrain());
   }
 
+  /** One drain under the lane, its outcome shared with every caller that
+   *  arrives while it is in flight. The lane still orders it behind a
+   *  running dispose or an earlier drain. */
+  private readonly sharedDrain = Effect.fn('UsageLogService.flush')(function* (
+    this: UsageLogServiceImpl,
+  ) {
+    if (this.inFlightDrain) return yield* Deferred.await(this.inFlightDrain);
+    const outcome = yield* Deferred.make<UsageLogFlushOutcome>();
+    this.inFlightDrain = outcome;
+    return yield* this.flushLane.withPermit(this.drain()).pipe(
+      Effect.onExit((exit) => {
+        this.inFlightDrain = null;
+        return Deferred.done(outcome, exit);
+      }),
+    );
+  });
+
   /** Send every batch that is due, one after another, under the lane. */
-  private readonly drain = Effect.fn('UsageLogService.flush')(function* (
+  private readonly drain = Effect.fn('UsageLogService.drain')(function* (
     this: UsageLogServiceImpl,
   ) {
     let finalOutcome: UsageLogFlushOutcome = USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
@@ -317,7 +346,7 @@ class UsageLogServiceImpl {
    * its owner instead of ending a fiber nobody observes.
    */
   private backgroundFlush(): Effect.Effect<void> {
-    return this.flushLane.withPermit(this.drain()).pipe(
+    return this.sharedDrain().pipe(
       Effect.asVoid,
       Effect.catchDefect((defect) =>
         Effect.sync(() => {

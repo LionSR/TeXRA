@@ -120,6 +120,36 @@ describe('UsageLogService', () => {
     expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
   });
 
+  it('shares a rejection with a flush that arrives while it is in flight', async () => {
+    stubAccessToken();
+
+    const { promise: rejectionReleased, resolve: releaseRejection } =
+      createDeferred();
+    const { fetchMock } = stubBatchFetch(async (callCount) => {
+      if (callCount !== 1) return;
+      await rejectionReleased;
+      return jsonResponse({
+        success: false,
+        accepted: 0,
+        error: 'invalid batch',
+        retryable: false,
+      });
+    });
+
+    UsageLogService.log(usageEntry('invalid'));
+    const firstFlush = UsageLogService.flush();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    UsageLogService.log(usageEntry('valid'));
+    const secondFlush = UsageLogService.flush();
+
+    releaseRejection();
+    await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
+      USAGE_LOG_FLUSH_OUTCOME.REJECTED,
+      USAGE_LOG_FLUSH_OUTCOME.REJECTED,
+    ]);
+  });
+
   it('waits for successive active batches during disposal', async () => {
     stubAccessToken();
 
