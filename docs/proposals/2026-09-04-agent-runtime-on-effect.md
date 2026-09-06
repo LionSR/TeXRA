@@ -75,9 +75,9 @@ Findings all refuters agreed on, regardless of design:
 - The Google handler synthesizes `callId` at extraction time
   (`modelHandlerGoogleInteractions.ts:1237`), so tool rows must be keyed by
   the extracted call list stored in the model row, not by re-extraction.
-- Today a COMPLETED run deletes its checkpoint
-  (`executionLifecycle.ts:227`, `AgentRunLifecycle.ts:562`). Every design
-  that kept unredacted rows forever was a retention regression.
+- Completion alone must not delete a checkpoint or conversation. The
+  single-owner D8 rule keeps completed runs continuable; C9 preserves their
+  history and recovery data until the user explicitly deletes the run.
 - Every "after the cutover, with Stage 5 carved out" sequencing is the lazy
   checkpoint import the substrate proposal §9 rejects, or a double migration
   of the same datum. The fix is the same in all four refutations: the cutover
@@ -104,7 +104,7 @@ files, made explicit:
 - The **stream aggregate** holds what people see: the existing trace rows
   (`tool.start`/`tool.end`, `response.finalized`, `usage`, stages) and
   `flow.step`. Every row is scrubbed at publish (C3 applies in full) and
-  lives until the C9 retention setting removes the stream. This is today's
+  lives until the user explicitly deletes the stream under C9. This is today's
   transcript sidecar.
 - The **execution aggregate** holds what the model sees: `model.message`,
   `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`. Rows
@@ -114,8 +114,8 @@ files, made explicit:
   single-owner D8 (#11304, "a checkpoint is deleted only by the user")
   keeps a completed run continuable, and once the view-state
   fold collapses these rows are the only copy of the conversation. The
-  aggregate lives for the C9 retention window like every other row, which
-  is shorter than today's "forever" for cancelled and failed checkpoints.
+  aggregate remains with the stream until explicit user deletion (C9).
+  There is no age-based expiry for completed, cancelled, or failed runs.
   The shared display fold applies redaction before updating view state,
   including the in-process CLI's `SessionViewService.ref`. Transport framers
   and exports also enforce display redaction and truncation (C3, third
@@ -276,9 +276,8 @@ fold, message text is durable twice (redacted trace rows and
 `model.message`); the collapse deletes the trace copy, after which the
 execution aggregate is the only conversation and the shared display fold
 redacts it before any view state is exposed, including direct in-process
-subscribers. A secret in a payload is on disk
-for the C9 retention window, the owner's decision 6 in the substrate
-proposal.
+subscribers. A secret in a payload remains on disk until explicit user deletion under
+C9; display redaction does not remove it from the recovery data.
 
 Resumability follows single-owner D8: "resumable" is "a `flow.snapshot`
 exists and no live owner holds either run aggregate's current claim",
@@ -857,7 +856,7 @@ branch.
   "null on COMPLETED" and "removed at completion" were withdrawn because
   C1 forbids rewriting a row, single-owner D8 keeps completed runs
   continuable, and after the fold collapse these rows are the only
-  conversation. Exposure is the C9 retention window.
+  conversation. Those bytes remain until explicit user deletion under C9.
 - One-fold PRD line 102: reversed by the owner's ruling; its `fold(view,
 event)` gains the `flow.step` arm and its §6 durable set gains six rows.
 - Single-owner §6: its single door at admission stays for the stream
@@ -872,11 +871,11 @@ event)` gains the `flow.step` arm and its §6 durable set gains six rows.
 1. Ratify the shape (§2) and the sequencing (§3): the runtime is lane D of
    the cutover branch, with no interim column and no shim, accepting a
    larger branch in exchange for one revert point.
-2. Retention of byte-exact conversation rows. Settled between the two
-   documents that they are never scrubbed and never removed early; what
-   remains is the substrate's decision 6, the C9 retention default. A
-   shorter window for these rows than for the rest is not available once
-   they are the only copy of the conversation, so decision 6 is one window.
+2. Preserve byte-exact conversation rows with the user's history until
+   explicit deletion under C9. They are never scrubbed or expired by age.
+   Removing recovery rows earlier than display rows would discard the only
+   conversation after the folds merge and violate the completed-run resume
+   contract.
 3. Confirm that the existing `approval.requested` / `approval.resolved`
    events land with PR 2. They are required for outcome-unknown barrier
    tools and manual retry (§2.3); those resume paths cannot ship before the
@@ -900,8 +899,8 @@ event)` gains the `flow.step` arm and its §6 durable set gains six rows.
   exact.
 - Effect rc churn: every name below is verified in rc.112; the next rc may
   rename. All uses sit behind the five service classes.
-- Raw provider content lives in the database for the retention window (§7
-  item 2). Any new reader of the `event` table that bypasses the fold is a
+- Raw provider content lives in the database until explicit user deletion
+  (§7 item 2). Any new reader of the `event` table that bypasses the fold is a
   redaction leak. The `Database` layer exposes the five
   execution-aggregate row types only through `RunLedger`, so the raw query is
   unconstructible elsewhere and no test is needed. Otherwise the

@@ -272,6 +272,14 @@ sequence row before its first event. The two foreign keys make deleting a
 root sequence row delete its dependent sequence rows and all their events.
 `parent_id` means owning aggregate (C9), and is NULL for independent roots.
 
+The database and its WAL files reside on a local filesystem. The `Database`
+layer rejects network or shared filesystem locations before opening SQLite:
+WAL requires all database processes to share memory on the same machine
+([SQLite WAL documentation](https://sqlite.org/wal.html)). Multiple local
+host processes may open the bucket; consumers on another machine use the
+existing runtime transport to the host that owns it. This proposal adds no
+distributed database protocol.
+
 `commit` is the session-wide ordinal the PRD needs for its cursor; SQLite's
 `AUTOINCREMENT` gives it monotone and non-reusing for free. `seq` is the
 per-stream ordinal the transcript fold and `settledSeq` use. Both exist on
@@ -306,7 +314,10 @@ An execution aggregate holds what the model sees, the byte-exact flow rows
 of `2026-09-04-agent-runtime-on-effect.md` §2.1 (`model.message`,
 `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`); which of
 a run's two aggregates each flow row lives on is decided in that §2.1, which
-places `flow.step` on the stream aggregate as a replay coordinate. The listing
+places `flow.step` on the stream aggregate as a replay coordinate. These five
+execution flow types are not the complete metadata schema: the named current
+execution records and workflow/delegation facts in the §8 key mapping are
+durable too, with their existing logical targets. The listing
 tier reads the canonical `status` fact for outcome, including failures before
 the runtime starts. An inquiry aggregate holds that thread's facts; one fixed session aggregate holds
 **singleton** session facts only. A fact that can have more than
@@ -332,7 +343,8 @@ streams), `worktree` (nullish), and explicit `category` and `isRemote` fields,
 because `RunIdentity` deliberately does not encode `AgentCategory`, a process
 or workflow-script stream has no agent to derive from, and remoteness is a
 registry lookup the fold must never perform; the flow rows in C2 (D4); the
-session facts in C2. Live-only, never persisted: deltas, focus and selection,
+current execution metadata records in §8; the session facts in C2. Live-only,
+never persisted: deltas, focus and selection,
 anything the PRD's `Surface` owns. `setActiveStream` no longer exists.
 
 Redaction has three owners and they are not interchangeable.
@@ -341,14 +353,14 @@ Redaction has three owners and they are not interchangeable.
   are secret-scrubbed at the publish boundary, before the row is written**,
   the way `TexraTranscriptRecorder` scrubs them today (`redactSecrets`,
   `src/logger/redaction.ts:5-14`). A secret in one of those rows would be on
-  disk for the retention window and in every export.
+  disk until deletion and in every export.
 - **D4 rows on the execution aggregate are byte-exact and never scrubbed.**
   Anthropic thinking blocks must go back to the provider byte-identical or
   signature verification fails on replay (`src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts:1372`),
   and a tool input or result the model already reasoned over must not diverge
   on resume. Today's checkpoint is unredacted for the same reason (single-owner
-  §6); exposure is unchanged, and retention (C9) shortens it from "forever"
-  under D8 to the retention window. These rows are not nulled on COMPLETED:
+  §6); exposure is unchanged. C9 preserves saved history until explicit
+  deletion. These rows are not nulled on COMPLETED:
   D8 keeps completed runs resumable, and after the fold collapse they are the
   only copy of the conversation.
 - **The shared display fold applies redaction before storing any view
@@ -356,7 +368,10 @@ Redaction has three owners and they are not interchangeable.
   in process. Raw execution rows are accessible only through `RunLedger`;
   its display projection scrubs them before either an in-process consumer
   or a transport receives them. Every export applies the same redaction.
-  Transport framers forward these display values, never raw D4 payloads.
+  Configuration, reports, and other execution metadata can also contain
+  user or provider content; their typed accessors preserve the stored value,
+  but every display/export projection applies this same redaction boundary.
+  Transport framers forward display values, never raw execution payloads.
   **Display truncation and bounding are also the fold's**.
 
 One residue to name plainly. Until the view-state PRD collapses the fold
@@ -385,14 +400,15 @@ It is stamped on `event_sequence` (who may append) and on every event row
 writer is historical attribution and never establishes a present claim.
 The liveness check first compares the recorded hostname with the local one.
 A different host is **unprovable**, without probing or signalling its pid
-locally: a missing local pid says nothing about a writer on another machine
-sharing the bucket. On the same host, `kill(pid, 0)` returning ESRCH or a
+locally: a missing local pid says nothing about a recorded owner from another
+machine. Such identities can occur in copied or imported state; they do not
+authorize opening a shared-filesystem database. On the same host, `kill(pid, 0)` returning ESRCH or a
 readable, different process-start identity proves death. An existing pid with
 an unreadable or null start identity, or any otherwise inconclusive probe,
 is unprovable. These are the existing `proveOwnerLiveness` rules
 (`leaseOwnerLiveness.ts:55-107`), applied per distinct owner, never per run.
 Foreign-host and unprovable claims block automatic takeover, import, and
-retention; neither age nor a local signal is a substitute for that proof.
+cleanup; neither age nor a local signal is a substitute for that proof.
 
 Opening existing aggregates for write acquires them together under
 `BEGIN IMMEDIATE`: compare each stored owner with the owner whose liveness
@@ -407,7 +423,15 @@ an action rechecks both targets before writing.
 Release clears only the caller's own claim. Every append verifies both the
 claim and `closed = 0` inside its transaction; a serialized non-owner write
 still fails. The legacy import additionally preserves the old claims until
-their owners are proved inactive (§8).
+their owners are proved inactive or explicitly cleared under §8.
+
+The existing explicit single-run deletion policy remains: a user-authorized
+delete may replace an unprovable claim, but never a known-live claim
+(`executionListing.ts`, `deleteExecution`). It still compares the observed
+claim inside the transaction before taking ownership and closing the run.
+This exception does not authorize resume, bulk deletion, or automatic
+cleanup, and never signals a remote pid. Interrupted migration has the
+separate, explicitly authorized recovery condition in §8.
 
 Claim, takeover, and release all wake local readers after commit, even when
 they append no event and the commit ordinal is unchanged; foreign readers
@@ -619,19 +643,39 @@ The publisher checks its ownership and the target aggregate's own `closed`
 flag in the write transaction it already holds, so an append for a removed
 aggregate is refused in O(1).
 
-Retention selects root streams whose latest canonical `status` is terminal
-and whose terminal timestamp is older than the configured window, or whose
-explicit removal timestamp has expired. Under one `BEGIN IMMEDIATE` it
-rechecks those facts, refuses any root or dependent with a live or unprovable
-owner, and acquires the remaining claims under C5. An expired terminal stream
-that is still open receives `stream.removed` and the recursive close update
-before collection; no user deletion is required. Deleting the selected root
-sequence rows then cascades through their closed dependents and events by C1.
-Publication of the wake occurs after commit even if every newly written
-tombstone was collected in that transaction. C7's indexed aggregate-state read
-removes those streams from resident views even when their tombstones were
-never observed. Retention is a setting with a default; its value is owner
-decision 6. Streams with no terminal or removal fact do not expire.
+Saved histories have no age limit. Stamped, supported, or resumable runs,
+including completed, cancelled, failed, crashed, and independently imported
+histories, remain until explicit user deletion. A terminal status alone never
+makes a run disposable. This preserves S6 of
+`2026-09-03-startup-repair-is-the-wrong-shape.md`. Automatic expiry is limited
+to an explicitly declared ephemeral, nonresumable orphan cohort or an
+already-deleted tombstone; an unknown classification is not eligible. Any
+cleanup grace applies only to those cohorts (owner decision 6).
+
+Deletion first acquires the root and dependent claims under C5 and commits
+the tombstone and recursive closure in one transaction. Known-live active run owners
+always block admission to deletion; unprovable owners additionally block bulk and
+automatic cleanup, with only the explicit single-run exception in C5.
+The tombstone records the owned execution directories to remove. A small
+worker retries those deletion records, not a scan for directories absent
+from the database. It removes the entire generated-artifact directory for
+each deleted execution, matching today's `deleteExecution`/`clear` contract;
+copied or accepted workspace outputs outside that directory are untouched.
+Deletion paths are confined to the recorded execution directories and never
+follow links outside them.
+
+Closed sequence rows, dependent events, and the tombstone remain until that
+filesystem cleanup succeeds. The worker holds the existing C5 claim on the
+closed root while cleaning and verifies the same tombstone before finalizing;
+ordinary appends remain forbidden. A successor may take over a dead worker's
+claim and retry: an already-absent directory counts as success, while a file
+error leaves the deletion record for another attempt. Only then does one
+transaction delete the root sequence row and cascade through its closed
+dependents and events by C1. No additional table or completion event is
+needed. This also handles a crash after file deletion but before the cascade.
+Publication of the wake follows closure and final collection. C7's indexed
+aggregate-state read removes collected streams from resident views even when
+their tombstones were never observed.
 
 **C10. Nothing derived is persisted, with one named exception.** No summary
 table, no projection table, no status column, no `run_state` summary on an
@@ -679,13 +723,13 @@ Stages are lanes on one branch and ship in one release (§8).
 
 | Stage | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Deletes in the same release                                                                                                                                                              | Companion step |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| 0     | Spike: `node:sqlite` on the CLI floor (raise `engines.node` to `>=22.13.0`, `packages/cli/package.json:37`), Electron 44 (`packages/desktop/package.json:33`), VS Code 1.125 extension host; WAL with two hosts on one bucket; kill -9 mid-transaction; `PRAGMA data_version` across processes. OpenCode's `packages/effect-sqlite-node` (MIT, ~200 LoC) is the starting client                                                                                                                    | nothing                                                                                                                                                                                  |                |
+| 0     | Spike: `node:sqlite` on the CLI floor (raise `engines.node` to `>=22.13.0`, `packages/cli/package.json:37`), Electron 44 (`packages/desktop/package.json:33`), VS Code 1.125 extension host; WAL with two local host processes on one local bucket; reject network/shared storage before open; kill -9 mid-transaction; `PRAGMA data_version` across processes. OpenCode's `packages/effect-sqlite-node` (MIT, ~200 LoC) is the starting client                                                    | nothing                                                                                                                                                                                  |                |
 | 1     | C1 schema and indexes; Effect `Database` layer parameterized by `WorkspaceRoots`; the C6 publisher behind `SessionEventHub`; the architecture test that fails any persistence write outside the database or the documents/export allowlist, and its sibling that fails a raw read of the execution row types outside `RunLedger` (or, better, a `Database` layer that only exposes those rows through `RunLedger`, so the query is unconstructible elsewhere and the test is unnecessary)          | nothing                                                                                                                                                                                  |                |
 | 2     | Listing tier: launcher history, resume picker, sessions rail, and the executions tool answered by C7/C8 indexed queries                                                                                                                                                                                                                                                                                                                                                                            | `streamLogSummaries/`, the mtime heuristic, `executionListing.ts` directory walks, `readExecutionStreamIndex`, `listExecutions` scans, the PR2 background hydration pass                 | S4, S5         |
 | 3     | C3 durable event set; transcript fold on hydrate reusing the recorder's live fold; `StreamLog` in-memory contract and `store-public-surface-baseline.json` unchanged                                                                                                                                                                                                                                                                                                                               | the 300 ms whole-array rewrite, `writeStream`/`hydrateStream`/`parsePersistedEntries`, `preservedRawEntries`, `seqNo` renumbering, the 50 KiB truncation and `toolOutput/` spill         |                |
 | 4     | Stream-state fold on hydrate (usage per round, work plan, outputs, missing outputs, compile failures) from the same events `attachSessionEvents` folds live today                                                                                                                                                                                                                                                                                                                                  | six sidecar files, `SidecarWriteCoordinator`, `StagedDeletionCoordinator`, `streamData.deleting`, `streamSnapshotRead.ts`, `streamDataPaths.ts`, `DiskState`, `probeRunPhase`/`runFacts` |                |
 | 5     | D4, delivered by `2026-09-04-agent-runtime-on-effect.md` as lane D: the flow rows of C2, `RunLedger`, `foldRunState`; resume as a fold; `deriveResumability` becomes "a `flow.snapshot` exists and no live owner holds the lease, outcome-independent per single-owner D8"; the importer converts each supported checkpoint's messages, non-message state, and cursor into canonical rows (§8); both flow families and the workflow-script journal convert in one PR, no interim checkpoint column | per-node whole-record rewrite in `persistedFlow.ts:505-509`, `resumability.ts` full parse, `flow_<id>.json`, `src/agent/node/`, `completedRunArchive`'s conversation reconstruction      | S7             |
-| 6     | C5 and C9: atomic claim/takeover and per-append ownership checks, `stream.removed` tombstones, terminal retention in one transaction                                                                                                                                                                                                                                                                                                                                                               | normal file-lease writes and scans, orphan sweeps, `executionLocks` remnants, `child-*.json` edge files; import-only lease validation remains until Stage 7                              | S3, S6         |
+| 6     | C5 and C9: atomic claim/takeover and per-append ownership checks, `stream.removed` tombstones, preservation-aware deletion, retryable generated-file cleanup, and final cascade                                                                                                                                                                                                                                                                                                                    | normal file-lease writes and scans, directory-wide app-state orphan sweeps, `executionLocks` remnants, `child-*.json` edge files; import-only lease validation remains until Stage 7     | S3, S6         |
 | 7     | Retire the importer, its schemas and lease reader, migration facts, backup handling, and fixture tests in the first release at least three calendar months after the cutover ships (§8)                                                                                                                                                                                                                                                                                                            | the importer                                                                                                                                                                             |                |
 
 Rules restated because they are the parts migrations get wrong:
@@ -712,13 +756,13 @@ The owner's standing rule is cut before add. Sizes are `wc -l` at
 | Element                                                                                                           | Today        | Why it no longer needs to exist                                                                                |
 | ----------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------- |
 | `StreamSummaryCacheStore` + `streamLogSummaries/` + mtime staleness                                               | 363          | listing is an indexed query (C7, C8)                                                                           |
-| `StagedDeletionCoordinator` + `streamData.deleting/`                                                              | 665          | deletion is one cascade (C9)                                                                                   |
+| `StagedDeletionCoordinator` + `streamData.deleting/`                                                              | 665          | app-state closure is one transaction; C9 retains a small tombstone-driven artifact cleanup worker              |
 | `SidecarWriteCoordinator`                                                                                         | 191          | the per-file mutex is what a transaction is                                                                    |
 | `streamSnapshotRead.ts`, `streamDataPaths.ts`, the six sidecar files, `DiskState`                                 | 353+         | stream state is a fold on hydrate (Stage 4)                                                                    |
 | `executionListing.ts` directory walks, `readExecutionStreamIndex`, PR2's background hydration                     | 442+         | one query                                                                                                      |
 | `restartRepair.ts`, `runClassification.ts` (companion S1 to S3)                                                   | 451          | boot does no history work; phase is a fold                                                                     |
 | `resumability.ts` full-checkpoint parse                                                                           | 120          | a `flow.snapshot` exists and no live owner holds the lease, outcome-independent per single-owner D8 (D4)       |
-| `SessionStores.ts` orphan sweeps                                                                                  | ~500 of 1019 | orphans cannot exist under cascade                                                                             |
+| `SessionStores.ts` directory-wide app-state orphan sweeps                                                         | ~500 of 1019 | database dependents cascade; generated-file cleanup follows retained deletion records (C9)                     |
 | File leases: `executionLeases/`, v3 claims, v2 shadow, `readClaims`                                               | ~600 of 848  | C5 claims replace normal file leases; import-only validation of retained legacy claims retires in Stage 7      |
 | `child-<id>.json` edge files (6,664 in TNLean) + `childRunPersistence.ts`                                         | 19 + 48      | the parent edge is on `run.start`                                                                              |
 | 50 KiB entry truncation + `toolOutput/<entryId>.txt` spill (`runTrace.ts:68-98`, `spillArtifacts.ts`)             | ~110         | a row holds the payload                                                                                        |
@@ -859,7 +903,7 @@ Before inspecting those files, a current host atomically claims the reserved
 migration aggregate using C5. Every current host passes this gate before
 opening the bucket for normal reads, writes, or resume. The claim covers
 detection, import, moves, and verification. A live claimant makes another
-host wait; takeover requires proof that the recorded process is dead.
+host wait; automatic takeover requires proof that the recorded process is dead.
 Progress facts on that aggregate record the immutable input manifest, planned
 event ranges, completed batches, and moves. Each batch commits its rows and
 progress together. A successor uses those facts and checks source and backup
@@ -867,11 +911,18 @@ hashes to resume after a crash, rather than starting a second import.
 
 All legacy hosts must be closed for the entire migration. The importer
 retains legacy lease files in place and probes each distinct recorded owner
-using the supported lease reader. A live or unprovable owner blocks import
+using the supported lease reader. A live or unprovable owner blocks automatic import
 and resume; age alone never proves death. Absence of a live execution lease
 does not establish that an idle legacy host has stopped writing sidecars,
 so closing all legacy hosts is an explicit cutover precondition. Claims are
-moved only after their owners are proved dead and verification completes.
+moved only after their owners are proved dead or explicitly cleared, and
+verification completes. For an interrupted migration on a verified local
+database, the user may explicitly assert that all old hosts are closed and
+authorize recovery of an unprovable migration or retained legacy claim.
+Recovery records that authorization and compares the exact observed claim
+before replacing it; a changed or known-live claim still blocks recovery.
+This is a scoped recovery action, never an automatic timeout or a remote
+process signal.
 
 With inputs quiescent, independently inventory stream records in
 `streamLogs/`, `streamData/`, and `streamLogSummaries/`, and every supported
@@ -935,6 +986,35 @@ inventoried execution exactly once:
   reject the import and retain its files; do not manufacture a resumable
   snapshot from `shared` alone.
 
+Before either import or native cutover, each current `ExecutionKVStore` key
+has a registered converter and a canonical reader/writer. The six reserved
+keys (`ExecutionKVStore.ts:43-58`) are not the entire inventory: current
+production callers also use the namespaces below. These are named domain
+records in the event table, not a replacement generic key/value API.
+
+| Current key or namespace                                                              | Canonical representation and preserved content                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `meta`                                                                                | `run.start` identity, timestamp, category, stream and parent edges; current workflow metadata and description facts; canonical `status` for outcome. Preserve readable incomplete records without inventing missing fields.                                               |
+| `config`                                                                              | `execution.config`, preserving the current `RunRecord` used by history, export, and resume.                                                                                                                                                                               |
+| `report`                                                                              | `execution.report`, preserving the report text consumed by history and child-result delivery.                                                                                                                                                                             |
+| `result-meta`                                                                         | `execution.result`, preserving the current result envelope, application-level failure detail, and attribution; the canonical `status` remains the sole execution-outcome authority, as in the current result accessor.                                                    |
+| `workspace-files`                                                                     | `execution.workspaceFiles`, preserving the normalized path list used for launch context and export.                                                                                                                                                                       |
+| `turn-state`                                                                          | The current child-turn protocol's active and last-completed turn tokens (runtime proposal §3, step 4), preserving report/result attribution.                                                                                                                              |
+| `child-<id>`                                                                          | Canonical child launch and parent facts, including the recorded child id, agent, and timestamp; the parent edge is the same `run.start` edge, not another stored parent map.                                                                                              |
+| `codex_thread_id`, `claude_agent_session_id`                                          | Named `execution.codexThread` and `execution.claudeSession` records preserving the external continuation ids.                                                                                                                                                             |
+| `workflow-script-*`                                                                   | The current workflow-script journal's invocation identity, script, arguments, files, and ordered activity results, moved to its canonical event protocol in runtime §3, step 4; each invocation remains independently addressable. No retired journal version is revived. |
+| `stable-subagent-attempt`, `stable-subagent-sequence-*`                               | The current delegation attempt and sequence facts, preserving logical execution identity, parent identity, phase, and next-attempt counter per logical execution.                                                                                                         |
+| Supported `flow_<id>` and stream sidecar keys, including any supported work-plan file | The explicit flow and sidecar normalization above; present values must agree with their canonical authority or stop import for resolution.                                                                                                                                |
+
+The converter inventory is checked against every current production key
+writer before cutover. The manifest records each discovered app-state key,
+its converter, and the canonical rows that reproduce its typed read result.
+An unmatched or unsupported app-state key blocks moving that file and
+completing the cutover; it is never silently discarded by a filename
+allowlist. This also prevents a new native writer from surviving without a
+canonical reader. The metadata families above are additional to the five
+execution **flow** row types in D4 and use C3's display/export redaction.
+
 The manifest assigns deterministic per-aggregate event ranges. Replaying a
 committed batch verifies the existing rows against those ranges and skips
 only identical rows; a mismatch aborts rather than overwriting history.
@@ -943,10 +1023,11 @@ only identical rows; a mismatch aborts rather than overwriting history.
 rules this). `executions/<id>/` holds user-facing generated artifacts beside
 the app JSON (`output.xml`, workflow outputs that `listRunGeneratedFiles` and
 `/executions/{id}/files` resolve at the execution path), and those stay
-exactly where they are. The importer moves only the app-state files it has
-imported (`meta`, `config`, `report`, `result-meta`, `turn-state`,
-`child-*`, `todos`, `workspace-files`, `flow_<id>`, `toolOutput/`) into a
-mirror under `pre-sqlite-backup/`. It then verifies the moved files against
+exactly where they are. The importer moves only app-state files whose
+registered conversions and typed read results have been verified, including
+the current generic namespaces in the table above and normalized spill
+content from `toolOutput/`, into a mirror under `pre-sqlite-backup/`.
+It then verifies the moved files against
 the manifest and imported rows before releasing all imported aggregate
 claims and the migration claim, then admitting
 normal access. For a crash between a move and its progress commit, the next
@@ -967,7 +1048,9 @@ the importer runs there is exactly one shape of resume data.
 **Version skew and retirement.** Concurrent legacy writers are not supported
 during cutover. A new CLI must defer opening an unmigrated bucket while an
 older extension holds a live or unprovable claim; the user must close and
-update all legacy hosts before migration. After successful migration the
+update all legacy hosts before migration. The explicit interrupted-migration
+recovery above is the only exception for an unprovable retained claim.
+After successful migration the
 database is authoritative. If a stale host recreates app-state files, the
 current host reports the unsupported older writer and blocks writes and
 resume until that conflict is resolved. It refuses to merge potentially
@@ -991,7 +1074,9 @@ the named import-only readers retire at the date above. After import,
 `WORKSPACE_STORAGE_LAYOUT` shrinks to `{ texra.db, texra.db-wal, texra.db-shm,
 original, memories, state.json, config.json, _workspace.json, pasted,
 recordings }` plus the per-execution artifacts area, which is user documents,
-not app state. If those deletions are not in the cutover PR the pain
+not app state. `pre-sqlite-backup/` is also a declared temporary layout entry
+throughout the import window, excluded from ordinary cleanup and removed
+with backup handling when the importer retires. If those deletions are not in the cutover PR the pain
 was not short, it was deferred.
 
 **Acceptance, before merge, on a copy of the TNLean bucket:**
@@ -1004,8 +1089,11 @@ was not short, it was deferred.
   present;
 - kill -9 during streaming loses at most the in-flight message (C4) and the
   next open needs no repair pass;
-- deleting a stream is one transaction and no state holder observes a
-  half-deleted stream;
+- saved histories survive age-based cleanup, including imported and terminal
+  histories; every retained execution key preserves its typed read result;
+- deleting a stream closes its state in one transaction; generated-file
+  cleanup retries after a crash before final collection, and no state holder
+  observes a half-deleted stream;
 - all ratchets green; no store public-surface change.
 
 **Ordering against `main`.** The companion's S1 to S3 land on `main` first, as
@@ -1059,8 +1147,10 @@ with the parallel-agent workflow, judged against OpenCode's +5.8k/-0.9k over
    checkpoint import, deletions in the same release, same-version hosts.
 5. Confirm the Effect scope in §7: substrate, fold, and the runtime lane, renderer components
    Effect-free, Zod the only data schema.
-6. Set the retention default (C9). Proposed: 90 days for streams with a
-   terminal outcome, never for streams without one, as a setting.
+6. Confirm C9's preservation rule: saved histories remain until explicit
+   deletion. Set a cleanup grace only for declared disposable, nonresumable
+   orphan/ephemeral cohorts and already-deleted tombstones; terminal status
+   alone never permits expiry.
 7. Answer the SQLite PRD's open question 2 (are `memories/` documents or
    rows). This proposal assumes documents, so they stay files.
 8. File one tracking issue for the program; none exists today.

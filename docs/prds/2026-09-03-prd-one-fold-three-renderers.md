@@ -283,7 +283,7 @@ aggregate** and, in the same transaction, sets `event_sequence.closed = 1`
 on that aggregate and on every dependent reachable through
 `event_sequence.parent_id`, which records only the owning lifecycle (C9;
 the closing rule is stated in 5.2). The
-agent runtime's five execution rows, named by
+agent runtime's five execution flow rows, named by
 `2026-09-04-agent-runtime-on-effect.md` section 2.1 (`model.message`,
 `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`), use the
 execution as their aggregate. `flow.step` shares the scrubbed stream
@@ -491,8 +491,10 @@ stream and execution together, and actions verify the relevant pair.
   compare-on-remove exist for today (`SessionState.ts:133-148`), and both go
   with it - as does every `{ streamId, executionId }` pairing successive
   review rounds added to this document before the id itself was fixed.
-  Physical removal is retention's business and takes a stream's rows only
-  together with its tombstone. The event table has two coordinates and they do different
+  Physical collection takes only explicitly deleted streams and their
+  closed dependents, together with the tombstone. User history, conversation,
+  and resume data do not expire by age or terminal outcome (C9).
+  The event table has two coordinates and they do different
   jobs. `seq` is per **qualified aggregate key** - stream, execution, inquiry,
   or the singleton session key (5.1, C2); an
   `inquiryThreadUpdated` with a null `parentStreamId` rides its thread
@@ -623,6 +625,12 @@ stream and execution together, and actions verify the relevant pair.
   `StreamStatusService`'s process-local map and reaches the UI through
   `holdState` (`LitSessionRenderer.ts:429`, `childExecutions.ts:98`), which
   no webview fold can call.
+  `readOnly` disables execution and approval controls; explicit single-run
+  Delete is a separate C5/C9 operation. A user-confirmed deletion may remove
+  a run with an unprovable owner, but must still refuse a known-alive owner.
+  It does not authorize resume, tool execution, or signalling an unverified
+  process. Bulk deletion and automatic cleanup retain the strict ownership
+  rule; missing liveness is never an automatic deletion permission.
 - **`context`** is latest-of-type over `context.state`, already a canonical
   run fact. Both renderers show it live today - `UsagePanel` through
   `ToolUseStreamContent` and `WorkflowStreamContent`, and the TUI status
@@ -1411,11 +1419,19 @@ scheduler drains many fibers' continuations in one turn, so that state
 bleeds across fibers. Roots come from context; the async-local path stays
 in the Promise tier only.
 
+The WAL database and its side files reside on one host's local filesystem.
+Several processes on that host may open it; another machine uses the
+owning runtime's transport and never opens the database through a shared
+network mount. The database layer rejects unsupported shared-filesystem
+storage before opening it, as required by substrate C1. Cross-host owner
+records remain conservative evidence during import; hostname checks do not
+make cross-host WAL access supported.
+
 ### 7.4 Transport framing
 
 **Display redaction precedes every view-state update (C3).** Trace rows,
 `flow.step`, error payloads, and approval payloads on the stream aggregate
-are secret-scrubbed before persistence. The five execution-aggregate rows
+are secret-scrubbed before persistence. The five execution-aggregate flow rows
 (`model.message`, `model.compaction`, `tool.intent`, `tool.result`,
 `flow.snapshot`) retain their provider content without redaction, as specified
 by the runtime proposal §2.1. Raw access belongs to `RunLedger`. The shared
@@ -1543,6 +1559,12 @@ type RequestError = NotOwner | Unavailable | Rejected | Invalid | Internal;
 // Effect.fn('SessionRequests.request')
 request: (req: RuntimeRequest) => Effect.Effect<Outcome, RequestError>;
 ```
+
+`stream.delete` has the explicit user-deletion exception defined in C5/C9:
+it may close a run held by an unprovable owner after the user's confirmation,
+using the current claim check and atomic closure, but never a known-alive
+owner. This exception grants deletion only. `stream.deleteAll` and automatic
+maintenance do not inherit it.
 
 The interaction scope (`executionInteractionOwnership.ts:36-56`, already
 "its own owner token") becomes a resource acquired with
@@ -1771,6 +1793,14 @@ more is needed: a `StreamTabId` names one run for its whole life (decision
 only miss, never land on a different run. Earlier drafts carried a
 `{ streamId, executionId }` target on every arm for exactly that race;
 fixing the id retired it.
+
+Ordinary run deletion also removes generated files within that run's
+execution directory, preserving today's `deleteExecution.clear` behavior.
+The runtime closes the aggregate first, keeps durable deletion evidence
+while file cleanup runs or retries, and permits final database collection
+only after cleanup succeeds (C9). It never sweeps other execution directories
+or accepted/copied files in the workspace. The separate debug Delete output
+action remains a file operation; it does not delete the run or its history.
 
 - stream: `stream.stop`, `stream.delete`, `stream.compact`,
   `stream.resume`, `stream.runNew`, `stream.restoreState`, each naming a
