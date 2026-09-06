@@ -1,0 +1,44 @@
+{
+  "node": "v26.6.0",
+  "iterations": 500,
+  "trials": 5,
+  "samples": [
+    {
+      "historyMessages": 1000,
+      "retained": false,
+      "medianUs": 1.736916000000008,
+      "medianHeapGrowthMiB": 0.0158843994140625
+    },
+    {
+      "historyMessages": 1000,
+      "retained": true,
+      "medianUs": 1.6037500000000193,
+      "medianHeapGrowthMiB": 0.15311431884765625
+    },
+    {
+      "historyMessages": 10000,
+      "retained": false,
+      "medianUs": 1.2021680000000003,
+      "medianHeapGrowthMiB": 0.01534271240234375
+    },
+    {
+      "historyMessages": 10000,
+      "retained": true,
+      "medianUs": 1.20474999999999,
+      "medianHeapGrowthMiB": 0.15309906005859375
+    },
+    {
+      "historyMessages": 50000,
+      "retained": false,
+      "medianUs": 1.2312499999999886,
+      "medianHeapGrowthMiB": 0.01537322998046875
+    },
+    {
+      "historyMessages": 50000,
+      "retained": true,
+      "medianUs": 1.221584000000007,
+      "medianHeapGrowthMiB": 0.15309906005859375
+    }
+  ]
+}
+Assertions passed: historical transcript identity unchanged; retained active revisions unchanged.

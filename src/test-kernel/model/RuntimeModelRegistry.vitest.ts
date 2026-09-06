@@ -455,6 +455,7 @@ describe('Copilot route in model pickers', () => {
       {
         globalState: {
           [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
+          [GlobalStateKey.REASONING_LEVELS]: { gemini31p: 'low' },
         },
         secrets: googleKeySecrets(),
       },
@@ -470,6 +471,7 @@ describe('Copilot route in model pickers', () => {
         availability: 'copilot-access',
         availabilityLabel: 'Copilot subscription',
         routeLabel: 'Via Copilot',
+        reasoning: 'Default (provider managed)',
         context: '160K',
         cost: '$0.000/$0.000',
         disabled: false,

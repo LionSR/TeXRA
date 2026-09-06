@@ -1,11 +1,13 @@
 /**
  * Re-mint the shared {@link SubscriptionOAuthError} raised inside the
- * coordinator machine as the caller's provider-specific auth error.
+ * coordinator machine, and the tagged request failures of `oauthRequest.ts`,
+ * as the caller's provider-specific auth error.
  */
 import {
   SubscriptionOAuthError,
   type SubscriptionOAuthErrorKind,
 } from './subscriptionOAuthError';
+import type { OAuthRequestError } from './oauthRequest';
 
 interface ProviderAuthError extends Error {
   readonly kind: SubscriptionOAuthErrorKind;
@@ -32,4 +34,23 @@ export function rethrowAsProviderAuthError(
     });
   }
   throw error;
+}
+
+/**
+ * The provider's auth error for a token-grant request failure: the same
+ * message, kind, and status the grant's Promise API always threw.
+ */
+export function providerAuthError(
+  error: OAuthRequestError,
+  ErrorType: ProviderAuthErrorCtor,
+): ProviderAuthError {
+  switch (error._tag) {
+    case 'OAuthHttpError':
+      return new ErrorType(error.message, error.kind, error.status);
+    case 'OAuthNetworkError':
+    case 'OAuthUnexpectedResponse':
+      return new ErrorType(error.message, 'transient', undefined, {
+        cause: error.cause,
+      });
+  }
 }

@@ -8,16 +8,12 @@
  * Worked exemplar for the Effect 4 runtime PRD
  * (`docs/prds/2026-08-26-effect-4-runtime-migration.md`): the server is a
  * scoped resource, the callback wait is a `Deferred` under a timeout, and
- * cancellation is fiber interruption delivered from the caller's
- * `AbortSignal` at the single run boundary in {@link loginWithOAuthLoopback}.
- * The exported Promise API, error identities, and HTTP responses are
- * unchanged.
+ * cancellation is fiber interruption, delivered by the host that runs the
+ * program at its own edge. Error identities and HTTP responses are unchanged.
  */
 import http from 'node:http';
 
-import { Cause, Deferred, Duration, Effect, Exit } from 'effect';
-
-import { effectRuntime } from '@platform/processRuntime';
+import { Deferred, Duration, Effect } from 'effect';
 
 import { AUTH_CALLBACK_TIMEOUT_MS } from '../config';
 import type { SubscriptionAuthorizeRequest } from './SubscriptionOAuthCoordinator';
@@ -54,7 +50,6 @@ export interface OAuthLoopbackLoginOptions<S> {
   callbackPath: string;
   /** User-facing provider name in HTML and errors (e.g. `ChatGPT`, `Grok`). */
   displayName: string;
-  signal?: AbortSignal;
 }
 
 function respondHtml(
@@ -125,7 +120,13 @@ function bindLoopbackServer(
   });
 }
 
-function loginProgram<S>(options: OAuthLoopbackLoginOptions<S>) {
+/**
+ * The loopback sign-in flow end to end: bind, open the browser, wait for the
+ * callback, and persist the session via the coordinator.
+ */
+export function loginWithOAuthLoopback<S>(
+  options: OAuthLoopbackLoginOptions<S>,
+): Effect.Effect<S, unknown> {
   const { coordinator, openBrowser, ports, callbackPath, displayName } =
     options;
   // The setup prefix is uninterruptible to preserve the Promise
@@ -236,27 +237,4 @@ function loginProgram<S>(options: OAuthLoopbackLoginOptions<S>) {
       });
     }),
   );
-}
-
-/**
- * Run the loopback sign-in flow end to end on the process runtime and
- * persist the session via the coordinator.
- */
-export async function loginWithOAuthLoopback<S>(
-  options: OAuthLoopbackLoginOptions<S>,
-): Promise<S> {
-  const { signal } = options;
-  signal?.throwIfAborted();
-  let exit: Exit.Exit<S, unknown>;
-  try {
-    exit = await effectRuntime().runPromiseExit(loginProgram(options), {
-      signal,
-    });
-  } catch (error) {
-    if (signal?.aborted) throw signal.reason;
-    throw error;
-  }
-  if (Exit.isSuccess(exit)) return exit.value;
-  if (signal?.aborted) throw signal.reason;
-  throw Cause.squash(exit.cause);
 }

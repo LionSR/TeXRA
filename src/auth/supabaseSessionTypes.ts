@@ -18,7 +18,7 @@ const SupabaseSessionSchema = z.object({
 export type SupabaseSession = z.infer<typeof SupabaseSessionSchema>;
 
 /** Response schema for GitHub token exchange and refresh Edge Functions. */
-const GitHubTokenExchangeSchema = z.object({
+export const GitHubTokenExchangeSchema = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
   expires_at: z.number().optional(),
@@ -35,10 +35,6 @@ const GitHubTokenExchangeSchema = z.object({
       .optional(),
   }),
 });
-export type GitHubTokenExchangeResponse = z.infer<
-  typeof GitHubTokenExchangeSchema
->;
-
 export interface SupabaseSessionParseOptions {
   logSource?: string;
   warn?: (source: string, message: string) => void;
@@ -99,19 +95,6 @@ export function parseStoredSupabaseSession(
       `Stored session has invalid schema: ${z.prettifyError(parsed.error)}`,
     );
     return null;
-  }
-  return parsed.data;
-}
-
-export async function parseTokenExchangeResponse(
-  response: Response,
-): Promise<GitHubTokenExchangeResponse> {
-  const rawData = await response.json();
-  const parsed = GitHubTokenExchangeSchema.safeParse(rawData);
-  if (!parsed.success) {
-    throw new Error(
-      `Invalid response format from authentication server: ${z.prettifyError(parsed.error)}`,
-    );
   }
   return parsed.data;
 }

@@ -1,9 +1,6 @@
 import { ModelProvider, type ModelConfig, ReasoningEffort } from 'llm-zoo';
 
-import {
-  LEVEL_TO_EFFORT,
-  supportsReasoningLevel,
-} from '@agent/modelHandlers/support/reasoningEffort';
+import { LEVEL_TO_EFFORT, supportsReasoningLevel } from '@model/reasoningLevel';
 import { preferredCopilotRouteModels } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
 import {
