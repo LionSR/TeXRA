@@ -230,7 +230,8 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   stage: StreamStage | null
   // latest `flow.step` payload, null until lane D lands (amended 2026-09-06;
   // migration PRD R4 as amended): the loop's own coordinate, never derived
-  // from stage rows
+  // from stage rows. Additive and nullable; the one public change to the
+  // SDK's exported view type (migration PRD section 6 item 6)
   flow: { family: 'toolUse' | 'reflection', step: string, round: number | null,
           turn: number | null, outcome: string | null } | null
   followUpSupport: UserFollowUpSupport
@@ -270,10 +271,25 @@ chunks, and `local` do (8.1). Every type that _is_ on the wire uses arrays
 and records, so nothing depends on a `Map` surviving `JSON.stringify`; the
 same rule governs the persisted `Surface` (9).
 
-Four aggregate kinds, one key shape, one placement rule (contract C2). The
-event key is `(aggregate_id, seq)`, and **every fact lives on the aggregate
-of its logical target**, so a latest-of-type lookup never has to
-disambiguate targets and no key column exists. Run-scoped trace facts and
+Five aggregate kinds (four at ratification, plus the checkpoint aggregate
+added 2026-09-06 by the owner's ruling, to be carried into contract C2 and
+C9 by the substrate owner as their next clause change), one key shape, one
+placement rule (contract C2). The event key is `(aggregate_id, seq)`, and
+**every fact lives on the aggregate of its logical target**, so a
+latest-of-type lookup never has to disambiguate targets and no key column
+exists. The **checkpoint aggregate**, id = a workflow's `checkpointId`
+(decision 9's resume anchor), carries the workflow-script journal (attempt
+identities and call results, migration PRD Phase 2 step 4) and nothing
+else. Its lifecycle: created by the first launch under that `checkpointId`;
+reached from every launch through the `checkpointId` on that launch's
+`run.start` (the edge, as `run.start` carries the execution edge); never
+closed by a run's `stream.removed`, since runs are ephemeral and the
+checkpoint outlives them; closed only by `checkpoint.removed`, its last row,
+written when the user deletes the checkpoint (single-owner D8, "a
+checkpoint is deleted only by the user"), which sets `closed = 1` on it and
+on every dependent reachable through `parent_id`; retained under C9 on its
+own closure, never on a run's. Discovery is `aggregate(checkpointId,
+fromSeq)`; it never appears in `listing()`. Run-scoped trace facts and
 the stream's own lifecycle facts use the stream as their aggregate:
 `run.start` (seq 1), the trace `AgentEvent`s, the status fact, `goal`
 (`GoalStore.getForStream` is keyed by stream), the queued-follow-ups
@@ -956,12 +972,18 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    `SessionHandle.publish` like item 1's approval facts, not a trace
    `AgentEvent`, so the exported trace and the SDK's `AgentRun.events` union
    do not change). On the execution aggregate, byte-exact and never
-   scrubbed: `model.message`,
-   `model.compaction`, `tool.intent`, `tool.result`, and `flow.snapshot`; the
-   fold never reads them, only `RunLedger` and the trace viewer's stepper do.
-   They are lane D's rows, not this document's lanes', and the eight changes
-   above stay eight; this item exists so the durable set this section
-   enumerates is complete.
+   scrubbed: `model.message`, `model.compaction`, `tool.intent`,
+   `tool.result`, and `flow.snapshot`. These five are **private rows**,
+   classified at the row-type level: `listing()` never returns them (today's
+   `listingRows` treats every non-transcript event as a listing fact, so the
+   classification is an explicit exclusion there, not a default), no frame
+   carries them (`SessionFramer.cutFrame` forwards listing events and
+   subscribed transcript rows; a private row is neither), and no renderer
+   subscription can name them. The fold never reads them; only `RunLedger`,
+   through `aggregate(executionId, fromSeq)` in the runtime process, and the
+   host's in-process step scrubber over it do. They are lane D's rows, not
+   this document's lanes', and the eight changes above stay eight; this item
+   exists so the durable set this section enumerates is complete.
 
 **Rename, cut before add (lane 1).** The tombstone this document calls
 `stream.removed` is today's `removeStream` session fact
@@ -1029,8 +1051,11 @@ class SessionEvents extends Context.Service<
     // one aggregate's rows from `fromSeq`, in seq order; completes. A
     // history read, never a tail: a subscribed aggregate's live rows come
     // from `all`. An AggregateId is a stream id, an execution id, an
-    // inquiry thread id, or the session aggregate (5.1); the fold fiber
-    // opens one per aggregate in its subscription set (7.2, 8.1)
+    // inquiry thread id, a workflow checkpoint id (5.1, added 2026-09-06),
+    // or the session aggregate; the fold fiber opens one per aggregate in
+    // its subscription set (7.2, 8.1). The five private ledger rows of
+    // section 6 item 9 are readable only here, by RunLedger, never
+    // through `listing()` or a frame
     readonly aggregate: (
       aggregateId: AggregateId,
       fromSeq: Seq,
@@ -1468,7 +1493,11 @@ byte-exact and never scrubbed, because Anthropic signature verification and
 a resumed context need the original bytes. Therefore every framer that
 feeds a renderer process (webview, Electron renderer) and every export
 applies display redaction and truncation, and no webview or export ever
-receives a byte-exact flow payload; only the in-process hub is trusted.
+receives a byte-exact flow payload; only the in-process hub is trusted. In
+practice the framer never sees those five rows at all: they are private rows
+(section 6 item 9), excluded from `listing()` and from every frame at the
+row-type level, so their redaction never arises at a framer; the display
+redaction obligation is for the derived display rows and for exports.
 Until the display fold reads `model.message` directly, message text is
 durable twice (the redacted trace row and the flow row); that collapse
 deletes the trace copy and moves redaction to fold time.

@@ -471,7 +471,12 @@ is the execution substrate beneath those rulings.
    _Amended 2026-09-06:_ the `flow_<id>.json` record is retired in Phase 2
    as amended, imported once into the execution aggregate's first
    `flow.snapshot` row; the substrate contract (C1) owns versioning from
-   then on.
+   then on. One public schema does change, additively: `StreamView`, which
+   `@texra-ai/agent` exports and `AgentRun.view` returns, gains the nullable
+   field `flow` (one-fold PRD 5.1). That is lane D's only public-schema
+   change; it is recorded in the package changelog as a minor change, and
+   wire protocols, agent YAML, the exported trace, and result schemas stay
+   unchanged.
 7. No public `Effect` return types from `@texra-ai/agent` in the first release.
 8. No automatic retry expansion. Existing idempotency and retry ownership
    decisions remain binding.
@@ -1353,20 +1358,29 @@ lane D of the persistence cutover branch, sequenced and sized by
    `docs/architecture/2026-06-20-pocketflow-state.md`; the PR re-runs that
    search and `npm run check:guidance-refs` is the gate. Reviewed as one
    because splitting it is what creates a shim.
-3. **Replay along the flow.** The viewer scrubber over `foldRunState`,
-   reading rows from the local database through `RunLedger`; the `flow.step`
-   arm in the session fold (the proposal's §5 PR 3 writes `flow.transition`;
-   the declared row type is `flow.step` and there is no seventh
-   discriminator). No change to `TraceDocument` or to the exported trace
-   format: the frozen wire (one-fold PRD 10.3) stays byte-identical, replay
-   is a local-database feature, and an exported document carries no step
-   coordinates and no ledger rows. The proposal's §5 PR 3
-   `TraceDocument.steps` is withdrawn.
+3. **Replay along the flow.** A step scrubber over `foldRunState` as a
+   surface of the in-process hosts (the conversation shell's run detail on
+   the extension and desktop, the TUI's run pane), reading rows from the
+   local database through `RunLedger` in the runtime process, which is the
+   only process that may hold byte-exact rows (one-fold PRD 7.4). The
+   standalone `packages/trace-viewer` is untouched: it keeps loading a
+   `TraceDocument` through its host bridge and gains no database transport.
+   Also the `flow.step` arm in the session fold (the proposal's §5 PR 3
+   writes `flow.transition`; the declared row type is `flow.step` and there
+   is no seventh discriminator). No change to `TraceDocument` or to the
+   exported trace format: the frozen wire (one-fold PRD 10.3) stays
+   byte-identical, and an exported document carries no step coordinates and
+   no ledger rows. The proposal's §5 PR 3 `TraceDocument.steps` is
+   withdrawn.
 4. **One child protocol.** Workflow-script journal rows into the event table
-   under an aggregate keyed by the workflow's `checkpointId`, the resume
-   anchor of one-fold PRD decision 9, never by the run's execution id, which
-   mints fresh per relaunch: a relaunch reads the same journal, and the
-   journal's retention follows the checkpoint, not the run. Native
+   under the **checkpoint aggregate**, the fifth aggregate kind the one-fold
+   PRD 5.1 defines with its lifecycle (created by the first launch under a
+   `checkpointId`, reached from every launch's `run.start` edge, closed only
+   by the user's `checkpoint.removed`, retained under C9 on its own
+   closure), keyed by the workflow's `checkpointId`, the resume anchor of
+   one-fold PRD decision 9, never by the run's execution id, which mints
+   fresh per relaunch: a relaunch reads the same journal, and the journal's
+   retention follows the checkpoint, not the run. Native
    `ChildTurnRef` and the script journal entry become one attempt-identity
    row on that aggregate in the same PR, so the active-versus-last-completed
    turn distinction `ChildTurnState` records today is carried by the row
@@ -1536,22 +1550,38 @@ through typed host controllers rather than directly importing Effect.
 ### Rollout and rollback
 
 No feature flag is required because the migration does not introduce two
-user-selectable behaviors. Each phase is independently revertible and changes
-no durable format through Phase 2 and Stage 3a. From the first durable-format
-writer onward, revertibility carries a qualification: reverting code must
-never orphan records that code has already written. Stage 3b therefore obeys
-a reader-outlives-writer rule — the code that reads the new checkpoint
-representation lands with or before the writer and is retained on rollback,
-so a reverted writer leaves every written session readable. The recommended
-sidecar-ledger representation (§15, decision 6) satisfies this cheaply: the
-version 2 record stays authoritative and readable by pre-amendment code, and
-rollback degrades fine-grained resume to today's coarse outer-cursor resume
-instead of producing unreadable sessions. If ratification instead selects a
-new record version, its reader ships ahead of its writer under the same rule,
-or the PRD's revertibility claim is explicitly withdrawn for that stage. A
-Stage 3b format change additionally follows the repository's explicit
-compatibility and retirement policy and lands only with its recovery
-behavior. A phase lands only after all affected hosts have crossed
+user-selectable behaviors. Each phase is independently revertible. ~~Each
+changes no durable format through Phase 2 and Stage 3a. From the first
+durable-format writer onward, revertibility carries a qualification:
+reverting code must never orphan records that code has already written.
+Stage 3b therefore obeys a reader-outlives-writer rule — the code that reads
+the new checkpoint representation lands with or before the writer and is
+retained on rollback, so a reverted writer leaves every written session
+readable. The recommended sidecar-ledger representation (§15, decision 6)
+satisfies this cheaply: the version 2 record stays authoritative and readable
+by pre-amendment code, and rollback degrades fine-grained resume to today's
+coarse outer-cursor resume instead of producing unreadable sessions. If
+ratification instead selects a new record version, its reader ships ahead of
+its writer under the same rule, or the PRD's revertibility claim is
+explicitly withdrawn for that stage. A Stage 3b format change additionally
+follows the repository's explicit compatibility and retirement policy and
+lands only with its recovery behavior.~~ _Amended 2026-09-06:_ Phase 2 as
+amended is the first durable-format change, and it lands as the cutover
+release, whose rollback is the revert of the cutover branch. The
+reader-outlives-writer rule cannot hold across it, because pre-cutover code
+has no reader for rows, so the revertibility claim is **withdrawn for runs
+that progressed under the ledger** and replaced by a weaker, explicit
+guarantee: such a run is interrupted on rollback, never silently resumed
+from a stale record and never repeated. The mechanism is the importer's:
+on first resume under the ledger it imports `flow_<id>.json` into the first
+`flow.snapshot` row and renames the file to `flow_<id>.json.imported` in
+the same step (never deleting it; single-owner D8 still governs deletion),
+so a reverted release finds no legacy checkpoint for that run, reports it
+as not resumable, and repeats no paid or side-effecting work. A run never
+resumed under the ledger keeps its untouched record and resumes after
+rollback exactly as before. The importer is the temporary compatibility
+reader of Phase 2 step 2 and follows the repository's compatibility and
+retirement policy. A phase lands only after all affected hosts have crossed
 the same internal boundary; the repository does not ship one host on the Effect
 implementation and another on a separately maintained Promise implementation.
 
