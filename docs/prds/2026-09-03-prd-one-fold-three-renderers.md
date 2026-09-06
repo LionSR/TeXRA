@@ -278,12 +278,16 @@ placement rule (contract C2). The event key is `(aggregate_id, seq)`, and
 **every fact lives on the aggregate of its logical target**, so a
 latest-of-type lookup never has to disambiguate targets and no key column
 exists. The **checkpoint aggregate**, id = a workflow's `checkpointId`
-(decision 9's resume anchor), carries three things: as its first row,
-`checkpoint.created`, with the canonical script, arguments, and file sets
-that `workflowScript/persistence.ts` writes today, so a resume or relaunch
-with omitted inputs reconstructs them from the row; then the
-workflow-script journal (attempt identities and call results, migration PRD
-Phase 2 step 4); and `checkpoint.removed` last. Its lifecycle: created by
+(decision 9's resume anchor), carries four things: `checkpoint.created`
+first; `checkpoint.inputs`, written by the creating launch and by every
+relaunch whose script, arguments, or file sets differ from the latest such
+row (the contract `workflowScript/persistence.ts` keeps today, where a
+relaunch adopts revised inputs), read latest-of-type so an omitted-input
+resume reconstructs the inputs the journal's later entries were written
+against; the workflow-script journal (attempt identities and call results,
+migration PRD Phase 2 step 4); and `checkpoint.removed` last. Every row on
+this aggregate is private in the sense of section 6 item 9: none reaches
+`listing()`, a frame, or a renderer. Its lifecycle: created by
 the first launch under that `checkpointId`; every workflow stream launched
 under it has `event_sequence.parent_id = checkpointId` (the ownership
 edge; the stream's execution keeps `parent_id` = the stream under the
@@ -990,17 +994,24 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    subscription can name them. The fold never reads them; only `RunLedger`,
    through `aggregate(executionId, fromSeq)` in the runtime process, and the
    host's in-process step scrubber over it do. Two rules bind the publisher:
-   a `flow.step` whose step is `waiting`, `halted`, or a terminal outcome is
-   published in the same transaction as the canonical `status` fact of item
-   3 it corresponds to (`publish` takes a batch), so `StreamView` can never
-   durably show a settled `flow` beside a running `status`, and `status`
+   every batch that moves the canonical `status` fact of item 3 into or out
+   of a settled state carries the `flow.step` that corresponds (`publish`
+   takes a batch): `waiting`, `halted`, or the outcome on the way in, and on
+   the way out, when a resume publishes `RUNNING`, the resumed loop's first
+   `turn.begin` or `round.begin`, appended in the resume's own status batch
+   before the loop does anything else, so `StreamView` can never durably
+   show a settled `flow` beside a running `status` or the reverse; `status`
    stays the lifecycle authority while `flow` is only the coordinate. On the
-   checkpoint aggregate (5.1): **`checkpoint.created`**, its first row,
-   carrying the canonical script, arguments, and file sets that
-   `workflowScript/persistence.ts` writes today, published by the launch
-   that creates the checkpoint; the workflow-script journal rows (migration
-   PRD Phase 2 step 4); and **`checkpoint.removed`**, the aggregate's last
-   row, published only by the one path that deletes a workflow checkpoint
+   checkpoint aggregate (5.1), every row of which is private exactly like
+   the five execution-aggregate rows above (excluded from `listing()` and
+   from every frame at the row-type level, since `checkpoint.inputs` carries
+   the whole script and journal rows carry cached results): **`checkpoint.created`**,
+   its first row, published by the launch that creates the checkpoint;
+   **`checkpoint.inputs`**, the canonical script, arguments, and file sets,
+   written by that launch and by every relaunch whose inputs differ from the
+   latest such row, read latest-of-type; the workflow-script journal rows
+   (migration PRD Phase 2 step 4); and **`checkpoint.removed`**, the
+   aggregate's last row, published only by the one path that deletes a workflow checkpoint
    today (single-owner D8), which sets `closed = 1` on the aggregate and its
    dependents; it is the checkpoint's tombstone as `stream.removed` is a
    stream's. They are lane D's rows, not this document's lanes', and the

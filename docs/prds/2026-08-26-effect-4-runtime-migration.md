@@ -739,19 +739,27 @@ migration complete.
 
 #### R4.4. Cursor identity is stable across refactoring
 
-Version 2 cursor identifiers are derived from graph paths and action labels.
+~~Version 2 cursor identifiers are derived from graph paths and action labels.
 Changing graph composition during an Effect rewrite can therefore invalidate a
 resume record without changing product behavior. Phase 2 first preserves the
 current graph construction and identifier algorithm exactly. Characterization
 tests pin every production cursor path used by resumable flows before node
-classes move.
+classes move.~~ _Amended 2026-09-06:_ there is no cursor to keep stable and
+no graph to preserve. The requirement survives as: identity is the logical
+keys `round`, `turn`, and `callId`, never a traversal path, and the one
+place a version 2 cursor is ever interpreted is the importer's
+cursor-to-coordinate mapping (Phase 2 step 2), which characterization tests
+pin for every cursor path a resumable flow can hold at the cutover, instead
+of pinning the graph.
 
-Explicit logical node identifiers and a hierarchical cursor are preferable for
-future formats because their identity does not depend on traversal layout.
-They require a versioned record decision and are introduced only with the
-tool-use checkpoint design. Current sessions either retain version 2 semantics
-or are retired according to the repository's compatibility policy; the reader
-must not guess a new cursor from an old topology.
+~~Explicit logical node identifiers and a hierarchical cursor are preferable
+for future formats because their identity does not depend on traversal
+layout. They require a versioned record decision and are introduced only
+with the tool-use checkpoint design.~~ _Amended 2026-09-06:_ that future
+format is the row ledger (§15 item 6). Current sessions are imported once
+under the rollout section's protocol or retired under the repository's
+compatibility policy; the importer maps a cursor it cannot place to the last
+completed boundary and never guesses a new coordinate from an old topology.
 
 #### R4.5. Rounds are durable coordinates, not retry schedules
 
@@ -1416,15 +1424,21 @@ lane D of the persistence cutover branch, sequenced and sized by
    closure), keyed by the workflow's `checkpointId`, the resume anchor of
    one-fold PRD decision 9, never by the run's execution id, which mints
    fresh per relaunch: a relaunch reads the same journal, and the journal's
-   retention follows the checkpoint, not the run. Native
-   `ChildTurnRef` and the script journal entry become one attempt-identity
-   row on that aggregate in the same PR, so the active-versus-last-completed
-   turn distinction `ChildTurnState` records today is carried by the row,
-   and the checkpoint's `checkpoint.created` row (one-fold PRD 5.1) carries
-   the script, arguments, and file sets `persistence.ts` restores today,
-   before `ChildTurnState`, `workflowScript/persistence.ts`, and the
-   turn-state writes in `childRunLoop.ts` are deleted; nothing is deleted
-   before its replacement lands. In scope, not optional: two ledgers would be
+   retention follows the checkpoint, not the run. The
+   active-versus-last-completed turn distinction `ChildTurnState` records
+   today is the child run's own `flow.step` (a `turn.begin` with no
+   `turn.end` on the child's stream aggregate), and it is execution-scoped
+   there exactly as `ChildTurnState` is: every launch path that starts a
+   child run loop (workflow scripts, native delegation, in-band subagents,
+   Bash, the agent CLI) reads that row instead, in the same PR, since
+   `startChildRunLoop` is one function and `inBandSubagentExecution.ts` is
+   one of its readers. The script journal entry references the child's
+   execution id as its attempt identity, and the checkpoint's
+   `checkpoint.inputs` rows (one-fold PRD 5.1) carry the script, arguments,
+   and file sets `persistence.ts` restores and revises on relaunch today.
+   Only then are `ChildTurnState`, `workflowScript/persistence.ts`, and the
+   turn-state writes in `childRunLoop.ts` deleted; nothing is deleted before
+   its replacement lands. In scope, not optional: two ledgers would be
    the intermediate this program refuses.
 
 Rules that bind every step: no interim column, no Promise shim so one family
