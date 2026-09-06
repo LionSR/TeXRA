@@ -31,14 +31,18 @@ export class LoopbackTransportUnavailableError extends Error {
   }
 }
 
-/** Minimal coordinator surface the loopback flow needs. */
+/**
+ * Minimal coordinator surface the loopback flow needs. The code exchange is a
+ * program, not a Promise, so it runs on this flow's own fiber: interrupting
+ * the login reaches the token exchange and the session store.
+ */
 export interface LoopbackOAuthCoordinator<S> {
   buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest;
-  completeLoginWithCode(params: {
+  loginWithCode(params: {
     code: string;
     verifier: string;
     redirectUri: string;
-  }): Promise<S>;
+  }): Effect.Effect<S, unknown>;
 }
 
 export interface OAuthLoopbackLoginOptions<S> {
@@ -226,14 +230,10 @@ export function loginWithOAuthLoopback<S>(
         }),
       );
 
-      return yield* Effect.tryPromise({
-        try: () =>
-          coordinator.completeLoginWithCode({
-            code: authCode,
-            verifier: authorize.verifier,
-            redirectUri: authorize.redirectUri,
-          }),
-        catch: (error) => error,
+      return yield* coordinator.loginWithCode({
+        code: authCode,
+        verifier: authorize.verifier,
+        redirectUri: authorize.redirectUri,
       });
     }),
   );

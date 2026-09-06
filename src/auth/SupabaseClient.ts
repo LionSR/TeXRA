@@ -50,7 +50,9 @@ function gotrueStorage(secrets: SessionSecretStore): SupportedStorage {
   /**
    * Run one secret-store operation, unless the key is the session slot. That
    * slot and a failed store both answer `undefined`, which every caller
-   * resolves against the memory mirror.
+   * resolves against the memory mirror. This is `@supabase/auth-js`'s own
+   * Promise callback surface — a foreign-runtime boundary, not a temporary
+   * adapter — so its catch stays.
    */
   const onFlowState = async <T>(
     action: string,
@@ -150,6 +152,13 @@ export class SupabaseClient {
     return this.initError ?? this.readinessError;
   }
 
+  // `isReady`, `getAccessToken`, `getUser`, and `getStoredAccountLabel` stay
+  // Promise-native, catch clauses included: each wraps the `AuthTokenProvider`
+  // port (src/auth/TokenProvider.ts), which this subsystem's own
+  // SupabaseSessionCoordinator implements behind a Promise edge, so running
+  // them as programs here would put Effect on both sides of a Promise.
+  // Retirement condition (R10): the port becomes Effect-typed, and these
+  // convert with it in that PR. @adapter-until 2026-11-05
   /**
    * Check if auth system is fully initialized and ready for use.
    */

@@ -13,7 +13,7 @@
  * own error type.
  */
 // Third-party imports
-import { Deferred, Effect, Result, Semaphore } from 'effect';
+import { Deferred, Effect, Result } from 'effect';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
@@ -22,13 +22,13 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   AuthPortError,
-  awaitWritesAhead,
   callPort,
   runAuthProgram,
+  SerializedWrites,
 } from '../authProgram';
 import { generateOAuthState, generatePkcePair } from './pkce';
 import {
-  rethrowAsProviderAuthError,
+  toProviderAuthError,
   type ProviderAuthErrorCtor,
 } from './providerAuthBridge';
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
@@ -144,7 +144,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   private readonly now: () => number;
   private readonly errorType: ProviderAuthErrorCtor;
   private refreshInFlight: Deferred.Deferred<S, MachineFailure> | null = null;
-  private readonly sessionMutations = Semaphore.makeUnsafe(1);
+  private readonly sessionMutations = new SerializedWrites();
   private sessionGeneration = 0;
 
   constructor(init: SubscriptionOAuthCoordinatorInit<S>) {
@@ -155,12 +155,16 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     this.errorType = init.errorType;
   }
 
-  /** Re-throw a program failure as the provider's own error type. */
-  private readonly rethrowAsProviderError = (error: MachineFailure): never =>
-    rethrowAsProviderAuthError(
+  /** A program failure as the provider's own error type. */
+  private readonly toProviderError = (error: MachineFailure): unknown =>
+    toProviderAuthError(
       error instanceof AuthPortError ? error.cause : error,
       this.errorType,
     );
+
+  private readonly rethrowAsProviderError = (error: MachineFailure): never => {
+    throw this.toProviderError(error);
+  };
 
   async loadSession(): Promise<S | null> {
     return runAuthProgram(this.load());
@@ -196,12 +200,24 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     redirectUri: string;
   }): Promise<S> {
     return runAuthProgram(
-      Effect.flatMap(
-        this.clientCall(() => this.client.exchangeAuthorizationCode(params)),
-        (tokens) => this.adoptTokens(tokens),
-      ),
+      this.exchangeCode(params),
       this.rethrowAsProviderError,
     );
+  }
+
+  /**
+   * {@link completeLoginWithCode} as a program, for a caller already on the
+   * runtime (the loopback login yields it, so interrupting that login reaches
+   * the exchange and the store). It fails as the Promise edge would throw:
+   * the provider's own error type for a machine failure, otherwise the port's
+   * own rejection.
+   */
+  loginWithCode(params: {
+    code: string;
+    verifier: string;
+    redirectUri: string;
+  }): Effect.Effect<S, unknown> {
+    return Effect.mapError(this.exchangeCode(params), this.toProviderError);
   }
 
   /** Persist tokens from a successful device-code (or other) grant. */
@@ -270,11 +286,6 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     });
   }
 
-  /** Serialize one storage write behind the single mutation permit. */
-  private mutate<E>(write: Effect.Effect<void, E>): Effect.Effect<void, E> {
-    return this.sessionMutations.withPermits(1)(write);
-  }
-
   private readonly stableSession = Effect.fn(
     'SubscriptionOAuthCoordinator.stableSession',
   )(function* (this: SubscriptionOAuthCoordinator<S>) {
@@ -282,7 +293,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
       const generation = this.sessionGeneration;
       // A mutation that starts after the barrier bumps the generation and
       // re-loops.
-      yield* awaitWritesAhead(this.sessionMutations);
+      yield* this.sessionMutations.awaitIdle();
       const session = yield* this.load();
       if (generation === this.sessionGeneration) {
         return { generation, session };
@@ -290,10 +301,11 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     }
   });
 
-  private supersedeInFlightRefresh(): void {
+  /** Passed to `SerializedWrites.run` so it shares the queueing segment. */
+  private readonly supersedeInFlightRefresh = (): void => {
     this.sessionGeneration += 1;
     this.refreshInFlight = null;
-  }
+  };
 
   /**
    * After a refresh is superseded (concurrent login/sign-out), take a stable
@@ -336,8 +348,10 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   private readonly clearSession = Effect.fn(
     'SubscriptionOAuthCoordinator.signOut',
   )(function* (this: SubscriptionOAuthCoordinator<S>) {
-    this.supersedeInFlightRefresh();
-    yield* this.mutate(callPort(() => this.storage.delete()));
+    yield* this.sessionMutations.run(
+      callPort(() => this.storage.delete()),
+      this.supersedeInFlightRefresh,
+    );
   });
 
   /** Make the session for a fresh grant the stored one, superseding any refresh in flight. */
@@ -348,9 +362,23 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     tokens: SubscriptionTokenResponse,
   ) {
     const session = yield* this.buildSession(tokens);
-    this.supersedeInFlightRefresh();
-    yield* this.mutate(this.store(session));
+    yield* this.sessionMutations.run(
+      this.store(session),
+      this.supersedeInFlightRefresh,
+    );
     return session;
+  });
+
+  private readonly exchangeCode = Effect.fn(
+    'SubscriptionOAuthCoordinator.completeLoginWithCode',
+  )(function* (
+    this: SubscriptionOAuthCoordinator<S>,
+    params: { code: string; verifier: string; redirectUri: string },
+  ) {
+    const tokens = yield* this.clientCall(() =>
+      this.client.exchangeAuthorizationCode(params),
+    );
+    return yield* this.adoptTokens(tokens);
   });
 
   private readonly freshSession = Effect.fn(
@@ -366,17 +394,21 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     return yield* this.refresh(session, generation);
   });
 
-  /** Single-flight refresh: concurrent callers share the in-flight result. */
+  /**
+   * Single-flight refresh: concurrent callers share the in-flight result. The
+   * check and the claim share one synchronous segment — no `yield*` between
+   * them, since the runtime may yield the fiber at any op boundary — so a
+   * second caller can never mint a second refresh.
+   */
   private readonly refresh = Effect.fn('SubscriptionOAuthCoordinator.refresh')(
     function* (
       this: SubscriptionOAuthCoordinator<S>,
       previous: S,
       generation: number,
     ) {
-      if (this.refreshInFlight) {
-        return yield* Deferred.await(this.refreshInFlight);
-      }
-      const inFlight = yield* Deferred.make<S, MachineFailure>();
+      const existing = this.refreshInFlight;
+      if (existing) return yield* Deferred.await(existing);
+      const inFlight = Deferred.makeUnsafe<S, MachineFailure>();
       this.refreshInFlight = inFlight;
       return yield* this.performRefresh(previous, generation).pipe(
         Effect.onExit((exit) =>
@@ -403,7 +435,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
       // a concurrent login or sign-out already replaced it.
       Effect.tapError((error) =>
         error instanceof SubscriptionOAuthError && error.kind === 'fatal'
-          ? this.mutate(
+          ? this.sessionMutations.run(
               Effect.suspend(() =>
                 generation === this.sessionGeneration
                   ? callPort(() => this.storage.delete())
@@ -414,7 +446,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
       ),
     );
     const session = yield* this.buildSession(tokens, previous);
-    yield* this.mutate(
+    yield* this.sessionMutations.run(
       Effect.suspend(() =>
         generation === this.sessionGeneration
           ? this.store(session)

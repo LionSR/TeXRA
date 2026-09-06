@@ -1,4 +1,4 @@
-import { Clock, Deferred, Effect, Semaphore } from 'effect';
+import { Clock, Deferred, Effect } from 'effect';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -6,9 +6,9 @@ import {
   type AuthCallbackUriParts,
 } from './authCallback';
 import {
-  awaitWritesAhead,
   callPort,
   runAuthProgram,
+  SerializedWrites,
   type AuthPortError,
 } from './authProgram';
 import {
@@ -70,12 +70,11 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     null;
   private sessionMutationVersion = 0;
   private lastRefreshFailure: SessionRefreshFailure | null = null;
-  // Single-permit serialization of writes, same mechanism as
-  // SubscriptionOAuthCoordinator's `sessionMutations`: every write bumps
-  // `sessionMutationVersion` under the permit, so taking the permit alone is
-  // a sufficient "no mutation in flight, and none can start without bumping
-  // the version first" barrier for `stableSnapshot`'s version-recheck loop.
-  private readonly sessionMutations = Semaphore.makeUnsafe(1);
+  // Serialized writes, same mechanism as SubscriptionOAuthCoordinator's
+  // `sessionMutations`: every write bumps `sessionMutationVersion` under the
+  // permit, so its idle barrier plus a version recheck is `stableSnapshot`'s
+  // "no mutation in flight, and none started during the read" guarantee.
+  private readonly sessionMutations = new SerializedWrites();
   private readonly log: Required<SupabaseSessionLog>;
 
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {
@@ -108,7 +107,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    */
   async clearSessionIfCurrent(expected: SupabaseSession): Promise<boolean> {
     return runAuthProgram(
-      this.sessionMutations.withPermits(1)(this.clearIfCurrent(expected)),
+      this.sessionMutations.run(this.clearIfCurrent(expected)),
     );
   }
 
@@ -214,7 +213,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private mutate(
     write: Effect.Effect<void, AuthPortError>,
   ): Effect.Effect<void, AuthPortError> {
-    return this.sessionMutations.withPermits(1)(
+    return this.sessionMutations.run(
       Effect.suspend(() => {
         this.sessionMutationVersion += 1;
         return write;
@@ -247,7 +246,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       const versionBeforeLoad = this.sessionMutationVersion;
       // A mutation that starts after the barrier bumps the version and
       // re-loops.
-      yield* awaitWritesAhead(this.sessionMutations);
+      yield* this.sessionMutations.awaitIdle();
       const session = yield* this.load();
       if (versionBeforeLoad === this.sessionMutationVersion) {
         return { session, version: versionBeforeLoad };
@@ -293,9 +292,12 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   });
 
   /**
-   * Single-flight refresh: concurrent callers share the in-flight result. A
-   * port rejection anywhere in the attempt is a transient failure, logged
-   * here where its disposition is decided.
+   * Single-flight refresh: concurrent callers share the in-flight result. The
+   * check and the claim share one synchronous segment — no `yield*` between
+   * them, since the runtime may yield the fiber at any op boundary — so a
+   * second caller can never mint a second refresh. A port rejection anywhere
+   * in the attempt is a transient failure, logged here where its disposition
+   * is decided.
    */
   private readonly refresh = Effect.fn(
     'SupabaseSessionCoordinator.refreshSession',
@@ -304,10 +306,9 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     session: SupabaseSession,
     expectedVersion: number,
   ) {
-    if (this.refreshInFlight) {
-      return yield* Deferred.await(this.refreshInFlight);
-    }
-    const inFlight = yield* Deferred.make<SupabaseSession | null>();
+    const existing = this.refreshInFlight;
+    if (existing) return yield* Deferred.await(existing);
+    const inFlight = Deferred.makeUnsafe<SupabaseSession | null>();
     this.refreshInFlight = inFlight;
     this.lastRefreshFailure = null;
     return yield* this.performRefresh(session, expectedVersion).pipe(
@@ -353,7 +354,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     // Decided under the permit: a mutation queued behind this refresh has not
     // bumped the version yet, and the refreshed session must not overwrite
     // what that mutation is about to write.
-    const stored = yield* this.sessionMutations.withPermits(1)(
+    const stored = yield* this.sessionMutations.run(
       Effect.suspend((): Effect.Effect<boolean, AuthPortError> => {
         if (this.sessionMutationVersion !== expectedVersion) {
           return Effect.succeed(false);
