@@ -597,9 +597,13 @@ uncommitted mutations through the in-memory record cache.~~ _Amended
 the fallback dispatcher are deleted with the engine. Run state stays
 schema-validated (`flow.snapshot` carries the family's Zod state). The
 private-working-copy rule becomes the append rule: a row is the only way
-state becomes durable, the append is the one uninterruptible region, and a
-failed or interrupted turn leaves no row, so nothing uncommitted can be
-observed by a later load.
+state becomes durable, the append is the one uninterruptible region, and an
+interrupted append produces no partial row. Rows already appended in the
+turn (`model.message`, `tool.intent`, `tool.result`) stay durable through
+the interruption; that is the finer checkpointing R4.3 requires, and it is
+what keeps a paid response or a side-effecting call from being repeated on
+resume. Only the in-memory state of the turn in flight is lost, and a later
+load cannot observe it.
 
 ~~There are only sixteen production `BaseNode` subclasses at the survey date.
 The graph kernel and all subclasses therefore migrate in one bounded phase;
@@ -1299,16 +1303,31 @@ converted; it is deleted with its replacement in the same change. This phase is
 lane D of the persistence cutover branch, sequenced and sized by
 `docs/proposals/2026-09-04-agent-runtime-on-effect.md` §3 and §5:
 
-1. **Foundation.** `RunLedger` over `SessionEvents`, the six `AgentEvent` arms
-   (`flow.step`, `model.message`, `model.compaction`, `tool.intent`,
-   `tool.result`, `flow.snapshot`) with Zod schemas, `foldRunState` in
-   `src/shared`, the in-memory ledger layer, one ledger test and one fold
-   test under `it.effect`. A load-time warning on rows-since-snapshot lands
-   here (proposal §8). Nothing deleted yet; nothing in production calls it.
+1. **Foundation.** `RunLedger` over `SessionEvents`; the six row schemas in
+   Zod, split by aggregate: `flow.step` is the one new `AgentEvent` arm (a
+   display row on the stream aggregate, scrubbed at publish like every trace
+   row), while `model.message`, `model.compaction`, `tool.intent`,
+   `tool.result`, and `flow.snapshot` are a private `RunLedgerRow` schema in
+   `src/agent/runtime/ledger/`, published through `SessionEvents` under the
+   execution aggregate and never part of `AgentEvent`, so the public SDK
+   trace union (`packages/agent`, `AgentRun.events`) does not widen and no
+   byte-exact provider content can reach an SDK consumer unredacted
+   (contract C3; the proposal's §2.1 phrase "all carried as `AgentEvent`
+   arms" is corrected to this in its PR 0). Only `RunLedger` and the trace
+   viewer's stepper read those five. Also `foldRunState` in `src/shared`,
+   the in-memory ledger layer, one ledger test and one fold test under
+   `it.effect`, and a load-time warning on rows-since-snapshot (proposal
+   §8). Nothing deleted yet; nothing in production calls it.
 2. **Both families on the ledger, one PR.** `ModelInvoker`, `Tools`,
    `FollowUps`, `RunContext`, `OutputPipeline`, `runToolUse`, `runReflection`;
    `executeAgent` and every resume arm call `runtime.runPromiseExit` with the
-   fiber's signal; the importer's `flow_<id>.json` to `flow.snapshot` arm.
+   fiber's signal; the importer's `flow_<id>.json` to `flow.snapshot` arm,
+   which is a temporary compatibility reader under AGENTS.md's rule and
+   records beside itself its introduction date (the cutover release) and
+   its retirement condition: it is deleted three months after that release
+   ships, once every session root's C9 retention window has passed, so no
+   readable run can still lack a `flow.snapshot`; the ratchet from Phase 1
+   carries an `@adapter-until` marker for it.
    Deletes `src/agent/node/`, `ModelInvocationNode`, `RoundPersistedFlow`,
    `ResponseCycleFlow`, `ToolUseRoundFlow`, all sixteen node classes, the
    disposition ladder, `linkAbortSignals`, `onAbort`, the startup window,

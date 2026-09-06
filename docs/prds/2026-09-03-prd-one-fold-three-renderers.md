@@ -286,11 +286,12 @@ on that aggregate and on every dependent reachable through
 `event_sequence.parent_id`, which records only the owning lifecycle (C9;
 the closing rule is stated in 5.2). The
 agent runtime's flow rows, named by
-`2026-09-04-agent-runtime-on-effect.md` section 2.1 (`model.message`,
-`model.compaction`, `tool.intent`, `tool.result`, `flow.step`,
-`flow.snapshot`; that section also says which of a run's two aggregates each
-row lives on), use the execution as their aggregate, with the
-execution-to-stream edge on `run.start`. An inquiry thread's facts
+`2026-09-04-agent-runtime-on-effect.md` section 2.1, split by aggregate as
+that section says: `flow.step` is a display row on the **stream** aggregate
+(section 6 item 9, folded into `StreamView.flow`), while `model.message`,
+`model.compaction`, `tool.intent`, `tool.result`, and `flow.snapshot` use
+the **execution** as their aggregate, with the execution-to-stream edge on
+`run.start`. An inquiry thread's facts
 (`inquiryThreadUpdated`, parented or not) use an aggregate whose id is the
 thread id. The **one session aggregate** per paper carries singleton session
 facts only (C2 names a session-level goal as its example); a fact that can
@@ -1454,11 +1455,11 @@ in the Promise tier only.
 
 **Redaction is the framer's contract obligation (C3, 2026-09-04).** Trace
 rows on the stream aggregate, error payloads, and approval payloads are
-secret-scrubbed at publish time before the row is written. The flow rows on
+secret-scrubbed at publish time before the row is written; `flow.step`, a
+stream-aggregate display row, is scrubbed with them. The five flow rows on
 the execution aggregate (`2026-09-04-agent-runtime-on-effect.md` section
-2.1 owns the list; the six names of 5.1: `model.message`,
-`model.compaction`, `tool.intent`, `tool.result`, `flow.step`,
-`flow.snapshot`) are
+2.1 owns the list; the names of 5.1 and section 6 item 9: `model.message`,
+`model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`) are
 byte-exact and never scrubbed, because Anthropic signature verification and
 a resumed context need the original bytes. Therefore every framer that
 feeds a renderer process (webview, Electron renderer) and every export
