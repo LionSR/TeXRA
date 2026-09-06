@@ -1630,14 +1630,14 @@
     {
       "file": "src/tools/lean/direct/directLspAdapter.ts",
       "category": "production-dead",
-      "kind": "exports",
-      "name": "defaultResolveWorkspaceRoot"
-    },
-    {
-      "file": "src/tools/lean/direct/directLspAdapter.ts",
-      "category": "production-dead",
       "kind": "types",
       "name": "DirectLspLeanAdapterOptions"
+    },
+    {
+      "file": "src/tools/lean/direct/leanServerPool.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "resolveWorkspaceRoot"
     },
     {
       "file": "src/tools/memory/memoryFileSystem.ts",

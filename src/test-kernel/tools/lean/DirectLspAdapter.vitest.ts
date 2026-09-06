@@ -2,10 +2,11 @@
  * The direct LSP lane at its two boundaries: the `LeanServerPool` service
  * (Effect, under `it.effect`'s `TestClock` where idle eviction and the
  * diagnostics quiet window are the subject, under `it.live` where the child
- * process's real exit timing is) and the Promise edge
- * `createDirectLspLeanAdapter` returns. Servers are a fake `lake` script
- * (a real child process) or an in-memory child handed to the Node spawner
- * through the mocked `spawn`.
+ * process's real exit timing is) and the `LeanLanguageServices` port
+ * `createDirectLspLeanAdapter` returns — the pool's programs plus the
+ * interruption fold, which the adapter suites compose directly under
+ * `it.live`. Servers are a fake `lake` script (a real child process) or an
+ * in-memory child handed to the Node spawner through the mocked `spawn`.
  */
 
 // Node imports
@@ -56,7 +57,10 @@ vi.mock('node:child_process', async (importOriginal) => {
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeChildProcessSpawnerLayer } from '@platform/defaults/nodeChildProcessSpawner';
 import type { ExecutionId } from '@shared/schemas';
-import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
+import {
+  createDirectLspLeanAdapter,
+  type DirectLspLeanAdapterOptions,
+} from '@tools/lean/direct/directLspAdapter';
 import { LeanServer } from '@tools/lean/direct/leanServer';
 import {
   LeanServerPool,
@@ -698,130 +702,158 @@ describe('LeanServerPool', () => {
 });
 
 describe('createDirectLspLeanAdapter', () => {
-  const fakeLakeIt = it.skipIf(process.platform === 'win32');
+  const fakeLakeIt = it.live.skipIf(process.platform === 'win32');
+
+  /**
+   * The port methods are programs; these tests compose them directly, the
+   * way a tool's execute() does after its one boundary run. The adapter's
+   * disposal rides `acquireUseRelease`, so a failing body still closes the
+   * pool's scope.
+   */
+  const withAdapter = <A>(
+    options: DirectLspLeanAdapterOptions,
+    use: (
+      adapter: ReturnType<typeof createDirectLspLeanAdapter>,
+    ) => Effect.Effect<A, unknown>,
+  ): Effect.Effect<A, unknown> =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => createDirectLspLeanAdapter(options)),
+      use,
+      (adapter) => Effect.promise(() => adapter.dispose()),
+    );
 
   fakeLakeIt(
     'joins concurrent first-touch requests for the same workspace',
-    async () => {
-      const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });
-      try {
-        const [first, second] = await Promise.all([
-          adapter.fetchDiagnosticsForFile(filePath),
-          adapter.fetchDiagnosticsForFile(filePath),
-        ]);
+    () =>
+      withAdapter({ lakeCommand: fakeLakePath }, (adapter) =>
+        Effect.gen(function* () {
+          const [first, second] = yield* Effect.all(
+            [
+              adapter.fetchDiagnosticsForFile(filePath),
+              adapter.fetchDiagnosticsForFile(filePath),
+            ],
+            { concurrency: 'unbounded' },
+          );
 
-        expect(first).toMatchObject({
-          ok: true,
-          diagnostics: [{ message: 'fake diagnostic' }],
-        });
-        expect(second).toMatchObject({
-          ok: true,
-          diagnostics: [{ message: 'fake diagnostic' }],
-        });
-        expect(await countStarts()).toBe(1);
-      } finally {
-        await adapter.dispose();
-      }
-    },
+          expect(first).toMatchObject({
+            ok: true,
+            diagnostics: [{ message: 'fake diagnostic' }],
+          });
+          expect(second).toMatchObject({
+            ok: true,
+            diagnostics: [{ message: 'fake diagnostic' }],
+          });
+          expect(yield* starts).toBe(1);
+        }),
+      ),
   );
 
-  fakeLakeIt('attributes a request to the ambient agent run', async () => {
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: fakeLakePath,
-      idleTimeoutMs: 0,
-    });
-    try {
-      await asRun('e00001', () => adapter.fetchDiagnosticsForFile(filePath));
-      expect(activeServerRoots()).toEqual([projectRoot]);
+  fakeLakeIt('attributes a request to the ambient agent run', () =>
+    withAdapter({ lakeCommand: fakeLakePath, idleTimeoutMs: 0 }, (adapter) =>
+      Effect.gen(function* () {
+        // The run id is captured when the method is called, so the call
+        // itself happens inside the ambient run context. `withRunContext`'s
+        // `T | Promise<T>` covers its async users; this callback is
+        // synchronous, so the cast only narrows that union back.
+        const program = withRunContext(
+          createRunContext({ executionId: run('e00001') }),
+          () => adapter.fetchDiagnosticsForFile(filePath),
+        ) as ReturnType<(typeof adapter)['fetchDiagnosticsForFile']>;
+        yield* program;
+        expect(activeServerRoots()).toEqual([projectRoot]);
 
-      await adapter.stopSessionsForRun?.('e00001' as ExecutionId);
+        yield* Effect.promise(async () => {
+          await adapter.stopSessionsForRun?.(run('e00001'));
+        });
 
-      expect(activeServerRoots()).toEqual([]);
-    } finally {
-      await adapter.dispose();
-    }
-  });
+        expect(activeServerRoots()).toEqual([]);
+      }),
+    ),
+  );
 
-  it('reports a missing lake command as toolchain_unavailable, not "file missing"', async () => {
-    const adapter = createDirectLspLeanAdapter({
-      lakeCommand: path.join(tempRoot, 'missing-lake'),
-    });
-    try {
-      await expect(
-        adapter.fetchDiagnosticsForFile(filePath),
-      ).resolves.toMatchObject({ ok: false, kind: 'toolchain_unavailable' });
-    } finally {
-      await adapter.dispose();
-    }
-  });
+  it.live(
+    'reports a missing lake command as toolchain_unavailable, not "file missing"',
+    () =>
+      withAdapter(
+        { lakeCommand: path.join(tempRoot, 'missing-lake') },
+        (adapter) =>
+          Effect.gen(function* () {
+            const result = yield* adapter.fetchDiagnosticsForFile(filePath);
+            expect(result).toMatchObject({
+              ok: false,
+              kind: 'toolchain_unavailable',
+            });
+          }),
+      ),
+  );
 
   fakeLakeIt(
     'reports requests a dispose interrupted mid-start as stopped',
-    async () => {
-      let spawnCount = 0;
-      // The handshake never answers, so every request below is still waiting
-      // on the server's build when `dispose()` closes the scope under it. The
-      // interruption that follows is not a failure the pool can fold, so the
-      // methods stay total only if the Promise edge folds it.
-      spawnOverride.current = () => {
-        spawnCount += 1;
-        return createFakeLeanChild({
-          initializeGate: new Promise<void>(() => {}),
-        });
-      };
-      const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });
-      const diagnostics = adapter.fetchDiagnosticsForFile(filePath);
-      const fileCommand = adapter.executeFileCommand('restart', filePath);
-      const hover = adapter.getHoverInfo(filePath, 0, 0);
-      await vi.waitFor(() => expect(spawnCount).toBe(1));
+    () =>
+      withAdapter({ lakeCommand: fakeLakePath }, (adapter) =>
+        Effect.gen(function* () {
+          let spawnCount = 0;
+          // The handshake never answers, so every request below is still
+          // waiting on the server's build when `dispose()` closes the scope
+          // under it. The interruption that follows is not a failure the pool
+          // can fold, so the methods stay total only if the port's own fold
+          // recovers it.
+          spawnOverride.current = () => {
+            spawnCount += 1;
+            return createFakeLeanChild({
+              initializeGate: new Promise<void>(() => {}),
+            });
+          };
+          const diagnostics = yield* Effect.forkChild(
+            adapter.fetchDiagnosticsForFile(filePath),
+          );
+          const fileCommand = yield* Effect.forkChild(
+            adapter.executeFileCommand('restart', filePath),
+          );
+          const hover = yield* Effect.forkChild(
+            adapter.getHoverInfo(filePath, 0, 0),
+          );
+          yield* eventually(() => expect(spawnCount).toBe(1));
 
-      await adapter.dispose();
+          yield* Effect.promise(() => adapter.dispose());
 
-      await expect(diagnostics).resolves.toEqual({
-        ok: false,
-        kind: 'toolchain_unavailable',
-        message: 'Lean adapter was stopped.',
-      });
-      await expect(fileCommand).resolves.toBe(false);
-      await expect(hover).resolves.toEqual({
-        data: null,
-        error: 'Lean adapter was stopped.',
-      });
-    },
+          expect(yield* Fiber.join(diagnostics)).toEqual({
+            ok: false,
+            kind: 'toolchain_unavailable',
+            message: 'Lean adapter was stopped.',
+          });
+          expect(yield* Fiber.join(fileCommand)).toBe(false);
+          expect(yield* Fiber.join(hover)).toEqual({
+            data: null,
+            error: 'Lean adapter was stopped.',
+          });
+        }),
+      ),
   );
 
-  fakeLakeIt(
-    'stops every server when disposed, and disposes twice',
-    async () => {
-      const adapter = createDirectLspLeanAdapter({ lakeCommand: fakeLakePath });
-      await adapter.fetchDiagnosticsForFile(filePath);
-      expect(activeServerRoots()).toEqual([projectRoot]);
+  fakeLakeIt('stops every server when disposed, and disposes twice', () =>
+    withAdapter({ lakeCommand: fakeLakePath }, (adapter) =>
+      Effect.gen(function* () {
+        yield* adapter.fetchDiagnosticsForFile(filePath);
+        expect(activeServerRoots()).toEqual([projectRoot]);
 
-      await adapter.dispose();
-      expect(activeServerRoots()).toEqual([]);
+        yield* Effect.promise(() => adapter.dispose());
+        expect(activeServerRoots()).toEqual([]);
 
-      await adapter.dispose();
-      await expect(
-        adapter.fetchDiagnosticsForFile(filePath),
-      ).resolves.toMatchObject({
-        ok: false,
-        kind: 'toolchain_unavailable',
-        message: 'Lean adapter was stopped.',
-      });
-    },
+        yield* Effect.promise(() => adapter.dispose());
+        const after = yield* adapter.fetchDiagnosticsForFile(filePath);
+        expect(after).toMatchObject({
+          ok: false,
+          kind: 'toolchain_unavailable',
+          message: 'Lean adapter was stopped.',
+        });
+      }),
+    ),
   );
 });
 
 function run(executionId: string): ExecutionId {
   return executionId as ExecutionId;
-}
-
-/** Run `fn` with the ambient run context of the given agent run. */
-function asRun<T>(
-  executionId: string,
-  fn: () => T | Promise<T>,
-): T | Promise<T> {
-  return withRunContext(createRunContext({ executionId }), fn);
 }
 
 function makeLakeProject(
