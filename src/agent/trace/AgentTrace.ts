@@ -97,9 +97,8 @@ export interface StreamHandle {
   /** Append a chunk of text; emits `stream.chunk`. */
   append(text: string): void;
   /**
-   * Close the stream; emits `stream.end`. Idempotent. Returns the buffered
-   * content so callers can inspect the final text without separately
-   * tracking it.
+   * Close the stream and emit its complete text in `stream.end`, except for
+   * phase-only streams. Idempotent. Returns that text to the caller as well.
    */
   finalize(finalText?: string): string;
 }

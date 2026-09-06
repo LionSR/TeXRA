@@ -198,7 +198,7 @@
       "src/agent/index/agentYamlScanner.ts": 3,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
       "src/agent/remote/remoteAgentList.ts": 2,
-      "src/agent/runtime/SessionHandle.ts": 10,
+      "src/agent/runtime/SessionHandle.ts": 9,
       "src/agent/runtime/bundledPrompts.ts": 1,
       "src/auth/oauth/loopbackLogin.ts": 2,
       "src/common/errors/sdkError/errorInspection.ts": 1,

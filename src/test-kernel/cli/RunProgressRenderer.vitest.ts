@@ -34,7 +34,10 @@ import {
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { makeStreamView, viewWith } from './fixtures/sessionViewFixture';
 
 const mocks = vi.hoisted(() => ({
@@ -300,7 +303,7 @@ async function publishRun(
 ): Promise<void> {
   const streamId = (overrides.streamId ?? 'stream-1') as StreamTabId;
   const agent = overrides.agent ?? 'polish';
-  const executionId = 'execution-1' as ExecutionId;
+  const executionId = 'e00101' as ExecutionId;
   session.publish([
     {
       type: 'run.start',
@@ -1053,12 +1056,10 @@ describe('CLI run progress renderer', () => {
       await host.close();
     });
 
-    // The launch facts paint first, the config's inputs next, and the
-    // completion exactly once: the status fact never doubles the line.
+    // The committed launch batch paints with its inputs. Completion emits
+    // exactly one further line.
     expect(output).toBe(
-      'polish · 0s\n' +
-        'polish paper.tex · 0s\n' +
-        'polish paper.tex · Completed · 0s\n',
+      'polish paper.tex · 0s\n' + 'polish paper.tex · Completed · 0s\n',
     );
   });
 

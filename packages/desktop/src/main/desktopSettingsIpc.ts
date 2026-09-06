@@ -303,7 +303,9 @@ export function createDesktopSettingsIpc(
   // needs the push. The session outlives the window, so the subscription is
   // window-scoped and released in `dispose` below.
   const subscriptions = [
-    subscribeGoalStateChanges(options.session, () => runAsync(postGoalList())),
+    subscribeGoalStateChanges(options.session, () =>
+      runAsyncInPaper(postGoalList),
+    ),
   ];
 
   // ── GitHub token + PR/repo/issue subscriptions (Git tab) ──

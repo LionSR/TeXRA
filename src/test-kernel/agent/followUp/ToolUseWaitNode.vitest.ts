@@ -24,6 +24,7 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -701,6 +702,7 @@ describe('ToolUseWaitNode', () => {
     const ownerSession = sessionWithInteractions(undefined);
     const streamStatus = ownerSession.status;
     // Status is a session fact on the session's plane, the single rail.
+    publishTestRunStart(ownerSession, streamId);
     const recorded = recordSessionEvents(ownerSession);
     const waitForFollowUp = vi.fn(async () => null);
     const services = createWaitNodeServices({
@@ -761,6 +763,7 @@ describe('ToolUseWaitNode', () => {
     const ownerSession = sessionWithInteractions(undefined);
     // Status is a session fact on the session's plane, the single rail; the
     // recorder-style status port hears it in publish order.
+    publishTestRunStart(ownerSession, streamId);
     const recorded = recordSessionEvents(ownerSession);
     const detachSequence = ownerSession.attachRunTrace(
       {

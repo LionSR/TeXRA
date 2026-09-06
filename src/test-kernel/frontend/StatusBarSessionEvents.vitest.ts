@@ -6,12 +6,16 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
 import { STREAM_PHASE, type ExecutionId } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 
 import { settleSessionEvents } from '../agent/progressTestUtils';
 
 function subscribeOverTestSession() {
   const session = createTestSession();
+  publishTestRunStart(session, 'stream-a', 'a0b0c0' as ExecutionId);
   const tracker = new StatusBarUsageTracker(session.status, session.snapshots);
   const onStatusChanged = vi.fn();
   const onUsageChanged = vi.fn();
@@ -28,7 +32,7 @@ function emitUsage(session: SessionHandle): void {
     type: 'usage',
     payload: {
       streamId: 'stream-a',
-      storageKey: 'run-a' as ExecutionId,
+      storageKey: 'a0b0c0' as ExecutionId,
       usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
     },
   });

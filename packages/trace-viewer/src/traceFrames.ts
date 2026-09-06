@@ -7,6 +7,7 @@
  */
 import {
   aggregateId as qualifyAggregateId,
+  referencedAggregates,
   AgentCategory,
   END_GROUP_STATUS,
   runIdentityDisplayName,
@@ -156,18 +157,15 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
       worktree: null,
       parentStreamId: null,
     },
-    {
+  ];
+  if (agentConfig) {
+    bodies.push({
       type: 'run.config',
       aggregateId: qualifyAggregateId('stream', trace.streamId),
       executionId,
-      config: {
-        model: trace.config.model,
-        instruction: trace.config.instruction,
-        agent: recordName(trace.config),
-        inputFiles: agentConfig?.inputFiles ?? null,
-      },
-    },
-  ];
+      config: agentConfig,
+    });
+  }
   if (trace.meta?.description) {
     bodies.push({
       type: 'updateStreamDescription',
@@ -241,7 +239,7 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
         executionId,
         category,
         isSubagent: false,
-        error: null,
+        agentName: runIdentityDisplayName(identity),
       },
     );
   }
@@ -310,6 +308,9 @@ export function traceFrame(
     (aggregate) =>
       aggregate.id === qualifyAggregateId('stream', trace.streamId),
   );
+  const checkedAggregateIds = [
+    ...new Set(listing.flatMap(referencedAggregates)),
+  ];
   return {
     kind: 'events',
     session,
@@ -330,8 +331,16 @@ export function traceFrame(
         : []),
     ],
     chunks: [],
-    local: { self: [], heldBy: [], unreadable: [] },
+    local: { self: [], dead: [], unreadable: [] },
     host: traceHost(trace),
     replayComplete: true,
+    existence: {
+      checkedAggregateIds,
+      removedAggregateIds: [],
+      claims: checkedAggregateIds.map((aggregateId) => ({
+        aggregateId,
+        ownerId: null,
+      })),
+    },
   };
 }

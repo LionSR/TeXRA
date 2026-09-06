@@ -39,6 +39,7 @@ import {
 import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
@@ -440,6 +441,7 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-run-config-before-running',
     );
+    publishTestRunStart(ctx.runScope.session, streamId, executionId);
     const trace = new TraceEmitter();
     const detachTrace = ctx.runScope.session.attachRunTrace(
       { trace, handleStatus: () => {} },
@@ -788,6 +790,7 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-early-stop-no-blip',
     );
+    publishTestRunStart(ctx.runScope.session, streamId, executionId);
     const changes: StatusEvent[] = [];
     const detachStatus = defaultSession().attachRunTrace(
       {

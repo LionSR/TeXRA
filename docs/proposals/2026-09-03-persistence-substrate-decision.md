@@ -293,6 +293,16 @@ host processes may open the bucket; consumers on another machine use the
 existing runtime transport to the host that owns it. This proposal adds no
 distributed database protocol.
 
+The open boundary resolves the storage directory through the native realpath
+operation before classifying it. On macOS it reads the most specific mount's
+`local` flag, because Node's `statfs` result omits `MNT_LOCAL`. On Linux it
+admits recognized local filesystem types; network, clustered, and unclassified
+FUSE types are refused. On Windows the native resolved DOS path is local and
+a resolved UNC path is refused. An unknown classification fails the open;
+it never selects memory storage. The managed database, WAL, and shared-memory
+filenames cannot be symbolic links. This makes the stage 0 filesystem finding
+an open-boundary requirement rather than a filesystem-name guess.
+
 `commit` is the session-wide ordinal the PRD needs for its cursor; SQLite's
 `AUTOINCREMENT` gives it monotone and non-reusing for free. `seq` is the
 per-stream ordinal the transcript fold and `settledSeq` use. Both exist on
@@ -543,7 +553,10 @@ queries into ordered finite input batches, as in the view-state PRD §7.2.
 It adds no persisted event or second tail interface. Each live read captures
 its text/local levels and per-subscription resident scope first, then opens
 one read transaction. Within that transaction it captures the log's committed
-`AUTOINCREMENT` high-water mark and reads `all(cursor, bound)`. It extends the
+`AUTOINCREMENT` high-water mark and reads the bounded interval through the
+type and aggregate indexes: listing and lifecycle facts across the session,
+transcript facts only for its named aggregates. The public `all` reader remains
+exhaustive for consumers such as NDJSON. The finite view reader extends the
 checked scope with every identity and typed edge introduced by that read's
 listing/lifecycle/inquiry rows, then reads `aggregateState(expandedScope)`
 before closing the transaction. The typed edges include a workflow's
@@ -568,9 +581,11 @@ type Drained = {
 };
 ```
 
-`removedAggregateIds` is exactly the expanded checked set minus the keys
-returned by `aggregateState` in that transaction. `claims` has one entry for
-every surviving checked key, including null for every released claim. The
+`removedAggregateIds` is exactly the expanded checked set minus the open keys
+returned by `aggregateState` in that transaction. A closed sequence row is no
+longer live under C2, even while its tombstone remains stored; in particular,
+closing a parent must remove its closed dependents from the view too. `claims` has one entry for
+every surviving open checked key, including null for every released claim. The
 fold receives the complete ordered batch, then replaces those keys' current
 claims and applies the marker's removals and captured bound before
 publishing its view. Removal uses the same rule as a tombstone, including
@@ -785,11 +800,12 @@ Rules restated because they are the parts migrations get wrong:
 - **Boot does no history work.** After Stage 2 every list is a query; the
   companion's S1 removes repair and sweeps from `waitUntilReady` and Stage 2
   removes their reason to exist.
-- **The frozen surfaces stay frozen** for the cutover. `StreamLogStore` and
-  `StreamSnapshotStore` keep their public Promise-based surfaces and the
-  `StreamLog` delta contract; the engine changes behind them. Collapsing the
-  two-step fold (events to entries to rows) into one is the view-state PRD's
-  step after the merge.
+- **The surface budget stays frozen** for the cutover. `StreamLogStore` and
+  `StreamSnapshotStore` retain their method responsibilities and shrink-only
+  surface budget. Their internal asynchronous methods may return Effect
+  values as specified in section 7; published host/SDK Promise APIs and the
+  `StreamLog` delta contract stay fixed. Collapsing the two-step fold (events
+  to entries to rows) into one is the view-state PRD's step after the merge.
 
 ### 6.3 Elimination ledger
 
@@ -864,13 +880,43 @@ on the same major (`4.0.0-beta.83`) and shows a shape worth copying exactly:
   vendored Drizzle adapter is about 3.4k lines. Copy, do not depend: OpenCode
   publishes neither.
 
+### Client selection at the approved host floor
+
+The September 6 comparison requested by the
+[delivery plan](2026-09-06-effect-runtime-delivery-plan.md#2-technology-choices-that-can-endure)
+retains the existing `Database` layer. The pinned official
+[`@effect/sql-sqlite-node` client](https://github.com/Effect-TS/effect/blob/effect%404.0.0-rc.112/packages/sql/sqlite-node/src/SqliteClient.ts#L32)
+statically imports `backup` from `node:sqlite`, and its ordinary statement path
+calls `StatementSync.columns()`. Both APIs were added in Node 22.16, after the
+approved 22.13.0 CLI floor. See the versioned Node histories for
+[`backup`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#sqlitebackupsourcedb-destination-options)
+and [`columns`](https://github.com/nodejs/node/blob/v22.18.0/doc/api/sqlite.md#statementcolumns).
+Thus the unmodified client cannot serve every supported host. This is a source
+compatibility finding, not a throughput measurement of that client.
+
+Its serialized connection and `BEGIN IMMEDIATE` fit the transaction model,
+but do not remove TeXRA's responsibility for C1 schema, C5 claims, C6 validation
+and redaction, C7 queries, or foreign-process wake detection. It also uses
+synchronous SQLite busy waits, so adopting it would not itself remove event-loop
+blocking. The current layer retains the measured API subset and the existing
+stage 0 contention evidence. No second SQL layer, compatibility shim, vendored
+fork, or further host-floor increase is selected. Scheduling improvements remain
+subject to measurement and C1's nonzero busy-timeout rule; no provider or tool
+work may be retried as a database transaction.
+
 Scope in this program:
 
-- Stages 1 to 6 are written in Effect: `Database` layer, `SqlClient`, Drizzle
-  schema, the C6 publisher, the C7 read path, and the hydrate folds.
-- One `ManagedRuntime` per process; the storage layer lives in it behind the
-  frozen store surfaces, so callers in `SessionHandle`, the hosts, and the
-  tools keep calling Promise methods. **Renderer components stay Effect-free**:
+- Stages 1 to 6 are written in Effect: the `Database` layer with C1 SQL and
+  Zod payload schemas, the C6 publisher, the C7 read path, and the hydrate folds.
+- One `ManagedRuntime` per process. Internal store operations and their call
+  chains return Effect values through to existing host and SDK entry points;
+  only the published host/SDK APIs retain Promise results. The frozen store
+  budget preserves responsibilities and prevents surface growth, not the
+  internal Promise return types. These stores are not SDK exports. This
+  clarification follows the 2026-09-06 implementation audit: retaining their
+  Promise bodies would require new below-boundary runtime wrappers, contrary
+  to the programme's no-wrapper and shrink-only ratchet rulings. No additional
+  runtime boundary or ratchet growth is authorized. **Renderer components stay Effect-free**:
   Ink and Lit components never import `effect` and read view state through
   one signal bridge. The processes themselves are not the boundary; the
   companion view-state proposal
@@ -928,9 +974,11 @@ the database. There is no commit on `main` where both exist for the same
 datum.
 
 **How the branch avoids a dual state while being built in parallel.** The
-store public surfaces are frozen and ratcheted, so each lane replaces the
-engine behind one surface and is verified by the existing callers and
-architecture tests. Lanes never touch each other's files; one integration
+internal store surfaces are ratcheted against growth, so each lane replaces
+one store and converts its affected call chain under section 7. Method
+responsibilities and result semantics remain caller-verified; internal return
+types may become Effect values. Existing callers and architecture tests
+verify each replacement, and published host/SDK Promise APIs remain fixed. Lanes never touch each other's files; one integration
 worktree runs typecheck, lint, the ratchets, and the importer fixture.
 Concurrency cap is three worktrees; lane agents commit and report SHAs
 (house rules in `AGENTS.md` and the recorded workflow lessons).

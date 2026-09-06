@@ -40,10 +40,10 @@ export class ProcessIdentity extends Context.Service<
 export class SessionEvents extends Context.Service<
   SessionEvents,
   {
-    /** An ordered batch, committed in one transaction (PRD 6, item 8). */
+    /** Return the committed rows of one ordered transaction (C6). */
     readonly publish: (
       events: readonly SessionEventDraft[],
-    ) => Effect.Effect<void>;
+    ) => Effect.Effect<readonly SessionEvent[]>;
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */

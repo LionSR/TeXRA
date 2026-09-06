@@ -56,6 +56,7 @@
  * `changed`, so `foldWith` publishes the envelope holding the copy; a write
  * followed by "no change" would be dropped, not shared.
  */
+
 import {
   aggregateTarget,
   aggregateId as qualifyAggregateId,
@@ -67,11 +68,13 @@ import {
   STREAMING_TEXT_MESSAGE_TYPES,
   isPlainAgentIdentity,
   listingTypeOf,
+  isTranscriptEvent,
   ownerPid,
   runIdentityDisplayName,
   sumUsageStats,
   type AggregateId,
   type FoldInput,
+  type ExistenceReconciliation,
   type LocalRuntimeState,
   type RoundIndexed,
   type SessionEvent,
@@ -129,6 +132,8 @@ import {
   type ChildRunProgress,
 } from '@shared/streams/workflowRunModel';
 import { isObject } from '@utils/core';
+import { createTranscriptFold } from './traceFold';
+import { StreamLog } from './traceEntries';
 
 import type { SessionView, StreamView, TranscriptView } from './sessionView';
 
@@ -187,16 +192,10 @@ function foldWith(
   const next: SessionView = { ...view };
   switch (input._tag) {
     case 'event': {
-      if (input.read === 'all' && input.event.commit > next.cursor) {
-        next.cursor = input.event.commit;
-      }
       if (input.read === 'listing') {
         sessionIndexesOf(next).listed.add(input.event.aggregateId);
       }
-      return foldDurable(next, input.event, deferred) ||
-        next.cursor !== view.cursor
-        ? next
-        : view;
+      return foldDurable(next, input.event, deferred, input.read) ? next : view;
     }
     case 'chunk':
       return foldTextChunk(next, input) ? next : view;
@@ -207,9 +206,9 @@ function foldWith(
       foldSubscriptions(next, input.set, deferred);
       return next;
     case 'drained':
-      return input.cursor > view.cursor
-        ? { ...view, cursor: input.cursor }
-        : view;
+      reconcileExistence(next, input.existence, deferred);
+      next.cursor = input.cursor;
+      return next;
     case 'replay.complete': {
       // The input reader releases the completed replay as one batch (7.2).
       // Its marker closes the listing ahead of it: a stream no listing row
@@ -222,7 +221,43 @@ function foldWith(
           foldStreamRemoved(next, id, deferred);
       }
       listed.clear();
+      reconcileExistence(next, input.existence, deferred);
       return next;
+    }
+  }
+}
+
+/** Current sequence-row claims supersede historical writers and captured liveness inputs. */
+function reconcileExistence(
+  view: SessionView,
+  existence: ExistenceReconciliation,
+  deferred: DeferredRunModels,
+): void {
+  for (const { aggregateId, ownerId } of existence.claims) {
+    if (
+      !view.claims.has(aggregateId) ||
+      view.claims.get(aggregateId) !== ownerId
+    )
+      writableMap(view, 'claims').set(aggregateId, ownerId);
+    const target = aggregateTarget(aggregateId);
+    if (target.kind !== 'stream') continue;
+    const stream = view.streams.get(target.id);
+    if (!stream || stream.ownerId === ownerId) continue;
+    setStream(view, { ...stream, ownerId });
+    walkUp(view, stream.id, stream.id, deferred);
+  }
+  for (const id of existence.removedAggregateIds) {
+    if (view.claims.has(id)) writableMap(view, 'claims').delete(id);
+    if (view.folded.has(id)) writableMap(view, 'folded').delete(id);
+    const target = aggregateTarget(id);
+    if (target.kind === 'stream') foldStreamRemoved(view, target.id, deferred);
+    if (
+      target.kind === 'inquiry' &&
+      view.inquiries.some((inquiry) => inquiry.threadId === target.id)
+    ) {
+      view.inquiries = view.inquiries.filter(
+        (inquiry) => inquiry.threadId !== target.id,
+      );
     }
   }
 }
@@ -237,7 +272,7 @@ interface SessionIndexes {
   /** Streams whose lifecycle `result` has folded: nothing in the owning
    *  process can still write for them. */
   readonly ended: Set<StreamTabId>;
-  /** Streams by the owner of their latest event, so a local snapshot
+  /** Streams by their current claimant, so a local snapshot
    *  recomputes exactly the streams a changed owner holds. */
   readonly byOwner: Map<string, Set<StreamTabId>>;
 }
@@ -268,7 +303,13 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
 let owned = new WeakSet<object>();
 
 type ViewMapKey =
-  'streams' | 'policy' | 'folded' | 'latest' | 'inflight' | 'queuedFollowUps';
+  | 'streams'
+  | 'policy'
+  | 'folded'
+  | 'claims'
+  | 'latest'
+  | 'inflight'
+  | 'queuedFollowUps';
 
 /** The view's map under `key`, copied once per call before its first write. */
 function writableMap<K extends ViewMapKey>(
@@ -337,6 +378,8 @@ interface StreamingCursor {
 }
 
 interface TranscriptIndexes {
+  readonly source: StreamLog;
+  readonly trace: ReturnType<typeof createTranscriptFold>;
   /** Row position by row id. */
   readonly rowIndex: Map<string, number>;
   /** Task-group position by group id. */
@@ -381,7 +424,10 @@ function emptyTranscript(): TranscriptView {
     settledRows: 0,
     run: null,
   };
+  const source = new StreamLog();
   INDEXES.set(transcript, {
+    source,
+    trace: createTranscriptFold(source),
     rowIndex: new Map(),
     taskGroupIndex: new Map(),
     compactionState,
@@ -412,7 +458,7 @@ function streamIdDisplayName(streamId: StreamTabId): string {
 const NO_ROUNDS = Object.freeze({});
 
 /** A stream in its initial shape, minted by its `run.start` alone. */
-function createStream(event: RunStartEvent): StreamView {
+function createStream(view: SessionView, event: RunStartEvent): StreamView {
   const id = aggregateTarget(event.aggregateId).id;
   const status = STREAM_STATUS.READY;
   const identity = event.identity ?? null;
@@ -421,7 +467,7 @@ function createStream(event: RunStartEvent): StreamView {
     executionId: event.executionId,
     identity,
     isRemote: event.isRemote,
-    ownerId: event.ownerId,
+    ownerId: view.claims.get(event.aggregateId) ?? null,
     label: identity
       ? runIdentityDisplayName(identity)
       : streamIdDisplayName(id),
@@ -656,7 +702,7 @@ function withAggregates(view: SessionView, stream: StreamView): StreamView {
   const owner = stream.ownerId;
   const own = owner !== null && local.self.includes(owner);
   const heldBy =
-    owner !== null && !own && local.heldBy.includes(owner) ? owner : null;
+    owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const heldElsewhere = heldBy !== null;
   const held = own || heldElsewhere;
   const pendingOwn = view.approvals.some((a) => a.streamId === stream.id);
@@ -1321,6 +1367,18 @@ function applyOwnArm(
   event: Exclude<SessionEvent, TranscriptEntryEvent>,
 ): StreamView {
   switch (event.type) {
+    case 'log':
+    case 'stage.end':
+    case 'tool.start':
+    case 'tool.end':
+    case 'workflow.plan':
+    case 'workflow.call':
+    case 'skills.snapshot':
+    case 'stream.start':
+    case 'stream.end':
+    case 'response.finalized':
+    case 'domain':
+      return stream;
     case 'run.start':
       // Existence cannot become more true (5.2, "Duplicates"): a second
       // start for a stream the view holds is a no-op.
@@ -1331,16 +1389,14 @@ function applyOwnArm(
       return stream;
     case 'run.config': {
       const model =
-        stream.identity?.kind === 'agent' ? (event.config.model ?? null) : null;
+        stream.identity?.kind === 'agent' ? event.config.model : null;
       return {
         ...stream,
         model,
         modelLabel: model === null ? null : getModelLabel(model),
         command:
-          stream.identity?.kind === 'process'
-            ? (event.config.instruction ?? null)
-            : null,
-        inputFiles: event.config.inputFiles ?? stream.inputFiles,
+          stream.identity?.kind === 'process' ? event.config.instruction : null,
+        inputFiles: event.config.inputFiles,
       };
     }
     case 'status': {
@@ -1573,15 +1629,21 @@ function foldDurable(
   view: SessionView,
   event: SessionEvent,
   deferred: DeferredRunModels,
+  read: 'listing' | 'aggregate' | 'all',
 ): boolean {
   if (event.type === 'transcript.entry') {
     return foldTranscriptRow(view, event, deferred);
   }
+  const traceChanged =
+    read !== 'listing' && (isTranscriptEvent(event) || event.type === 'status')
+      ? foldTraceEvent(view, event, deferred)
+      : false;
+  if (listingTypeOf(event) === null) return traceChanged;
   // Listing facts are ordered by commit per (aggregate, listing type),
   // whichever read delivered them (5.2, "Duplicates").
   const listingKey = `${event.aggregateId}/${listingTypeOf(event)}`;
   const latest = view.latest.get(listingKey);
-  if (latest !== undefined && event.commit <= latest) return false;
+  if (latest !== undefined && event.commit <= latest) return traceChanged;
 
   const streamId = streamOf(event);
   if (streamId === null) {
@@ -1599,7 +1661,7 @@ function foldDurable(
     return foldStreamRemoved(view, streamId, deferred);
   }
   const created = !known;
-  const before = known ?? createStream(event as RunStartEvent);
+  const before = known ?? createStream(view, event as RunStartEvent);
 
   applySessionSlices(view, streamId, event);
   const own = applyOwnArm(before, event);
@@ -1615,7 +1677,6 @@ function foldDurable(
   }
   let next: StreamView = {
     ...own,
-    ownerId: event.ownerId,
     lastTimestamp: event.at,
   };
   setStream(view, next);
@@ -1649,6 +1710,40 @@ function foldDurable(
       ? next.parentId
       : null,
     deferred,
+  );
+  return true;
+}
+
+/** Replay and live durable inputs use one trace projection for each resident aggregate. */
+function foldTraceEvent(
+  view: SessionView,
+  event: SessionEvent,
+  deferred: DeferredRunModels,
+): boolean {
+  const retained = view.folded.get(event.aggregateId);
+  if (retained === undefined || event.seq <= retained) return false;
+  let stream = view.streams.get(aggregateTarget(event.aggregateId).id);
+  if (!stream) return false;
+  const indexes = indexesOf(stream.transcript);
+  if (event.type === 'status') indexes.trace.status(event.phase);
+  else if (isTranscriptEvent(event))
+    indexes.trace.record(event, {
+      at: event.at,
+      id: JSON.stringify([event.aggregateId, event.seq]),
+      debug: false,
+    });
+  const change = indexes.source.drainEmission();
+  for (const entry of [...change.appended, ...change.dirtied]) {
+    stream = { ...stream, transcript: applyEntry(view, stream, entry) };
+  }
+  writableMap(view, 'folded').set(event.aggregateId, event.seq);
+  setStream(
+    view,
+    runModelAt(
+      view,
+      withTranscriptFacts({ ...stream, lastTimestamp: event.at }),
+      deferred,
+    ),
   );
   return true;
 }
@@ -1746,8 +1841,8 @@ function foldLocal(
 ): void {
   const previous = view.local;
   view.local = local;
-  const heldBefore = new Set([...previous.self, ...previous.heldBy]);
-  const heldAfter = new Set([...local.self, ...local.heldBy]);
+  const heldBefore = new Set([...previous.self, ...previous.dead]);
+  const heldAfter = new Set([...local.self, ...local.dead]);
   const changedOwners = new Set<string>();
   for (const owner of heldBefore) {
     if (!heldAfter.has(owner)) changedOwners.add(owner);
@@ -1755,7 +1850,7 @@ function foldLocal(
   for (const owner of heldAfter) {
     if (!heldBefore.has(owner)) changedOwners.add(owner);
   }
-  // `self` and `heldBy` are separate only so `readOnly` can ask who holds:
+  // Changes between self and a proved-dead verdict also change ownership:
   // an owner moving between them, in either direction, changes that answer
   // while staying held.
   for (const owner of heldAfter) {

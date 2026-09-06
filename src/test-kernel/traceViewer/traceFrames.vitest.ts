@@ -59,7 +59,8 @@ function foldTrace(trace: TraceDocument) {
       set: [{ id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 }],
     },
     ...frame.events,
-    { _tag: 'local', local: { self: [], heldBy: [], unreadable: [] } },
+    { _tag: 'local', local: { self: [], dead: [], unreadable: [] } },
+    { _tag: 'replay.complete', existence: frame.existence! },
   ]);
   return view.streams.get(trace.streamId);
 }

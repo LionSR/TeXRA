@@ -17,7 +17,10 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/support/streamStatusTestUtils';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -31,7 +34,7 @@ vi.mock('@agent/storage', () => ({
 let counter = 0;
 
 /** Fresh logger + result collector + launch context, wired together. */
-function setupResultCase(): {
+function setupResultCase(session?: ReturnType<typeof createTestSession>): {
   logger: TraceEmitter;
   results: ResultEvent[];
   ctx: AgentLaunchContext;
@@ -45,9 +48,10 @@ function setupResultCase(): {
 
   const n = counter++;
   const ctx = createTestLaunchContext({
-    executionId: `exec:result-${n}` as ExecutionId,
+    executionId: `e${n.toString(16).padStart(5, '0')}` as ExecutionId,
     streamId: `stream:result-${n}` as StreamTabId,
     logger,
+    session,
   });
   return { logger, results, ctx, streamStatus: ctx.runScope.session.status };
 }
@@ -331,7 +335,12 @@ describe('terminal result event', () => {
   it('marks subagent runs and bridges results to session.onResult', async () => {
     const session = createTestSession();
     const onResult = vi.fn();
-    const { logger, ctx, streamStatus } = setupResultCase();
+    const { logger, ctx, streamStatus } = setupResultCase(session);
+    publishTestRunStart(
+      session,
+      ctx.runScope.streamId,
+      ctx.runScope.executionId,
+    );
     const detach = session.attachRunTrace(
       { trace: logger, handleStatus: () => {} },
       ctx.runScope.streamId,

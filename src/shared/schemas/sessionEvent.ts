@@ -22,7 +22,7 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
-import { ContextStateDataSchema } from './contextManagement';
+import { AgentConfigFieldsSchema } from './agentConfig';
 import { GoalStateSchema } from './goal';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { InquiryThreadUpdatedEventSchema } from './inquiry';
@@ -42,9 +42,8 @@ import {
   ConversationProgressSchema,
   RoundKeyedOutputSidecarValueSchemas,
 } from './streamState';
-import { StageKindSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
-import { ExtendedTokenUsageStatsSchema } from './usage';
+import { ResultEventSchema, TranscriptEventSchemas } from './traceEvent';
 
 /** C5's complete process identity, encoded canonically without losing null. */
 const OwnerIdentitySchema = z.tuple([
@@ -163,7 +162,6 @@ export type ApprovalPolicySnapshot = z.infer<
  * across them.
  */
 const envelope = {
-  aggregateId: AggregateIdSchema,
   seq: SeqSchema,
   commit: CommitOrdinalSchema,
   /** Owner of the process that appended the event; null on legacy imports. */
@@ -180,11 +178,11 @@ function durable<T extends string, S extends z.ZodRawShape>(
   kind: z.infer<typeof AggregateKeySchema>[0] = 'stream',
 ) {
   return z.object({
-    ...envelope,
     aggregateId: AggregateIdSchema.refine(
       (key) => aggregateTarget(key).kind === kind,
       `Expected a ${kind} aggregate for ${type}`,
     ),
+    stageId: z.string().optional(),
     type: z.literal(type),
     ...shape,
   });
@@ -215,6 +213,8 @@ const RunStartEventSchema = durable('run.start', {
   isRemote: z.boolean(),
   worktree: WorktreeInfoSchema.nullish(),
   parentStreamId: StreamTabIdSchema.nullish(),
+  /** The declared parent's creation commit, assigned by the database. */
+  parentStartCommit: z.int().positive().optional(),
   /**
    * Launched in the background whoever is watching (a delegated child); the
    * launch fact half of the old `suppressViewSwitch`, which the frozen NDJSON
@@ -234,8 +234,8 @@ const RunStartEventSchema = durable('run.start', {
  * facts with the payload flattened. `stream.removed` is the tombstone: the
  * last row of its aggregate, final (PRD 5.2, "Existence").
  */
-const SessionEventSchema = z.discriminatedUnion('type', [
-  RunStartEventSchema,
+export const SessionEventDraftSchema = z.discriminatedUnion('type', [
+  RunStartEventSchema.omit({ parentStartCommit: true }),
   /**
    * Every activation of a run, the first launch and each resume (PRD 6,
    * item 8): the frozen NDJSON `setActiveStream` line projects from this and
@@ -251,25 +251,16 @@ const SessionEventSchema = z.discriminatedUnion('type', [
   }),
   durable('run.config', {
     executionId: ExecutionIdSchema,
-    /** The persisted `AgentConfig`, narrowed to what the view shows. */
-    config: z.looseObject({
-      model: z.string().nullish(),
-      instruction: z.string().nullish(),
-      agent: z.string().nullish(),
-      inputFiles: z.array(z.string()).nullish(),
-    }),
+    /** The canonical configuration, validated before it becomes durable. */
+    config: AgentConfigFieldsSchema,
   }),
   /** The run lifecycle's last word: emitted once nothing in the owning
    *  process can still write for the run. The phase is the `status` fact's
    *  (PRD 6, item 3); this arm says only that the lifecycle has ended. */
-  durable('result', {
-    outcome: RunOutcomeSchema,
-    executionId: z.string(),
-    category: AgentCategorySchema,
-    isSubagent: z.boolean(),
-    /** The failure's kind alone; its message stays in the runtime's log. */
-    error: z.object({ kind: z.string() }).nullish(),
-  }),
+  durable(
+    'result',
+    ResultEventSchema.unwrap().omit({ type: true, streamId: true }).shape,
+  ),
   durable('status', {
     phase: StreamPhaseSchema,
     previousPhase: StreamPhaseSchema.nullish(),
@@ -279,24 +270,7 @@ const SessionEventSchema = z.discriminatedUnion('type', [
     substate: StreamSubstateSchema.nullish(),
     runStartedAt: z.int().positive().nullish(),
   }),
-  /** The fields `streamStageFromStageStart` reads. */
-  durable('stage.start', {
-    id: z.string(),
-    label: z.string(),
-    parentId: z.string().nullish(),
-    kind: StageKindSchema.nullish(),
-    index: z.int().nonnegative().nullish(),
-    total: z.int().nonnegative().nullish(),
-  }),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
-  durable('usage', {
-    storageKey: ExecutionIdSchema,
-    usage: ExtendedTokenUsageStatsSchema,
-  }),
-  durable('context.state', {
-    inputTokens: ContextStateDataSchema.shape.inputTokens,
-    contextWindow: ContextStateDataSchema.shape.contextWindow,
-  }),
   durable('updateTodos', { todos: z.array(TodoItemSchema) }),
   durable('updatePlan', { plan: PlanSchema.nullable() }),
   durable('addOutputFiles', {
@@ -338,6 +312,25 @@ const SessionEventSchema = z.discriminatedUnion('type', [
    * aggregates only (PRD 5.2).
    */
   durable('transcript.entry', { entry: StreamLogEntrySchema }),
+  ...Object.values(TranscriptEventSchemas).map((schema) =>
+    schema.extend({
+      aggregateId: AggregateIdSchema.refine(
+        (key) => aggregateTarget(key).kind === 'stream',
+        `Expected a stream aggregate for ${schema.shape.type.value}`,
+      ),
+    }),
+  ),
+]);
+export const SessionEventSchema = z.discriminatedUnion('type', [
+  RunStartEventSchema.extend(envelope).refine(
+    (event) =>
+      (event.parentStreamId == null) ===
+      (event.parentStartCommit === undefined),
+    'A declared parent requires its creation commit, and a root has neither.',
+  ),
+  ...SessionEventDraftSchema.options
+    .slice(1)
+    .map((schema) => schema.extend(envelope)),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
@@ -345,13 +338,28 @@ export type SessionEvent = z.infer<typeof SessionEventSchema>;
  * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
  * it lives on (contract C2). The publisher stamps the rest of the envelope
  * (`seq`, `commit`, `ownerId`, `at`) under its permit; no caller passes them.
- * `Omit` is distributed over the union so a draft keeps its arm.
+ * Parsing a draft removes caller-supplied envelope fields before storage.
  */
-export type SessionEventDraft = SessionEvent extends infer E
-  ? E extends unknown
-    ? Omit<E, 'seq' | 'commit' | 'ownerId' | 'at'>
-    : never
-  : never;
+export type SessionEventDraft = z.infer<typeof SessionEventDraftSchema>;
+
+/** Aggregate identities introduced by a fact and its declared lifecycle edges. */
+export function referencedAggregates(event: SessionEvent): AggregateId[] {
+  const ids = [event.aggregateId];
+  if (event.type === 'run.start') {
+    ids.push(aggregateId('execution', event.executionId));
+    if (event.checkpointId != null)
+      ids.push(aggregateId('workflow-checkpoint', event.checkpointId));
+  }
+  if (
+    (event.type === 'run.start' ||
+      event.type === 'setParentStream' ||
+      event.type === 'inquiryThreadUpdated') &&
+    event.parentStreamId != null
+  ) {
+    ids.push(aggregateId('stream', event.parentStreamId));
+  }
+  return ids;
+}
 
 /**
  * The listing types the fold keys `latest` by (PRD 5.1): every durable arm
@@ -361,9 +369,22 @@ export type SessionEventDraft = SessionEvent extends infer E
  * outranks a replayed `run.start` below it, which is what makes the
  * tombstone final under every read (5.2, "Existence").
  */
-export function listingTypeOf(event: SessionEvent): string | null {
+export function listingTypeOf(
+  event: Pick<SessionEvent, 'type'>,
+): string | null {
   switch (event.type) {
     case 'transcript.entry':
+    case 'log':
+    case 'stage.end':
+    case 'tool.start':
+    case 'tool.end':
+    case 'workflow.plan':
+    case 'workflow.call':
+    case 'skills.snapshot':
+    case 'stream.start':
+    case 'stream.end':
+    case 'response.finalized':
+    case 'domain':
       return null;
     case 'approval.requested':
     case 'approval.resolved':
@@ -405,17 +426,13 @@ export const TextChunkSchema = z.object({
 export type TextChunk = z.infer<typeof TextChunkSchema>;
 
 /**
- * What this process knows that the events cannot say (PRD 5.2): its own
- * owner id, the owners whose lease this process may not touch (alive or
- * unprovable), and the streams whose run state it could not read. From the
- * runtime's lease reader on every change and on every subscribe. Transient
- * like a text chunk: a replay with no snapshot folds with everything empty,
- * so every ownerless run reads as interrupted until the runtime says
- * otherwise.
+ * Process-local liveness evidence: self, explicitly proved-dead owners, and
+ * unreadable runs. A current claimant absent from these verdicts is
+ * unprovable and remains held until a probe establishes otherwise.
  */
 export const LocalRuntimeStateSchema = z.object({
   self: z.array(OwnerIdSchema),
-  heldBy: z.array(OwnerIdSchema),
+  dead: z.array(OwnerIdSchema),
   unreadable: z.array(
     z.object({ streamId: StreamTabIdSchema, detail: z.string() }),
   ),
@@ -436,6 +453,21 @@ export type TranscriptSubscription = z.infer<
   typeof TranscriptSubscriptionSchema
 >;
 
+/** Current ownership and removals for exactly the scope checked by a finite read. */
+export const ExistenceReconciliationSchema = z.object({
+  checkedAggregateIds: z.array(AggregateIdSchema),
+  removedAggregateIds: z.array(AggregateIdSchema),
+  claims: z.array(
+    z.object({
+      aggregateId: AggregateIdSchema,
+      ownerId: OwnerIdSchema.nullable(),
+    }),
+  ),
+});
+export type ExistenceReconciliation = z.infer<
+  typeof ExistenceReconciliationSchema
+>;
+
 const FoldInputSchema = z.discriminatedUnion('_tag', [
   FoldEventSchema,
   TextChunkSchema,
@@ -444,10 +476,16 @@ const FoldInputSchema = z.discriminatedUnion('_tag', [
     _tag: z.literal('subscriptions'),
     set: z.array(TranscriptSubscriptionSchema),
   }),
-  /** The one marker of PRD 7.2: the sequenced cold reads have ended. It
-   *  carries no fact and the fold does not fold it. */
-  z.object({ _tag: z.literal('replay.complete') }),
+  /** Cold reads have completed; apply current claims without adopting a later cursor. */
+  z.object({
+    _tag: z.literal('replay.complete'),
+    existence: ExistenceReconciliationSchema,
+  }),
   /** A finite tail read has completed, including rows no longer materialized. */
-  z.object({ _tag: z.literal('drained'), cursor: CommitOrdinalSchema }),
+  z.object({
+    _tag: z.literal('drained'),
+    cursor: CommitOrdinalSchema,
+    existence: ExistenceReconciliationSchema,
+  }),
 ]);
 export type FoldInput = z.infer<typeof FoldInputSchema>;

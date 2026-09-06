@@ -86,6 +86,17 @@ function projectCliSessionEvent(
     case 'approval.policy':
     case 'result':
     case 'context.state':
+    case 'log':
+    case 'stage.end':
+    case 'tool.start':
+    case 'tool.end':
+    case 'workflow.plan':
+    case 'workflow.call':
+    case 'skills.snapshot':
+    case 'stream.start':
+    case 'stream.end':
+    case 'response.finalized':
+    case 'domain':
     case 'transcript.entry':
       return undefined;
     case 'status':

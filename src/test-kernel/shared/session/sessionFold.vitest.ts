@@ -10,6 +10,7 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
+  isTranscriptEvent,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   runIdentityDisplayName,
@@ -80,10 +81,97 @@ function rowsOf(entries: readonly StreamLogEntry[]): TranscriptRow[] {
 }
 
 const alive = local({ self: [OWNER] });
-const nobody = local({});
+const nobody = local({ dead: [OWNER] });
 
 describe('sessionFold', () => {
   const scenario = buildScenario();
+
+  it('projects completed trace facts identically live and on replay without folding the listing as transcript', () => {
+    const log = new Log();
+    const start = log.emit(CHILD, 1000, {
+      type: 'run.start',
+      executionId: 'bbbbbbbbbbbb',
+      identity: CHILD_IDENTITY,
+      userFollowUpSupport: 'unsupported',
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+    });
+    const stage = log.emit(CHILD, 1010, {
+      type: 'stage.start',
+      id: 'round',
+      label: 'Round 1',
+      kind: 'round',
+    });
+    const opened = log.emit(CHILD, 1020, {
+      type: 'stream.start',
+      id: 'response',
+      kind: 'modelResponse',
+      stageId: 'round',
+    });
+    const completed = log.emit(CHILD, 1030, {
+      type: 'stream.end',
+      id: 'response',
+      finalText: 'The integral is zero.',
+      stageId: 'round',
+    });
+    const completedText = 'The integral vanishes.\n'.repeat(3000);
+    const final = log.emit(CHILD, 1040, {
+      type: 'response.finalized',
+      text: completedText,
+      stageId: 'round',
+    });
+    const ended = log.emit(CHILD, 1050, {
+      type: 'stage.end',
+      id: 'round',
+      status: 'completed',
+    });
+    const notice = log.emit(CHILD, 1060, {
+      type: 'log',
+      level: 'info',
+      message: 'Calculation complete.',
+      stageId: 'round',
+    });
+    const initial = () => foldAll([tail(start), subscribe(CHILD), alive]);
+    const live = foldAll(
+      [
+        tail(stage),
+        tail(opened),
+        {
+          _tag: 'chunk',
+          streamId: CHILD,
+          rowId: 'response',
+          from: 0,
+          to: 12,
+          text: 'The integral',
+        },
+        ...[completed, final, ended, notice].map(tail),
+      ],
+      initial(),
+    );
+    const listing = fold(initial(), {
+      _tag: 'event',
+      read: 'listing',
+      event: stage,
+    });
+    expect(stream(listing, CHILD).transcript.rows).toEqual([]);
+    expect(listing.folded.get(qualifyAggregateId('stream', CHILD))).toBe(0);
+    const replay = foldAll(
+      log.events.map((event) => ({ _tag: 'event', read: 'aggregate', event })),
+      listing,
+    );
+    expect(stream(replay, CHILD).transcript).toEqual(
+      stream(live, CHILD).transcript,
+    );
+    expect(stream(replay, CHILD).transcript.rows).toHaveLength(2);
+    expect(stream(replay, CHILD).transcript.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'assistant',
+          text: expect.objectContaining({ full: completedText }),
+        }),
+      ]),
+    );
+  });
 
   it('reproduces topology, order, labels, and launch facts from run.start', () => {
     const view = foldAll(scenario.events);
@@ -149,7 +237,9 @@ describe('sessionFold', () => {
           .filter(
             (e) =>
               e.aggregateId === qualifyAggregateId('stream', ROOT) &&
-              e.type === 'transcript.entry',
+              (e.type === 'transcript.entry' ||
+                e.type === 'status' ||
+                isTranscriptEvent(e)),
           )
           .map((e) => e.seq),
       ),
@@ -223,11 +313,11 @@ describe('sessionFold', () => {
     expect(root.rollup).toStrictEqual({ total: 2, running: 0, finished: 2 });
     expect(stream(settled, CHILD).runStartedAt).toBeNull();
     expect(settled.approvals).toStrictEqual([]);
-    // No snapshot: nobody holds the process stream, which never ran.
+    // No liveness verdict: the current process-stream claimant is unprovable.
     expect(settled.rollup).toStrictEqual({
       running: 0,
       waiting: 0,
-      interrupted: 1,
+      interrupted: 0,
     });
 
     // The durable outcome: for a run this process owns, the lifecycle's
@@ -251,6 +341,7 @@ describe('sessionFold', () => {
       tail(
         scenario.log.emit(CHILD, 1851, {
           type: 'result',
+          agentName: 'custom:search',
           outcome: 'cancelled',
           executionId: 'bbbbbbbbbbbb',
           category: AgentCategory.ToolUse,
@@ -312,14 +403,14 @@ describe('sessionFold', () => {
       interrupted: 3,
     });
 
-    // A replay that never received a snapshot folds the same way.
+    // A current claim without a liveness verdict remains held as unprovable.
     const unknown = foldAll(scenario.pending);
-    expect(stream(unknown, CHILD).group).toBe('interrupted');
-    expect(stream(unknown, CHILD).statusLabel).toBe('Interrupted');
+    expect(stream(unknown, CHILD).group).toBe('waiting');
+    expect(stream(unknown, CHILD).readOnly).toBe(true);
   });
 
   it('reads another live process as held and read-only, and an unreadable run as an overlay', () => {
-    const held = foldAll([...scenario.pending, local({ heldBy: [OWNER] })]);
+    const held = foldAll([...scenario.pending, local({ dead: [] })]);
     const child = stream(held, CHILD);
     // Somebody holds the run: waiting, not interrupted; but not ours to act on.
     expect(child.group).toBe('waiting');
@@ -351,7 +442,10 @@ describe('sessionFold', () => {
     expect(stream(lifted, PROCESS).readOnly).toBe(false);
     expect(stream(lifted, PROCESS).statusDetail).toBeNull();
     const foreign = fold(lifted, local({ self: [OTHER_OWNER] }));
-    expect(stream(foreign, CHILD).group).toBe('interrupted');
+    expect(stream(foreign, CHILD).group).toBe('waiting');
+    expect(stream(foreign, CHILD).readOnly).toBe(true);
+    const dead = fold(foreign, local({ self: [OTHER_OWNER], dead: [OWNER] }));
+    expect(stream(dead, CHILD).group).toBe('interrupted');
   });
 
   it('keeps live text in inflight by offsets and joins it to its row whichever arrives first', () => {
@@ -573,7 +667,14 @@ describe('sessionFold', () => {
     const pruned = foldAll(
       [
         { _tag: 'event', read: 'listing', event: processStart },
-        { _tag: 'replay.complete' },
+        {
+          _tag: 'replay.complete',
+          existence: {
+            checkedAggregateIds: [processStart.aggregateId],
+            removedAggregateIds: [],
+            claims: [{ aggregateId: processStart.aggregateId, ownerId: OWNER }],
+          },
+        },
       ],
       foldAll(scenario.pending),
     );
@@ -608,11 +709,11 @@ describe('sessionFold', () => {
     expect(stream(settled, CHILD).resumeEligible).toBe(true);
     expect(stream(settled, ROOT).resumeEligible).toBe(false);
     expect(stream(settled, PROCESS).resumeEligible).toBe(false);
-    // A fact for a stream with no run.start changes nothing but the cursor;
+    // A fact alone cannot advance the finite-read cursor;
     // a parent edge to one leaves the child top-level with no dangling edge.
     const ignored = fold(settled, facts[0]);
     expect(ignored.streams).toBe(settled.streams);
-    expect(ignored.cursor).toBe(99);
+    expect(ignored.cursor).toBe(settled.cursor);
     const reparented = fold(settled, facts[1]);
     expect(reparented.streams.has(ghost)).toBe(false);
     expect(reparented.order).toStrictEqual([PROCESS, ROOT]);

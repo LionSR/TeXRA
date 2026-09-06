@@ -2,7 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -19,6 +19,10 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { launchAgentCliSession } from '@tools/agentCliShared';
 import {
   createChildStream,
@@ -51,16 +55,6 @@ const workflowRelaunchExecutionId = 'c11119' as ExecutionId;
 const workflowRelaunchChildStreamId = 'workflow-script#c11119' as StreamTabId;
 const setupRetryExecutionId = 'c11120' as ExecutionId;
 const setupRetryChildStreamId = 'workflow-script#c11120' as StreamTabId;
-const allChildStreamIds = [
-  childStreamId,
-  loopChildStreamId,
-  stoppedChildStreamId,
-  cancelledChildStreamId,
-  failedChildStreamId,
-  noProjectionAutoCloseChildStreamId,
-  workflowRelaunchChildStreamId,
-  setupRetryChildStreamId,
-];
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -88,10 +82,10 @@ function startCodexChild(executionId: ExecutionId, description: string) {
 }
 
 describe('child stream progress events', () => {
-  afterEach(() => {
-    for (const streamId of allChildStreamIds) {
-      clearStreamStatusForTest(defaultSession().status, streamId);
-    }
+  beforeEach(async () => {
+    const session = createProcessSession();
+    publishTestRunStart(session, parentStreamId);
+    await vi.waitFor(() => expect(session.now()).toBeGreaterThan(0));
   });
 
   it('publishes child stream lifecycle events through the session hub', async () => {

@@ -7,8 +7,10 @@ import { ContextStateDataSchema } from './contextManagement';
 import { ExecutionIdSchema } from './identifiers';
 import { LogLevelSchema } from './log';
 import { RunOutcomeSchema } from './stream';
+import { AgentCategorySchema } from './agent';
+import { RetryErrorInfoSchema } from './errors';
 import { StageKindSchema } from './taskGroup';
-import { ExtendedTokenUsageStatsSchema } from './usage';
+import { ExtendedTokenUsageStatsSchema, RunUsageTotalsSchema } from './usage';
 import {
   WorkflowCallProgressSchema,
   WorkflowPlanMarkerSchema,
@@ -22,8 +24,38 @@ function trace<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
   });
 }
 
+/** Terminal errors retain the trace contract's local/provider distinction. */
+const ResultErrorSchema = z
+  .discriminatedUnion('kind', [
+    RetryErrorInfoSchema.pick({
+      message: true,
+      userRetryable: true,
+      streamDiagnostics: true,
+      partialText: true,
+    })
+      .partial()
+      .extend({ kind: z.enum(['abort', 'disk-full']) }),
+    RetryErrorInfoSchema.partial().extend({
+      kind: z.enum(['context-window', 'missing-api-key', 'unexpected']),
+    }),
+  ])
+  .readonly();
+
+/** One canonical terminal-result payload for trace publication and storage. */
+export const ResultEventSchema = trace('result', {
+  outcome: RunOutcomeSchema,
+  executionId: z.string(),
+  streamId: z.string(),
+  agentName: z.string(),
+  category: AgentCategorySchema,
+  isSubagent: z.boolean(),
+  error: ResultErrorSchema.optional(),
+  usage: RunUsageTotalsSchema.optional(),
+}).readonly();
+export type ResultEvent = z.infer<typeof ResultEventSchema>;
+
 /** Named arms let the durable vocabulary omit the transient chunk explicitly. */
-const TranscriptEventSchemas = {
+export const TranscriptEventSchemas = {
   log: trace('log', {
     level: LogLevelSchema,
     message: z.string(),

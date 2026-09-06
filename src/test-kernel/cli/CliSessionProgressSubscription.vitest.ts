@@ -13,7 +13,6 @@ import {
 } from '@cli/runtime/sessionProgressSubscription';
 import {
   aggregateId as qualifyAggregateId,
-  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   AgentCategory,
@@ -28,13 +27,16 @@ import {
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 
 const streamId = 'stream:cli-session-projection' as StreamTabId;
-const executionId = 'execution:cli-session-projection' as ExecutionId;
+const executionId = 'c11a01' as ExecutionId;
 const childStreamId = 'stream:cli-child' as StreamTabId;
-const childExecutionId = 'execution:cli-child' as ExecutionId;
-const storageKey = 'run-a' as ExecutionId;
+const childExecutionId = 'c11c01' as ExecutionId;
+const storageKey = 'a00101' as ExecutionId;
 
 type WorkflowConfig = Omit<AgentConfig, 'agentCategory'> & {
   agentCategory: typeof AgentCategory.Workflow;
@@ -468,14 +470,18 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('projects every public NDJSON progress event with its typed payload', async () => {
     const cases = Object.entries(PROGRESS_PROJECTION_CASES);
-    const { writeRecord, publish, detach } =
-      projectionOver(createTestSession());
+    const session = createTestSession();
+    publishTestRunStart(session, streamId, executionId);
+    publishTestRunStart(session, childStreamId, childExecutionId);
+    const { writeRecord, publish, detach } = projectionOver(session);
     try {
       for (const [, projection] of cases) {
         await publish(projection.source);
       }
 
-      expect(writeRecord).toHaveBeenCalledTimes(cases.length);
+      expect(
+        vi.mocked(writeRecord).mock.calls.map(([record]) => record.event),
+      ).toEqual(cases.map(([event]) => event));
       for (const [index, [event, projection]] of cases.entries()) {
         expect(writeRecord).toHaveBeenNthCalledWith(
           index + 1,
@@ -487,44 +493,47 @@ describe('attachCliSessionProgressProjection', () => {
     }
   });
 
-  it('projects updateActiveSubagents rows byte-for-byte onto the frozen public shape', () => {
+  it('projects updateActiveSubagents rows byte-for-byte onto the frozen public shape', async () => {
     // One row per identity kind; `toEqual` (not objectContaining) pins the
     // exact pre-consolidation wire shape: `kind` discriminant, `toolName`
     // encoding, `childStreamId` only on subagent rows, and NO `identity`.
     const items: ActiveChildInfo[] = [
       {
-        executionId: 'exec-native' as ExecutionId,
+        executionId: 'a101' as ExecutionId,
         childStreamId: 'stream:native' as StreamTabId,
         agentName: 'review',
         identity: { kind: 'agent', agent: 'review' },
         status: STREAM_PHASE.RUNNING,
       },
       {
-        executionId: 'exec-tool' as ExecutionId,
+        executionId: 'a102' as ExecutionId,
         childStreamId: 'stream:tool' as StreamTabId,
         agentName: 'polish',
         identity: { kind: 'agent', agent: 'polish', tool: 'delegate' },
         status: STREAM_PHASE.RUNNING,
       },
       {
-        executionId: 'exec-workflow' as ExecutionId,
+        executionId: 'a103' as ExecutionId,
         childStreamId: 'stream:workflow' as StreamTabId,
         agentName: 'plan',
         identity: { kind: 'multiAgentWorkflow', workflowName: 'delegate' },
         status: STREAM_PHASE.RUNNING,
       },
       {
-        executionId: 'exec-process' as ExecutionId,
+        executionId: 'a104' as ExecutionId,
         childStreamId: 'stream:process' as StreamTabId,
         agentName: 'bash',
         identity: { kind: 'process', tool: 'bash' },
         status: STREAM_PHASE.RUNNING,
       },
     ];
-    const { writeRecord, emitRoster, hasRosterListener, detach } =
-      projectionOver(createTestSession());
+    const session = createTestSession();
+    publishTestRunStart(session, streamId, executionId);
+    publishTestRunStart(session, childStreamId, childExecutionId);
+    const { writeRecord, emitRoster, detach } = projectionOver(session);
     try {
       emitRoster(streamId, items);
+      await settleSessionEvents();
       expect(writeRecord).toHaveBeenCalledTimes(1);
       const [record] = vi.mocked(writeRecord).mock.calls[0]!;
       expect(record.payload).toEqual({
@@ -532,14 +541,14 @@ describe('attachCliSessionProgressProjection', () => {
         children: [
           {
             kind: 'subagent',
-            executionId: 'exec-native',
+            executionId: 'a101',
             agentName: 'review',
             status: STREAM_PHASE.RUNNING,
             childStreamId: 'stream:native',
           },
           {
             kind: 'subagent',
-            executionId: 'exec-tool',
+            executionId: 'a102',
             agentName: 'polish',
             status: STREAM_PHASE.RUNNING,
             toolName: 'delegate',
@@ -547,7 +556,7 @@ describe('attachCliSessionProgressProjection', () => {
           },
           {
             kind: 'subagent',
-            executionId: 'exec-workflow',
+            executionId: 'a103',
             agentName: 'plan',
             status: STREAM_PHASE.RUNNING,
             toolName: 'delegate_multi_agents',
@@ -555,7 +564,7 @@ describe('attachCliSessionProgressProjection', () => {
           },
           {
             kind: 'process',
-            executionId: 'exec-process',
+            executionId: 'a104',
             agentName: 'bash',
             status: STREAM_PHASE.RUNNING,
             toolName: 'bash',
@@ -563,15 +572,16 @@ describe('attachCliSessionProgressProjection', () => {
         ],
       });
       detach();
-      expect(hasRosterListener()).toBe(false);
     } finally {
       detach();
     }
   });
 
   it('writes nothing after detach', async () => {
-    const { writeRecord, publish, detach } =
-      projectionOver(createTestSession());
+    const session = createTestSession();
+    publishTestRunStart(session, streamId, executionId);
+    publishTestRunStart(session, childStreamId, childExecutionId);
+    const { writeRecord, publish, detach } = projectionOver(session);
     await publish(
       draft({
         type: 'updateStreamDescription',
@@ -591,37 +601,10 @@ describe('attachCliSessionProgressProjection', () => {
     await publish(
       draft({
         type: 'updateStreamDescription',
-        aggregateId: qualifyAggregateId('stream', 'stream:after-detach'),
+        aggregateId: qualifyAggregateId('stream', streamId),
         description: 'after detach',
       }),
     );
-    expect(writeRecord).toHaveBeenCalledTimes(1);
-  });
-
-  it('drains at detach past a transcript row the store no longer holds', async () => {
-    const { writeRecord, publish, detach } =
-      projectionOver(createTestSession());
-    await publish(draft(activation));
-    // The row's stream is not in the store, so the tail materializes nothing
-    // for its commit: no event says the tail passed the ordinal detach cuts
-    // at, only the tail's own coordinate does.
-    await publish(
-      draft({
-        type: 'transcript.entry',
-        aggregateId: qualifyAggregateId('stream', 'stream:evicted'),
-        entry: {
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          id: 'row-1',
-          seqNo: 1,
-          level: 'info',
-          timestamp: 1,
-          text: 'gone',
-        },
-      }),
-    );
-
-    await detach();
-
     expect(writeRecord).toHaveBeenCalledTimes(1);
   });
 
@@ -630,8 +613,10 @@ describe('attachCliSessionProgressProjection', () => {
       ...resumingStatusPayload,
       substate: STREAM_SUBSTATE.STARTING,
     };
-    const { writeRecord, publish, detach } =
-      projectionOver(createTestSession());
+    const session = createTestSession();
+    publishTestRunStart(session, streamId, executionId);
+    publishTestRunStart(session, childStreamId, childExecutionId);
+    const { writeRecord, publish, detach } = projectionOver(session);
     try {
       await publish(statusDraft(resumingStatusPayload));
       await publish(statusDraft(startingPayload));

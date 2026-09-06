@@ -44,11 +44,14 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost } from '../progressTestUtils';
 
-const EXECUTION_ID = 'launch-context-test' as ExecutionId;
+const EXECUTION_ID = 'a00101' as ExecutionId;
 
 /** Launches an unresolvable agent, asserting the shared missing-agent failure. */
 async function launchWithMissingAgent(
@@ -427,6 +430,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession({
       responseTextProcessing,
     });
+    publishTestRunStart(session, 'late-assembly-stream', EXECUTION_ID);
     // The recorder-style status port hears the terminal fact in publish
     // order, before any renderer wakes.
     const detachStatus = session.attachRunTrace(

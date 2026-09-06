@@ -9,21 +9,18 @@
  * escape hatch with a host-chosen `key`.
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
-import type { AgentErrorKind } from '@common/errors';
 import type {
   ActiveChildInfo,
+  ResultEvent,
   RawAcceptedSkill,
   AddOutputFilesPayload,
   AgentCategory,
   ConversationProgress,
   GoalPausedPayload,
   ExecutionId,
-  RetryErrorInfo,
   RunIdentity,
   RunOutcome,
-  StreamPhase,
-  StreamSubstate,
+  SessionEventDraft,
   StreamTabId,
   UserFollowUpSupport,
   UpdateCompileFailuresPayload,
@@ -34,7 +31,6 @@ import type {
   WorkflowCallProgress,
   WorkflowPlanMarker,
 } from '@shared/schemas';
-import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 
 /** Status assigned to a tool call when it completes. */
 export type ToolStatus = 'completed' | 'failed' | 'in_progress';
@@ -166,22 +162,10 @@ interface UsageEvent extends StageStamp {
  * fact on the session's event plane (`SessionHandle.publishStatus`). The type stays here because the trace
  * package owns the event vocabulary the fact reuses.
  */
-export interface StatusEvent extends StageStamp {
-  readonly type: 'status';
-  readonly streamId: StreamTabId;
-  readonly phase: StreamPhase;
-  readonly previousPhase?: StreamPhase;
-  readonly cause: StreamTransitionCause;
-  readonly substate?: StreamSubstate;
-  /**
-   * Epoch ms when this stream entered its current active phase, stamped by the
-   * status machine and held across substate changes; absent once the phase is
-   * no longer active. Travelling with the transition is what lets every host
-   * show the same run start instead of each deriving one from its own clock at
-   * the moment it happened to observe the fact.
-   */
-  readonly runStartedAt?: number;
-}
+export type StatusEvent = Omit<
+  Extract<SessionEventDraft, { type: 'status' }>,
+  'aggregateId'
+> & { readonly streamId: StreamTabId };
 
 /** Session-owned subagent activity for a parent run stream. */
 interface ChildActivityEvent extends StageStamp {
@@ -293,74 +277,8 @@ interface DomainEvent extends StageStamp {
   readonly text?: string;
 }
 
-/**
- * Fields `formatProviderHttpError`'s `terminalError()` branch actually sets
- * for `abort` / `disk-full` (see `src/common/errors/sdkError/
- * providerErrorFormat.ts`): it deliberately opts out of provider/
- * credential classification, so `statusCode`/`provider`/`requestId`/
- * `classification` is never populated for these kinds.
- */
-type ResultEventLocalError = Readonly<{
-  message?: string;
-  userRetryable?: RetryErrorInfo['userRetryable'];
-  streamDiagnostics?: RetryErrorInfo['streamDiagnostics'];
-  partialText?: RetryErrorInfo['partialText'];
-}>;
-
-/**
- * Fields available for `context-window` / `missing-api-key` / `unexpected`,
- * which may reach `formatProviderHttpError`'s general SDK/provider-error
- * classification path and so may populate the full `RetryErrorInfo` shape
- * (minus `message`, carried separately, and `rawErrorBody`, stripped as bulky
- * by `toRetryErrorInfo` at the emission boundary). `context-window` usually
- * takes the same `terminalError()` branch as the local kinds, but a provider
- * that reports the overflow on a retryable status falls through to the general
- * path with the provider fields populated — hence the wider shape.
- */
-type ResultEventProviderError = ResultEventLocalError &
-  Readonly<
-    Partial<
-      Omit<
-        RetryErrorInfo,
-        'message' | 'userRetryable' | 'streamDiagnostics' | 'partialText'
-      >
-    >
-  >;
-
-/**
- * Terminal run outcome as data — emitted exactly once at the run-lifecycle
- * boundary (`runFlowWithLifecycle`), never from flows or the bus. `cancelled`
- * is a sibling of `failed` (a user interrupt is not a failure). `error.kind` is
- * the classified terminal-error discriminant, and it also selects which
- * `RetryErrorInfo` fields are ever populated: `abort`/`disk-full` are always
- * local, non-provider failures (`ResultEventLocalError`), while
- * `context-window`/`missing-api-key`/`unexpected` may go through the general
- * provider/SDK classification and carry the fuller shape
- * (`ResultEventProviderError`) — see `formatProviderHttpError` in
- * `src/common/errors/sdkError/providerErrorFormat.ts`. `usage` is the run
- * totals (present once at least one round recorded usage, including on
- * failures).
- */
-export interface ResultEvent extends StageStamp {
-  readonly type: 'result';
-  readonly outcome: RunOutcome;
-  readonly executionId: string;
-  readonly streamId: string;
-  readonly agentName: string;
-  readonly category: AgentCategory;
-  readonly isSubagent: boolean;
-  readonly error?:
-    | (ResultEventLocalError & {
-        readonly kind: Extract<AgentErrorKind, 'abort' | 'disk-full'>;
-      })
-    | (ResultEventProviderError & {
-        readonly kind: Extract<
-          AgentErrorKind,
-          'context-window' | 'missing-api-key' | 'unexpected'
-        >;
-      });
-  readonly usage?: RunUsageTotals;
-}
+/** Canonical terminal-result shape, shared with the durable boundary. */
+export type { ResultEvent } from '@shared/schemas';
 
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =

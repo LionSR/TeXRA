@@ -8,8 +8,11 @@
  * and ahead of every fold), so a stop issued the moment a launch exposes its
  * stream is admitted; a stream with no row is `Unavailable`, never a defect
  * (a second surface can act from a view that has not yet folded a
- * `stream.removed`). Ownership is read from the view: a stream another live
- * process holds (`readOnly`) is `NotOwner`. In process (the TUI, headless) the Effect's own result is
+ * `stream.removed`). Ownership comes from that same current sequence row:
+ * a foreign claim
+ * without a death proof is `NotOwner`. Display residency and historical
+ * event writers never establish present ownership. In process (the TUI,
+ * headless) the Effect's own result is
  * the response; a bridge posts it as the `Response` of 8.4.
  *
  * Built per `SessionHandle` by `sessionLayer.ts`'s opener: it acts on
@@ -23,11 +26,11 @@ import type {
   PlanApprovalResult,
   ProposalResult,
 } from '@agent/runtime/HostInteractions';
-import type { SessionEventLog } from '@agent/runtime/SessionEvents';
 import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId as qualifyAggregateId } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
+import type { LocalRuntimeState, StreamTabId } from '@shared/schemas';
+import type { Database } from '@shared/session/database';
 import {
   NotOwner,
   Rejected,
@@ -43,7 +46,8 @@ const done: Outcome = { kind: 'done' };
 /** The session's request handler, admitting on the log's sequence table. */
 export function sessionRequests(
   session: SessionHandle,
-  log: Pick<Context.Service.Shape<typeof SessionEventLog>, 'exists'>,
+  log: Pick<Context.Service.Shape<typeof Database>, 'aggregateState'>,
+  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
 ): SessionGraph['requests'] {
   // The store lifecycle owner, built on the first request that deletes: it
   // holds the deletion queues, which only those need.
@@ -51,7 +55,7 @@ export function sessionRequests(
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
   ) {
-    yield* admit(session, log, req);
+    yield* admit(log, local, req);
     return yield* handle(
       session,
       () => (stores ??= createSessionStores(session)),
@@ -61,23 +65,24 @@ export function sessionRequests(
   return { request };
 }
 
-/** Existence from the log's sequence table, ownership from the view: no
- *  row is `Unavailable`, held elsewhere is `NotOwner`. A stream the view
- *  has not folded yet is held by nobody this process knows of. A deletion
- *  is admitted for a held stream: it acts on storage the lease protocol
- *  guards, not on the run. */
+/** Admit against current sequence-row existence and claims. A foreign owner
+ *  absent from the liveness snapshot is unprovable, so it cannot be admitted.
+ *  Deletion retains its explicit single-run ownership protocol in the store. */
 function admit(
-  session: SessionHandle,
-  log: Pick<Context.Service.Shape<typeof SessionEventLog>, 'exists'>,
+  log: Pick<Context.Service.Shape<typeof Database>, 'aggregateState'>,
+  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   req: RuntimeRequest,
 ): Effect.Effect<void, RequestError> {
   // The stream a request acts on.
   const streamId =
     req.kind === 'policy.set' ? req.change.streamId : req.streamId;
   return Effect.flatMap(
-    log.exists(qualifyAggregateId('stream', streamId)),
-    (exists): Effect.Effect<void, RequestError> => {
-      if (!exists) {
+    log.aggregateState([qualifyAggregateId('stream', streamId)]).pipe(
+      Effect.orDie,
+      Effect.map((rows) => rows[0]),
+    ),
+    (state): Effect.Effect<void, RequestError> => {
+      if (!state || state.closed) {
         return Effect.fail(
           new Unavailable({
             streamId,
@@ -85,10 +90,13 @@ function admit(
           }),
         );
       }
-      const stream = SubscriptionRef.getUnsafe(session.view).streams.get(
-        streamId,
-      );
-      if (stream?.readOnly && req.kind !== 'stream.delete') {
+      const liveness = SubscriptionRef.getUnsafe(local);
+      if (
+        req.kind !== 'stream.delete' &&
+        state.ownerId !== null &&
+        !liveness.self.includes(state.ownerId) &&
+        !liveness.dead.includes(state.ownerId)
+      ) {
         return Effect.fail(new NotOwner({ streamId }));
       }
       return Effect.void;

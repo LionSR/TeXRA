@@ -32,7 +32,7 @@
  * session is justified only as the ownership container.
  */
 
-import { SubscriptionRef, type Stream } from 'effect';
+import { Effect, SubscriptionRef, type Stream } from 'effect';
 import pDefer, { type DeferredPromise } from 'p-defer';
 
 import type {
@@ -59,10 +59,12 @@ import {
 } from '@shared/approvalPolicy';
 import {
   aggregateId as qualifyAggregateId,
+  aggregateTarget,
   RUN_OUTCOME,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
   type ExecutionId,
+  type SessionEvent,
   type SessionEventDraft,
   type StreamTabId,
   type TranscriptSubscription,
@@ -232,11 +234,6 @@ export class SessionHandle {
       readonly graph: (session: SessionHandle) => SessionGraph;
     },
   ) {
-    if (init.transcripts.mode.kind === 'read-only') {
-      throw new Error(
-        'SessionHandle requires a writable transcript store; read-only stores are reserved for call-scoped readers.',
-      );
-    }
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
     const transcripts = init.transcripts;
@@ -501,10 +498,8 @@ export class SessionHandle {
   }
 
   /**
-   * Terminal `result` listeners, called from {@link publishRunEvent} with
-   * the run's own event (its usage totals and agent name included, which the
-   * durable arm does not carry). Cleared by `dispose()`: a late
-   * `publishRunEvent` after teardown must not reach host closures.
+   * Terminal result listeners consume committed table rows, including run
+   * usage and agent identity. Cleared when the session unwinds.
    */
   private readonly resultListeners = new Set<(event: ResultEvent) => void>();
 
@@ -554,60 +549,69 @@ export class SessionHandle {
    */
   publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
     if (this.disposed) return;
-    if (event.type === 'result') {
-      for (const listener of [...this.resultListeners]) {
-        try {
-          listener(event);
-        } catch (error) {
-          logger.warn('Session result listener threw', { data: error });
-        }
-      }
-    }
     const draft = runEventDraft(streamId, event);
     if (draft) this.publish([draft]);
   }
 
   /**
    * Publish one canonical status fact from the session's status machine. The
-   * runtime's ordering-sensitive consumers hear it here, in publish order and
-   * before the log moves and any renderer wakes: the recorders' status ports
-   * and the execution registry's waiters and child rosters.
+   * runtime's status consumers hear it only after the event batch commits:
+   * the recorders' status ports and the execution registry's waiters and
+   * child rosters cannot announce a rejected write.
    */
   publishStatus(event: StatusEvent): void {
     if (this.disposed) return;
-    for (const port of [...this.statusPorts]) {
-      try {
-        port(event);
-      } catch (error) {
-        logger.warn('Session status port threw', { data: error });
-      }
-    }
-    this.executions.handleStatus(event.streamId);
     this.publish([statusDraft(event)]);
   }
 
   /**
-   * The one publisher of this session's facts (PRD 7.1). The snapshot store
-   * projects each durable fact synchronously, before the log moves, so its
-   * summary mirror is current for every reader the wake reaches; then the
-   * batch commits under the plane's permit. A publish after teardown goes
+   * The one publisher of this session's facts (PRD 7.1). Durable subscribers
+   * read committed facts from the table tail; publication never delivers
+   * payloads directly. A publish after teardown goes
    * nowhere: the session's owners have unwound and a late fact has no reader.
    */
   publish(events: readonly SessionEventDraft[]): void {
     if (this.disposed || events.length === 0) return;
-    for (const event of events) {
-      // A projection that rejects a fact (a malformed payload, a store that
-      // refused a patch) is logged and the fact still lands: the store owns
-      // its own validation, and a publisher must not lose the plane over it.
-      try {
-        this.applySnapshotEvent(event);
-      } catch (error) {
-        logger.warn(`Snapshot projection rejected a ${event.type} fact`, {
-          data: error,
-        });
+    effectRuntime().runFork(
+      this.graph.publish(events).pipe(
+        Effect.tapDefect((cause) =>
+          Effect.sync(() => {
+            logger.error('Session publication failed', { data: cause });
+          }),
+        ),
+      ),
+    );
+  }
+
+  /** Apply a durable fact delivered by the root's ordered table tail. */
+  receiveCommittedEvent(event: SessionEvent): void {
+    this.applySnapshotEvent(event);
+    if (event.type === 'result') {
+      for (const listener of [...this.resultListeners]) {
+        try {
+          listener({
+            ...event,
+            streamId: aggregateTarget(event.aggregateId).id,
+          });
+        } catch (error) {
+          logger.warn('Session result listener threw', { data: error });
+        }
       }
     }
-    effectRuntime().runFork(this.graph.publish(events));
+
+    if (event.type !== 'status') return;
+    const status: StatusEvent = {
+      ...event,
+      streamId: aggregateTarget(event.aggregateId).id as StreamTabId,
+    };
+    for (const port of [...this.statusPorts]) {
+      try {
+        port(status);
+      } catch (error) {
+        logger.warn('Session status port threw', { data: error });
+      }
+    }
+    this.executions.handleStatus(status.streamId);
   }
 
   /**

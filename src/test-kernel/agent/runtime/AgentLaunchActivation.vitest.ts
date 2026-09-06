@@ -62,7 +62,10 @@ import {
   AgentCategory,
   type SessionEvent,
 } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 
@@ -91,9 +94,17 @@ interface StartedLaunch {
  */
 async function captureStartedLaunch(
   run: (session: ReturnType<typeof createTestSession>) => Promise<unknown>,
-  options: { readonly resumed?: boolean } = {},
+  options: {
+    readonly resumed?: { executionId: ExecutionId; streamId: StreamTabId };
+  } = {},
 ): Promise<StartedLaunch> {
   const session = createTestSession();
+  if (options.resumed)
+    publishTestRunStart(
+      session,
+      options.resumed.streamId,
+      options.resumed.executionId,
+    );
   const recordedSession = recordSessionEvents(session);
   const trace = new TraceEmitter();
   const handler = {
@@ -207,12 +218,12 @@ describe('native agent launch activation', () => {
       // has to be visible at the call site rather than widened by `it.each`.
       const launch = await captureStartedLaunch((session) =>
         isSubagent
-          ? executeAgent(config, 'fresh-launch' as ExecutionId, {
+          ? executeAgent(config, 'f1e501' as ExecutionId, {
               session,
               isSubagent: true,
               modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
             })
-          : executeAgent(config, 'fresh-launch' as ExecutionId, {
+          : executeAgent(config, 'f1e501' as ExecutionId, {
               session,
               modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
             }),
@@ -230,7 +241,7 @@ describe('native agent launch activation', () => {
   ])(
     'starts a resumed $label launch at the commit point and fails it on the same path',
     async ({ isSubagent }) => {
-      const executionId = 'resumed-launch' as ExecutionId;
+      const executionId = 'ae5010' as ExecutionId;
       const streamId = 'resumed-stream' as StreamTabId;
       mocks.hasPersistedParent.mockResolvedValueOnce(isSubagent);
       const resume = createToolUseResumeData({
@@ -243,7 +254,7 @@ describe('native agent launch activation', () => {
 
       const launch = await captureStartedLaunch(
         (session) => resumeToolUseFromResumeData(resume, { session }),
-        { resumed: true },
+        { resumed: { executionId, streamId } },
       );
 
       // A resume activates the stream it already has: no second creation

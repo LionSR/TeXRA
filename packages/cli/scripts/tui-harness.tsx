@@ -69,6 +69,7 @@ import {
 } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import type { SessionEventDraft } from '@shared/schemas/sessionEvent';
+import { AgentConfigFieldsSchema } from '@shared/schemas/agentConfig';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
@@ -697,7 +698,10 @@ function seedStream(
       type: 'run.config',
       aggregateId: qualifyAggregateId('stream', streamId),
       executionId,
-      config: { model: HARNESS_MODEL },
+      config: AgentConfigFieldsSchema.parse({
+        agentCategory: options.category ?? AgentCategory.ToolUse,
+        model: HARNESS_MODEL,
+      }),
     });
   }
 }

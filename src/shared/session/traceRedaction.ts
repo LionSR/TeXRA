@@ -1,8 +1,94 @@
 /** Existing transcript redaction rules, shared by publication and display. */
-// Shared contracts and utilities
 import { redactSecrets } from '@logger/redaction';
-
+import {
+  ActiveSkillsSnapshotSchema,
+  SessionEventDraftSchema,
+  type SessionEventDraft,
+} from '@shared/schemas';
 import { isObject } from '@utils/core';
+
+/** Apply the existing transcript rules before source facts enter the event table. */
+export function redactTraceDraft(event: SessionEventDraft): SessionEventDraft {
+  switch (event.type) {
+    case 'result':
+      return SessionEventDraftSchema.parse({
+        ...event,
+        error: redactLogData(event.error),
+      });
+    case 'log':
+      return {
+        ...event,
+        message: redactSecrets(event.message),
+        data: redactLogData(event.data),
+      };
+    case 'stage.start':
+      return { ...event, label: redactSecrets(event.label) };
+    case 'tool.start':
+      return {
+        ...event,
+        input: redactToolInputForLog(event.toolName, event.input),
+      };
+    case 'tool.end': {
+      const result = event.result;
+      if (!isObject(result) || typeof result.toolName !== 'string')
+        return event;
+      return {
+        ...event,
+        result: {
+          ...result,
+          input: redactToolInputForLog(result.toolName, result.input),
+        },
+      };
+    }
+    case 'workflow.plan':
+      return {
+        ...event,
+        phases: event.phases.map((phase) => ({
+          ...phase,
+          title: redactSecrets(phase.title),
+        })),
+        tasks: event.tasks.map((task) => ({
+          ...task,
+          label: redactSecrets(task.label),
+          ...(task.phase !== undefined && { phase: redactSecrets(task.phase) }),
+        })),
+      };
+    case 'workflow.call':
+      return {
+        ...event,
+        call:
+          event.call.status === 'failed'
+            ? {
+                ...event.call,
+                label: redactSecrets(event.call.label),
+                error: redactSecrets(event.call.error),
+              }
+            : { ...event.call, label: redactSecrets(event.call.label) },
+      };
+    case 'skills.snapshot':
+      return {
+        ...event,
+        skills: ActiveSkillsSnapshotSchema.parse(event).skills,
+      };
+    case 'stream.end':
+      return {
+        ...event,
+        ...(event.finalText !== undefined && {
+          finalText: redactSecrets(event.finalText),
+        }),
+      };
+    case 'response.finalized':
+      return { ...event, text: redactSecrets(event.text) };
+    case 'domain':
+      return {
+        ...event,
+        ...(event.text !== undefined && { text: redactSecrets(event.text) }),
+        data: redactLogData(event.data),
+      };
+    default:
+      return event;
+  }
+}
 
 /**
  * Redact secrets from a tool's recorded input before it is persisted.

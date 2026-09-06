@@ -44,8 +44,7 @@ const mocks = vi.hoisted(() => ({
 const tempDirs = useTempDirs();
 
 async function installFreshDefaultSession(): Promise<void> {
-  const { installPlatform } = await import('@test/support/setupPlatform');
-  await installPlatform();
+  await installStoragePlatform();
   await import('@test/support/sessionGraphTestSetup');
   const [
     { initializeDefaultSession, teardownDefaultSession },
@@ -499,7 +498,6 @@ describe('executeCliRequest', () => {
   });
 
   it('persists headless stream sidecars from session events', async () => {
-    await installStoragePlatform();
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
     const streamId = 'stream-1' as StreamTabId;
@@ -518,6 +516,17 @@ describe('executeCliRequest', () => {
       const { defaultSession } = await import('@agent/runtime/SessionHandle');
       const config = AgentConfigSchema.parse(toolUseConfig());
 
+      defaultSession().publish([
+        {
+          type: 'run.start',
+          aggregateId: qualifyAggregateId('stream', streamId),
+          executionId,
+          identity: { kind: 'agent', agent: 'chat' },
+          userFollowUpSupport: 'unsupported',
+          category: 'toolUse',
+          isRemote: false,
+        },
+      ]);
       await getExecutionStore(executionId).writeRunRecord(config);
       // Emitter contract (#9590 A4/Stage 6): the authority write to
       // `ExecutionMeta.description` lands before the display event below.
@@ -540,7 +549,7 @@ describe('executeCliRequest', () => {
         type: 'usage',
         payload: {
           streamId,
-          storageKey: 'run-1' as ExecutionId,
+          storageKey: executionId,
           usage: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
         },
       });
@@ -571,7 +580,7 @@ describe('executeCliRequest', () => {
     await reader.load([streamId]);
     const snapshot = await reader.read(streamId);
     expect(snapshot.todos).toEqual([todo]);
-    expect(snapshot.runUsage['run-1']).toMatchObject({
+    expect(snapshot.runUsage[executionId]).toMatchObject({
       inputTokens: 100,
       outputTokens: 20,
       cost: 0.5,
