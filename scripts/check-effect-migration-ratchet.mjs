@@ -144,7 +144,7 @@ const ROWS = [
   })),
   {
     id: ROW_RUN_BOUNDARY,
-    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli), the tool execute() contract (src/tools/**/*Tool.ts, until lane D), or the SDK's public API (packages/agent/src); a new boundary file is admitted deliberately by regenerating the baseline in the same PR, with the justification in the PR body`,
+    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli), the tool execute() contract (src/tools/**/*Tool.ts, until lane D), or the SDK's public API (packages/agent/src). This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
   },
   {
     id: ROW_CATCH,
@@ -158,7 +158,7 @@ const SEMANTICS =
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
   "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to — `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback (PRD rule R1 as amended 2026-09-06: a run belongs at one of the three boundary kinds — packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts). A run site outside those paths belongs to the lane named for it in the closed 'debtLanes' register: --update refuses a below-boundary file the register does not already name, and refuses any count that would grow except an 'Effect.run*' at a boundary path, where a rise means runs moved up out of the debt below); " +
+  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the last recognised by the class that extends the imported defineTool). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. Every file here belongs to the lane named for it in the closed 'debtLanes' register: --update refuses a below-boundary file the register does not already name, never adds a file to a row, and writes the lower of the committed count and the tree's); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator. " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
   "'debtLanes' maps each below-boundary 'Effect.run*' file to the lane that removes it; an entry whose file leaves the row is stale and --update drops it. " +
@@ -1224,9 +1224,10 @@ function main() {
       }
     }
     console.error(
-      '\nRemove the new use, or — only when the PR body justifies it — regenerate the baseline with ' +
-        '`node scripts/check-effect-migration-ratchet.mjs --update` in the same PR ' +
-        `(a new Effect.run* file outside ${BOUNDARY_PATHS_TEXT} is recorded in debtLanes and must be given the name of the lane that deletes it).`,
+      '\nRemove the new use. `node scripts/check-effect-migration-ratchet.mjs --update` records shrinkage ' +
+        'but never a rise: it keeps the committed ceiling for a count that grew, and will not add a file a row ' +
+        `does not already carry, so a new Effect.run* below ${BOUNDARY_PATHS_TEXT} cannot be admitted by regenerating — ` +
+        'convert the file and its callers so the run moves to one of those kinds.',
     );
   }
   if (stale.length > 0) {
