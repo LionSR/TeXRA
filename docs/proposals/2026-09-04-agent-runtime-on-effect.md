@@ -130,7 +130,7 @@ Flow row types, all Zod-validated at the boundary, all carried as
 | `model.message`                | a completed model response is recorded, or provider-native messages are appended: initial/round prompt, completed tool-follow-up batch, user follow-up, synthetic continuation                                                                                                        | a discriminated payload: `pending-tools` stores normalized response and builder inputs plus ordered extracted calls; `append` stores the handler-built `ProviderMessage[]` delta (z.custom), with `sourceResponseCommit` for a completed tool-follow-up batch. No raw SDK response                                                                                                    |
 | `model.compaction`             | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens                                                                                                                                                                                       | the full replacement array; later loads start here                                                                                                                                                                                                                                                                                                                                    |
 | `tool.intent`                  | unconditionally at the barrier dispatch site, before any barrier (non parallel-safe) call starts (`ToolUseDispatchNode._exec` today). Not from an approval hook: `onExecutionReady` exists for three tools only (`bash`, `codex`, `wolfram`), while about 38 of 50 tools are barriers | `{ callIds, attempt }`; the attempt increases only after an explicit re-run decision                                                                                                                                                                                                                                                                                                  |
-| `tool.result`                  | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | `{ sourceResponseCommit, callId, attempt, result, attachments, stateMutation }`: normalized `ToolResult`, attachment references, and that call's settled `stateSlices` mutation, without a provider message. Its terminal `tool.end` commits in the same cross-aggregate batch, scrubbed at publish                                                                                   |
+| `tool.result`                  | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | `{ sourceResponseCommit, callId, attempt, result, attachments, stateMutation }`: normalized `ToolResult`, immutable attachment payloads encoded as below, and that call's settled `stateSlices` mutation, without a provider message. Its terminal `tool.end` commits in the same cross-aggregate batch, scrubbed at publish                                                          |
 | `flow.snapshot`                | initially before the first external activity; at `turn.end` / `round.end`, before WAITING, and whenever bytes appended since the last snapshot exceed its size                                                                                                                        | the family's non-message Zod state: `structured`, `lastError`, `userCancelledRetry`, `shouldSkipCycle`, `systemPrompt`, `continuationGenerationId`, `stateSlices`, `modelId`, `modelHandlerCompatibilityKey`; `outputLocation`, `roundOutputs`, `continueRounds`, `endTurn`, `context`, compile-repair state, round counters, durable phase, pending intents, and `messageBaseCommit` |
 
 Snapshots omit the accumulated provider message array. `messageBaseCommit`
@@ -167,6 +167,35 @@ response, so a resumed settlement closes the same card. If no start card
 was published, the settlement batch includes its `tool.start` as well.
 Turn snapshots include the resulting state, pending intents, and references
 to any pending response and its already-settled calls.
+
+Attachment settlement uses a JSON-safe representation rather than persisting
+`ToolFileAttachment` directly: its `bytes` field is a `Uint8Array`, which
+JSON does not reconstruct (`src/shared/schemas/toolResult.ts:23-29`). Each
+stored attachment preserves `path`, `mimeType`, and optional `description`,
+with `content: { kind: 'base64', data: string }` for captured bytes or
+`content: { kind: 'metadata-only', reason: string }` for a settled omission.
+Raw `result.files` attachments are extracted into this one ordered list;
+the saved `result.files` contains metadata only, as in
+`extractToolAttachments` today. Neither it nor the attachment list may retain
+a typed array in the JSON payload.
+
+Before the settlement batch commits, capture the bytes from `bytes` or
+`base64Data`, or perform any workspace-path read the provider follow-up would
+otherwise require. Encode one immutable base64 payload in the `tool.result`
+row; a path alone is not recoverable content. Capture failures retain the
+settled omission or failure and its explanation, never a claim that bytes
+were included. At the provider-builder boundary, validate the stored form
+and decode each base64 payload into a fresh `Uint8Array` in the expected
+`ToolFileAttachment.bytes` field, preserving its metadata and call order.
+The delivery loader recognizes payload **presence**, including empty base64
+and zero-length bytes, rather than today's `loadAttachmentBuffer` length
+checks (`src/agent/modelHandlers/utils/toolAttachmentUtils.ts:133-145`). It
+never falls back to the current workspace path during pending follow-up
+delivery, including after a crash. Explicit metadata-only entries keep the
+existing summary/fallback behavior without an automatic file read; a later
+explicit `read_file` call can still read the current file. Thus recovery
+before the completed provider-message append uses the settled bytes even if
+the source was edited or deleted. This requires no separate asset store.
 
 Per-call settlement and provider-message delivery are separate boundaries.
 The latter preserves `ModelHandler.requiresBatchedParallelToolResults` and
@@ -862,8 +891,10 @@ event)` gains the `flow.step` arm and its §6 durable set gains six rows.
   costs separately and warns on an unexpectedly large non-message tail.
   Mandatory snapshots must never regain an accumulated message array.
 - Anthropic image blocks and pasted attachments inline base64 in provider
-  messages; one `model.message` row can be megabytes. Accept in N+1 (it is
-  what the file holds today); route to the assets store later.
+  messages; one `model.message` row can be megabytes. Pending tool attachment
+  recovery also stores immutable base64 in `tool.result`, overlapping the
+  eventual provider content. Accept both in N+1; a later asset store may
+  address this cost without weakening recovery.
 - Handlers that return `updatedMessages` on every call would write a
   compaction row per call; the prefix check in `RunLedger.append` must be
   exact.

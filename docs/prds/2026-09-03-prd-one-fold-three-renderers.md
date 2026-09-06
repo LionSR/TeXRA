@@ -419,6 +419,16 @@ claim is released, while only an explicit dead verdict makes a non-null
 foreign claim reclaimable. The runtime still rechecks C5 atomically before
 any action.
 
+`OwnerId` preserves the full existing `LeaseOwnerSchema` identity: `pid`,
+nullable `processStart`, and `hostname` (`leaseOwnerLiveness.ts:17-21`), using
+C5's `JSON.stringify([hostname.toLowerCase(), pid, processStart])` encoding.
+`self` and claim comparisons use that whole
+identity. The liveness source compares hostnames case-insensitively before
+any local PID or process-start probe. An owner on another host is
+unprovable: local process absence says nothing about it, and its recorded
+PID must never be used for a local signal or automatic takeover. The same
+rule governs imported lease evidence and decoded transport claims.
+
 Liveness probes remain per distinct **current** owner process, not per run
 or historical event writer. The source periodically re-probes those owners
 and emits explicit `alive`, `dead`, or `unprovable` verdicts; lookup absence
@@ -2725,7 +2735,7 @@ As tests:
 | Reconnect loses in-flight text                                                             | Chunks carry `from`/`to`, so adjacent ones coalesce losslessly and text never drops; a reconnect is answered with a `from: 0` chunk per in-flight row                                                        |
 | A late chunk mutates settled text                                                          | Durable text wins: a chunk for a row whose finalizing event has folded is discarded, so the merge order of the three arms cannot change the result (5.2)                                                     |
 | A webview folds another paper's events                                                     | `SessionFrames` is per session; the port is demultiplexed once at decode, so the key is not a runtime value below it (7.1)                                                                                   |
-| Owner liveness stale in a webview                                                          | Snapshot on every change and every subscribe; an empty snapshot folds to interrupted, the safe direction                                                                                                     |
+| Owner liveness stale in a webview                                                          | Snapshot on every change and every subscribe; a missing verdict or different-host owner is unprovable and held; only explicit proven death permits takeover                                                  |
 | Replay-then-tail gap                                                                       | The tail anchor is captured before the cold reads and the tail follows them by `Stream.concat`, so a commit landing during the replay is delivered by the tail and absorbed by the duplicate rule (7.1, 7.2) |
 | Another process commits an event this one never sees (the hub is process-local)            | A poll of `PRAGMA data_version` joins the local level as a trigger, never a level; both only say the table moved, and every subscriber reads forward from its own position (7.1, contract C7)                |
 | Two event sources interleave out of order                                                  | There is one source: the table. The wakes carry no payload, so nothing can arrive ahead of the read they trigger (7.1)                                                                                       |

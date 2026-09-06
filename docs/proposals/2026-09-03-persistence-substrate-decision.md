@@ -249,7 +249,7 @@ event
   aggregate_id  TEXT NOT NULL REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE
   seq           INTEGER NOT NULL                    -- per-aggregate, dense from 1
   type          TEXT NOT NULL                       -- versioned, e.g. "run.start.1"
-  owner_id      TEXT NOT NULL                       -- pid + processStart of the writer, derived at insert
+  owner_id      TEXT NOT NULL                       -- hostname + pid + processStart (C5), derived at insert
   at            INTEGER NOT NULL                    -- wall clock ms, informational only
   data          TEXT NOT NULL                       -- Zod-validated JSON payload
   UNIQUE (aggregate_id, seq)
@@ -374,14 +374,25 @@ peers accept and what the SQLite PRD's acceptance already allowed. This
 rejects the PRD's `stream.text` offset checkpoints: they are a second writer
 for one datum with a render-time `max()` to reconcile.
 
-**C5. Owner id.** `owner_id` names a process: pid plus process start time. The
-`Database` layer derives it; callers cannot supply an arbitrary writer id.
+**C5. Owner id.** `owner_id` preserves the full `LeaseOwnerSchema` identity:
+hostname, pid, and the nullable process-start identity
+(`src/agent/storage/leaseOwnerLiveness.ts:17-23`). Its canonical string is
+`JSON.stringify([hostname.toLowerCase(), pid, processStart])`; hostname
+comparison is case-insensitive, and a missing process-start identity stays
+null. The `Database` layer derives it; callers cannot supply an arbitrary writer id.
 It is stamped on `event_sequence` (who may append) and on every event row
 (who did). Only the sequence row is current ownership: an immutable event's
 writer is historical attribution and never establishes a present claim.
-Liveness is `kill(pid, 0)` plus the start-time check, probed per
-distinct owner, never per run; there are a handful of owners in a workspace.
-An inconclusive probe, including a permissions error, is not evidence of death.
+The liveness check first compares the recorded hostname with the local one.
+A different host is **unprovable**, without probing or signalling its pid
+locally: a missing local pid says nothing about a writer on another machine
+sharing the bucket. On the same host, `kill(pid, 0)` returning ESRCH or a
+readable, different process-start identity proves death. An existing pid with
+an unreadable or null start identity, or any otherwise inconclusive probe,
+is unprovable. These are the existing `proveOwnerLiveness` rules
+(`leaseOwnerLiveness.ts:55-107`), applied per distinct owner, never per run.
+Foreign-host and unprovable claims block automatic takeover, import, and
+retention; neither age nor a local signal is a substitute for that proof.
 
 Opening existing aggregates for write acquires them together under
 `BEGIN IMMEDIATE`: compare each stored owner with the owner whose liveness
@@ -862,12 +873,45 @@ does not establish that an idle legacy host has stopped writing sidecars,
 so closing all legacy hosts is an explicit cutover precondition. Claims are
 moved only after their owners are proved dead and verification completes.
 
-With inputs quiescent, enumerate the registered streams from `streamLogs/`
-(`StreamLogStore.has()` :485), then sort by persisted creation timestamp,
-ascending, with stream id as the deterministic tie-breaker. If that timestamp
-is absent, use the earliest persisted entry timestamp; streams with neither
-sort first by stream id. Record this order in the manifest before assigning
-commits, so a crash restart preserves history order. For each stream:
+With inputs quiescent, independently inventory stream records in
+`streamLogs/`, `streamData/`, and `streamLogSummaries/`, and every supported
+execution directory under `executions/`. `listExecutions` scans execution
+metadata independently today (`src/agent/storage/executionListing.ts:215-263`);
+the measured 4,148 executions versus 3,789 stream logs (§2) already rules out
+using either listing as a filter for the other. Record every discovered
+source file and its disposition in the immutable manifest, including
+artifact-only directories that stay in place.
+
+Reconcile execution-to-stream edges from authored metadata. Unambiguous
+means consistent with the stream's recorded execution edge and all other
+execution claims in the inventory: at most one execution maps to each
+stream. Conflicting claims receive distinct import streams rather than
+sharing or overwriting a stream aggregate. An execution
+with an unambiguous recorded stream id keeps it even if all stream files are
+missing; synthesize that stream's `run.start` from the execution metadata.
+Do not require a transcript or sidecar to import its execution state. With
+no unambiguous edge, give the execution a distinct import stream instead of
+merging unrelated histories: use `imported:<executionId>`, adding the smallest
+numeric suffix needed to avoid every real or already assigned stream id.
+Assign these ids in execution-id order and record the mapping before writes,
+so crash recovery makes the same choice. Existing execution ids and generated
+artifact paths never change.
+
+Missing record or identity fields remain visibly incomplete, as in today's
+`listExecutions`; import their readable history and metadata without
+inventing identity, outcome, or resumability. A supported checkpoint is
+normalized under the rule below even without a transcript. Missing optional
+stream files alone never reject an otherwise supported execution. An
+artifact-only directory remains user files and is not promoted to a run or
+moved as app state.
+
+Sort the resulting union of original and synthesized streams by persisted
+creation timestamp, ascending, with stream id as the deterministic tie-breaker;
+use the execution timestamp for a synthesized stream. If a timestamp is
+absent, use the earliest persisted entry timestamp; streams with neither sort
+first by stream id. Record this order in the manifest before assigning commits,
+so a restart preserves history order. Import each stream and each independently
+inventoried execution exactly once:
 
 - Synthesize `run.start` from `meta.json` and the sidecar descriptor, with
   nullish identity where none exists, followed by its normalized history.
@@ -953,6 +997,9 @@ was not short, it was deferred.
 **Acceptance, before merge, on a copy of the TNLean bucket:**
 
 - import completes once, in low minutes, and a second open imports nothing;
+- every supported execution is accounted for, including executions with no
+  stream log and visible incomplete metadata; generated artifacts retain their
+  paths, and supported checkpoint availability is preserved;
 - `texra chat` shows the prompt in under two seconds with 4,148 executions
   present;
 - kill -9 during streaming loses at most the in-flight message (C4) and the
