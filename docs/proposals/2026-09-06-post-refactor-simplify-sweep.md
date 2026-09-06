@@ -69,23 +69,57 @@ on open PRs — but to record the opportunity instead. **78 of the 261 skips are
 Effect-port opportunities**, and 24 name a hand-rolled primitive with a direct
 Effect equivalent.
 
-These are agent claims. Four were spot-verified; three held and one did not.
-**Verify before scheduling.**
+These are agent claims, and they do not survive inspection at anything like
+face value. Five were spot-verified: **two held, two were refuted, one is
+already being fixed elsewhere.** Treat the list as leads, never as a queue.
 
 ### Verified
 
-| Site                                               | Finding                                                                                                                                                                        |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/cli/src/chat/tui/state/approvalQueue.ts` | Imports `Effect` (line 15) yet settles `HostRequest`/`HostReservation` through a raw `new Promise<ApprovalDecision>((resolve) => …)` latch (line 510) instead of a `Deferred`. |
-| `src/tools/goal/goalStore.ts`                      | Imports `Mutex` from `async-mutex` (line 1) _and_ `Effect, Fiber, Stream` (line 2) — two concurrency systems in one file; `indexMutex` wants an Effect Semaphore.              |
-| `config/ratchets/effect-migration-baseline.json`   | Carries a stale `import:p-timeout` row for `src/telemetry/UsageLogService.ts`, which no longer imports it. A free shrink — see the baseline note below.                        |
+| Site                                            | Finding                                                                                                                                                           |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/tools/goal/goalStore.ts`                   | Imports `Mutex` from `async-mutex` (line 1) _and_ `Effect, Fiber, Stream` (line 2) — two concurrency systems in one file; `indexMutex` wants an Effect Semaphore. |
+| `src/telemetry/UsageLogService.ts` baseline row | The `import:p-timeout` row is stale — the file no longer imports it. Already dropped by #11951.                                                                   |
 
 ### Refuted
 
-`src/utils/core/perKeyQueue.ts` — reported as "a hand-rolled Deferred-chain lane
-that should be an Effect Semaphore/Queue". It already imports `Deferred` from
-`effect` and uses `Deferred.makeUnsafe`; the hand-off is a documented,
-deliberate design. Not a hand-rolled substitute.
+- `src/utils/core/perKeyQueue.ts` — reported as "a hand-rolled Deferred-chain
+  lane that should be an Effect Semaphore/Queue". It already imports `Deferred`
+  from `effect` and uses `Deferred.makeUnsafe`; the hand-off is a documented,
+  deliberate design.
+- `packages/cli/src/chat/tui/state/approvalQueue.ts` — reported as a raw
+  `new Promise((resolve) => …)` latch that wants a `Deferred`. It is sound
+  design, not scaffolding: `HostReservation.decided` is a **public
+  `Promise<ApprovalDecision>`** that Promise-shaped callers await, and the
+  resolver doubles as the reservation's **identity token** (`live()` tests
+  `entry.settle === decide`, which is what makes every operation a no-op once
+  the entry leaves the surface). A `Deferred` would change the public field and
+  need `runPromise(Deferred.await(…))`, raising the file's `Effect.run*` count
+  from 1 to 2 — a shrink-only ratchet failure.
+
+### Why the remainder is not a work queue
+
+Two structural constraints, both discovered by trying to schedule this list:
+
+1. **Most sites are already owned.** #11951's `debtLanes` map assigns every
+   below-boundary `Effect.run*` site to a named lane that will delete it:
+   `OnboardingRefreshQueue`, `ProgressApiKeyRetryController`,
+   `hostDraftRequests` and `UsageLogService` to _wave-1 rebuild — controllers,
+   telemetry and session drafts_; `jsonStore` and `fileLocks` to _lane D —
+   Platform ports become Effect-typed_; `goalStore` to _Phase 5 — tools
+   subsystem_; `PollingSourceBase`, `memoryFileSystem` and
+   `agentCliSessionRegistry` to _wave-1 tools_ (in flight on #11953);
+   `SessionHandle` to _Phase 3_. Taking any of these ad hoc duplicates an owned
+   lane.
+
+2. **The ones nobody owns cannot be done yet.** `runExecution.ts`,
+   `desktopDiffHost.ts` and `SupabaseAuthProvider.ts` sit at sanctioned
+   boundaries but import no `effect` today, so porting each adds its first
+   `Effect.run*` site. The ratchet is shrink-only — a file absent from the row
+   fails — and `--update` refuses wholesale while 11 below-boundary files
+   remain. They unblock when #11951 lands, not before.
+
+The practical reading: this list feeds the lane program as evidence. It is not
+a parallel work front, and it should not be fanned out to agents.
 
 ### Unverified clusters worth triaging
 
