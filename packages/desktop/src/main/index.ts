@@ -745,10 +745,11 @@ function createWindow(options: {
     const execution = createDesktopAgentExecution({
       host: agentExecutionHost,
       session: paper.session,
-      showAgentConfigBanner: ({ agentName }) =>
+      showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.setAgentConfigBanner({
           visible: true,
           agentName,
+          sessionType: category,
           customDirSet: true,
         }),
     });

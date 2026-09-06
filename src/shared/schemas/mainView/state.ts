@@ -191,6 +191,9 @@ export type ApiKeyBannerState = z.infer<typeof ApiKeyBannerStateSchema>;
 
 export const AgentConfigBannerDataSchema = z.object({
   agentName: z.string().nullish(),
+  /** The category the named agent was launched as: what the banner's
+   *  actions edit, whichever surface renders the strip. */
+  sessionType: SessionTypeSchema.nullish(),
   customDirSet: z.boolean().nullish(),
 });
 const AgentConfigBannerStateSchema = BannerStateSchema.extend(

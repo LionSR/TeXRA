@@ -30,6 +30,7 @@ import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/Ma
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
+  AgentCategory,
   MainViewExecuteMessage,
   RequestOpenFilePayload,
   StreamTabId,
@@ -50,7 +51,10 @@ export interface DesktopAgentExecutionOptions {
   session: SessionHandle;
   /** A run loaded an agent from the custom directory: the New-task
    *  state's agent-config banner (`HostSnapshot.banners`). */
-  showAgentConfigBanner(data: { agentName: string }): void;
+  showAgentConfigBanner(data: {
+    agentName: string;
+    category: AgentCategory;
+  }): void;
   logger?: AgentTrace;
 }
 
@@ -123,8 +127,8 @@ export function createDesktopAgentExecution(
           host.showInstructionDialog(instruction.message, instruction.actions),
           'Failed to present the instruction dialog',
         ),
-      showAgentConfigBanner: ({ agentName }) => {
-        options.showAgentConfigBanner({ agentName });
+      showAgentConfigBanner: ({ agentName, category }) => {
+        options.showAgentConfigBanner({ agentName, category });
         return true;
       },
       requestOpenFile: (data: RequestOpenFilePayload) =>

@@ -22,6 +22,7 @@ import type { Response } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   applySurfaceAction,
+  canSendFollowUp,
   EMPTY_DRAFT,
   loadSurface,
   persistSurface,
@@ -386,12 +387,16 @@ export function createSessionSurfaces(options: {
    *  empty draft, like an empty launcher instruction, sends nothing. */
   function submit(entry: Held): void {
     const surface = entry.surface$.get();
-    const streamId = resolveSelected(entry.view$.get(), surface);
+    const view = entry.view$.get();
+    const streamId = resolveSelected(view, surface);
     if (streamId !== null) {
+      const stream = view.streams.get(streamId);
       const draft = surface.drafts.get(streamId) ?? EMPTY_DRAFT;
+      // The same decision the composer's Send takes, from the same fold
+      // fields: a run that ended or that another process owns takes no
+      // follow-up, however the send was reached.
+      if (!stream || !canSendFollowUp(stream, draft)) return;
       const text = draft.text.trim();
-      if (text === '' && draft.images.length === 0) return;
-      if (draft.images.some((image) => image.path === null)) return;
       const mediaFiles = draft.images.flatMap((image) =>
         image.path === null ? [] : [image.path],
       );
