@@ -71,6 +71,18 @@ export interface PerKeyLane {
  * fiber started in between takes the free permit ahead of them. The lane is
  * created on first use and deleted from `lanes` once the last fiber holding
  * or waiting on it settles.
+ *
+ * A `Queue` of tickets served by one detached worker fiber (the shape
+ * `sessionFrames.ts` uses) was prototyped against this chain in review and
+ * not taken. FIFO came for free, but `Queue.make` is `withFiber`, so the
+ * queue cannot be created in the synchronous claim step: the create path
+ * had to re-check the map after `Queue.unbounded` and claim in the same
+ * synchronous step as the insert, because a lane whose count drops to zero
+ * ends its queue and a ticket offered to an ended queue waits forever. Its
+ * interruption handling was the same single `ensuring` as here, with the
+ * body still on the caller's fiber, and it measured 84 lines against these
+ * 65 while adding two lifecycle cases (raced creation, ended queue) that the
+ * chain does not have.
  */
 export function withPerKeyLane<Key>(
   lanes: Map<Key, PerKeyLane>,
