@@ -284,6 +284,41 @@ function platformBindings(sourceFile, fileName) {
 }
 
 /**
+ * Local names a file binds Effect's `Effect` module to, so `Effect.catch`
+ * (the rc.112 combinator) is excluded from the catch row under any alias:
+ * `locals` are bindings of the `Effect` export of 'effect' (aliased or not)
+ * and namespace imports of 'effect/Effect'; `namespaces` are namespace
+ * imports of 'effect', whose `.Effect.catch` is the combinator.
+ */
+function effectBindings(sourceFile) {
+  const locals = new Set();
+  const namespaces = new Set();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const specifier = staticSpecifierText(statement.moduleSpecifier);
+    const bindings = statement.importClause?.namedBindings;
+    if (specifier == null || bindings == null) continue;
+    if (specifier === 'effect') {
+      if (ts.isNamespaceImport(bindings)) {
+        namespaces.add(bindings.name.text);
+        continue;
+      }
+      for (const element of bindings.elements) {
+        if ((element.propertyName ?? element.name).text === 'Effect') {
+          locals.add(element.name.text);
+        }
+      }
+    } else if (
+      specifier === 'effect/Effect' &&
+      ts.isNamespaceImport(bindings)
+    ) {
+      locals.add(bindings.name.text);
+    }
+  }
+  return { locals, namespaces };
+}
+
+/**
  * Per-row counts for one source text. Rows with a zero count are omitted so
  * the result is exactly the file's baseline contribution.
  */
@@ -303,6 +338,15 @@ function surveySource(text, fileName) {
       ts.isIdentifier(callee.expression) &&
       namespaces.has(callee.expression.text) &&
       callee.name.text === 'platform');
+  const effect = effectBindings(sourceFile);
+  const isEffectCombinator = (callee) =>
+    ts.isPropertyAccessExpression(callee) &&
+    ((ts.isIdentifier(callee.expression) &&
+      effect.locals.has(callee.expression.text)) ||
+      (ts.isPropertyAccessExpression(callee.expression) &&
+        ts.isIdentifier(callee.expression.expression) &&
+        effect.namespaces.has(callee.expression.expression.text) &&
+        callee.expression.name.text === 'Effect'));
   let effectImporter = false;
   let catches = 0;
 
@@ -321,10 +365,7 @@ function surveySource(text, fileName) {
       if (
         name === 'catch' &&
         ts.isPropertyAccessExpression(callee) &&
-        !(
-          ts.isIdentifier(callee.expression) &&
-          callee.expression.text === 'Effect'
-        )
+        !isEffectCombinator(callee)
       ) {
         catches += 1;
       }
@@ -402,6 +443,10 @@ function selfTestSurvey() {
     {
       text: "import { Effect, type Stream } from 'effect';\ntry { a(); } catch { b(); }\n",
       expected: { [ROW_CATCH]: 1 },
+    },
+    {
+      text: "import { Effect as Eff } from 'effect';\nimport * as E from 'effect';\nimport * as Fx from 'effect/Effect';\nEff.catch(a, h);\nE.Effect.catch(b, h);\nFx.catch(c, h);\nE.catch(d, h);\nEffect.catch(e, h);\nvoid p.catch(() => undefined);\n",
+      expected: { [ROW_CATCH]: 3 },
     },
     {
       text: 'const c = new AbortController();\nflow.setServices(services);\nsetServices(services);\n',
