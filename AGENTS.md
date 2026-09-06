@@ -552,13 +552,18 @@ default to reach for, it's `settingsView`'s pattern specifically:
   `MemoryHandlers`, `GitHubSubscriptionHandlers`, `SubscriptionHandlers`).
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
   `SETTINGS_VIEW_CMD`, `PROFILE_VIEW_COMMANDS`, `MEMORY_VIEW_COMMANDS`) — use
-  those, not string literals. Frontend state lives in Redux-style slices under
-  `settingsView/frontend/slices/`.
+  those, not string literals. Frontend state lives in module-level reactive
+  signals declared in `settingsView/frontend/settingsState.ts`
+  (`trackedSignal`); `settingsView/frontend/slices/` holds the domain-grouped
+  outbound message-handler registries (`agentSelectionSlice.ts`,
+  `latexSlice.ts`, etc., each `satisfies Partial<SettingsViewOutboundHandlerRegistry>`)
+  that mutate those signals — there is no Redux store or reducer.
 - **`progressView`** (the sidebar and editor-tab conversation shell) is
   event-fold, not request/response: `ProgressViewProvider` implements
   `vscode.WebviewViewProvider` directly — composed with
-  `BundledViewContentProvider` for shared webview boilerplate, not extending
-  `BaseViewContentProvider` — and routes through `SessionBridge` /
+  `BundledViewContentProvider` (`common/webview/BaseViewContentProvider.ts`;
+  there is no `BaseViewContentProvider` class, despite the file name) for
+  shared webview boilerplate — and routes through `SessionBridge` /
   `HostDraftRequests` as typed `runtime.request` / `host.request` calls (see
   `docs/proposals/2026-09-03-one-view-state-three-renderers.md`). Its Lit
   components (`progressView/frontend/components/`) read the `SessionView` fold
