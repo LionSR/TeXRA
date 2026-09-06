@@ -213,7 +213,7 @@ async function getAgentPath(
     interactions,
     new AgentError(`Could not find agent: ${agentIdentifier}`),
     'showAgentConfigBanner',
-    { agentName: agentIdentifier },
+    { agentName: agentIdentifier, category },
   );
 }
 

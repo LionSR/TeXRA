@@ -17,7 +17,7 @@ import {
   getEnabledModels,
 } from '@model/computeModelOptions';
 import type { StateStore } from '@platform/interfaces';
-import type { FileOptions } from '@shared/schemas';
+import type { FileOptions, SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FILE_SELECT_CONFIGS } from '@shared/launcher/fileSelectConfigs';
 import type { HostSnapshot, PaperDisplay } from '@shared/session/hostSnapshot';
@@ -61,8 +61,9 @@ export interface HostSnapshotSource {
   refreshWorkspaceRoots(): void;
   /** The one recorder per process started or stopped. */
   setRecording(recording: HostSnapshot['recording']): void;
-  /** A run loaded an agent from the custom directory. */
-  showAgentConfigBanner(agentName: string): void;
+  /** A run loaded an agent from the custom directory, under the category
+   *  it was launched as: the banner's actions edit that catalog. */
+  showAgentConfigBanner(agentName: string, sessionType: SessionType): void;
   /** The user dismissed one of the dismissable banners. */
   dismissBanner(banner: 'login' | 'gettingStarted' | 'dependency'): void;
   setOnboarding(state: HostSnapshot['onboarding']): void;
@@ -210,8 +211,13 @@ export function createHostSnapshotSource(
       recording = next;
       publish();
     },
-    showAgentConfigBanner(agentName) {
-      agentConfig = { visible: true, agentName, customDirSet: true };
+    showAgentConfigBanner(agentName, sessionType) {
+      agentConfig = {
+        visible: true,
+        agentName,
+        sessionType,
+        customDirSet: true,
+      };
       publish();
     },
     dismissBanner(banner) {

@@ -29,7 +29,12 @@ import type { SessionType, StreamTabId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
-import { EMPTY_DRAFT, type Draft, type Surface } from '@shared/session/surface';
+import {
+  canSendFollowUp,
+  EMPTY_DRAFT,
+  type Draft,
+  type Surface,
+} from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { appendClipboardImageChips } from '@shared/utils/clipboard';
 import {
@@ -414,11 +419,6 @@ export class SessionComposer extends LitElement {
     event.preventDefault();
     this.send();
   };
-
-  /** A follow-up sends once the host has stored every pasted image. */
-  private get imagesPending(): boolean {
-    return this.draft.images.some((image) => image.path === null);
-  }
 
   /** Send is the root's decision (`SessionSurfaces.submit`): the same one
    *  the run accelerator reaches, so the two cannot diverge. */
@@ -834,10 +834,12 @@ export class SessionComposer extends LitElement {
       ? (this.view?.queuedFollowUps.get(stream.id) ?? [])
       : [];
     const text = this.text;
-    const canSend =
-      !readOnly &&
-      !this.imagesPending &&
-      (text.trim() !== '' || this.draft.images.length > 0);
+    // A follow-up's Send and the Cmd+Alt+E accelerator read one rule
+    // (`canSendFollowUp`); the launcher has no stream and no draft images,
+    // so its own Run turns on the instruction alone.
+    const canSend = stream
+      ? canSendFollowUp(stream, this.draft)
+      : text.trim() !== '';
     const sendLabel = compact ? 'Send follow-up' : 'Run';
 
     return html`

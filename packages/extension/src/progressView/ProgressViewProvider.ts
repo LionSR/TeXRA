@@ -67,6 +67,7 @@ import {
   agentKeyOf,
   AgentCategory,
   type OnboardingFunnelState,
+  type SessionType,
   type StreamTabId,
 } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
@@ -388,8 +389,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** A run loaded an agent from the custom directory. */
-  public showAgentConfigBanner(agentName: string): void {
-    this.snapshot.showAgentConfigBanner(agentName);
+  public showAgentConfigBanner(
+    agentName: string,
+    sessionType: SessionType,
+  ): void {
+    this.snapshot.showAgentConfigBanner(agentName, sessionType);
   }
 
   /**
@@ -513,23 +517,40 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return { kind: 'surface.action', session: this.bridge.key, action };
   }
 
-  /** The completion chime plays once per process: in the sidebar when it
-   *  has ever been resolved (it retains its context while hidden, so a
-   *  collapsed sidebar still receives and plays it), else in the editor
-   *  tab. No port means no renderer to play it, and nothing to play. */
+  /**
+   * The one rule for which surface a host action lands on: the one the user
+   * is looking at, the editor tab first while it is the active panel, then a
+   * visible sidebar, then a visible tab. Attachment is not visibility here:
+   * the sidebar keeps its port and its own webview state while hidden
+   * (`retainContextWhenHidden`), so a hidden sidebar must not outrank the
+   * tab on screen. `undefined` when no surface is showing.
+   */
+  private visibleSurfacePort(): Port | undefined {
+    const editor = this.editor;
+    if (editor?.panel.active === true) return editor.port;
+    if (this.sidebarView?.visible === true) return this.sidebarPort;
+    if (editor?.panel.visible === true) return editor.port;
+    return undefined;
+  }
+
+  /** The completion chime plays once per process, in the surface the user is
+   *  looking at. With none showing it still plays in a retained sidebar (or
+   *  a hidden tab), which is the case a chime is for: a run the user walked
+   *  away from. No port means no renderer to play it. */
   private chime(): void {
-    const port = this.sidebarPort ?? this.editor?.port;
+    const port =
+      this.visibleSurfacePort() ?? this.sidebarPort ?? this.editor?.port;
     port?.send(this.frameOf({ kind: 'chime' }));
   }
 
   /** `texra.execute` with no configuration (Cmd+Alt+E): the composer's
-   *  Send in the view the user is in. The editor tab when it is the active
-   *  panel; otherwise the sidebar, shown first so the action has a surface
-   *  to land on. */
+   *  Send in the view the user is in, which is the visible surface and its
+   *  own draft. With none showing, the sidebar, shown first so the action
+   *  has a surface to land on. */
   public async submit(): Promise<void> {
-    const editor = this.editor;
-    if (editor?.panel.active === true) {
-      editor.port.send(this.frameOf({ kind: 'submit' }));
+    const port = this.visibleSurfacePort();
+    if (port !== undefined && port === this.editor?.port) {
+      port.send(this.frameOf({ kind: 'submit' }));
       return;
     }
     await this.showInSidebar();

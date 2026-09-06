@@ -123,6 +123,7 @@ describe('AgentLaunchContext', () => {
         event: 'showAgentConfigBanner',
         payload: {
           agentName: '__missing_agent_for_launch_context_test__',
+          category: AgentCategory.Workflow,
         },
       },
     ]);

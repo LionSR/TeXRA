@@ -26,7 +26,7 @@ import {
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
-import type { SessionView } from './sessionView';
+import type { SessionView, StreamView } from './sessionView';
 
 /** The new-task composer's selections, separate from host-derived state. */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
@@ -289,6 +289,34 @@ export function resolveSelected(
   if (selected === null) return null;
   if (view.streams.has(selected)) return selected;
   return view.order.at(0) ?? null;
+}
+
+/**
+ * Whether a stream takes a follow-up at all: what decides the composer is
+ * shown for it, and therefore what a host action aimed at it may assume. A
+ * run that declares no follow-up support and one this process may not act
+ * on take none; otherwise a run still going or waiting takes one, as does a
+ * conversation that has not started (`ready` with nothing written yet).
+ */
+export function acceptsFollowUp(stream: StreamView): boolean {
+  if (stream.followUpSupport === 'unsupported' || stream.readOnly) return false;
+  if (stream.group === 'running' || stream.group === 'waiting') return true;
+  return stream.status === 'ready' && stream.lastTimestamp === null;
+}
+
+/**
+ * Whether a follow-up can be sent to a stream: the one rule the composer's
+ * Send button and the host's submit accelerator (Cmd+Alt+E) both read, so
+ * the surface a user sees and the keystroke that bypasses it cannot
+ * disagree. The stream must take a follow-up at all (`acceptsFollowUp`, the
+ * same answer that decides whether its composer is on screen), an empty
+ * draft sends nothing, and a pasted image the host has not stored yet is
+ * not ready to name.
+ */
+export function canSendFollowUp(stream: StreamView, draft: Draft): boolean {
+  if (!acceptsFollowUp(stream)) return false;
+  if (draft.images.some((image) => image.path === null)) return false;
+  return draft.text.trim() !== '' || draft.images.length > 0;
 }
 
 /**

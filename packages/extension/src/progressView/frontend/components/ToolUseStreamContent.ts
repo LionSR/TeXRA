@@ -1,7 +1,7 @@
 import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import type { StreamView } from '@shared/session/sessionView';
+import { acceptsFollowUp } from '@shared/session/surface';
 import { BaseStreamContent } from './BaseStreamContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 import './StreamHeader';
@@ -12,13 +12,6 @@ import './SessionBanners';
 import './SessionComposer';
 
 const RUN_ENDED_MESSAGE = 'This run has ended.';
-
-/** The follow-up line shows while the run can still take one. */
-function composerVisible(stream: StreamView): boolean {
-  if (stream.followUpSupport === 'unsupported' || stream.readOnly) return false;
-  if (stream.group === 'running' || stream.group === 'waiting') return true;
-  return stream.status === 'ready' && stream.lastTimestamp === null;
-}
 
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends BaseStreamContent {
@@ -34,7 +27,9 @@ export class ToolUseStreamContent extends BaseStreamContent {
   override render(): TemplateResult | typeof nothing {
     const stream = this.stream;
     if (!stream || stream.category !== 'toolUse') return nothing;
-    const showComposer = composerVisible(stream);
+    // The follow-up line shows while the run can still take one, which is
+    // the same rule Send and the run accelerator take (`acceptsFollowUp`).
+    const showComposer = acceptsFollowUp(stream);
     return html`
       <stream-header .stream=${stream} .view=${this.view}></stream-header>
       <div class="conversation-content">

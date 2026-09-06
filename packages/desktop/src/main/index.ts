@@ -739,7 +739,8 @@ function createWindow(options: {
     const execution = createDesktopAgentExecution({
       host: agentExecutionHost,
       session: paper.session,
-      showAgentConfigBanner: snapshot.showAgentConfigBanner,
+      showAgentConfigBanner: ({ agentName, category }) =>
+        snapshot.showAgentConfigBanner(agentName, category),
       onLaunched: (streamId) =>
         bridge.surfaceAction({ kind: 'select', streamId }),
     });
