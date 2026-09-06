@@ -691,6 +691,7 @@ export function createChatSessionController(
       // honored by `isCancellationRequested`, which `resumeRun` re-reads once
       // this returns, rather than starting an agent the user cancelled.
       const adoptResumedStream = async (): Promise<void> => {
+        await setCliHelperModel(config.model);
         adoptRunConfig(config, 'history');
         clearLocalTranscript();
         followUpQueue.clear();
@@ -733,7 +734,7 @@ export function createChatSessionController(
       // cleared the interrupted stream, so the follow-ups typed during the
       // interruption are lost unless both go back where they came from.
       let followUpQueueReady = false;
-      const runChain = setCliHelperModel(config.model)
+      const runChain = Promise.resolve()
         .then(() => {
           recoveryHandedOff = true;
           return resumeRun(id, {

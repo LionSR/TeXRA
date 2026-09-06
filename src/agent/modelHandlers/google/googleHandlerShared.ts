@@ -3,6 +3,11 @@ import { basename } from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/types/mediaTypes';
+import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
+import {
+  reportMediaAttachmentFailure,
+  type MediaAttachmentContext,
+} from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { isNonEmptyString } from '@utils/core';
 
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
@@ -21,6 +26,7 @@ interface UploadGoogleMediaEntriesOptions<T> {
   getClient: () => Promise<GoogleGenAI>;
   inlineLimit: number;
   logger: AgentTrace;
+  context: MediaAttachmentContext;
   buildMedia: (source: GoogleMediaSource, mimeType: string) => T;
   buildLabel: (media: T, fileName: string) => T;
 }
@@ -33,66 +39,75 @@ interface UploadGoogleMediaEntriesOptions<T> {
 export async function uploadGoogleMediaEntries<T>(
   entries: MediaEntry[],
   options: UploadGoogleMediaEntriesOptions<T>,
-): Promise<T[]> {
+): Promise<CreatedMedia<T>> {
   if (entries.length === 0) {
-    return [];
+    return { media: [], entries: [] };
   }
 
   const { getClient, inlineLimit, logger, buildMedia, buildLabel } = options;
   const client = await getClient();
   const parts: T[] = [];
+  const insertedEntries: MediaEntry[] = [];
   const appendMedia = (entry: MediaEntry, media: T): void => {
     parts.push(buildLabel(media, entry.file_name), media);
+    insertedEntries.push(entry);
   };
 
   for (const entry of entries) {
-    const fileName = entry.file_name;
-    const mimeType = entry.media_type;
-    const inlinePayload = isNonEmptyString(entry.data) ? entry.data : null;
+    try {
+      const fileName = entry.file_name;
+      const mimeType = entry.media_type;
+      const inlinePayload = isNonEmptyString(entry.data) ? entry.data : null;
 
-    if (inlinePayload) {
-      const payloadBytes = Buffer.byteLength(inlinePayload, 'base64');
-      if (payloadBytes <= inlineLimit) {
+      if (inlinePayload) {
+        const payloadBytes = Buffer.byteLength(inlinePayload, 'base64');
+        if (payloadBytes <= inlineLimit) {
+          logger.debug(
+            `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
+          );
+          const media = buildMedia({ data: inlinePayload }, mimeType);
+          appendMedia(entry, media);
+          continue;
+        }
         logger.debug(
-          `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
+          'Media entry exceeds inline limit; falling back to upload.',
+          {
+            data: { fileName, payloadBytes, inlineLimit },
+          },
         );
-        const media = buildMedia({ data: inlinePayload }, mimeType);
-        appendMedia(entry, media);
-        continue;
       }
+
+      const uploadPath =
+        entry.bytes_match_source !== false ? entry.source_path : undefined;
+      if (!uploadPath) {
+        throw new Error(`Media entry ${fileName} is missing an upload source.`);
+      }
+
       logger.debug(
-        'Media entry exceeds inline limit; falling back to upload.',
-        {
-          data: { fileName, payloadBytes, inlineLimit },
-        },
+        `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
+      );
+      const uploaded: File = await client.files.upload({
+        file: uploadPath,
+        // `fileName` may be workspace-relative; displayName is a filename.
+        config: { mimeType, displayName: basename(fileName) },
+      });
+      const fileUri = uploaded.uri;
+      if (!fileUri) {
+        throw new Error(`Upload result for ${fileName} is missing a URI.`);
+      }
+      const resolvedMimeType =
+        uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
+      const media = buildMedia({ uri: fileUri }, resolvedMimeType);
+      appendMedia(entry, media);
+    } catch (error) {
+      reportMediaAttachmentFailure(
+        logger,
+        options.context,
+        error,
+        entry.file_name,
       );
     }
-
-    const uploadPath =
-      entry.bytes_match_source !== false ? entry.source_path : undefined;
-    if (!uploadPath) {
-      throw new Error(`Media entry ${fileName} is missing an upload source.`);
-    }
-
-    logger.debug(
-      `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
-    );
-    // The caller's createMediaForRound applies the shared failure policy:
-    // initial requests fail; later rounds report the missing attachments.
-    const uploaded: File = await client.files.upload({
-      file: uploadPath,
-      // `fileName` may be workspace-relative; displayName is a filename.
-      config: { mimeType, displayName: basename(fileName) },
-    });
-    const fileUri = uploaded.uri;
-    if (!fileUri) {
-      throw new Error(`Upload result for ${fileName} is missing a URI.`);
-    }
-    const resolvedMimeType =
-      uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
-    const media = buildMedia({ uri: fileUri }, resolvedMimeType);
-    appendMedia(entry, media);
   }
 
-  return parts;
+  return { media: parts, entries: insertedEntries };
 }

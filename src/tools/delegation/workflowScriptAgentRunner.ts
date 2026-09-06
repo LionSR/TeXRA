@@ -1,5 +1,6 @@
 // Node imports
 import { createHash } from 'node:crypto';
+import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Local imports
@@ -17,11 +18,7 @@ import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import { AgentCategory } from '@shared/schemas';
-import type {
-  ExecutionId,
-  RunStorageFileLocation,
-  StreamTabId,
-} from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
@@ -48,55 +45,64 @@ async function resolveInvocationFileList(
   label: string,
   files: readonly string[],
 ): Promise<string[]> {
-  const references = files.map((file) => {
-    const runStorage =
-      runStorageLocationFromAnyAbsolutePath(file) !== undefined;
-    if (!runStorage && path.isAbsolute(file)) {
-      const relative = path.relative(StorageFS.fullPath(''), file);
-      if (!path.isAbsolute(relative) && relative.split(path.sep)[0] !== '..') {
-        throw new WorkflowRunAbortError(
-          `Workflow ${label} could not be resolved: ${file}; ` +
-            'workspace-storage files must be declared outputs of a completed child run.',
-        );
-      }
-    }
-    return { file, runStorage };
-  });
-  const workspaceFiles = references
-    .filter((reference) => !reference.runStorage)
-    .map((reference) => reference.file);
   try {
-    await assertWorkflowFilesExist([{ label, files: workspaceFiles }]);
+    const storageRoot = await realpath(StorageFS.fullPath(''));
+    const references = await Promise.all(
+      files.map(async (file) => {
+        const absolutePath = WorkspaceFS.toAbsolute(file);
+        const canonicalPath = await realpath(absolutePath);
+        const relative = path.relative(storageRoot, canonicalPath);
+        const storagePath =
+          !path.isAbsolute(relative) && relative.split(path.sep)[0] !== '..'
+            ? StorageFS.fullPath(relative)
+            : undefined;
+        if (
+          storagePath !== undefined &&
+          runStorageLocationFromAnyAbsolutePath(storagePath) === undefined
+        ) {
+          throw new Error(
+            `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+          );
+        }
+        // Explicit run paths still pass the resolver's symlink rejection,
+        // even when a workspace mirror points outside storage.
+        const runStoragePath =
+          runStorageLocationFromAnyAbsolutePath(absolutePath) !== undefined
+            ? absolutePath
+            : storagePath;
+        return { file: canonicalPath, runStoragePath };
+      }),
+    );
+    await assertWorkflowFilesExist([
+      {
+        label,
+        files: references
+          .filter((reference) => reference.runStoragePath === undefined)
+          .map((reference) => reference.file),
+      },
+    ]);
+    return await Promise.all(
+      references.map(async ({ file, runStoragePath }) => {
+        if (runStoragePath !== undefined) {
+          const output = await resolveChildRunOutput(
+            parentExecutionId,
+            runStoragePath,
+          );
+          if (!output) {
+            throw new Error(
+              `${runStoragePath}; pass a matching workflow file option whose files still exist.`,
+            );
+          }
+        }
+        return file;
+      }),
+    );
   } catch (error) {
     throw new WorkflowRunAbortError(
       formatError(`Workflow ${label} files could not be resolved`, error),
       { cause: error },
     );
   }
-  return await Promise.all(
-    references.map(async ({ file, runStorage }) => {
-      if (!runStorage) return file;
-      let output: RunStorageFileLocation | undefined;
-      try {
-        output = await resolveChildRunOutput(parentExecutionId, file);
-      } catch (error) {
-        throw new WorkflowRunAbortError(
-          formatError(
-            `Workflow ${label} could not be resolved: ${file}`,
-            error,
-          ),
-          { cause: error },
-        );
-      }
-      if (!output) {
-        throw new WorkflowRunAbortError(
-          `Workflow ${label} could not be resolved: ${file}; ` +
-            'pass a matching workflow file option whose files still exist.',
-        );
-      }
-      return output.absolutePath;
-    }),
-  );
 }
 
 /** Hash the bytes behind every file option used by one workflow agent call. */
@@ -127,10 +133,7 @@ export async function fingerprintWorkflowAgentDependencies(
       files,
     );
     for (const [index, file] of resolved.entries()) {
-      const bytes =
-        runStorageLocationFromAnyAbsolutePath(file) !== undefined
-          ? await AbsoluteFS.readBytes(file)
-          : await WorkspaceFS.readBytes(file);
+      const bytes = await AbsoluteFS.readBytes(file);
       hash.update(`${kind}\0${index}\0${bytes.length}\0`);
       hash.update(bytes);
     }

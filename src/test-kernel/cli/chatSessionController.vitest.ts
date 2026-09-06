@@ -1178,9 +1178,13 @@ describe('createChatSessionController', () => {
       },
     });
     installResumeExecutionStore(config);
-    const ctrl = createChatSessionController(makeInit());
+    const session = makeSession();
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore: makeResumeSnapshotStore({ config }) }),
+    );
 
     await ctrl.resume('exec-resume' as ExecutionId);
+    await session.runPromise;
 
     expect(sessionMeta.get()).toMatchObject({
       teamName: 'Physicist',
@@ -1219,6 +1223,7 @@ describe('createChatSessionController', () => {
         describeFollowUpFailure(failure),
       );
       expect(sessionMeta.get()).toEqual(previousMetadata);
+      expect(mocks.setCliHelperModel).not.toHaveBeenCalled();
       expect(mocks.clearLocalTranscript).not.toHaveBeenCalled();
       expect(session.streamId).toBeUndefined();
       expect(session.executionId).toBeUndefined();
@@ -1263,6 +1268,7 @@ describe('createChatSessionController', () => {
     );
 
     await ctrl.resume('aaaaaa' as ExecutionId);
+    await session.runPromise;
 
     expect(session.streamId).toBe('stream-resume');
     expect(session.interruptedStreamId).toBeUndefined();
@@ -1491,12 +1497,15 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => ({
-        ...STARTED,
-        outcome: options.isCancellationRequested?.()
-          ? RUN_OUTCOME.CANCELLED
-          : RUN_OUTCOME.COMPLETED,
-      }),
+      async (_id: ExecutionId, options: ResumeRunOptions) => {
+        await options.onResumeResolved?.();
+        return {
+          ...STARTED,
+          outcome: options.isCancellationRequested?.()
+            ? RUN_OUTCOME.CANCELLED
+            : RUN_OUTCOME.COMPLETED,
+        };
+      },
     );
 
     const resumeStarted = ctrl.resume('aaaaaa' as ExecutionId);

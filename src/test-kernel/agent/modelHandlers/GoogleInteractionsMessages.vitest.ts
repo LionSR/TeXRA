@@ -1,12 +1,14 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
+import type { MediaAttachmentContext } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/types/mediaTypes';
+import type { FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local file imports
@@ -72,14 +74,15 @@ class MediaProbeHandler extends ModelHandlerGoogleInteractions {
 
   /** Invoke the media-upload pipeline directly. */
   async uploadEntries(entries: MediaEntry[]): Promise<Interactions.Content[]> {
-    return (await this.uploadMediaEntries(entries)).media;
+    return (await this.uploadMediaEntries(entries, 'initial')).media;
   }
 
-  protected override async createMediaMessage(): Promise<
-    CreatedMedia<Interactions.Content>
-  > {
+  protected override async createMediaMessage(
+    _files: FileLocation[],
+    context: MediaAttachmentContext,
+  ): Promise<CreatedMedia<Interactions.Content>> {
     return this.stubbedEntries
-      ? this.uploadMediaEntries(this.stubbedEntries)
+      ? this.uploadMediaEntries(this.stubbedEntries, context)
       : { media: this.stubbedMedia, entries: [] };
   }
 }
@@ -308,6 +311,63 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
       expect(handler.consumeInsertedAttachmentKinds('initial')).toEqual([]);
     },
   );
+
+  it('retains valid follow-up attachments around a failed upload and reports that file', async () => {
+    const handler = createMediaProbe();
+    const error = vi.fn();
+    handler.setLogger({ ...noopTrace, error });
+    handler.setClient({
+      files: {
+        upload: async ({ file }: { file: string }) => {
+          if (file === '/x/failed.pdf') throw new Error('Upload unavailable');
+          return { uri: 'files/figure', mimeType: 'image/png' };
+        },
+      },
+    } as unknown as GoogleGenAI);
+    handler.setMediaEntries([
+      {
+        file_name: 'inline.png',
+        data: Buffer.from('figure').toString('base64'),
+        media_type: 'image/png',
+        media_category: 'image',
+      },
+      {
+        file_name: 'failed.pdf',
+        data: '',
+        source_path: '/x/failed.pdf',
+        media_type: 'application/pdf',
+        media_category: 'document',
+      },
+      {
+        file_name: 'uploaded.png',
+        data: '',
+        source_path: '/x/uploaded.png',
+        media_type: 'image/png',
+        media_category: 'image',
+      },
+    ]);
+
+    const steps = await handler.createRoundMessages([], 'Compare the figures', [
+      { absolutePath: '/x/inline.png' } as FileLocation,
+      { absolutePath: '/x/failed.pdf' } as FileLocation,
+      { absolutePath: '/x/uploaded.png' } as FileLocation,
+    ]);
+
+    const content = (steps[0] as Interactions.UserInputStep).content ?? [];
+    expect(content.filter((part) => part.type === 'image')).toEqual([
+      expect.objectContaining({
+        data: Buffer.from('figure').toString('base64'),
+      }),
+      expect.objectContaining({ uri: 'files/figure' }),
+    ]);
+    expect(textOf(steps[0])).not.toContain('failed.pdf');
+    expect(handler.consumeInsertedAttachmentKinds('followUp')).toEqual([
+      'image',
+      'image',
+    ]);
+    expect(error).toHaveBeenCalledOnce();
+    expect(error.mock.calls[0][0]).toContain('failed.pdf');
+  });
 
   it('builds typed Interactions media content for audio, video, and documents', async () => {
     const handler = createMediaProbe();
