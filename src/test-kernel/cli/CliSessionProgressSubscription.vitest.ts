@@ -21,11 +21,7 @@ import {
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import type {
-  ExecutionId,
-  StreamTabId,
-  UpdateStreamStatusPayload,
-} from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
@@ -64,9 +60,10 @@ function workflowConfig(
   };
 }
 
-type RunStatusProjectionPayload = UpdateStreamStatusPayload & {
-  cause: StreamTransitionCause;
-};
+type RunStatusProjectionPayload =
+  CliNdjsonProgressEventPayloads['updateStreamStatus'] & {
+    cause: StreamTransitionCause;
+  };
 
 /** A published fact: a run-scoped trace event on `streamId`, or a draft. */
 type Source =

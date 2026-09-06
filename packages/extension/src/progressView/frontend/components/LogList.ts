@@ -77,7 +77,7 @@ export class LogList extends LitElement {
         aria-relevant="additions"
         .hasStreams=${false}
         .streamStatus=${undefined}
-        .streamDurablyFinal=${false}
+        .durableOutcome=${null}
         .isToolUse=${false}
       ></task-group-list>`;
     }
@@ -98,7 +98,7 @@ export class LogList extends LitElement {
             .transcript=${stream.transcript}
             .hasStreams=${true}
             .streamStatus=${stream.status}
-            .streamDurablyFinal=${stream.durableOutcome !== null}
+            .durableOutcome=${stream.durableOutcome}
             .isToolUse=${stream.category === 'toolUse'}
             .expanded=${this.surface?.groups.get(id)}
             ?terminal=${terminal}

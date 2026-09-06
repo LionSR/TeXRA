@@ -77,6 +77,29 @@ function response(): (result: Response['result']) => void {
 }
 
 describe('session Surface ownership', () => {
+  it('keeps a late refusal on its originating paper and leaves cancellation quiet', async () => {
+    const cancel = response();
+    surfaces.hostRequest(KEY, { kind: 'pickFiles', fileType: 'input' });
+    cancel({ ok: false, error: { _tag: 'Cancelled' } });
+    await Promise.resolve();
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
+
+    const refuse = response();
+    surfaces.hostRequest(KEY, { kind: 'compileInputPdf' });
+    // Open another paper while the first paper's request remains pending.
+    surfaces.sync([KEY, 'other-paper']);
+    const error = {
+      _tag: 'Rejected',
+      reason: 'Compiling the input PDF is unavailable.',
+    } as const;
+    refuse({ ok: false, error });
+    await Promise.resolve();
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toBe(error);
+    expect(surfaces.get('other-paper')?.surface$.get().requestError).toBeNull();
+    surfaces.act(KEY, { kind: 'dismissRequestError' });
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
+  });
+
   it('releases the graph of a session that leaves the sync set', () => {
     surfaces.sync([]);
     expect(transport.close).toHaveBeenCalledExactlyOnceWith(KEY);
@@ -141,6 +164,10 @@ describe('session Surface ownership', () => {
     });
     reject({ ok: false, error: { _tag: 'Rejected', reason: 'Unavailable' } });
     await Promise.resolve();
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toEqual({
+      _tag: 'Rejected',
+      reason: 'Unavailable',
+    });
     expect(surfaces.get(KEY)?.surface$.get().drafts.get(ROOT)).toEqual({
       text: 'New text',
       images: [image],

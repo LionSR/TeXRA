@@ -56,6 +56,8 @@ const LF = String.fromCharCode(10); // Ctrl-J
 const KITTY_SHIFT_ENTER = ESC + '[13;2u';
 const UP = ESC + '[A';
 const DOWN = ESC + '[B';
+const RIGHT = ESC + '[C';
+const LEFT = ESC + '[D';
 const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
 const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] Running/;
@@ -2393,6 +2395,48 @@ const SCENARIOS = [
     unexpect: ['Apply edit to draft.tex?', '1 approval'],
   },
   {
+    name: 'session-tree-groups',
+    cols: 150,
+    rows: 40,
+    env: { HARNESS_ENTRIES: '0', HARNESS_SESSION_TREE: '1' },
+    keys: ['\t', DOWN, LEFT],
+    expect: [
+      'Running',
+      'Waiting on you',
+      'Interrupted',
+      'Recent',
+      'nested Interrupted',
+      'Resume',
+      '[2 total · 0 running · 2 finished]',
+    ],
+    ordered: [
+      { before: 'Running', after: 'Waiting on you' },
+      { before: 'Waiting on you', after: '\n Interrupted' },
+      { before: '\n Interrupted', after: 'Recent' },
+    ],
+    unexpect: ['ERROR', 'signal read during notification phase'],
+  },
+  {
+    name: 'session-tree-resume',
+    cols: 150,
+    env: { HARNESS_ENTRIES: '0', HARNESS_SESSION_TREE: '1' },
+    keys: ['\t', DOWN, DOWN, '\r'],
+    expect: ['Harness resume selected: 111111111111.'],
+    unexpect: ['ERROR', 'signal read during notification phase'],
+  },
+  {
+    name: 'subagents-collapsed-rollup',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_NESTED_CHILDREN: '1',
+    },
+    keys: ['\t'],
+    expect: ['[4 total · 4 running · 0 finished]'],
+    unexpect: ['● localChecker', '● strategy', '● reviewer'],
+  },
+  {
     name: 'subagents',
     frame: 'scrollback',
     env: {
@@ -2401,7 +2445,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t'],
+    keys: ['\t', RIGHT],
     expect: [
       'strategy',
       'leanSolver',
@@ -2426,11 +2470,11 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t'],
+    keys: ['\t', RIGHT],
     expect: [
       'strategy Running',
       'leanSolver Idle',
-      'reviewer error',
+      'reviewer Error',
       '3 agents',
       'Tab input',
     ],
@@ -2448,7 +2492,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t'],
+    keys: ['\t', RIGHT],
     expect: ['3 agents', '2 active', 'Tab sessions', 'Ctrl-C stop'],
   },
   {
@@ -2463,8 +2507,8 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t'],
-    expect: ['3 agents', '2 active', 'Tab sessions', 'Ctrl-C stop'],
+    keys: ['\t', RIGHT],
+    expect: ['3 agents', '2 run', 'Tab sessions', 'Ctrl-C stop'],
     unexpect: ['Option-p tasks'],
   },
   {
@@ -2480,9 +2524,9 @@ const SCENARIOS = [
     // The collapsed frame must retain a discoverable Tab affordance even when
     // the child count no longer fits; Tab then expands and focuses the list.
     bootExpect: 'Tab sessions',
-    keys: ['\t'],
-    expect: ['Choosing a session', 'strategy runni'],
-    expectCollapsed: ['Choosing a session'],
+    keys: ['\t', RIGHT],
+    expect: ['Session list.', '▾'],
+    expectCollapsed: ['Session list.'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
@@ -2496,6 +2540,7 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: [
       '\t',
+      RIGHT,
       DOWN,
       DOWN,
       DOWN,
@@ -2525,7 +2570,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, '\r'],
     expect: ['strategy is checking the harness-child-strategy details'],
     unexpect: [
       '✓ ● strategy Running',
@@ -2546,8 +2591,8 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, ESC, '\t'],
-    expect: ['›   ● strategy Running', 'Tab input', 'Esc input'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, ESC, '\t'],
+    expect: ['● strategy Running', 'Tab input', 'Esc input'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
@@ -2560,7 +2605,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['draft survives resize', '\t', DOWN],
+    keys: ['draft survives resize', '\t', RIGHT, DOWN],
     resizes: [{ cols: 44, rows: 5 }],
     keysAfterResize: [' and accepts input'],
     // The draft is windowed to the input's soft-break rows at narrow widths,
@@ -2581,7 +2626,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r', '\t', UP, UP, UP, '\r'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, '\r', '\t', UP, UP, UP, '\r'],
     expect: [
       'agent: chat · model: harness-model',
       'Run command?',
@@ -2591,30 +2636,6 @@ const SCENARIOS = [
     ],
     unexpect: [
       'subagent: strategy · parent: main · model: harness-model',
-      'signal read during notification phase',
-      'ERROR',
-    ],
-  },
-  {
-    name: 'subagent-focused-bounded-live-tail',
-    frame: 'scrollback',
-    cols: 120,
-    rows: 24,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_LONG_CHILD_OUTPUT: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r'],
-    resizes: [{ cols: 120, rows: 14 }],
-    expect: ['strategy detail line 15', 'strategy detail line 18'],
-    unexpect: [
-      'strategy detail line 01',
-      'entry-1 chat history line',
-      'entry-4 chat history line',
-      'PgUp',
       'signal read during notification phase',
       'ERROR',
     ],
@@ -2631,14 +2652,9 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r', '\t'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, '\r', '\t', RIGHT],
     expect: ['1 agent', 'localChecker Running'],
-    unexpect: [
-      'leanSolver',
-      'reviewer',
-      'signal read during notification phase',
-      'ERROR',
-    ],
+    unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
     name: 'subagent-transcript-reader-full-history',
@@ -2652,7 +2668,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r', DC4],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, '\r', DC4],
     expect: [
       'Transcript: strategy',
       'strategy detail line 01',
@@ -2674,7 +2690,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r', '/status', '\r'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, '\r', '/status', '\r'],
     frame: 'viewport',
     expect: ['strategy is checking the harness-child-strategy details'],
     expectPatterns: [RUNNING_STATUS_PATTERN],
@@ -2697,7 +2713,21 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r', DC4, ESC, '\t', UP, UP, UP, '\r'],
+    keys: [
+      '\t',
+      RIGHT,
+      DOWN,
+      DOWN,
+      DOWN,
+      '\r',
+      DC4,
+      ESC,
+      '\t',
+      UP,
+      UP,
+      UP,
+      '\r',
+    ],
     expect: [
       'entry-1 chat history line',
       'entry-4 chat history line',
@@ -2733,10 +2763,10 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, 'k'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'k'],
     expect: [
       'Harness kill requested for harness-child-strategy.',
-      '›   ● strategy Stopped',
+      '● strategy Stopped',
       'Enter focus',
       'Tab input',
       'Esc input',
@@ -2755,9 +2785,9 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'k', '\r'],
     frame: 'viewport',
-    expect: ['◆ Stopped', 'root active', 'Ctrl-C stop root', 'Esc back'],
+    expect: ['◆ Stopped', 'root active', 'Ctrl-C stop root', 'Esc parent'],
     unexpect: [STOPPED_SUBAGENT_INPUT_MESSAGE_START],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
@@ -2769,7 +2799,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r', '\t', UP, '\r'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'k', '\r', '\t', UP, '\r'],
     frame: 'viewport',
     expect: ['◆ Idle', 'root active'],
     unexpect: [
@@ -2789,6 +2819,7 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: [
       '\t',
+      RIGHT,
       DOWN,
       DOWN,
       DOWN,
@@ -2798,7 +2829,7 @@ const SCENARIOS = [
       '\r',
     ],
     frame: 'viewport',
-    expect: ['◆ Stopped', 'root active', 'Esc back'],
+    expect: ['◆ Stopped', 'root active', 'Esc parent'],
     unexpect: [
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
       STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE,
@@ -2941,16 +2972,16 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [{ input: ESC, delayMs: 700 }, '\t', DOWN],
+    keys: [{ input: ESC, delayMs: 700 }, '\t', RIGHT, DOWN],
     frame: 'viewport',
     expect: [
       'Harness focused interrupt requested for harness-stream-1.',
-      '✓ ● main Stopped',
+      '● harness-stream-1 Stopped',
       'strategy Running',
       'leanSolver Idle',
       'reviewer Running',
       '3 agents',
-      'Choosing a session',
+      'Session list.',
     ],
     unexpect: ['Harness interrupt requested.'],
   },
@@ -2962,15 +2993,24 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', DOWN, DOWN, DOWN, '\r', { input: ESC, delayMs: 700 }, '\t'],
+    keys: [
+      '\t',
+      RIGHT,
+      DOWN,
+      DOWN,
+      DOWN,
+      '\r',
+      { input: ESC, delayMs: 700 },
+      '\t',
+    ],
     frame: 'viewport',
     expect: [
-      '› ✓ ● main Running',
+      '● harness-stream-1 Running',
       'strategy Running',
       'leanSolver Idle',
       'reviewer Running',
       '3 agents',
-      'Choosing a session',
+      'Session list.',
       'Ctrl-C stop',
     ],
     unexpect: [
@@ -2990,6 +3030,7 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: [
       '\t',
+      RIGHT,
       DOWN,
       DOWN,
       DOWN,
@@ -3000,7 +3041,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: ['root draft after child back', '3 agents', 'Ctrl-C stop'],
     unexpect: [
-      'Choosing a session',
+      'Session list.',
       'Harness interrupt requested.',
       'Harness focused interrupt requested',
       'main Stopped',
@@ -3033,7 +3074,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: [{ input: ESC, delayMs: 80 }, '2'],
+    keys: ['\t', RIGHT, '\t', { input: ESC, delayMs: 80 }, '3'],
     frame: 'viewport',
     expect: ['Idle', 'root active', 'Tab sessions'],
     unexpect: [

@@ -51,11 +51,11 @@ test('first launch shows a usable launcher chrome', async () => {
   await expect(
     launched.page.locator('.task-header-button[aria-label="Show Commands"]'),
   ).toBeVisible();
-  // The main view itself either renders <main-app> or the no-workspace empty
+  // The conversation view renders the launcher or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
   // one each user actually hits.
   const mainSection = launched.page.locator(
-    '.task-conversation-pane[data-pane="launcher"]',
+    '.task-conversation-pane[data-pane="conversation"]',
   );
   await expect(mainSection).toBeVisible();
 });
@@ -222,7 +222,9 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   };
 
   await launched.page.evaluate((message) => {
-    window.postMessage(message, '*');
+    const session =
+      document.querySelector<HTMLElement>('progress-app')?.dataset.session;
+    window.postMessage({ ...message, session }, '*');
   }, payload);
 
   const reviewTab = launched.page.locator(
@@ -265,9 +267,73 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
 
   // Close via desktop:closeDiff — the Review tab should close.
   await launched.page.evaluate(() => {
-    window.postMessage({ command: 'desktop:closeDiff' }, '*');
+    window.postMessage(
+      {
+        command: 'desktop:closeDiff',
+        session:
+          document.querySelector<HTMLElement>('progress-app')?.dataset.session,
+      },
+      '*',
+    );
   });
   await expect(
     launched.page.locator('.task-workbench-tab[data-kind="review"]'),
   ).toHaveCount(0);
+});
+
+/** The host opens compiled PDFs in the originating paper's workbench. */
+test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
+  const { page } = launched;
+  const pdfPath = '/tmp/texra-trajectory/output.pdf';
+  const session = await page
+    .locator('progress-app')
+    .getAttribute('data-session');
+  const pdfTab = page.locator('.task-workbench-tab[data-kind="pdf"]');
+  const frame = page.locator('iframe.task-workbench-pdf-frame');
+
+  await page.evaluate(
+    ({ session, pdfPath }) => {
+      window.postMessage(
+        {
+          command: 'desktop:showPdf',
+          session,
+          title: 'output.pdf',
+          pdfPath,
+        },
+        '*',
+      );
+    },
+    { session, pdfPath },
+  );
+  await expect(pdfTab).toBeVisible();
+  await expect(pdfTab).toHaveAttribute('data-active', 'true');
+  await expect(pdfTab).toContainText('output.pdf');
+  await expect(frame).toBeVisible();
+  await expect(frame).toHaveAttribute('src', `file://${pdfPath}`);
+  await expect(frame).toHaveAttribute('sandbox', 'allow-same-origin');
+  await expect(frame).toHaveAttribute('title', 'output.pdf');
+
+  const rejectedPath = page.waitForEvent('console', (message) =>
+    message.text().includes('[desktop] rejected unsafe PDF path'),
+  );
+  await page.evaluate((session) => {
+    window.postMessage(
+      {
+        command: 'desktop:showPdf',
+        session,
+        title: 'malicious',
+        pdfPath: 'http://evil.com/x.pdf',
+      },
+      '*',
+    );
+  }, session);
+  await rejectedPath;
+  await expect(pdfTab).toHaveCount(1);
+  await expect(frame).toHaveAttribute('src', `file://${pdfPath}`);
+
+  await page.evaluate((session) => {
+    window.postMessage({ command: 'desktop:closePdf', session }, '*');
+  }, session);
+  await expect(pdfTab).toHaveCount(0);
+  await expect(frame).toHaveCount(0);
 });
