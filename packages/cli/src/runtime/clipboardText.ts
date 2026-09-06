@@ -4,7 +4,7 @@ import { basename } from 'node:path';
 import { promisify } from 'node:util';
 
 import clipboard from 'clipboardy';
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Option } from 'effect';
 
 import { effectRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -127,25 +127,37 @@ export function writeClipboardText(
       try: () => clipboard.write(normalized),
       catch: (cause) => cause,
     }).pipe(
-      // Interrupting the losing fiber cannot cancel clipboardy's own promise
-      // (no cancellation hook — see above), so the spawned helper lives on
-      // and the timeout branch reaps it before reporting failure.
+      // Interrupting the fiber cannot cancel clipboardy's own promise (no
+      // cancellation hook — see above), so the spawned helper lives on.
+      // Timeout and runtime-dispose interruption both reap it before
+      // reporting failure; `matchCauseEffect` recovers interruption so
+      // `runPromise` resolves instead of rejecting into a `void` caller.
       Effect.timeout(CLIPBOARD_WRITE_TIMEOUT_MS),
-      Effect.matchEffect({
-        onFailure: (error) =>
-          Cause.isTimeoutError(error)
-            ? // Reap before reporting failure so a wedged helper cannot land a
-              // stale write on the clipboard after the UI has already shown
-              // 'failed'.
-              Effect.as(reapWedgedCopyHelpers(platform), {
-                ok: false as const,
-                reason: `Clipboard write timed out after ${CLIPBOARD_WRITE_TIMEOUT_MS}ms`,
-              })
-            : Effect.succeed({
-                ok: false as const,
-                reason: toErrorMessage(error),
-              }),
+      Effect.matchCauseEffect({
         onSuccess: () => Effect.succeed({ ok: true as const }),
+        onFailure: (cause) => {
+          const error = Cause.findErrorOption(cause);
+          const timedOut =
+            Option.isSome(error) && Cause.isTimeoutError(error.value);
+          if (timedOut || Cause.hasInterrupts(cause)) {
+            return Effect.as(
+              Effect.uninterruptible(reapWedgedCopyHelpers(platform)),
+              {
+                ok: false as const,
+                reason: timedOut
+                  ? `Clipboard write timed out after ${CLIPBOARD_WRITE_TIMEOUT_MS}ms`
+                  : 'Clipboard write interrupted',
+              },
+            );
+          }
+          if (Option.isSome(error)) {
+            return Effect.succeed({
+              ok: false as const,
+              reason: toErrorMessage(error.value),
+            });
+          }
+          return Effect.failCause(cause);
+        },
       }),
     ),
   );
