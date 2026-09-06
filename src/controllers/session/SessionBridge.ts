@@ -198,7 +198,7 @@ export class SessionBridge {
       view: session.view,
       inputs: session.inputs,
       setTranscriptSubscriptions: (id, set) =>
-        Effect.sync(() => session.setTranscriptSubscriptions(id, set)),
+        session.subscriptions.set(id, set),
     };
     const framer = new PortFramer(source, port, this.host);
     this.ports.set(port.id, { port, framer });

@@ -93,12 +93,12 @@ const HOST_LAYER_IMPORT_PREFIXES = [
 /**
  * Effect run boundary (PRD R1, docs/prds/2026-08-26-effect-4-runtime-migration.md
  * "Execution strategy" rule 3): production code enters Effect through the
- * host-owned runtime, `effectRuntime()` from `@platform/processRuntime`, and
- * nothing else. The pre-runtime exemption this once carried (the platform
- * stores every host opens in its `initPlatform`, and the file-lock provider
- * those stores flush through) is gone: each host now installs the process
- * runtime before it opens a store, so the allowlist is empty and any bare
- * `Effect.run*` call in production fails.
+ * host-owned runtime, `effectRuntime()` from `@platform/processRuntime`. A
+ * bare `Effect.run*` call is allowed only where the program must run before
+ * `installProcessRuntime` — today the platform stores every host opens in its
+ * `initPlatform` (`JsonStore`) and the file-lock provider those stores flush
+ * through. The pins are exact counts: a new site anywhere fails, and a removed
+ * site is recorded by lowering (then deleting) its pin.
  */
 const EFFECT_RUN_ROOTS = [
   ...ALL_HOST_PRODUCTION_ROOTS,
@@ -107,6 +107,16 @@ const EFFECT_RUN_ROOTS = [
 ] as const;
 const EFFECT_RUN_CALL =
   /\bEffect\.run(?:Promise|PromiseExit|Sync|SyncExit|Fork|Callback)(?:With)?\s*\(/g;
+const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
+  // The published SDK's Promise entry, which is rule R1's third boundary
+  // kind and the one module in `packages/agent` allowed to run an Effect at
+  // all. It cannot borrow `effectRuntime()`: the process runtime does not
+  // exist until this entry's own composition installs it, and `closeSession`
+  // has to answer for a process no run initialized and for one whose
+  // shutdown already disposed that runtime.
+  'packages/agent/src/index.ts': 6,
+};
+
 function sourceFilesUnder(
   zone: string,
   opts?: { readonly excludeTestKernel?: boolean },
@@ -248,8 +258,8 @@ describe('Effect run boundaries', () => {
 
     expect(
       sites,
-      'bare Effect.run* sites must go through effectRuntime() from @platform/processRuntime; hosts install the process runtime before anything that runs a program, so there is no pre-runtime exemption left',
-    ).toEqual({});
+      'bare Effect.run* sites must go through effectRuntime() from @platform/processRuntime; a site that has to run before installProcessRuntime is pinned in BARE_EFFECT_RUN_SITES in this PR, and a removed site lowers its pin',
+    ).toEqual(BARE_EFFECT_RUN_SITES);
   });
 
   it('actually scans the Effect run roots', () => {

@@ -94,22 +94,29 @@ async function reachableDeclarations(entry) {
   return visited;
 }
 
-const mainTypes = path.resolve(packageRoot, manifest.exports['.'].types);
-const mainGraph = await reachableDeclarations(mainTypes);
-const mainGraphText = (
-  await Promise.all([...mainGraph].map((file) => readFile(file, 'utf8')))
-).join('\n');
-for (const provider of [
-  '@anthropic-ai/sdk',
-  '@google/genai',
-  '@openrouter/sdk',
-  'openai',
-]) {
-  const providerImport = new RegExp(
-    `(?:from|import\\s*\\()\\s*['"]${provider.replaceAll('/', '\\/')}(?:/|['"])`,
-  );
-  if (providerImport.test(mainGraphText)) {
-    throw new Error(`Provider type leaked into the main entry: ${provider}`);
+// Every published entry, not only the root: an entry whose declaration
+// graph reaches a provider SDK puts that provider's types back on the
+// published surface however narrow the entry looks.
+for (const [entry, target] of Object.entries(manifest.exports)) {
+  const entryTypes = path.resolve(packageRoot, target.types);
+  const entryGraph = await reachableDeclarations(entryTypes);
+  const entryGraphText = (
+    await Promise.all([...entryGraph].map((file) => readFile(file, 'utf8')))
+  ).join('\n');
+  for (const provider of [
+    '@anthropic-ai/sdk',
+    '@google/genai',
+    '@openrouter/sdk',
+    'openai',
+  ]) {
+    const providerImport = new RegExp(
+      `(?:from|import\\s*\\()\\s*['"]${provider.replaceAll('/', '\\/')}(?:/|['"])`,
+    );
+    if (providerImport.test(entryGraphText)) {
+      throw new Error(
+        `Provider type leaked into the "${entry}" entry: ${provider}`,
+      );
+    }
   }
 }
 

@@ -133,5 +133,10 @@ export function createLifecycleHost(
       })();
       return shutdownPromise;
     },
+    // The cache above is also the answer: once a drain exists, the phases
+    // have been spliced and a later registration has no drain of its own.
+    get shutdownRan() {
+      return shutdownPromise !== undefined;
+    },
   };
 }

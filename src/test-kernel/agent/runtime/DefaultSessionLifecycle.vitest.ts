@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const channelTraceMocks = vi.hoisted(() => ({
@@ -232,7 +233,7 @@ describe('default session lifecycle', () => {
       const { closeSession } = await import('@agent/runtime/sessionGraph');
       const { processWorkspaceRoots } =
         await import('@platform/workspaceRoots');
-      await closeSession(processWorkspaceRoots().storage);
+      await Effect.runPromise(closeSession(processWorkspaceRoots().storage));
       expect(tryDefaultSession()).toBeUndefined();
     } finally {
       teardownDefaultSession();

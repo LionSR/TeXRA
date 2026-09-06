@@ -17,7 +17,18 @@ Not on the registry yet. Inside this workspace, depend on it by name:
 { "dependencies": { "@texra-ai/agent": "workspace:*" } }
 ```
 
-`zod` (v4) is a peer dependency.
+`effect` and `zod` (v4) are peer dependencies, and they are peers of the
+**whole package**, not only of the `@texra-ai/agent/effect` subpath: the root
+entry's bundle imports `effect` at runtime too (`dist/index.js` opens with
+`import ... from 'effect'`). Install both alongside it, `effect` at the exact
+version the package pins (`4.0.0-rc.112`). Two copies of `effect` in one
+process do not work at all: Streams, Fibers and Context built by one copy do
+not interoperate with another's, and a peer dependency is how a consumer gets
+one copy rather than a second nested one.
+
+```jsonc
+{ "dependencies": { "effect": "4.0.0-rc.112", "zod": "^4.4.3" } }
+```
 
 ## Usage
 
@@ -51,9 +62,22 @@ interface AgentRun extends AsyncIterable<AgentEvent> {
 }
 ```
 
-Event delivery starts at the iterator's first `next()`. Awaiting only `result`
-does not retain trace events, and ending iteration detaches the event source
-while the run itself continues.
+Trace events are buffered from the moment the run enters its session, so an
+iteration begun right after `runAgent()` misses none of the launch events.
+Ending the iteration detaches the event source while the run itself continues,
+and a run that settles without ever being iterated discards what it buffered.
+That buffer is only the handover to the first reader, and it is bounded: a run
+whose events pass the handover window with nobody reading has no reader, so it
+logs a warning naming the run and detaches its trace. Awaiting only `result`
+therefore never retains a long run's whole trace. A reader that did attach is
+never dropped: past its first pull the buffer is that reader's, and nothing
+discards what it has yet to read.
+
+Every failure reaches the caller on `result`; `runAgent()` itself does not
+throw. A refusal before any model work is one of the tagged errors the Effect
+surface names below (`AgentNotFound`, `ToolsRefused`, and `PlatformConflict`
+for a second, different platform); a run that fails after entering its session
+rejects with exactly what the launch path threw.
 
 `view` is the folded session state every TeXRA host renders, so stream
 status, transcript rows, and pending approvals are read from it rather than
@@ -70,10 +94,11 @@ stops that reader while the run continues. If launch fails before the run
 enters the session, `view` ends without a value and `result` carries the
 failure.
 
-Every yielded view is immutable: an older view stays what it was for as long
-as it is held, and a branch the later level did not touch is the same object
-in both. An older view is stable to read; it is not a fold input, so nothing
-in the package folds onto anything but the latest level. The exported
+Every yielded view is a value: the fold publishes immutable levels with
+copy-on-touch structural sharing, so an older view stays exactly what it was
+for as long as it is held, and a branch the later level did not touch is the
+same object in both. An older view is stable to read; it is not a fold input,
+so nothing in the package folds onto anything but the latest level. The exported
 `SessionView`, `StreamView`, and
 `TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
 arrays); a write through a cast corrupts the session every later run in the
@@ -93,7 +118,14 @@ returning `{ settled, abandoned }`. `settled` is true when every run ended in
 time; otherwise `abandoned` names the runs still live, and the session stays
 open, refusing new runs, until they end. The platform's shutdown path
 (`lifecycle.runShutdown()`), which an embedder runs before it exits, closes
-the platform's session this way after the runs it owns have settled.
+the platform's session this way after the runs it owns have settled, and then
+disposes the runtime the session owner ran on.
+
+That path runs once, so `runAgent` composes once per process: a run started
+after the platform's shutdown has run is refused, because the session it would
+open has no shutdown left to close and flush it. An embedder that needs more
+than one composition in a process takes the Effect surface below, where each
+scope owns the composition it made.
 
 ## Run results
 
@@ -126,6 +158,78 @@ files.
 | `@texra-ai/agent`         | `runAgent`, `closeSession`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` / `SessionCloseReport` types |
 | `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                                             |
 | `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                                           |
+| `@texra-ai/agent/effect`  | `Runtime`, `Sessions`, `Session`, `Run` and the tagged errors: the services the entry above renders                                                      |
+
+Every entry needs the `effect` and `zod` peers installed, the root one
+included: `@texra-ai/agent` is the Effect surface rendered as Promises, and
+its bundle imports `effect` at runtime like the subpath does.
+
+## Effect
+
+`@texra-ai/agent/effect` is the surface. Everything this package decides is
+stated once there, in Effect: which level is a run's first, when its transcript
+interest changes, when its drain ends, which failure wins. `@texra-ai/agent`
+above is that surface rendered as Promises and AsyncIterables, and holds no
+logic of its own. It stays the Promise entry because the published SDK is one
+of the three boundary kinds rule R1 of TeXRA's Effect migration names
+(`docs/prds/2026-08-26-effect-4-runtime-migration.md`, §7): host entries, the
+tool `execute()` contract, and this package's public API speak Promises;
+everything below them is Effect-typed.
+
+`effect` is a peer dependency of every entry, not only this one. See
+[Install](#install).
+
+```ts
+import { Effect, Stream } from 'effect';
+import { Runtime, Sessions } from '@texra-ai/agent/effect';
+import { nodePlatform } from '@texra-ai/agent/node';
+
+const program = Effect.gen(function* () {
+  const sessions = yield* Sessions;
+  const session = yield* sessions.open();
+  yield* Effect.forkScoped(Stream.runForEach(session.view.changes, render));
+  const run = yield* session.start({ agent: 'polish', instruction });
+  yield* session.subscribe([{ id: run.streamId, fromSeq: 0 }]);
+  yield* session.request({
+    kind: 'followUp.send',
+    streamId: run.streamId,
+    text: 'Keep the theorem statements unchanged.',
+  });
+  return yield* run.result;
+}).pipe(Effect.scoped, Effect.provide(Runtime.layer(nodePlatform(options))));
+```
+
+| Service    | What it is                                                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Runtime`  | The composed process: the platform and its workspace roots. `Runtime.layer(platform)` provides it and `Sessions`, with this scope as the lifetime of the hold it takes on that composition. |
+| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?, signal?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                   |
+| `Session`  | `start`, `request`, `view.changes`, `events`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                |
+| `Run`      | `executionId`, `streamId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its stream published and its trace live.                  |
+
+`session.view.changes` publishes the fold's levels as values: each is
+immutable, an older level stays exactly what it was for as long as it is held,
+and a branch the later level did not touch is the same object in both.
+
+The composition is held, not owned: each `Runtime.layer` scope takes a hold on
+it, and the last hold to end is what closes every session the owner holds,
+each settling its runs and flushing its artifacts, and then disposes the
+runtime they ran on. So two overlapping scopes over one platform are safe, the
+first one out ends nothing the second is still using, and a later program in
+the same process composes again over the platform already installed. That is
+what the Promise entry cannot do, and why it composes once: its owner is the
+embedder's shutdown path, which runs once. A composition that found a host's
+own installation ends nothing however its holds end: those sessions are the
+host's, and killing its live runs is not this package's to do.
+
+Failures are `Data.TaggedError`s: `PlatformConflict`, `AgentNotFound`,
+`ToolsRefused`, and `RunFailure`, whose `cause` is exactly what the launch path
+threw, which is what the Promise entry rejects with. A `session.request`
+answers with the runtime's own `Outcome` or its `RequestError` union, the same
+values every TeXRA host reads. Nothing else is exported: no store, no fold
+internals, no host widgets.
+
+A runnable version of this program against a packed tarball is in
+[`example/`](./example).
 
 ## The platform
 
