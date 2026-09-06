@@ -986,7 +986,18 @@ function main() {
     // back the file it had already replaced, so every count matched itself.
     const committed = readBaseline();
 
-    const { failures: grew } = diffRows(rows, committed.rows);
+    // Growth is refused everywhere except one place: `Effect.run*` at a legal
+    // boundary path. That exception is the migration itself working -- a lane
+    // converts a subsystem and its runs MOVE to a host entry, so the entry's
+    // count rises while the debt below it falls. Every other row is a pure
+    // debt counter with no legitimate growth, and a below-boundary
+    // `Effect.run*` is the case the owner reproduced: a file already named in
+    // the register going 1 -> 2 was written, not refused.
+    const { failures: allGrowth } = diffRows(rows, committed.rows);
+    const grew = allGrowth.filter(
+      ({ row, file }) =>
+        row.id !== ROW_RUN_BOUNDARY || !isBoundaryPath(file, toolExecuteFiles),
+    );
     if (grew.length > 0) {
       console.error(
         `\n--update refused: ${grew.length} count(s) would grow beyond the committed baseline.`,
@@ -995,7 +1006,7 @@ function main() {
         console.error(`  - [${row.id}] ${file}: ${was} -> ${now} (${kind})`);
       }
       console.error(
-        "\nA ratchet is shrink-only in both directions of use: --update records a measurement, it never raises a ceiling. Remove the new sites, or move them to one of R1's boundary kinds.",
+        `\nA ratchet is shrink-only in both directions of use: --update records a measurement, it never raises a ceiling. Remove the new sites, or move them to one of ${BOUNDARY_PATHS_TEXT}, where an Effect.run* count may rise because the debt below it fell.`,
       );
       process.exit(1);
     }
