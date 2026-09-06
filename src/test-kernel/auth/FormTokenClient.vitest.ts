@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
@@ -8,6 +9,7 @@ import {
   type OAuthFormEndpoint,
 } from '@auth/oauth/formTokenClient';
 import { decodeJwtClaimsWithSchema } from '@auth/oauth/jwtDecode';
+import { postOAuth } from '@auth/oauth/oauthRequest';
 import { stubJsonFetch } from '@test/support/fetchTestUtils';
 
 class TestAuthError extends Error {
@@ -98,6 +100,38 @@ describe('form token endpoint (declarative)', () => {
       kind: 'fatal',
       status: 401,
     });
+  });
+});
+
+describe('postOAuth', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('times out a response whose body stalls after the headers', async () => {
+    // The stream never closes, so only a deadline over the body read can end
+    // the request; the fetch signal must be aborted so the stream is released.
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(new ReadableStream(), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      Effect.runPromise(
+        postOAuth({
+          url: 'https://example.test/token',
+          headers: {},
+          body: '',
+          timeoutMs: 20,
+          networkErrorMessage: 'Network error contacting token',
+        }),
+      ),
+    ).rejects.toMatchObject({
+      _tag: 'OAuthNetworkError',
+      message:
+        'Network error contacting token: The operation was aborted due to timeout',
+    });
+    expect(fetchMock.mock.calls[0]![1]?.signal?.aborted).toBe(true);
   });
 });
 

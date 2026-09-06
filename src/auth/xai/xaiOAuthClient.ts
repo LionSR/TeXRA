@@ -112,13 +112,13 @@ export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
   },
 );
 
-/** Best-effort read of an RFC 6749 error body; anything else is `{}`. */
+/** Best-effort parse of an RFC 6749 error body; anything else is `{}`. */
 const readErrorBody = Effect.fn('xaiOAuthClient.readErrorBody')(function* (
-  response: Response,
+  text: string,
 ) {
-  const raw = yield* Effect.tryPromise((): Promise<unknown> =>
-    response.json(),
-  ).pipe(Effect.orElseSucceed((): unknown => ({})));
+  const raw = yield* Effect.try((): unknown => JSON.parse(text)).pipe(
+    Effect.orElseSucceed((): unknown => ({})),
+  );
   const body: Record<string, unknown> = isObject(raw) ? raw : {};
   return body;
 });
@@ -153,7 +153,7 @@ export const pollDeviceToken = Effect.fn('xaiOAuthClient.pollDeviceToken')(
       );
     }
 
-    const body = yield* readErrorBody(response);
+    const body = yield* readErrorBody(response.text);
     const oauthError = typeof body.error === 'string' ? body.error : undefined;
     const errorDescription =
       typeof body.error_description === 'string'
