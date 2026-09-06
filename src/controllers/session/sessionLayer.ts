@@ -54,6 +54,7 @@ import {
   type SessionOpen,
 } from '@agent/runtime/sessionGraph';
 import { createLog } from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import {
   clearProcessRuntime,
   initProcessRuntime,
@@ -596,16 +597,22 @@ export function installProcessRuntime(
   const release = (key: SessionKey): void => {
     runtime.runFork(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
   };
-  const runtime = ManagedRuntime.make(Sessions.layer(release, identity));
+  const runtime = ManagedRuntime.make(
+    Sessions.layer(release, identity).pipe(
+      Layer.provideMerge(effectDiagnosticsLayer),
+    ),
+  );
   initProcessRuntime(runtime);
   // The map's services on the caller's own fiber: an Effect-native opener
   // (the SDK) runs these where it stands, so the owner adds no run site of
-  // its own. `openSync` and `current` stay synchronous for the three hosts.
+  // its own. Supply only the owned session family: the caller retains its
+  // tracer, logger, and other independently provided services. `openSync`
+  // and `current` stay synchronous for the three hosts.
   const onThisRuntime = <A, E>(
     effect: Effect.Effect<A, E, Sessions>,
   ): Effect.Effect<A, E> =>
     Effect.flatMap(runtime.contextEffect, (context) =>
-      Effect.provideContext(effect, context),
+      Effect.provideService(effect, Sessions, Context.get(context, Sessions)),
     );
   initSessionOwner({
     openSync: (open) => runtime.runSync(openSession(open)),
