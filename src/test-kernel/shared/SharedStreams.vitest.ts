@@ -15,7 +15,6 @@ import {
   formatStageLabel,
   formatStreamStatusLabel,
   progressHeaderStatus,
-  type StreamStatusLabelStyle,
 } from '@shared/streams/streamStatusDisplay';
 
 // ---------------------------------------------------------------------------
@@ -63,44 +62,24 @@ describe('formatStageLabel', () => {
 });
 
 describe('stream status display labels', () => {
-  const wordingCases: Array<
-    [StreamStatusLabelStyle, StreamLifecycleStatus, string]
-  > = [
-    ['cli', STREAM_PHASE.WAITING, 'idle'],
-    ['cliCompact', STREAM_PHASE.WAITING, 'idle'],
-    ['progressHeader', STREAM_PHASE.WAITING, 'Idle'],
-    ['cliCompact', STREAM_PHASE.COMPLETED, 'completed'],
-    ['progressHeader', STREAM_PHASE.COMPLETED, 'Completed'],
-    ['cliCompact', STREAM_PHASE.CANCELLED, 'stopped'],
-    ['progressHeader', STREAM_PHASE.CANCELLED, 'Stopped'],
-    ['cli', STREAM_STATUS.READY, 'ready'],
-    ['progressHeader', STREAM_STATUS.READY, 'Ready'],
+  const wordingCases: Array<[StreamLifecycleStatus, string]> = [
+    [STREAM_PHASE.WAITING, 'Idle'],
+    [STREAM_PHASE.COMPLETED, 'Completed'],
+    [STREAM_PHASE.CANCELLED, 'Stopped'],
+    [STREAM_STATUS.READY, 'Ready'],
   ];
 
-  it.each(wordingCases)(
-    'preserves %s wording: %s -> "%s"',
-    (style, status, label) => {
-      expect(formatStreamStatusLabel(status, { style })).toBe(label);
-    },
-  );
+  it.each(wordingCases)('preserves wording: %s -> "%s"', (status, label) => {
+    expect(formatStreamStatusLabel(status)).toBe(label);
+  });
 
-  const substateWordingCases: Array<[StreamStatusLabelStyle, string]> = [
-    ['cli', 'starting\u2026'],
-    ['cliCompact', 'starting'],
-    ['progressHeader', 'Initializing'],
-  ];
-
-  it.each(substateWordingCases)(
-    'preserves %s STARTING wording: "%s"',
-    (style, label) => {
-      expect(
-        formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
-          style,
-          substate: STREAM_SUBSTATE.STARTING,
-        }),
-      ).toBe(label);
-    },
-  );
+  it('preserves the STARTING wording', () => {
+    expect(
+      formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
+        substate: STREAM_SUBSTATE.STARTING,
+      }),
+    ).toBe('Initializing');
+  });
 
   it('supports an explicit missing label', () => {
     expect(formatStreamStatusLabel(undefined, { missingLabel: '-' })).toBe('-');
@@ -109,10 +88,9 @@ describe('stream status display labels', () => {
   it('uses substate display keys for current running phases', () => {
     expect(
       formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
-        style: 'cli',
         substate: STREAM_SUBSTATE.RESUMING,
       }),
-    ).toBe('resuming');
+    ).toBe('Resuming');
     expect(
       progressHeaderStatus(STREAM_PHASE.RUNNING, STREAM_SUBSTATE.RESUMING)
         .displayKey,

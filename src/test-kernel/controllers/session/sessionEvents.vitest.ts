@@ -11,14 +11,21 @@
  * process holds (`self`) or whose owner is alive (`heldBy`) folds to
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
+import '@test/support/sessionGraphTestSetup';
+
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
-import { describe, expect } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import {
   SessionEventLog,
   sessionEventsLayer,
 } from '@agent/runtime/SessionEvents';
+import {
+  forEachLiveSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { closeSession, openSession } from '@agent/runtime/sessionGraph';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -27,6 +34,7 @@ import {
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   AgentCategory,
   STREAM_PHASE,
@@ -35,7 +43,9 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
+import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
@@ -43,6 +53,24 @@ const SELF = '4242:self-start';
 const OTHER = '4343:other-start';
 const STREAM = 'stream:framing' as StreamTabId;
 const EXECUTION = 'ab12cd' as ExecutionId;
+const OLDER = 'stream:older' as StreamTabId;
+const NEWER = 'stream:newer' as StreamTabId;
+
+/** A store holding two finished streams' summaries, as a reopened
+ *  workspace does before any graph is built over it. */
+function storeWithHistory(): StreamLogStore {
+  const store = StreamLogStore.ephemeral('session events history');
+  store.recordSummaryMeta(OLDER, {
+    executionId: 'a1b2c3' as ExecutionId,
+    agentCategory: AgentCategory.ToolUse,
+  });
+  store.recordSummaryMeta(NEWER, {
+    executionId: 'b2c3d4' as ExecutionId,
+    agentCategory: AgentCategory.Workflow,
+    description: 'the newer run',
+  });
+  return store;
+}
 
 /** Wait on the fold's level until it holds a view `ready` accepts: the ref
  *  replays its current value on subscribe, so a view already there ends the
@@ -89,7 +117,10 @@ const requested: SessionEventDraft = {
  *  bits: the log seeded with `history` before the plane reads its anchor
  *  (the pre-cutover importer's position), the plane, the fold, and the
  *  three local sources. */
-const graph = (history: readonly SessionEventDraft[]) => {
+const graph = (
+  history: readonly SessionEventDraft[],
+  transcripts = StreamLogStore.ephemeral('session events test'),
+) => {
   const roots = createFakeWorkspaceRoots({ storagePath: '/workspace/framing' });
   const seeded = Layer.effectDiscard(
     Effect.gen(function* () {
@@ -103,12 +134,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
       sessionEventsLayer.pipe(
         Layer.provideMerge(
           seeded.pipe(
-            Layer.provideMerge(
-              SessionEventLog.memoryLayer(
-                StreamLogStore.ephemeral('session events test'),
-                roots,
-              ),
-            ),
+            Layer.provideMerge(SessionEventLog.memoryLayer(transcripts, roots)),
           ),
         ),
       ),
@@ -238,4 +264,128 @@ describe('session events and view', () => {
         expect(held.streams.get(STREAM)?.readOnly).toBe(true);
       }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );
+  it.effect(
+    'lists the streams the store held at build below the log, in order and on the wire',
+    () =>
+      Effect.gen(function* () {
+        const events = yield* SessionEvents;
+        const log = yield* SessionEventLog;
+        const view = yield* SessionViewService;
+        yield* settle(view.ref, (v) => v.streams.size === 2);
+        const listed = yield* SubscriptionRef.get(view.ref);
+        const older = listed.streams.get(OLDER);
+        const newer = listed.streams.get(NEWER);
+        // Distinct commits in the store's order, so the roster keeps the
+        // transcript's creation order rather than falling back to the id.
+        expect(older?.createdAt).toBeGreaterThanOrEqual(1);
+        expect(newer?.createdAt).toBeGreaterThan(older?.createdAt ?? 0);
+        expect(newer?.description).toBe('the newer run');
+        // Every listing row is a wire-valid event: the webview parses the
+        // replay frame whole and drops it on one bad seq.
+        const rows = yield* Stream.runCollect(log.readListing());
+        const frame = DownMessageSchema.safeParse({
+          kind: 'events',
+          session: 'k',
+          generation: 0,
+          cursor: 0,
+          events: rows.map((event) => ({
+            _tag: 'event',
+            read: 'listing',
+            event,
+          })),
+          chunks: [],
+          local: null,
+          host: null,
+          replayComplete: true,
+        });
+        expect(
+          frame.success,
+          frame.success ? '' : JSON.stringify(frame.error.issues, null, 1),
+        ).toBe(true);
+        // A stream born after the build enters through its own row alone,
+        // above the reserved space, so a renderer attached at open sees it
+        // as new.
+        yield* events.publish([{ ...runStart, aggregateId: STREAM }]);
+        yield* settle(view.ref, (v) => v.streams.has(STREAM));
+        const live = yield* SubscriptionRef.get(view.ref);
+        expect(live.streams.get(STREAM)?.createdAt).toBeGreaterThan(
+          newer?.createdAt ?? 0,
+        );
+        expect(live.streams.size).toBe(3);
+      }).pipe(Effect.provide(graph([], storeWithHistory()))),
+  );
+});
+
+/**
+ * The session owner (proposal 2026-09-05, sections 3 and 9): `closeSession`
+ * is how a session the `Sessions` map holds behind `openSession` ends.
+ */
+describe('Sessions owner', () => {
+  const open = (storagePath: string) =>
+    openSession({
+      roots: createFakeWorkspaceRoots({ storagePath }),
+      transcripts: StreamLogStore.ephemeral('sessions owner test'),
+    });
+  const isLive = (session: SessionHandle): boolean => {
+    let live = false;
+    forEachLiveSession((candidate) => {
+      live ||= candidate === session;
+    });
+    return live;
+  };
+  const track = (session: SessionHandle, executionId: string) =>
+    session.executions.track(
+      testExecutionHandle({
+        executionId,
+        parentStreamId: `stream:${executionId}` as StreamTabId,
+        agent: 'chat',
+      }),
+    );
+
+  it('close reports settled once the run ended, and releases the session', async () => {
+    const session = open('/workspace/owner/settled');
+    track(session, 'exec:settled');
+    // The run completes: its driver untracks it as it unwinds.
+    session.executions.untrack('exec:settled');
+    // A native child between turns, detached from its stopped parent: its
+    // activation is its only record, so the close must stop it itself, and
+    // wait for the loop to release the activation after its last delivery.
+    let releaseChild = (): void => {};
+    const interrupt = vi.fn(() => releaseChild());
+    releaseChild = session.executions.reserveChildActivation({
+      executionId: 'exec:child' as ExecutionId,
+      parentStreamId: 'stream:exec:settled' as StreamTabId,
+      childStreamId: 'stream:exec:child' as StreamTabId,
+      interrupt,
+      detach: () => {},
+      isDetached: () => true,
+    });
+
+    await expect(closeSession('/workspace/owner/settled')).resolves.toEqual({
+      settled: true,
+      abandoned: [],
+    });
+    expect(interrupt).toHaveBeenCalledOnce();
+    expect(isLive(session)).toBe(false);
+  });
+
+  it('close reports a run still live past the budget as abandoned, and releases the session at its settlement', async () => {
+    const session = open('/workspace/owner/abandoned');
+    // A run that ignores its interrupt: no handler, no driver to unwind it.
+    track(session, 'exec:slow');
+    vi.useFakeTimers();
+    try {
+      const closing = closeSession('/workspace/owner/abandoned');
+      await vi.advanceTimersByTimeAsync(SHUTDOWN_PHASE_DEADLINE_MS);
+      await expect(closing).resolves.toEqual({
+        settled: false,
+        abandoned: ['exec:slow'],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(isLive(session)).toBe(true);
+    session.executions.untrack('exec:slow');
+    await vi.waitFor(() => expect(isLive(session)).toBe(false));
+  });
 });

@@ -103,6 +103,11 @@ export const conversationContentStyles: CSSResult = css`
     );
   }
 
+  .conversation-composer-dock session-banners {
+    display: block;
+    padding: 0 var(--wa-space-3xs);
+  }
+
   .conversation-composer-banner {
     padding: var(--wa-space-xs) var(--wa-space-s);
     color: var(--color-text-muted);

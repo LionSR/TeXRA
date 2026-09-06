@@ -141,14 +141,6 @@ describe('sessionFold', () => {
       taskGroupsOf(scenario.rootEntries),
     );
     expect(root.transcript.rows).toStrictEqual(rowsOf(scenario.rootEntries));
-    // The last session commit folded for the stream, not a per-aggregate seq.
-    expect(root.transcript.settledSeq).toBe(
-      Math.max(
-        ...scenario.log.events
-          .filter((e) => e.aggregateId === ROOT)
-          .map((e) => e.commit),
-      ),
-    );
     // The transcript tier retained the rows: the aggregate's newest seq.
     expect(view.folded.get(ROOT)).toBe(
       Math.max(
@@ -408,7 +400,6 @@ describe('sessionFold', () => {
     expect(first.kind === 'assistant' && first.streaming).toBe(true);
     expect(streaming.inflight.get(`${CHILD}/response-1`)).toBe('Hello');
     expect(streaming.inflight.get(`${CHILD}/response-2`)).toBe('Ear');
-    expect(child.transcript.settledSeq).toBe(2);
     // A streaming reply is not settled and not yet the latest line.
     expect(child.transcript.settledRows).toBe(0);
     expect(child.latestLine).toBeNull();
@@ -597,5 +588,59 @@ describe('sessionFold', () => {
     expect(reparented.order).toStrictEqual([PROCESS, ROOT]);
     expect(stream(reparented, PROCESS).parentId).toBeNull();
     expect(stream(reparented, PROCESS).ancestors).toStrictEqual([]);
+  });
+
+  it('publishes an immutable level and shares its untouched branches with the next (D5)', () => {
+    const before = foldAll(scenario.events);
+    const childBefore = stream(before, CHILD);
+    const rowsBefore = childBefore.transcript.rows;
+    const rowCount = rowsBefore.length;
+    const key = `${CHILD}/late`;
+    const after = fold(before, [
+      tail({
+        aggregateId: CHILD,
+        seq: before.folded.get(CHILD)! + 1,
+        commit: 200,
+        ownerId: OWNER,
+        at: 4000,
+        type: 'transcript.entry',
+        entry: {
+          id: 'late',
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+          text: 'Late',
+          data: { status: 'running' },
+          seqNo: 999,
+          timestamp: 4000,
+          level: 'info',
+        },
+      }),
+      {
+        _tag: 'chunk',
+        streamId: CHILD,
+        rowId: 'late',
+        from: 4,
+        to: 6,
+        text: '!!',
+      },
+    ]);
+    // The older level reads what it did when it was published.
+    expect(before.streams.get(CHILD)).toBe(childBefore);
+    expect(childBefore.transcript.rows).toBe(rowsBefore);
+    expect(rowsBefore).toHaveLength(rowCount);
+    expect(before.inflight.has(key)).toBe(false);
+    // The next level holds the writes ...
+    const childAfter = stream(after, CHILD);
+    expect(childAfter.transcript.rows).toHaveLength(rowCount + 1);
+    expect(after.inflight.get(key)).toBe('Late!!');
+    expect(after.streams).not.toBe(before.streams);
+    // ... and shares every branch it did not touch by reference.
+    expect(after.streams.get(PROCESS)).toBe(before.streams.get(PROCESS));
+    expect(stream(after, PROCESS).transcript.rows).toBe(
+      stream(before, PROCESS).transcript.rows,
+    );
+    expect(after.policy).toBe(before.policy);
+    expect(after.latest).toBe(before.latest);
+    expect(after.queuedFollowUps).toBe(before.queuedFollowUps);
   });
 });

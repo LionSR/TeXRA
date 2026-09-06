@@ -36,6 +36,7 @@ import {
 } from '@controllers/session/SessionBridge';
 import { createHostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
+import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
@@ -1497,7 +1498,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         afterExecutionSettlement: [
           () => processResources.dispose(),
           // Last: every paper's session has released its graph above.
-          () => platformInit.runtime.dispose(),
+          () => disposeProcessRuntime(),
         ],
       });
 

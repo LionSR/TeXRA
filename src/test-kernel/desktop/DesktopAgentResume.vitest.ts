@@ -1,5 +1,5 @@
 // Test setup imports
-import '@test/support/defaultSessionTestSetup';
+import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
@@ -25,7 +25,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { StreamSnapshotStore } from '@transcript';
@@ -145,7 +145,7 @@ function createResumeHarness(): {
 } {
   const snapshots = new StreamSnapshotStore();
   snapshotFacts(snapshots).setRunConfig(stream, config, executionId);
-  const session = createTestSession({ snapshots });
+  const session = createProcessSession({ snapshots });
   session.transcripts.ensureStream(stream);
   const owner = new DesktopProcessResumeOwner({ sessions: () => [session] });
   const detachTerminalResultToast = attachTerminalResultToast(

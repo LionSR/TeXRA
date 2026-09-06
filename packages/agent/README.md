@@ -70,19 +70,30 @@ stops that reader while the run continues. If launch fails before the run
 enters the session, `view` ends without a value and `result` carries the
 failure.
 
-Each view is the runtime's own value, not a copy: a yielded view supersedes
-the one before it, and the maps and arrays beneath an older view may already
-show a later level. The exported `SessionView`, `StreamView`, and
+Every yielded view is immutable: an older view stays what it was for as long
+as it is held, and a branch the later level did not touch is the same object
+in both. An older view is stable to read; it is not a fold input, so nothing
+in the package folds onto anything but the latest level. The exported
+`SessionView`, `StreamView`, and
 `TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
 arrays); a write through a cast corrupts the session every later run in the
 process reads. The run's transcript rows (`StreamView.transcript`) are
 subscribed on its behalf, its stream and its descendants as they appear, and
 stay resident for the life of the process.
 
-Runs share one session per workspace storage root for the life of the
-process. It is disposed, after its live executions settle, on the platform's
-shutdown path (`lifecycle.runShutdown()`), which an embedder runs before it
-exits.
+Runs share one session per workspace storage root. The runtime's session
+owner holds it, the same owner every TeXRA host opens its sessions through, so
+opening a root twice (two runs, or a run beside a host in the same process)
+resolves the one session already open there; a second root gets its own. When the session was opened by a host (the extension, the desktop, or the CLI in the same process), that host's decision delivery applies to every run on it: retries and approvals prompt in the host's UI and the run waits there, as PR #11893 section 8 rules; the package's inline retry denial applies only to sessions the package opened itself. A
+session ends only through `closeSession(roots)`: it refuses new runs on the
+root, interrupts the runs it owns and waits for them to settle within the
+runtime's shutdown budget (or the `signal` you pass, when the close runs under
+a budget of your own), flushes its artifacts, and releases the session,
+returning `{ settled, abandoned }`. `settled` is true when every run ended in
+time; otherwise `abandoned` names the runs still live, and the session stays
+open, refusing new runs, until they end. The platform's shutdown path
+(`lifecycle.runShutdown()`), which an embedder runs before it exits, closes
+the platform's session this way after the runs it owns have settled.
 
 ## Run results
 
@@ -110,11 +121,11 @@ files.
 
 ## Entry points
 
-| Entry                     | Contents                                                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/agent`         | `runAgent`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` types |
-| `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                      |
-| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                    |
+| Entry                     | Contents                                                                                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/agent`         | `runAgent`, `closeSession`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` / `SessionCloseReport` types |
+| `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                                             |
+| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                                           |
 
 ## The platform
 

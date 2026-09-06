@@ -168,14 +168,13 @@ describe('desktop IPC adapters', () => {
     ]);
   });
 
-  it('resets the launcher through the shell messages', async () => {
+  it('shows the launcher for New Session through the shell messages', async () => {
     const { actions, postToRenderer } = await createShellHarness();
 
     actions.resetMainView();
 
     expect(postToRenderer.mock.calls.map(([message]) => message)).toEqual([
       { command: 'desktop:showLauncher' },
-      { command: 'desktop:resetLauncher' },
     ]);
   });
 

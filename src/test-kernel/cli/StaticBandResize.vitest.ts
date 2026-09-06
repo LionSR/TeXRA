@@ -125,8 +125,6 @@ function seedTranscript(
         transcript: {
           rows: entries,
           taskGroups: [],
-          compaction: [],
-          settledSeq: entries.length,
           settledRows: entries.length,
           run: null,
         },

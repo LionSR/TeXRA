@@ -808,12 +808,14 @@ function validateRunCommand() {
       text.stdout.trim() === copiedOutputPath,
       'text run output should print the filesystem copy path when --output is used',
     );
+    // The progress line prints the fold's status label from the one table in
+    // src/shared/streams/streamStatusDisplay.ts (STREAM_STATUS_LABELS).
     assert(
-      text.stderr.includes(' · completed ·'),
+      text.stderr.includes(' · Completed ·'),
       `text run progress should end with the shared completed label\nstderr:\n${text.stderr}`,
     );
     assert(
-      !text.stderr.includes(' · stopped ·'),
+      !text.stderr.includes(' · Stopped ·'),
       `a successful text run should not report the cancelled stopped label\nstderr:\n${text.stderr}`,
     );
 

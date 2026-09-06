@@ -22,6 +22,7 @@ import {
   ExecutionIdSchema,
   GoalStateSchema,
   InquiryThreadUpdatedEventSchema,
+  LocalRuntimeStateSchema,
   OwnerIdSchema,
   PermissionPayloadSchema,
   PlanSchema,
@@ -40,7 +41,6 @@ import {
   WorktreeInfoSchema,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import type { CompactionActivityBlock } from '@shared/streams/compactionActivityProjection';
 import { STREAM_STATUS_TONE } from '@shared/streams/streamStatusDisplay';
 import type { WorkflowRunModel } from '@shared/streams/workflowRunModel';
 
@@ -52,9 +52,9 @@ const SessionKeySchema = z.string().min(1);
  * keeps its incremental indexes (row and group positions, the compaction
  * projection's working state, the measured live text per streaming row, the
  * newest plan marker) beside the value in a module-private map, so a host
- * can neither depend on nor mutate them. `rows`, `taskGroups`, and `compaction` are appended in
- * place by the fold (a copy per entry would make a replay quadratic) and the
- * slice value is replaced on every change; hosts read, never write.
+ * can neither depend on nor mutate them. The slice value is replaced on every
+ * change and `rows` and `taskGroups` are never written after the fold that
+ * produced them returns (D5); hosts read, never write.
  *
  * The row, block, and run-model elements are the shared renderers' own
  * TypeScript shapes (`transcriptRow.ts`, `compactionActivityProjection.ts`,
@@ -67,12 +67,6 @@ const TranscriptViewSchema = z.object({
   rows: z.array(z.custom<TranscriptRow>()),
   /** `upsertTaskGroupFromStreamLog` over the group entries. */
   taskGroups: z.array(TaskGroupSchema),
-  /** `applyCompactionActivityEntries` blocks, in projection order. */
-  compaction: z.array(z.custom<CompactionActivityBlock>()),
-  /** The last session commit ordinal folded for this stream, over both of
-   *  its aggregates; text chunks never move it. A memoization key, never a
-   *  print boundary. */
-  settledSeq: CommitOrdinalSchema,
   /** The contiguous leading prefix of rows whose finalizing event has
    *  folded: what an append-only scrollback may print. */
   settledRows: z.int().nonnegative(),
@@ -241,13 +235,7 @@ const SessionViewSchema = z.object({
   policy: z.map(StreamTabIdSchema, ApprovalPolicySnapshotSchema),
   inquiries: z.array(InquiryThreadUpdatedEventSchema),
   /** This process's local truth: a fold input, never durable. */
-  local: z.object({
-    self: z.array(OwnerIdSchema),
-    heldBy: z.array(OwnerIdSchema),
-    unreadable: z.array(
-      z.object({ streamId: StreamTabIdSchema, detail: z.string() }),
-    ),
-  }),
+  local: LocalRuntimeStateSchema,
   queuedFollowUps: z.map(StreamTabIdSchema, z.array(z.string())),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;

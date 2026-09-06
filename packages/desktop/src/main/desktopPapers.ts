@@ -9,8 +9,9 @@ import type { SessionStores } from '@agent/storage';
 import {
   agentResponseTextConnector,
   attachTerminalResultToast,
+  openSession,
   runInSession,
-  SessionHandle,
+  type SessionHandle,
 } from '@agent/runtime';
 import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -219,7 +220,7 @@ async function openPaperSession(
     const transcripts = await runWithWorkspaceRoots(roots, () =>
       StreamLogStore.openOrEphemeral(),
     );
-    const session = new SessionHandle({
+    const session = openSession({
       transcripts,
       roots,
       responseTextProcessing,

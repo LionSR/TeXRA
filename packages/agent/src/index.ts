@@ -11,10 +11,11 @@ import { Effect, Fiber, Stream } from 'effect';
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { loadAgents, resolveAgent } from '@agent/index';
 import {
-  processOwnerId,
+  closeSession as closeRuntimeSession,
+  openSessionAsync,
   runAgent as runValidatedAgent,
-  SessionHandle as RuntimeSessionHandle,
   type AgentRunHandle as RuntimeAgentRunHandle,
+  type SessionHandle as RuntimeSessionHandle,
 } from '@agent/runtime';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 
@@ -29,7 +30,10 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - config and host services
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
+import {
+  disposeProcessRuntime,
+  installProcessRuntime,
+} from '@controllers/session/sessionLayer';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import {
   initProcessWorkspaceRoots,
@@ -37,7 +41,11 @@ import {
 } from '@platform/workspaceRoots';
 import { effectRuntime } from '@platform/processRuntime';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type SessionCloseReport,
+  type StreamTabId,
+} from '@shared/schemas';
 import type {
   SessionView as RuntimeSessionView,
   StreamView as RuntimeStreamView,
@@ -47,6 +55,7 @@ import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 export type { AgentEvent } from '@agent/trace';
+export type { SessionCloseReport } from '@shared/schemas';
 export type {
   ITool,
   IToolRegistry,
@@ -124,12 +133,11 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
    * The first view yielded holds the run's stream: a level from before the
    * run entered the session is not this run's and is skipped.
    *
-   * Each view is the runtime's own value, never a copy. The fold replaces
-   * the envelope per level and appends to the maps and arrays beneath it in
-   * place, so a yielded view supersedes the one before it, and a value read
-   * through an older view may already show a later level. The type is
-   * read-only all the way down; a write through a cast corrupts the session
-   * every host and every later run on it reads.
+   * Every yielded view is immutable: an older view stays what it was for as
+   * long as it is held, and a branch the later level did not touch is the
+   * same object in both. The type is read-only all the way down; a write
+   * through a cast corrupts the session every host and every later run on
+   * it reads.
    *
    * The run's transcript rows (`StreamView.transcript`) are resident for the
    * life of the package session, which is the process: its stream and, as
@@ -152,28 +160,14 @@ interface EnteredRun {
   readonly view: RuntimeSessionHandle['viewChanges'];
 }
 
-/**
- * The package's one process-wide state, made on the first run and torn down
- * on the embedder's shutdown path: the node runtime features, the Effect
- * runtime the package sessions' graphs run on, and the sessions themselves,
- * one per storage root (PRD 7.3, 11). `Sessions` keys a root's graph by its
- * storage root and bridges the transcript store the root's first handle
- * opened, so every run on a root shares one handle, or a later run's rows
- * would land in a store no graph reads. The shutdown path resets this owner,
- * so the sessions have no life of their own past it.
- */
-let packageSessions: Promise<Map<string, RuntimeSessionHandle>> | undefined;
-
-function sessionFor(
-  sessions: Map<string, RuntimeSessionHandle>,
-  platform: AgentPlatform,
-): RuntimeSessionHandle {
-  let session = sessions.get(platform.roots.storage);
-  if (!session) {
-    session = new RuntimeSessionHandle({
-      roots: platform.roots,
-      transcripts: StreamLogStore.ephemeral('npm package consumer'),
-    });
+/** The session of the platform's storage root, as the runtime's owner
+ *  holds it: built on the first open, over what the package supplies then.
+ *  Registered with the owner before the returned promise is awaited, so a
+ *  close issued after `runAgent` returns finds this open. */
+function sessionFor(platform: AgentPlatform): Promise<RuntimeSessionHandle> {
+  return openSessionAsync({
+    roots: platform.roots,
+    transcripts: StreamLogStore.ephemeral('npm package consumer'),
     // The session's one host, for its whole life, like every TeXRA host
     // attaches one per session: the interaction hub keeps a single active
     // host and tells runs apart by the stream its requests and cancellations
@@ -181,16 +175,14 @@ function sessionFor(
     // previous run's host. The package has no interactive prompts, so there
     // is nothing for a cancellation to settle; a retry prompt is denied so
     // that it never parks the run waiting for a host.
-    session.interactions.use({
+    interactions: {
       cancel: () => {},
       requestRetry: async () => ({
         action: 'deny',
         reason: 'Interactive retries are unavailable in the agent package.',
       }),
-    });
-    sessions.set(platform.roots.storage, session);
-  }
-  return session;
+    },
+  });
 }
 
 /** The run's stream and every descendant the view holds. */
@@ -288,10 +280,10 @@ class AgentRunStream implements AgentRun {
     });
     // The transcript tier folds only for subscribed aggregates (PRD 7.2), on
     // a port of this run's own: its stream now, its descendants as the view
-    // gains them. The port is never cleared: the fold evicts an unsubscribed
-    // stream's rows through the maps a delivered view shares, so clearing
-    // at the terminal view would empty the transcript of the view a consumer
-    // just received. The rows live as long as the session, as a TUI's do.
+    // gains them. The port is never cleared, by choice: the run's rows stay
+    // resident for the life of the package session (the README's residency
+    // contract), as a TUI's do, so a consumer can read the transcript of a
+    // finished run from the latest level as well as from the one it held.
     const port = `sdk/${streamId}`;
     let subscribed = '';
     const subscribe = (ids: readonly StreamTabId[]): void => {
@@ -401,6 +393,26 @@ class AgentRunStream implements AgentRun {
 }
 
 /**
+ * Close the session of a workspace's storage root: refuse new runs on it,
+ * interrupt the ones it owns and wait for them to settle within `signal`'s
+ * budget (the embedder's own shutdown phase) or, without one, the runtime's
+ * shutdown budget, flush its artifacts, and release it. The report says
+ * whether every run settled; the runs it names as `abandoned` were still
+ * live when the budget ran out, and the session stays open, refusing new
+ * runs, until they end. A root with no open session reports `settled`, as
+ * does a process no run has initialized. The embedder's shutdown path
+ * (`lifecycle.runShutdown()`) closes the platform's session this way, under
+ * its phase budget; call it directly to close a root before that, or to
+ * close one of several roots one platform opened.
+ */
+export function closeSession(
+  roots: WorkspaceRoots,
+  signal?: AbortSignal,
+): Promise<SessionCloseReport> {
+  return closeRuntimeSession(roots.storage, signal);
+}
+
+/**
  * Start one agent run and expose its trace as an asynchronous event stream.
  *
  * The platform and agent registry are process-wide. Applications should create
@@ -418,6 +430,13 @@ export function runAgent(input: RunAgentInput): AgentRun {
       );
     }
 
+    // Everything from the platform check to the session open is
+    // synchronous: two first runs cannot both pass the check, and the owner
+    // holds this run's session before the run's first await, so a
+    // `closeSession` or a `runShutdown` issued right after `runAgent`
+    // returns settles this launch too (the run then fails at admission
+    // instead of starting model work after the cleanup). The process
+    // identity is read while the session builds.
     const activePlatform = tryPlatform();
     if (activePlatform && activePlatform !== input.platform) {
       throw new Error(
@@ -425,38 +444,32 @@ export function runAgent(input: RunAgentInput): AgentRun {
       );
     }
     if (!activePlatform) {
+      // No composition root has run in this process, so the package is its
+      // composition root: the platform, the node agent runtime, the one
+      // Effect runtime holding the sessions' owner (PRD 7.7), and the hosts'
+      // shutdown order on the embedder's shutdown path. A run beside a host
+      // that already ran its own (the same platform object) reuses all four,
+      // its session included: the owner is process-wide, and nothing here
+      // may be installed twice.
       initPlatform(input.platform);
       initProcessWorkspaceRoots(input.platform.roots);
-    }
-    packageSessions ??= (async () => {
       initNodeAgentRuntime(input.platform.lifecycle);
-      // The one Effect runtime of the embedding process (PRD 7.7), for the
-      // package sessions' graphs.
-      const runtime = installProcessRuntime(
-        processOwnerId(await input.platform.processes.selfIdentity()),
-      );
-      const sessions = new Map<string, RuntimeSessionHandle>();
-      // The hosts' shutdown order, on the embedder's shutdown path: the
-      // sessions' agent-spawned children and agent-CLI sessions are stopped
-      // and their live executions settled, then each session goes with the
-      // owner that held it, then the runtime its graph ran on.
+      installProcessRuntime(input.platform.processes.selfIdentity());
+      // The session's agent-spawned children and agent-CLI sessions are
+      // stopped, then the platform's session is closed through its owner
+      // under the phase's own budget (its runs stopped and settled, its
+      // artifacts flushed, the session released: the headless shape, as the
+      // CLI's headless run stops and awaits its run in this phase), then
+      // the runtime that held it goes, and its owner with it: a later
+      // `closeSession` answers as a process with none does.
       registerRuntimeShutdownHandlers(input.platform.lifecycle, {
-        flushArtifacts: async () => {
-          for (const session of sessions.values()) {
-            await session.flushArtifacts();
-          }
+        flushArtifacts: async (signal) => {
+          await closeSession(input.platform.roots, signal);
         },
-        afterExecutionSettlement: [
-          () => {
-            for (const session of sessions.values()) session.dispose();
-            packageSessions = undefined;
-          },
-          () => runtime.dispose(),
-        ],
+        afterExecutionSettlement: [() => disposeProcessRuntime()],
       });
-      return sessions;
-    })();
-    const session = sessionFor(await packageSessions, input.platform);
+    }
+    const session = await sessionFor(input.platform);
     await loadAgents({ includeRemote: false });
     const resolved = resolveAgent(input.agent);
     if (!resolved) {

@@ -193,7 +193,7 @@ describe('SessionHandle', () => {
     const transcripts =
       await StreamLogStore.openReadOnlyForStream('any-stream');
 
-    expect(() => new SessionHandle({ transcripts })).toThrow(
+    expect(() => createTestSession({ transcripts })).toThrow(
       'requires a writable transcript store',
     );
   });

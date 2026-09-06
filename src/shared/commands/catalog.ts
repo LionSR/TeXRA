@@ -303,7 +303,7 @@ export const commandCatalog = [
   {
     id: 'texra.toggleView',
     extensionRegistry: true,
-    title: 'Toggle Launcher/Progress View',
+    title: 'Toggle Sessions Drawer',
     category: 'TeXRA',
     icon: '$(split-horizontal)',
     keybinding: {

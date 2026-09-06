@@ -34,11 +34,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared webview
 import '@shared/wa/spinner';
 import type {
-  AgentConfigBannerActionDetail,
-  ApiKeyBannerActionDetail,
   CheckboxChangeDetail,
-  GettingStartedActionDetail,
-  InstallGuideDetail,
   MultipleFilesActionDetail,
   MultipleFilesTypeActionDetail,
   RemoveFileDetail,
@@ -60,15 +56,11 @@ import { getBasename } from '@utils/core';
 import { progressAppStyles } from './progressAppStyles';
 import './components/StreamTabs';
 import './components/StreamConversation';
+import './components/SessionBanners';
 import './components/SessionComposer';
 import './components/SessionDrawer';
 import './components/ToolsSheet';
-import '@webview/frontend/components/AgentConfigBanner';
-import '@webview/frontend/components/ApiKeyBanner';
-import '@webview/frontend/components/DependencyBanner';
 import '@webview/frontend/components/FileSelectGroup';
-import '@webview/frontend/components/GettingStartedBanner';
-import '@webview/frontend/components/LoginBanner';
 import '@webview/frontend/components/OnboardingSetupCard';
 import '@webview/frontend/components/OnboardingWelcomeCard';
 
@@ -122,10 +114,6 @@ export class ProgressApp extends LitElement {
 
   private toggleDrawer = (): void => {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'toggleDrawer' }));
-  };
-
-  private openDashboard = (): void => {
-    this.dispatchEvent(SessionUiEvents.host({ kind: 'openDashboard' }));
   };
 
   private stopStream(stream: StreamView): void {
@@ -337,24 +325,17 @@ export class ProgressApp extends LitElement {
             tooltip: 'New task',
             onClick: this.selectNew,
           })}
-          ${
-            stream
-              ? this.renderOverflow(stream, host)
-              : renderIconActionButton({
-                  id: 'shell-dashboard',
-                  icon: 'gear',
-                  label: 'Open dashboard',
-                  tooltip: 'Open dashboard',
-                  onClick: this.openDashboard,
-                })
-          }
+          ${this.renderOverflow(stream, host)}
         </div>
       </header>
     `;
   }
 
+  /** The overflow in both states, so Open dashboard and the Tools sheet
+   *  have one home reachable from the New-task state; the debug section
+   *  needs a stream's output. */
   private renderOverflow(
-    stream: StreamView,
+    stream: StreamView | null,
     host: HostSnapshot,
   ): TemplateResult {
     const inEditor = this.placement === 'editor';
@@ -403,7 +384,7 @@ export class ProgressApp extends LitElement {
           Count</wa-dropdown-item
         >
         ${
-          host.debugMode
+          host.debugMode && stream
             ? html`<wa-divider></wa-divider>
                 <wa-dropdown-item value="pack"
                   >${waIcon('box-archive', { slot: 'icon' })}Pack output to
@@ -453,72 +434,33 @@ export class ProgressApp extends LitElement {
     `;
   }
 
-  /** The five banners and the setup card, host-owned state (8.1); each
-   *  action leaves as the `host.request` arm it names. */
-  private renderBanners(host: HostSnapshot, surface: Surface): TemplateResult {
-    const { banners } = host;
-    const hostRequest = (request: Parameters<typeof SessionUiEvents.host>[0]) =>
-      this.dispatchEvent(SessionUiEvents.host(request));
-    return html`
-      ${
-        host.onboarding === 'setup'
-          ? html`<onboarding-setup-card
-              @onboarding-run-setup=${() =>
-                hostRequest({ kind: 'onboarding', action: 'runSetup' })}
-              @onboarding-open-getting-started=${() =>
-                hostRequest({
-                  kind: 'onboarding',
-                  action: 'openGettingStarted',
-                })}
-              @onboarding-skip-setup=${() =>
-                hostRequest({ kind: 'onboarding', action: 'skipSetup' })}
-            ></onboarding-setup-card>`
-          : nothing
-      }
-      <div
-        class="banners"
-        @api-key-action=${({ detail }: CustomEvent<ApiKeyBannerActionDetail>) =>
-          hostRequest({
-            kind: 'apiKeyBanner',
-            action: detail.action,
-            provider: banners.apiKey.provider,
-          })}
-        @agent-config-action=${({
-          detail,
-        }: CustomEvent<AgentConfigBannerActionDetail>) =>
-          hostRequest({
-            kind: 'agentConfigBanner',
-            action: detail.action,
-            sessionType: surface.launch.sessionType,
-            customDirSet: banners.agentConfig.customDirSet,
-          })}
-        @dependency-dismiss=${() =>
-          hostRequest({ kind: 'dismissBanner', banner: 'dependency' })}
-        @recheck-dependencies=${() =>
-          hostRequest({ kind: 'recheckDependencies' })}
-        @open-install-guide=${({ detail }: CustomEvent<InstallGuideDetail>) =>
-          hostRequest({ kind: 'openInstallGuide', tool: detail.tool })}
-        @sign-in=${() => hostRequest({ kind: 'signIn' })}
-        @dismiss-login=${() =>
-          hostRequest({ kind: 'dismissBanner', banner: 'login' })}
-        @dismiss-getting-started=${() =>
-          hostRequest({ kind: 'dismissBanner', banner: 'gettingStarted' })}
-        @getting-started-action=${({
-          detail,
-        }: CustomEvent<GettingStartedActionDetail>) =>
-          hostRequest({ kind: 'gettingStarted', action: detail.action })}
-      >
-        <api-key-banner .state=${banners.apiKey}></api-key-banner>
-        <agent-config-banner
-          .state=${banners.agentConfig}
-        ></agent-config-banner>
-        <dependency-banner .state=${banners.dependency}></dependency-banner>
-        <getting-started-banner
-          .visible=${banners.gettingStarted}
-        ></getting-started-banner>
-        <login-banner .visible=${banners.login}></login-banner>
+  /** The hero, or the setup card in its place while the funnel is pending
+   *  (PRD 12.1); each card action leaves as the `onboarding` host arm. */
+  private renderHero(host: HostSnapshot): TemplateResult {
+    if (host.onboarding === 'setup') {
+      const onboarding = (
+        action: 'runSetup' | 'openGettingStarted' | 'skipSetup',
+      ) =>
+        this.dispatchEvent(
+          SessionUiEvents.host({ kind: 'onboarding', action }),
+        );
+      return html`<onboarding-setup-card
+        @onboarding-run-setup=${() => onboarding('runSetup')}
+        @onboarding-open-getting-started=${() =>
+          onboarding('openGettingStarted')}
+        @onboarding-skip-setup=${() => onboarding('skipSetup')}
+      ></onboarding-setup-card>`;
+    }
+    return html`<section class="hero" aria-labelledby="shell-hero-title">
+      <div class="hero-mark" aria-hidden="true">
+        ${waIcon('wand-magic-sparkles')}
       </div>
-    `;
+      <h1 id="shell-hero-title">What are you working on?</h1>
+      <p>
+        ${host.paper.name}. Describe the outcome you want: a polish, a review, a
+        literature pass, a proof check.
+      </p>
+    </section>`;
   }
 
   private renderEmptyState(
@@ -559,17 +501,7 @@ export class ProgressApp extends LitElement {
     return html`
       <div class="empty">
         <div class="hero-wrap">
-          <section class="hero" aria-labelledby="shell-hero-title">
-            <div class="hero-mark" aria-hidden="true">
-              ${waIcon('wand-magic-sparkles')}
-            </div>
-            <h1 id="shell-hero-title">What are you working on?</h1>
-            <p>
-              ${host.paper.name}. Describe the outcome you want: a polish, a
-              review, a literature pass, a proof check.
-            </p>
-          </section>
-          ${this.renderBanners(host, surface)}
+          ${this.renderHero(host)}
           <wa-details class="context">
             <span slot="summary" class="context-summary"
               >${waIcon('file-circle-plus')} Context and attachments
@@ -649,6 +581,11 @@ export class ProgressApp extends LitElement {
               </section>`
             : nothing
         }
+        <session-banners
+          class="launch-banners"
+          .banners=${host.banners}
+          .sessionType=${launch.sessionType}
+        ></session-banners>
         <session-composer
           class="launch-composer"
           .view=${view}
