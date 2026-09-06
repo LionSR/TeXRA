@@ -17,7 +17,6 @@
  */
 
 import pMap from 'p-map';
-import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { getExecutionStore, readExecutionMetaCore } from '@agent/storage';
@@ -25,7 +24,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   CompileFailureSchema,
   cloneRoundIndexed,
@@ -60,7 +58,7 @@ import {
 } from '@shared/schemas';
 
 import { mapToRecord, throwAggregated } from '@utils/core';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -91,6 +89,7 @@ import {
   readStreamData,
   type StreamData,
 } from './streamSnapshotRead';
+import type PQueue from 'p-queue';
 import type { StreamSummaryMeta } from './StreamSummaryCacheStore';
 
 const log = createLog('StreamSnapshotStore');
@@ -426,7 +425,7 @@ interface StreamRecord {
   // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
   // the first mutation so an accumulate/merge can't overwrite unloaded disk
   // data. `diskState` = this record's disk provenance; `seedChain` is the
-  // latest unit of work queued on this stream's seed lane, published
+  // latest unit of work queued on this stream's `seedQueueFor` lane, published
   // for readers that await seed/mutate quiescence (`awaitSeeded`, `flush`,
   // staged deletion) — the lane itself, not this field, serializes the work.
   diskState: DiskState;
@@ -505,29 +504,16 @@ export class StreamSnapshotStore {
   } satisfies SidecarWriteHost);
 
   /**
-   * Per-stream FIFO lane that serializes seed reads and the mutations queued
-   * behind them — `withPerKeyLane`, the same lane the file locks and the
-   * `JsonStore` flushes take. Each unit of work still publishes its promise
-   * onto `record.seedChain` for the readers that await it (`awaitSeeded`,
-   * `flush`, staged deletion).
+   * Per-stream FIFO lane (concurrency 1) that serializes seed reads and the
+   * mutations queued behind them — the same `PQueue({ concurrency: 1 })`-
+   * per-key precedent as `streamApprovalQueue.ts`. Each queued unit of work
+   * still publishes its promise onto `record.seedChain` for the readers that
+   * await it (`awaitSeeded`, `flush`, staged deletion).
    */
-  private readonly seedLanes = new Map<StreamTabId, PerKeyLane>();
+  private readonly seedQueues = new Map<StreamTabId, PQueue>();
 
-  /**
-   * Run `work` on `stream`'s lane. The lane is claimed in the program's first
-   * synchronous step, so units enter in call order; this store's readers hold
-   * promises, so the program runs on the process runtime here.
-   */
-  private onSeedLane(
-    stream: StreamTabId,
-    work: () => Promise<void>,
-  ): Promise<void> {
-    return effectRuntime().runPromise(
-      withPerKeyLane(
-        this.seedLanes,
-        stream,
-      )(Effect.tryPromise({ try: work, catch: (cause) => cause as Error })),
-    );
+  private seedQueueFor(stream: StreamTabId): PQueue {
+    return getOrCreatePQueue(this.seedQueues, stream);
   }
 
   /**
@@ -796,37 +782,40 @@ export class StreamSnapshotStore {
 
   /**
    * Queue a mutation onto the stream's seed lane: the lane's single-flight
-   * FIFO order (shared with `refreshSeed`) is what guarantees this runs after
-   * every unit of work queued ahead of it, seed reads included — the read
-   * itself must run INSIDE the queued work, not before entering the lane, or
-   * a `refreshSeed` racing on the same stream could start its own disk read
-   * concurrently with this one (the lane only serializes what it holds;
-   * anything started outside it runs unguarded). Each unit re-checks
-   * `hasDiskProvenance` before reading, so once the first one establishes it,
-   * every unit behind it skips straight to `apply`.
+   * FIFO order (concurrency 1, shared with `refreshSeed`) is what guarantees
+   * this runs after every unit of work queued ahead of it, seed reads
+   * included — the read itself must run INSIDE a queued task, not before
+   * enqueueing, or a `refreshSeed` racing on the same stream could start its
+   * own disk read concurrently with this one (the queue only serializes what
+   * it dispatches; anything started outside `add()` runs unguarded). Each
+   * task re-checks `hasDiskProvenance` before reading, so once the first
+   * queued task establishes it, every task queued behind it skips straight
+   * to `apply`.
    */
   private queueAfterSeed(
     stream: StreamTabId,
     generation: symbol,
     apply: () => unknown,
   ): Promise<void> {
-    const next: Promise<void> = this.onSeedLane(stream, async () => {
-      if (!this.hasDiskProvenance(stream)) {
-        try {
-          await this.readSeed(stream, generation);
-        } catch (err: unknown) {
-          if (!this.hasDiskProvenance(stream)) throw err;
+    const next: Promise<void> = this.seedQueueFor(stream)
+      .add(async () => {
+        if (!this.hasDiskProvenance(stream)) {
+          try {
+            await this.readSeed(stream, generation);
+          } catch (err: unknown) {
+            if (!this.hasDiskProvenance(stream)) throw err;
+          }
         }
-      }
-      if (!this.isCurrentGeneration(stream, generation)) return;
-      const record = this.records.get(stream);
-      if (!record || record.diskState === 'unknown') return;
-      apply();
-    }).catch((err: unknown) => {
-      log.warn(`Deferred update failed for stream ${stream}`, {
-        data: err,
-      });
-    });
+        if (!this.isCurrentGeneration(stream, generation)) return;
+        const record = this.records.get(stream);
+        if (!record || record.diskState === 'unknown') return;
+        apply();
+      })
+      .catch((err: unknown) => {
+        log.warn(`Deferred update failed for stream ${stream}`, {
+          data: err,
+        });
+      }) as Promise<void>;
     this.getOrCreateRecord(stream).seedChain = next;
     return next;
   }
@@ -1218,9 +1207,7 @@ export class StreamSnapshotStore {
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   private evict(stream: StreamTabId): void {
     this.records.delete(stream);
-    // The seed lane is not dropped here: it removes its own entry once the
-    // last fiber holding or waiting on it settles, and dropping it while one
-    // is still in flight would let a re-seed of the same stream run beside it.
+    this.seedQueues.delete(stream);
     this.writes.dropStreamWrites(stream);
     this.unseededReadWarned.delete(stream);
   }
@@ -1824,61 +1811,65 @@ export class StreamSnapshotStore {
     record.seedRefreshBaseline = refreshBaseline;
     const refreshGeneration = ++record.seedRefreshGeneration;
     record.diskState = 'unknown';
-    const next: Promise<void> = this.onSeedLane(stream, async () => {
-      if (!this.isCurrentGeneration(stream, generation)) return;
-      await this.writes.retryDirtyWrites(stream);
-      if (!this.isCurrentGeneration(stream, generation)) return;
-      await this.seedFromDisk(stream, generation);
-    }).then(
-      () => {
-        const current = this.records.get(stream);
-        if (
-          current?.seedRefreshGeneration === refreshGeneration &&
-          this.isCurrentGeneration(stream, generation)
-        ) {
-          current.seedRefreshBaseline = undefined;
-        }
-      },
-      (error: unknown) => {
-        const current = this.records.get(stream);
-        const generationIsCurrent = this.isCurrentGeneration(
-          stream,
-          generation,
-        );
-        // Snapshot the surviving state BEFORE the restore below, whose
-        // `persistEagerOverlays` drains the very overlays it reads.
-        const resolvedRefreshBaseline =
-          refreshBaseline === 'unknown' ? current?.diskState : refreshBaseline;
-        const failureBaseline: DiskState | undefined =
-          reportArtifactAuthority && current && generationIsCurrent
-            ? resolvedRefreshBaseline
-            : undefined;
-        const failureWorkPlanProvenance =
-          failureBaseline !== undefined && current
-            ? workPlanProvenanceOf(failureBaseline, current.overlays)
-            : undefined;
-        if (
-          current?.seedRefreshGeneration === refreshGeneration &&
-          generationIsCurrent
-        ) {
-          current.diskState = refreshBaseline;
-          current.seedRefreshBaseline = undefined;
-          if (refreshBaseline !== 'unknown') {
-            this.persistEagerOverlays(stream, current);
+    const next: Promise<void> = this.seedQueueFor(stream)
+      .add(async () => {
+        if (!this.isCurrentGeneration(stream, generation)) return;
+        await this.writes.retryDirtyWrites(stream);
+        if (!this.isCurrentGeneration(stream, generation)) return;
+        await this.seedFromDisk(stream, generation);
+      })
+      .then(
+        () => {
+          const current = this.records.get(stream);
+          if (
+            current?.seedRefreshGeneration === refreshGeneration &&
+            this.isCurrentGeneration(stream, generation)
+          ) {
+            current.seedRefreshBaseline = undefined;
           }
-          if (current.seedChain === next) current.seedChain = undefined;
-        }
-        if (failureBaseline !== undefined && failureWorkPlanProvenance) {
-          throw new StreamSnapshotPreloadError(
-            error,
+        },
+        (error: unknown) => {
+          const current = this.records.get(stream);
+          const generationIsCurrent = this.isCurrentGeneration(
             stream,
-            failureBaseline !== 'unknown',
-            failureWorkPlanProvenance,
+            generation,
           );
-        }
-        throw error;
-      },
-    ) as Promise<void>;
+          // Snapshot the surviving state BEFORE the restore below, whose
+          // `persistEagerOverlays` drains the very overlays it reads.
+          const resolvedRefreshBaseline =
+            refreshBaseline === 'unknown'
+              ? current?.diskState
+              : refreshBaseline;
+          const failureBaseline: DiskState | undefined =
+            reportArtifactAuthority && current && generationIsCurrent
+              ? resolvedRefreshBaseline
+              : undefined;
+          const failureWorkPlanProvenance =
+            failureBaseline !== undefined && current
+              ? workPlanProvenanceOf(failureBaseline, current.overlays)
+              : undefined;
+          if (
+            current?.seedRefreshGeneration === refreshGeneration &&
+            generationIsCurrent
+          ) {
+            current.diskState = refreshBaseline;
+            current.seedRefreshBaseline = undefined;
+            if (refreshBaseline !== 'unknown') {
+              this.persistEagerOverlays(stream, current);
+            }
+            if (current.seedChain === next) current.seedChain = undefined;
+          }
+          if (failureBaseline !== undefined && failureWorkPlanProvenance) {
+            throw new StreamSnapshotPreloadError(
+              error,
+              stream,
+              failureBaseline !== 'unknown',
+              failureWorkPlanProvenance,
+            );
+          }
+          throw error;
+        },
+      ) as Promise<void>;
     record.seedChain = next;
     return next;
   }

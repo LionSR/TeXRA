@@ -9,7 +9,11 @@ import { secretWithEnvOverride, type PlatformSecrets } from '@platform/secrets';
 import { effectRuntime } from '@platform/processRuntime';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import {
+  type PerKeyLane,
+  type PerKeyLanes,
+  withPerKeyLane,
+} from '@utils/core/perKeyQueue';
 
 // Local file imports
 import { cliEnvValue } from './cliContext';
@@ -21,7 +25,7 @@ const SECRETS_FILE_MODE = 0o600;
  * One mutation lane per secrets file, so two instances over the same path
  * still write in call order before entering the cross-process lock.
  */
-const mutationLanes = new Map<string, PerKeyLane>();
+const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
 
 /**
  * CLI secret storage.

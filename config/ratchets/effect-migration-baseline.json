@@ -119,7 +119,10 @@
       "src/auth/oauth/SubscriptionOAuthCoordinator.ts": 1,
       "src/tools/lean/direct/directLspAdapter.ts": 1,
       "src/transcript/StagedDeletionCoordinator.ts": 1,
-      "src/transcript/StreamLogStore.ts": 1
+      "src/transcript/StreamLogStore.ts": 1,
+      "src/transcript/StreamSnapshotStore.ts": 1,
+      "src/transcript/TexraTranscriptRecorder.ts": 1,
+      "src/utils/core/perKeyQueue.ts": 1
     },
     "import:p-map": {
       "packages/cli/src/runtime/history.ts": 1,
@@ -229,9 +232,7 @@
       "src/tools/zotero/ZoteroAddTool.ts": 1,
       "src/tools/zotero/ZoteroCollectionsTool.ts": 1,
       "src/tools/zotero/ZoteroExportTool.ts": 1,
-      "src/tools/zotero/ZoteroSearchTool.ts": 1,
-      "src/transcript/StreamSnapshotStore.ts": 1,
-      "src/transcript/TexraTranscriptRecorder.ts": 1
+      "src/tools/zotero/ZoteroSearchTool.ts": 1
     },
     "catch:effect-importer": {
       "packages/cli/src/chat/chatSessionController.ts": 7,
@@ -265,8 +266,6 @@
       "src/tools/github/PollingSourceBase.ts": 2,
       "src/tools/web/WebFetchTool.ts": 2,
       "src/tools/zotero/bbtClient.ts": 1,
-      "src/transcript/StreamSnapshotStore.ts": 10,
-      "src/transcript/TexraTranscriptRecorder.ts": 5,
       "src/utils/files/relativeFS.ts": 2
     }
   },
@@ -289,8 +288,6 @@
     "src/tools/approval/toolEditApproval.ts": "Phase 5 — tools subsystem (approval queue consumers)",
     "src/tools/github/PollingSourceBase.ts": "wave-1 rebuild — tools: memory, executions, polling sources",
     "src/tools/goal/goalStore.ts": "Phase 5 — tools subsystem",
-    "src/tools/memory/memoryFileSystem.ts": "wave-1 rebuild — tools: memory, executions, polling sources",
-    "src/transcript/StreamSnapshotStore.ts": "Phase 5 — transcript subsystem",
-    "src/transcript/TexraTranscriptRecorder.ts": "Phase 5 — transcript subsystem"
+    "src/tools/memory/memoryFileSystem.ts": "wave-1 rebuild — tools: memory, executions, polling sources"
   }
 }

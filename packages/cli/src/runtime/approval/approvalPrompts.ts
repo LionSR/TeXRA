@@ -204,23 +204,42 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         ? 'Approve? [y/N, v view full, or n <feedback>] '
         : 'Approve? [y/N, or n <feedback>] ';
       let answer: string;
+      // The hook prepares the terminal and `content.details()` renders
+      // caller-supplied content, so either can throw. Left as bare calls
+      // inside the gen their throw is a defect, which the `Effect.catch`
+      // below does not see: the rejection decision it settles would be
+      // skipped and `runPromise` would abort the tool and the session, where
+      // the outer try/catch this replaced settled it. `Effect.try` puts them
+      // back in the failure channel, and unlike catching the whole cause it
+      // leaves interruption free to propagate.
+      const beforePrompt = Effect.try({
+        try: () => hooks.beforePrompt?.(),
+        catch: (cause) => cause,
+      });
       while (true) {
-        hooks.beforePrompt?.();
+        yield* beforePrompt;
         answer = yield* askCliApprovalQuestion(context, {
           kind: 'approval',
           summary: content.summary,
           prompt,
         });
-        if (content.details == null || !isViewDetailsAnswer(answer)) {
+        const details = content.details;
+        if (details == null || !isViewDetailsAnswer(answer)) {
           break;
         }
-        writeTextStderr(safeTerminalText(content.details()));
+        yield* Effect.try({
+          try: () => writeTextStderr(safeTerminalText(details())),
+          catch: (cause) => cause,
+        });
       }
 
-      const parsed = parseApprovalAnswer(answer);
+      const parsed = yield* Effect.try({
+        try: () => parseApprovalAnswer(answer),
+        catch: (cause) => cause,
+      });
       let feedback = parsed.feedback;
       if (!parsed.accepted && parsed.shouldPromptForFeedback) {
-        hooks.beforePrompt?.();
+        yield* beforePrompt;
         const feedbackAnswer = yield* askCliApprovalQuestion(context, {
           kind: 'approval',
           summary: '',

@@ -28,8 +28,6 @@
  * model-written code sample is scrubbed along with a real key.
  */
 
-import { Effect } from 'effect';
-
 import type {
   AgentEvent,
   AgentTrace,
@@ -38,7 +36,6 @@ import type {
 } from '@agent/trace';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
-import { effectRuntime } from '@platform/processRuntime';
 import {
   ActiveSkillsSnapshotSchema,
   MESSAGE_TYPES,
@@ -61,7 +58,8 @@ import {
   isObject,
   type FlushableDebounce,
 } from '@utils/core';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
+import type PQueue from 'p-queue';
 
 import type { StreamLogAppendInput, StreamLogUpdatePatch } from './StreamLog';
 import type { TranscriptWriter } from './StreamLogStore';
@@ -261,7 +259,7 @@ export function attachTranscriptRecorder(
   let pendingFailure: unknown;
   let pendingSpillFailure: unknown;
   const pendingSpills = new Set<Promise<void>>();
-  const spillLanes = new Map<string, PerKeyLane>();
+  const spillQueues = new Map<string, PQueue>();
   const queueSpill = (
     id: string,
     text: string,
@@ -269,21 +267,9 @@ export function attachTranscriptRecorder(
   ): string | undefined => {
     if (preview === text || !spillWriter) return undefined;
     const path = spillWriter.pathFor(id);
-    // One lane per spill path so two writes of the same file cannot
-    // interleave; the recorder's own contract stays synchronous, so the
-    // program runs on the process runtime here.
-    const pending = effectRuntime()
-      .runPromise(
-        withPerKeyLane(
-          spillLanes,
-          path,
-        )(
-          Effect.tryPromise({
-            try: () => spillWriter.write(path, text),
-            catch: (cause) => cause as Error,
-          }),
-        ),
-      )
+    const pending = runOnPerKeyQueue(spillQueues, path, () =>
+      spillWriter.write(path, text),
+    )
       .catch((error: unknown) => {
         pendingSpillFailure ??= error;
       })

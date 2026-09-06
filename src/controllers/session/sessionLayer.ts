@@ -57,7 +57,11 @@ import {
   type SessionOpen,
 } from '@agent/runtime/sessionGraph';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime, initProcessRuntime } from '@platform/processRuntime';
+import {
+  clearProcessRuntime,
+  effectRuntime,
+  initProcessRuntime,
+} from '@platform/processRuntime';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   type OwnerId,
@@ -577,9 +581,15 @@ export function installProcessRuntime(
  * Uninstall the session owner and dispose the runtime it ran on, releasing
  * every session still open there: the one shutdown step for both, so a
  * close issued after it answers as a process with no owner does instead of
- * reaching the disposed runtime.
+ * reaching the disposed runtime. The reference goes before the disposal
+ * rather than after, so nothing that arrives while the disposal is in
+ * flight is handed the runtime that is going away; a process that installs
+ * again afterwards -- the CLI re-initializing its platform -- gets a fresh
+ * one, because there is no longer one to reuse.
  */
-export function disposeProcessRuntime(): Promise<void> {
+export async function disposeProcessRuntime(): Promise<void> {
   initSessionOwner(undefined);
-  return effectRuntime().dispose();
+  const runtime = effectRuntime();
+  clearProcessRuntime();
+  await runtime.dispose();
 }

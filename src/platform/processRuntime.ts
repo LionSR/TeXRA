@@ -18,6 +18,25 @@ export function initProcessRuntime(runtime: ProcessRuntime): void {
   processRuntime = runtime;
 }
 
+/**
+ * Whether a runtime is installed. An entry that may or may not be the first
+ * one asks here instead of keeping a latch of its own: a boolean beside the
+ * install drifts from the fact the moment a dispose or a raced install lands
+ * between the two.
+ */
+export function hasProcessRuntime(): boolean {
+  return processRuntime !== null;
+}
+
+/**
+ * Forget the installed runtime, so `effectRuntime()` throws "not initialized"
+ * rather than handing out a disposed one. Called by `disposeProcessRuntime`
+ * as its first step, before the disposal it cannot take back.
+ */
+export function clearProcessRuntime(): void {
+  processRuntime = null;
+}
+
 /** The process runtime, for the Promise-facing boundaries that run fibers. */
 export function effectRuntime(): ProcessRuntime {
   if (!processRuntime) {

@@ -284,7 +284,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   let latest: string | undefined;
   let confirmed = false;
   try {
-    await installCliProcessRuntime({ onlyIfMissing: true });
+    await installCliProcessRuntime();
     const globalState = await effectRuntime().runPromise(
       openCliGlobalStateStore(createNodeStorageProvider()),
     );

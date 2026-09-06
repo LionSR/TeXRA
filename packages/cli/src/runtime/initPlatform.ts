@@ -256,7 +256,10 @@ export async function initCliPlatform(
     // The one Effect runtime of this process (PRD 7.7) comes first: the
     // stores below open as Effect programs, and the session graph and every
     // Promise-facing fiber run on it. Disposed after the default session has
-    // released its graph.
+    // released its graph. An entry that ran before any platform existed --
+    // the update check, `clone` -- may already have installed it; this then
+    // adopts that one rather than building a second and leaving the first
+    // undisposed.
     await installCliProcessRuntime();
     // The project `.texra/config.json` backs the workspace target and
     // user-level config (`~/.texra/global-storage/config.json`, the same file

@@ -179,7 +179,7 @@ export const cloneCommand = withUsageSections(
       // `CliSecrets`, whose reads and writes are Effect programs run at this
       // host edge. Install the process runtime before the first one, the same
       // way the update check does for the entry that precedes any platform.
-      await installCliProcessRuntime({ onlyIfMissing: true });
+      await installCliProcessRuntime();
 
       const outcome = await cloneOverleafProject(
         remote,
