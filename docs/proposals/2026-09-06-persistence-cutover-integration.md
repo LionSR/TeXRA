@@ -168,3 +168,29 @@ Validation outcomes:
   reduced here. Neither failure is waived or presented as passing.
 - No copied-user-bucket import, multi-process host experiment, kill-9 acceptance,
   packaged host launch or <2-second startup measurement was run here.
+
+## Review follow-up: retained spill content
+
+Review of integration head `a09b0e1004` found that removing the old full-output
+buttons/readers made pre-cutover spill content unreachable while file-backed
+history still accepts `spillPath`. `StreamLogStore.hydratePersistedEntries`
+now resolves those artifacts at the storage boundary for cold reads, resident
+hydration and deletion rollback preservation. It replaces previews with full
+text/tool output and removes the reference from the hydrated row; every
+renderer receives the same canonical content. No spill writer or host-specific
+reader is restored. Summary listing does not open artifacts. Invalid paths or
+unreadable artifacts reject hydration, preserving the original stored history.
+The reader is limited to recorder-owned `executions/<id>/toolOutput/*.txt`
+paths and retires with the cutover's retained-history importer.
+
+One regression in the existing `StreamLogStoreLoad` suite covers retained tool
+and model output through cold and resident reads; all 64 tests in that suite
+passed. Exact follow-up checks and CI/review results are recorded on #11972.
+The initial integration's CI passed both kernel shards, Linux build artifacts
+and macOS webview smoke. Static checks failed on the single dormant Database
+finding, as predicted; that gate remains open.
+
+Follow-up local validation: full lint, full typecheck, formatting and extension
+build passed. The full suite with `--maxWorkers=4` passed on the repair tree:
+765 suites / 9,085 tests passed; one suite / five tests skipped. Logs are under
+`/private/tmp/texra-11972-review-*.log`.
