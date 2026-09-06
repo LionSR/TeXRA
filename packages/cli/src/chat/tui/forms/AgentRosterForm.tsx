@@ -11,12 +11,14 @@ import {
   readCliAgentRoster,
   type CliAgentRosterRecord,
 } from '@cli/runtime/agentRoster';
+
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AGENT_MODE_PRESETS,
@@ -272,7 +274,9 @@ export function AgentRosterForm(
               'Default chat-agent selection requires a workspace.',
             );
           }
-          await setWorkspaceCliChatAgent(cwd, value || undefined);
+          await effectRuntime().runPromise(
+            setWorkspaceCliChatAgent(cwd, value || undefined),
+          );
         }, 'overview');
       },
       () => setMode('overview'),

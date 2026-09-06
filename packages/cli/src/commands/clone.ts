@@ -22,6 +22,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
+import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { getCliSecrets } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
 import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
@@ -173,6 +174,12 @@ export const cloneCommand = withUsageSections(
       const workspacePath = ctx.args.destination
         ? resolve(context.cwd, ctx.args.destination)
         : context.cwd;
+
+      // `clone` runs without a platform, but its token ports are
+      // `CliSecrets`, whose reads and writes are Effect programs run at this
+      // host edge. Install the process runtime before the first one, the same
+      // way the update check does for the entry that precedes any platform.
+      await installCliProcessRuntime();
 
       const outcome = await cloneOverleafProject(
         remote,

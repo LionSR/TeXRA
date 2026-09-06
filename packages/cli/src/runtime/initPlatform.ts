@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
 import {
   initializeBundledPrompts,
@@ -8,16 +11,14 @@ import { createPlatformAgentDirectories } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import {
-  disposeProcessRuntime,
-  installProcessRuntime,
-} from '@controllers/session/sessionLayer';
+import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
-import { initPlatform, platform, tryPlatform } from '@platform/platform';
+import { initPlatform, tryPlatform } from '@platform/platform';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { DisposableStore } from '@platform/disposable';
+import { effectRuntime } from '@platform/processRuntime';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
@@ -36,6 +37,7 @@ import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
+import { installCliProcessRuntime } from './cliProcessRuntime';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import {
@@ -251,20 +253,35 @@ export async function initCliPlatform(
   );
 
   if (!tryPlatform()) {
-    const stateStores = await createCliStateStores({
-      storageRoot: context.storageRoot,
-      workspacePath: context.cwd,
-    });
+    // The one Effect runtime of this process (PRD 7.7) comes first: the
+    // stores below open as Effect programs, and the session graph and every
+    // Promise-facing fiber run on it. Disposed after the default session has
+    // released its graph. An entry that ran before any platform existed --
+    // the update check, `clone` -- may already have installed it; this then
+    // adopts that one rather than building a second and leaving the first
+    // undisposed.
+    await installCliProcessRuntime();
     // The project `.texra/config.json` backs the workspace target and
     // user-level config (`~/.texra/global-storage/config.json`, the same file
     // chatDefaults reads) backs the global target — the same pair of stores
     // the extension and desktop hosts open, including the fallback to the
     // internal workspace store when the project file cannot be read or its
     // directory cannot be written.
-    const configStores = await openTexraConfigStores(
-      stateStores.storage,
-      context.cwd,
-      showPersistentConfigWarning,
+    const { stateStores, configStores } = await effectRuntime().runPromise(
+      Effect.gen(function* () {
+        const stores = yield* createCliStateStores({
+          storageRoot: context.storageRoot,
+          workspacePath: context.cwd,
+        });
+        return {
+          stateStores: stores,
+          configStores: yield* openTexraConfigStores(
+            stores.storage,
+            context.cwd,
+            showPersistentConfigWarning,
+          ),
+        };
+      }),
     );
     // Same severity and wording as the extension/desktop hosts: a shutdown
     // handler failure is an error everywhere, not a warning in one host.
@@ -304,10 +321,6 @@ export async function initCliPlatform(
       workspaceState: stateStores.workspaceState,
     });
     initProcessWorkspaceRoots(roots);
-    // The one Effect runtime of this process (PRD 7.7): the session graph
-    // and every Promise-facing fiber run on it. Disposed after the default
-    // session has released its graph.
-    installProcessRuntime(await platform().processes.selfIdentity());
     initProcessSettingHost('cli');
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
@@ -388,12 +401,14 @@ export async function initCliPlatform(
 
   initializeBundledPrompts(context.resourcesPath);
 
-  await bootstrapNodeAgentDirectories({
-    channel: 'cli',
-    resourcesPath: context.resourcesPath,
-    currentVersion: context.version,
-    versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-  });
+  await effectRuntime().runPromise(
+    bootstrapNodeAgentDirectories({
+      channel: 'cli',
+      resourcesPath: context.resourcesPath,
+      currentVersion: context.version,
+      versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+    }),
+  );
 
   initializeNodeRuntimeSkills({
     resourcesPath: context.resourcesPath,

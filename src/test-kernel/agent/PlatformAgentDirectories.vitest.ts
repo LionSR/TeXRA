@@ -4,6 +4,7 @@ import { basename, dirname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -70,12 +71,14 @@ describe('bootstrapPlatformAgentDirectories', () => {
   });
 
   function bootstrap(currentVersion: string | undefined = '1.0.0') {
-    return bootstrapPlatformAgentDirectories({
-      channel: 'test',
-      resourcesPath,
-      currentVersion,
-      versionStateKey: VERSION_STATE_KEY,
-    });
+    return Effect.runPromise(
+      bootstrapPlatformAgentDirectories({
+        channel: 'test',
+        resourcesPath,
+        currentVersion,
+        versionStateKey: VERSION_STATE_KEY,
+      }),
+    );
   }
 
   it('serializes concurrent copies into the same storage root', async () => {
@@ -114,44 +117,47 @@ describe('bootstrapPlatformAgentDirectories', () => {
   it('retries contention and rechecks the marker after acquiring the shared lock', async () => {
     const copy = vi.spyOn(platform().fs, 'copy');
     const markerPath = GlobalStorageFS.fullPath(SYNC_MARKER_FILE);
-    const runExclusive = vi
-      .spyOn(platform().fileLocks, 'runExclusive')
-      .mockImplementationOnce(async () => {
-        throw elocked('Lock file is already being held');
-      })
-      .mockImplementationOnce(async (lockPath, operation) => {
+    const withFileLock = vi
+      .spyOn(platform().fileLocks, 'withFileLock')
+      .mockImplementationOnce(
+        () => () => Effect.fail(elocked('Lock file is already being held')),
+      )
+      .mockImplementationOnce((lockPath) => (self) => {
         expect(lockPath).toBe(markerPath);
         // Another process finished the same reconciliation while this one
         // waited for the lock; its marker must be honoured.
-        await writeText(
-          lockPath,
-          `${JSON.stringify({
-            completedAt: Date.now(),
-            ownerPid: process.pid + 1,
-            version: '1.0.0',
-          })}\n`,
-        );
-        return operation();
+        return Effect.promise(() =>
+          writeText(
+            lockPath,
+            `${JSON.stringify({
+              completedAt: Date.now(),
+              ownerPid: process.pid + 1,
+              version: '1.0.0',
+            })}\n`,
+          ),
+        ).pipe(Effect.andThen(self));
       });
 
     await bootstrap('1.0.0');
 
     expect(copy).not.toHaveBeenCalled();
     expect(platform().globalState.get<string>(VERSION_STATE_KEY)).toBe('1.0.0');
-    expect(runExclusive).toHaveBeenCalledTimes(2);
+    expect(withFileLock).toHaveBeenCalledTimes(2);
   });
 
   it('skips refresh when cross-process ownership remains unavailable', async () => {
     vi.useFakeTimers();
-    const runExclusive = vi
-      .spyOn(platform().fileLocks, 'runExclusive')
-      .mockRejectedValue(elocked('Lock file is already being held'));
+    const withFileLock = vi
+      .spyOn(platform().fileLocks, 'withFileLock')
+      .mockImplementation(
+        () => () => Effect.fail(elocked('Lock file is already being held')),
+      );
 
     const bootstrapped = bootstrap();
     await vi.runAllTimersAsync();
     await expect(bootstrapped).resolves.toBe(false);
 
-    expect(runExclusive).toHaveBeenCalledTimes(21);
+    expect(withFileLock).toHaveBeenCalledTimes(21);
     expect(logs.warn).toHaveBeenCalledWith(
       'Skipping bundled agent refresh because another process still owns the sync lock',
     );

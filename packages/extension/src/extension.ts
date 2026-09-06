@@ -73,6 +73,7 @@ import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { initPlatform, platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   bootstrapNodeAgentDirectories,
@@ -82,6 +83,7 @@ import {
   type NodePlatformServices,
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -145,8 +147,16 @@ async function initVscodePlatform(
     'toolAvailability' | 'languageModel' | 'toolMissingHandler'
   > = {},
 ): Promise<void> {
+  // The process runtime comes first: the config stores below are opened as
+  // Effect programs, so it must exist before the platform this host wires.
+  // The identity is the Node default `createNodePlatform` wires as
+  // `platform().processes`, read before installing: an opener that uses the
+  // synchronous `open` would otherwise face an asynchronous layer build.
+  installProcessRuntime(await nodeProcesses.selfIdentity());
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
-  const config = await createExtensionTexraConfig(storage, workspaceRoot);
+  const config = await effectRuntime().runPromise(
+    createExtensionTexraConfig(storage, workspaceRoot),
+  );
   initPlatform(
     createNodePlatform({
       globalState: context.globalState,
@@ -160,9 +170,6 @@ async function initVscodePlatform(
       ...extras,
     }),
   );
-  // Make the process runtime over the process identity and install it beside
-  // the platform: the session graphs and every Promise-facing fiber run on it.
-  installProcessRuntime(await platform().processes.selfIdentity());
   initProcessWorkspaceRoots(
     createNodeWorkspaceRoots({
       workspacePath: workspaceRoot,
@@ -579,12 +586,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // scans them.
   await Promise.all([
     (async () => {
-      await bootstrapNodeAgentDirectories({
-        channel: 'extension',
-        resourcesPath: path.join(context.extensionPath, 'resources'),
-        currentVersion: context.extension.packageJSON?.version,
-        versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-      });
+      await effectRuntime().runPromise(
+        bootstrapNodeAgentDirectories({
+          channel: 'extension',
+          resourcesPath: path.join(context.extensionPath, 'resources'),
+          currentVersion: context.extension.packageJSON?.version,
+          versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+        }),
+      );
       await registerAgentDirectoryRoots(context);
       try {
         await loadAgents({ includeRemote: false });

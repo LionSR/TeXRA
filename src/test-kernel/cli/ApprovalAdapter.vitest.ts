@@ -1,6 +1,7 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn(async () => {}));
@@ -662,16 +663,18 @@ describe('buildToolEditApprovalContent', () => {
     const beforePrompt = vi.fn();
     const stderrWrite = stubStderrWrites();
 
-    const decision = await askApproval(
-      context({
-        approvalPrompt: async (request) => {
-          prompts.push(request.prompt);
-          summaries.push(request.summary);
-          return answers.shift() ?? '';
-        },
-      }),
-      { summary: 'bounded preview', details: () => 'complete proposal' },
-      { beforePrompt },
+    const decision = await Effect.runPromise(
+      askApproval(
+        context({
+          approvalPrompt: async (request) => {
+            prompts.push(request.prompt);
+            summaries.push(request.summary);
+            return answers.shift() ?? '';
+          },
+        }),
+        { summary: 'bounded preview', details: () => 'complete proposal' },
+        { beforePrompt },
+      ),
     );
 
     expect(decision).toEqual({ accepted: true, userMessage: undefined });
@@ -689,11 +692,13 @@ describe('buildToolEditApprovalContent', () => {
 
   it('does not construct complete content unless it is requested', async () => {
     const details = vi.fn(() => 'complete proposal');
-    const decision = await askApproval(
-      context({
-        approvalPrompt: async () => 'y',
-      }),
-      { summary: 'bounded preview', details },
+    const decision = await Effect.runPromise(
+      askApproval(
+        context({
+          approvalPrompt: async () => 'y',
+        }),
+        { summary: 'bounded preview', details },
+      ),
     );
 
     expect(details).not.toHaveBeenCalled();
@@ -704,14 +709,16 @@ describe('buildToolEditApprovalContent', () => {
     const answers = ['v', 'y'];
     const stderrWrite = stubStderrWrites();
 
-    await askApproval(
-      context({
-        approvalPrompt: async () => answers.shift() ?? '',
-      }),
-      {
-        summary: 'bounded preview',
-        details: () => 'safe\u001b]0;unsafe\u0007\ntext',
-      },
+    await Effect.runPromise(
+      askApproval(
+        context({
+          approvalPrompt: async () => answers.shift() ?? '',
+        }),
+        {
+          summary: 'bounded preview',
+          details: () => 'safe\u001b]0;unsafe\u0007\ntext',
+        },
+      ),
     );
 
     expect(stderrWrite).toHaveBeenCalledWith(
@@ -741,11 +748,15 @@ describe('buildToolEditApprovalContent', () => {
       },
     });
 
-    const first = askApproval(cliContext, {
-      summary: 'first',
-      details: () => 'complete first proposal',
-    });
-    const second = askApproval(cliContext, { summary: 'second' });
+    const first = Effect.runPromise(
+      askApproval(cliContext, {
+        summary: 'first',
+        details: () => 'complete first proposal',
+      }),
+    );
+    const second = Effect.runPromise(
+      askApproval(cliContext, { summary: 'second' }),
+    );
 
     resolveView('v');
     await vi.waitFor(() => expect(summaries).toEqual(['first', 'first']));
