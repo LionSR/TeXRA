@@ -1,3 +1,6 @@
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - logging
 import { createLog } from '@logger/logUtils';
 
@@ -15,18 +18,16 @@ const log = createLog('extension');
  * storage root is: VS Code restarts the extension host when the first
  * workspace folder changes, so a live provider never has to switch stores.
  */
-export async function createExtensionTexraConfig(
+export const createExtensionTexraConfig = Effect.fn(
+  'texraConfig.createExtensionTexraConfig',
+)(function* (
   storage: WorkspaceStorageProvider,
   workspaceRoot: string | undefined,
-): Promise<JsonConfigProvider> {
-  const stores = await openTexraConfigStores(
+) {
+  const stores = yield* openTexraConfigStores(
     storage,
     workspaceRoot,
     (message) => log.warn(message),
   );
-
-  return new JsonConfigProvider({
-    workspace: stores.workspace,
-    global: stores.global,
-  });
-}
+  return new JsonConfigProvider(stores);
+});

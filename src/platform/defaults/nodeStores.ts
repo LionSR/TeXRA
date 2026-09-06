@@ -13,6 +13,9 @@
 import { access, constants } from 'node:fs/promises';
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - common
 import { isFileNotFoundError } from '@common/errors';
 
@@ -27,7 +30,6 @@ import {
 } from './nodeStorage';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type { WorkspaceStorageProvider } from './workspaceStorage';
-import type { StateStore } from '../interfaces';
 
 /** File name of a state store inside a storage directory. */
 const STATE_FILE_NAME = 'state.json';
@@ -39,21 +41,28 @@ const STATE_FILE_NAME = 'state.json';
  * writable and traversable. Answers false for e.g. a read-only checkout
  * without ever creating the directory in the project tree.
  */
-async function canCreateOrWrite(filePath: string): Promise<boolean> {
+const canCreateOrWrite = Effect.fn('nodeStores.canCreateOrWrite')(function* (
+  filePath: string,
+) {
   let dir = path.dirname(filePath);
   // Walk up to the deepest existing ancestor; the workspace root exists, so
   // this terminates after a step or two.
   for (;;) {
-    try {
-      await access(dir, constants.W_OK | constants.X_OK);
-      return true;
-    } catch (error) {
-      const parent = path.dirname(dir);
-      if (!isFileNotFoundError(error) || parent === dir) return false;
-      dir = parent;
-    }
+    const reachable = yield* Effect.tryPromise({
+      try: () => access(dir, constants.W_OK | constants.X_OK),
+      catch: (cause) => cause as NodeJS.ErrnoException,
+    }).pipe(
+      Effect.as(true),
+      Effect.catch((error) =>
+        Effect.succeed(isFileNotFoundError(error) ? undefined : false),
+      ),
+    );
+    if (reachable !== undefined) return reachable;
+    const parent = path.dirname(dir);
+    if (parent === dir) return false;
+    dir = parent;
   }
-}
+});
 
 /**
  * Open the store backing the workspace config target. The desktop opens one
@@ -70,61 +79,75 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
  * malformed JSON) fall back to the internal workspace store so settings stay
  * readable and writable — degraded, never fatal.
  */
-export async function openTexraWorkspaceConfigStore(
+export const openTexraWorkspaceConfigStore = Effect.fn(
+  'nodeStores.openTexraWorkspaceConfigStore',
+)(function* (
   workspaceStoragePath: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
-): Promise<JsonStore> {
+) {
   if (workspaceRoot) {
     const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
-    try {
-      const projectStore = await JsonStore.open(projectConfigPath);
+    const projectStore = yield* JsonStore.open(projectConfigPath).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          warn(
+            `Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,
+          );
+          return undefined;
+        }),
+      ),
+    );
+    if (projectStore) {
       if (
         projectStore.keys().length > 0 ||
-        (await canCreateOrWrite(projectConfigPath))
+        (yield* canCreateOrWrite(projectConfigPath))
       ) {
         return projectStore;
       }
       warn(
         `Project .texra/config.json is not writable (${projectConfigPath}); using the internal workspace config store.`,
       );
-    } catch (error) {
-      warn(
-        `Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,
-      );
     }
   }
-  return JsonStore.open(
+  return yield* JsonStore.open(
     path.join(workspaceStoragePath, TEXRA_CONFIG_FILE_NAME),
   );
-}
+});
 
 /** Open both stores backing a host's {@link JsonConfigProvider}. */
-export async function openTexraConfigStores(
+export const openTexraConfigStores = Effect.fn(
+  'nodeStores.openTexraConfigStores',
+)(function* (
   storage: WorkspaceStorageProvider,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
-): Promise<JsonConfigProviderOptions> {
-  const [workspace, global] = await Promise.all([
-    openTexraWorkspaceConfigStore(
-      storage.getStoragePath(),
-      workspaceRoot,
-      warn,
-    ),
-    JsonStore.open(
-      path.join(storage.getGlobalStoragePath(), TEXRA_CONFIG_FILE_NAME),
-    ),
-  ]);
-  return { workspace, global };
-}
+) {
+  const [workspace, global] = yield* Effect.all(
+    [
+      openTexraWorkspaceConfigStore(
+        storage.getStoragePath(),
+        workspaceRoot,
+        warn,
+      ),
+      JsonStore.open(
+        path.join(storage.getGlobalStoragePath(), TEXRA_CONFIG_FILE_NAME),
+      ),
+    ],
+    { concurrency: 'unbounded' },
+  );
+  return { workspace, global } satisfies JsonConfigProviderOptions;
+});
 
 /**
  * Open the workspace state store. The CLI and desktop hosts address the same
  * physical `<storageRoot>/workspace-storage/<id>/state.json` in production, so
  * the path is derived once here.
  */
-export async function openNodeWorkspaceStateStore(
-  workspaceStoragePath: string,
-): Promise<StateStore> {
-  return JsonStore.open(path.join(workspaceStoragePath, STATE_FILE_NAME));
-}
+export const openNodeWorkspaceStateStore = Effect.fn(
+  'nodeStores.openNodeWorkspaceStateStore',
+)(function* (workspaceStoragePath: string) {
+  return yield* JsonStore.open(
+    path.join(workspaceStoragePath, STATE_FILE_NAME),
+  );
+});

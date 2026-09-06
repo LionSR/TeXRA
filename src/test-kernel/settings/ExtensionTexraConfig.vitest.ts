@@ -3,6 +3,7 @@ import { access, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - extension
@@ -39,7 +40,9 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
     await expect(access(projectConfig)).rejects.toThrow();
     await expect(access(globalConfig)).rejects.toThrow();
 
-    const config = await createExtensionTexraConfig(storage, workspace);
+    const config = await Effect.runPromise(
+      createExtensionTexraConfig(storage, workspace),
+    );
 
     expect(config.get('texra.bib.zoteroPort')).toBe(23119);
     expect(config.inspect('texra.bib.zoteroPort')).toStrictEqual({
@@ -53,7 +56,9 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
   it('returns isolated copies of mutable schema defaults', async () => {
     const { workspace, storage } = await createTempLayout();
 
-    const config = await createExtensionTexraConfig(storage, workspace);
+    const config = await Effect.runPromise(
+      createExtensionTexraConfig(storage, workspace),
+    );
     const key = 'texra.latex.enabledReplacements';
     const first = config.get<string[]>(key);
 

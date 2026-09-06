@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InvalidAgentTeamError } from '@agent/index';
@@ -14,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   setEnabledAgentKeys: vi.fn(),
   setInherited: vi.fn(),
   setTeam: vi.fn(),
-  setWorkspaceCliChatAgent: vi.fn(),
+  setWorkspaceCliChatAgent: vi.fn(() => Effect.void),
 }));
 
 vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({

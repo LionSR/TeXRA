@@ -1,11 +1,14 @@
 import { join } from 'node:path';
 import { app } from 'electron';
+import { Effect } from 'effect';
+
 import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
-import { initPlatform, platform } from '@platform/platform';
+import { initPlatform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   initProcessWorkspaceRoots,
   type WorkspaceRoots,
@@ -16,6 +19,7 @@ import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
+import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
@@ -75,9 +79,6 @@ export async function initializeElectronPlatform(
   // so shutdown-handler failures land at error severity like the other hosts.
   const lifecycle = createLifecycleHost();
   const userDataPath = app.getPath('userData');
-  const globalStateStore = await JsonStore.open(
-    join(userDataPath, 'state', 'global.json'),
-  );
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history.
@@ -86,15 +87,38 @@ export async function initializeElectronPlatform(
   // own roots (desktopPapers.ts); this pair only backs the window before a
   // folder is open.
   const storage = new WorkspaceStorageProvider(dataRoot, undefined);
-  const workspaceStateStore = await openNodeWorkspaceStateStore(
-    storage.getStoragePath(),
-  );
-  const configStores = await openTexraConfigStores(
-    storage,
-    undefined,
-    (message) => console.warn(`[desktop] ${message}`),
-  );
-  const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
+  // The one Effect runtime of this process (PRD 7.7) is installed first: the
+  // stores below open as Effect programs, and every paper's session graph and
+  // Promise-facing fiber runs on it. The entry disposes it last
+  // (`disposeProcessRuntime`), after execution settlement and the papers'
+  // release of their graphs. Its identity is the Node default
+  // `createNodePlatform` wires as `platform().processes`, read before
+  // installing: an opener that uses the synchronous `open` would otherwise
+  // face an asynchronous layer build.
+  installProcessRuntime(await nodeProcesses.selfIdentity());
+  const { globalStateStore, workspaceStateStore, configStores, secretsStore } =
+    await effectRuntime().runPromise(
+      Effect.gen(function* () {
+        const [globalState, workspaceState, config, secrets] =
+          yield* Effect.all(
+            [
+              JsonStore.open(join(userDataPath, 'state', 'global.json')),
+              openNodeWorkspaceStateStore(storage.getStoragePath()),
+              openTexraConfigStores(storage, undefined, (message) =>
+                console.warn(`[desktop] ${message}`),
+              ),
+              JsonStore.open(join(userDataPath, 'secrets.json')),
+            ],
+            { concurrency: 'unbounded' },
+          );
+        return {
+          globalStateStore: globalState,
+          workspaceStateStore: workspaceState,
+          configStores: config,
+          secretsStore: secrets,
+        };
+      }),
+    );
 
   repairLaunchPath();
   const agentDirectories = createPlatformAgentDirectories({
@@ -122,11 +146,6 @@ export async function initializeElectronPlatform(
     workspaceState: workspaceStateStore,
   });
   initProcessWorkspaceRoots(processRoots);
-  // The one Effect runtime of this process (PRD 7.7): every paper's session
-  // graph and every Promise-facing fiber run on it. The entry disposes it
-  // last (`disposeProcessRuntime`), after execution settlement and the
-  // papers' release of their graphs.
-  installProcessRuntime(await platform().processes.selfIdentity());
   initProcessSettingHost('desktop');
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
@@ -172,12 +191,14 @@ export async function initializeElectronPlatform(
   // Project skills follow each paper's session; only the bundle is fixed.
   initializeNodeRuntimeSkills({ resourcesPath });
 
-  await bootstrapNodeAgentDirectories({
-    channel: 'desktop',
-    resourcesPath,
-    currentVersion: app.getVersion(),
-    versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-  });
+  await effectRuntime().runPromise(
+    bootstrapNodeAgentDirectories({
+      channel: 'desktop',
+      resourcesPath,
+      currentVersion: app.getVersion(),
+      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+    }),
+  );
 
   return {
     processRoots,

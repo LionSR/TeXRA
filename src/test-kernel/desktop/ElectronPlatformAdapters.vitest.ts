@@ -2,6 +2,7 @@
 import { join } from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
@@ -66,7 +67,9 @@ describe('desktop platform adapters', () => {
       loadJsonStore(),
     ]);
     const root = await makeTempDir('texra-electron-secrets-');
-    const store = await JsonStore.open(join(root, 'secrets.json'));
+    const store = await Effect.runPromise(
+      JsonStore.open(join(root, 'secrets.json')),
+    );
     const secrets = new secretsModule.ElectronSecrets(store, options);
     return { module: secretsModule, store, secrets };
   }
@@ -99,11 +102,13 @@ describe('desktop platform adapters', () => {
   it('persists state values and deletes undefined updates through JsonStore', async () => {
     const JsonStore = await loadJsonStore();
     const root = await makeTempDir('texra-electron-state-');
-    const store = await JsonStore.open(join(root, 'state.json'));
+    const store = await Effect.runPromise(
+      JsonStore.open(join(root, 'state.json')),
+    );
 
-    await store.update('session', { active: true });
-    await store.update('cleared', 'value');
-    await store.update('cleared', undefined);
+    await Effect.runPromise(store.set('session', { active: true }));
+    await Effect.runPromise(store.set('cleared', 'value'));
+    await Effect.runPromise(store.set('cleared', undefined));
 
     expect(store.get('session')).toEqual({ active: true });
     expect(store.get('missing', 'fallback')).toBe('fallback');

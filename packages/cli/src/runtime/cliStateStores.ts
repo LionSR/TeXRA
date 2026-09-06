@@ -1,16 +1,11 @@
 import * as path from 'node:path';
 
-import type { StateStore, StorageProvider } from '@platform/interfaces';
+import { Effect } from 'effect';
+
+import type { StorageProvider } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { openNodeWorkspaceStateStore } from '@platform/defaults/nodeStores';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
-import type { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
-
-interface CliStateStores {
-  readonly storage: WorkspaceStorageProvider;
-  readonly globalState: StateStore;
-  readonly workspaceState: StateStore;
-}
 
 interface CliStateStoresInit {
   readonly storageRoot?: string;
@@ -21,29 +16,27 @@ interface CliStateStoresInit {
  *  is the single derivation of the global state path; pre-platform-init callers
  *  (e.g. the update checker) use it with a default provider instead of
  *  re-deriving the same path by hand. */
-export function openCliGlobalStateStore(
-  storage: StorageProvider,
-): Promise<StateStore> {
-  return JsonStore.open(
+export const openCliGlobalStateStore = Effect.fn(
+  'cliStateStores.openCliGlobalStateStore',
+)(function* (storage: StorageProvider) {
+  return yield* JsonStore.open(
     path.join(storage.getGlobalStoragePath(), 'state.json'),
   );
-}
+});
 
-export async function createCliStateStores(
-  init: CliStateStoresInit,
-): Promise<CliStateStores> {
+export const createCliStateStores = Effect.fn(
+  'cliStateStores.createCliStateStores',
+)(function* (init: CliStateStoresInit) {
   const storage = createNodeStorageProvider({
     storageRoot: init.storageRoot,
     workspacePath: init.workspacePath,
   });
-  const [globalStore, workspaceStore] = await Promise.all([
-    openCliGlobalStateStore(storage),
-    openNodeWorkspaceStateStore(storage.getStoragePath()),
-  ]);
-
-  return {
-    storage,
-    globalState: globalStore,
-    workspaceState: workspaceStore,
-  };
-}
+  const [globalState, workspaceState] = yield* Effect.all(
+    [
+      openCliGlobalStateStore(storage),
+      openNodeWorkspaceStateStore(storage.getStoragePath()),
+    ],
+    { concurrency: 'unbounded' },
+  );
+  return { storage, globalState, workspaceState };
+});
