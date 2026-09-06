@@ -107,7 +107,14 @@ returning `{ settled, abandoned }`. `settled` is true when every run ended in
 time; otherwise `abandoned` names the runs still live, and the session stays
 open, refusing new runs, until they end. The platform's shutdown path
 (`lifecycle.runShutdown()`), which an embedder runs before it exits, closes
-the platform's session this way after the runs it owns have settled.
+the platform's session this way after the runs it owns have settled, and then
+disposes the runtime the session owner ran on.
+
+That path runs once, so `runAgent` composes once per process: a run started
+after the platform's shutdown has run is refused, because the session it would
+open has no shutdown left to close and flush it. An embedder that needs more
+than one composition in a process takes the Effect surface below, where each
+scope owns the composition it made.
 
 ## Run results
 
@@ -191,7 +198,9 @@ and a branch the later level did not touch is the same object in both.
 
 A scope that composed the process ends it: leaving it closes the runtime's
 session and disposes the runtime the owner ran on, and a later program in the
-same process composes again over the platform already installed. A scope that
+same process composes again over the platform already installed. That is what
+the Promise entry cannot do, and why it composes once: its owner is the
+embedder's shutdown path, which runs once. A scope that
 found a host (or an earlier `runAgent`) already composed closes nothing, so it
 never kills runs it does not own; close a root such a scope opened of its own
 through `Sessions.close`.

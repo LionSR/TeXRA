@@ -198,8 +198,11 @@ import {
 import { Runtime, Sessions } from '../../../packages/agent/src/effect';
 import { nodePlatform } from '../../../packages/agent/src/node';
 
+/** The embedder's shutdown path, as the package reads it: `shutdownRan`
+ *  is what says a composition still has an owner to dispose it. */
+const LIFECYCLE = { onShutdown: vi.fn(), shutdownRan: false };
 const PLATFORM = {
-  lifecycle: { onShutdown: vi.fn() },
+  lifecycle: LIFECYCLE,
   roots: { storage: '/storage' },
   processes: { selfIdentity: async () => 'test-start' },
 } as unknown as AgentPlatform;
@@ -271,6 +274,7 @@ describe('agent package run lifecycle', () => {
       await handler();
     }
     mocks.shutdownHooks = undefined;
+    LIFECYCLE.shutdownRan = false;
     mocks.sessionInits.splice(0);
     vi.clearAllMocks();
     mocks.activePlatform = null;
@@ -420,13 +424,16 @@ describe('agent package run lifecycle', () => {
     const [runtimeOrder] = mocks.disposeRuntime.mock.invocationCallOrder;
     expect(closeOrder).toBeLessThan(runtimeOrder);
 
-    // Shutdown closed the session through its owner and took the owner
-    // with the runtime it ran on, so a later run composes the process again
-    // over the platform already installed: the package is not single-use
-    // per process, and the owner builds the root's session anew.
-    await runAgent(INPUT).result;
-    expect(mocks.sessionInits).toHaveLength(2);
-    expect(mocks.installRuntime).toHaveBeenCalledTimes(2);
+    // Shutdown closed the session through its owner and took the owner with
+    // the runtime it ran on. That path is the entry's only owner for a
+    // composition and a lifecycle drains once, so a later run is refused
+    // rather than composing a runtime and an owner nothing would dispose.
+    LIFECYCLE.shutdownRan = true;
+    await expect(runAgent(INPUT).result).rejects.toThrow(
+      /shutdown has already run/,
+    );
+    expect(mocks.sessionInits).toHaveLength(1);
+    expect(mocks.installRuntime).toHaveBeenCalledTimes(1);
     expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
   });
 
@@ -462,6 +469,25 @@ describe('agent package run lifecycle', () => {
     expect(mocks.disposeRuntime).not.toHaveBeenCalled();
     await runAgent(INPUT).result;
     expect(mocks.sessionInits).toHaveLength(1);
+  });
+
+  it('disposes the runtime its scope installed even when the closing session defects', async () => {
+    // Nothing is composed yet, so this scope installs the runtime and owns
+    // both the close and the disposal at its exit. The close defects on the
+    // artifact flush: the disposal is its finalizer, not its continuation,
+    // so the owner and the runtime under it still go, and the defect still
+    // leaves the scope.
+    mocks.closeSession.mockImplementationOnce(() => {
+      throw new Error('artifact flush defect');
+    });
+    const program = Effect.gen(function* () {
+      yield* Sessions;
+    }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
+
+    await expect(Effect.runPromise(program)).rejects.toThrow(
+      'artifact flush defect',
+    );
+    expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
   });
 
   it('a scoped reader holds its own transcript interest and clears it at the scope, leaving the run its own', async () => {

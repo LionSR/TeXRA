@@ -95,9 +95,11 @@ export interface RunAgentInput {
  *
  * Every failure arrives on `result`, never as a throw from `runAgent()`
  * itself. A refusal before any model work is the tagged error the Effect
- * surface names (`AgentNotFound`, `ToolsRefused`, `PlatformConflict`); a
- * run that fails after it entered the session rejects with exactly what the
- * launch path threw.
+ * surface names (`AgentNotFound`, `ToolsRefused`, `PlatformConflict`), or,
+ * for a run started after the platform's shutdown has run, the plain
+ * `Error` this entry states: that one is the Promise entry's own condition,
+ * since the Effect surface composes per scope. A run that fails after it
+ * entered the session rejects with exactly what the launch path threw.
  */
 export interface AgentRun extends AsyncIterable<AgentEvent> {
   readonly result: Promise<AgentFlowResult>;
@@ -144,14 +146,28 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
  * The composing call also puts the session on the embedder's shutdown path:
  * the session's agent-spawned children and agent-CLI sessions are stopped,
  * then the platform's session is closed through its owner under the phase's
- * own budget, then the runtime that held it goes, and its owner with it, so
- * a later `closeSession` answers as a process with none does and a later
- * `runAgent` composes the process again. An Effect embedder reaches the
- * same closure through `Runtime.layer`'s scope.
+ * own budget, then the runtime that held it goes, and its owner with it
+ * (#11913 ends the two in one step), so a later `closeSession` answers as a
+ * process with none does. An Effect embedder reaches the same closure
+ * through `Runtime.layer`'s scope.
+ *
+ * That path is this entry's only owner for a composition, and it can be
+ * drawn once: a lifecycle host drains each phase exactly once and caches
+ * its shutdown, so a handler registered after `runShutdown()` began is
+ * never run. A run on a platform whose shutdown has run is therefore
+ * refused, rather than installing a runtime and an owner with nothing left
+ * to dispose them. The lifecycle says so itself, through `shutdownRan`,
+ * which also covers the shutdown a host ran over its own composition. The Effect surface has no such limit: there the owner is the
+ * scope, so a new `Runtime.layer` scope composes the process again.
  */
 function agentServices(
   platform: AgentPlatform,
 ): ReturnType<typeof makeSessions> {
+  if (platform.lifecycle.shutdownRan) {
+    throw new Error(
+      "This platform's shutdown has already run, and it runs once: a session opened now would have no shutdown path to close and flush it, and the runtime under it none to dispose it. Run further agents in a new process, or take the Effect surface (@texra-ai/agent/effect), whose scope owns each composition.",
+    );
+  }
   const runtime = composeProcess(platform);
   const sessions = makeSessions(runtime);
   if (runtime.composed) {

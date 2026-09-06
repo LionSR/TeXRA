@@ -68,8 +68,10 @@ export interface AgentRuntime {
  * installed them (`disposeProcessRuntime`). Reading the platform instead
  * would leave a process whose first closure has run permanently without an
  * owner; reading the owner composes again over the platform already
- * installed, which is what makes the package usable more than once per
- * process.
+ * installed, which is what makes the Effect surface usable more than once
+ * per process: there each scope owns the composition it made. The Promise
+ * entry composes once, because the owner it hands a composition to is the
+ * embedder's shutdown path, which runs once (`../index.ts`).
  *
  * Throws {@link PlatformConflict} when a second, different platform reaches
  * a process the package already composed.
@@ -143,6 +145,12 @@ export class Runtime extends Context.Service<Runtime, AgentRuntime>()(
  * earlier run) that opened it, and killing its live runs is not this scope's
  * to do; a root such a scope opened of its own ends through
  * `Sessions.close`.
+ *
+ * The disposal is the close's finalizer, not its continuation: the close
+ * flushes the session's artifacts, and a flush that defects must not leave
+ * the owner and the runtime under it installed with no later scope to end
+ * them. The defect still leaves the scope, so the embedder sees the failed
+ * close; what it cannot do is skip the disposal.
  */
 const sessionsLayer = Layer.effect(
   Sessions,
@@ -153,7 +161,7 @@ const sessionsLayer = Layer.effect(
       yield* Effect.addFinalizer(() =>
         sessions
           .close()
-          .pipe(Effect.andThen(Effect.promise(() => disposeProcessRuntime()))),
+          .pipe(Effect.ensuring(Effect.promise(() => disposeProcessRuntime()))),
       );
     }
     return sessions;

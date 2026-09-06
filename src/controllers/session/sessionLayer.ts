@@ -471,7 +471,10 @@ const aborted = (signal: AbortSignal) =>
  * root's executions) cannot be undone and its last (the artifact flush and
  * the entry's release) must still run, so a caller that races or times out
  * this effect must not be able to leave a session shut to new runs, its
- * artifacts unflushed and its entry never released.
+ * artifacts unflushed and its entry never released. It does not mask the
+ * two races below: `Effect.race` forks its arms interruptible whatever the
+ * region around it, so the budget still interrupts the settlement wait and
+ * the flush, and the report still returns at the deadline.
  */
 const closeSession = (root: string, signal?: AbortSignal) =>
   Effect.gen(function* () {
