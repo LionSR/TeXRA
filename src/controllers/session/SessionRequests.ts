@@ -160,7 +160,20 @@ function handle(
       });
     case 'stream.delete':
       return Effect.promise(() => stores().deleteStream(req.streamId)).pipe(
-        Effect.map((result): Outcome => ({ kind: 'deleted', result })),
+        Effect.map((result): Outcome => {
+          // Listing is the database sequence row. Sidecar deletion without
+          // `stream.removed` leaves a ghost; the leftover sweep uses this
+          // same order so a later removal listener is a no-op.
+          if (result === 'deleted') {
+            session.publish([
+              {
+                type: 'stream.removed',
+                aggregateId: qualifyAggregateId('stream', req.streamId),
+              },
+            ]);
+          }
+          return { kind: 'deleted', result };
+        }),
       );
     case 'stream.compact':
       return Effect.suspend((): Effect.Effect<Outcome, RequestError> => {
