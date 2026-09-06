@@ -1,10 +1,12 @@
 ---
 created: 2026-08-18
 updated: 2026-08-18
-status: proposed
+status: rejected
 ---
 
 # PRD: The session event journal — single-authority transcript persistence
+
+Status: rejected — superseded by the merged SQLite persistence-substrate decision; journal follow-ups closed not-planned
 
 **Status:** draft for owner ratification. This is the "newly specified
 single-authority design" that the 2026-08-17 closures of the JSONL/settlement
@@ -45,7 +47,7 @@ fix.)
   ("without a second Settings History or sidecar/overlay chain").
 - **C5 — supersede, don't revive.** #10773 and its family stay closed. This
   spec supersedes the transcript-persistence claims of
-  `.agents/docs/proposed/architecture/2026-08-15-single-substrate-hosts-as-renderers.md` and
+  `.agents/docs/archived/architecture/2026-08-15-single-substrate-hosts-as-renderers.md` and
   `.agents/docs/archived/architecture/2026-08-11-transcript-memory-architecture.md`; the SQLite PRD
   (`2026-08-16-sqlite-workspace-state.md`) stays parked and untouched.
 

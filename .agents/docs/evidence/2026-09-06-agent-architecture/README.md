@@ -1,6 +1,6 @@
 # Evidence for the September 6 agent architecture studies
 
-The [HTML explorer](../../proposed/architecture/2026-09-06-agent-architecture.html), [decision study](../../proposed/architecture/2026-09-06-agent-architecture-study.md), [loop study](../../proposed/architecture/2026-09-06-agent-loop-architecture-study.md), [LLM package study](../../proposed/architecture/2026-09-06-llm-package-architecture-study.md), and [architectural review](../../proposed/architecture/2026-09-06-agent-architecture-review.md) are recommendations, not production changes. The review identifies four unresolved contract gaps and makes preservation of the reflection pipeline explicit.
+The [HTML explorer](../../archived/architecture/2026-09-06-agent-architecture.html), [decision study](../../archived/architecture/2026-09-06-agent-architecture-study.md), [loop study](../../archived/architecture/2026-09-06-agent-loop-architecture-study.md), [LLM package study](../../proposed/architecture/2026-09-06-llm-package-architecture-study.md), and [architectural review](../../proposed/architecture/2026-09-06-agent-architecture-review.md) are recommendations, not production changes. The review identifies four unresolved contract gaps and makes preservation of the reflection pipeline explicit.
 
 ## Source scope
 

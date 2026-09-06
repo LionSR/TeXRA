@@ -1,6 +1,7 @@
 # Stream lifetime and cancellation: one owner per fact (2026-09-02)
 
-Status: proposed
+Status: implemented
+Archived: 2026-09-06
 
 > **Status:** survey + proposal. Grounded on branch
 > `claude/texra-cli-heap-leak-ji9o1d` at `37248a74d7` (origin/main `646475d`

@@ -11,7 +11,7 @@ no old-flow importer, and no private ledger row in the public trace union.
 Historical scope: reverses migration PRD R4 and 13.C,
 amends persistence proposal §6 Stage 5 and §7, and the one-fold PRD non-goal
 at line 102. Companion to `2026-09-03-persistence-substrate-decision.md` and
-`.agents/docs/proposed/architecture/2026-09-03-prd-one-fold-three-renderers.md` (PR #11821).
+`.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md` (PR #11821).
 Amended 2026-09-04 against substrate contract §6.1 after it adopted the §2.1
 row vocabulary: C1/C2 name the columns (`aggregate_id`, `commit`), C10
 forbids the `run_state` and transcript projections this draft had, C1
@@ -49,7 +49,7 @@ extra coordinate rather than a second framework.
 ### 0.1 Current implementation contract: runtime and LLM package
 
 Refreshed from `origin/main` at `542aea6e8425ec574ffa0fa9fd4fd05a878feb03`.
-The [agent architecture study](./2026-09-06-agent-architecture-study.md) and
+The [agent architecture study](../../archived/architecture/2026-09-06-agent-architecture-study.md) and
 [review](./2026-09-06-agent-architecture-review.md) add a necessary dependency:
 settle the canonical LLM turn/continuation contract with the runtime before
 implementing its durable message rows. This section is the common contract;

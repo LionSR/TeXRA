@@ -1,6 +1,7 @@
 # Simplification survey: agent runtime, hosts, session, and lifecycle ownership (2026-09-02)
 
-Status: proposed
+Status: implemented
+Archived: 2026-09-06
 
 > **Status:** survey record, read-only. Surveyed against `a78a896` (#11754),
 > then **re-grounded on `origin/main` at `a3f01c1`** — see §7, which carries the

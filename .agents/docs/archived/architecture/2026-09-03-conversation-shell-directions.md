@@ -1,6 +1,6 @@
 # Conversation shell directions, grounded in the codebase
 
-> **Consolidated into `.agents/docs/proposed/architecture/2026-09-03-prd-one-fold-three-renderers.md` on 2026-09-03.** That PRD governs where the two differ; this proposal is kept for its evidence and history.
+> **Consolidated into `.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md` on 2026-09-03.** That PRD governs where the two differ; this proposal is kept for its evidence and history.
 
 Status: proposal, 2026-09-03. Companion to the design canvas "TeXRA
 Conversation Shell" (extension directions A to E, desktop directions 1 to 6,

@@ -1,6 +1,7 @@
 # Single substrate, hosts as renderers (2026-08-15 directive)
 
-Status: proposed
+Status: implemented
+Archived: 2026-09-06
 
 > **Status:** Adjudicated design, 2026-08-15. Companion to
 > `2026-08-15-cross-host-consolidation.md` (the audit register); this doc is

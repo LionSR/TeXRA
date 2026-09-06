@@ -1,6 +1,7 @@
 # Simplification survey, round 2: transcript and session memory (2026-09-02)
 
-Status: proposed
+Status: implemented
+Archived: 2026-09-06
 
 > **Status:** survey + proposal. Grounded on branch
 > `claude/texra-cli-heap-leak-ji9o1d` at `1248b5b7fc` (origin/main `646475d`

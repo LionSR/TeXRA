@@ -4,7 +4,7 @@ Status: proposed
 
 > **Status:** survey + decision proposal, revised the same day after reading
 > OpenCode's V2 session core. Grounded on `main` at `1fbcaa0108`. Companion to
-> `2026-09-03-startup-repair-is-the-wrong-shape.md`, which owns the lifecycle
+> `.agents/docs/archived/architecture/2026-09-03-startup-repair-is-the-wrong-shape.md`, which owns the lifecycle
 > side (what boot may do, where terminal facts are written, ownership as a
 > lock on open-for-write) and defers the storage engine as its S7. This
 > document owns S7: what the store is, how the two competing PRDs resolve,
@@ -110,18 +110,18 @@ Of the 4,610 stream sidecars measured on 2026-08-08, zero carried the current
 
 ## 3. The decision record, and where it contradicts itself
 
-| Date       | Document / ruling                                                                        | Said about the substrate                                                                                                                                                                                                                         | Status                                                                                             |
-| ---------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| 2026-02-22 | #2748 creates `StreamLogStore`                                                           | per-stream JSON array, whole-file rewrite, from day one                                                                                                                                                                                          | live                                                                                               |
-| 2026-06-06 | #5441 creates `StreamSnapshotStore`                                                      | six sidecar files per stream                                                                                                                                                                                                                     | live                                                                                               |
-| 2026-07-03 | `2026-07-03-session-scoped-runtime-architecture.md` A6 (:296-299,805)                    | formats stay separate; ownership unifies                                                                                                                                                                                                         | shipped (#9234, #11334)                                                                            |
+| Date       | Document / ruling                                                                         | Said about the substrate                                                                                                                                                                                                                         | Status                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| 2026-02-22 | #2748 creates `StreamLogStore`                                                            | per-stream JSON array, whole-file rewrite, from day one                                                                                                                                                                                          | live                                                                                               |
+| 2026-06-06 | #5441 creates `StreamSnapshotStore`                                                       | six sidecar files per stream                                                                                                                                                                                                                     | live                                                                                               |
+| 2026-07-03 | `2026-07-03-session-scoped-runtime-architecture.md` A6 (:296-299,805)                     | formats stay separate; ownership unifies                                                                                                                                                                                                         | shipped (#9234, #11334)                                                                            |
 | 2026-08-11 | `.agents/docs/archived/architecture/2026-08-11-transcript-memory-architecture.md` (#9952) | keep the substrate; fix residency, deltas, bounded startup; explicitly rejects sidecar collapse and an event-log rewrite of `PersistedFlow` (:414-439)                                                                                           | shipped in full (#9965-#10572)                                                                     |
 | 2026-08-16 | `.agents/docs/archived/architecture/2026-08-16-sqlite-workspace-state.md`                 | one `node:sqlite` DB per workspace, transcript entries as rows, eight-stage migration; "supersedes the JSONL prescription in #10773" (:12); §8 "no Effect or any framework buy-in"                                                               | merged as a doc; **zero code**; Stage 0 spike never run                                            |
-| 2026-08-17 | #10773 family closed (#10774, #10817, #10819, #10820, #10841, #10842-45)                 | JSONL journal work closed as "divergent from the settled single Stream-tab authority direction"                                                                                                                                                  | closed                                                                                             |
-| 2026-08-18 | `.agents/docs/proposed/architecture/2026-08-18-session-event-journal.md` (#10849)         | append-only `streamJournals/<id>.jsonl` as SSOT, fold-derived sidecars; "the SQLite PRD stays parked" (:45-49)                                                                                                                                   | "draft for owner ratification"; all eight follow-ups (#10878-#10885) closed NOT_PLANNED; zero code |
-| 2026-08-20 | maintainer comment on #10773                                                             | "Prescription superseded by the now-merged storage PRD [SQLite] … transcript entries become rows"                                                                                                                                                | most recent ruling                                                                                 |
-| 2026-08-23 | `2026-08-23-single-owner-sessions.md` §6 (:521-536)                                      | a journal "helps partly"; the checkpoint cannot be a fold of an admission-redacted journal (thinking signatures, `previous_response_id`); the checkpoint, not the transcript, is the largest write amplifier (p50 547 KB per outer-node rewrite) | shipped (seven PRs) on the old substrate                                                           |
-| 2026-09-02 | two round-2 surveys                                                                      | treat the SQLite PRD as the superseding storage decision; withdraw in-place persistence bound as "a storage-engine concern"                                                                                                                      | recorded                                                                                           |
+| 2026-08-17 | #10773 family closed (#10774, #10817, #10819, #10820, #10841, #10842-45)                  | JSONL journal work closed as "divergent from the settled single Stream-tab authority direction"                                                                                                                                                  | closed                                                                                             |
+| 2026-08-18 | `.agents/docs/rejected/architecture/2026-08-18-session-event-journal.md` (#10849)         | append-only `streamJournals/<id>.jsonl` as SSOT, fold-derived sidecars; "the SQLite PRD stays parked" (:45-49)                                                                                                                                   | "draft for owner ratification"; all eight follow-ups (#10878-#10885) closed NOT_PLANNED; zero code |
+| 2026-08-20 | maintainer comment on #10773                                                              | "Prescription superseded by the now-merged storage PRD [SQLite] … transcript entries become rows"                                                                                                                                                | most recent ruling                                                                                 |
+| 2026-08-23 | `2026-08-23-single-owner-sessions.md` §6 (:521-536)                                       | a journal "helps partly"; the checkpoint cannot be a fold of an admission-redacted journal (thinking signatures, `previous_response_id`); the checkpoint, not the transcript, is the largest write amplifier (p50 547 KB per outer-node rewrite) | shipped (seven PRs) on the old substrate                                                           |
+| 2026-09-02 | two round-2 surveys                                                                       | treat the SQLite PRD as the superseding storage decision; withdraw in-place persistence bound as "a storage-engine concern"                                                                                                                      | recorded                                                                                           |
 
 Contradictions nobody has closed:
 
@@ -239,7 +239,7 @@ fold"; §8 Effect non-goal reversed per §7), and ship it as one cutover (§8).
 ### 6.1 The contract (jointly owned with the view-state PRD)
 
 This section is the only shared contract between the substrate program and
-`.agents/docs/proposed/architecture/2026-09-03-prd-one-fold-three-renderers.md`. The PRD references
+`.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md`. The PRD references
 it; it does not restate it. Changes land here first.
 
 **C1. Persisted schema.** Two tables, nothing else app-owned on disk except the
@@ -694,7 +694,7 @@ Saved histories have no age limit. Stamped, supported, or resumable runs,
 including completed, cancelled, failed, crashed, and independently imported
 histories, remain until explicit user deletion. A terminal status alone never
 makes a run disposable. This preserves S6 of
-`2026-09-03-startup-repair-is-the-wrong-shape.md`. Automatic expiry is limited
+`.agents/docs/archived/architecture/2026-09-03-startup-repair-is-the-wrong-shape.md`. Automatic expiry is limited
 to an explicitly declared ephemeral, nonresumable orphan cohort or an
 already-deleted tombstone; an unknown classification is not eligible. Any
 cleanup grace applies only to those cohorts (owner decision 6).
@@ -1183,7 +1183,7 @@ with the parallel-agent workflow, judged against OpenCode's +5.8k/-0.9k over
 
 1. Ratify the target in §5 and the contract in §6.1: two tables, folds
    everywhere, nothing derived persisted. Mark
-   `2026-08-18-session-event-journal.md` absorbed and
+   `.agents/docs/rejected/architecture/2026-08-18-session-event-journal.md` absorbed and
    `2026-08-16-sqlite-workspace-state.md` amended (§3.2, §5 staging, §8 Effect)
    in their status lines, each with a pointer here.
 2. Ratify D4: the runtime proposal's flow rows (`model.message`,
@@ -1217,11 +1217,11 @@ Read first-hand at `1fbcaa0108`: `src/common/storage/KVStore.ts`,
 `packages/desktop/package.json:33`, root `package.json:63,132`, `AGENTS.md:690-720`.
 Docs read in full: `.agents/docs/archived/architecture/2026-08-11-transcript-memory-architecture.md`,
 `.agents/docs/archived/architecture/2026-08-16-sqlite-workspace-state.md`,
-`.agents/docs/proposed/architecture/2026-08-18-session-event-journal.md`,
+`.agents/docs/rejected/architecture/2026-08-18-session-event-journal.md`,
 `.agents/docs/archived/architecture/2026-08-23-single-owner-sessions.md`,
-`.agents/docs/proposed/simplification/2026-09-02-simplification-survey-stream-memory-round2.md`,
-`.agents/docs/proposed/simplification/2026-09-02-stream-lifetime-and-cancellation-simplification.md`,
-`.agents/docs/proposed/architecture/2026-09-03-startup-repair-is-the-wrong-shape.md`. GitHub state
+`.agents/docs/archived/simplification/2026-09-02-simplification-survey-stream-memory-round2.md`,
+`.agents/docs/archived/simplification/2026-09-02-stream-lifetime-and-cancellation-simplification.md`,
+`.agents/docs/archived/architecture/2026-09-03-startup-repair-is-the-wrong-shape.md`. GitHub state
 and closing comments checked on #9945, #9947, #10773, #10809, #10820, #10841,
 #10878-#10885, #11014, #11731, #11771, #10753. On-disk counts from
 `~/.texra/workspace-storage/` on 2026-09-03 with `ls`, `du`, `find`, and a

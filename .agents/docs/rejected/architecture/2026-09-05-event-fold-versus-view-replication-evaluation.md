@@ -1,9 +1,11 @@
 ---
 created: 2026-09-05
-status: evaluation; proposed architectural amendment, not ratified
+status: rejected
 ---
 
 # Event folding versus authoritative view replication
+
+Status: rejected — not adopted; main shipped one fold per renderer, the opposite transport
 
 **Recommendation:** preserve one semantic fold and the durable event ledger, but
 make runtime-owned presentation state the leading design for ordinary live
@@ -18,7 +20,7 @@ executable probes. It is not a demonstrated end-to-end performance win. A bounde
 comparison slice must establish the remaining publication, interest and transport
 costs before the governing PRD is amended for implementation.
 
-Read this alongside the [SDK ownership proposal](./2026-09-05-agent-sdk-architecture.md).
+Read this alongside the [SDK ownership proposal](../../proposed/architecture/2026-09-05-agent-sdk-architecture.md).
 Its session, execution, interaction and lifecycle ownership contracts apply to either
 transport. This evaluation proposes reconsidering its retained G1/G2 event-only
 transport baseline; it does not supersede those ownership contracts. Neither document
@@ -213,7 +215,7 @@ replay and disconnection. Those capabilities do not distinguish the transports.
    append operations. Conversely, generic deltas do not guarantee small payloads
    if the published schema contains several derived copies of the same text.
 3. **In-process embedding and replication are independent choices.** The SDK
-   proposal's [alternatives table](./2026-09-05-agent-sdk-architecture.md#10-alternatives-and-decision)
+   proposal's [alternatives table](../../proposed/architecture/2026-09-05-agent-sdk-architecture.md#10-alternatives-and-decision)
    does not establish that replicated
    presentation requires a daemon, HTTP or a forwarding SDK object. The local
    consumer can read the same publication directly.
@@ -245,7 +247,7 @@ contains cursor, deduplication, residency and inflight bookkeeping.
 
 `sessionFold.ts:36` documents reused Maps, mutable transcript arrays and
 latest-value-only consumption. Replacing the outer envelope does not preserve
-previous observations. The SDK proposal's [public contract](./2026-09-05-agent-sdk-architecture.md#4-public-contract-expose-intent-and-lifetime)
+previous observations. The SDK proposal's [public contract](../../proposed/architecture/2026-09-05-agent-sdk-architecture.md#4-public-contract-expose-intent-and-lifetime)
 already proposes stable immutable publications and explicitly requires performance evidence. That cost
 exists whichever transport serves the SDK.
 

@@ -1,6 +1,6 @@
 # One fold, three renderers
 
-> **Consolidated into `.agents/docs/proposed/architecture/2026-09-03-prd-one-fold-three-renderers.md` on 2026-09-03.** That PRD governs where the two differ; this proposal is kept for its evidence and history.
+> **Consolidated into `.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md` on 2026-09-03.** That PRD governs where the two differ; this proposal is kept for its evidence and history.
 
 Status: proposal, version 2, 2026-09-03. Governs the conversation-shell
 redesign (`2026-09-03-conversation-shell-directions.md`) and the projection
@@ -355,7 +355,7 @@ and the resync path's in-flight text frame under a dropped `postMessage`.
 ## 12. Effect shape
 
 Superseded. The Effect shape of this program is PRD sections 7 and 8
-(`.agents/docs/proposed/architecture/2026-09-03-prd-one-fold-three-renderers.md`): `SessionEvents`
+(`.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md`): `SessionEvents`
 exposes three reads, `listing()`, `all(fromCommit)`, and
 `aggregate(id, fromSeq)`; its wakes carry no payload; and every subscriber
 holds one commit cursor for the tail plus one `folded` seq per subscribed

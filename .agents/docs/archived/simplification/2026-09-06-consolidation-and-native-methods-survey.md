@@ -21,14 +21,14 @@ bump the development-dependencies group across 1 directory with 6 updates`,
 `05b6cd3..03d2cfd` was this pass's window (the prior entry's grounding
 commit to today). 15 commits touched `src/` or `packages/*/src/` in that
 span, dominated by one large, tracked feature: "one fold, three renderers"
-(PRD `.agents/docs/proposed/architecture/2026-09-03-prd-one-fold-three-renderers.md`, lanes 1-5 and 8,
+(PRD `.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md`, lanes 1-5 and 8,
 landing across #11881, #11883, #11884, #11894, #11896, #11897, #11909,
 #11910, #11912, #11913, #11915, #11916) plus its immediate follow-up
 cleanups. This is exactly the shape prior entries in this series flag as the
 highest-yield place to look: a large feature landing across many files in a
 short window is the classic source of copy-pasted wiring, and the PRD itself
 documents the `toSignal`-shaped pattern this pass found duplicated
-(`.agents/docs/proposed/architecture/2026-09-03-prd-one-fold-three-renderers.md:1503-1507`).
+(`.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md:1503-1507`).
 
 ## 1. Method
 

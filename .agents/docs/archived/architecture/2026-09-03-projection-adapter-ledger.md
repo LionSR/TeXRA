@@ -1,6 +1,6 @@
 # Projection and adapter ledger
 
-> **Consolidated into `.agents/docs/proposed/architecture/2026-09-03-prd-one-fold-three-renderers.md` on 2026-09-03.** That PRD governs where the two differ; this proposal is kept for its evidence and history.
+> **Consolidated into `.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md` on 2026-09-03.** That PRD governs where the two differ; this proposal is kept for its evidence and history.
 
 Status: proposal, 2026-09-03. Companion to
 `2026-09-03-one-view-state-three-renderers.md`, which covers the read path

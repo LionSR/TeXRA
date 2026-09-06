@@ -1,6 +1,6 @@
 # Fold and replication probe evidence
 
-These probes support the [September 5, 2026 view-replication evaluation](../../proposed/architecture/2026-09-05-event-fold-versus-view-replication-evaluation.md).
+These probes support the [September 5, 2026 view-replication evaluation](../../rejected/architecture/2026-09-05-event-fold-versus-view-replication-evaluation.md).
 They run the actual TeXRA fold and Pi immutable applicator against synthetic inputs.
 The checked-in `.out` files contain the measurements cited in the proposal;
 they are evidence from individual runs, not CI performance thresholds. The two

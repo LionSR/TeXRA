@@ -27,11 +27,11 @@ for (const item of clones.values()) {
   assert.equal(actual, item.commit, item.repository);
 }
 const docs = [
-  '.agents/docs/proposed/architecture/2026-09-06-agent-architecture-study.md',
+  '.agents/docs/archived/architecture/2026-09-06-agent-architecture-study.md',
   '.agents/docs/proposed/architecture/2026-09-06-agent-architecture-review.md',
-  '.agents/docs/proposed/architecture/2026-09-06-agent-loop-architecture-study.md',
+  '.agents/docs/archived/architecture/2026-09-06-agent-loop-architecture-study.md',
   '.agents/docs/proposed/architecture/2026-09-06-llm-package-architecture-study.md',
-  '.agents/docs/proposed/architecture/2026-09-06-agent-architecture.html',
+  '.agents/docs/archived/architecture/2026-09-06-agent-architecture.html',
   '.agents/docs/evidence/2026-09-06-agent-architecture/README.md',
 ];
 let localLinks = 0;

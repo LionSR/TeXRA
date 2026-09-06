@@ -415,4 +415,4 @@ spike does not establish delivery.
 [substrate]: ./2026-09-03-persistence-substrate-decision.md
 [sdk]: ./2026-09-05-agent-sdk-architecture.md
 [prd]: ./2026-08-26-effect-4-runtime-migration.md
-[study]: ./2026-09-06-agent-architecture-study.md
+[study]: ../../archived/architecture/2026-09-06-agent-architecture-study.md

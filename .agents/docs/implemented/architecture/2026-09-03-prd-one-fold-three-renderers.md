@@ -1,7 +1,7 @@
 ---
 created: 2026-09-03
 updated: 2026-09-03
-status: proposed
+status: implemented
 ---
 
 # PRD: One fold, three renderers

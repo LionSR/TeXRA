@@ -9,7 +9,7 @@ archived: 2026-09-06
 
 **Status:** draft proposal. Companion to
 `.agents/docs/archived/architecture/2026-08-11-transcript-memory-architecture.md` (the memory
-evidence), `.agents/docs/proposed/architecture/2026-08-15-single-substrate-hosts-as-renderers.md`
+evidence), `.agents/docs/archived/architecture/2026-08-15-single-substrate-hosts-as-renderers.md`
 (orthogonal campaign, no shared PRs), and issues #10702, #10773, #10774,
 #10775. **Supersedes the JSONL prescription in #10773** (its diagnosis — the
 whole-file rewrite primitive is the root defect — is exactly what this PRD

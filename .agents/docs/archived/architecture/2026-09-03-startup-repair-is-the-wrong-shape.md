@@ -1,6 +1,7 @@
 # Startup restart repair is the wrong shape (2026-09-03)
 
-Status: proposed
+Status: implemented
+Archived: 2026-09-06
 
 > **Status:** decision proposal. Measured on `main` at `1fbcaa0108` with an
 > env-gated trace (reverted, not committed). Reference codebases were read on
