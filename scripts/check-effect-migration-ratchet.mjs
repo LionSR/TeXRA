@@ -10,11 +10,20 @@
 // concurrency/error packages, `Effect.run*` boundary calls (rule R1), and
 // raw catch clauses in files that already import `effect` at runtime (rule
 // R7). Every row is a per-file allowlist: a file absent from a row fails on
-// its first site. A separate hard check expires `@adapter-until YYYY-MM-DD`
-// markers on temporary adapters: it validates the date and fails once it has
-// passed, but it cannot detect an adapter added without a marker, since
-// "temporary adapter" is not mechanically recognizable; presence stays a
-// review obligation. The PR that zeroes a row deletes the row.
+// its first site. The PR that zeroes a row deletes the row.
+//
+// Two checks carry the owner's second ruling of 2026-09-06 ("fully embrace
+// Effect. No more pass-throughs nor adapters"; PRD R1 and execution rule 3
+// as amended): there are no temporary adapters, so a separate hard check
+// fails on the presence of any `@adapter-until` marker in production scope,
+// not on its expiry; and the `Effect.run*` row admits a new file through
+// `--update` only when its path is one of R1's three boundary kinds (a host
+// entry under packages/extension, packages/desktop, or packages/cli; a tool
+// `execute()` contract, src/tools/**/*Tool.ts, until lane D; the SDK's
+// public API under packages/agent/src). Baseline rows outside those paths
+// are wave-0 debt the lanes pay down: frozen as-is, never widened. Neither
+// check can recognize an adapter written without a marker, since "adapter"
+// is not mechanically recognizable; that stays a review obligation.
 //
 // Files are parsed with the TypeScript compiler API (the repo's `typescript`
 // devDependency, as scripts/check-browser-safe-utils.mjs does) rather than
@@ -61,6 +70,33 @@ const RUN_BOUNDARY_NAMES = new Set([
   'runCallback',
 ]);
 
+/**
+ * R1's three boundary kinds, as path predicates: (a) a host entry a host
+ * framework invokes, (b) the agent tool `execute()` contract until lane D
+ * converts the tool runner, (c) the SDK's public Promise API. `--update`
+ * admits a new `Effect.run*` file only under one of these; a run site
+ * anywhere else is below the boundary and converts instead.
+ */
+const BOUNDARY_HOST_ROOTS = [
+  'packages/extension/src/',
+  'packages/desktop/src/',
+  'packages/cli/src/',
+  'packages/agent/src/',
+];
+const BOUNDARY_TOOL_ROOT = 'src/tools/';
+const BOUNDARY_TOOL_SUFFIX = 'Tool.ts';
+const BOUNDARY_PATHS_TEXT =
+  'packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts';
+
+function isBoundaryPath(file) {
+  return (
+    BOUNDARY_HOST_ROOTS.some((root) => file.startsWith(root)) ||
+    (file.startsWith(BOUNDARY_TOOL_ROOT) && file.endsWith(BOUNDARY_TOOL_SUFFIX))
+  );
+}
+
+const BELOW_BOUNDARY = `below the boundary: only ${BOUNDARY_PATHS_TEXT} may run an Effect (owner ruling 2026-09-06, ${PRD} R1); convert this file and its callers to Effect, do not allowlist it`;
+
 const ROW_PLATFORM = 'platform()';
 const ROW_SET_SERVICES = 'setServices()';
 const ROW_ABORT_CONTROLLER = 'new AbortController()';
@@ -93,7 +129,7 @@ const ROWS = [
   })),
   {
     id: ROW_RUN_BOUNDARY,
-    rule: `${PRD} R1: Effect inside, Promises at the boundary — Effect.run* is forbidden below the named boundary modules; a new boundary module is added deliberately by regenerating the baseline in the same PR, with the justification in the PR body`,
+    rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli), the tool execute() contract (src/tools/**/*Tool.ts, until lane D), or the SDK's public API (packages/agent/src); a new boundary file is admitted deliberately by regenerating the baseline in the same PR, with the justification in the PR body`,
   },
   {
     id: ROW_CATCH,
@@ -107,10 +143,10 @@ const SEMANTICS =
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
   "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to — `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; 'setServices()' counts calls whose callee is setServices or ends in .setServices; 'new AbortController()' counts new-expressions on the identifier AbortController; " +
   "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback (PRD rule R1: the row's files are the named boundary modules); " +
+  "'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback (PRD rule R1 as amended 2026-09-06: --update admits a new file only under packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts, the three boundary kinds; rows outside those paths are wave-0 debt, frozen as-is and never widened); " +
   "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator. " +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
-  'The PR that zeroes a row deletes the row. `@adapter-until YYYY-MM-DD` markers are a hard check in the same script, not a baseline.';
+  'The PR that zeroes a row deletes the row. The same script fails on the presence of any `@adapter-until` marker in scope (owner ruling 2026-09-06: no temporary adapters), a hard check with no baseline.';
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -491,56 +527,111 @@ function surveyTree(files) {
   return { rows, texts };
 }
 
-function isIsoDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return (
-    !Number.isNaN(parsed.getTime()) &&
-    parsed.toISOString().slice(0, 10) === value
-  );
-}
-
-/** Local calendar date as YYYY-MM-DD — the one legitimate clock read here. */
-function localToday() {
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
 /**
- * `@adapter-until YYYY-MM-DD` markers on temporary adapters. Any marker
- * dated before `today`, or with an unparsable date, fails.
+ * `@adapter-until` markers. There are no temporary adapters (owner ruling
+ * 2026-09-06), so the presence of a marker anywhere in production scope
+ * fails; the date after it, if any, is irrelevant.
  */
-function checkAdapterMarkers(texts, today) {
+function checkAdapterMarkers(texts) {
   const failures = [];
-  let total = 0;
   for (const [file, text] of texts) {
     text.split('\n').forEach((line, index) => {
-      for (const match of line.matchAll(/@adapter-until\b\s*(\S*)/g)) {
-        total += 1;
-        const date = match[1];
-        const where = `${file}:${index + 1}`;
-        if (!isIsoDate(date)) {
-          failures.push(
-            `${where}: @adapter-until needs an ISO date (YYYY-MM-DD), got ${JSON.stringify(date)}`,
-          );
-        } else if (date < today) {
-          failures.push(
-            `${where}: @adapter-until ${date} has expired (today is ${today}); retire the adapter or re-justify the date in this PR`,
-          );
-        }
+      if (/@adapter-until\b/.test(line)) {
+        failures.push(
+          `${file}:${index + 1}: @adapter-until marker present — the owner ruled on 2026-09-06 "fully embrace Effect. No more pass-throughs nor adapters" (${PRD} R1, second ruling; execution rule 3): there are no temporary adapters to date, so the adapter is deleted by converting the port and its callers to Effect`,
+        );
       }
     });
   }
-  return { total, failures };
+  return failures;
 }
 
-function readBaseline() {
-  if (!existsSync(baselinePath)) {
-    throw new Error(
-      `Baseline missing: ${baselinePath}. Run \`node scripts/check-effect-migration-ratchet.mjs --update\` to create it.`,
+/**
+ * Files `--update` may not admit to the `Effect.run*` row: new relative to
+ * the committed baseline and outside R1's three boundary kinds. Files
+ * already in the baseline are wave-0 debt, frozen wherever they are.
+ */
+function runBoundaryAdmissionRefusals(current, baseline) {
+  return Object.keys(current).filter(
+    (file) => !(file in baseline) && !isBoundaryPath(file),
+  );
+}
+
+/** Fail the ratchet itself if the marker scan or the boundary gate regresses. */
+function selfTestBoundaryAndMarkers() {
+  const markerFailures = checkAdapterMarkers(
+    new Map([
+      [
+        'src/agent/probe.ts',
+        '// @adapter-until 2026-12-01\nx();\n/* @adapter-until */\nconst s = "adapter-until";\n',
+      ],
+      ['src/agent/clean.ts', '// no marker here\n'],
+    ]),
+  );
+  const markerWhere = markerFailures.map((f) =>
+    f.slice(0, f.indexOf(':', f.indexOf(':') + 1)),
+  );
+  if (
+    JSON.stringify(markerWhere) !==
+      JSON.stringify(['src/agent/probe.ts:1', 'src/agent/probe.ts:3']) ||
+    !markerFailures.every((f) =>
+      f.includes('No more pass-throughs nor adapters'),
+    )
+  ) {
+    console.error(
+      'checkAdapterMarkers self-test failed:',
+      JSON.stringify(markerFailures),
     );
+    process.exit(1);
   }
+
+  const boundaryCases = [
+    ['packages/extension/src/commands/run.ts', true],
+    ['packages/desktop/src/main/ipc.ts', true],
+    ['packages/cli/src/chat/tui/App.tsx', true],
+    ['packages/agent/src/index.ts', true],
+    ['src/tools/EditTool.ts', true],
+    ['src/tools/arxiv/SearchTool.ts', true],
+    ['src/tools/goal/goalStore.ts', false],
+    ['src/tools/bash.ts', false],
+    ['src/agent/runtime/SessionHandle.ts', false],
+    ['src/controllers/session/SessionBridge.ts', false],
+    ['packages/trace-viewer/src/main.ts', false],
+  ];
+  for (const [file, expected] of boundaryCases) {
+    if (isBoundaryPath(file) !== expected) {
+      console.error(
+        `isBoundaryPath self-test failed: ${file} expected ${expected}`,
+      );
+      process.exit(1);
+    }
+  }
+
+  const refused = runBoundaryAdmissionRefusals(
+    {
+      'src/agent/runtime/newRunner.ts': 1,
+      'packages/cli/src/commands/newCommand.ts': 2,
+      'src/tools/NewTool.ts': 1,
+      'src/tools/goal/goalStore.ts': 3,
+    },
+    { 'src/tools/goal/goalStore.ts': 2 },
+  );
+  if (
+    JSON.stringify(refused) !==
+    JSON.stringify(['src/agent/runtime/newRunner.ts'])
+  ) {
+    console.error(
+      'runBoundaryAdmissionRefusals self-test failed:',
+      JSON.stringify(refused),
+    );
+    process.exit(1);
+  }
+}
+
+const BASELINE_MISSING = `Baseline missing: ${baselinePath}. Restore it from git; it cannot be regenerated from scratch, because its Effect.run* rows outside the boundary paths are frozen wave-0 debt that --update may not re-admit.`;
+
+function readBaseline() {
+  if (!existsSync(baselinePath)) throw new Error(BASELINE_MISSING);
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(baselinePath, 'utf8'));
@@ -570,6 +661,11 @@ function readBaseline() {
         );
       }
     }
+  }
+  if (parsed.semantics !== SEMANTICS) {
+    throw new Error(
+      `Baseline semantics text is out of date with the script: ${baselinePath}. Run --update.`,
+    );
   }
   return parsed;
 }
@@ -612,21 +708,13 @@ function sites(entries) {
 }
 
 function parseArgs(argv) {
-  const options = { update: false, today: null };
+  const options = { update: false };
   for (const arg of argv) {
     if (arg === '--update') {
       options.update = true;
-    } else if (arg.startsWith('--today=')) {
-      const value = arg.slice('--today='.length);
-      if (!isIsoDate(value)) {
-        throw new Error(
-          `--today needs YYYY-MM-DD, got ${JSON.stringify(value)}`,
-        );
-      }
-      options.today = value;
     } else {
       throw new Error(
-        `Unknown argument ${JSON.stringify(arg)}; expected --update and/or --today=YYYY-MM-DD`,
+        `Unknown argument ${JSON.stringify(arg)}; expected --update or nothing`,
       );
     }
   }
@@ -636,12 +724,27 @@ function parseArgs(argv) {
 function main() {
   const options = parseArgs(process.argv.slice(2));
   selfTestSurvey();
+  selfTestBoundaryAndMarkers();
   const files = productionFiles();
   const { rows, texts } = surveyTree(files);
-  const today = options.today ?? localToday();
   let failed = false;
 
   if (options.update) {
+    if (!existsSync(baselinePath)) throw new Error(BASELINE_MISSING);
+    const committed = JSON.parse(readFileSync(baselinePath, 'utf8'));
+    const refused = runBoundaryAdmissionRefusals(
+      rows[ROW_RUN_BOUNDARY],
+      committed?.rows?.[ROW_RUN_BOUNDARY] ?? {},
+    );
+    if (refused.length > 0) {
+      console.error(
+        `--update refused: ${refused.length} new Effect.run* file(s) ${BELOW_BOUNDARY}.`,
+      );
+      for (const file of refused) {
+        console.error(`  - [${ROW_RUN_BOUNDARY}] ${file}`);
+      }
+      process.exit(1);
+    }
     writeBaseline(rows);
     console.log(`Effect migration baseline written: ${baselinePath}`);
   }
@@ -668,10 +771,14 @@ function main() {
     for (const { row, file, was, now, kind } of failures) {
       console.error(`  - [${row.id}] ${file}: ${was} -> ${now} (${kind})`);
       console.error(`      ${row.rule}`);
+      if (row.id === ROW_RUN_BOUNDARY && !isBoundaryPath(file)) {
+        console.error(`      This file is ${BELOW_BOUNDARY}.`);
+      }
     }
     console.error(
       '\nRemove the new use, or — only when the PR body justifies it — regenerate the baseline with ' +
-        '`node scripts/check-effect-migration-ratchet.mjs --update` in the same PR.',
+        '`node scripts/check-effect-migration-ratchet.mjs --update` in the same PR ' +
+        `(for Effect.run*, --update admits only ${BOUNDARY_PATHS_TEXT}).`,
     );
   }
   if (stale.length > 0) {
@@ -687,17 +794,15 @@ function main() {
     );
   }
 
-  const markers = checkAdapterMarkers(texts, today);
-  if (markers.failures.length > 0) {
+  const markers = checkAdapterMarkers(texts);
+  if (markers.length > 0) {
     failed = true;
     console.error(
-      `\n@adapter-until check failed (today is ${today}): ${markers.failures.length} of ${markers.total} marker(s).`,
+      `\n@adapter-until check failed: ${markers.length} marker(s) present; there are no temporary adapters.`,
     );
-    for (const failure of markers.failures) console.error(`  - ${failure}`);
+    for (const failure of markers) console.error(`  - ${failure}`);
   } else {
-    console.log(
-      `@adapter-until markers OK: ${markers.total} marker(s), none expired as of ${today}.`,
-    );
+    console.log('@adapter-until markers OK: none present.');
   }
 
   if (failed) process.exit(1);
