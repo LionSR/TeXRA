@@ -65,6 +65,30 @@ describe('Codex device login', () => {
     expect(coordinator.completeDeviceLogin).not.toHaveBeenCalled();
   });
 
+  it('resolves with the session when cancellation lands while it is stored', async () => {
+    const controller = new AbortController();
+    stubDeviceEndpoints({}, () =>
+      jsonResponse({
+        authorization_code: 'authorization-code',
+        code_verifier: 'code-verifier',
+      }),
+    );
+    const coordinator = coordinatorStub();
+    vi.mocked(coordinator.completeDeviceLogin).mockImplementation(async () => {
+      controller.abort();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return { accessToken: 'stored' } as never;
+    });
+
+    await expect(
+      loginWithDeviceCode({
+        coordinator,
+        onPrompt: vi.fn(),
+        signal: controller.signal,
+      }),
+    ).resolves.toEqual({ accessToken: 'stored' });
+  });
+
   it('gives up at the expiry the server reported, not the local fallback', async () => {
     // 20 ms of polling at 1 ms; the 15-minute fallback would hang the test.
     let polls = 0;

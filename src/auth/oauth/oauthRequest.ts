@@ -52,10 +52,10 @@ interface OAuthPostOptions {
  * POST and resolve the raw `Response`. Fails with {@link OAuthNetworkError}
  * when the request cannot complete; status handling is the caller's.
  */
-export function postOAuth(
+export const postOAuth = Effect.fn('oauthRequest.postOAuth')(function* (
   options: OAuthPostOptions,
-): Effect.Effect<Response, OAuthNetworkError> {
-  return Effect.tryPromise({
+) {
+  return yield* Effect.tryPromise({
     try: (signal) =>
       fetch(options.url, {
         method: 'POST',
@@ -74,13 +74,15 @@ export function postOAuth(
       orElse: () =>
         Effect.fail(
           new OAuthNetworkError({
-            message: `${options.networkErrorMessage}: request timed out after ${options.timeoutMs} ms`,
+            // The wording `AbortSignal.timeout` produced, so the message the
+            // provider error carries is unchanged.
+            message: `${options.networkErrorMessage}: The operation was aborted due to timeout`,
             cause: undefined,
           }),
         ),
     }),
   );
-}
+});
 
 /** Fail with {@link OAuthHttpError} describing a non-ok response. */
 export const oauthHttpError = Effect.fn('oauthRequest.oauthHttpError')(

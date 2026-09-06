@@ -7,6 +7,8 @@
  * One Effect program per sign-in: the requests, the spaced poll, and the
  * expiry bound run on one fiber, and the caller's `AbortSignal` becomes
  * fiber interruption at the single run boundary in {@link loginWithDeviceCode}.
+ * Interruption reaches the requests and the wait; persisting the approved
+ * session runs to completion once started, as the Promise loop always did.
  * The Promise API and the errors it rejects with are unchanged.
  */
 // Third-party imports
@@ -14,6 +16,7 @@ import { Cause, Data, Effect, Exit } from 'effect';
 
 // Local imports - oauth, platform
 import {
+  completeDeviceSession,
   deviceAuthorizationThrowable,
   pollDeviceAuthorization,
 } from '@auth/oauth/deviceAuthorization';
@@ -52,35 +55,45 @@ export interface CodexDeviceLoginOptions {
 
 const loginProgram = Effect.fn('codexDeviceLogin.loginWithDeviceCode')(
   function* (options: CodexDeviceLoginOptions) {
-    const userCodeResponse = yield* requestDeviceUserCode();
-    const userCode = userCodeResponse.user_code ?? userCodeResponse.usercode;
-    if (!userCode) {
-      return yield* new DeviceCodeMissing({
-        message: 'ChatGPT did not return a device code. Try again.',
-      });
-    }
+    // The fiber runs uninterruptible (see `loginWithDeviceCode`); the
+    // requests and the wait for approval restore interruption so the caller's
+    // abort cancels them, while storing the approved session does not.
+    const token = yield* Effect.interruptible(
+      Effect.gen(function* () {
+        const userCodeResponse = yield* requestDeviceUserCode();
+        const userCode =
+          userCodeResponse.user_code ?? userCodeResponse.usercode;
+        if (!userCode) {
+          return yield* new DeviceCodeMissing({
+            message: 'ChatGPT did not return a device code. Try again.',
+          });
+        }
 
-    options.onPrompt({
-      userCode,
-      verificationUrl: CODEX_DEVICE_VERIFICATION_URL,
-    });
+        options.onPrompt({
+          userCode,
+          verificationUrl: CODEX_DEVICE_VERIFICATION_URL,
+        });
 
-    return yield* pollDeviceAuthorization({
-      poll: pollDeviceToken({
-        deviceAuthId: userCodeResponse.device_auth_id,
-        userCode,
+        return yield* pollDeviceAuthorization({
+          poll: pollDeviceToken({
+            deviceAuthId: userCodeResponse.device_auth_id,
+            userCode,
+          }),
+          intervalMs: userCodeResponse.interval * 1000,
+          expiresInMs:
+            userCodeResponse.expires_in == null
+              ? DEVICE_TIMEOUT_FALLBACK_MS
+              : userCodeResponse.expires_in * 1000,
+        });
       }),
-      complete: (token) =>
-        options.coordinator.completeDeviceLogin({
-          authorizationCode: token.authorization_code,
-          codeVerifier: token.code_verifier,
-        }),
-      intervalMs: userCodeResponse.interval * 1000,
-      expiresInMs:
-        userCodeResponse.expires_in == null
-          ? DEVICE_TIMEOUT_FALLBACK_MS
-          : userCodeResponse.expires_in * 1000,
-    });
+    );
+
+    return yield* completeDeviceSession(() =>
+      options.coordinator.completeDeviceLogin({
+        authorizationCode: token.authorization_code,
+        codeVerifier: token.code_verifier,
+      }),
+    );
   },
   Effect.mapError((error) =>
     error._tag === 'DeviceCodeMissing'
@@ -100,8 +113,12 @@ export async function loginWithDeviceCode(
   signal?.throwIfAborted();
   let exit: Exit.Exit<CodexSession, unknown>;
   try {
+    // Uninterruptible by default so an abort that lands while the coordinator
+    // stores the session lets it finish and resolves with that session;
+    // `loginProgram` restores interruption for everything before it.
     exit = await effectRuntime().runPromiseExit(loginProgram(options), {
       signal,
+      uninterruptible: true,
     });
   } catch (error) {
     if (signal?.aborted) throw signal.reason;
