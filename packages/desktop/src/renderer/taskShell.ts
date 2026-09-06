@@ -60,6 +60,8 @@ interface TaskSidebarCallbacks {
   onOpenBrowser(): void;
   onOpenSettings(): void;
   onOpenLogs(): void;
+  /** Opens the Subagents tab on the active paper's selected family. */
+  onOpenSubagents(): void;
 }
 
 function sidebarAction(options: {
@@ -124,26 +126,52 @@ function streamTabsTemplate(
 }
 
 /**
- * Under a selected workflow run the list shows the root alone (W2): its
- * calls are child streams the run board lists, and the note says so. The
- * selection may sit on one of those calls; the note is the family root's.
+ * Where the selected stream's children are. The whole tree is the Subagents
+ * tab's, and this control is what opens that tab; it belongs to the shown
+ * paper alone, since the workbench beside the rail is that paper's. While the
+ * tab holds the tree the section is flat, and under a workflow run the note
+ * then says where its calls went (W2). Nothing when the selection has no
+ * children, since there would be no tree to reach.
  */
-export function workflowCallsNote(
-  view: SessionView,
-  surface: Surface,
+function childStreamsAccess(
+  paper: RailPaper,
+  options: { active: boolean; flattened: boolean },
+  callbacks: TaskSidebarCallbacks,
 ): TemplateResult | typeof nothing {
+  const { view, surface } = paper;
   const selected = resolveSelected(view, surface);
   const stream = selected === null ? undefined : view.streams.get(selected);
   const rootId = stream?.ancestors[0]?.id ?? stream?.id;
   const root = rootId === undefined ? undefined : view.streams.get(rootId);
-  if (root?.category !== 'workflow' || root.rollup.total === 0) {
-    return nothing;
-  }
+  if (root === undefined || root.rollup.total === 0) return nothing;
   const { total } = root.rollup;
-  return html`<div class="task-workflow-calls-note">
-    ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child streams`},
-    reachable from the board. They never appear here.
-  </div>`;
+  const { icon, label } = WORKBENCH_KIND_META.subagents;
+  return html`
+    ${
+      options.flattened && root.category === 'workflow'
+        ? html`<div class="task-workflow-calls-note">
+            ${total === 1 ? 'The 1 call is a child stream' : `The ${total} calls are child streams`},
+            reachable from the board. They never appear here.
+          </div>`
+        : nothing
+    }
+    ${
+      options.active
+        ? html`<wa-button
+            type="button"
+            class="task-subagents-open btn-ghost"
+            appearance="plain"
+            size="s"
+            title="Open the ${label} tab on this task's tree"
+            @click=${callbacks.onOpenSubagents}
+          >
+            ${waIcon(icon, { slot: 'start' })}
+            <span>${label}</span>
+            <span class="task-subagents-open-count" slot="end">${total}</span>
+          </wa-button>`
+        : nothing
+    }
+  `;
 }
 
 /**
@@ -163,6 +191,9 @@ function paperSection(
   const active = key === model.shell.active;
   const collapsed = model.shell.collapsed.includes(key);
   const foldLabel = `${collapsed ? 'Expand' : 'Collapse'} ${name}`;
+  // The tree has one home at a time: the Subagents tab holds the shown
+  // paper's, and this section then lists its top-level streams only.
+  const flattened = active && model.subagentsOpen;
   return html`
     <div class="task-project-item">
       <wa-button
@@ -212,10 +243,8 @@ function paperSection(
         ? nothing
         : html`
             <div class="task-sidebar-sessions task-paper-streams">
-              ${streamTabsTemplate(paper, {
-                topLevelOnly: active && model.subagentsOpen,
-              })}
-              ${workflowCallsNote(paper.view, paper.surface)}
+              ${streamTabsTemplate(paper, { topLevelOnly: flattened })}
+              ${childStreamsAccess(paper, { active, flattened }, callbacks)}
             </div>
           `
     }

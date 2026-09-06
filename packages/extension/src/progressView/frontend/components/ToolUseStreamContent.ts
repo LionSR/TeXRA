@@ -43,6 +43,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
           <background-tasks-panel
             .stream=${stream}
             .view=${this.view}
+            .surface=${this.surface}
             .nowMs=${this.nowMs}
           ></background-tasks-panel>
         </div>

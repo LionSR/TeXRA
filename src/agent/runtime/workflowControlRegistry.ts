@@ -6,8 +6,9 @@
  * grandchild by its execution id (the same identity the child list, focus, and
  * kill use), and {@link WorkflowScriptControl} takes that id directly. The
  * registry fans a request out to every registered run, so the one run that
- * currently owns that grandchild acts and the rest no-op — the same
- * no-op-if-not-in-flight semantics the engine already guarantees.
+ * currently owns that grandchild acts and the rest no-op, and it answers
+ * whether any run did: a settled call or a foreign id is a false the request
+ * layer turns into an error rather than a silent success.
  *
  * Host-agnostic and session-owned: registration happens in the workflow-script
  * strategy (`src/tools/delegation`), consumption in a host (the CLI child list).
@@ -36,9 +37,13 @@ export class WorkflowControlRegistry {
 
   /**
    * Skip or retry the in-flight grandchild `agent()` call with this execution
-   * id. No-op if no live run owns it.
+   * id. True when a live run owned it and acted; false when none did.
    */
-  control(grandchildId: ExecutionId, action: WorkflowControlAction): void {
-    for (const control of this.runs) control(grandchildId, action);
+  control(grandchildId: ExecutionId, action: WorkflowControlAction): boolean {
+    let claimed = false;
+    for (const control of this.runs) {
+      if (control(grandchildId, action)) claimed = true;
+    }
+    return claimed;
   }
 }
