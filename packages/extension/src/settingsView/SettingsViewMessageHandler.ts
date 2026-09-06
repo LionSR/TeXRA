@@ -47,7 +47,6 @@ import {
   requestRuntimeModelAccess,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,

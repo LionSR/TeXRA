@@ -8,7 +8,6 @@ import { statSync } from 'node:fs';
 import type { SessionStores } from '@agent/storage';
 import {
   agentResponseTextConnector,
-  attachTerminalResultToast,
   openSession,
   runInSession,
   type SessionHandle,
@@ -226,11 +225,6 @@ async function openPaperSession(
       responseTextProcessing,
     });
     resources.add(() => session.dispose());
-    resources.add(
-      attachTerminalResultToast(session, session.interactions, {
-        replayWhenAttached: true,
-      }),
-    );
     return await runInSession(session, async () => {
       const processStores = await initializeDesktopProcessStores(session);
       resources.add(() => processStores.dispose());

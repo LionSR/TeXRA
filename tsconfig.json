@@ -13,7 +13,6 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "paths": {
-      "vscode-jsonrpc/node": ["./node_modules/vscode-jsonrpc/lib/node/main"],
       "@shared/*": [
         "./src/shared/*",
         "./src/shared/*.ts",

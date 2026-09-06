@@ -795,7 +795,8 @@ describe('desktop Supabase auth', () => {
   });
 
   it('settles the waiter when starting the sign-in fails', async () => {
-    const { oauthClient, auth } = createAuthSetup();
+    const showErrorMessage = vi.fn(async () => {});
+    const { oauthClient, auth } = createAuthSetup({ showErrorMessage });
     oauthClient.auth.signInWithOAuth.mockResolvedValueOnce({
       data: { url: null },
       error: { message: 'provider unavailable' },
@@ -806,6 +807,7 @@ describe('desktop Supabase auth', () => {
       await expect(
         auth.signInAndWaitForSession(undefined, { timeoutMs: 60_000 }),
       ).rejects.toThrow();
+      expect(showErrorMessage).not.toHaveBeenCalled();
       // The waiter and its timeout go with the failed attempt, so nothing is
       // left to clear a later attempt's pending callback state.
       expect(vi.getTimerCount()).toBe(0);

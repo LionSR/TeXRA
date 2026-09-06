@@ -27,6 +27,11 @@ type DeleteExecutionFn = (
 type ListExecutionStreamReferencesFn =
   () => Promise<ExecutionStreamReferenceListing>;
 
+/** The stream→execution index, reshaped by stream. See `readStreamIndex`. */
+type StreamExecutionIndex = ExecutionStreamReferenceListing & {
+  readonly byStream: ReadonlyMap<StreamTabId, ExecutionId>;
+};
+
 interface GoalEntryStore {
   forget(stream: StreamTabId): Promise<void>;
 }
@@ -563,11 +568,7 @@ export class SessionStores {
    * `byStream` proves a stream unowned only while `unreadable` is empty: a
    * caller that would delete or settle an unowned stream must retain it.
    */
-  private async readStreamIndex(): Promise<
-    ExecutionStreamReferenceListing & {
-      readonly byStream: ReadonlyMap<StreamTabId, ExecutionId>;
-    }
-  > {
+  private async readStreamIndex(): Promise<StreamExecutionIndex> {
     const listing = await this.listExecutionStreamReferences();
     return {
       ...listing,
@@ -716,70 +717,85 @@ export class SessionStores {
           shouldDelete,
         );
 
-        if (outcome.kind === 'completed') {
-          if (outcome.result.status === 'active') {
-            for (const stream of streams) active.add(stream);
-          } else {
-            for (const stream of streams) deleted.add(stream);
-            await this.notifyCanonicalDeletions(streams, canonicalStreams);
-          }
-          return;
-        }
-        if (outcome.kind === 'streams-deleted') {
-          for (const stream of streams) deleted.add(stream);
-          log.warn(
-            `Streams for execution ${executionId} were deleted, but execution cleanup was incomplete: ${toErrorMessage(outcome.error)}`,
-            { data: outcome.error },
-          );
-          await this.notifyCanonicalDeletions(streams, canonicalStreams);
-          return;
-        }
-        if (outcome.kind === 'superseded') {
-          if (supersededAdjacentStreams.size === 0) {
-            for (const stream of streams) active.add(stream);
+        switch (outcome.kind) {
+          case 'completed': {
+            if (outcome.result.status === 'active') {
+              for (const stream of streams) active.add(stream);
+            } else {
+              for (const stream of streams) deleted.add(stream);
+              await this.notifyCanonicalDeletions(streams, canonicalStreams);
+            }
             return;
           }
-          for (const stream of supersededAdjacentStreams) active.add(stream);
-          for (const stream of streams) {
-            if (!supersededAdjacentStreams.has(stream)) deleted.add(stream);
+          case 'streams-deleted': {
+            for (const stream of streams) deleted.add(stream);
+            log.warn(
+              `Streams for execution ${executionId} were deleted, but execution cleanup was incomplete: ${toErrorMessage(outcome.error)}`,
+              { data: outcome.error },
+            );
+            await this.notifyCanonicalDeletions(streams, canonicalStreams);
+            return;
           }
-          await this.notifyCanonicalDeletions(
-            streams,
-            canonicalStreams,
-            supersededAdjacentStreams,
-          );
-          return;
-        }
-        log.warn(
-          `Failed to delete streams for execution ${executionId}: ${toErrorMessage(outcome.error)}`,
-          { data: outcome.error },
-        );
-        // `retained` normally means execution deletion failed before its
-        // `beforeDelete` cleanup committed. When adjacent cleanup did run,
-        // retain only the streams that failed or were superseded; the others
-        // committed and belong in `deleted`. With no adjacent outcome, cleanup
-        // never ran, so `deleted` must stay empty even for snapshot-only
-        // identities that have no canonical tab to report in `failed`.
-        const retainedAdjacentStreams = new Set([
-          ...failedAdjacentStreams,
-          ...supersededAdjacentStreams,
-        ]);
-        if (retainedAdjacentStreams.size === 0) {
-          for (const stream of streams) {
-            if (this.streamLogs.has(stream)) failed.add(stream);
+          case 'superseded': {
+            if (supersededAdjacentStreams.size === 0) {
+              for (const stream of streams) active.add(stream);
+              return;
+            }
+            for (const stream of supersededAdjacentStreams) active.add(stream);
+            for (const stream of streams) {
+              if (!supersededAdjacentStreams.has(stream)) deleted.add(stream);
+            }
+            await this.notifyCanonicalDeletions(
+              streams,
+              canonicalStreams,
+              supersededAdjacentStreams,
+            );
+            return;
           }
-          return;
+          case 'retained': {
+            log.warn(
+              `Failed to delete streams for execution ${executionId}: ${toErrorMessage(outcome.error)}`,
+              { data: outcome.error },
+            );
+            // `retained` normally means execution deletion failed before its
+            // `beforeDelete` cleanup committed. When adjacent cleanup did run,
+            // retain only the streams that failed or were superseded; the
+            // others committed and belong in `deleted`. With no adjacent
+            // outcome, cleanup never ran, so `deleted` must stay empty even
+            // for snapshot-only identities that have no canonical tab to
+            // report in `failed`.
+            const retainedAdjacentStreams = new Set([
+              ...failedAdjacentStreams,
+              ...supersededAdjacentStreams,
+            ]);
+            if (retainedAdjacentStreams.size === 0) {
+              for (const stream of streams) {
+                if (this.streamLogs.has(stream)) failed.add(stream);
+              }
+              return;
+            }
+            for (const stream of failedAdjacentStreams) failed.add(stream);
+            for (const stream of supersededAdjacentStreams) active.add(stream);
+            for (const stream of streams) {
+              if (!retainedAdjacentStreams.has(stream)) deleted.add(stream);
+            }
+            await this.notifyCanonicalDeletions(
+              streams,
+              canonicalStreams,
+              retainedAdjacentStreams,
+            );
+            return;
+          }
+          default: {
+            // Exhaustiveness guard: a new `ExecutionDeletionOutcome` variant
+            // must be handled above rather than silently falling through to
+            // the `retained` bulk-repair logic, which does not apply to it.
+            const unreachable: never = outcome;
+            throw new Error(
+              `Unhandled execution deletion outcome: ${JSON.stringify(unreachable)}`,
+            );
+          }
         }
-        for (const stream of failedAdjacentStreams) failed.add(stream);
-        for (const stream of supersededAdjacentStreams) active.add(stream);
-        for (const stream of streams) {
-          if (!retainedAdjacentStreams.has(stream)) deleted.add(stream);
-        }
-        await this.notifyCanonicalDeletions(
-          streams,
-          canonicalStreams,
-          retainedAdjacentStreams,
-        );
       }),
     );
     return { active, failed, deleted };
@@ -948,7 +964,7 @@ export class SessionStores {
     // resolves each orphan's owning execution from it, and the execution half
     // takes the same references. Reading it twice cost a second full scan of
     // every execution's metadata for exactly the same answer.
-    let index: Awaited<ReturnType<SessionStores['readStreamIndex']>>;
+    let index: StreamExecutionIndex;
     try {
       index = await this.readStreamIndex();
     } catch (error) {

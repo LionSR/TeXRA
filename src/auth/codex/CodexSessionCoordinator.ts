@@ -7,8 +7,6 @@
  */
 import { Effect } from 'effect';
 
-import { effectRuntime } from '@platform/processRuntime';
-
 import { providerAuthError } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
@@ -97,23 +95,17 @@ export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexS
     super({
       storage: init.storage,
       policy: CODEX_POLICY,
-      // The grant programs run here at the coordinator's Promise boundary
-      // until the coordinator itself is an Effect program.
       client: init.client ?? {
         exchangeAuthorizationCode: (params) =>
-          effectRuntime().runPromise(
-            exchangeAuthorizationCode(params).pipe(
-              Effect.mapError((error) =>
-                providerAuthError(error, CodexAuthError),
-              ),
+          exchangeAuthorizationCode(params).pipe(
+            Effect.mapError((error) =>
+              providerAuthError(error, CodexAuthError),
             ),
           ),
         refreshTokens: (refreshToken) =>
-          effectRuntime().runPromise(
-            refreshTokens(refreshToken).pipe(
-              Effect.mapError((error) =>
-                providerAuthError(error, CodexAuthError),
-              ),
+          refreshTokens(refreshToken).pipe(
+            Effect.mapError((error) =>
+              providerAuthError(error, CodexAuthError),
             ),
           ),
       },

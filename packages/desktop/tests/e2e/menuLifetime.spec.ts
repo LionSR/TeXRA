@@ -43,11 +43,11 @@ test('application menu releases a closed window and binds once to its replacemen
   const windowlessProbe = await launched.app.evaluate(
     ({ BrowserWindow, Menu }, closedWindowId) => {
       const menu = Menu.getApplicationMenu();
-      const showLogs = (menu?.items ?? [])
-        .flatMap((item) => item.submenu?.items ?? [])
-        .find((item) => item.label === 'Show Logs');
-      const appMenu = menu?.items.find((item) => item.role === 'appmenu');
-      const quit = appMenu?.submenu?.items.find((item) => item.role === 'quit');
+      const menuItems = (menu?.items ?? []).flatMap(
+        (item) => item.submenu?.items ?? [],
+      );
+      const showLogs = menuItems.find((item) => item.label === 'Show Logs');
+      const quit = menuItems.find((item) => item.role === 'quit');
       showLogs?.click(showLogs, BrowserWindow.getFocusedWindow() ?? undefined, {
         triggeredByAccelerator: false,
       });

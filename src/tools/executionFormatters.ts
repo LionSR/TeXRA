@@ -27,7 +27,12 @@ import type {
   RunIdentity,
   TodoItem,
 } from '@shared/schemas';
-import { runIdentityName, RUN_OUTCOME, STATUS_DISPLAY } from '@shared/schemas';
+import {
+  countByStatus,
+  runIdentityName,
+  RUN_OUTCOME,
+  STATUS_DISPLAY,
+} from '@shared/schemas';
 import { formatTimestamp } from '@utils/text/stringUtils';
 
 // Local imports - liveness
@@ -210,9 +215,8 @@ export function formatTodoHeader(
   executionId: string,
   todos: readonly TodoItem[],
 ): string {
-  const completed = todos.filter((t) => t.status === 'completed').length;
-  const inProgress = todos.filter((t) => t.status === 'in_progress').length;
-  return `Tasks for ${executionId} (${completed} done, ${inProgress} active, ${todos.length - completed - inProgress} pending):`;
+  const { completed, inProgress, pending } = countByStatus(todos);
+  return `Tasks for ${executionId} (${completed} done, ${inProgress} active, ${pending} pending):`;
 }
 
 // ============================================================================

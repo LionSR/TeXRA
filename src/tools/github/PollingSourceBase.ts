@@ -11,7 +11,7 @@
  * 24 h detach gate) lives here once.
  */
 
-import { Cause, Data, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
@@ -64,15 +64,6 @@ export function createBasePollState(
     skipPollUntilMs: 0,
   };
 }
-
-/**
- * A subclass hook (`pollOne` or `afterTick`) rejected. `cause` is whatever it
- * raised — for `pollOne`, one of the GitHub error classes or a transport
- * failure that {@link PollingSourceBase.handleFailure} classifies.
- */
-class PollHookRejected extends Data.TaggedError('PollHookRejected')<{
-  readonly cause: unknown;
-}> {}
 
 interface PollingSourceConfig {
   /** Display name used in the logger and exception messages. */
@@ -513,14 +504,11 @@ export abstract class PollingSourceBase<
             .reduce((left, right) => Cause.combine(left, right)),
         );
       }
-      yield* Effect.tryPromise({
-        try: () => this.afterTick(entries, now),
-        catch: (cause) => new PollHookRejected({ cause }),
-      }).pipe(
-        Effect.catchTag('PollHookRejected', (rejection) =>
+      yield* Effect.tryPromise(() => this.afterTick(entries, now)).pipe(
+        Effect.catch((error) =>
           Effect.sync(() => {
             this.logger.warn('Post-poll hook failed', {
-              data: rejection.cause,
+              data: error.cause,
             });
           }),
         ),
@@ -533,16 +521,13 @@ export abstract class PollingSourceBase<
   private readonly pollEntry = Effect.fn('PollingSourceBase.pollEntry')(
     function* (this: PollingSourceBase<K, S>, key: K, state: S, now: number) {
       if (state.skipPollUntilMs > now) return;
-      yield* Effect.tryPromise({
-        try: () => this.pollOne(key, state),
-        catch: (cause) => new PollHookRejected({ cause }),
-      }).pipe(
+      yield* Effect.tryPromise(() => this.pollOne(key, state)).pipe(
         Effect.map(() => {
           state.lastSuccessAt = Date.now();
           state.consecutiveFailures = 0;
         }),
-        Effect.catchTag('PollHookRejected', (rejection) =>
-          Effect.sync(() => this.handleFailure(key, state, rejection.cause)),
+        Effect.catch((error) =>
+          Effect.sync(() => this.handleFailure(key, state, error.cause)),
         ),
       );
     },

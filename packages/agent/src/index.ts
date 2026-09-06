@@ -445,16 +445,20 @@ export function runAgent(input: RunAgentInput): AgentRun {
     }
     if (!activePlatform) {
       // No composition root has run in this process, so the package is its
-      // composition root: the platform, the node agent runtime, the one
-      // Effect runtime holding the sessions' owner (PRD 7.7), and the hosts'
+      // composition root: the platform, the one Effect runtime holding the
+      // sessions' owner (PRD 7.7), the node agent runtime, and the hosts'
       // shutdown order on the embedder's shutdown path. A run beside a host
       // that already ran its own (the same platform object) reuses all four,
       // its session included: the owner is process-wide, and nothing here
       // may be installed twice.
       initPlatform(input.platform);
       initProcessWorkspaceRoots(input.platform.roots);
-      initNodeAgentRuntime(input.platform.lifecycle);
+      // The runtime is installed before the agent runtime, as the CLI and
+      // desktop roots do: registering the direct Lean language services
+      // builds their layer graph on it, so a registration ahead of the
+      // install throws before any agent work begins.
       installProcessRuntime(input.platform.processes.selfIdentity());
+      initNodeAgentRuntime(input.platform.lifecycle);
       // The session's agent-spawned children and agent-CLI sessions are
       // stopped, then the platform's session is closed through its owner
       // under the phase's own budget (its runs stopped and settled, its

@@ -1,3 +1,4 @@
+import { Deferred, Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,7 +9,6 @@ import {
 import { XaiSessionCoordinator } from '@auth/xai/XaiSessionCoordinator';
 import type { XaiSession, XaiTokenResponse } from '@auth/xai/xaiSessionTypes';
 import * as logger from '@logger/logUtils';
-import { createDeferred } from '@test/support/asyncTestUtils';
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
@@ -116,7 +116,7 @@ describe('XaiSessionCoordinator', () => {
     const coordinator = makeCoordinator({
       storage,
       client: makeClient({
-        exchangeAuthorizationCode: vi.fn(async () => tokens()),
+        exchangeAuthorizationCode: vi.fn(() => Effect.succeed(tokens())),
       }),
     });
     const stored = await coordinator.completeLoginWithCode({
@@ -131,8 +131,11 @@ describe('XaiSessionCoordinator', () => {
 
   it('refreshes when within the buffer and single-flights concurrent callers', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW + FIVE_MIN - 1 }));
-    const refreshDeferred = createDeferred<XaiTokenResponse>();
-    const refreshTokens = vi.fn(() => refreshDeferred.promise);
+    const refreshDeferred = Deferred.makeUnsafe<
+      XaiTokenResponse,
+      XaiAuthError
+    >();
+    const refreshTokens = vi.fn(() => Deferred.await(refreshDeferred));
     const coordinator = makeCoordinator({
       storage,
       client: makeClient({ refreshTokens }),
@@ -144,7 +147,10 @@ describe('XaiSessionCoordinator', () => {
     await vi.waitFor(() => {
       expect(refreshTokens).toHaveBeenCalledTimes(1);
     });
-    refreshDeferred.resolve(tokens({ access_token: 'access-fresh' }));
+    Deferred.doneUnsafe(
+      refreshDeferred,
+      Effect.succeed(tokens({ access_token: 'access-fresh' })),
+    );
     await expect(a).resolves.toBe('access-fresh');
     await expect(b).resolves.toBe('access-fresh');
   });
@@ -154,9 +160,9 @@ describe('XaiSessionCoordinator', () => {
     const coordinator = makeCoordinator({
       storage,
       client: makeClient({
-        refreshTokens: vi.fn(async () => {
-          throw new XaiAuthError('revoked', 'fatal', 400);
-        }),
+        refreshTokens: vi.fn(() =>
+          Effect.fail(new XaiAuthError('revoked', 'fatal', 400)),
+        ),
       }),
     });
     await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({

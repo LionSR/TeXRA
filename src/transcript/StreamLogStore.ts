@@ -1340,11 +1340,8 @@ export class StreamLogStore {
   }
 
   /**
-   * Drain the log's pending entry-level changes into one immutable delta and
-   * multicast it. The delta is drained exactly once per notification and
-   * shared by every listener; no listener acks anything and nothing here is
-   * destructive — this is the single change-feed surface, and consumers that
-   * miss or lose a delta resync from `getRange(0)`.
+   * Drain the log's pending entry-level changes once per notification and
+   * pass the delta to each listener. A reset requires rereading `getRange(0)`.
    */
   private notify(
     streamId: StreamTabId,
@@ -1352,10 +1349,10 @@ export class StreamLogStore {
   ): void {
     const logInstance = this.streams.get(streamId)?.log;
     if (!logInstance) return;
-    const delta: StreamLogDelta = Object.freeze({
+    const delta: StreamLogDelta = {
       ...logInstance.drainEmission(),
       reset: options.reset === true,
-    });
+    };
     for (const listener of this.listeners) {
       listener(streamId, delta);
     }

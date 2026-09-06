@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "lint": "node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js src packages/agent/src packages/agent/scripts packages/extension/src packages/desktop/src packages/cli/src \"packages/cli/scripts/**/*.{ts,tsx}\"",
+    "lint": "node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js src packages/agent/src packages/agent/scripts packages/extension/src packages/desktop/src packages/cli/src \"packages/cli/scripts/**/*.{ts,tsx}\" && node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js \"packages/desktop/design-harness/**/*.ts\" \"packages/desktop/tests/e2e/**/*.ts\"",
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",
     "desktop:build": "corepack pnpm --filter @texra/trace-viewer run build && corepack pnpm --filter @texra/desktop build",
@@ -184,7 +184,6 @@
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
     "undici": "^8.10.1",
-    "vscode-jsonrpc": "^9.0.2",
     "which": "^5.0.0",
     "write-file-atomic": "^7.0.1",
     "yaml": "^2.9.0",

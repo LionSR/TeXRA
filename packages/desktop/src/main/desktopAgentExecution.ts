@@ -26,17 +26,14 @@ import {
   type ExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
   AgentCategory,
-  MainViewExecuteMessage,
   RequestOpenFilePayload,
   StreamTabId,
 } from '@shared/schemas';
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
-import { Cancelled, Rejected } from '@shared/session/requestErrors';
+import { Rejected } from '@shared/session/requestErrors';
 
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
 import { toLogData } from './desktopLogUtils.js';
@@ -48,6 +45,11 @@ import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
 export interface DesktopAgentExecutionOptions {
   host: DesktopAgentExecutionHost;
+  /** Preview operations reject; the approval controller presents failures. */
+  toolEditPreview: Pick<
+    DesktopAgentExecutionHost,
+    'openPath' | 'openBuildDisplay' | 'openDiff'
+  >;
   session: SessionHandle;
   /** A run loaded an agent from the custom directory: the New-task
    *  state's agent-config banner (`HostSnapshot.banners`). */
@@ -61,8 +63,6 @@ export interface DesktopAgentExecutionOptions {
 }
 
 export interface DesktopAgentExecution {
-  /** Launch from the launcher's selections; every failure is a dialog. */
-  handleExecute(message: MainViewExecuteMessage): Promise<void>;
   /** Launch a request another host action built (a merge, a compile fix). */
   runExecutionRequest(
     request: ExecutionRequest,
@@ -155,20 +155,16 @@ export function createDesktopAgentExecution(
   // settles it there; the staged preview is discarded when the request
   // resolves, whichever way.
   const toolEditApprovals = new ToolEditApprovalController({
-    host: new DesktopToolEditApprovalHost({ ui: host }),
-    showToolEditPermission: () => undefined,
-    resolveToolEditPermission: () => undefined,
-    detachCause: SESSION_DISPOSED_CAUSE,
+    host: new DesktopToolEditApprovalHost({
+      ui: {
+        ...options.toolEditPreview,
+        showErrorMessage: host.showErrorMessage,
+      },
+    }),
   });
-  const resolvedApprovals = effectRuntime().runFork(
+  const sessionEvents = effectRuntime().runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
-      Effect.sync(() => {
-        if (event.type !== 'approval.resolved') return;
-        toolEditApprovals.handleAction({
-          requestId: event.requestId,
-          action: 'reject',
-        });
-      }),
+      Effect.sync(() => toolEditApprovals.handleSessionEvent(event)),
     ),
   );
   // Attached for the window's life: the runtime parks a request until a
@@ -196,20 +192,6 @@ export function createDesktopAgentExecution(
   }
 
   return {
-    async handleExecute(message) {
-      // Setup kickoff has no requesting surface. Its message-level entry
-      // presents preparation failures before the detached kickoff settles.
-      let request: ValidatedExecutionRequest;
-      try {
-        request = await prepareMainViewExecutionLaunch(message, host);
-      } catch (error) {
-        if (error instanceof Cancelled) return;
-        if (!(error instanceof Rejected)) throw error;
-        await host.showErrorMessage(error.reason);
-        return;
-      }
-      return runValidated(request);
-    },
     async runExecutionRequest(request, runOptions) {
       const validated = validateExecutionRequest(request);
       if (!validated.valid) {
@@ -232,7 +214,7 @@ export function createDesktopAgentExecution(
       if (disposed) return;
       disposed = true;
       detachHostInteractions();
-      effectRuntime().runFork(Fiber.interrupt(resolvedApprovals));
+      effectRuntime().runFork(Fiber.interrupt(sessionEvents));
       toolEditApprovals.dispose();
     },
   };

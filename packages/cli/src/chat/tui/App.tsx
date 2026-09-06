@@ -19,16 +19,9 @@ import {
   metaChordInput,
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
-import {
-  AgentCategory,
-  isPlainAgentIdentity,
-  USER_FOLLOW_UP_SUPPORT,
-  type StreamTabId,
-  type WorkflowControlAction,
-} from '@shared/schemas';
-import { isActivePhase, isInFlightPhase } from '@shared/streams/streamStatus';
+import { type StreamTabId, type WorkflowControlAction } from '@shared/schemas';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
-import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type { SessionView } from '@shared/session/sessionView';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import {
   appDraftDiscardActive,
@@ -92,7 +85,6 @@ import {
   currentView,
   killableExecutionId,
   sessionView,
-  streamPhaseOf,
   streamLabelOf,
   streamViewOf,
   focusedChildAcceptsFollowUps,
