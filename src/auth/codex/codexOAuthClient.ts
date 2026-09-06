@@ -1,20 +1,27 @@
 /**
  * Network calls against OpenAI's auth endpoints for the Codex OAuth flow.
  *
- * Token grants: declarative {@link OAuthFormEndpoint} + shared pure functions.
- * Device-code: OpenAI custom JSON protocol (not RFC 8628).
+ * Token grants: declarative {@link OAuthFormEndpoint} + shared pure functions,
+ * Promise-facing for the coordinator.
+ * Device-code: OpenAI custom JSON protocol (not RFC 8628), as Effect programs
+ * the device-login flow runs on one fiber.
  */
-// Local imports
-import { toErrorMessage } from '@utils/errors/errorMessage';
+// Third-party imports
+import { Effect } from 'effect';
 
+// Local imports
+import { DeviceAuthorizationPending } from '../oauth/deviceAuthorization';
 import {
   exchangeAuthorizationCode as exchangeFormAuthorizationCode,
-  oauthRequestSignal,
-  parseOAuthJson,
   refreshOAuthTokens,
-  throwOAuthHttpError,
   type OAuthFormEndpoint,
 } from '../oauth/formTokenClient';
+import {
+  OAuthHttpError,
+  oauthHttpError,
+  parseOAuthJson,
+  postOAuth,
+} from '../oauth/oauthRequest';
 import {
   CODEX_CLIENT_ID,
   CODEX_DEVICE_TOKEN_URL,
@@ -26,8 +33,6 @@ import {
   CodexDeviceTokenSchema,
   CodexDeviceUserCodeSchema,
   CodexTokenResponseSchema,
-  type CodexDeviceToken,
-  type CodexDeviceUserCode,
   type CodexTokenResponse,
 } from './codexSessionTypes';
 
@@ -61,101 +66,70 @@ export function refreshTokens(
   return refreshOAuthTokens(CODEX_FORM_ENDPOINT, refreshToken);
 }
 
-/** POST a JSON body, mapping a network failure to a CodexAuthError. */
-async function postJson(
-  url: string,
-  body: unknown,
-  networkErrorMessage: string,
-  networkErrorKind: CodexAuthError['kind'],
-  signal?: AbortSignal,
-): Promise<Response> {
-  try {
-    return await fetch(url, {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(body),
-      signal: oauthRequestSignal(REQUEST_TIMEOUT_MS, signal),
-    });
-  } catch (cause) {
-    signal?.throwIfAborted();
-    throw new CodexAuthError(
-      `${networkErrorMessage}: ${toErrorMessage(cause)}`,
-      networkErrorKind,
-    );
-  }
+function postJson(url: string, body: unknown, networkErrorMessage: string) {
+  return postOAuth({
+    url,
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+    timeoutMs: REQUEST_TIMEOUT_MS,
+    networkErrorMessage,
+  });
 }
 
 /** Begin the device-code flow: request a user code to display. */
-export async function requestDeviceUserCode(
-  signal?: AbortSignal,
-): Promise<CodexDeviceUserCode> {
-  const response = await postJson(
+export const requestDeviceUserCode = Effect.fn(
+  'codexOAuthClient.requestDeviceUserCode',
+)(function* () {
+  const response = yield* postJson(
     CODEX_DEVICE_USERCODE_URL,
     { client_id: CODEX_CLIENT_ID },
     'Network error requesting device code',
-    'transient',
-    signal,
   );
   if (response.status === 404) {
-    throw new CodexAuthError(
-      'Device-code login is not enabled for this account. Enable it under ChatGPT settings → Security (chatgpt.com/settings/security), then try again.',
-      'fatal',
-      404,
-    );
+    return yield* new OAuthHttpError({
+      message:
+        'Device-code login is not enabled for this account. Enable it under ChatGPT settings → Security (chatgpt.com/settings/security), then try again.',
+      status: 404,
+      kind: 'fatal',
+    });
   }
   if (!response.ok) {
-    await throwOAuthHttpError(
-      CODEX_FORM_ENDPOINT,
-      response,
-      'Device code request',
-    );
+    return yield* oauthHttpError(response, 'Device code request');
   }
-  return parseOAuthJson(
-    CODEX_FORM_ENDPOINT,
+  return yield* parseOAuthJson(
     response,
     CodexDeviceUserCodeSchema,
     'Device code request returned an unexpected response',
   );
-}
+});
 
 /**
- * Poll once for the device authorization result. Resolves to the authorization
- * code + verifier on success, or throws a CodexAuthError('pending') while the
- * user has not yet approved (403/404).
+ * Poll once for the device authorization result. Succeeds with the
+ * authorization code + verifier, or fails with
+ * {@link DeviceAuthorizationPending} while the user has not yet approved
+ * (403/404). A network blip mid-poll is also pending so the loop keeps trying.
  */
-export async function pollDeviceToken(
-  params: {
-    deviceAuthId: string;
-    userCode: string;
-  },
-  signal?: AbortSignal,
-): Promise<CodexDeviceToken> {
-  // A network blip mid-poll is reported as 'pending' so the loop keeps trying.
-  const response = await postJson(
-    CODEX_DEVICE_TOKEN_URL,
-    { device_auth_id: params.deviceAuthId, user_code: params.userCode },
-    'Network error polling device authorization',
-    'pending',
-    signal,
-  );
-  if (response.status === 403 || response.status === 404) {
-    throw new CodexAuthError(
-      'Authorization pending',
-      'pending',
-      response.status,
+export const pollDeviceToken = Effect.fn('codexOAuthClient.pollDeviceToken')(
+  function* (params: { deviceAuthId: string; userCode: string }) {
+    const response = yield* postJson(
+      CODEX_DEVICE_TOKEN_URL,
+      { device_auth_id: params.deviceAuthId, user_code: params.userCode },
+      'Network error polling device authorization',
+    ).pipe(
+      Effect.catchTag('OAuthNetworkError', () =>
+        Effect.fail(new DeviceAuthorizationPending({ slowDown: false })),
+      ),
     );
-  }
-  if (!response.ok) {
-    await throwOAuthHttpError(
-      CODEX_FORM_ENDPOINT,
+    if (response.status === 403 || response.status === 404) {
+      return yield* new DeviceAuthorizationPending({ slowDown: false });
+    }
+    if (!response.ok) {
+      return yield* oauthHttpError(response, 'Device authorization');
+    }
+    return yield* parseOAuthJson(
       response,
-      'Device authorization',
+      CodexDeviceTokenSchema,
+      'Device authorization returned an unexpected response',
     );
-  }
-  return parseOAuthJson(
-    CODEX_FORM_ENDPOINT,
-    response,
-    CodexDeviceTokenSchema,
-    'Device authorization returned an unexpected response',
-  );
-}
+  },
+);

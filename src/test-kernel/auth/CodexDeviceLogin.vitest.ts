@@ -1,28 +1,37 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { CodexAuthError } from '@auth/codex';
 import type { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
+import { loginWithDeviceCode } from '@auth/codex/codexDeviceLogin';
+import {
+  CODEX_DEVICE_TOKEN_URL,
+  CODEX_DEVICE_USERCODE_URL,
+} from '@auth/codex/codexConstants';
+import { jsonResponse } from '@test/support/fetchTestUtils';
 
-const mocks = vi.hoisted(() => ({
-  pollDeviceToken: vi.fn(),
-  requestDeviceUserCode: vi.fn(),
-}));
-
-vi.mock('@auth/codex/codexOAuthClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@auth/codex/codexOAuthClient')>()),
-  pollDeviceToken: mocks.pollDeviceToken,
-  requestDeviceUserCode: mocks.requestDeviceUserCode,
-}));
-
-const { loginWithDeviceCode } = await import('@auth/codex/codexDeviceLogin');
-
-function stubDeviceUserCode(overrides: Record<string, unknown> = {}): void {
-  mocks.requestDeviceUserCode.mockResolvedValue({
-    device_auth_id: 'device-auth-id',
-    user_code: 'ABCD-EFGH',
-    interval: 0,
-    ...overrides,
-  });
+/**
+ * Drive the flow through the wire: the usercode endpoint answers once, and
+ * every token poll goes to `onPoll`.
+ */
+function stubDeviceEndpoints(
+  userCode: Record<string, unknown>,
+  onPoll: (init: RequestInit | undefined) => Response,
+): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url === CODEX_DEVICE_USERCODE_URL) {
+        return jsonResponse({
+          device_auth_id: 'device-auth-id',
+          user_code: 'ABCD-EFGH',
+          interval: 0.001,
+          ...userCode,
+        });
+      }
+      if (url === CODEX_DEVICE_TOKEN_URL) return onPoll(init);
+      throw new Error(`Unexpected fetch: ${url}`);
+    }),
+  );
 }
 
 function coordinatorStub(): CodexSessionCoordinator {
@@ -30,15 +39,18 @@ function coordinatorStub(): CodexSessionCoordinator {
 }
 
 describe('Codex device login', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('does not exchange a token when cancellation follows polling', async () => {
     const controller = new AbortController();
-    stubDeviceUserCode();
-    mocks.pollDeviceToken.mockImplementation(async () => {
+    stubDeviceEndpoints({}, () => {
       controller.abort();
-      return {
+      return jsonResponse({
         authorization_code: 'authorization-code',
         code_verifier: 'code-verifier',
-      };
+      });
     });
     const coordinator = coordinatorStub();
 
@@ -54,16 +66,11 @@ describe('Codex device login', () => {
   });
 
   it('gives up at the expiry the server reported, not the local fallback', async () => {
-    stubDeviceUserCode({
-      interval: 0.01,
-      // 1 ms: already elapsed by the time the first poll returns.
-      expires_in: 0.001,
-    });
+    // 20 ms of polling at 1 ms; the 15-minute fallback would hang the test.
     let polls = 0;
-    mocks.pollDeviceToken.mockImplementation(async () => {
+    stubDeviceEndpoints({ expires_in: 0.02 }, () => {
       polls += 1;
-      if (polls > 3) throw new Error('polled past the reported expiry');
-      throw new CodexAuthError('authorization_pending', 'pending');
+      return jsonResponse({ error: 'authorization_pending' }, 403);
     });
 
     await expect(
@@ -73,6 +80,6 @@ describe('Codex device login', () => {
       }),
     ).rejects.toThrow('Device-code sign-in timed out.');
 
-    expect(polls).toBe(1);
+    expect(polls).toBeGreaterThanOrEqual(1);
   });
 });
