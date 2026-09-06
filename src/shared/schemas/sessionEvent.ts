@@ -64,8 +64,9 @@ export function ownerPid(ownerId: string): number {
 export const AggregateIdSchema = z.string().min(1);
 export type AggregateId = z.infer<typeof AggregateIdSchema>;
 
-/** Per-aggregate append order; `run.start` is seq 1 of its stream. */
-const SeqSchema = z.int().positive();
+/** Per-aggregate append order; `run.start` is seq 1 of its stream. Dense
+ *  from 1, assigned by the substrate's publisher and by nothing else. */
+export const AggregateSeqSchema = z.int().positive();
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
  *  first commit", the cursor an empty view starts from. */
@@ -94,7 +95,7 @@ export type ApprovalPolicySnapshot = z.infer<
  */
 const envelope = {
   aggregateId: AggregateIdSchema,
-  seq: SeqSchema,
+  seq: AggregateSeqSchema,
   commit: CommitOrdinalSchema,
   /** Owner of the process that appended the event; null on legacy imports. */
   ownerId: OwnerIdSchema.nullable(),
@@ -149,7 +150,7 @@ const RunStartEventSchema = durable('run.start', {
  * facts with the payload flattened. `stream.removed` is the tombstone: the
  * last row of its aggregate, final (PRD 5.2, "Existence").
  */
-const SessionEventSchema = z.discriminatedUnion('type', [
+export const SessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema,
   /**
    * Every activation of a run, the first launch and each resume (PRD 6,
