@@ -152,19 +152,25 @@ export async function readRememberedDesktopPapers(
   for (const candidate of stored) {
     const root = canonicalizeWorkspacePath(candidate);
     if (roots.includes(root) || missing.includes(root)) continue;
-    let isFolder = false;
-    try {
-      isFolder =
-        statSync(root, { throwIfNoEntry: false })?.isDirectory() ?? false;
-    } catch (error) {
-      // Persisted state validated at its boundary: an unreadable path is
-      // reported and forgotten like a missing one, so it cannot fail every
-      // launch until repaired by hand.
-      warn(
-        `Cannot read the remembered paper ${root}; forgetting it: ${toErrorMessage(error)}`,
-      );
-    }
-    (isFolder ? roots : missing).push(root);
+    const stats = effectRuntime().runSync(
+      Effect.try({
+        try: () => statSync(root, { throwIfNoEntry: false }),
+        catch: (error) => error,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            // Persisted state validated at its boundary: an unreadable path is
+            // reported and forgotten like a missing one, so it cannot fail
+            // every launch until repaired by hand.
+            warn(
+              `Cannot read the remembered paper ${root}; forgetting it: ${toErrorMessage(error)}`,
+            );
+            return undefined;
+          }),
+        ),
+      ),
+    );
+    (stats?.isDirectory() ? roots : missing).push(root);
   }
   const changed =
     roots.length !== stored.length ||
@@ -214,43 +220,49 @@ async function openPaperSession(
   roots: WorkspaceRoots,
 ): Promise<DesktopPaper> {
   const resources = new DisposableStore();
-  try {
-    const transcripts = await runWithWorkspaceRoots(roots, () =>
-      StreamLogStore.open(),
-    );
-    const session = openSession({
-      transcripts,
-      roots,
-      responseTextProcessing,
-    });
-    resources.add(() => session.dispose());
-    return await runInSession(session, async () => {
-      const processStores = await initializeDesktopProcessStores(session);
-      resources.add(() => processStores.dispose());
-      session.setApprovalPolicy(
-        readPlatformSetting<TexraApprovalPolicy>(
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-        ),
-      );
-      // Off the open path: the leftover-stream sweep reads this paper's
-      // whole storage root, so it starts on a timer nothing awaits. It is
-      // scheduled inside the session scope, which the timer inherits, so the
-      // sweep reads this paper's storage and not another's; closing the paper
-      // or shutting the process down cancels it if it has not started.
-      resources.add(scheduleLeftoverStreamSweep(session));
-      return {
-        key: roots.storage,
-        root,
-        roots,
-        session,
-        stores: processStores.stores,
-        dispose: () => runInSession(session, () => resources.dispose()),
-      };
-    });
-  } catch (error) {
-    resources.dispose();
-    throw error;
-  }
+  return effectRuntime().runPromise(
+    Effect.tryPromise({
+      try: async () => {
+        const transcripts = await runWithWorkspaceRoots(roots, () =>
+          StreamLogStore.open(),
+        );
+        const session = openSession({
+          transcripts,
+          roots,
+          responseTextProcessing,
+        });
+        resources.add(() => session.dispose());
+        return await runInSession(session, async () => {
+          const processStores = await initializeDesktopProcessStores(session);
+          resources.add(() => processStores.dispose());
+          session.setApprovalPolicy(
+            readPlatformSetting<TexraApprovalPolicy>(
+              TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+            ),
+          );
+          // Off the open path: the leftover-stream sweep reads this paper's
+          // whole storage root, so it starts on a timer nothing awaits. It is
+          // scheduled inside the session scope, which the timer inherits, so the
+          // sweep reads this paper's storage and not another's; closing the paper
+          // or shutting the process down cancels it if it has not started.
+          resources.add(scheduleLeftoverStreamSweep(session));
+          return {
+            key: roots.storage,
+            root,
+            roots,
+            session,
+            stores: processStores.stores,
+            dispose: () => runInSession(session, () => resources.dispose()),
+          };
+        });
+      },
+      catch: (error) => error,
+    }).pipe(
+      // A failed open releases everything the attempt registered before the
+      // rejection reaches the caller.
+      Effect.onError(() => Effect.sync(() => resources.dispose())),
+    ),
+  );
 }
 
 /**
@@ -316,14 +328,24 @@ export async function openDesktopPaperRegistry(
   const rememberActive = (root: string) => {
     const remembered = readRememberedPapers(options.globalState, options.warn);
     if (remembered.at(-1) === root) return;
-    void writeRememberedPapers(options.globalState, [
-      ...remembered.filter((entry) => entry !== root),
-      root,
-    ]).catch((error: unknown) => {
-      options.warn(
-        `Could not remember the active paper ${root}: ${toErrorMessage(error)}`,
-      );
-    });
+    effectRuntime().runFork(
+      Effect.tryPromise({
+        try: () =>
+          writeRememberedPapers(options.globalState, [
+            ...remembered.filter((entry) => entry !== root),
+            root,
+          ]),
+        catch: (error) => error,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            options.warn(
+              `Could not remember the active paper ${root}: ${toErrorMessage(error)}`,
+            );
+          }),
+        ),
+      ),
+    );
   };
 
   const activate = (root: string | undefined) => {
@@ -407,15 +429,24 @@ export async function openDesktopPaperRegistry(
     async flushArtifacts() {
       const failures: string[] = [];
       for (const paper of [fallback, ...papers.values()]) {
-        try {
-          await runInSession(paper.session, () =>
-            paper.session.flushArtifacts(),
-          );
-        } catch (error) {
-          failures.push(
-            `${paper.root ?? 'no workspace'}: ${toErrorMessage(error)}`,
-          );
-        }
+        await effectRuntime().runPromise(
+          Effect.tryPromise({
+            try: async () => {
+              await runInSession(paper.session, () =>
+                paper.session.flushArtifacts(),
+              );
+            },
+            catch: (error) => error,
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                failures.push(
+                  `${paper.root ?? 'no workspace'}: ${toErrorMessage(error)}`,
+                );
+              }),
+            ),
+          ),
+        );
       }
       if (failures.length > 0) {
         throw new Error(
