@@ -56,6 +56,13 @@ The supplied [Effect v3 introduction](https://effect.website/docs/v3/ai/introduc
 
 ## 3. Proposed package contract
 
+The [joint runtime/LLM implementation contract](2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package)
+refines the sketch below with separate preparation, remote submission and
+observation boundaries. In particular, a completed-only `generateTurn` signature
+does not describe the durable caller's acceptance barrier. That contract also
+binds continuation to immutable history and keeps tool-state settlement with
+the runtime. These requirements remain subject to implementation validation.
+
 ![Proposed TeXRA LLM package](evidence/2026-09-06-agent-architecture/llm-package.svg)
 
 The proposed workspace name is `@texra-ai/llm`. Establish it as an internal workspace package first; npm publication and broad public compatibility are separate product decisions. Its public surface is a deliberate package boundary, not a convenience barrel over old handler files.
