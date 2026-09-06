@@ -165,14 +165,25 @@ export async function initializeElectronPlatform(
   // reconcile when MODEL_LIST_VERSION changes; retired entries and stale
   // Copilot route preferences are swept on every startup. Runs here so it is
   // upstream of the settings view's first model-list paint.
-  try {
-    const { messages } = await refreshModelListAndLog(globalStateStore);
-    for (const message of messages) console.info(`[desktop] ${message}`);
-  } catch (error) {
-    console.error(
-      `[desktop] Failed to refresh model list: ${toErrorMessage(error)}`,
-    );
-  }
+  await effectRuntime().runPromise(
+    Effect.tryPromise({
+      try: () => refreshModelListAndLog(globalStateStore),
+      catch: (error) => error,
+    }).pipe(
+      Effect.tap(({ messages }) =>
+        Effect.sync(() => {
+          for (const message of messages) console.info(`[desktop] ${message}`);
+        }),
+      ),
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          console.error(
+            `[desktop] Failed to refresh model list: ${toErrorMessage(error)}`,
+          );
+        }),
+      ),
+    ),
+  );
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected. Mirrors the

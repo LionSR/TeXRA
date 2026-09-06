@@ -114,6 +114,12 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // has to answer for a process no run initialized and for one whose
   // shutdown already disposed that runtime.
   'packages/agent/src/index.ts': 6,
+  // The CLI platform shutdown sequence, which cannot borrow `effectRuntime()`
+  // for the same reason the SDK entry cannot: `lifecycle.runShutdown()`
+  // disposes the process runtime (`disposeProcessRuntime`) before the
+  // stderr/stdout flushes run, and a teardown path must not depend on the
+  // runtime it is tearing down.
+  'packages/cli/src/runtime/initPlatform.ts': 1,
 };
 
 function sourceFilesUnder(

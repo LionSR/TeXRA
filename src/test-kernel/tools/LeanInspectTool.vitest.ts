@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -28,14 +29,13 @@ function installServices(overrides: Partial<LeanLanguageServices>): void {
 
 describe('LeanInspectTool', () => {
   it('reports a failing language-server request with a per-type summary', async () => {
-    // The dispatch must be awaited inside execute()'s try block; a bare
-    // `return this.executeGoal(...)` settles the promise after the try has
-    // exited, so the rejection reaches the caller unwrapped and loses the
-    // summary that names which inspection failed.
+    // A port failure settles the program's run as a failed Exit, which the
+    // execute() boundary folds into a ToolError carrying the summary that
+    // names which inspection failed.
     installServices({
-      getGoalState: vi.fn(async () => {
-        throw new Error('Lean server not running');
-      }),
+      getGoalState: vi.fn(() =>
+        Effect.die(new Error('Lean server not running')),
+      ),
     });
 
     const result = await new LeanInspectTool().call(GOAL_INSPECT_INPUT);
@@ -52,7 +52,9 @@ describe('LeanInspectTool', () => {
     // A resolved "no data" answer is a normal outcome, not a thrown failure:
     // it must keep its own message instead of being wrapped as a ToolError.
     installServices({
-      getGoalState: vi.fn(async () => ({ data: null, error: 'no goal here' })),
+      getGoalState: vi.fn(() =>
+        Effect.succeed({ data: null, error: 'no goal here' }),
+      ),
     });
 
     const result = await new LeanInspectTool().call(GOAL_INSPECT_INPUT);
