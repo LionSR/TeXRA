@@ -1,6 +1,9 @@
 // Third-party imports
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
+import { TestClock } from 'effect/testing';
 import { HTTPError, TimeoutError } from 'ky';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports - tools
 import { isTransientHttpError, retryTransientFetch } from '@tools/timeouts';
@@ -90,16 +93,36 @@ describe('isTransientHttpError / isTransientHttpStatus parity', () => {
 });
 
 describe('retryTransientFetch', () => {
-  it('reports retries left per transient attempt, the exhausted one included', async () => {
-    const retriesLeft: number[] = [];
-    await expect(
-      retryTransientFetch(() => Promise.reject(kyErrorWithStatus(503)), {
-        retries: 3,
-        minTimeout: 1,
-        timeoutMs: 1000,
-        onFailedAttempt: (_error, left) => retriesLeft.push(left),
+  it.effect(
+    'reports retries left per transient attempt, the exhausted one included',
+    () =>
+      Effect.gen(function* () {
+        const retriesLeft: number[] = [];
+        const fiber = yield* Effect.forkChild(
+          Effect.flip(
+            retryTransientFetch(() => Promise.reject(kyErrorWithStatus(503)), {
+              retries: 3,
+              minTimeout: 1,
+              timeoutMs: 1000,
+              onFailedAttempt: (_error, left) =>
+                Effect.sync(() => {
+                  retriesLeft.push(left);
+                }),
+            }),
+          ),
+        );
+        // Each backoff (at most 8 ms with jitter) sleeps on the test clock;
+        // let the rejected attempt settle before moving the clock past it.
+        for (let i = 0; i < 4; i++) {
+          yield* Effect.promise(
+            () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+          );
+          yield* TestClock.adjust('10 millis');
+        }
+        const error = yield* Fiber.join(fiber);
+        expect(error._tag).toBe('RequestFailed');
+        expect(error.cause).toBeInstanceOf(HTTPError);
+        expect(retriesLeft).toEqual([3, 2, 1, 0]);
       }),
-    ).rejects.toBeInstanceOf(HTTPError);
-    expect(retriesLeft).toEqual([3, 2, 1, 0]);
-  });
+  );
 });

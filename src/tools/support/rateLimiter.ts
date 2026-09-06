@@ -1,9 +1,18 @@
+/**
+ * Per-API request rate limiting for the metadata lookups (arXiv, Crossref).
+ *
+ * The limiters are keyed by API name in one module-level map: a limit is a
+ * property of the remote API, shared by every tool call in the process, so
+ * it cannot live in a layer a tool's run edge provides — `Effect.provide`
+ * builds a layer afresh per call (the process `ManagedRuntime` does not seed
+ * `CurrentMemoMap` into fibers), which would leave each call with its own
+ * limiter and no limit at all.
+ */
+
 // Third-party imports
-import { Cause, Clock, Data, Duration, Effect, Exit, Semaphore } from 'effect';
+import { Clock, Duration, Effect, Semaphore } from 'effect';
 
 // Local imports
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -42,60 +51,35 @@ export const acquireRateLimitSlot = Effect.fn(
   );
 });
 
-/** The API request rejected; `cause` is the client's own error. */
-class ApiCallFailed extends Data.TaggedError('ApiCallFailed')<{
-  readonly cause: unknown;
-}> {}
-
-const rateLimitedRequest = Effect.fn('rateLimiter.rateLimitedApiCall')(
-  <T>(apiName: string, minDelayMs: number, request: () => Promise<T>) =>
+/**
+ * A rate-limited request against an external metadata API with uniform
+ * error wrapping — the exact pattern every arXiv/Crossref lookup repeats.
+ *
+ * Waits for the API's next slot ({@link acquireRateLimitSlot}), runs the
+ * request, and fails with a `ToolError` prefixed with `failureMessage` (a
+ * `ToolError` the request throws itself passes through unchanged).
+ * Interruption stops the slot wait; these clients expose no AbortSignal
+ * hook, so an interrupted in-flight request is *abandoned*: it settles in
+ * the background and its result is discarded. Only safe for the idempotent,
+ * read-only lookups these tools perform — never abandon a write.
+ */
+export const rateLimitedApiCall = Effect.fn('rateLimiter.rateLimitedApiCall')(
+  <T>(
+    apiName: string,
+    minDelayMs: number,
+    failureMessage: string,
+    request: () => Promise<T>,
+  ) =>
     Effect.gen(function* () {
       yield* acquireRateLimitSlot(apiName, minDelayMs);
-      // These clients expose no AbortSignal hook, so on interruption the
-      // in-flight request is *abandoned*: it settles in the background and
-      // its result is discarded. Only safe for the idempotent, read-only
-      // lookups these tools perform — never abandon a write.
       return yield* Effect.tryPromise({
         try: () => request(),
-        catch: (cause) => new ApiCallFailed({ cause }),
+        catch: (cause) =>
+          cause instanceof ToolError
+            ? cause
+            : new ToolError(`${failureMessage}: ${toErrorMessage(cause)}`, {
+                cause,
+              }),
       });
     }),
 );
-
-/**
- * Run a rate-limited, cancellable request against an external metadata API
- * with uniform error wrapping — the exact pattern every arXiv/Crossref
- * lookup repeats.
- *
- * Waits for the API's next slot ({@link acquireRateLimitSlot}), runs the
- * request, and rethrows failures as a `ToolError` prefixed with
- * `failureMessage` (a `ToolError` the request throws itself passes through
- * unchanged). Cancelling the current tool call interrupts the slot wait and
- * abandons the in-flight request, and the caller gets an immediate
- * `ToolError('Cancelled <label>.')` so a cancelled dispatch batch stops
- * waiting. Both phases raise that one message; the p-throttle version said
- * `Cancelled before contacting the API.` for the slot wait, a string no
- * caller matched on.
- */
-export async function rateLimitedApiCall<T>(
-  apiName: string,
-  minDelayMs: number,
-  label: string,
-  failureMessage: string,
-  request: () => Promise<T>,
-): Promise<T> {
-  const exit = await effectRuntime().runPromiseExit(
-    rateLimitedRequest(apiName, minDelayMs, request),
-    { signal: getCurrentToolCallContext()?.signal },
-  );
-  if (Exit.isSuccess(exit)) return exit.value;
-  if (Cause.hasInterruptsOnly(exit.cause)) {
-    throw new ToolError(`Cancelled ${label}.`);
-  }
-  const failure = Cause.squash(exit.cause);
-  if (!(failure instanceof ApiCallFailed)) throw failure;
-  if (failure.cause instanceof ToolError) throw failure.cause;
-  throw new ToolError(`${failureMessage}: ${toErrorMessage(failure.cause)}`, {
-    cause: failure.cause,
-  });
-}

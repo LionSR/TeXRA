@@ -1,71 +1,78 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Exit, Fiber } from 'effect';
+import { describe, expect } from 'vitest';
 
 // Local imports
-import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError } from '@shared/schemas';
 import { rateLimitedApiCall } from '@tools/support/rateLimiter';
 
-const neverSettles = new Promise<never>(() => {});
+/** The rate-limited lookup of `operation` as a tool program runs it. */
+const lookup = <T>(operation: () => Promise<T>) =>
+  rateLimitedApiCall('test-api', 0, 'Lookup failed', operation);
 
-/** Run `operation` as a rate-limited lookup owned by a tool call with `signal`. */
-function lookup<T>(
-  operation: Promise<T>,
-  signal: AbortSignal | undefined,
-  what: string,
-): Promise<T> {
-  return withToolFileInteractionContext(
-    { tracker: new FileInteractionState(), signal },
-    () =>
-      rateLimitedApiCall('test-api', 0, what, 'Lookup failed', () => operation),
-  );
-}
+/** Let the forked lookup take its slot and start its request. */
+const started = Effect.promise(
+  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+);
 
 describe('rateLimitedApiCall cancellation', () => {
-  it('resolves with the operation result when no abort fires', async () => {
-    const controller = new AbortController();
-    await expect(
-      lookup(Promise.resolve(42), undefined, 'lookup'),
-    ).resolves.toBe(42);
-    await expect(
-      lookup(Promise.resolve(42), controller.signal, 'lookup'),
-    ).resolves.toBe(42);
-  });
+  it.effect('succeeds with the operation result', () =>
+    Effect.gen(function* () {
+      expect(yield* lookup(() => Promise.resolve(42))).toBe(42);
+    }),
+  );
 
-  it('rejects immediately when the signal is already aborted', async () => {
-    const controller = new AbortController();
-    controller.abort();
-    await expect(
-      lookup(neverSettles, controller.signal, 'arXiv search'),
-    ).rejects.toThrow(new ToolError('Cancelled arXiv search.'));
-  });
+  it.effect('interrupting the program abandons an in-flight operation', () =>
+    Effect.gen(function* () {
+      let requests = 0;
+      const fiber = yield* Effect.forkChild(
+        lookup(() => {
+          requests += 1;
+          return new Promise<never>(() => {});
+        }),
+      );
+      yield* started;
+      expect(requests).toBe(1);
+      yield* Fiber.interrupt(fiber);
+      const exit = yield* Fiber.await(fiber);
+      expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
+    }),
+  );
 
-  it('rejects as soon as the signal aborts mid-flight', async () => {
-    const controller = new AbortController();
-    const pending = lookup(neverSettles, controller.signal, 'lookup');
-    controller.abort();
-    await expect(pending).rejects.toThrow('Cancelled lookup.');
-  });
+  it.effect(
+    'an abandoned operation rejection after interruption is observed',
+    () =>
+      Effect.gen(function* () {
+        let rejectOperation: (error: Error) => void = () => {};
+        const operation = new Promise<never>((_, reject) => {
+          rejectOperation = reject;
+        });
+        const fiber = yield* Effect.forkChild(lookup(() => operation));
+        yield* started;
+        yield* Fiber.interrupt(fiber);
+        // The orphaned rejection must not become an unhandled rejection.
+        rejectOperation(new Error('late network failure'));
+        yield* Effect.promise(
+          () => new Promise((resolve) => setTimeout(resolve, 10)),
+        );
+      }),
+  );
 
-  it('swallows the abandoned operation rejection after abort', async () => {
-    const controller = new AbortController();
-    let rejectOperation: (error: Error) => void = () => {};
-    const operation = new Promise<never>((_, reject) => {
-      rejectOperation = reject;
-    });
-    const pending = lookup(operation, controller.signal, 'lookup');
-    controller.abort();
-    await expect(pending).rejects.toThrow('Cancelled lookup.');
-    // The orphaned rejection must not become an unhandled rejection.
-    rejectOperation(new Error('late network failure'));
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  });
+  it.effect('wraps the operation error in the failure message', () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        lookup(() => Promise.reject(new Error('boom'))),
+      );
+      expect(error).toEqual(new ToolError('Lookup failed: boom'));
+    }),
+  );
 
-  it('propagates the operation error when it rejects before abort', async () => {
-    const controller = new AbortController();
-    await expect(
-      lookup(Promise.reject(new Error('boom')), controller.signal, 'lookup'),
-    ).rejects.toThrow(new ToolError('Lookup failed: boom'));
-  });
+  it.effect('passes a ToolError the operation throws through unchanged', () =>
+    Effect.gen(function* () {
+      const thrown = new ToolError('No such record', { summary: 'Missing' });
+      const error = yield* Effect.flip(lookup(() => Promise.reject(thrown)));
+      expect(error).toBe(thrown);
+    }),
+  );
 });

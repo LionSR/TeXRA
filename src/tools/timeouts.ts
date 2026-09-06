@@ -1,41 +1,38 @@
 /**
- * Shared timeout and HTTP-error helpers for tool implementations.
+ * Shared request programs for tool implementations: one attempt under a
+ * deadline ({@link withRequestTimeout}), the transient-failure retry every
+ * network-boundary tool repeats ({@link retryTransientFetch}), and the
+ * classification of a failed request into a `ToolError`
+ * ({@link toFetchToolError}). Each tool defines its own timeout constant
+ * locally; the failure policy is consistent here (built around the `ky`
+ * HTTP client).
  *
- * Each tool defines its own timeout constant locally. This module provides
- * the retry scaffolding and error-classification helpers that enforce a
- * consistent failure policy across tools (built around the `ky` HTTP client).
- *
- * The request programs run on Effect: a deadline is `Effect.timeoutOrElse`,
- * the transient-failure retry is an exponential `Schedule` with full jitter
- * (see {@link transientBackoff}), and the
- * caller's cancellation `AbortSignal` becomes fiber interruption at the one
- * run boundary of each exported helper — `Effect.tryPromise` hands the
- * interrupted attempt's own signal to the underlying fetch, so an
- * interrupted run aborts the in-flight request instead of waiting out the
- * deadline or the next backoff.
+ * A deadline is `Effect.timeoutOrElse`, the retry is an exponential
+ * `Schedule` with the [1, 2) jitter window the tools were tuned to
+ * ({@link transientBackoff}), and cancellation is fiber interruption:
+ * `Effect.tryPromise` hands the attempt's own `AbortSignal` to the request,
+ * so an interrupted run aborts the in-flight fetch instead of waiting out the
+ * deadline or the next backoff. The caller's signal enters once, as the
+ * `{ signal }` of the tool's run edge.
  */
 
-import { Cause, Data, Duration, Effect, Exit, Random, Schedule } from 'effect';
+import { Data, Duration, Effect, Random, Schedule } from 'effect';
 import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
 
-import { effectRuntime } from '@platform/processRuntime';
 import { ToolError } from '@shared/schemas';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
- * Whether an error is a request timeout.
- *
- * Covers three sources:
- * - ky's own `TimeoutError` (thrown when the `timeout:` option fires)
- * - `DOMException`/`Error` with `name === 'TimeoutError'` (thrown when
- *   `AbortSignal.timeout()` fires in Node.js 20+ / undici v6+, and by this
- *   module's own deadline)
- * - `AbortError` whose `cause` is a `TimeoutError` — the shape some undici
- *   versions produce when `AbortSignal.timeout()` fires mid-request
+ * Whether a request's own error is a timeout the client raised: ky's
+ * `TimeoutError` (the `timeout:` option), a `DOMException`/`Error` named
+ * `TimeoutError` (`AbortSignal.timeout()` in Node.js 20+ / undici v6+), or
+ * an `AbortError` whose `cause` is one (the shape some undici versions
+ * produce when `AbortSignal.timeout()` fires mid-request). This module's own
+ * deadline is the {@link RequestTimedOut} tag, never one of these.
  */
-export function isTimeoutError(error: unknown): boolean {
+function isTimeoutError(error: unknown): boolean {
   if (error instanceof TimeoutError) return true;
   if (!(error instanceof Error)) return false;
   if (error.name === 'TimeoutError') return true;
@@ -68,96 +65,49 @@ export function isTransientHttpError(error: unknown): boolean {
 
 /** A request attempt rejected; `cause` is the request's own error. */
 class RequestFailed extends Data.TaggedError('RequestFailed')<{
+  readonly message: string;
   readonly cause: unknown;
 }> {}
 
 /** A request attempt outlived its deadline. */
 class RequestTimedOut extends Data.TaggedError('RequestTimedOut')<{
+  readonly message: string;
   readonly timeoutMs: number;
 }> {}
 
-type RequestError = RequestFailed | RequestTimedOut;
-
-/**
- * The error a request program throws at its Promise edge: the request's own
- * rejection unchanged, or — for the deadline — the same `TimeoutError`
- * DOMException `AbortSignal.timeout()` produces, so {@link isTimeoutError}
- * classifies it wherever the caller matches on it.
- */
-function toThrowable(error: RequestError): unknown {
-  return error._tag === 'RequestTimedOut'
-    ? new DOMException(
-        `Request timed out after ${error.timeoutMs} ms`,
-        'TimeoutError',
-      )
-    : error.cause;
-}
+export type RequestError = RequestFailed | RequestTimedOut;
 
 function isTransientRequestError(error: RequestError): boolean {
   return error._tag === 'RequestTimedOut' || isTransientHttpError(error.cause);
 }
 
 /**
- * One request attempt under a deadline that spans the whole of `request` —
- * connection and body read — where a client's own `timeout` option (e.g.
- * ky's) only clears once headers arrive. The signal handed to `request`
- * aborts when the attempt is interrupted, by the deadline or by the caller.
+ * One request under a deadline of `timeoutMs` that spans the whole of
+ * `request` — connection and body read — where a client's own `timeout`
+ * option (e.g. ky's) only clears once headers arrive. The signal handed to
+ * `request` aborts when the attempt is interrupted, by the deadline or by
+ * the caller. Fails with {@link RequestTimedOut} on the deadline and with
+ * {@link RequestFailed} carrying the request's own error otherwise.
  */
-const requestAttempt = Effect.fn('timeouts.requestAttempt')(
+export const withRequestTimeout = Effect.fn('timeouts.withRequestTimeout')(
   <T>(timeoutMs: number, request: (signal: AbortSignal) => Promise<T>) =>
     Effect.tryPromise({
       try: request,
-      catch: (cause) => new RequestFailed({ cause }),
+      catch: (cause) =>
+        new RequestFailed({ message: toErrorMessage(cause), cause }),
     }).pipe(
       Effect.timeoutOrElse({
         duration: Duration.millis(timeoutMs),
-        orElse: () => Effect.fail(new RequestTimedOut({ timeoutMs })),
+        orElse: () =>
+          Effect.fail(
+            new RequestTimedOut({
+              message: `Request timed out after ${timeoutMs} ms`,
+              timeoutMs,
+            }),
+          ),
       }),
     ),
 );
-
-/**
- * Settle a request program at its Promise edge. An interruption delivered by
- * the caller's cancellation signal rethrows that signal's reason — what the
- * aborted fetch itself would have thrown.
- */
-function settleRequest<T>(
-  exit: Exit.Exit<T, RequestError>,
-  cancelSignal: AbortSignal | undefined,
-): T {
-  if (Exit.isSuccess(exit)) return exit.value;
-  // Stricter than `rateLimitedApiCall`'s interrupts-only check because this
-  // edge rethrows `cancelSignal.reason`, which only exists once the signal
-  // has aborted; an interrupt from elsewhere (runtime disposal) has no reason
-  // to rethrow and falls through to the squashed cause below.
-  if (cancelSignal?.aborted && Cause.hasInterruptsOnly(exit.cause)) {
-    throw cancelSignal.reason;
-  }
-  const failure = Cause.squash(exit.cause);
-  throw failure instanceof RequestFailed || failure instanceof RequestTimedOut
-    ? toThrowable(failure)
-    : failure;
-}
-
-/**
- * Run one request under a deadline of `timeoutMs`, interrupted early when
- * the run's cancellation signal fires. Rejects with a `TimeoutError`
- * DOMException on the deadline ({@link isTimeoutError} classifies it), with
- * the request's own error otherwise, and with the signal's abort reason on
- * cancellation.
- */
-export async function withRequestTimeout<T>(
-  timeoutMs: number,
-  cancelSignal: AbortSignal | undefined,
-  request: (signal: AbortSignal) => Promise<T>,
-): Promise<T> {
-  cancelSignal?.throwIfAborted();
-  const exit = await effectRuntime().runPromiseExit(
-    requestAttempt(timeoutMs, request),
-    { signal: cancelSignal },
-  );
-  return settleRequest(exit, cancelSignal);
-}
 
 interface RetryTransientFetchOptions {
   /** Retries after the first attempt. */
@@ -169,14 +119,15 @@ interface RetryTransientFetchOptions {
   readonly minTimeout: number;
   /** Deadline for each attempt, connection and body read included. */
   readonly timeoutMs: number;
-  readonly cancelSignal?: AbortSignal;
   /**
-   * Observes each transient failure with the error the edge would throw —
-   * the attempts the schedule may retry, the last exhausted one included. A
-   * permanent failure ends the retry unobserved, since it never had retries
-   * left to report.
+   * Observes each transient failure — the attempts the schedule may retry,
+   * the last exhausted one included. A permanent failure ends the retry
+   * unobserved, since it never had retries left to report.
    */
-  readonly onFailedAttempt?: (error: unknown, retriesLeft: number) => void;
+  readonly onFailedAttempt?: (
+    error: RequestError,
+    retriesLeft: number,
+  ) => Effect.Effect<void>;
 }
 
 /**
@@ -195,20 +146,28 @@ function transientBackoff(minTimeout: number) {
   );
 }
 
-const retryingRequest = Effect.fn('timeouts.retryTransientFetch')(
+/**
+ * Run `fetchOnce` under a per-attempt deadline, retrying only transient
+ * failures (timeout, network error, 429, 5xx) with exponential backoff and
+ * full jitter — the pattern every network-boundary tool (web fetch/search,
+ * Loogle) repeats. Any other failure — a non-transient HTTP status, a
+ * response-shape or size-limit check `fetchOnce` throws itself — ends the
+ * retry immediately and is the program's failure. Interruption stops both
+ * the active attempt and the backoff sleep.
+ */
+export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')(
   <T>(
     fetchOnce: (signal: AbortSignal) => Promise<T>,
     options: RetryTransientFetchOptions,
   ) =>
-    requestAttempt(options.timeoutMs, fetchOnce).pipe(
+    withRequestTimeout(options.timeoutMs, fetchOnce).pipe(
       Effect.tapError((error) =>
         Effect.gen(function* () {
-          if (!isTransientRequestError(error)) return;
+          if (!options.onFailedAttempt || !isTransientRequestError(error)) {
+            return;
+          }
           const { attempt } = yield* Schedule.CurrentMetadata;
-          options.onFailedAttempt?.(
-            toThrowable(error),
-            options.retries - attempt,
-          );
+          yield* options.onFailedAttempt(error, options.retries - attempt);
         }),
       ),
       Effect.retry({
@@ -219,27 +178,6 @@ const retryingRequest = Effect.fn('timeouts.retryTransientFetch')(
     ),
 );
 
-/**
- * Run `fetchOnce` under a per-attempt deadline, retrying only transient
- * failures (timeout, network error, 429, 5xx) with exponential backoff and
- * full jitter — the pattern every network-boundary tool (web fetch/search,
- * Loogle) repeats. Any other rejection — a non-transient HTTP status, a
- * response-shape or size-limit check `fetchOnce` throws itself — ends the
- * retry immediately and is rethrown unchanged. Cancellation stops both the
- * active attempt and the backoff sleep.
- */
-export async function retryTransientFetch<T>(
-  fetchOnce: (signal: AbortSignal) => Promise<T>,
-  options: RetryTransientFetchOptions,
-): Promise<T> {
-  options.cancelSignal?.throwIfAborted();
-  const exit = await effectRuntime().runPromiseExit(
-    retryingRequest(fetchOnce, options),
-    { signal: options.cancelSignal },
-  );
-  return settleRequest(exit, options.cancelSignal);
-}
-
 /** Tool-facing message for each failure class of a retried fetch. */
 interface FetchToolErrorMessages {
   readonly timeout: string;
@@ -249,7 +187,7 @@ interface FetchToolErrorMessages {
 }
 
 /**
- * Classify the error from a failed {@link retryTransientFetch} call into a
+ * Classify the failure of a {@link retryTransientFetch} program into a
  * {@link ToolError}: timeout, HTTP status, network failure, or fallback.
  *
  * The network predicate here is the same one `isTransientHttpError` uses for
@@ -262,17 +200,17 @@ interface FetchToolErrorMessages {
  * transient and then mislabeled as a network failure, or vice versa.
  */
 export function toFetchToolError(
-  error: unknown,
+  error: RequestError,
   messages: FetchToolErrorMessages,
 ): ToolError {
-  if (isTimeoutError(error)) {
+  if (error._tag === 'RequestTimedOut' || isTimeoutError(error.cause)) {
     return new ToolError(messages.timeout);
   }
-  if (error instanceof HTTPError) {
-    return new ToolError(messages.http(error.response.status));
+  if (error.cause instanceof HTTPError) {
+    return new ToolError(messages.http(error.cause.response.status));
   }
-  if (isNetworkError(error)) {
-    return new ToolError(messages.network(toErrorMessage(error)));
+  if (isNetworkError(error.cause)) {
+    return new ToolError(messages.network(error.message));
   }
-  return new ToolError(messages.fallback(toErrorMessage(error)));
+  return new ToolError(messages.fallback(error.message));
 }

@@ -18,7 +18,7 @@
 
 // Third-party imports
 import { type Work } from '@jamesgopsill/crossref-client';
-import { Cause, Data, Duration, Effect, Exit } from 'effect';
+import { Data, Duration, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -279,11 +279,12 @@ function workToZoteroItem(doi: string, work: Work): ZoteroConnectorItem {
 /**
  * Resolve a DOI to full metadata via the Crossref API.
  * Uses the shared CrossrefClient and rate limiter from @tools/citation.
- * Returns a Zotero-format item object, or null if resolution fails; a
- * cancelled tool call throws instead of degrading to the fallback metadata.
+ * Succeeds with a Zotero-format item object, or null if resolution fails;
+ * an interrupted tool call stops here instead of degrading to the fallback
+ * metadata.
  */
-async function resolveDOI(doi: string): Promise<ZoteroConnectorItem | null> {
-  const lookup = crossrefWork(doi).pipe(
+const resolveDOI = Effect.fn('ZoteroAddTool.resolveDOI')((doi: string) =>
+  crossrefWork(doi).pipe(
     Effect.map((response) =>
       response.ok && response.content?.message
         ? workToZoteroItem(doi, response.content.message)
@@ -299,16 +300,8 @@ async function resolveDOI(doi: string): Promise<ZoteroConnectorItem | null> {
         return null;
       }),
     ),
-  );
-  const exit = await effectRuntime().runPromiseExit(lookup, {
-    signal: getCurrentToolCallContext()?.signal,
-  });
-  if (Exit.isSuccess(exit)) return exit.value;
-  if (Cause.hasInterruptsOnly(exit.cause)) {
-    throw new ToolError('Cancelled Crossref DOI lookup.');
-  }
-  throw Cause.squash(exit.cause);
-}
+  ),
+);
 
 /**
  * Convert our item schema to Zotero Connector format.
@@ -345,81 +338,96 @@ function toZoteroItem(
   return result;
 }
 
+/**
+ * Add one item: a URL-only item is saved as a snapshot; a DOI resolves its
+ * metadata via Crossref, with the manual metadata as the fallback when that
+ * lookup fails.
+ */
+const addItem = Effect.fn('ZoteroAddTool.addItem')(function* (
+  item: z.infer<typeof ZoteroItemSchema>,
+  port: number,
+  collectionBody: object,
+) {
+  const itemLabel = item.doi || item.url || item.title || 'Unknown item';
+
+  let result: ConnectorResult;
+  if (!item.doi && item.url) {
+    result = yield* callZoteroConnector(
+      'saveSnapshot',
+      { url: item.url, ...collectionBody },
+      port,
+    );
+  } else {
+    const resolved = item.doi
+      ? yield* resolveDOI(item.doi)
+      : toZoteroItem(item);
+    const zoteroItem = resolved ?? (item.title ? toZoteroItem(item) : null);
+    if (zoteroItem) {
+      result = yield* callZoteroConnector(
+        'saveItems',
+        { items: [zoteroItem], ...collectionBody },
+        port,
+      );
+    } else {
+      result = {
+        status: 'error',
+        message: 'Crossref lookup failed and no title provided to fall back on',
+      };
+    }
+  }
+
+  return { item: itemLabel, ...result };
+});
+
+const addItems = Effect.fn('ZoteroAddTool.execute')(function* ({
+  items,
+  collection,
+}: ZoteroAddInput) {
+  const port = getZoteroPort();
+
+  // Fails with a ToolError if Zotero is not running.
+  yield* checkZoteroRunning(port);
+
+  const collectionBody = collection ? { targetID: collection } : {};
+  const results = yield* Effect.forEach(items, (item) =>
+    addItem(item, port, collectionBody),
+  );
+
+  const successCount = results.filter((r) => r.status === 'success').length;
+  const errorCount = results.length - successCount;
+
+  const output = results
+    .map((r) =>
+      r.status === 'success' ? `✓ ${r.item}` : `✗ ${r.item}: ${r.message}`,
+    )
+    .join('\n');
+
+  // Fail if all items failed (items.length >= 1 per schema)
+  if (successCount === 0) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Failed to add all ${errorCount} ${pluralize(errorCount, 'item')} to Zotero:\n${output}`,
+      ),
+    );
+  }
+
+  const summary =
+    errorCount === 0
+      ? `Successfully added ${successCount} ${pluralize(successCount, 'item')} to Zotero.`
+      : `Added ${successCount} ${pluralize(successCount, 'item')}, failed to add ${errorCount} ${pluralize(errorCount, 'item')} to Zotero.`;
+
+  return executed(output, summary);
+});
+
 export class ZoteroAddTool extends defineTool({
   name: 'zotero_add',
   description:
     'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by DOI (recommended), URL, or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files).',
   schema: ZoteroAddInputSchema,
 }) {
-  protected async execute({
-    items,
-    collection,
-  }: ZoteroAddInput): Promise<ToolResult> {
-    const port = getZoteroPort();
-
-    // Check if Zotero is running (throws ToolError if not)
-    await checkZoteroRunning(port);
-
-    const results: Array<ConnectorResult & { item: string }> = [];
-    const collectionBody = collection ? { targetID: collection } : {};
-
-    for (const item of items) {
-      const itemLabel = item.doi || item.url || item.title || 'Unknown item';
-
-      let result: ConnectorResult;
-
-      if (!item.doi && item.url) {
-        result = await callZoteroConnector(
-          'saveSnapshot',
-          { url: item.url, ...collectionBody },
-          port,
-        );
-      } else {
-        // A DOI resolves its metadata via Crossref; manual metadata is the
-        // fallback when that lookup fails.
-        const resolved = item.doi
-          ? await resolveDOI(item.doi)
-          : toZoteroItem(item);
-        const zoteroItem = resolved ?? (item.title ? toZoteroItem(item) : null);
-        if (zoteroItem) {
-          result = await callZoteroConnector(
-            'saveItems',
-            { items: [zoteroItem], ...collectionBody },
-            port,
-          );
-        } else {
-          result = {
-            status: 'error',
-            message:
-              'Crossref lookup failed and no title provided to fall back on',
-          };
-        }
-      }
-
-      results.push({ item: itemLabel, ...result });
-    }
-
-    const successCount = results.filter((r) => r.status === 'success').length;
-    const errorCount = results.length - successCount;
-
-    const output = results
-      .map((r) =>
-        r.status === 'success' ? `✓ ${r.item}` : `✗ ${r.item}: ${r.message}`,
-      )
-      .join('\n');
-
-    // Throw ToolError if all items failed (items.length >= 1 per schema)
-    if (successCount === 0) {
-      throw new ToolError(
-        `Failed to add all ${errorCount} ${pluralize(errorCount, 'item')} to Zotero:\n${output}`,
-      );
-    }
-
-    const summary =
-      errorCount === 0
-        ? `Successfully added ${successCount} ${pluralize(successCount, 'item')} to Zotero.`
-        : `Added ${successCount} ${pluralize(successCount, 'item')}, failed to add ${errorCount} ${pluralize(errorCount, 'item')} to Zotero.`;
-
-    return executed(output, summary);
+  protected execute(input: ZoteroAddInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(addItems(input), {
+      signal: getCurrentToolCallContext()?.signal,
+    });
   }
 }
