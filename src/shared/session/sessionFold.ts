@@ -1801,7 +1801,9 @@ function foldSubscriptions(
   for (const id of [...view.folded.keys()]) {
     if (subscribed.has(id)) continue;
     writableMap(view, 'folded').delete(id);
-    const stream = view.streams.get(aggregateTarget(id).id);
+    const target = aggregateTarget(id);
+    const stream =
+      target.kind === 'stream' ? view.streams.get(target.id) : undefined;
     if (!stream) continue;
     clearInflight(view, stream);
     const evicted = withTranscriptFacts({

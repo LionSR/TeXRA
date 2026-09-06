@@ -505,6 +505,23 @@ describe('sessionFold', () => {
 
     // Subscribing later reopens from the seq the subscription names.
     const full = foldAll(scenario.events);
+    const subscriptions = [...full.folded].map(([id, fromSeq]) => ({
+      id,
+      fromSeq,
+    }));
+    const execution = qualifyAggregateId('execution', ROOT);
+    const overlapping = fold(full, {
+      _tag: 'subscriptions',
+      set: [...subscriptions, { id: execution, fromSeq: 0 }],
+    });
+    const streamOnly = fold(overlapping, {
+      _tag: 'subscriptions',
+      set: subscriptions,
+    });
+    expect(streamOnly.folded.has(execution)).toBe(false);
+    expect(stream(streamOnly, ROOT).transcript).toEqual(
+      stream(full, ROOT).transcript,
+    );
     const evicted = fold(full, subscribe(CHILD));
     expect(evicted.folded.has(qualifyAggregateId('stream', ROOT))).toBe(false);
     expect(evicted.folded.has(qualifyAggregateId('stream', CHILD))).toBe(true);
