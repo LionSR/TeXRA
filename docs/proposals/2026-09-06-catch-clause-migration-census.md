@@ -62,23 +62,22 @@ collapses into, are quoted from P12 as the classifiers received them:
 
 ## 2. Totals
 
-| Category                |    Count |  Share |
-| ----------------------- | -------: | -----: |
-| boundary-translation    |      330 |  31.2% |
-| typed-recovery          |      182 |  17.2% |
-| cleanup                 |      124 |  11.7% |
-| best-effort-projection  |      206 |  19.5% |
-| failure-aggregation     |       52 |   4.9% |
-| control-flow            |      146 |  13.8% |
-| defect-suppression      |       18 |   1.7% |
-| _sum of categories_     |     1058 |  99.9% |
-| _not-a-catch (checker)_ |        1 |   0.1% |
-| **total entries**       | **1059** | 100.0% |
+| Category               |    Count |  Share |
+| ---------------------- | -------: | -----: |
+| boundary-translation   |      330 |  31.2% |
+| typed-recovery         |      182 |  17.2% |
+| cleanup                |      124 |  11.7% |
+| best-effort-projection |      206 |  19.5% |
+| failure-aggregation    |       52 |   4.9% |
+| control-flow           |      147 |  13.9% |
+| defect-suppression     |       18 |   1.7% |
+| **total entries**      | **1059** | 100.0% |
 
-The category counts sum to 1058. The remaining entry,
-`packages/cli/src/runtime/supabaseAuthCallbackServer.ts:220`, is a Zod schema
-`.catch(undefined)` that the checker marked `not-a-catch`; it stays in the
-appendix so the row count matches the grep, and it carries no category.
+The category counts sum to 1059. Twenty-three of the `control-flow` entries
+are Zod schema `.catch(default)` combinators rather than exception handlers;
+they are counted on purpose and as one class, because a schema `.catch` is
+the swallow `CLAUDE.md` warns about on persisted data, and the appendix names
+each one as a schema combinator so the migration can decide them together.
 
 Independently of category, 161 of the 1059 clauses are **silent**: they
 neither log nor rethrow nor return a value that carries the error. This is the
@@ -92,12 +91,11 @@ silent column in Appendix A is the fastest way to find them.
 
 Areas are the first two path segments (`packages/cli`, `src/tools`), except
 under `src/agent/` where the third segment is used so that `runtime`,
-`storage`, and `modelHandlers` can be read separately. The one `not-a-catch`
-entry is omitted from this table.
+`storage`, and `modelHandlers` can be read separately.
 
 | Area                        | boundary | recovery | cleanup | best-effort | aggregation | control-flow | defect |    Total |
 | --------------------------- | -------: | -------: | ------: | ----------: | ----------: | -----------: | -----: | -------: |
-| `packages/cli`              |       71 |       13 |      13 |          18 |           6 |           22 |      6 |      149 |
+| `packages/cli`              |       71 |       13 |      13 |          18 |           6 |           23 |      6 |      150 |
 | `packages/desktop`          |       32 |       10 |      12 |          48 |           2 |            8 |      2 |      114 |
 | `packages/extension`        |       44 |       16 |       4 |          32 |           0 |           11 |      1 |      108 |
 | `src/agent/core`            |        0 |        2 |       1 |           1 |           0 |            1 |      0 |        5 |
@@ -129,7 +127,7 @@ entry is omitted from this table.
 | `src/tools`                 |       63 |       25 |      21 |          20 |           5 |           22 |      1 |      157 |
 | `src/transcript`            |        4 |        6 |      11 |          14 |          10 |            6 |      0 |       51 |
 | `src/utils`                 |        7 |       10 |       2 |           6 |           1 |           11 |      3 |       40 |
-| **all**                     |  **330** |  **182** | **124** |     **206** |      **52** |      **146** | **18** | **1058** |
+| **all**                     |  **330** |  **182** | **124** |     **206** |      **52** |      **147** | **18** | **1059** |
 
 ## 3. Reading for the migration
 
@@ -230,10 +228,12 @@ closes at `src/utils/text/xmlConversion.ts`). One agent per slice read every
 hit and recorded file, line, kind (`try-catch` or `promise-catch`), the one
 category from the P12 list, what the clause catches, what it does, and whether
 it is silent. Zod schema `.catch(` hits were recorded with kind
-`promise-catch` because no other kind existed; there are 23 such
-entries, all under `control-flow` except the one the checker marked
-`not-a-catch`, and the appendix names each one as a schema combinator in its
-`catches` or `does` column.
+`promise-catch` because no other kind existed; there are 23 such entries,
+all under `control-flow` as one class (section 2), and the appendix names
+each one as a schema combinator in its `catches` or `does` column. The
+checker flagged one of them as not an exception clause; since its three
+named siblings are structurally identical, all four keep the class rather
+than one leaving it.
 
 **Checking.** A second, independent agent re-read every fourth entry of each
 slice with the same definitions and recorded agreement on the category alone.
@@ -428,7 +428,7 @@ embedded in `does` where the classifier or checker left them.
 | `packages/cli/src/runtime/supabaseAuthCallbackServer.ts`            |   70 | promise-catch | boundary-translation   | no     | callback request handler rejection            | reject session unless recoverable; write 400/500 failure HTML                                                                                                                                                                                                                                                                                                                                                                     |
 | `packages/cli/src/runtime/supabaseAuthCallbackServer.ts`            |  100 | promise-catch | control-flow           | no     | sessionPromise rejection (early)              | no-op observer to avoid unhandled rejection; callers still see it                                                                                                                                                                                                                                                                                                                                                                 |
 | `packages/cli/src/runtime/supabaseAuthCallbackServer.ts`            |  219 | promise-catch | control-flow           | yes    | Zod .catch: non-string query field            | Zod schema .catch (not promise): degrade to undefined                                                                                                                                                                                                                                                                                                                                                                             |
-| `packages/cli/src/runtime/supabaseAuthCallbackServer.ts`            |  220 | promise-catch | not-a-catch            | yes    | Zod .catch: non-string nonce field            | Zod schema .catch (not promise): degrade to undefined [checker: Line 220 is `nonce: z.string().nullish().catch(undefined)` inside a Zod object schema — a schema-level fallback combinator matched by the `\.catch\(` regex, not an exception catch clause (same grep false positive at line 219, supabaseAuthDeviceCode.ts:38, and updateChecker.ts:168).]                                                                       |
+| `packages/cli/src/runtime/supabaseAuthCallbackServer.ts`            |  220 | promise-catch | control-flow           | yes    | Zod .catch: non-string nonce field            | Zod schema .catch (not promise): degrade to undefined [checker: a schema-level fallback combinator matched by the `\.catch\(` regex, structurally identical to line 219, supabaseAuthDeviceCode.ts:38, and updateChecker.ts:168; kept in the Zod control-flow class with them, section 4]                                                                                                                                         |
 | `packages/cli/src/runtime/supabaseAuthCallbackServer.ts`            |  266 | promise-catch | boundary-translation   | no     | browser fetch failure (inline script)         | render 'Sign-in failed' text in page body                                                                                                                                                                                                                                                                                                                                                                                         |
 | `packages/cli/src/runtime/supabaseAuthDeviceCode.ts`                |   38 | promise-catch | control-flow           | yes    | Zod .catch: invalid interval                  | Zod schema .catch (not promise): default to 5                                                                                                                                                                                                                                                                                                                                                                                     |
 | `packages/cli/src/runtime/supabaseAuthDeviceCode.ts`                |   84 | promise-catch | boundary-translation   | no     | device-code fetch rejection                   | rethrow timeout as friendly Error; rethrow others                                                                                                                                                                                                                                                                                                                                                                                 |
