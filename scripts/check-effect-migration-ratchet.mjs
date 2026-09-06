@@ -89,12 +89,28 @@ const BOUNDARY_HOST_ROOTS = [
   'packages/cli/src/',
   'packages/agent/src/',
 ];
+/**
+ * Webview frontends live under a host package but are not host entries: they
+ * are VS Code-free zones (CLAUDE.md, "Separation of concerns"), so R1 does not
+ * admit a run there. Without this the whole source root reads as a boundary
+ * and their runs drop out of the row entirely -- which is how five tracked
+ * sites in progressView/frontend/sessionTransport.ts went silently untracked.
+ */
+const BOUNDARY_HOST_EXCLUSIONS = [
+  'packages/extension/src/webview/frontend/',
+  'packages/extension/src/progressView/frontend/',
+  'packages/extension/src/settingsView/frontend/',
+];
+
 const BOUNDARY_TOOL_ROOT = 'src/tools/';
 const BOUNDARY_TOOL_SUFFIX = 'Tool.ts';
 const BOUNDARY_PATHS_TEXT =
   'packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or src/tools/**/*Tool.ts';
 
 function isBoundaryPath(file, toolExecuteFiles) {
+  if (BOUNDARY_HOST_EXCLUSIONS.some((root) => file.startsWith(root))) {
+    return false;
+  }
   return (
     BOUNDARY_HOST_ROOTS.some((root) => file.startsWith(root)) ||
     (file.startsWith(BOUNDARY_TOOL_ROOT) &&
@@ -870,6 +886,14 @@ function selfTestBoundaryAndMarkers() {
     ['src/agent/runtime/SessionHandle.ts', false],
     ['src/controllers/session/SessionBridge.ts', false],
     ['packages/trace-viewer/src/main.ts', false],
+    // A webview frontend sits under a host package but is a VS Code-free
+    // zone, not a host entry, so R1 does not admit a run there.
+    ['packages/extension/src/progressView/frontend/sessionTransport.ts', false],
+    ['packages/extension/src/webview/frontend/app.ts', false],
+    ['packages/extension/src/settingsView/frontend/settings.ts', false],
+    // The extension-host frontend (no view-name segment) is host code and
+    // stays a boundary — the two are easy to confuse, so both are pinned.
+    ['packages/extension/src/frontend/auth/subscriptionSignIn.ts', true],
   ];
   for (const [file, expected, executeFiles] of boundaryCases) {
     if (isBoundaryPath(file, executeFiles) !== expected) {
