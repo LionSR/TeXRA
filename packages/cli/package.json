@@ -34,7 +34,7 @@
     "texra": "dist/bin/texra.js"
   },
   "engines": {
-    "node": ">=22.9.0"
+    "node": ">=22.13.0"
   },
   "publishConfig": {
     "access": "public"

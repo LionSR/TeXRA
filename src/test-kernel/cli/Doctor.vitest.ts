@@ -191,9 +191,9 @@ describe('CLI doctor', () => {
   it('matches the published Node engine range', async () => {
     const cases: Array<[string, 'pass' | 'fail']> = [
       ['21.9.9', 'fail'],
-      ['22.8.9', 'fail'],
-      ['22.9.0', 'pass'],
-      ['v22.9.0', 'pass'],
+      ['22.9.0', 'fail'],
+      ['22.13.0', 'pass'],
+      ['v22.13.0', 'pass'],
       ['23.0.0', 'pass'],
       ['24.15.0', 'pass'],
       ['26.0.0', 'pass'],
@@ -207,7 +207,7 @@ describe('CLI doctor', () => {
     const unsupportedRelease = await buildReport({ nodeVersion: '21.0.0' });
     expect(checkById(unsupportedRelease, 'node')).toMatchObject({
       message: 'Node 21.0.0 is outside the supported range.',
-      hint: 'Install Node >=22.9.0 before running TeXRA CLI.',
+      hint: 'Install Node >=22.13.0 before running TeXRA CLI.',
     });
   });
 
