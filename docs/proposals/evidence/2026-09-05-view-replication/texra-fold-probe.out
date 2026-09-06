@@ -1,0 +1,54 @@
+{
+  "node": "v26.6.0",
+  "fixture": "10000 schema-validated completed assistant rows, 64-input frames, one flat stream; fold only, no IO/parse/wire/UI/immutable publication",
+  "results": [
+    {
+      "readers": 1,
+      "ms": [
+        17.374875000000003,
+        14.493167,
+        17.60250000000002,
+        15.653333000000003,
+        15.057416999999987
+      ],
+      "medianMs": 15.653333000000003
+    },
+    {
+      "readers": 3,
+      "ms": [
+        48.51241699999997,
+        41.39470899999998,
+        39.66808299999997,
+        43.66374999999999,
+        39.85654199999999
+      ],
+      "medianMs": 41.39470899999998
+    },
+    {
+      "readers": 10,
+      "ms": [
+        133.801041,
+        138.37470799999994,
+        132.769,
+        132.6957500000001,
+        143.14724999999999
+      ],
+      "medianMs": 133.801041
+    }
+  ],
+  "retainedView": {
+    "beforeCursor": 10002,
+    "afterCursor": 10003,
+    "priorRows": 10000,
+    "retainedRowsNow": 10001,
+    "sameStreamsMap": true
+  },
+  "viewpoint": {
+    "ownerReadOnly": false,
+    "observerReadOnly": true
+  },
+  "wireShape": {
+    "jsonStreams": {},
+    "actualStreams": 1
+  }
+}

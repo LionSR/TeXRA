@@ -182,7 +182,7 @@ importers:
         version: 3.2.4(chokidar@3.6.0)
       openai:
         specifier: ^7.10.0
-        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3)
+        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@8.10.1)(ws@8.21.3)(zod@4.4.3)
       p-defer:
         specifier: ^4.0.1
         version: 4.0.1
@@ -262,8 +262,8 @@ importers:
         specifier: ^1.0.2
         version: 1.0.2
       undici:
-        specifier: ^7.29.0
-        version: 7.29.0
+        specifier: ^8.10.1
+        version: 8.10.1
       which:
         specifier: ^5.0.0
         version: 5.0.0
@@ -516,7 +516,7 @@ importers:
         version: 3.2.4(chokidar@3.6.0)
       openai:
         specifier: ^7.10.0
-        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3)
+        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@8.10.1)(ws@8.21.3)(zod@4.4.3)
       p-defer:
         specifier: ^4.0.1
         version: 4.0.1
@@ -581,8 +581,8 @@ importers:
         specifier: ^1.0.2
         version: 1.0.2
       undici:
-        specifier: ^7.29.0
-        version: 7.29.0
+        specifier: ^8.10.1
+        version: 8.10.1
       which:
         specifier: ^5.0.0
         version: 5.0.0
@@ -879,7 +879,7 @@ importers:
         version: 6.0.1
       openai:
         specifier: ^7.10.0
-        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3)
+        version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@8.10.1)(ws@8.21.3)(zod@4.4.3)
       p-map:
         specifier: ^7.0.7
         version: 7.0.7
@@ -6450,8 +6450,8 @@ packages:
     resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
     engines: {node: '>=20.18.1'}
 
-  undici@8.9.0:
-    resolution: {integrity: sha512-aWZpUj7XoGonMClx4gdDRfgBjqeA+F473aDmROQQbM9n6PRfK/u1q/a0X4wMTgcHfT8H6fpbt98PFuDUwFg2YA==}
+  undici@8.10.1:
+    resolution: {integrity: sha512-YQ3WlbqjYMmNpdvDH64jAgLjxuAR9+649calDWhbshYaeQGO2bR4nI94ORJmwI3J9YhoKQnpyGOK+0zlWS5N5Q==}
     engines: {node: '>=22.19.0'}
 
   unicorn-magic@0.1.0:
@@ -10798,7 +10798,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.2
-      undici: 8.9.0
+      undici: 8.10.1
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -11352,9 +11352,9 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@7.29.0)(ws@8.21.3)(zod@4.4.3):
+  openai@7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@8.10.1)(ws@8.21.3)(zod@4.4.3):
     optionalDependencies:
-      undici: 7.29.0
+      undici: 8.10.1
       ws: 8.21.3
       zod: 4.4.3
 
@@ -12422,7 +12422,7 @@ snapshots:
 
   undici@7.29.0: {}
 
-  undici@8.9.0: {}
+  undici@8.10.1: {}
 
   unicorn-magic@0.1.0: {}
 

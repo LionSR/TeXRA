@@ -361,6 +361,7 @@ describe('CLI model access resolution', () => {
       model('deepseekT', {
         model: modelOption('deepseekT', {
           label: 'DeepSeek',
+          reasoning: 'Default (High)',
           availability: 'provider-key',
         }),
         status: 'api key set',
@@ -388,7 +389,7 @@ describe('CLI model access resolution', () => {
       'openrouterOnlyT',
     ]);
     expect(rows.map((row) => row.description)).toEqual([
-      'api: api key set',
+      'api: api key set · reasoning setting: Default (High)',
       'api: openrouter key',
     ]);
   });
@@ -400,6 +401,7 @@ describe('CLI model access resolution', () => {
           model('sonnet46T', {
             model: modelOption('sonnet46T', {
               label: 'Sonnet',
+              reasoning: 'Low',
               availability: 'provider-key',
             }),
             status: 'api key set',
@@ -422,7 +424,7 @@ describe('CLI model access resolution', () => {
         value: 'sonnet46T',
         label: 'Sonnet',
         description:
-          'different conversation format; start new chat; api: api key set',
+          'different conversation format; start new chat; api: api key set · reasoning setting: Low',
         disabled: true,
       },
       {

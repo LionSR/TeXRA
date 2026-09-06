@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -59,17 +60,22 @@ function loopbackSession() {
   };
 }
 
-async function loginByOpeningBrowser({
+function loginByOpeningBrowser({
   openBrowser,
 }: {
   openBrowser: (url: string) => Promise<void>;
 }) {
-  await openBrowser('https://auth.openai.com/authorize?x=1');
-  return loopbackSession();
+  return Effect.tryPromise({
+    try: async () => {
+      await openBrowser('https://auth.openai.com/authorize?x=1');
+      return loopbackSession();
+    },
+    catch: (error) => error,
+  });
 }
 
 function mockLoopbackSuccess(): void {
-  mocks.loginWithLoopback.mockResolvedValue(loopbackSession());
+  mocks.loginWithLoopback.mockReturnValue(Effect.succeed(loopbackSession()));
 }
 
 function mockPreferenceEnabled(): void {
@@ -89,7 +95,9 @@ describe('signInWithSubscription (ChatGPT)', () => {
   });
 
   it('reports OAuth failures as sign-in failures', async () => {
-    mocks.loginWithLoopback.mockRejectedValue(new Error('oauth failed'));
+    mocks.loginWithLoopback.mockReturnValue(
+      Effect.fail(new Error('oauth failed')),
+    );
 
     const signedIn = await signInWithChatGptSubscription('TestChannel');
 
