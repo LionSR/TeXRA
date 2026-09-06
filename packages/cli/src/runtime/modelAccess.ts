@@ -161,7 +161,10 @@ export function modelSelectItemsForCli(
 ): readonly CliModelPickerItem[] {
   return runnableCliModelAccessEntries(models).map((model) => {
     const disabledReason = getModelSwitchDisabledReason?.(model.model.value);
-    const status = formatModelStatusForCli(model);
+    const access = formatModelStatusForCli(model);
+    const status = model.model.reasoning
+      ? `${access} · reasoning setting: ${model.model.reasoning}`
+      : access;
     return {
       value: model.model.value,
       label: model.model.label || model.model.value,
