@@ -1,16 +1,43 @@
 ---
 created: 2026-08-26
-updated: 2026-08-28
+updated: 2026-09-06
 ---
 
 # PRD: Effect 4 as the TeXRA backend runtime
 
-**Status:** Proposed; requires owner ratification before implementation.
+**Status:** Owner ruling of 2026-09-06: the agent runtime is written in pure
+Effect to Effect's best practice, and PocketFlow is not retained. That ruling
+amends R4, 8.4, Phase 2, and alternative 13.C below, in the form
+`docs/proposals/2026-09-04-agent-runtime-on-effect.md` §6 specifies, and
+closes open decisions 6 and 7 of section 15. That proposal is in flight as
+pull request #11843 and merges before this amendment; until it lands, every
+section reference to it below resolves in that pull request's branch.
+
+A second owner ruling, later on 2026-09-06 on the first wave of conversion
+pull requests (#11922 to #11928): "we should fully embrace Effect. No more
+pass-throughs nor adapters." That ruling amends R1 and execution-strategy
+rules 1 and 3 below: a converted subsystem's public surface is Effect-typed,
+its consumers convert upward until a host entry, the tool `execute()`
+contract, or the SDK's public API, and no temporary adapter exists, so the
+`@adapter-until` marker is retired before it was ever merged. The remaining
+items of section 15 stay open; R2, R3, and R5 to R10 are unchanged.
+
+A third owner ruling, 2026-09-06: "with 0.41 we can be breaking if
+respecting legacy means too much tech debt." TeXRA is at 0.41.0, ships no
+npm package (publication is held until a named external consumer exists,
+CLAUDE.md), and updates all three hosts together, so a compatibility
+mechanism here buys one upgrade's convenience and is paid for in permanent
+machinery. The ruling is conditional and applied as such: break where the
+legacy path costs more than it protects, keep compatibility where it is
+cheap. Its consequences below are non-goal 6, Phase 2's `flow_<id>.json`
+importer, and the rollout section's rollback protocol.
 
 **Decision in one sentence:** TeXRA will adopt Effect 4 RC as the execution
-model for host-neutral asynchronous backend work, while retaining PocketFlow
-as the durable agent state machine, Zod as the existing data-contract system,
-and Promise-based APIs at host and SDK boundaries.
+model for host-neutral asynchronous backend work, with the two agent flow
+families as plain Effect loops whose only durable act is appending rows to
+the session event table (no graph, cursor, or flow record), Zod as the
+existing data-contract system, and Promise-based APIs at host and SDK
+boundaries.
 
 **Why ratification is required:** this PRD deliberately revisits the earlier
 decision that `platform()` plus a frozen `RunContext` was the final dependency
@@ -405,7 +432,11 @@ Effect is not an answer to every difficult part of the runtime.
 
 - It does not decide who owns a session, stream, checkpoint, or transcript.
 - It does not make an incorrect persistence transition correct.
-- It does not replace PocketFlow's persisted cursor or graph semantics.
+- ~~It does not replace PocketFlow's persisted cursor or graph semantics.~~
+  _Amended 2026-09-06:_ there is no cursor or graph to preserve (R4 as
+  amended); what Effect still does not decide is the row vocabulary and the
+  resume rules, which belong to the runtime proposal and the substrate
+  contract.
 - It does not determine approval policy or which tool operations are safe to
   retry.
 - It does not replace `AgentEvent`, session facts, Zod wire schemas, or host
@@ -422,8 +453,10 @@ is the execution substrate beneath those rulings.
 
 1. Establish one typed execution model for dependencies, expected failures,
    cancellation, concurrency, time, and resource lifetime.
-2. Eliminate `setServices()` and service-object spreading from PocketFlow
-   nodes while preserving PocketFlow's durable state-machine role.
+2. Eliminate `setServices()` and service-object spreading ~~from PocketFlow
+   nodes while preserving PocketFlow's durable state-machine role~~ by
+   deleting the node classes and the engine that carried them (amended
+   2026-09-06; R4 as amended).
 3. Retire the global `platform()` reader from host-neutral production code.
 4. Make every ordinary child task structurally owned; require an explicit API
    and name for the few detached tasks.
@@ -446,10 +479,28 @@ is the execution substrate beneath those rulings.
 3. No migration from Zod to Effect Schema in this program.
 4. No adoption of `effect/unstable/*` modules in the foundation phases.
 5. No replacement of PocketFlow with Effect's experimental workflow module.
-6. No change to wire protocols, agent YAML, or public result schemas. Durable
-   flow formats remain unchanged through Phase 2 and Stage 3a; Stage 3b may
-   introduce one explicit versioned representation for finer checkpoints
-   under the rollout section's reader-outlives-writer rule.
+   _Amended 2026-09-06:_ still true of the unstable module; PocketFlow is
+   replaced by plain Effect loops over the event table (R4 as amended).
+6. No change to wire protocols, agent YAML, or public result schemas.
+   ~~Durable flow formats remain unchanged through Phase 2 and Stage 3a;
+   Stage 3b may introduce one explicit versioned representation for finer
+   checkpoints under the rollout section's reader-outlives-writer rule.~~
+   _Amended 2026-09-06:_ the `flow_<id>.json` record is retired in Phase 2
+   as amended; the substrate contract (C1) owns versioning from then on.
+   ~~imported once into the execution aggregate's first `flow.snapshot`
+   row~~ _Amended 2026-09-06 (third ruling):_ **not imported at all** — see
+   Phase 2 step 2. One public schema does change: `StreamView`, which
+   `@texra-ai/agent` exports and `AgentRun.view` returns, gains the field
+   `flow` (one-fold PRD 5.1). ~~additively … recorded in the package
+   changelog as a minor change~~ _Amended 2026-09-06 (third ruling):_ the
+   package is built and fenced but **not published**, and CLAUDE.md holds
+   publication until a named external consumer exists, so there is no
+   external consumer for an additive-only constraint to protect. Lane D
+   shapes `StreamView.flow` as the view wants it and the changelog records
+   the change; a nullable field is a reasonable shape, not a requirement.
+   Wire protocols, agent YAML and the exported trace stay unchanged, because
+   those are read by files on disk and by the standalone viewer, which the
+   ruling does not cover.
 7. No public `Effect` return types from `@texra-ai/agent` in the first release.
 8. No automatic retry expansion. Existing idempotency and retry ownership
    decisions remain binding.
@@ -468,6 +519,35 @@ Host callbacks, IPC handlers, VS Code commands, Electron entry points, CLI
 commands, and the published SDK continue to speak Promises. They enter Effect
 through a host-owned runtime. Calls to `Effect.runPromise`, `runSync`, or
 `runFork` are forbidden below named boundary modules.
+
+_Amended 2026-09-06 (second ruling):_ "the boundary" is exactly three kinds
+of place, and nothing inside the tree is one. (a) A host entry that a host
+framework invokes: a VS Code command or webview message handler, an Electron
+IPC handler, a CLI command action, a React or Ink event handler, an activate
+or deactivate hook. (b) The agent tool `execute()` contract in `src/tools`,
+until lane D converts the tool runner (_amended 2026-09-06 (review
+finding):_ Phase 2 **is** lane D, so "until lane D" cannot mean "until this
+phase" without the rule contradicting itself the moment the phase lands. It
+means: the boundary survives Phase 2 and retires when the tool **runner** —
+`Tools`, the dispatcher that calls `execute()` — is itself Effect-typed and
+can await an Effect-returning tool, which Phase 2 does not do. Until then a
+tool's `execute()` returning a Promise is boundary kind (b), not an adapter,
+and `check:effect-migration-ratchet` admits it on exactly that basis);
+a tool's `execute` body is one
+`runPromise` of a program that holds every line of logic. (c) The SDK's
+public Promise API in `packages/agent/src`. Everything below those three is
+Effect-typed: exported functions return `Effect` or `Stream`, stateful
+objects are `Context.Service` classes with layers, and no class below the
+boundary exposes a Promise method. A Promise-returning function whose body
+only runs an Effect is a pass-through and is deleted by converting its
+callers; a Promise-native method kept "because its port is Promise" is an
+adapter and is deleted by converting the port and the host code on the other
+side of it. A foreign boundary (Node's `fs` and `child_process`, `fetch`, a
+third-party SDK, the VS Code or Electron API) is wrapped exactly once, at the
+foreign edge, with `Effect.tryPromise`, `Effect.try`,
+`effect/unstable/process`, or `Stream.fromAsyncIterable`; that single wrap is
+the R1 boundary crossing, not an adapter. Consequences for the first wave
+are recorded on each of #11922 to #11928.
 
 ### R2. Services follow semantic boundaries
 
@@ -523,44 +603,81 @@ rebuilt in every node. A `Layer` is a construction recipe, not another domain
 layer in the repository: no `FooLayer` wrapper survives when it only calls
 `Layer.succeed(Foo, value)` once.
 
-### R4. PocketFlow retains state-machine authority
+### R4. The agent runtime is plain Effect; no state-machine framework
 
-PocketFlow continues to decide node order, actions, persisted cursors, and
-state snapshots. Effect governs one in-process attempt; PocketFlow governs what
-survives process death. These authorities must not be conflated: an Effect
-fiber, scope, `Ref`, `Exit`, or `Cause` is not a durable object and is never
-serialized into a flow record.
+**Amended 2026-09-06 by owner ruling.** This rule originally read "PocketFlow
+retains state-machine authority" and prescribed a typed `FlowNode.run`
+transition over a graph kernel. That is reversed. There is no PocketFlow, no
+node, no graph, no action string, no cursor, and no flow record. Each flow
+family (document-based reflection, tool use) is one plain Effect loop, written
+with `Effect.fn` and `Effect.gen`, whose only durable act is appending rows to
+the session event table on the run's two aggregates (the stream aggregate for
+`flow.step` and the display rows, the execution aggregate for the byte-exact
+model rows and `flow.snapshot`; proposal §2.1); run state is a pure fold of
+those rows (`foldRunState`, in `src/shared`), computed the same way on
+resume and in the trace viewer, and never persisted. The shape, the six row
+types, the services (`RunLedger`, `RunContext`, `ModelInvoker`, `Tools`,
+`FollowUps`, `OutputPipeline`), and the elimination ledger are specified in
+`docs/proposals/2026-09-04-agent-runtime-on-effect.md` §2 and §4.
 
-The Promise-era `prep` / `exec` / `execFallback` / `post` protocol collapses to
-one typed transition:
+What does not change: an Effect fiber, scope, `Ref`, `Exit`, or `Cause` is
+still not a durable object and is never serialized. Effect governs one
+in-process attempt; the rows govern what survives process death.
 
-```ts
-interface FlowNode<Shared, Action, Error, Requirements> {
-  readonly id: NodeId;
-  readonly run: (
-    shared: Shared,
-  ) => Effect.Effect<Action | undefined, Error, Requirements>;
-}
-```
+The subsections R4.1 to R4.6 that follow are retained as the **durability
+requirements** the row model must satisfy, not as a description of the
+mechanism. Their mapping (explicit membrane = the append under
+`Effect.uninterruptibleMask`; declared replay classes = `tool.intent` rows for
+barrier tools and re-run for parallel-safe ones; finer tool-use checkpoints =
+per-call rows; stable identity = logical keys `round`, `turn`, `callId`, never
+a traversal path; rounds as durable coordinates = `flow.step`; one child
+protocol = the script journal folded into the event table) is the proposal's
+§6, first bullet. R4.2's three barrier phases (intent, started, completed)
+collapse to two rows by design: `tool.intent` is appended at the dispatch
+site, after approval and immediately before the adapter call, so it is the
+started marker, and `tool.result` is completed. The declared-but-unapproved
+phase needs no row, because a run that dies during approval re-asks from
+its `approval.requested` row. The window between the intent append and the
+adapter invocation, a few instructions in one fiber with no await, is
+accepted as outcome-unknown on resume; a separate started row would only
+move that same window one instruction later, and the manual reconciliation
+it triggers is the safe outcome for a barrier tool. Where a subsection below speaks of a cursor, a node, a record,
+or an interpreter, read the corresponding row-model term.
 
-Preparation, external execution, recovery, and state mutation may remain as
+~~Preparation, external execution, recovery, and state mutation may remain as
 small private functions where they clarify a particular node, but the graph
 kernel does not prescribe or dynamically dispatch those phases. Typed recovery
 uses the node's Effect program; the kernel handles only graph transition and
-durable commit.
+durable commit.~~ _Amended 2026-09-06:_ preparation, invocation, dispatch,
+and output are plain functions the two loops call in sequence; there is no
+phase protocol and nothing dispatches them. Typed recovery is the loop's own
+`E` channel.
 
-The requirements type is inferred from the Effect. `BaseNode<S, Svc>`, `Svc`,
+~~The requirements type is inferred from the Effect. `BaseNode<S, Svc>`, `Svc`,
 `_services`, `services`, `setServices()`, and the generic fallback dispatcher
 disappear. Mutable shared state continues to be explicit and schema-validated.
 Each attempt receives a private working copy of the last committed shared
 state. The interpreter publishes that copy only after the authoritative record
 has been written successfully; failed and interrupted attempts cannot leak
-uncommitted mutations through the in-memory record cache.
+uncommitted mutations through the in-memory record cache.~~ _Amended
+2026-09-06:_ `BaseNode`, `Svc`, `_services`, `services`, `setServices()`, and
+the fallback dispatcher are deleted with the engine. Run state stays
+schema-validated (`flow.snapshot` carries the family's Zod state). The
+private-working-copy rule becomes the append rule: a row is the only way
+state becomes durable, the append is the one uninterruptible region, and an
+interrupted append produces no partial row. Rows already appended in the
+turn (`model.message`, `tool.intent`, `tool.result`) stay durable through
+the interruption; that is the finer checkpointing R4.3 requires, and it is
+what keeps a paid response or a side-effecting call from being repeated on
+resume. Only the in-memory state of the turn in flight is lost, and a later
+load cannot observe it.
 
-There are only sixteen production `BaseNode` subclasses at the survey date.
+~~There are only sixteen production `BaseNode` subclasses at the survey date.
 The graph kernel and all subclasses therefore migrate in one bounded phase;
 the repository must not carry Promise-nodes and Effect-nodes as two permanent
-frameworks.
+frameworks.~~ _Amended 2026-09-06:_ the sixteen subclasses, the engine, and
+its three interpreters are deleted in one change (Phase 2 step 2); the
+repository never carries the engine and the loops together.
 
 #### R4.1. The durability membrane is explicit
 
@@ -675,19 +792,27 @@ migration complete.
 
 #### R4.4. Cursor identity is stable across refactoring
 
-Version 2 cursor identifiers are derived from graph paths and action labels.
+~~Version 2 cursor identifiers are derived from graph paths and action labels.
 Changing graph composition during an Effect rewrite can therefore invalidate a
 resume record without changing product behavior. Phase 2 first preserves the
 current graph construction and identifier algorithm exactly. Characterization
 tests pin every production cursor path used by resumable flows before node
-classes move.
+classes move.~~ _Amended 2026-09-06:_ there is no cursor to keep stable and
+no graph to preserve. The requirement survives as: identity is the logical
+keys `round`, `turn`, and `callId`, never a traversal path, and the one
+place a version 2 cursor is ever interpreted is the importer's
+cursor-to-coordinate mapping (Phase 2 step 2), which characterization tests
+pin for every cursor path a resumable flow can hold at the cutover, instead
+of pinning the graph.
 
-Explicit logical node identifiers and a hierarchical cursor are preferable for
-future formats because their identity does not depend on traversal layout.
-They require a versioned record decision and are introduced only with the
-tool-use checkpoint design. Current sessions either retain version 2 semantics
-or are retired according to the repository's compatibility policy; the reader
-must not guess a new cursor from an old topology.
+~~Explicit logical node identifiers and a hierarchical cursor are preferable
+for future formats because their identity does not depend on traversal
+layout. They require a versioned record decision and are introduced only
+with the tool-use checkpoint design.~~ _Amended 2026-09-06:_ that future
+format is the row ledger (§15 item 6). Current sessions are imported once
+under the rollout section's protocol or retired under the repository's
+compatibility policy; the importer maps a cursor it cannot place to the last
+completed boundary and never guesses a new coordinate from an old topology.
 
 #### R4.5. Rounds are durable coordinates, not retry schedules
 
@@ -850,11 +975,21 @@ Every migration PR states:
 - which existing carriers or lifecycle stages collapse, if any;
 - which imports or dependencies are removed;
 - whether lines and architectural elements decrease;
-- the temporary adapter's deletion phase and deadline, if one is unavoidable.
+- ~~the temporary adapter's deletion phase and deadline, if one is unavoidable.~~
 
-An adapter may live for at most sixty days or until the next named migration
+~~An adapter may live for at most sixty days or until the next named migration
 phase completes, whichever comes first. It carries its introduction date and
-retirement condition beside the code.
+retirement condition beside the code.~~
+
+_Amended 2026-09-06 (second ruling):_ struck. There is no temporary-adapter
+allowance and no retirement clock, because there are no temporary adapters:
+the ruling in R1 requires the surface to become Effect-typed and its
+consumers to be converted upward until a genuine host, tool, or SDK boundary
+is reached. A PR that cannot do that has found a boundary it did not
+recognise, or a lane it should not have started; it says which, rather than
+booking sixty days. The `@adapter-until` marker this clause justified is
+retired, and `check:effect-migration-ratchet` fails on the presence of any
+such marker.
 
 ## 8. Target architecture
 
@@ -934,20 +1069,67 @@ SDK adapters rather than stored as a second cancellation authority on
 `RunScope`. A control handle may expose interruption to Promise callers, but it
 interrupts the owned root fiber.
 
-### 8.4 One graph transition kernel
+### 8.4 Two loops over one ledger, no kernel
 
-`Flow` and `PersistedFlow` no longer contain separate orchestration loops. An
-immutable graph plus one transition kernel computes node outcomes. A commit
-policy determines whether the new snapshot is published in memory or through
-the durable store. Persistence validation and atomic writing remain separate
-capabilities because they are true system boundaries; graph walking is not
-duplicated around them.
+**Amended 2026-09-06 by owner ruling** (this section originally specified
+"one graph transition kernel"). There is no graph and no transition kernel.
+`Flow`, `PersistedFlow`, `RoundPersistedFlow`, `ResponseCycleFlow`,
+`ToolUseRoundFlow`, and every node class are deleted. In their place:
 
-Specialized flow subclasses survive only when they add domain transitions.
-Subclass methods used merely to rewind a cursor or insert a checkpoint become
-operations of the durable interpreter. Nested response and tool-use flows use
-the same addressable graph representation instead of executing an opaque
-second interpreter inside one outer node.
+- `runToolUse` and `runReflection`, two `Effect.fn` loops in
+  `src/agent/runtime/loop/`, re-yielding the services they need from
+  `Context` rather than closures. The reflection loop carries one extra
+  coordinate (the round) and opens each round under `Effect.scoped` with an
+  `acquireRelease` stage.
+- `RunLedger`, a per-session-root `Context.Service` over `SessionEvents`:
+  `append(rows) -> Effect<RunState>` and `load(executionId)`. `load` reads
+  the execution aggregate and, through the execution-to-stream edge on
+  `run.start`, the stream aggregate's `flow.step` rows, merged in `commit`
+  order: the coordinate lives on the stream aggregate and the state rows on
+  the execution aggregate, and neither history alone can place a resume.
+  `append`
+  takes a batch of one or more rows and commits them in **one transaction**,
+  across the run's two aggregates when the batch spans them (as
+  `SessionEvents.publish` already does for `run.start` plus `run.activate`,
+  one-fold PRD §6 item 8); a turn's or a round's closing snapshot and its
+  `flow.step` are one batch, so neither is ever durable without the other,
+  and a `flow.step` that carries a lifecycle outcome (`waiting`, `halted`,
+  or terminal) is batched with the canonical `status` fact it corresponds
+  to, so a view can never show a settled coordinate beside a running
+  status.
+  The append is the single uninterruptible region and runs under the
+  publisher's permit. `append` returns the state obtained by folding the
+  batch into the current state with the same `foldRunState` step; there is
+  no second reducer, so the state the loop sees after an append is the state
+  a later load would produce at those rows.
+- `foldRunState(rows) -> RunState`, pure and data-only in `src/shared`: latest
+  `flow.snapshot`, then later `model.compaction`, `model.message`,
+  `tool.intent`, `tool.result`, `flow.step`, `approval.requested`, and
+  `approval.resolved` rows in order. The two approval arms are in the fold
+  because resume needs them: a process that dies with a model-retry or
+  tool-outcome approval pending must recover the original request id, its
+  authorization state, and its attempt binding, or it re-prompts the user and
+  loses the one-attempt authorization (runtime proposal §2.3, and its PR-2
+  confirmation item, which makes those rows a precondition for the
+  outcome-unknown and manual-retry paths). An `approval.requested` with no
+  matching `approval.resolved` stays in the state as a pending decision, the
+  same way an unmatched `tool.intent` does. A
+  `tool.intent` with no matching `tool.result` stays in the state as an
+  unresolved intent, which is what lets resume enter the outcome-unknown path
+  for a barrier tool instead of repeating the call (R4.2, proposal §2.3).
+  The function has exactly three callers: `RunLedger.load`,
+  `RunLedger.append` (one step), and the in-process step scrubber that runs
+  in the runtime process (the conversation shell's run detail on the
+  extension and desktop, and the TUI's run pane — see Phase 2 step 3); "state
+  at step k" and "resume would continue after step k" are the same fact. It
+  is deliberately **not** the standalone `packages/trace-viewer`, which stays
+  `TraceDocument`-only and is given no database transport: the fold reads
+  private ledger rows, and trusting a separate application with them is a
+  redaction boundary this program does not cross.
+
+Persistence validation and atomic writing remain the substrate's boundaries
+(contract C1 to C10 in the persistence substrate decision); nothing in the
+runtime walks a graph around them.
 
 ### 8.5 External async adapters
 
@@ -974,22 +1156,22 @@ contract not already covered.
 The following is the intended net architecture, not merely a list of possible
 library substitutions:
 
-| Present mechanisms                                                                                                          | Target                                                         | Required deletion or absorption                                                                                 |
-| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `Platform` global reader plus copied flow services                                                                          | Process services and one run service                           | `platform()` access in migrated zones, `setServices()`, and service spreading                                   |
-| `AgentLaunchContext`, `RunScope`, `RunContext`, `AgentCore`, `BaseFlowContextInit`                                          | Plain launch inputs plus `AgentRun`                            | Mirrored fields, ALS projection helpers, and the `bare` production fallback path                                |
-| `prep`, `exec`, `execFallback`, `post`                                                                                      | One `FlowNode.run` Effect                                      | Generic phase dispatcher and untyped intermediate transport                                                     |
-| `Flow` and `PersistedFlow` orchestration loops                                                                              | One transition kernel with a commit policy                     | Duplicate graph walking and specialized subclasses with no domain semantics                                     |
-| `RoundPersistedFlow`, response finalization callbacks, and cursor rewind                                                    | Durable round transition plus scoped stage                     | Third interpreter subclass and duplicate round-finalization fallback                                            |
-| Stable-subagent, in-band, child-loop, and workflow `agent()` launch paths                                                   | One durable child-call operation                               | Parallel reservation, launch, interruption, result, and commit choreography                                     |
-| Workflow queue, timeout, abort map, pending-call drain, and first-fault ledger                                              | One scoped workflow-run Effect                                 | Generic Promise runtime inside the deterministic script engine                                                  |
-| Abort-controller trees, timeout wrappers, and sticky cancellation flags                                                     | Root fiber interruption with SDK-edge signals                  | Internal abort choreography and cancellation normalization layers                                               |
-| `DisposableStore`, manual `finally` blocks, teardown ledgers                                                                | Effect scopes and one terminal `Exit` fold                     | Duplicate resource ownership and cleanup aggregation code                                                       |
-| `p-retry`, `p-timeout`, delay callbacks, fake-time seams                                                                    | `Schedule`, timeout combinators, and one clock                 | Package-specific error wrappers and injected clock plumbing                                                     |
-| Deferred promises, listener cleanup, and wait abort controllers                                                             | Scoped `Deferred`/`Queue` programs                             | Hand-built settlement and unsubscribe protocols                                                                 |
-| ALS run context plus separately propagated trace fields                                                                     | `AgentRun` and fiber-local trace annotations                   | Duplicate context projection and accessor families                                                              |
-| Boundary translation, cleanup, sentinel, aggregation, and logging catch clauses                                             | Typed adapters, recovery, scopes, and `Exit`                   | Raw catch sites whose meaning is supplied only by local control flow                                            |
-| Status reservations with rollback, escalation ladders, terminal claim gates, and the interaction-ownership generation index | One owner fiber per run plus a single-writer status projection | Phase-arbitration guards, synthetic transitions, claim flags, and observer-reconstructed reference counts (P13) |
+| Present mechanisms                                                                                                          | Target                                                                                                                              | Required deletion or absorption                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `Platform` global reader plus copied flow services                                                                          | Process services and one run service                                                                                                | `platform()` access in migrated zones, `setServices()`, and service spreading                                   |
+| `AgentLaunchContext`, `RunScope`, `RunContext`, `AgentCore`, `BaseFlowContextInit`                                          | Plain launch inputs plus `AgentRun`                                                                                                 | Mirrored fields, ALS projection helpers, and the `bare` production fallback path                                |
+| `prep`, `exec`, `execFallback`, `post`                                                                                      | Plain functions inside `runToolUse` / `runReflection` (amended 2026-09-06; was one `FlowNode.run` Effect)                           | The node classes, the generic phase dispatcher, and untyped intermediate transport                              |
+| `Flow` and `PersistedFlow` orchestration loops                                                                              | `RunLedger.append` plus `foldRunState` (amended 2026-09-06; was one transition kernel with a commit policy)                         | `src/agent/node/`, both interpreters, the graph, the cursor, and the flow record                                |
+| `RoundPersistedFlow`, response finalization callbacks, and cursor rewind                                                    | The reflection loop's round coordinate under `Effect.scoped` (amended 2026-09-06; was a durable round transition plus scoped stage) | Third interpreter subclass and duplicate round-finalization fallback                                            |
+| Stable-subagent, in-band, child-loop, and workflow `agent()` launch paths                                                   | One durable child-call operation                                                                                                    | Parallel reservation, launch, interruption, result, and commit choreography                                     |
+| Workflow queue, timeout, abort map, pending-call drain, and first-fault ledger                                              | One scoped workflow-run Effect                                                                                                      | Generic Promise runtime inside the deterministic script engine                                                  |
+| Abort-controller trees, timeout wrappers, and sticky cancellation flags                                                     | Root fiber interruption with SDK-edge signals                                                                                       | Internal abort choreography and cancellation normalization layers                                               |
+| `DisposableStore`, manual `finally` blocks, teardown ledgers                                                                | Effect scopes and one terminal `Exit` fold                                                                                          | Duplicate resource ownership and cleanup aggregation code                                                       |
+| `p-retry`, `p-timeout`, delay callbacks, fake-time seams                                                                    | `Schedule`, timeout combinators, and one clock                                                                                      | Package-specific error wrappers and injected clock plumbing                                                     |
+| Deferred promises, listener cleanup, and wait abort controllers                                                             | Scoped `Deferred`/`Queue` programs                                                                                                  | Hand-built settlement and unsubscribe protocols                                                                 |
+| ALS run context plus separately propagated trace fields                                                                     | `AgentRun` and fiber-local trace annotations                                                                                        | Duplicate context projection and accessor families                                                              |
+| Boundary translation, cleanup, sentinel, aggregation, and logging catch clauses                                             | Typed adapters, recovery, scopes, and `Exit`                                                                                        | Raw catch sites whose meaning is supplied only by local control flow                                            |
+| Status reservations with rollback, escalation ladders, terminal claim gates, and the interaction-ownership generation index | One owner fiber per run plus a single-writer status projection                                                                      | Phase-arbitration guards, synthetic transitions, claim flags, and observer-reconstructed reference counts (P13) |
 
 Queues and mutexes are not collapsed merely because Effect supplies similarly
 named primitives. A queue representing a real domain protocol remains a domain
@@ -1124,10 +1306,16 @@ impossible rather than a matter of reviewer memory:
 
 1. **Boundary inversion, once.** From Phase 1, each host enters Effect at its
    process entry, and unmigrated Promise code runs inside the runtime through
-   adapters. Adaptation is therefore one-directional. No chain may take the
-   shape Promise → Effect → Promise: a function converts together with its
-   whole call chain, leaf to root, or its subsystem waits. Sandwich layers
-   are where adapters accumulate and stay.
+   ~~adapters~~ _Amended 2026-09-06:_ a single foreign-boundary wrap at each
+   Promise leaf, never a Promise-facing layer of its own. Adaptation is
+   therefore one-directional. No chain may take the shape
+   Promise → Effect → Promise: a function converts together with its whole
+   call chain, leaf to root, or its subsystem waits. Sandwich layers are
+   where adapters accumulate and stay. _Amended 2026-09-06 (second ruling):_
+   "leaf to root" is binding on every conversion PR, not a preference: the
+   PR that converts a file converts that file's callers up to a boundary of
+   R1's three kinds, and a conversion that stops short by keeping the old
+   Promise signature is rejected in review as a pass-through.
 2. **One pass per file.** When a phase converts a file, every §2.5 mechanism
    in that file converts in the same PR — its deferreds, timers, queues, and
    cancellation races together. A file is not revisited once per family;
@@ -1136,9 +1324,13 @@ impossible rather than a matter of reviewer memory:
 3. **Leftovers fail CI, not review.** Phase 1 lands counting ratchets beside
    the existing ratchet machinery: `platform()`, `setServices()`,
    `new AbortController(`, superseded package imports, and raw catch clauses
-   in migrated zones, as baselines that may only shrink. Every temporary
-   adapter carries an `@adapter-until <date>` marker enforced by a check.
-   The PR that zeroes a ratchet deletes the ratchet.
+   in migrated zones, as baselines that may only shrink. ~~Every temporary
+   adapter carries an `@adapter-until <date>` marker enforced by a check.~~
+   _Amended 2026-09-06 (second ruling):_ there are no temporary adapters, so
+   there is no marker to date; the Phase 1 check (#11920) fails on the
+   presence of any `@adapter-until` marker rather than on its expiry, and
+   the `Effect.run*` row's allowlist admits only files of R1's three
+   boundary kinds. The PR that zeroes a ratchet deletes the ratchet.
 
 Phases land complete on `main` as short, dense PR trains; the migration has
 no long-lived integration branch to rot against the tree's churn. The
@@ -1226,48 +1418,241 @@ beside an untouched `initPlatform()` would be exactly the wrapper-only dual
 runtime this PRD rejects. Either the Phase 1 seam has made some old machinery
 unreachable, or the foundation is reverted under the rollback rule.
 
-### Phase 2 — PocketFlow execution kernel
+### Phase 2 — the agent runtime on the ledger (lane D of the cutover)
 
-- Characterize version 2 cursor identities, commit order, `WAITING`, terminal
-  records, write failures, and projection failures before changing the
-  interpreter.
-- Replace `BaseNode`'s four-phase lifecycle with one typed node Effect while
-  preserving graph and durable semantics.
-- Collapse `Flow` and `PersistedFlow` onto one transition kernel with explicit
-  in-memory and durable commit policies.
-- Convert all sixteen production node subclasses in the same phase.
-- Preserve graph actions, cloning rules, persisted node identifiers, shared
-  state schemas, and cursor semantics.
-- Run every attempt against a private working copy and publish it only after a
-  successful atomic record write.
-- Keep node execution interruptible; make only record write plus cache
-  publication uninterruptible.
-- Represent success, typed failure, interruption, defect, suspension, and
-  commit failure distinctly at the interpreter boundary.
-- Delete `BaseNode`, its generic fallback dispatcher, `Svc`, `_services`,
-  `services`, `setServices()`, and service spreading.
-- Supply run services once at the flow boundary.
+**Amended 2026-09-06 by owner ruling.** The original Phase 2 ("PocketFlow
+execution kernel": one typed node Effect, one transition kernel, sixteen
+subclasses converted, cursor semantics preserved) is struck. The engine is not
+converted; it is deleted with its replacement in the same change. This phase is
+lane D of the persistence cutover branch, sequenced and sized by
+`docs/proposals/2026-09-04-agent-runtime-on-effect.md` §3 and §5:
 
-Like every phase, this one must delete; its mandatory target is structural.
-The phase is complete only when no production `setServices()` call remains.
-It does not yet change the version 2 record schema or make nested tool
-operations more durable.
+1. **Foundation.** `RunLedger` over `SessionEvents`; the six row schemas as
+   data-only Zod in `src/shared/schemas/runLedger.ts`, beside
+   `foldRunState`, so the fold reads them without an `@agent/*` import and
+   the runtime imports the schema, never the reverse. They split by
+   aggregate and by contract. `flow.step` is a run-scoped **session fact**
+   on the stream aggregate, published as a draft through
+   `SessionHandle.publish` exactly like the approval facts of one-fold PRD
+   §6 item 1, scrubbed at publish, and not a trace `AgentEvent` arm; the
+   public SDK trace union (`packages/agent`, `AgentRun.events`) and the
+   exported trace therefore do not change, and the SDK reads the coordinate
+   through the session view (`StreamView.flow`, lane 5). `model.message`,
+   `model.compaction`, `tool.intent`, `tool.result`, and `flow.snapshot` are
+   ledger rows published through `SessionEvents` under the execution
+   aggregate, never part of `AgentEvent` or of any export, so no byte-exact
+   provider content can reach an SDK consumer or a file unredacted (contract
+   C3); "private" means outside every public and exported contract, not a
+   directory. The proposal's §2.1 phrase "all carried as `AgentEvent` arms"
+   is corrected to this in its PR 0. Only `RunLedger` and the in-process step
+   scrubber read those five (not the standalone `packages/trace-viewer`; see
+   the target-architecture note on `foldRunState`'s callers). Also `foldRunState` in `src/shared`, the
+   in-memory ledger layer, one ledger test and one fold test under
+   `it.effect`, and a load-time warning on rows-since-snapshot (proposal
+   §8). Nothing deleted yet; nothing in production calls it.
+2. **Both families on the ledger, one PR.** `ModelInvoker`, `Tools`,
+   `FollowUps`, `RunContext`, `OutputPipeline`, `runToolUse`, `runReflection`;
+   ~~`executeAgent` and every resume arm call `runtime.runPromiseExit` with the
+   fiber's signal;~~ _amended 2026-09-06 (second ruling):_ `executeAgent` is a
+   runtime operation, not one of R1's three boundary kinds, so a run call
+   there is the Effect-to-Promise pass-through the ruling rejects. It and
+   every resume arm become Effect programs in this same PR, and their callers
+   are converted upward until a host entry, a tool `execute()`, or the SDK's
+   public API is reached — `runAgent`'s host callers, the resume commands,
+   and the SDK entry are where the run lands. Deferring the `executeAgent`
+   interior to Stage 3a is what would make Phase 2 unlandable under the new
+   rule, so the interior moves with the surface.
+
+   ~~The importer's `flow_<id>.json` arm writes one batch: the
+   `flow.snapshot` carrying the record's `shared` state and the canonical
+   `flow.step` derived from the record's cursor and action (a cursor at the
+   wait node is `waiting`; a cursor at a round boundary is `round.end` with
+   its round number; any mid-cycle cursor maps to the last completed turn or
+   round boundary), so the loop resumes from a coordinate, never from a node
+   identity. The importer is a temporary compatibility reader under
+   AGENTS.md's rule and records beside itself its introduction date (the
+   cutover release) and its retirement condition: it is deleted three months
+   after that release ships, once every session root's C9 retention window
+   has passed, so no readable run can still lack a `flow.snapshot`; it is a
+   compatibility reader, not an adapter, so it carries no `@adapter-until`
+   marker.~~
+
+   _Amended 2026-09-06 (third ruling):_ **the importer is cut.** Everything
+   struck above — the `flow_<id>.json` arm, the cursor-and-action to
+   `flow.step` derivation with its three mapping rules, the introduction
+   date, the retirement condition and the C9 retention argument behind it —
+   exists so that a run _already in flight at the cutover_ survives the
+   upgrade. `FlowRecord` is `{ shared, cursor }`: the resume contract for an
+   interrupted run, and nothing else. Conversation history, transcripts and
+   results are separate stores under C9 and are untouched either way. So the
+   whole mechanism buys the resumability of whichever runs happen to be
+   interrupted at one upgrade, and is paid for with a reader, a derivation
+   whose three cases each need their own correctness argument, and a
+   retirement nobody will remember to perform.
+
+   The breaking behaviour instead: a run whose only durable state is a
+   `flow_<id>.json` record is **reported as not resumable** after the
+   cutover, with a message naming the release. The record is left on disk
+   for D8 to delete, and renamed to `flow_<id>.json.superseded` before this
+   run's first ledger append so a reverted release cannot resume from it (see
+   the rollout section). Phase 2 deletes `persistedFlow.ts` with the rest of
+   `src/agent/node/`, and no code in the tree reads the old format again.
+
+   _Amended 2026-09-06 (review finding):_ that deletion is only landable if
+   **every** importer converts in this same phase, and at this commit
+   `persistedFlow.ts` has **eleven** production importers: `RoundPersistedFlow`,
+   `runReflectionFlow`, `runToolUseFlow`, `AgentLaunchContext`,
+   `SessionResumeRetrieval`, `persistedCompileRejection`, `resumeRun`,
+   `storage/executionLifecycle` (which imports `flowKey`), `storage/resumability`,
+   `tools/executions/executionKvFiles` (`FLOW_KEY_PREFIX`), and
+   `tools/executions/executionLiveness` (`flowKey`). _(Corrected 2026-09-06
+   from "nine": the first inventory was taken from a truncated search and
+   dropped the two `tools/executions` readers.)_ `executionKvFiles` needs one
+   thing beyond conversion: since the cutover leaves legacy `flow_<id>.json`
+   files on disk, it must keep excluding them from execution file listings,
+   which is what its `FLOW_KEY_PREFIX` import does today. Two of them were assigned elsewhere and move here:
+   `AgentRunLifecycle`'s `setFlowRecordDisposition` (declared at
+   `AgentRunLifecycle.ts:104`, implemented at `:515`, called from
+   `executeAgent.ts:171`) was left to Stage 3a, and `executionLifecycle`'s
+   `flowKey` use had no phase at all. A Phase 2 that deletes the module while
+   either still references it does not build, so both convert in Phase 2 —
+   which follows anyway from the second ruling putting `executeAgent`'s
+   interior in this phase, since `executeAgent` is what calls the
+   disposition setter.
+   Deletes `src/agent/node/`, `ModelInvocationNode`, `RoundPersistedFlow`,
+   `ResponseCycleFlow`, `ToolUseRoundFlow`, all sixteen node classes, the
+   disposition ladder, the flow-local uses of `linkAbortSignals` and
+   `onAbort` (the shared helpers themselves survive until their last
+   consumer migrates in Phases 3 to 5, since at this commit they are also
+   imported by `runAgent.ts`, `AgentLaunchContext.ts`, `tools/timeouts.ts`,
+   `claudeAgent.ts`, `executionRegistry.ts`, `FollowUpQueue.ts`, the
+   workflow-script runner, the CLI runtime, and the platform lifecycle; the
+   Phase 1 ratchet counts their importers down), the startup window,
+   `p-retry` in the runtime, `resumability.ts`'s parse, the checkpoint arm of
+   `SessionResumeRetrieval`, the engine tests except the manual-retry cases
+   of `PocketFlowNode.vitest.ts` (approval-driven retry budgets, the
+   cancellation race, `AbortError` unwrapping, approvals past the former
+   ceiling), which move into `ModelInvoker`'s existing suite because R8 and
+   F7 preserve that behavior, and every guidance passage
+   that names the engine. _Corrected 2026-09-06:_ the earlier inventory was
+   taken over a narrower path set and missed live guidance that instructs
+   reviewers and workflows to preserve the engine's hooks and node-call
+   shape; a repo-wide `git grep -l PocketFlow` over tracked files finds, as
+   **live guidance that must be updated**: CLAUDE.md, AGENTS.md,
+   `src/README.md`, `.claude/agents/our-code-simplifier.md`,
+   `.claude/skills/code-review/SKILL.md` and its
+   `references/review-checklist.md`,
+   `.claude/skills/find-simplification/SKILL.md`,
+   `.claude/workflows/debt-audit.js`, `.claude/workflows/tech-debt-tournament.mjs`,
+   `.github/prompts/claude-code-review-prompt.md`,
+   `.github/prompts/claude-code-review-system-prompt.md`,
+   `.github/prompts/claude-code-system-prompt.md`,
+   `.github/prompts/texra-code-review-prompt.md`, and
+   `docs/architecture/2026-06-20-pocketflow-state.md`. Dated audits,
+   surveys, and superseded PRDs under `docs/` keep their text: they record
+   what was true when written. `NOTICE` and the four package `NOTICE.txt`
+   files keep the upstream attribution for as long as any derived code
+   remains, and are reviewed rather than edited blindly. The PR re-runs that
+   search and `npm run check:guidance-refs` is the gate. Reviewed as one
+   because splitting it is what creates a shim.
+
+3. **Replay along the flow.** A step scrubber over `foldRunState` as a
+   surface of the in-process hosts (the conversation shell's run detail on
+   the extension and desktop, the TUI's run pane), reading rows from the
+   local database through `RunLedger` in the runtime process, which is the
+   only process that may hold byte-exact rows (one-fold PRD 7.4). The
+   standalone `packages/trace-viewer` is untouched: it keeps loading a
+   `TraceDocument` through its host bridge and gains no database transport.
+   Also the `flow.step` arm in the session fold (the proposal's §5 PR 3
+   writes `flow.transition`; the declared row type is `flow.step` and there
+   is no seventh discriminator). No change to `TraceDocument` or to the
+   exported trace format: the frozen wire (one-fold PRD 10.3) stays
+   byte-identical, and an exported document carries no step coordinates and
+   no ledger rows. The proposal's §5 PR 3 `TraceDocument.steps` is
+   withdrawn.
+4. **One child protocol.** Workflow-script journal rows into the event table
+   under the **checkpoint aggregate**, the fifth aggregate kind the one-fold
+   PRD 5.1 defines with its lifecycle (created by the first launch under a
+   `checkpointId`, reached from every launch's `run.start` edge, closed only
+   by the user's `checkpoint.removed`, retained under C9 on its own
+   closure), keyed by the workflow's `checkpointId`, the resume anchor of
+   one-fold PRD decision 9, never by the run's execution id, which mints
+   fresh per relaunch: a relaunch reads the same journal, and the journal's
+   retention follows the checkpoint, not the run. The
+   active-versus-last-completed turn distinction `ChildTurnState` records
+   today is the child run's own `flow.step` (a `turn.begin` with no
+   `turn.end` on the child's stream aggregate), and it is execution-scoped
+   there exactly as `ChildTurnState` is: every launch path that starts a
+   child run loop (workflow scripts, native delegation, in-band subagents,
+   Bash, the agent CLI) reads that row instead, in the same PR, since
+   `startChildRunLoop` is one function and `inBandSubagentExecution.ts` is
+   one of its readers. The script journal entry references the child's
+   execution id as its attempt identity, and the checkpoint's
+   `checkpoint.inputs` rows (one-fold PRD 5.1) carry the script, arguments,
+   and file sets `persistence.ts` restores and revises on relaunch today.
+   _Amended 2026-09-06 (review finding):_ the launch paths are not the only
+   readers. `src/tools/executions/turnAttribution.ts` also calls
+   `readTurnState()`, and it uses the active and last-completed turn tokens to
+   warn when `/report` or `/result` is showing an older turn after a newer one
+   was interrupted — so deleting the state after migrating only the launch
+   paths would either break that reader or silently drop the warning and
+   present a stale result as current. The replacement rows carry the same
+   stable turn token, and `turnAttribution` migrates onto them in this step
+   too.
+
+   Only then are `ChildTurnState`, `workflowScript/persistence.ts`, and the
+   turn-state writes in `childRunLoop.ts` deleted; nothing is deleted before
+   its replacement lands. In scope, not optional: two ledgers would be
+   the intermediate this program refuses.
+
+Rules that bind every step: no interim column, no Promise shim so one family
+can run on the old engine while the other runs on the new service, no window
+in which two runtimes or two checkpoint formats exist on the branch. Rollback
+is the cutover branch's rollback. The phase is complete when no production
+file imports `src/agent/node`, no `setServices()` call remains, and
+`config/ratchets/` carries no PocketFlow row. Two items of later phases move
+here and are struck there: the flow interiors (`runReflectionFlow`,
+`runToolUseFlow`) that Stage 3a listed are the two loops of step 2, and the
+workflow-script half of Phase 4's child-call operation (the script journal
+into the event table) is step 4. The `executeAgent` and `AgentRunLifecycle`
+interiors stay in Stage 3a, and the native-delegation, in-band, and
+child-run-loop launch paths stay in Phase 4.
+
+Two of the proposal's §7 decisions remain with the owner and do not block
+step 1: the C9 retention window for byte-exact conversation rows, and whether
+the `approval.requested` / `approval.resolved` rows for outcome-unknown
+barrier tools and the manual-retry prompt land in step 2 (the arms already
+exist in the session vocabulary since lane 1 of the one-fold PRD, so step 2
+is the default). The proposal's fourth item, whether step 4 is in scope, is
+closed: section 15 decision 7 records one physical record, and step 4 is how
+that record comes to exist.
 
 ### Phase 3 — run lifecycle and cancellation
 
 Phase 3 lands as two separately revertible stages. Stage 3a changes no
 durable format: it converts the run interiors, collapses the dependency
 carriers onto `AgentRun`, moves lifecycle under scopes, and replaces internal
-abort choreography. Stage 3b carries the persistence amendment, the round
+abort choreography. ~~Stage 3b carries the persistence amendment, the round
 commit, and the finer checkpoints — every item that writes a new durable
 shape. The split isolates the only rollback-constrained work of the program
 in one small stage; the rollout section defines what revertibility means for
-it.
+it.~~
+
+_Amended 2026-09-06:_ Phase 2 as amended writes the new durable shape
+itself (`tool.intent` / `tool.result` rows, `flow.step` round coordinates,
+`flow.snapshot`), so Phase 2 — not Stage 3b — is the program's first durable-
+format change and carries its rollback constraint, as the rollout section now
+says. Stage 3b keeps only what Phase 2 does not deliver: the recovery
+behaviour for an unknown external outcome and the version-retirement policy,
+plus validation that the checkpoints Phase 2 writes meet this stage's
+acceptance. Stage 3a is therefore the whole of Phase 3's implementation work,
+and Stage 3b is a validation gate rather than a second implementation.
 
 Stage 3a — lifecycle and carriers, no durable format change:
 
-- Convert `runReflectionFlow`, `runToolUseFlow`, `executeAgent`, and
-  `AgentRunLifecycle` interiors.
+- Convert ~~`runReflectionFlow`, `runToolUseFlow`,~~ `executeAgent` and
+  `AgentRunLifecycle` interiors (amended 2026-09-06: the two flow interiors
+  are Phase 2 step 2's loops, not this stage's work).
 - Replace the mirrored `AgentLaunchContext` / ambient `RunContext` /
   `AgentCore` / flow-service dependency path with plain launch inputs and one
   scoped `AgentRun` service.
@@ -1288,15 +1673,28 @@ Stage 3a — lifecycle and carriers, no durable format change:
 
 Stage 3b — durable rounds and finer checkpoints:
 
-- Ratify the nested-flow persistence amendment: stable activity identities,
-  hierarchical cursor or activity-ledger representation, recovery behavior for
-  an unknown external outcome, and version-retirement policy.
+_Amended 2026-09-06:_ Phase 2 as amended delivers this stage's substance
+(per-call `tool.intent` / `tool.result` rows, `flow.step` round coordinates,
+`flow.snapshot`), so the bullets below are read as requirements already met
+there, not as a second implementation.
+
+- ~~Ratify the nested-flow persistence amendment: stable activity identities,
+  hierarchical cursor or activity-ledger representation,~~ recovery behavior
+  for an unknown external outcome, and version-retirement policy (the row
+  ledger is the representation; §15 item 6).
 - Checkpoint completed model responses before tool dispatch and completed
-  side-effecting tool calls before the next side-effecting call.
-- Replace `RoundPersistedFlow` with the common durable transition kernel plus a
-  reflection-round transition; preserve the configured bound and the single
-  persisted compile-repair grant.
-- Collapse response-cycle finalization to one canonical round-state commit and
+  side-effecting tool calls before the next side-effecting call (the
+  `model.message` and `tool.result` rows).
+- ~~Replace `RoundPersistedFlow` with the common durable transition kernel plus
+  a reflection-round transition;~~ `RoundPersistedFlow` is deleted in Phase 2
+  as amended; preserve the configured bound and the single persisted
+  compile-repair grant on `flow.snapshot`.
+- Collapse response-cycle finalization to one canonical round-state commit:
+  `flow.snapshot` and `flow.step round.end` are appended as **one batch in
+  one transaction** across the run's two aggregates (`RunLedger.append`
+  takes a batch, as `SessionEvents.publish` already does for `run.start`
+  plus `run.activate`, one-fold PRD §6 item 8), so a consumed compile-repair
+  grant and the round's completion are never observable apart; and
   watermark-tracked derived projections.
 
 The Promise-returning `runAgent` and SDK entry points remain adapters around the
@@ -1306,8 +1704,10 @@ one opaque durability interval inside an outer persisted node.
 ### Phase 4 — durable child calls and workflow scripts
 
 - Extract one durable child-call operation from stable subagent attempts,
-  in-band execution, the child-run loop, native delegation, and workflow-script
-  `agent()` dispatch.
+  in-band execution, the child-run loop, and native delegation ~~and
+  workflow-script `agent()` dispatch~~ (amended 2026-09-06: the
+  workflow-script side, the journal into the event table, is Phase 2 step 4;
+  this phase unifies the remaining launch paths onto that protocol).
 - Preserve separate foreground, detached-delivery, and workflow-script
   presentation policies above that operation.
 - Convert the workflow-script runner's bounded fan-out, timeout, child
@@ -1376,22 +1776,75 @@ through typed host controllers rather than directly importing Effect.
 ### Rollout and rollback
 
 No feature flag is required because the migration does not introduce two
-user-selectable behaviors. Each phase is independently revertible and changes
-no durable format through Phase 2 and Stage 3a. From the first durable-format
-writer onward, revertibility carries a qualification: reverting code must
-never orphan records that code has already written. Stage 3b therefore obeys
-a reader-outlives-writer rule — the code that reads the new checkpoint
-representation lands with or before the writer and is retained on rollback,
-so a reverted writer leaves every written session readable. The recommended
-sidecar-ledger representation (§15, decision 6) satisfies this cheaply: the
-version 2 record stays authoritative and readable by pre-amendment code, and
-rollback degrades fine-grained resume to today's coarse outer-cursor resume
-instead of producing unreadable sessions. If ratification instead selects a
-new record version, its reader ships ahead of its writer under the same rule,
-or the PRD's revertibility claim is explicitly withdrawn for that stage. A
-Stage 3b format change additionally follows the repository's explicit
-compatibility and retirement policy and lands only with its recovery
-behavior. A phase lands only after all affected hosts have crossed
+user-selectable behaviors. Each phase is independently revertible. ~~Each
+changes no durable format through Phase 2 and Stage 3a. From the first
+durable-format writer onward, revertibility carries a qualification:
+reverting code must never orphan records that code has already written.
+Stage 3b therefore obeys a reader-outlives-writer rule — the code that reads
+the new checkpoint representation lands with or before the writer and is
+retained on rollback, so a reverted writer leaves every written session
+readable. The recommended sidecar-ledger representation (§15, decision 6)
+satisfies this cheaply: the version 2 record stays authoritative and readable
+by pre-amendment code, and rollback degrades fine-grained resume to today's
+coarse outer-cursor resume instead of producing unreadable sessions. If
+ratification instead selects a new record version, its reader ships ahead of
+its writer under the same rule, or the PRD's revertibility claim is
+explicitly withdrawn for that stage. A Stage 3b format change additionally
+follows the repository's explicit compatibility and retirement policy and
+lands only with its recovery behavior.~~ _Amended 2026-09-06:_ Phase 2 as
+amended is the first durable-format change, and it lands as the cutover
+release, whose rollback is the revert of the cutover branch. The
+reader-outlives-writer rule cannot hold across it, because pre-cutover code
+has no reader for rows, so the revertibility claim is **withdrawn for runs
+that progressed under the ledger** and replaced by a weaker, explicit
+guarantee: such a run is interrupted on rollback, never silently resumed
+from a stale record and never repeated. ~~The mechanism is the importer's
+three-step idempotent protocol, since a SQLite append and a file rename
+cannot be one atomic step: (1) rename `flow_<id>.json` to
+`flow_<id>.json.importing`; (2) append the import batch (`flow.snapshot`
+carrying `importedFrom: { path, sha256 }` plus the derived `flow.step`) in
+one transaction; (3) rename `.importing` to `.imported` (never deleting;
+single-owner D8 still governs deletion). Every resume under the ledger
+first repairs: an `.importing` file with no `importedFrom` snapshot on the
+aggregate completes steps 2 and 3; an `.importing` file beside such a
+snapshot completes step 3 only; a `flow_<id>.json` beside such a snapshot
+is renamed straight to `.imported` and never re-imported. A reverted
+release, in every window, finds no `flow_<id>.json` for a run that
+progressed under the ledger, reports it as not resumable, and repeats no
+paid or side-effecting work; a run never resumed under the ledger keeps its
+untouched record and resumes after rollback exactly as before. The importer is the temporary compatibility
+reader of Phase 2 step 2 and follows the repository's compatibility and
+retirement policy.~~
+
+_Amended 2026-09-06 (third ruling):_ the protocol goes with the importer it
+served. Its whole purpose was to keep the two stores consistent across a
+crash _and_ a revert, and it was intricate precisely because a SQLite append
+and a file rename cannot be made atomic: three steps, a `sha256` provenance
+field, and three repair cases each carrying its own correctness argument.
+With no importer there is no second store to keep consistent, so the
+three-step protocol, the `sha256` provenance field and the three repair cases
+all go.
+
+~~a reverted release reads the untouched record it always could. In both
+directions a run interrupted across the boundary is reported as not
+resumable~~ _Corrected 2026-09-06 (review finding):_ that was wrong, and in
+the dangerous direction. Leaving the record untouched means a reverted
+release finds a perfectly readable `flow_<id>.json` with its old cursor and
+resumes from it — repeating whatever model calls and side-effecting tool
+calls the run completed under the ledger. The cutover release not reading the
+file does nothing to stop the _old_ release reading it.
+
+One rename fixes it, and unlike the deleted protocol it needs no atomicity
+argument: the first time a run appends a ledger row, it first renames
+`flow_<id>.json` to `flow_<id>.json.superseded`. The rename is ordered
+**before** the first append, so the two crash windows are both safe — die
+before it and the old release resumes from a record that is still current
+(nothing was written to the ledger), die after it and the old release finds
+no record and reports the run not resumable, which is the intended breaking
+behaviour. No second store to reconcile, no provenance field, no repair
+pass: the ledger is never read by the old release and the record is never
+read by the new one, so the rename only has to make the file invisible, not
+consistent. A phase lands only after all affected hosts have crossed
 the same internal boundary; the repository does not ship one host on the Effect
 implementation and another on a separately maintained Promise implementation.
 
@@ -1407,14 +1860,19 @@ custom runtime machinery.
 ### Architectural completion
 
 - Zero production `setServices()` calls after Phase 2.
-- Zero generic `prep` / `execFallback` / `post` dispatch in the graph kernel
-  after Phase 2; nodes expose one typed transition.
-- One graph-transition loop serves ephemeral and persisted flows after Phase 2.
+- ~~Zero generic `prep` / `execFallback` / `post` dispatch in the graph kernel
+  after Phase 2; nodes expose one typed transition.~~ _Amended 2026-09-06:_
+  zero node classes and no `src/agent/node/` directory after Phase 2.
+- ~~One graph-transition loop serves ephemeral and persisted flows after Phase 2.~~ _Amended 2026-09-06:_ two `Effect.fn` loops (`runToolUse`,
+  `runReflection`) over one `RunLedger` after Phase 2; run state is
+  `foldRunState` over rows and is never persisted.
 - One run dependency carrier serves migrated execution code after Phase 3;
   launch inputs are not copied into an ambient context and then into flow
   services.
-- Zero `RoundPersistedFlow` subclass after Phase 3; reflection rounds use the
-  common durable transition kernel.
+- ~~Zero `RoundPersistedFlow` subclass after Phase 3; reflection rounds use the
+  common durable transition kernel.~~ _Amended 2026-09-06:_ zero
+  `RoundPersistedFlow`, `ResponseCycleFlow`, and `ToolUseRoundFlow` after
+  Phase 2; reflection rounds are `flow.step` coordinates.
 - One durable child-call operation serves native delegation and workflow-script
   dispatch after Phase 4.
 - Zero `PQueue`, `p-timeout`, or internal `AbortController` use in the
@@ -1432,8 +1890,11 @@ custom runtime machinery.
 - Zero new `AbortController` constructions inside completed Effect zones.
 - Zero raw catch clauses inside completed Effect zones except named Promise,
   synchronous-callback, filesystem, SDK, or sandbox-realm adapters.
-- Every temporary Promise/Effect adapter has a checked retirement date and
-  condition.
+- ~~Every temporary Promise/Effect adapter has a checked retirement date and
+  condition.~~ _Amended 2026-09-06 (second ruling):_ replaced by its
+  opposite — zero `@adapter-until` markers in the tree, enforced by
+  `check:effect-migration-ratchet`, which fails on the presence of any
+  marker rather than on an expired one.
 
 ### Runtime correctness
 
@@ -1496,25 +1957,25 @@ custom runtime machinery.
 
 ## 12. Risks and mitigations
 
-| Risk                          | Consequence                                                                                 | Mitigation                                                                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| RC API churn                  | Repeated mechanical changes distract from product work.                                     | Exact pinning; dedicated upgrade PRs; stable modules only; no automatic dependency updates.                                                |
-| Wrapper-only adoption         | The repository gains Effect without deleting complexity.                                    | Replacement-must-delete rule and phase acceptance gates.                                                                                   |
-| Layer multiplication          | Existing fields acquire tags, constructors, and test wrappers without changing ownership.   | Service census, semantic grouping, one carrier per lifetime, and rejection of trivial layer modules.                                       |
-| Two runtimes per host         | Stateful layers duplicate queues, caches, or resources.                                     | One managed runtime owned by each host process; architecture test for constructors.                                                        |
-| Effect leaks into public APIs | SDK consumers acquire a new programming model involuntarily.                                | Promise adapters remain the published surface.                                                                                             |
-| Error semantics change        | Cancellation or defects become user-facing failures, or vice versa.                         | Preserve the current outer classifier; test `Exit` mapping at one boundary.                                                                |
-| Catch-all migration           | Broad recovery handlers swallow interruption or defects under a new API.                    | Classify every touched catch; prefer tagged recovery; permit raw catch only in named foreign adapters.                                     |
-| Iteration conflation          | A durable round or paid model continuation is treated as an ephemeral retry.                | Distinct coordinate types and failure-injection tests at every durable iteration boundary.                                                 |
-| Workflow rewrite drift        | Script replay identity, sandbox behavior, or child delivery changes during runtime cleanup. | Keep the script/journal interpreter authoritative; extract only the common child activity and runtime mechanics.                           |
-| Durable flow behavior changes | Resume records or node identifiers become incompatible.                                     | Preserve version 2 exactly through Stage 3a; Stage 3b needs an explicit version, reader-outlives-writer rollback, and retirement decision. |
-| External action is repeated   | Recovery duplicates a tool write, charge, or subagent launch.                               | Replay classification, stable idempotency keys, immediate checkpoints, and an explicit unknown-outcome state.                              |
-| Interruption races a commit   | The caller retries while the previous atomic write is still running.                        | Keep node work interruptible but mask the short write-and-cache-publication critical region.                                               |
-| Excess abstraction            | Fine-grained service classes make simple code harder to read.                               | Service boundaries follow existing ports and co-usage; pure arguments stay arguments.                                                      |
-| Bundle growth                 | Extension, CLI, or SDK distribution becomes materially larger.                              | Phase 0 size gate; tree-shaken imports; no Effect in browser code.                                                                         |
-| Finalizer-order drift         | Shutdown behavior changes subtly.                                                           | Record current order before conversion; use sequential scopes where ordering is semantic.                                                  |
-| Training cost                 | Contributors write unsafe or non-idiomatic Effect code.                                     | Small repository guide, boundary lint rules, and examples from migrated TeXRA code.                                                        |
-| False promise of correctness  | Teams expect Effect to repair domain ownership automatically.                               | Explicit non-solution list and unchanged single-authority rulings.                                                                         |
+| Risk                          | Consequence                                                                                 | Mitigation                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RC API churn                  | Repeated mechanical changes distract from product work.                                     | Exact pinning; dedicated upgrade PRs; stable modules only; no automatic dependency updates.                                                                                                                 |
+| Wrapper-only adoption         | The repository gains Effect without deleting complexity.                                    | Replacement-must-delete rule and phase acceptance gates.                                                                                                                                                    |
+| Layer multiplication          | Existing fields acquire tags, constructors, and test wrappers without changing ownership.   | Service census, semantic grouping, one carrier per lifetime, and rejection of trivial layer modules.                                                                                                        |
+| Two runtimes per host         | Stateful layers duplicate queues, caches, or resources.                                     | One managed runtime owned by each host process; architecture test for constructors.                                                                                                                         |
+| Effect leaks into public APIs | SDK consumers acquire a new programming model involuntarily.                                | Promise adapters remain the published surface.                                                                                                                                                              |
+| Error semantics change        | Cancellation or defects become user-facing failures, or vice versa.                         | Preserve the current outer classifier; test `Exit` mapping at one boundary.                                                                                                                                 |
+| Catch-all migration           | Broad recovery handlers swallow interruption or defects under a new API.                    | Classify every touched catch; prefer tagged recovery; permit raw catch only in named foreign adapters.                                                                                                      |
+| Iteration conflation          | A durable round or paid model continuation is treated as an ephemeral retry.                | Distinct coordinate types and failure-injection tests at every durable iteration boundary.                                                                                                                  |
+| Workflow rewrite drift        | Script replay identity, sandbox behavior, or child delivery changes during runtime cleanup. | Keep the script/journal interpreter authoritative; extract only the common child activity and runtime mechanics.                                                                                            |
+| Durable flow behavior changes | Resume records or node identifiers become incompatible.                                     | Amended 2026-09-06: the version 2 record is read once by the importer into `flow.snapshot` and never written again; row types are versioned by the substrate (C1); rollback is the cutover branch's revert. |
+| External action is repeated   | Recovery duplicates a tool write, charge, or subagent launch.                               | Replay classification, stable idempotency keys, immediate checkpoints, and an explicit unknown-outcome state.                                                                                               |
+| Interruption races a commit   | The caller retries while the previous atomic write is still running.                        | Keep node work interruptible but mask the short write-and-cache-publication critical region.                                                                                                                |
+| Excess abstraction            | Fine-grained service classes make simple code harder to read.                               | Service boundaries follow existing ports and co-usage; pure arguments stay arguments.                                                                                                                       |
+| Bundle growth                 | Extension, CLI, or SDK distribution becomes materially larger.                              | Phase 0 size gate; tree-shaken imports; no Effect in browser code.                                                                                                                                          |
+| Finalizer-order drift         | Shutdown behavior changes subtly.                                                           | Record current order before conversion; use sequential scopes where ordering is semantic.                                                                                                                   |
+| Training cost                 | Contributors write unsafe or non-idiomatic Effect code.                                     | Small repository guide, boundary lint rules, and examples from migrated TeXRA code.                                                                                                                         |
+| False promise of correctness  | Teams expect Effect to repair domain ownership automatically.                               | Explicit non-solution list and unchanged single-authority rulings.                                                                                                                                          |
 
 ## 13. Alternatives considered
 
@@ -1537,6 +1998,13 @@ risk-to-deletion ratio and is rejected.
 Effect 4's workflow facilities are under an unstable module, and TeXRA has
 product-specific durable cursor and resume semantics. Replacing them would mix
 a runtime migration with a persistence redesign. Rejected.
+
+_Amended 2026-09-06:_ upheld on the module, moot on the reason. The unstable
+`effect/unstable/workflow` module stays out. But PocketFlow is not kept either
+(R4 as amended): the persistence redesign this alternative feared mixing with
+the runtime migration is now its prerequisite, and the two land together as
+the cutover branch. The replacement is plain Effect loops over the event
+table, not a workflow engine of any kind.
 
 ### D. Publish Effect as the SDK API immediately
 
@@ -1585,18 +2053,35 @@ unless the repository owner explicitly amends it.
    repository's TypeScript 6/7 toolchain.
 5. Whether a future optional Effect-native SDK entry point is desirable after
    Phase 7.
-6. Whether nested durable progress uses a hierarchical cursor, an activity
-   ledger, or both; this decision must be made before Stage 3b begins. The
-   PRD recommends the activity ledger as the default: an append-only sidecar
-   referenced by the outer cursor preserves version 2 cursor identity
-   (R4.4), keeps the flow record readable by pre-amendment code, and gives
-   rollback a defined degradation — coarse outer-cursor resume — rather than
-   unreadable sessions. A hierarchical cursor is admitted only with evidence
-   of a recovery need the ledger cannot express.
-7. Whether PocketFlow activities and workflow-script child calls share one
-   physical activity record or only one protocol over their existing stores.
-   Semantic unification is required; premature storage-schema unification is
-   not.
+6. ~~Whether nested durable progress uses a hierarchical cursor, an activity
+   ledger, or both.~~ **Decided 2026-09-06 by the owner's ruling:** there is
+   no cursor of either kind. Progress is the row ledger on the run's two
+   aggregates (`flow.step` on the stream aggregate, the model rows and
+   `flow.snapshot` on the execution aggregate; R4 as amended);
+   `flow.snapshot` is the only derived row.
+7. ~~Whether PocketFlow activities and workflow-script child calls share one
+   physical activity record or only one protocol over their existing stores.~~
+   **Decided 2026-09-06:** one physical record, the session event table, with
+   the script journal moved into it in Phase 2 step 4.
+8. **Recorded 2026-09-06.** The owner ruled that the agent runtime uses no
+   PocketFlow and is pure Effect written to Effect's best practice (the
+   `effect-solutions` guides AGENTS.md mandates: `Context.Service` classes
+   with static layers, `Effect.fn` for every named operation, one `provide`
+   at the process entry, `Data.TaggedError` for expected failures with
+   defects left to die, per-test layers under `it.effect` with `TestClock`).
+   Effect Schema stays out: Zod remains the one data-contract system, so the
+   guides' `Schema.TaggedError` reads as `Data.TaggedError` here. This closes
+   the R4 question; decisions 1 to 5 above are untouched by it.
+9. **Recorded 2026-09-06.** On the first wave of conversion pull requests
+   (#11922 to #11928) the owner ruled: "we should fully embrace Effect. No
+   more pass-throughs nor adapters." R1 now names the only three boundary
+   kinds (host entries, the tool `execute()` contract until lane D, the SDK's
+   public API); execution-strategy rule 1 makes leaf-to-root conversion
+   binding on every PR; rule 3 retires the `@adapter-until` marker before it
+   merged, so #11920's check fails on any marker's presence. Decision 2
+   above is narrowed by it: whatever hosts the managed runtime, it is not an
+   adapter layer between Promise code and Effect code, because no such
+   layer may exist.
 
 None of these decisions blocks the read-only feasibility measurements.
 
