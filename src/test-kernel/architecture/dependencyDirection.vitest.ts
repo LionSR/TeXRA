@@ -120,6 +120,12 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // stderr/stdout flushes run, and a teardown path must not depend on the
   // runtime it is tearing down.
   'packages/cli/src/runtime/initPlatform.ts': 1,
+  // The clipboard write's interrupted-at-disposal reap, which runs only
+  // after the process runtime's `dispose()` interrupted the in-flight
+  // fiber — no process runtime is left to borrow, and the wedged-helper
+  // reap must still run so a `void`-ed TUI copy settles instead of
+  // rejecting unhandled.
+  'packages/cli/src/runtime/clipboardText.ts': 1,
 };
 
 function sourceFilesUnder(
