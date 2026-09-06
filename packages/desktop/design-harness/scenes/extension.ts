@@ -43,7 +43,7 @@ function host(): HostSnapshot {
     ...emptyHostSnapshot(PAPER),
     agentOptions: {
       toolUse: [
-        { value: 'orchestrator', label: 'orchestrator' },
+        { value: 'orchestrator', label: 'orchestrator', isOrchestrator: true },
         { value: 'polish', label: 'polish' },
         { value: 'search', label: 'search' },
       ],

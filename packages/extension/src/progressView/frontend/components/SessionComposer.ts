@@ -21,8 +21,8 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import type { SessionType, StreamTabId } from '@shared/schemas';
@@ -49,6 +49,35 @@ import './QueuedFollowUps';
 const MODE_LABELS: Record<SessionType, string> = {
   toolUse: 'Interactive',
   workflow: 'Workflow',
+};
+
+/** The hint under the expanded composer, keyed by what the launch is. */
+type SessionHintKey = SessionType | 'orchestrator' | 'team';
+
+const SESSION_HINT_COPY: Record<
+  SessionHintKey,
+  { lede: string; body: string; time: string }
+> = {
+  workflow: {
+    lede: 'Deep pass.',
+    body: 'Drafts, reviews its own work, then revises, across your whole document.',
+    time: 'Typically 5 to 10 min on fast models, 10 to 30 min on frontier reasoning. Pick a smaller model if you need faster turnaround.',
+  },
+  toolUse: {
+    lede: 'Conversational.',
+    body: 'Reads, edits, and searches in a running dialogue you steer turn by turn.',
+    time: 'Turns stream back in seconds; tool-heavy runs take a minute or two. Pick a stronger model for longer chains of reasoning.',
+  },
+  orchestrator: {
+    lede: 'Orchestrator.',
+    body: 'Plans a pipeline of specialized agents and dispatches them for you. Name agents to steer delegation, or ask it which one to use.',
+    time: 'For example, "use polish on the intro, then review the math", or leave it blank. Approve tasks in Sessions as they arrive.',
+  },
+  team: {
+    lede: 'Team run.',
+    body: 'Starts the team lead in an interactive session with delegation limited to this team.',
+    time: '',
+  },
 };
 
 interface ChipMenu {
@@ -143,17 +172,10 @@ export class SessionComposer extends LitElement {
           var(--wa-space-2xs);
         border-radius: var(--wa-border-radius-xl, 20px);
       }
-      .composer.is-compact wa-textarea {
+      .composer.is-compact textarea {
         flex: 1 1 auto;
-        min-width: 0;
-      }
-      .composer.is-compact wa-textarea::part(base) {
-        min-height: 0;
-      }
-      .composer.is-compact wa-textarea::part(textarea) {
-        min-height: 1.5em;
-        height: auto;
-        padding-block: var(--wa-space-3xs);
+        --textarea-min-height: calc(1lh + 2 * var(--wa-space-3xs));
+        --textarea-max-height: 10em;
       }
       .composer.is-compact .row {
         flex: 0 0 auto;
@@ -170,19 +192,39 @@ export class SessionComposer extends LitElement {
         display: contents;
       }
 
-      wa-textarea::part(base) {
-        border: none;
-        box-shadow: none;
+      /* A plain native textarea (#11851): the card draws the one focus
+         ring, so the field carries no chrome of its own and grows with its
+         content between the two heights each state sets. */
+      textarea {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        border: 0;
+        outline: none;
         background: transparent;
-      }
-      wa-textarea::part(textarea) {
-        padding-inline: var(--wa-space-3xs);
+        color: inherit;
+        resize: none;
+        box-sizing: border-box;
+        field-sizing: content;
+        height: auto;
+        min-height: var(--textarea-min-height);
+        max-height: var(--textarea-max-height);
+        padding: var(--wa-space-3xs);
+        overflow-x: hidden;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
         font-family: var(--wa-font-family-body, inherit);
         font-size: var(--font-size);
         line-height: var(--line-height-normal);
-        field-sizing: content;
-        min-height: 0;
-        max-height: 10em;
+      }
+      textarea::placeholder {
+        color: var(--wa-color-text-quiet);
+      }
+      .composer:not(.is-compact) textarea {
+        --textarea-min-height: calc(3lh + 2 * var(--wa-space-3xs));
+        --textarea-max-height: clamp(var(--textarea-min-height), 32vh, 240px);
       }
 
       .row {
@@ -228,7 +270,7 @@ export class SessionComposer extends LitElement {
       .chips-collapsed {
         display: none;
       }
-      @container (max-width: 380px) {
+      @container (max-width: 440px) {
         .chips {
           display: none;
         }
@@ -248,6 +290,33 @@ export class SessionComposer extends LitElement {
         min-width: 0;
         margin-bottom: var(--wa-space-2xs);
       }
+
+      /* The session hint under the expanded composer: a brand callout at
+         IDE density, one row. */
+      .session-hint {
+        margin-top: var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
+        font-size: var(--font-size-sm);
+        line-height: var(--line-height-relaxed);
+      }
+      .session-hint::part(message) {
+        display: flex;
+        gap: var(--wa-space-2xs);
+        align-items: flex-start;
+        color: var(--wa-color-text-quiet);
+      }
+      .session-hint-lede {
+        color: var(--wa-color-text-normal);
+        font-weight: var(--font-weight-semibold);
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+      }
+      .session-hint-body {
+        flex: 1 1 auto;
+      }
+      .session-hint-time {
+        color: var(--wa-color-text-quiet);
+      }
     `,
   ];
 
@@ -259,7 +328,7 @@ export class SessionComposer extends LitElement {
 
   @state() private announcement = '';
 
-  @query('wa-textarea') private textArea?: HTMLElement;
+  @query('textarea') private textArea?: HTMLTextAreaElement;
 
   private get compact(): boolean {
     return this.stream !== null;
@@ -336,34 +405,10 @@ export class SessionComposer extends LitElement {
     return this.draft.images.some((image) => image.path === null);
   }
 
+  /** Send is the root's decision (`SessionSurfaces.submit`): the same one
+   *  the run accelerator reaches, so the two cannot diverge. */
   private send = (): void => {
-    const text = this.text.trim();
-    const stream = this.stream;
-    if (stream) {
-      const draft = this.draft;
-      if (text === '' && draft.images.length === 0) return;
-      if (this.imagesPending) return;
-      const mediaFiles = draft.images.flatMap((image) =>
-        image.path === null ? [] : [image.path],
-      );
-      this.dispatchEvent(
-        SessionUiEvents.runtime({
-          kind: 'followUp.send',
-          streamId: stream.id,
-          text: text === '' ? '(image)' : text,
-          mediaFiles: mediaFiles.length > 0 ? mediaFiles : null,
-        }),
-      );
-      return;
-    }
-    if (text === '' || !this.surface) return;
-    this.dispatchEvent(
-      SessionUiEvents.host({
-        kind: 'launch',
-        launch: this.surface.launch,
-        instruction: text,
-      }),
-    );
+    this.dispatchEvent(SessionUiEvents.submit());
   };
 
   private polish = (): void => {
@@ -535,7 +580,7 @@ export class SessionComposer extends LitElement {
               : nothing
           }
           <wa-dropdown-item value="settings:agents"
-            >Agent settings…</wa-dropdown-item
+            >Browse all agents…</wa-dropdown-item
           >
         `,
         onSelect: (value) => {
@@ -730,6 +775,41 @@ export class SessionComposer extends LitElement {
     </div>`;
   }
 
+  /** What the launch is: the team when one is chosen, else an orchestrator
+   *  agent, else the mode. */
+  private renderSessionHint(): TemplateResult | typeof nothing {
+    const launch = this.surface?.launch;
+    const host = this.host;
+    if (!launch || !host) return nothing;
+    const { sessionType } = launch;
+    const agent = host.agentOptions[sessionType]?.find(
+      (option) => option.value === launch.agent[sessionType],
+    );
+    let key: SessionHintKey = sessionType;
+    if (sessionType === 'toolUse' && launch.launchTarget === 'team') {
+      key = 'team';
+    } else if (sessionType === 'toolUse' && agent?.isOrchestrator === true) {
+      key = 'orchestrator';
+    }
+    const copy = SESSION_HINT_COPY[key];
+    return html`<wa-callout
+      class="session-hint"
+      variant="brand"
+      role="note"
+      data-hint-key=${key}
+    >
+      <span class="session-hint-lede">${copy.lede}</span>
+      <span class="session-hint-body">
+        ${copy.body}
+        ${
+          copy.time
+            ? html` <span class="session-hint-time">${copy.time}</span>`
+            : nothing
+        }
+      </span>
+    </wa-callout>`;
+  }
+
   override render(): TemplateResult | typeof nothing {
     const stream = this.stream;
     if (stream && stream.followUpSupport === 'unsupported') return nothing;
@@ -759,27 +839,27 @@ export class SessionComposer extends LitElement {
           'has-text': text.trim() !== '' || this.draft.images.length > 0,
         })}
       >
-        <wa-textarea
+        <label for="composer-text" class="visually-hidden"
+          >${compact ? 'Follow-up message' : 'Instruction'}</label
+        >
+        <textarea
+          id="composer-text"
           name=${compact ? 'follow-up-message' : 'instruction'}
           placeholder=${compact ? 'Follow-up' : 'Describe the outcome you want…'}
           rows=${compact ? '1' : '3'}
-          resize="auto"
           autocomplete="off"
           spellcheck="true"
+          aria-describedby="composer-text-hint"
           ?disabled=${readOnly}
           .value=${live(text)}
           @input=${this.handleInput}
           @keydown=${this.handleKeydown}
           @paste=${this.handlePaste}
-        >
-          <span slot="label" class="visually-hidden"
-            >${compact ? 'Follow-up message' : 'Instruction'}</span
-          >
-          <span slot="hint" class="visually-hidden">
-            Press Enter to send or Shift+Enter for a new line. Paste images to
-            attach them.
-          </span>
-        </wa-textarea>
+        ></textarea>
+        <div id="composer-text-hint" class="visually-hidden">
+          Press Enter to send or Shift+Enter for a new line. Paste images to
+          attach them.
+        </div>
         <div class="row">
           ${compact ? html`<span class="spacer"></span>` : this.renderChips()}
           <span class="expand"
@@ -848,6 +928,7 @@ export class SessionComposer extends LitElement {
           >
         </div>
       </div>
+      ${compact ? nothing : this.renderSessionHint()}
       <div class="visually-hidden" role="status">${this.announcement}</div>
     `;
   }

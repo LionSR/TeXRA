@@ -88,7 +88,7 @@ const STOP_STREAM_BUTTON = Object.freeze({
 const RESTORE_STATE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.RESTORE_STATE_BTN,
   icon: 'reply',
-  title: 'Setup this configuration in the main view',
+  title: 'Edit as new task',
   className: 'restore-button',
 });
 

@@ -132,7 +132,6 @@ export class ToolsSheet extends LitElement {
           })}
         </div>
         <latexdiffs-section
-          .visible=${true}
           .baseFile=${launch.baseFile}
           .baseFileOptions=${[...host.fileOptions.baseFile]}
           .editedFile=${editedFile}

@@ -52,9 +52,9 @@ const SessionKeySchema = z.string().min(1);
  * keeps its incremental indexes (row and group positions, the compaction
  * projection's working state, the measured live text per streaming row, the
  * newest plan marker) beside the value in a module-private map, so a host
- * can neither depend on nor mutate them. `rows` and `taskGroups` are appended in
- * place by the fold (a copy per entry would make a replay quadratic) and the
- * slice value is replaced on every change; hosts read, never write.
+ * can neither depend on nor mutate them. The slice value is replaced on every
+ * change and `rows` and `taskGroups` are never written after the fold that
+ * produced them returns (D5); hosts read, never write.
  *
  * The row, block, and run-model elements are the shared renderers' own
  * TypeScript shapes (`transcriptRow.ts`, `compactionActivityProjection.ts`,

@@ -11,7 +11,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import {
   GETTING_STARTED_ACTION_PRESENTATION,
   GettingStartedActionSchema,
-  STREAM_PHASE,
   type GettingStartedAction,
   type RunOutcome,
   type StreamLifecycleStatus,
@@ -58,9 +57,6 @@ import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';
-
-// Local imports - progress view utils
-import { playCompletionSound } from '../audioNotification';
 
 // Local imports - formatters
 import { formatLogEntry } from '../formatters';
@@ -255,9 +251,6 @@ export class TaskGroupList extends LitElement {
    */
   @property({ type: Boolean, reflect: true }) terminal = false;
 
-  /** Track previous group statuses to detect completion (not rendered — no @state needed) */
-  private previousStatuses = new Map<string, string>();
-
   /** The transcript partitioned for render: rebuilt when `groups` or
    *  `rows` change; the rows arrive in wire order and the groups keyed, so
    *  the partition is one pass (PRD 10.2). */
@@ -327,18 +320,6 @@ export class TaskGroupList extends LitElement {
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
     const transcriptChanged = changedProperties.has('transcript');
-
-    // The painted status is a fold of the group and the run's durable
-    // outcome, so a change in any of the three is a change in what the
-    // chime's memory holds: a run that becomes durably final repaints its
-    // open groups as its outcome without any group row changing.
-    if (
-      transcriptChanged ||
-      changedProperties.has('streamDurablyFinal') ||
-      changedProperties.has('streamStatus')
-    ) {
-      this.checkForCompletedRuns();
-    }
     if (this.terminal || !transcriptChanged) return;
     this.timeline = transcriptTimeline(this.groups, this.rows);
     this.dispatchRow = dispatchRowOf(this.rows);
@@ -352,34 +333,6 @@ export class TaskGroupList extends LitElement {
     ) {
       this.resetRenderWindows();
     }
-  }
-
-  /**
-   * Play the completion sound when a workflow round group leaves `running` for
-   * a terminal phase other than `failed`: a finished or cancelled round chimes,
-   * a failed one does not.
-   */
-  private checkForCompletedRuns(): void {
-    const nextStatuses = new Map<string, string>();
-    for (const group of this.groups) {
-      // The status the row PAINTS, not the raw one: a group the run never
-      // closed reads as the run's own outcome once nothing can still close
-      // it, and the chime's memory has to agree with the pixels or the next
-      // paint sees a transition that never happened.
-      const status = taskGroupDisplayStatus(group, this.runDurableOutcome);
-      const prev = this.previousStatuses.get(group.id);
-      const isRunGroup = !this.isToolUse && group.kind === 'round';
-      const wasRunning = prev === STREAM_PHASE.RUNNING;
-      const isNowComplete =
-        status === STREAM_PHASE.COMPLETED || status === STREAM_PHASE.CANCELLED;
-
-      if (isRunGroup && wasRunning && isNowComplete) {
-        playCompletionSound();
-      }
-
-      nextStatuses.set(group.id, status);
-    }
-    this.previousStatuses = nextStatuses;
   }
 
   private resetRenderWindows(): void {
