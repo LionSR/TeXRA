@@ -463,9 +463,6 @@ importers:
       diff-match-patch:
         specifier: ^1.0.5
         version: 1.0.5
-      effect:
-        specifier: 4.0.0-rc.112
-        version: 4.0.0-rc.112
       escape-string-regexp:
         specifier: ^5.0.0
         version: 5.0.0
@@ -599,6 +596,9 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@^7.0.2
         version: typescript@7.0.2
+      effect:
+        specifier: 4.0.0-rc.112
+        version: 4.0.0-rc.112
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2

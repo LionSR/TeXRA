@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 
 // Third-party imports
-import { Deferred, Effect, Stream, SubscriptionRef } from 'effect';
+import { Deferred, Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 interface RunAgentOptions {
@@ -28,12 +28,12 @@ const mocks = vi.hoisted(() => ({
   activePlatform: null as object | null,
   agentCategory: 'toolUse',
   /** The runtime owner's close, as the package reaches it: by storage root. */
-  closeSession: vi.fn(async (_root: string) => ({
+  closeSession: vi.fn((_root: string) => ({
     settled: true,
     abandoned: [] as string[],
   })),
   detachEvents: vi.fn(),
-  disposeRuntime: vi.fn(),
+  disposeRuntime: vi.fn(async () => {}),
   executionId: 'execution-1',
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
@@ -41,6 +41,11 @@ const mocks = vi.hoisted(() => ({
   initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
   initProcessWorkspaceRoots: vi.fn(),
+  /** The process's session owner, as `installProcessRuntime` installs it
+   *  and `disposeProcessRuntime` takes it away: what says whether the
+   *  package must compose the process. */
+  installRuntime: vi.fn(),
+  ownerInstalled: false,
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
   /** Every session the owner built for the package, with what it was
@@ -109,7 +114,15 @@ vi.mock('@agent/runtime', async () => {
       ),
     );
 
-    readonly setTranscriptSubscriptions = mocks.setTranscriptSubscriptions;
+    /** The transcript interest port, as the owner's graph exposes it. */
+    readonly subscriptions = {
+      set: (port: string, set: readonly unknown[]) =>
+        Effect.sync(() => {
+          mocks.setTranscriptSubscriptions(port, set);
+        }),
+    };
+
+    readonly roots: { readonly storage: string };
 
     constructor(
       init: (typeof mocks.sessionInits)[number] & {
@@ -118,43 +131,36 @@ vi.mock('@agent/runtime', async () => {
     ) {
       mocks.sessionInits.push(init);
       mocks.sessionView = this.view;
+      this.roots = init.roots;
       if (init.interactions) mocks.useInteractions(init.interactions);
     }
   }
   const sessions = new Map<string, FakeSession>();
   return {
-    openSessionAsync: async (
-      init: ConstructorParameters<typeof FakeSession>[0],
-    ) => {
-      let session = sessions.get(init.roots.storage);
-      if (!session) {
-        session = new FakeSession(init);
-        sessions.set(init.roots.storage, session);
-      }
-      return session;
-    },
-    closeSession: async (root: string) => {
-      sessions.delete(root);
-      return mocks.closeSession(root);
-    },
+    openSessionEffect: (init: ConstructorParameters<typeof FakeSession>[0]) =>
+      Effect.sync(() => {
+        let session = sessions.get(init.roots.storage);
+        if (!session) {
+          session = new FakeSession(init);
+          sessions.set(init.roots.storage, session);
+        }
+        return session;
+      }),
+    listSessions: () => Effect.sync(() => [...sessions.values()]),
+    closeSession: (root: string) =>
+      Effect.sync(() => {
+        sessions.delete(root);
+        return mocks.closeSession(root);
+      }),
     runAgent: mocks.runValidatedAgent,
+    sessionOwnerInstalled: () => mocks.ownerInstalled,
   };
 });
 
 vi.mock('@controllers/session/sessionLayer', () => ({
   disposeProcessRuntime: mocks.disposeRuntime,
-  installProcessRuntime: vi.fn(),
+  installProcessRuntime: mocks.installRuntime,
 }));
-
-vi.mock('@platform/processRuntime', async () => {
-  const { Effect } = await import('effect');
-  return {
-    effectRuntime: () => ({
-      runFork: Effect.runFork,
-      runPromise: Effect.runPromise,
-    }),
-  };
-});
 
 vi.mock('@tools/agentCliSessionStores', () => ({
   registerRuntimeShutdownHandlers: (
@@ -189,10 +195,14 @@ import {
   type AgentPlatform,
   type SessionView,
 } from '../../../packages/agent/src/index';
+import { Runtime, Sessions } from '../../../packages/agent/src/effect';
 import { nodePlatform } from '../../../packages/agent/src/node';
 
+/** The embedder's shutdown path, as the package reads it: `shutdownRan`
+ *  is what says a composition still has an owner to dispose it. */
+const LIFECYCLE = { onShutdown: vi.fn(), shutdownRan: false };
 const PLATFORM = {
-  lifecycle: { onShutdown: vi.fn() },
+  lifecycle: LIFECYCLE,
   roots: { storage: '/storage' },
   processes: { selfIdentity: async () => 'test-start' },
 } as unknown as AgentPlatform;
@@ -264,13 +274,21 @@ describe('agent package run lifecycle', () => {
       await handler();
     }
     mocks.shutdownHooks = undefined;
+    LIFECYCLE.shutdownRan = false;
     mocks.sessionInits.splice(0);
     vi.clearAllMocks();
     mocks.activePlatform = null;
     mocks.agentCategory = 'toolUse';
     mocks.eventListener = undefined;
+    mocks.ownerInstalled = false;
     mocks.initPlatform.mockImplementation((platform: object) => {
       mocks.activePlatform = platform;
+    });
+    mocks.installRuntime.mockImplementation(() => {
+      mocks.ownerInstalled = true;
+    });
+    mocks.disposeRuntime.mockImplementation(async () => {
+      mocks.ownerInstalled = false;
     });
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.loadAgents.mockResolvedValue(undefined);
@@ -348,6 +366,12 @@ describe('agent package run lifecycle', () => {
       'The agent package cannot run approval-requiring tools: dangerous_tool',
     );
     expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
+    // The refusal the package states from the input alone precedes the
+    // composition: a caller being refused does not install a platform, a
+    // process runtime or a session owner, and opens no session.
+    expect(mocks.initPlatform).not.toHaveBeenCalled();
+    expect(mocks.installRuntime).not.toHaveBeenCalled();
+    expect(mocks.sessionInits).toHaveLength(0);
     await expect(run.view[Symbol.asyncIterator]().next()).resolves.toEqual({
       done: true,
       value: undefined,
@@ -406,12 +430,163 @@ describe('agent package run lifecycle', () => {
     const [runtimeOrder] = mocks.disposeRuntime.mock.invocationCallOrder;
     expect(closeOrder).toBeLessThan(runtimeOrder);
 
-    // Shutdown closed the session through its owner: a later run finds none
-    // open on the root and the owner builds it anew. Whether such a run
-    // works is out of contract (the README scopes the package state to the
-    // process); only the reset owner is observed here.
+    // Shutdown closed the session through its owner and took the owner with
+    // the runtime it ran on. That path is the entry's only owner for a
+    // composition and a lifecycle drains once, so a later run is refused
+    // rather than composing a runtime and an owner nothing would dispose.
+    LIFECYCLE.shutdownRan = true;
+    await expect(runAgent(INPUT).result).rejects.toThrow(
+      /shutdown has already run/,
+    );
+    expect(mocks.sessionInits).toHaveLength(1);
+    expect(mocks.installRuntime).toHaveBeenCalledTimes(1);
+    expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
+  });
+
+  it('composes into an embedder own runtime: the Effect surface starts a run and lists the one session the Promise entry already opened', async () => {
+    // The Promise entry composes the process and opens the platform's root.
     await runAgent(INPUT).result;
-    expect(mocks.sessionInits).toHaveLength(2);
+    expect(mocks.sessionInits).toHaveLength(1);
+
+    const program = Effect.gen(function* () {
+      const sessions = yield* Sessions;
+      const session = yield* sessions.open();
+      const run = yield* session.start({
+        agent: 'assistant',
+        instruction: 'Test instruction',
+      });
+      const result = yield* run.result;
+      const open = yield* sessions.list;
+      return { open: open.length, result, streamId: run.streamId };
+    }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
+
+    const seen = await Effect.runPromise(program);
+    expect(seen.result).toBe(RESULT);
+    expect(seen.streamId).toBe('stream-1');
+    // One session per storage root, held by the runtime's own owner: the
+    // Effect surface resolved the session the Promise entry ran on, and the
+    // package built no registry of its own.
+    expect(seen.open).toBe(1);
+    expect(mocks.sessionInits).toHaveLength(1);
+    // The scope composed nothing, so leaving it ended nothing the Promise
+    // entry still uses: no close, no disposal, and the next run finds the
+    // same session rather than building a second one.
+    expect(mocks.closeSession).not.toHaveBeenCalled();
+    expect(mocks.disposeRuntime).not.toHaveBeenCalled();
+    await runAgent(INPUT).result;
+    expect(mocks.sessionInits).toHaveLength(1);
+  });
+
+  it('disposes the runtime its scope installed even when the closing session defects', async () => {
+    // Nothing is composed yet, so this scope installs the runtime and owns
+    // both the close and the disposal at its exit. The close defects on the
+    // artifact flush: the disposal is its finalizer, not its continuation,
+    // so the owner and the runtime under it still go, and the defect still
+    // leaves the scope.
+    mocks.closeSession.mockImplementationOnce(() => {
+      throw new Error('artifact flush defect');
+    });
+    const program = Effect.gen(function* () {
+      const sessions = yield* Sessions;
+      yield* sessions.open();
+    }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
+
+    await expect(Effect.runPromise(program)).rejects.toThrow(
+      'artifact flush defect',
+    );
+    expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
+  });
+
+  it('holds the runtime for an overlapping scope: the composing scope leaving closes nothing', async () => {
+    // Two independently provided scopes over one platform. The first
+    // composes the process; the second finds that composition and borrows
+    // it. The first leaving must not close the session the second is still
+    // working on, nor dispose the runtime under it.
+    const firstComposed = Effect.runSync(Deferred.make<void>());
+    const secondComposed = Effect.runSync(Deferred.make<void>());
+    const secondMayLeave = Effect.runSync(Deferred.make<void>());
+
+    const first = Effect.runFork(
+      Effect.gen(function* () {
+        const sessions = yield* Sessions;
+        yield* sessions.open();
+        yield* Deferred.succeed(firstComposed, undefined);
+        yield* Deferred.await(secondComposed);
+      }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM))),
+    );
+    await Effect.runPromise(Deferred.await(firstComposed));
+
+    const second = Effect.runFork(
+      Effect.gen(function* () {
+        const sessions = yield* Sessions;
+        yield* sessions.open();
+        yield* Deferred.succeed(secondComposed, undefined);
+        yield* Deferred.await(secondMayLeave);
+      }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM))),
+    );
+    await Effect.runPromise(Deferred.await(secondComposed));
+
+    await Effect.runPromise(Fiber.join(first));
+    expect(mocks.closeSession).not.toHaveBeenCalled();
+    expect(mocks.disposeRuntime).not.toHaveBeenCalled();
+
+    await Effect.runPromise(Deferred.succeed(secondMayLeave, undefined));
+    await Effect.runPromise(Fiber.join(second));
+    // The last hold out is what ends the composition the two shared.
+    expect(mocks.closeSession).toHaveBeenCalledExactlyOnceWith(
+      PLATFORM.roots.storage,
+    );
+    expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
+  });
+
+  it('closes every root the owner holds before it disposes the runtime', async () => {
+    const otherRoots = { storage: '/other-storage' };
+    const program = Effect.gen(function* () {
+      const sessions = yield* Sessions;
+      yield* sessions.open();
+      yield* sessions.open(otherRoots as never);
+    }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
+
+    await Effect.runPromise(program);
+
+    // A root this composition opened of its own settles and flushes like
+    // the runtime's, rather than going down with the runtime unwritten.
+    expect(mocks.closeSession.mock.calls.map(([root]) => root)).toEqual([
+      PLATFORM.roots.storage,
+      otherRoots.storage,
+    ]);
+    const [disposal] = mocks.disposeRuntime.mock.invocationCallOrder;
+    for (const order of mocks.closeSession.mock.invocationCallOrder) {
+      expect(order).toBeLessThan(disposal as number);
+    }
+  });
+
+  it('a scoped reader holds its own transcript interest and clears it at the scope, leaving the run its own', async () => {
+    await runAgent(INPUT).result;
+    const interest = [{ id: '["stream","stream-1"]', fromSeq: 0 }];
+
+    const program = Effect.gen(function* () {
+      const sessions = yield* Sessions;
+      const session = yield* sessions.open();
+      yield* Effect.scoped(session.subscribe(interest as never));
+    }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
+    await Effect.runPromise(program);
+
+    const ports = mocks.setTranscriptSubscriptions.mock.calls as [
+      string,
+      readonly unknown[],
+    ][];
+    const reader = ports.filter(([port]) => port.startsWith('sdk/reader/'));
+    // The reader's own port: set for the scope, emptied when it closed.
+    expect(reader).toHaveLength(2);
+    expect(reader[0]?.[1]).toEqual(interest);
+    expect(reader[1]?.[0]).toBe(reader[0]?.[0]);
+    expect(reader[1]?.[1]).toEqual([]);
+    // The run's port is the run's: the reader never touched it, so the
+    // README's residency contract still holds for a finished run.
+    expect(ports.filter(([port]) => port === 'sdk/stream-1')).toEqual([
+      ['sdk/stream-1', interest],
+    ]);
   });
 
   it('fails the run instead of hanging when the session fold dies before the final view', async () => {
@@ -498,7 +673,7 @@ describe('agent package run lifecycle', () => {
     // The run's stream is subscribed as soon as it exists in the session.
     expect(mocks.setTranscriptSubscriptions).toHaveBeenCalledWith(
       'sdk/stream-1',
-      [{ id: 'stream-1', fromSeq: 0 }],
+      [{ id: '["stream","stream-1"]', fromSeq: 0 }],
     );
     enterRun?.();
     const view = (await first).value as SessionView;
@@ -513,8 +688,8 @@ describe('agent package run lifecycle', () => {
       expect(mocks.setTranscriptSubscriptions).toHaveBeenLastCalledWith(
         'sdk/stream-1',
         [
-          { id: 'stream-1', fromSeq: 0 },
-          { id: 'stream-2', fromSeq: 0 },
+          { id: '["stream","stream-1"]', fromSeq: 0 },
+          { id: '["stream","stream-2"]', fromSeq: 0 },
         ],
       ),
     );

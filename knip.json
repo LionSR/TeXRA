@@ -18,6 +18,7 @@
     "packages/agent": {
       "entry": [
         "src/index.ts!",
+        "src/effect.ts!",
         "src/node.ts!",
         "src/schemas.ts!",
         "scripts/*.mjs!"

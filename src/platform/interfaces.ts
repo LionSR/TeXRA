@@ -212,6 +212,13 @@ export interface LifecycleHost {
     callback: (signal: AbortSignal) => void | Promise<void>,
   ): Disposable;
   runShutdown(): Promise<void>;
+  /**
+   * True from the moment `runShutdown()` is first called. Each phase drains
+   * exactly once and the drain is cached, so a handler registered from here
+   * on is never run: a caller whose cleanup depends on this path must read
+   * this before taking a resource it would register here.
+   */
+  readonly shutdownRan: boolean;
 }
 
 // ---------------------------------------------------------------------------

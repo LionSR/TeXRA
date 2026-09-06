@@ -27,9 +27,16 @@ function captureSignalHandlers(): Map<string, (...args: unknown[]) => void> {
 }
 
 function fakeLifecycle(runShutdown: () => Promise<void>): LifecycleHost {
+  let shutdownRan = false;
   return {
     onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
-    runShutdown,
+    runShutdown: () => {
+      shutdownRan = true;
+      return runShutdown();
+    },
+    get shutdownRan() {
+      return shutdownRan;
+    },
   };
 }
 

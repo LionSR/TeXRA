@@ -396,7 +396,9 @@ describe('Sessions owner', () => {
       isDetached: () => true,
     });
 
-    await expect(closeSession('/workspace/owner/settled')).resolves.toEqual({
+    await expect(
+      Effect.runPromise(closeSession('/workspace/owner/settled')),
+    ).resolves.toEqual({
       settled: true,
       abandoned: [],
     });
@@ -410,7 +412,9 @@ describe('Sessions owner', () => {
     track(session, 'exec:slow');
     vi.useFakeTimers();
     try {
-      const closing = closeSession('/workspace/owner/abandoned');
+      const closing = Effect.runPromise(
+        closeSession('/workspace/owner/abandoned'),
+      );
       await vi.advanceTimersByTimeAsync(SHUTDOWN_PHASE_DEADLINE_MS);
       await expect(closing).resolves.toEqual({
         settled: false,

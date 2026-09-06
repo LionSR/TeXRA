@@ -43,7 +43,9 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),
   path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
   path.join(__dirname, 'packages/cli/src/runtime/initPlatform.ts'),
-  path.join(__dirname, 'packages/agent/src/index.ts'),
+  // The package's composition root is `composeProcess`, which the Promise
+  // entry and the Effect subpath's `Runtime.layer` both call.
+  path.join(__dirname, 'packages/agent/src/effect/runtime.ts'),
   // The test suite's composition root: the sole place vitest suites swap the
   // fake platform, replacing the per-suite `await import('@platform/platform')`
   // dance every suite used to hand-roll to dodge this same rule.

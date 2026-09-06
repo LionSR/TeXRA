@@ -33,6 +33,10 @@
       "types": "./dist/types/packages/agent/src/schemas.d.ts",
       "import": "./dist/schemas.js"
     },
+    "./effect": {
+      "types": "./dist/types/packages/agent/src/effect.d.ts",
+      "import": "./dist/effect.js"
+    },
     "./node": {
       "types": "./dist/types/packages/agent/src/node.d.ts",
       "import": "./dist/node.js"
@@ -40,6 +44,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "example:packed": "npm run build && rm -f example/*.tgz && corepack pnpm pack --pack-destination example && mv example/texra-ai-agent-*.tgz example/agent.tgz && cd example && npm install ./agent.tgz && npm start",
     "prepack": "npm run build"
   },
   "dependencies": {
@@ -67,7 +72,6 @@
     "delay": "^7.0.0",
     "diff": "^9.0.0",
     "diff-match-patch": "^1.0.5",
-    "effect": "4.0.0-rc.112",
     "escape-string-regexp": "^5.0.0",
     "execa": "^10.0.1",
     "fast-xml-parser": "^5.11.1",
@@ -113,10 +117,12 @@
     "yaml": "^2.9.0"
   },
   "peerDependencies": {
+    "effect": "4.0.0-rc.112",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@typescript/native": "npm:typescript@^7.0.2",
+    "effect": "4.0.0-rc.112",
     "esbuild": "^0.28.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "zod": "^4.4.3"

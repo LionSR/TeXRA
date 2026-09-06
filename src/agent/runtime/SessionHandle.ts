@@ -162,7 +162,14 @@ export class SessionHandle {
   readonly folded: SessionGraph['folded'];
   /** Ordered replay and live inputs for each transport subscription. */
   readonly inputs: SessionGraph['inputs'];
-  /** Qualified aggregate subscriptions, owned by the session graph. */
+  /**
+   * The transcript subscription set, one set per port: the aggregates whose
+   * transcript tier the view folds for that port, the view's set being the
+   * union over every port. An Effect-native reader (the SDK's run drain,
+   * the session bridge's ports) sets its own port here;
+   * {@link setTranscriptSubscriptions} is the same write for the callers
+   * that still speak Promises.
+   */
   readonly subscriptions: SessionGraph['subscriptions'];
   /** Session-scoped status plane. */
   readonly status: StreamStatusMachine;
