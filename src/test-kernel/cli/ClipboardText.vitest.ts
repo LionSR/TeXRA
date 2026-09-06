@@ -67,8 +67,8 @@ describe('CLI clipboard text writer', () => {
     });
 
     expect(result).toEqual({ ok: false, reason: 'pbcopy not found' });
-    // Only a timeout reaps helpers; an ordinary rejection means the helper
-    // already exited.
+    // Timeout and interrupt reap helpers; an ordinary rejection means the
+    // helper already exited.
     expect(execFileMock).not.toHaveBeenCalled();
   });
 

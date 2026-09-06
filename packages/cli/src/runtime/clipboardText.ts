@@ -4,12 +4,10 @@ import { basename } from 'node:path';
 import { promisify } from 'node:util';
 
 import clipboard from 'clipboardy';
-import { Cause, Effect, Option } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 import { effectRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-import { settleRuntimeInterrupt } from './settleRuntimeInterrupt';
 
 const execFileAsync = promisify(execFile);
 
@@ -118,59 +116,51 @@ function normalizeClipboardText(
   return platform === 'win32' ? lf.replaceAll('\n', '\r\n') : lf;
 }
 
-export async function writeClipboardText(
+export function writeClipboardText(
   text: string,
   options: ClipboardTextWriteOptions = {},
 ): Promise<ClipboardTextWriteResult> {
   const platform = options.platform ?? osPlatform();
   const normalized = normalizeClipboardText(text, platform);
-  const program = Effect.tryPromise({
-    try: () => clipboard.write(normalized),
-    catch: (cause) => cause,
-  }).pipe(
-    // Interrupting the fiber cannot cancel clipboardy's own promise (no
-    // cancellation hook — see above), so the spawned helper lives on.
-    // Timeout recovers inside the fiber; process-runtime disposal rejects
-    // `runPromise` at the Promise boundary, so the catch below reaps and
-    // settles `{ ok: false }` instead of leaking into a `void` TUI caller.
-    Effect.timeout(CLIPBOARD_WRITE_TIMEOUT_MS),
-    Effect.matchCauseEffect({
-      onSuccess: () => Effect.succeed({ ok: true as const }),
-      onFailure: (cause) => {
-        const error = Cause.findErrorOption(cause);
-        const timedOut =
-          Option.isSome(error) && Cause.isTimeoutError(error.value);
-        if (timedOut || Cause.hasInterrupts(cause)) {
-          return Effect.as(
-            Effect.uninterruptible(reapWedgedCopyHelpers(platform)),
-            {
-              ok: false as const,
-              reason: timedOut
-                ? `Clipboard write timed out after ${CLIPBOARD_WRITE_TIMEOUT_MS}ms`
-                : 'Clipboard write interrupted',
-            },
-          );
-        }
-        if (Option.isSome(error)) {
-          return Effect.succeed({
-            ok: false as const,
-            reason: toErrorMessage(error.value),
-          });
-        }
-        return Effect.failCause(cause);
-      },
-    }),
-  );
-
-  return settleRuntimeInterrupt(
-    () => effectRuntime().runPromise(program),
-    async () => {
-      // Disposal already tore down the process runtime; reap on the default
-      // runtime (this file is a CLI host boundary, so a run here is not debt).
-      await Effect.runPromise(
-        Effect.ignore(Effect.uninterruptible(reapWedgedCopyHelpers(platform))),
-      );
-      return { ok: false, reason: 'Clipboard write interrupted' };
-    },
-  );
+  // Timeout and ordinary Fail settle inside the effect. Runtime dispose
+  // interrupts the fiber while it is still interruptible, which skips
+  // cause-matching on the fiber; fold that Exit at `runPromiseExit` so the
+  // TUI's `void copyQuestion()` caller gets `{ ok: false }` instead of a
+  // rejection. Clipboardy has no cancellation hook, so interrupt reaps on
+  // the default runtime — the process runtime is already disposing.
+  return effectRuntime()
+    .runPromiseExit(
+      Effect.tryPromise({
+        try: () => clipboard.write(normalized),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.timeout(CLIPBOARD_WRITE_TIMEOUT_MS),
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Cause.isTimeoutError(error)
+              ? Effect.as(reapWedgedCopyHelpers(platform), {
+                  ok: false as const,
+                  reason: `Clipboard write timed out after ${CLIPBOARD_WRITE_TIMEOUT_MS}ms`,
+                })
+              : Effect.succeed({
+                  ok: false as const,
+                  reason: toErrorMessage(error),
+                }),
+          onSuccess: () => Effect.succeed({ ok: true as const }),
+        }),
+      ),
+    )
+    .then(async (exit) => {
+      if (Exit.isSuccess(exit)) return exit.value;
+      if (Cause.hasInterrupts(exit.cause)) {
+        await Effect.runPromise(
+          Effect.uninterruptible(reapWedgedCopyHelpers(platform)),
+        );
+        return {
+          ok: false as const,
+          reason: 'Clipboard write interrupted',
+        };
+      }
+      throw Cause.squash(exit.cause);
+    });
 }
