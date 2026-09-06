@@ -131,9 +131,7 @@ function createPortSession(): {
   };
 }
 
-function createControllablePlanAdapter(
-  options: { settleOnDispose?: boolean } = {},
-) {
+function createControllablePlanAdapter() {
   const requests: HostPlanApprovalRequest[] = [];
   const pending = new Map<
     string,
@@ -143,7 +141,6 @@ function createControllablePlanAdapter(
     }
   >();
   const dispose = vi.fn(() => {
-    if (options.settleOnDispose === false) return;
     for (const { settle } of pending.values()) settle({ action: 'reject' });
     pending.clear();
   });
@@ -593,7 +590,6 @@ describe('session.interactions request bookkeeping', () => {
         (error: unknown) => ({ status: 'rejected' as const, error }),
       );
 
-      expect(session.interactions.pendingCount).toBe(1);
       session.interactions.use(adapter.interactions);
       expect(adapter.requests).toHaveLength(1);
       expect(
@@ -603,7 +599,6 @@ describe('session.interactions request bookkeeping', () => {
         status: 'resolved',
         result: { action: 'approve' },
       });
-      expect(session.interactions.pendingCount).toBe(0);
     } finally {
       session.dispose();
       setOutputChannelFactory(null);
@@ -617,7 +612,6 @@ describe('session.interactions request bookkeeping', () => {
       await expect(
         requestPlan(session, 'approval:minimal-host'),
       ).resolves.toEqual({ action: 'reject' });
-      expect(session.interactions.pendingCount).toBe(0);
     } finally {
       session.dispose();
     }
@@ -646,17 +640,12 @@ describe('session.interactions request bookkeeping', () => {
     const session = createTestSession();
     const first = createControllablePlanAdapter();
     const second = createControllablePlanAdapter();
-    const pendingCounts: number[] = [];
-    session.interactions.onPendingCountChange((count) =>
-      pendingCounts.push(count),
-    );
     try {
       const detach = session.interactions.use(first.interactions);
       const pending = requestPlan(session, 'approval:reattach');
       detach();
       await Promise.resolve();
       expect(first.dispose).toHaveBeenCalledOnce();
-      expect(pendingCounts).toEqual([1]);
       expect(
         lines.filter((line) =>
           line.includes('No interaction host is attached'),
@@ -669,70 +658,10 @@ describe('session.interactions request bookkeeping', () => {
         true,
       );
       await expect(pending).resolves.toEqual({ action: 'approve' });
-      expect(pendingCounts).toEqual([1, 0]);
     } finally {
       session.dispose();
       setOutputChannelFactory(null);
     }
-  });
-
-  it('observes every response-bearing request until cancellation', async () => {
-    const session = createTestSession();
-    const pendingCounts: number[] = [];
-    const stopObserving = session.interactions.onPendingCountChange((count) =>
-      pendingCounts.push(count),
-    );
-    const requests = [
-      session.interactions.requestToolEditApproval(
-        toolEditApprovalRequest({
-          path: 'paper.tex',
-          originalContent: 'old',
-          proposedContent: 'new',
-          sourceTool: 'edit_file',
-          streamId,
-        }),
-      ),
-      session.interactions.requestBashApproval(
-        bashApprovalRequest({
-          command: 'lake build',
-          streamId,
-        }),
-      ),
-      requestPlan(session, 'approval:count'),
-      requestProposal(session, 'proposal:count'),
-      session.interactions.requestRetry({
-        requestId: 'retry:count',
-        streamId,
-        operation: 'model request',
-      }),
-      session.interactions.askUserQuestion({
-        requestId: 'question:count',
-        streamId,
-        allowBypass: false,
-        questions: [
-          {
-            question: 'Continue?',
-            options: [{ label: 'Yes' }, { label: 'No' }],
-          },
-        ],
-      }),
-    ];
-
-    expect(session.interactions.pendingCount).toBe(6);
-    expect(pendingCounts).toEqual([1]);
-
-    session.interactions.cancel({ cause: 'Test complete.' });
-    await Promise.all(requests);
-
-    expect(session.interactions.pendingCount).toBe(0);
-    expect(pendingCounts).toEqual([1, 0]);
-
-    stopObserving();
-    const ignored = requestPlan(session, 'approval:after-observer-dispose');
-    session.interactions.cancel({ cause: 'Test cleanup.' });
-    await ignored;
-    expect(pendingCounts).toHaveLength(2);
-    session.dispose();
   });
 
   it('drops ordinary one-way events emitted while no host is attached', async () => {
@@ -844,41 +773,6 @@ describe('session.interactions request bookkeeping', () => {
     const session = createTestSession();
     const pending = requestProposal(session, 'proposal:dispose-unattached');
 
-    session.dispose();
-
-    await expect(pending).resolves.toEqual({
-      action: 'reject',
-      cause: SESSION_DISPOSED_CAUSE,
-    });
-  });
-
-  it('publishes the final pending boundary before disposal', async () => {
-    const session = createTestSession();
-    const adapter = createControllablePlanAdapter({ settleOnDispose: false });
-    const pendingCounts: number[] = [];
-    session.interactions.onPendingCountChange((count) =>
-      pendingCounts.push(count),
-    );
-    session.interactions.use(adapter.interactions);
-    const pending = requestPlan(session, 'approval:dispose-attached');
-
-    session.dispose();
-
-    await expect(pending).resolves.toEqual({
-      action: 'reject',
-      cause: SESSION_DISPOSED_CAUSE,
-    });
-    expect(pendingCounts).toEqual([1, 0]);
-  });
-
-  it('does not let a pending observer interrupt request cleanup', async () => {
-    const session = createTestSession();
-    session.interactions.onPendingCountChange(() => {
-      throw new Error('title projection failed');
-    });
-    const pending = requestPlan(session, 'approval:throwing-observer');
-
-    expect(session.interactions.pendingCount).toBe(1);
     session.dispose();
 
     await expect(pending).resolves.toEqual({

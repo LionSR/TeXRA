@@ -25,12 +25,6 @@ export type StreamLogUpdatePatch = Partial<
  * supersedes any earlier buffered value for its id.
  */
 export interface StreamLogDelta {
-  /**
-   * Monotonic per-log-instance emission counter. A consumer that detects a
-   * gap (`emissionSeq !== lastSeen + 1`) must resync from `getRange(0)`
-   * through the same code path as its from-scratch projection.
-   */
-  readonly emissionSeq: number;
   /** Entries appended since the previous emission, in seqNo order. */
   readonly appended: readonly StreamLogEntry[];
   /**
@@ -54,8 +48,6 @@ export interface StreamLogDelta {
    */
   readonly reset: boolean;
 }
-
-let nextStreamLogInstanceId = 1;
 
 /**
  * Chunked accumulation for one streaming entry's text. Provider chunks are
@@ -151,12 +143,6 @@ export function nonterminalWorkflowCall(
 }
 
 export class StreamLog {
-  /**
-   * Distinguishes log instances for the same stream id, so a delta consumer
-   * can detect that its fold state was built from an evicted-and-rehydrated
-   * (or disk-merged) instance whose seqNos and emission counter restarted.
-   */
-  readonly instanceId = nextStreamLogInstanceId++;
   private entries: StreamLogEntry[] = [];
   private readonly preservedRawEntries: StreamLogPreservedRawEntry[] = [];
   private readonly indexById = new Map<string, number>();
@@ -167,7 +153,6 @@ export class StreamLog {
    * accumulator, so persisted and settled entries are always plain.
    */
   private readonly streamingText = new Map<string, StreamingTextAccumulator>();
-  private emissionSeqCounter = 0;
   private pendingAppendedIds: string[] = [];
   private readonly pendingDirtiedIds = new Set<string>();
   /**
@@ -239,42 +224,16 @@ export class StreamLog {
   }
 
   /**
-   * Latest {@link StreamLogDelta.emissionSeq} drained from this instance. A
-   * consumer whose fold state matches `(instanceId, emissionHead)` is current
-   * and can fold subsequent deltas instead of rereading the log.
-   */
-  get emissionHead(): number {
-    return this.emissionSeqCounter;
-  }
-
-  /**
-   * True while mutations since the last drain have not been emitted. In the
-   * store-mediated flow every mutation is drained synchronously by the
-   * notification it triggers, so pending changes at read time mean the log
-   * was mutated directly — a fold consumer must rebuild, not fold.
-   */
-  get hasUndrainedChanges(): boolean {
-    return (
-      this.pendingAppendedIds.length > 0 ||
-      this.pendingDirtiedIds.size > 0 ||
-      this.pendingTextChunks.size > 0
-    );
-  }
-
-  /**
-   * Drain the entries changed since the previous drain into an emission
-   * payload, allocating its emission seq. Called by `StreamLogStore` exactly
-   * once per notification; the payload is multicast unchanged to every
-   * listener, so nothing here is consumer-specific and nothing is acked.
+   * Drain the entries changed since the previous notification into a delta.
+   * `StreamLogStore` calls this once and passes the result to its listeners.
    */
   drainEmission(): Omit<StreamLogDelta, 'reset'> {
-    const emissionSeq = ++this.emissionSeqCounter;
     if (
       this.pendingAppendedIds.length === 0 &&
       this.pendingDirtiedIds.size === 0 &&
       this.pendingTextChunks.size === 0
     ) {
-      return { emissionSeq, appended: [], dirtied: [], textChunks: [] };
+      return { appended: [], dirtied: [], textChunks: [] };
     }
     const appendedIds = new Set(this.pendingAppendedIds);
     const appended = this.resolveEntries(this.pendingAppendedIds);
@@ -294,7 +253,7 @@ export class StreamLog {
     this.pendingAppendedIds = [];
     this.pendingDirtiedIds.clear();
     this.pendingTextChunks.clear();
-    return { emissionSeq, appended, dirtied, textChunks };
+    return { appended, dirtied, textChunks };
   }
 
   /** Current entry objects for `ids`; entries are never removed, so every id resolves. */

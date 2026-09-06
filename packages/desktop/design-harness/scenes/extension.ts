@@ -68,7 +68,7 @@ function host(): HostSnapshot {
       },
     ],
     workspaceRoots: [{ value: '/paper', label: 'ldt-lean' }],
-    fileConfigs: FILE_SELECT_CONFIGS,
+    fileConfigs: [...FILE_SELECT_CONFIGS],
     fileOptions: {
       baseFile: ['main.tex', 'section2.tex', 'appendixB.tex'],
       editedFile: ['main_polish.tex', 'main_review.tex'],

@@ -1,7 +1,4 @@
-// The store-emitted entry-level change feed (#9946): every onChange
-// notification carries an immutable StreamLogDelta, drained once and
-// multicast — nothing is acked and nothing is destroyed; this is the single
-// change-feed surface (#9969 deleted the webview ack/dirty protocol).
+// Store notifications carry entry changes drained once for all listeners.
 
 import { describe, expect, it } from 'vitest';
 
@@ -18,7 +15,6 @@ import {
   appendTranscriptEntry,
   appendTranscriptText,
   updateTranscriptEntry,
-  withTranscriptWriter,
 } from '../support/storeTestDrivers';
 
 const STREAM = 'delta-stream' as StreamTabId;
@@ -46,7 +42,7 @@ function captureDeltas(store: StreamLogStore): StreamLogDelta[] {
 }
 
 describe('StreamLogStore delta emission', () => {
-  it('emits appends by value, text appends as chunks, updates by value, with a monotonic seq', () => {
+  it('emits appends by value, text appends as chunks, and updates by value', () => {
     const store = StreamLogStore.ephemeral('delta test');
     const deltas = captureDeltas(store);
 
@@ -54,7 +50,6 @@ describe('StreamLogStore delta emission', () => {
     appendTranscriptText(store, STREAM, 'm1', 'lo');
     updateTranscriptEntry(store, STREAM, 'm1', { text: 'hello!' });
 
-    expect(deltas.map((delta) => delta.emissionSeq)).toEqual([1, 2, 3]);
     expect(deltas.map((delta) => delta.reset)).toEqual([false, false, false]);
 
     expect(deltas[0].appended.map((entry) => entry.text)).toEqual(['hel']);
@@ -112,21 +107,5 @@ describe('StreamLogStore delta emission', () => {
     updateTranscriptEntry(store, STREAM, 'm1', { text: 'hello' });
 
     expect(deltas).toEqual([]);
-  });
-
-  it('reports undrained changes only for mutations that bypassed the store', () => {
-    const store = StreamLogStore.ephemeral('delta test');
-    appendTranscriptEntry(store, STREAM, logRow('m1', 'hello'));
-    const log = store.get(STREAM);
-    expect(log?.hasUndrainedChanges).toBe(false);
-
-    log?.append(logRow('direct', 'not via writer'));
-    expect(log?.hasUndrainedChanges).toBe(true);
-
-    // The next store-mediated commit drains the direct mutation too.
-    withTranscriptWriter(store, STREAM, (writer) =>
-      writer.appendText('m1', '!'),
-    );
-    expect(log?.hasUndrainedChanges).toBe(false);
   });
 });

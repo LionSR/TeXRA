@@ -1,4 +1,10 @@
-import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import {
+  INSTRUCTION_ACTION,
+  RUN_OUTCOME,
+  type RequestShowErrorPayload,
+  type RequestShowInstructionPayload,
+  type RunOutcome,
+} from '@shared/schemas';
 
 import { isDiskFullError } from './errorPredicates';
 import { hasMissingApiKeyErrorMarker } from './sdkError/errorMetadata';
@@ -36,4 +42,70 @@ export function classifyAgentError(err: unknown): AgentErrorKind {
   if (isContextWindowError(err)) return 'context-window';
 
   return 'unexpected';
+}
+
+type AgentErrorPresentation =
+  | {
+      readonly type: 'instruction';
+      readonly payload: RequestShowInstructionPayload;
+    }
+  | {
+      readonly type: 'error';
+      readonly payload: RequestShowErrorPayload;
+    };
+
+const MISSING_API_KEY_MESSAGE =
+  'API key not found. Set your API key in Settings and run again.';
+
+/** Map a classified error to host guidance, with no notification for aborts. */
+export function agentErrorPresentation(error: {
+  kind: AgentErrorKind;
+  message?: string;
+}): AgentErrorPresentation | null {
+  switch (error.kind) {
+    case 'missing-api-key':
+      return {
+        type: 'instruction',
+        payload: {
+          key: 'missingApiKey',
+          message: MISSING_API_KEY_MESSAGE,
+          actions: [
+            INSTRUCTION_ACTION.SET_API_KEY,
+            INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
+          ],
+          showSuppress: false,
+        },
+      };
+    case 'context-window':
+      // A supplied message already carries the run's specific remediation.
+      return {
+        type: 'error',
+        payload: {
+          message:
+            error.message ??
+            'Conversation exceeds the model context window. Start a new ' +
+              'session, or reduce attached files and tool output.',
+        },
+      };
+    case 'disk-full':
+      return {
+        type: 'error',
+        payload: { message: error.message ?? 'Disk full.' },
+      };
+    case 'unexpected':
+      return {
+        type: 'error',
+        payload: {
+          message: error.message ?? 'Unexpected error executing agent.',
+        },
+      };
+    case 'abort':
+      return null;
+    default: {
+      // Every error kind must choose an explicit presentation policy.
+      const _exhaustive: never = error.kind;
+      void _exhaustive;
+      return null;
+    }
+  }
 }

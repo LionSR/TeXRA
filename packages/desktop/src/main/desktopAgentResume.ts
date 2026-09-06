@@ -1,10 +1,10 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
+import { runInSession, type SessionHandle } from '@agent/runtime';
 import {
-  runInSession,
-  trackTerminalResultPresentation,
-  type SessionHandle,
-} from '@agent/runtime';
+  agentErrorPresentation,
+  classifyAgentError,
+} from '@common/errors/agentErrorClassification';
 import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
@@ -78,10 +78,6 @@ export class DesktopProcessResumeOwner {
       return false;
     }
     if (isCancellationRequested()) return false;
-    const terminalResult = trackTerminalResultPresentation(
-      session,
-      (event) => event.streamId === streamId,
-    );
     try {
       return await resumeStreamWithRefusalNotice(streamId, {
         session,
@@ -94,7 +90,7 @@ export class DesktopProcessResumeOwner {
           launchDesktopAgent(
             { kind: 'resume', config, executionId: id },
             { session },
-            { modelHandlerCompatibilityKey, suppressErrorNotification: true },
+            { modelHandlerCompatibilityKey },
           ),
       });
     } catch (error) {
@@ -102,16 +98,22 @@ export class DesktopProcessResumeOwner {
       this.logger.error(`Failed to resume desktop stream ${streamId}`, {
         data: toLogData(error),
       });
-      terminalResult.reportUnhandled(() =>
+      const presentation = agentErrorPresentation({
+        kind: classifyAgentError(error),
+        message: `Resume failed: ${toErrorMessage(error)}`,
+      });
+      if (presentation?.type === 'instruction') {
         session.interactions.emit(
-          'requestShowError',
-          { message: `Resume failed: ${toErrorMessage(error)}` },
+          'requestShowInstruction',
+          presentation.payload,
           { replayWhenAttached: true },
-        ),
-      );
+        );
+      } else if (presentation?.type === 'error') {
+        session.interactions.emit('requestShowError', presentation.payload, {
+          replayWhenAttached: true,
+        });
+      }
       return false;
-    } finally {
-      terminalResult.dispose();
     }
   }
 }

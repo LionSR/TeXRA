@@ -7,18 +7,20 @@
  * what the user edited — lives behind {@link ToolEditApprovalHost}.
  */
 
+// Third-party imports
+import { Effect, Fiber, Stream } from 'effect';
+
+// Local imports
 import {
   cancellationResultFor,
   matchesCancelSelector,
   type HostInteractionCancelSelector,
 } from '@agent/runtime/HostInteractions';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { withEventErrorHandling } from '@controllers/session/eventErrorHandling';
-import type {
-  StreamTabId,
-  ToolEditApprovalAction,
-  ToolEditPermission,
-} from '@shared/schemas';
+import { effectRuntime } from '@platform/processRuntime';
+import type { StreamTabId, ToolEditApprovalAction } from '@shared/schemas';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import {
   previewProposedLatex,
   runLatexdiff,
@@ -31,8 +33,6 @@ import {
 } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-
-const CHANNEL = 'ToolEditApproval';
 
 /** The host view of one staged request, live until the approval settles. */
 export interface ToolEditPreview {
@@ -70,22 +70,15 @@ export interface ToolEditApprovalHost {
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview>;
-  /**
-   * Resolve once the surface that renders approval prompts is visible.
-   * Awaiting it is what keeps a request cancelled while that surface opens
-   * from flashing a prompt that is immediately dismissed.
-   */
+  /** Reopen the host surface containing the pending approval's controls. */
   revealApprovalSurface(): Promise<void>;
   readonly openBuildDisplay: BuildDisplayFn;
   reportError(message: string): void;
 }
 
-export interface ToolEditApprovalControllerOptions {
+interface ToolEditApprovalControllerOptions {
   host: ToolEditApprovalHost;
-  showToolEditPermission(payload: ToolEditPermission): void;
-  resolveToolEditPermission(requestId: string): void;
-  /** Cancellation cause reported to the agent when the host detaches. */
-  detachCause: string;
+  session: SessionHandle;
 }
 
 /** A request whose preview is still being staged, so it cannot be settled yet. */
@@ -115,9 +108,22 @@ export class ToolEditApprovalController {
    * entry, so no separate settled flag can disagree with the map.
    */
   private readonly requests = new Map<string, ToolEditApprovalState>();
+  private readonly resolvedApprovals: Fiber.Fiber<void>;
   private disposed = false;
 
-  constructor(private readonly options: ToolEditApprovalControllerOptions) {}
+  constructor(private readonly options: ToolEditApprovalControllerOptions) {
+    const { session } = options;
+    // Runtime cancellation resolves the session's approval before its staged
+    // preview settles. Release that preview through the same rejection path.
+    this.resolvedApprovals = effectRuntime().runFork(
+      Stream.runForEach(session.events.all(session.now()), (event) =>
+        Effect.sync(() => {
+          if (event.type !== 'approval.resolved') return;
+          this.handleAction({ requestId: event.requestId, action: 'reject' });
+        }),
+      ),
+    );
+  }
 
   async requestApproval(
     request: ToolEditApprovalRequest,
@@ -178,7 +184,9 @@ export class ToolEditApprovalController {
     try {
       await preview.present();
       if (!entry.isSettled()) {
-        void this.runAction(entry, () => this.publishPromptWhenVisible(entry));
+        void this.runAction(entry, () =>
+          this.options.host.revealApprovalSurface(),
+        );
       }
       // `requestToolEditApproval` derives userPatch, lineChanges, and startLine
       // from the content this returns; `ToolEditApprovalResult` requires
@@ -275,7 +283,8 @@ export class ToolEditApprovalController {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.cancel({ cause: this.options.detachCause });
+    effectRuntime().runFork(Fiber.interrupt(this.resolvedApprovals));
+    this.cancel({ cause: SESSION_DISPOSED_CAUSE });
   }
 
   private isSettled(requestId: string): boolean {
@@ -299,7 +308,6 @@ export class ToolEditApprovalController {
 
     this.requests.delete(requestId);
     entry.settle(result);
-    this.resolvePrompt(requestId);
   }
 
   private async runAction(
@@ -337,36 +345,8 @@ export class ToolEditApprovalController {
       this.options.host.reportError(
         `Approval failed because the edited document could not be read: ${toErrorMessage(error)}`,
       );
-      // The frontend removes the panel optimistically on approve. Reset backend
-      // delivery tracking, then publish the still-pending request under the
-      // same ID so the user can retry instead of the agent hanging.
-      this.resolvePrompt(entry.requestId);
-      this.publishPrompt(entry);
       return;
     }
     this.settle(entry.requestId, { action: 'apply', appliedContent });
-  }
-
-  private async publishPromptWhenVisible(
-    entry: PendingToolEditApproval,
-  ): Promise<void> {
-    await this.options.host.revealApprovalSurface();
-    if (entry.isSettled()) return;
-    this.publishPrompt(entry);
-  }
-
-  private publishPrompt(entry: PendingToolEditApproval): void {
-    // Post the prompt; each host supplies the display path its own way.
-    // Revealing the stream belongs to the host interactions port, which does
-    // it for every interaction kind before the request is dispatched here.
-    withEventErrorHandling(CHANNEL, 'failed to show approval prompt', () => {
-      this.options.showToolEditPermission(entry.request.permission);
-    });
-  }
-
-  private resolvePrompt(requestId: string): void {
-    withEventErrorHandling(CHANNEL, 'failed to resolve approval prompt', () =>
-      this.options.resolveToolEditPermission(requestId),
-    );
   }
 }

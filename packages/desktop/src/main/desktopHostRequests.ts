@@ -10,6 +10,10 @@ import path from 'node:path';
 
 import { SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
+import {
+  agentErrorPresentation,
+  classifyAgentError,
+} from '@common/errors/agentErrorClassification';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportStreamTranscript } from '@controllers/progressView/exportTranscript';
@@ -73,7 +77,6 @@ import {
   type DesktopLatexdiffWorkspaceScan,
 } from './desktopProgressFileActions.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
-import type { DesktopShellActions } from './desktopShellIpc.js';
 import type { DesktopAgentExecution } from './desktopAgentExecution.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
@@ -91,17 +94,12 @@ interface DesktopHostRequestsOptions {
   postToRenderer(message: unknown): boolean | void;
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
-  shell: Pick<
-    DesktopShellActions,
-    'signIn' | 'openAgentDirectory' | 'showFirstRunWalkthrough'
-  >;
+  signIn(): Promise<void>;
+  getCustomAgentDirectory(): Promise<string>;
+  showFirstRunWalkthrough(): void;
   onboarding: Pick<
     DesktopOnboardingIpc,
-    | 'skipOnboarding'
-    | 'skipSetup'
-    | 'runSetup'
-    | 'signInWithChatGpt'
-    | 'openGettingStarted'
+    'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
   >;
   openExternalUrl(url: string): Promise<void>;
   /** Re-probe the LaTeX toolchain. */
@@ -134,6 +132,10 @@ export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
   const { session, host, execution, logger } = options;
+  // Shared controllers propagate request failures to the dispatcher.
+  const rejectRequest = async (reason: string): Promise<never> => {
+    throw new Rejected({ reason });
+  };
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
@@ -169,7 +171,7 @@ export function createDesktopHostRequests(
     },
     showInfo: (message) => host.showInfoMessage(message),
     showWarning: (message) => host.showWarningMessage(message),
-    showError: (message) => host.showErrorMessage(message),
+    showError: rejectRequest,
     logError: (message, error) =>
       logger.error(message, { data: toLogData(error) }),
   });
@@ -187,19 +189,40 @@ export function createDesktopHostRequests(
     return files.map((file) => path.resolve(workspacePath, file));
   };
 
-  const fileActions = new DesktopProgressFileActions(host, {
-    startExecution: (request) => {
-      void execution
-        .runValidated(request, { suppressErrorNotification: true })
-        .catch((error: unknown) => {
+  const fileActions = new DesktopProgressFileActions(
+    { ...host, showErrorMessage: rejectRequest },
+    {
+      // The request schedules a merge; its later run failure belongs to this
+      // lifecycle callback, after the request has already completed.
+      startExecution: (request) => {
+        void execution.runValidated(request).catch((error: unknown) => {
           logger.error('Desktop merge execution failed', {
             data: toLogData(error),
           });
-          void host.showErrorMessage(`Merge failed: ${toErrorMessage(error)}`);
+          const presentation = agentErrorPresentation({
+            kind: classifyAgentError(error),
+            message: `Merge failed: ${toErrorMessage(error)}`,
+          });
+          if (presentation?.type === 'instruction') {
+            session.interactions.emit(
+              'requestShowInstruction',
+              presentation.payload,
+              { replayWhenAttached: true },
+            );
+          } else if (presentation?.type === 'error') {
+            session.interactions.emit(
+              'requestShowError',
+              presentation.payload,
+              {
+                replayWhenAttached: true,
+              },
+            );
+          }
         });
+      },
+      listWorkspaceCandidateFiles,
     },
-    listWorkspaceCandidateFiles,
-  });
+  );
 
   async function runLatexdiffFile(
     baseFile: string,
@@ -271,9 +294,7 @@ export function createDesktopHostRequests(
       showInfo: async (message) => {
         await host.showInfoMessage(message);
       },
-      showError: async (message) => {
-        await host.showErrorMessage(message);
-      },
+      showError: rejectRequest,
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
     },
@@ -282,10 +303,9 @@ export function createDesktopHostRequests(
 
   async function runWorkflowDiff(request: WorkflowDiffRequest): Promise<void> {
     if (!request.agent || !request.model || !request.inputFile) {
-      await host.showErrorMessage(
-        'Missing required configuration parameters for the diff.',
-      );
-      return;
+      throw new Rejected({
+        reason: 'Missing required configuration parameters for the diff.',
+      });
     }
     await fileActions.diffStreamToolbarAction({
       outputsByRound: request.outputsByRound ?? {},
@@ -321,8 +341,7 @@ export function createDesktopHostRequests(
         );
         return;
       case 'error':
-        await host.showErrorMessage(`Error during ${verb}: ${result.error}`);
-        return;
+        throw new Rejected({ reason: `Error during ${verb}: ${result.error}` });
     }
   }
 
@@ -333,12 +352,10 @@ export function createDesktopHostRequests(
     const { verb, gerund } = operationLabel(operation);
     const { agent, model, inputFile, executionId } = request;
     if (!agent || !model || !inputFile) {
-      await host.showErrorMessage(`Select an input file before ${gerund}.`);
-      return;
+      throw new Rejected({ reason: `Select an input file before ${gerund}.` });
     }
     if (!executionId) {
-      await host.showErrorMessage(`Missing execution identity for ${verb}.`);
-      return;
+      throw new Rejected({ reason: `Missing execution identity for ${verb}.` });
     }
     let result: FileOpResult;
     try {
@@ -355,10 +372,9 @@ export function createDesktopHostRequests(
       logger.error(`Desktop ${operation} operation failed`, {
         data: toLogData(error),
       });
-      await host.showErrorMessage(
-        `Error during ${operation}: ${toErrorMessage(error)}`,
-      );
-      return;
+      throw new Rejected({
+        reason: `Error during ${operation}: ${toErrorMessage(error)}`,
+      });
     }
     await reportFileOperationResult(operation, result, inputFile);
   }
@@ -394,7 +410,7 @@ export function createDesktopHostRequests(
       openPath: (filePath) => host.openPath(filePath),
       showInfo: (message) => host.showInfoMessage(message),
       showWarning: (message) => host.showWarningMessage(message),
-      showError: (message) => host.showErrorMessage(message),
+      showError: rejectRequest,
       reportDetail: (message) => logger.error(message),
       getController: getChatExportController,
       getTraceViewerTemplate: () =>
@@ -417,36 +433,14 @@ export function createDesktopHostRequests(
       await session.flushArtifacts();
       file = await findTranscriptSpillFile(spillPath);
     } catch (error) {
-      await host.showErrorMessage(
-        spillArtifactOpenFailedMessage(toErrorMessage(error)),
-      );
-      return;
-    }
-    if (!file) {
-      await host.showErrorMessage(SPILL_ARTIFACT_DELETED_MESSAGE);
-      return;
-    }
-    try {
-      await host.openPath(file);
-    } catch (error) {
-      // The desktop preview host already surfaced its own "Failed to open
-      // file" dialog before rethrowing, so reporting here would stack a
-      // second dialog on the same failure (#10848). Log only.
-      logger.warn('Failed to open the full output artifact', {
-        data: toLogData(error),
+      throw new Rejected({
+        reason: spillArtifactOpenFailedMessage(toErrorMessage(error)),
       });
     }
-  }
-
-  /**
-   * A refusal the user has to see. The renderer's settle path drops
-   * `Rejected` reasons (`sessionSurfaces.ts` `settleHost` early-returns), so
-   * a latexdiff refusal goes through the host's error dialog first, the way
-   * the extension's latexdiff commands report the same failures.
-   */
-  async function showRefusal(reason: string): Promise<Rejected> {
-    await host.showErrorMessage(reason);
-    return new Rejected({ reason });
+    if (!file) {
+      throw new Rejected({ reason: SPILL_ARTIFACT_DELETED_MESSAGE });
+    }
+    await host.openPath(file);
   }
 
   /**
@@ -463,7 +457,7 @@ export function createDesktopHostRequests(
     commit: string,
   ): Promise<void> {
     if (!baseFile) {
-      throw await showRefusal('Choose a base file first.');
+      throw new Rejected({ reason: 'Choose a base file first.' });
     }
     const base = pathToLocation(baseFile);
     if (action === 'latexdiffvc') {
@@ -471,29 +465,15 @@ export function createDesktopHostRequests(
         base,
         commit,
       );
-      if (!result.success) throw await showRefusal(result.message);
+      if (!result.success) throw new Rejected({ reason: result.message });
       await host.openBuildDisplay(createExternalLocation(result.diffPath));
       return;
     }
-    // The workspace-relative base, as the extension passes: the collector
-    // resolves it from the workspace root. A filesystem failure here, a
-    // read-only Diffs directory or a locked artifact, reaches the renderer
-    // as a result its settle path drops, so it is reported the way the
-    // extension's latexdiff commands report the same failures, then
-    // rethrown so the request still settles as a failure.
-    let packed;
-    try {
-      packed = await runPackLatexdiffvc(
-        baseFile,
-        commit,
-        action === 'cleanLatexdiffvc',
-      );
-    } catch (error) {
-      await host.showErrorMessage(
-        `Error packing LaTeX diff: ${toErrorMessage(error)}`,
-      );
-      throw error;
-    }
+    const packed = await runPackLatexdiffvc(
+      baseFile,
+      commit,
+      action === 'cleanLatexdiffvc',
+    );
     const message = latexdiffPackMessage(packed);
     if (message) await host.showInfoMessage(message);
   }
@@ -518,7 +498,9 @@ export function createDesktopHostRequests(
         break;
     }
     if (!baseFile || !editedFile) {
-      throw await showRefusal('Choose a base file and an edited file first.');
+      throw new Rejected({
+        reason: 'Choose a base file and an edited file first.',
+      });
     }
     switch (request.action) {
       case 'compare':
@@ -548,7 +530,14 @@ export function createDesktopHostRequests(
         );
         return;
       case 'dir':
-        options.shell.openAgentDirectory(request.customDirSet === true);
+        if (request.customDirSet === true) {
+          await host.openPath(await options.getCustomAgentDirectory());
+        } else {
+          postDesktopSettingsView(
+            (message) => options.postToRenderer(message),
+            'agents',
+          );
+        }
         return;
       case 'docs':
         await options.openExternalUrl(`${DESKTOP_DOCS_URL}#agents`);
@@ -579,14 +568,15 @@ export function createDesktopHostRequests(
         await options.onboarding.skipSetup();
         return;
       case 'openGettingStarted':
-        await options.onboarding.openGettingStarted();
+        await options.openExternalUrl(DESKTOP_DOCS_URL);
         return;
     }
   }
 
   const notOnDesktop = (what: string) =>
     new Rejected({ reason: `${what} is not available in the desktop app.` });
-  async function handle(
+
+  async function dispatch(
     request: HostRequest,
     port: string,
   ): Promise<HostOutcome> {
@@ -728,14 +718,14 @@ export function createDesktopHostRequests(
         );
         return done;
       case 'signIn':
-        options.shell.signIn();
+        await options.signIn();
         return done;
       case 'dismissBanner':
         options.snapshot.dismissBanner(request.banner);
         return done;
       case 'gettingStarted':
         if (request.action === 'openWalkthrough') {
-          options.shell.showFirstRunWalkthrough();
+          options.showFirstRunWalkthrough();
           return done;
         }
         await host.showInfoMessage(
@@ -752,7 +742,38 @@ export function createDesktopHostRequests(
   }
 
   return {
-    handle,
+    async handle(request, port) {
+      try {
+        return await dispatch(request, port);
+      } catch (error) {
+        if (error instanceof Cancelled) throw error;
+        // Request-scoped operations do not present. Every rejection, including
+        // a capability refusal, reaches this one dialog before the response.
+        const presentation = agentErrorPresentation({
+          kind: classifyAgentError(error),
+          message:
+            error instanceof Rejected || error instanceof Unavailable
+              ? error.reason
+              : toErrorMessage(error),
+        });
+        if (presentation?.type === 'instruction') {
+          await session.interactions.emit(
+            'requestShowInstruction',
+            presentation.payload,
+            { replayWhenAttached: true },
+          );
+        } else if (presentation?.type === 'error') {
+          await session.interactions.emit(
+            'requestShowError',
+            presentation.payload,
+            {
+              replayWhenAttached: true,
+            },
+          );
+        }
+        throw error;
+      }
+    },
     closePort: draftRequests.closePort,
     dispose: draftRequests.dispose,
   };

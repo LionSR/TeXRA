@@ -22,10 +22,9 @@ export type DesktopAgentLaunchOptions = Pick<
   | 'preferHelperModel'
   | 'onRun'
   | 'onStreamResolved'
-  | 'suppressErrorNotification'
 >;
 
-/** Start a desktop run with process-owned dependencies only. */
+/** Start a desktop run; its awaiting host owns failure presentation. */
 export async function launchDesktopAgent(
   request: RunAgentRequest,
   context: DesktopAgentLaunchContext,
@@ -43,7 +42,7 @@ export async function launchDesktopAgent(
     ...(options.preferHelperModel && { preferHelperModel: true }),
     onRun: options.onRun,
     onStreamResolved: options.onStreamResolved,
-    suppressErrorNotification: options.suppressErrorNotification,
+    suppressErrorNotification: true,
     openWorkflowOutput: async (result) => {
       const output = selectAutoOpenFinalOutput(result);
       if (!output) return;

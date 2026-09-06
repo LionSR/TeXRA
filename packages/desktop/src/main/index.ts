@@ -25,10 +25,15 @@ import {
 } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
+  agentErrorPresentation,
+  classifyAgentError,
+} from '@common/errors/agentErrorClassification';
+import {
   teamAvailabilityPrompt,
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
   SessionBridge,
@@ -48,6 +53,7 @@ import {
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { paperDisplayOf } from '@shared/session/hostSnapshot';
+import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import {
   getLastCheckResults,
@@ -461,16 +467,20 @@ function createWindow(options: {
       }
     },
   }).catch(reportBackgroundError);
-  const previewHost = createDesktopPreviewHost({
+  const previewOptions = {
     shell,
-    showErrorMessage,
-    // Prefer the in-app PDF overlay (an <iframe> inside a wa-dialog, so
-    // Electron's bundled Chromium PDF viewer renders the build output).
-    // Returning `false` when the IPC bridge is not yet wired (startup race)
-    // or the BrowserWindow has been destroyed falls the host back to the
-    // external viewer (`shell.openPath`) so previews never silently disappear.
+    // The in-app PDF overlay is preferred when the renderer is available.
     postToRenderer: postToRendererIfAlive,
+  };
+  const previewHost = createDesktopPreviewHost({
+    ...previewOptions,
+    showErrorMessage,
   });
+  // Session requests present errors at their dispatcher. Menu, navigation,
+  // and runtime preview callers retain the reporting host above.
+  const requestPreviewHost = createDesktopPreviewHost(previewOptions);
+  const getCustomAgentDirectory = () => platform().agentDirectories.custom();
+
   // Button labels for the instruction dialog below. Desktop has one settings
   // home (Settings tab), so SET_API_KEY opens it directly rather than the
   // extension's separate "enter a key" quick pick.
@@ -536,7 +546,8 @@ function createWindow(options: {
     await onboardingIpcRef.current?.refreshOnboardingFunnel();
   };
   const desktopAuthHost: DesktopSupabaseAuthHost = {
-    openExternalUrl: (url) => previewHost.openExternal(url),
+    openExternalUrl: (url) =>
+      previewHost.openExternal(url, { reportFailure: false }),
     showInfoMessage,
     showErrorMessage,
     onSessionChanged: refreshDesktopAuthSurfaces,
@@ -649,6 +660,14 @@ function createWindow(options: {
     const current = desktopDiffHost.dispose().catch(reportBackgroundError);
     void diffHostDisposeQueue.add(() => current);
   });
+  const requestDiffHost = createDesktopDiffHost({
+    openPath: requestPreviewHost.openPath,
+    postToRenderer: postToRendererIfAlive,
+  });
+  windowResources.add(() => {
+    const current = requestDiffHost.dispose().catch(reportBackgroundError);
+    void diffHostDisposeQueue.add(() => current);
+  });
   const agentExecutionHost: DesktopAgentExecutionHost = {
     openPath: previewHost.openPath,
     openBuildDisplay: previewHost.openBuildDisplay,
@@ -738,6 +757,11 @@ function createWindow(options: {
     if (funnel) snapshot.setOnboarding(funnel);
     const execution = createDesktopAgentExecution({
       host: agentExecutionHost,
+      toolEditPreview: {
+        openPath: requestPreviewHost.openPath,
+        openBuildDisplay: requestPreviewHost.openBuildDisplay,
+        openDiff: requestDiffHost.openDiff,
+      },
       session: paper.session,
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
@@ -747,7 +771,12 @@ function createWindow(options: {
     const hostRequests = createDesktopHostRequests({
       session: paper.session,
       draftRequests: hostDraftRequests,
-      host: agentExecutionHost,
+      host: {
+        ...agentExecutionHost,
+        openPath: requestPreviewHost.openPath,
+        openBuildDisplay: requestPreviewHost.openBuildDisplay,
+        openDiff: requestDiffHost.openDiff,
+      },
       execution,
       files,
       snapshot,
@@ -755,9 +784,11 @@ function createWindow(options: {
       resourcesPath: options.resourcesPath,
       postToRenderer: postToRendererIfAlive,
       postSurfaceAction: (action) => bridge.surfaceAction(action),
-      shell: shellActions,
+      signIn,
+      getCustomAgentDirectory,
+      showFirstRunWalkthrough: () => shellActions.showFirstRunWalkthrough(),
       onboarding: requireOnboardingIpc(),
-      openExternalUrl: (url) => previewHost.openExternal(url),
+      openExternalUrl: requestPreviewHost.openExternal,
       recheckTools: async () => {
         await refreshToolAvailability();
       },
@@ -921,7 +952,7 @@ function createWindow(options: {
         getVisibleAgents,
       },
       directory: {
-        getCustomAgentDirectory: () => platform().agentDirectories.custom(),
+        getCustomAgentDirectory,
         getSourceDirectory: (source: AgentSource) => {
           switch (source) {
             case 'custom':
@@ -1153,39 +1184,64 @@ function createWindow(options: {
       selectSetupAgent: async () => {},
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
-      // `handleExecute` path: resolve a model the user's credentials can call,
+      // launch path: resolve a model the user's credentials can call,
       // build the setup execute message, and run it through the same desktop
       // execute path the renderer's Execute button uses. The per-session
       // `setupKickoffStarted` dedup guard inside the onboarding IPC keeps this
       // one-shot; on a resolution failure it throws so that guard resets and a
       // later "Run Setup" click can retry.
       kickoffSetup: async () => {
-        // The paper the user started setup in, taken before the first await:
-        // the run and its presentation belong to it even when the window
-        // moves to another paper while the model resolves and agents load.
-        const binding = activeBinding();
-        if (!binding) {
-          await showErrorMessage('Open a folder before running setup.');
-          throw new Error('Setup launch: no paper is open.');
-        }
-        const { buildDesktopSetupExecuteMessage } =
-          await import('@controllers/onboarding/setupLaunch');
-        const message = await buildDesktopSetupExecuteMessage();
-        if (!message) {
-          await showErrorMessage(
-            'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
+        const setupSession = activePaper().session;
+        try {
+          // The paper the user started setup in, taken before the first await:
+          // the run and its presentation belong to it even when the window
+          // moves to another paper while the model resolves and agents load.
+          const binding = activeBinding();
+          if (!binding) {
+            throw new Error('Open a folder before running setup.');
+          }
+          const { buildDesktopSetupExecuteMessage } =
+            await import('@controllers/onboarding/setupLaunch');
+          const message = await buildDesktopSetupExecuteMessage();
+          if (!message) {
+            throw new Error(
+              'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
+            );
+          }
+          // Idempotent: returns the in-flight/initialized registry so a kickoff
+          // racing the startup `loadAgents()` cannot hit "Could not find agent:
+          // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
+          await loadAgents();
+          await runInSession(binding.paper.session, async () =>
+            binding.execution.runValidated(
+              await prepareMainViewExecutionLaunch(message, agentExecutionHost),
+            ),
           );
-          // Throw so the onboarding IPC clears its kickoff guard and a later
-          // credential change can re-trigger the auto-start.
-          throw new Error('Setup launch: no runnable model resolved.');
+        } catch (error) {
+          if (error instanceof Cancelled) return;
+          // Setup continues after its initiating request has completed.
+          const presentation = agentErrorPresentation({
+            kind: classifyAgentError(error),
+            message:
+              error instanceof Rejected ? error.reason : toErrorMessage(error),
+          });
+          if (presentation?.type === 'instruction') {
+            await setupSession.interactions.emit(
+              'requestShowInstruction',
+              presentation.payload,
+              { replayWhenAttached: true },
+            );
+          } else if (presentation?.type === 'error') {
+            await setupSession.interactions.emit(
+              'requestShowError',
+              presentation.payload,
+              {
+                replayWhenAttached: true,
+              },
+            );
+          }
+          throw error;
         }
-        // Idempotent: returns the in-flight/initialized registry so a kickoff
-        // racing the startup `loadAgents()` cannot hit "Could not find agent:
-        // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-        await loadAgents();
-        await runInSession(binding.paper.session, () =>
-          binding.execution.handleExecute(message),
-        );
       },
       signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
       // The desktop shell can't host the VS Code getting-started walkthrough, so
@@ -1209,7 +1265,7 @@ function createWindow(options: {
   const shellActions = createDesktopShellActions(
     { postToRenderer: postToRendererIfAlive },
     {
-      getCustomAgentDirectory: () => platform().agentDirectories.custom(),
+      getCustomAgentDirectory,
       openExternalUrl: previewHost.openExternal,
       openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
       openPath: previewHost.openPath,

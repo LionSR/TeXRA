@@ -4,13 +4,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  ToolEditApprovalController,
-  type ToolEditApprovalControllerOptions,
-} from '@controllers/approval/ToolEditApprovalController';
+import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import type { ToolEditPermission } from '@shared/schemas';
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
@@ -101,14 +96,8 @@ vi.mock('vscode', () => {
   };
 });
 
-interface RecordingRuntimeHost {
-  readonly shown: ToolEditPermission[];
-  readonly resolved: Array<{ requestId: string }>;
-}
-
 interface ApprovalHarness {
   readonly controller: ToolEditApprovalController;
-  readonly interactions: RecordingRuntimeHost;
   readonly session: SessionHandle;
 }
 
@@ -117,71 +106,38 @@ interface StartedApproval extends ApprovalHarness {
   readonly requestId: string;
 }
 
-type ApprovalPrompts = Pick<
-  ToolEditApprovalControllerOptions,
-  'showToolEditPermission' | 'resolveToolEditPermission'
->;
-
-const sessions: SessionHandle[] = [];
+const harnesses: ApprovalHarness[] = [];
 const tempDirs = useTempDirs();
 const activeApprovals: Promise<ToolEditApprovalResult>[] = [];
 let storageRoot: string;
 
-function recordingPrompts(interactions: RecordingRuntimeHost): ApprovalPrompts {
-  return {
-    showToolEditPermission: (payload) => interactions.shown.push(payload),
-    resolveToolEditPermission: (requestId) =>
-      interactions.resolved.push({ requestId }),
-  };
-}
-
 /** One controller per session, exactly as `ProgressViewProvider` wires it. */
-function createApprovalHarness(
-  prompts: (
-    interactions: RecordingRuntimeHost,
-  ) => ApprovalPrompts = recordingPrompts,
-): ApprovalHarness {
-  const interactions: RecordingRuntimeHost = {
-    shown: [],
-    resolved: [],
-  };
+function createApprovalHarness(): ApprovalHarness {
   const session = createTestSession();
-  sessions.push(session);
   const controller = new ToolEditApprovalController({
     host: new VscodeToolEditApprovalHost(storageRoot),
-    ...prompts(interactions),
-    detachCause: SESSION_DISPOSED_CAUSE,
+    session,
   });
-  return { controller, interactions, session };
+  const harness = { controller, session };
+  harnesses.push(harness);
+  return harness;
 }
 
 function requestApproval(
   controller: ToolEditApprovalController,
   filePath: string,
   streamId: string,
-): Promise<ToolEditApprovalResult> {
-  const approval = controller.requestApproval(
-    toolEditApprovalRequest({
-      path: filePath,
-      originalContent: 'old\n',
-      proposedContent: 'new\n',
-      sourceTool: 'write_file',
-      streamId,
-    }),
-  );
+): Pick<StartedApproval, 'approval' | 'requestId'> {
+  const request = toolEditApprovalRequest({
+    path: filePath,
+    originalContent: 'old\n',
+    proposedContent: 'new\n',
+    sourceTool: 'write_file',
+    streamId,
+  });
+  const approval = controller.requestApproval(request);
   activeApprovals.push(approval);
-  return approval;
-}
-
-async function firstRequestId(
-  interactions: RecordingRuntimeHost,
-): Promise<string> {
-  await vi.waitFor(() => expect(interactions.shown).toHaveLength(1));
-  const requestId = interactions.shown[0]?.requestId;
-  if (!requestId) {
-    throw new Error('Expected a tool edit approval request ID.');
-  }
-  return requestId;
+  return { approval, requestId: request.permission.requestId };
 }
 
 function recordDiffEditor(command: unknown, args: unknown[]): void {
@@ -206,16 +162,13 @@ function currentProposedUri(): TestUri {
 
 async function startApproval(): Promise<StartedApproval> {
   const harness = createApprovalHarness();
-  const approval = requestApproval(
+  const request = requestApproval(
     harness.controller,
     '/workspace/notes.txt',
     'stream-approval',
   );
-  return {
-    ...harness,
-    approval,
-    requestId: await firstRequestId(harness.interactions),
-  };
+  await vi.waitFor(() => expect(currentProposedUri()).toBeDefined());
+  return { ...harness, ...request };
 }
 
 beforeEach(async () => {
@@ -232,7 +185,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  for (const session of sessions.splice(0)) {
+  for (const { controller, session } of harnesses.splice(0)) {
+    controller.dispose();
     session.dispose();
   }
   await Promise.allSettled(activeApprovals.splice(0));
@@ -240,8 +194,8 @@ afterEach(async () => {
 
 describe('VS Code tool edit approval', () => {
   it('approves a matching edit while its preview is still initializing', async () => {
-    const { controller, interactions } = createApprovalHarness();
-    const approval = requestApproval(
+    const { controller } = createApprovalHarness();
+    const { approval } = requestApproval(
       controller,
       '/workspace/approve-initializing.txt',
       'stream-initializing',
@@ -254,26 +208,7 @@ describe('VS Code tool edit approval', () => {
       action: 'apply',
       appliedContent: 'new\n',
     });
-    expect(interactions.shown).toEqual([]);
-  });
-
-  it('publishes line changes derived from the request content', async () => {
-    const { approval, controller, requestId, interactions } =
-      await startApproval();
-
-    expect(interactions.shown[0]).toMatchObject({
-      requestId,
-      path: '/workspace/notes.txt',
-      relativePath: 'notes.txt',
-      sourceTool: 'write_file',
-      streamId: 'stream-approval',
-      addedLines: 1,
-      removedLines: 1,
-      isLatex: false,
-    });
-
-    controller.handleAction({ requestId, action: 'reject' });
-    await expect(approval).resolves.toMatchObject({ action: 'reject' });
+    expect(vscodeMocks.executeCommand).not.toHaveBeenCalled();
   });
 
   it('approves a matching edit whose preview is already pending', async () => {
@@ -291,23 +226,28 @@ describe('VS Code tool edit approval', () => {
   it('keeps each session controller scoped to its own requests', async () => {
     const target = createApprovalHarness();
     const other = createApprovalHarness();
-    const targetStream = requestApproval(
+    const { approval: targetStream } = requestApproval(
       target.controller,
       '/workspace/target.txt',
       'stream-target',
     );
-    const otherStream = requestApproval(
+    const { approval: otherStream } = requestApproval(
       target.controller,
       '/workspace/other-stream.txt',
       'stream-other',
     );
-    const otherSessionRequest = requestApproval(
+    const { approval: otherSessionRequest } = requestApproval(
       other.controller,
       '/workspace/other-session.txt',
       'stream-target',
     );
-    await vi.waitFor(() => expect(target.interactions.shown).toHaveLength(2));
-    await vi.waitFor(() => expect(other.interactions.shown).toHaveLength(1));
+    await vi.waitFor(() =>
+      expect(
+        vscodeMocks.executeCommand.mock.calls.filter(
+          ([command]) => command === 'vscode.diff',
+        ),
+      ).toHaveLength(3),
+    );
 
     await target.controller.approvePendingForStream('stream-target');
     await expect(targetStream).resolves.toMatchObject({ action: 'apply' });
@@ -321,8 +261,8 @@ describe('VS Code tool edit approval', () => {
   });
 
   it('does not present an approval cancelled during initialization', async () => {
-    const { controller, interactions } = createApprovalHarness();
-    const approval = requestApproval(
+    const { controller } = createApprovalHarness();
+    const { approval } = requestApproval(
       controller,
       '/workspace/cancel-initializing.txt',
       'stream-initializing',
@@ -338,44 +278,11 @@ describe('VS Code tool edit approval', () => {
       action: 'reject',
       cause: 'Run ended.',
     });
-    expect(interactions.shown).toEqual([]);
-  });
-
-  it('does not publish a prompt after cancellation while revealing the view', async () => {
-    let revealProgress: (() => void) | undefined;
-    vscodeMocks.executeCommand.mockImplementation(
-      async (command: unknown, ...args: unknown[]) => {
-        recordDiffEditor(command, args);
-        if (command === 'texra.showProgressView') {
-          await new Promise<void>((resolve) => {
-            revealProgress = resolve;
-          });
-        }
-      },
-    );
-    const { controller, interactions } = createApprovalHarness();
-    const approval = requestApproval(
-      controller,
-      '/workspace/cancel-reveal.txt',
-      'stream-reveal',
-    );
-    await vi.waitFor(() => expect(revealProgress).toBeTypeOf('function'));
-
-    controller.cancel({
-      kind: 'toolEdit',
-      streamId: 'stream-reveal',
-      cause: 'Run ended.',
-    });
-    revealProgress?.();
-
-    await expect(approval).resolves.toMatchObject({ action: 'reject' });
-    await Promise.resolve();
-    expect(interactions.shown).toEqual([]);
+    expect(vscodeMocks.executeCommand).not.toHaveBeenCalled();
   });
 
   it('cancels and cleans a selected session approval', async () => {
-    const { approval, controller, requestId, interactions } =
-      await startApproval();
+    const { approval, controller } = await startApproval();
 
     controller.cancel({
       kind: 'toolEdit',
@@ -387,48 +294,21 @@ describe('VS Code tool edit approval', () => {
       action: 'reject',
       cause: 'Stream resources released.',
     });
-    expect(interactions.resolved).toEqual([{ requestId }]);
   });
 
-  it('isolates host-local prompt failures from the approval result', async () => {
-    const { controller, interactions } = createApprovalHarness((recorder) => ({
-      showToolEditPermission: (payload) => {
-        recorder.shown.push(payload);
-        throw new Error('show failed');
-      },
-      resolveToolEditPermission: () => {
-        throw new Error('resolve failed');
-      },
-    }));
-    const approval = requestApproval(
-      controller,
-      '/workspace/isolated.txt',
-      'stream-isolated',
-    );
-
-    controller.handleAction({
-      requestId: await firstRequestId(interactions),
-      action: 'reject',
-    });
-
-    await expect(approval).resolves.toMatchObject({ action: 'reject' });
-  });
-
-  it('restores a failed approval prompt and accepts a later retry', async () => {
-    const { approval, controller, requestId, interactions } =
-      await startApproval();
+  it('reports a failed preview read and accepts a later approval', async () => {
+    const { approval, controller, requestId } = await startApproval();
     const proposedUri = currentProposedUri();
     await rm(proposedUri.fsPath);
 
     controller.handleAction({ requestId, action: 'approve' });
 
-    await vi.waitFor(() => expect(interactions.shown).toHaveLength(2));
-    expect(vscodeMocks.showErrorMessage).toHaveBeenCalledOnce();
+    await vi.waitFor(() =>
+      expect(vscodeMocks.showErrorMessage).toHaveBeenCalledOnce(),
+    );
     expect(vscodeMocks.showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('edited document could not be read'),
     );
-    expect(interactions.resolved).toEqual([{ requestId }]);
-    expect(interactions.shown[1]).toEqual(interactions.shown[0]);
 
     const getText = vi.fn(() => 'beta after retry\r\n');
     vscodeMocks.textDocuments.push({ uri: proposedUri, getText });
@@ -439,12 +319,10 @@ describe('VS Code tool edit approval', () => {
       appliedContent: 'beta after retry\n',
     });
     expect(getText).toHaveBeenCalledOnce();
-    expect(interactions.resolved).toEqual([{ requestId }, { requestId }]);
   });
 
   it('accepts the current edited document content', async () => {
-    const { approval, controller, requestId, interactions } =
-      await startApproval();
+    const { approval, controller, requestId } = await startApproval();
     const getText = vi.fn(() => 'beta edited\r\n');
     vscodeMocks.textDocuments.push({
       uri: currentProposedUri(),
@@ -459,7 +337,6 @@ describe('VS Code tool edit approval', () => {
     });
     expect(getText).toHaveBeenCalledOnce();
     expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
-    expect(interactions.resolved).toHaveLength(1);
   });
 
   it('previews a non-LaTeX proposal by opening the proposed file', async () => {

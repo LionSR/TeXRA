@@ -23,10 +23,10 @@ import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@progressView/frontend/ProgressApp';
 import { html, render, type TemplateResult } from 'lit';
 
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { desktopScenes } from './scenes/desktop';
 import { extensionScenes } from './scenes/extension';
 import { RUN_BOARD_FIXTURES, runBoardScene } from './scenes/runBoard';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
 // ── small pieces ────────────────────────────────────────────────────────
 const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
   html` <wa-button
