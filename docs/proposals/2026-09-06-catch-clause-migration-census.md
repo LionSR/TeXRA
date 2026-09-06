@@ -262,9 +262,9 @@ kept so that the totals above are the classifier's, not a blend.
 | S9    |     118 |        119 |       0 |     0.900 | none          |
 | S10   |      71 |         73 |       0 |     0.778 | none          |
 
-**What agreement below 0.8 means.** With every fourth entry checked, a slice
-of about 106 entries has 26 or 27 checks, so 0.778 (S10) is roughly six
-disagreements and 0.815 (S8) five. The disagreements the checker wrote up are
+**What agreement below 0.8 means.** With every fourth entry checked, S8
+(106 entries) has about 27 checks, so 0.815 is roughly five disagreements,
+and S10 (71 entries) has about 18 checks, so 0.778 is roughly four. The disagreements the checker wrote up are
 of one kind: a clause on the `typed-recovery` / `boundary-translation` border
 (does a rethrow after tagging count as recovery?) or on the
 `best-effort-projection` / `boundary-translation` border (is forwarding to
