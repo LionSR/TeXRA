@@ -453,23 +453,13 @@ export function fullTranscriptEntryLayout(
     width: printWidth,
   });
   if (row.kind !== 'tool') return layout;
-  // Spilled rows carry only a bounded preview in the normal transcript. The
-  // on-demand reader substitutes the artifact text before reaching this
-  // layout. Let the owning renderer append it for read/edit-style tools whose
-  // compact card intentionally omits ordinary output.
-  let compactOutput: 'loaded' | 'failed' | undefined;
-  if (row.spillPath !== undefined) {
-    compactOutput = row.spillFailed === true ? 'failed' : 'loaded';
-  }
   return {
     ...layout,
     lines: wrapDisplayLines(
       toolUseDisplayLines(row, {
         elide: false,
         executionLabels,
-        // Gate the "Full output:" header on actual recovery: a failed spill
-        // keeps the bounded preview plus failure notice, without the header.
-        compactOutput,
+        showFullOutput: true,
       }),
       layout.columns,
     ),

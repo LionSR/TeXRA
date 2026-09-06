@@ -115,7 +115,6 @@ async function captureStartedLaunch(
   mocks.createTrace.mockReturnValueOnce({
     trace,
     handleStatus: vi.fn(),
-    flushSpills: vi.fn(async () => undefined),
     dispose: vi.fn(),
   });
   mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);

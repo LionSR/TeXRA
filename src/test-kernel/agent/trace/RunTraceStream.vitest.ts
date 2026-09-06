@@ -41,59 +41,6 @@ describe('AgentTrace stream output', () => {
     vi.useRealTimers();
   });
 
-  it('coalesces streaming text updates and flushes on finalize', () => {
-    vi.useFakeTimers();
-
-    withStore((store, logger, flushPending) => {
-      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-
-      stream.append('a');
-      let entries = streamEntries(store);
-      expect(entries).toHaveLength(1);
-      expect(entries[0]?.text).toBe('a');
-
-      stream.append('b');
-      stream.append('c');
-      entries = streamEntries(store);
-      expect(entries[0]?.text).toBe('a');
-
-      vi.advanceTimersByTime(49);
-      entries = streamEntries(store);
-      expect(entries[0]?.text).toBe('a');
-
-      vi.advanceTimersByTime(1);
-      entries = streamEntries(store);
-      expect(entries[0]?.text).toBe('abc');
-
-      stream.append('d');
-      expect(streamEntries(store)[0]?.text).toBe('abc');
-
-      expect(stream.finalize()).toBe('abcd');
-      expect(streamEntries(store)[0]?.text).toBe('abcd');
-
-      vi.runOnlyPendingTimers();
-      expect(streamEntries(store)[0]?.text).toBe('abcd');
-    });
-  });
-
-  it('drains pending stream updates for shutdown persistence', () => {
-    vi.useFakeTimers();
-
-    withStore((store, logger, flushPending) => {
-      const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-
-      stream.append('a');
-      stream.append('b');
-      expect(streamEntries(store)[0]?.text).toBe('a');
-
-      flushPending();
-      expect(streamEntries(store)[0]?.text).toBe('ab');
-      expect(vi.getTimerCount()).toBe(0);
-
-      expect(stream.finalize()).toBe('ab');
-    });
-  });
-
   it('materializes streams at stream start, before any delta', () => {
     withStore((store, logger) => {
       const thinking = logger.openStream(MESSAGE_TYPES.THINKING);

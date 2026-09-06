@@ -123,7 +123,6 @@
       "src/transcript/StagedDeletionCoordinator.ts": 1,
       "src/transcript/StreamLogStore.ts": 1,
       "src/transcript/StreamSnapshotStore.ts": 1,
-      "src/transcript/TexraTranscriptRecorder.ts": 1,
       "src/utils/core/perKeyQueue.ts": 1
     },
     "import:p-map": {
@@ -203,7 +202,7 @@
       "packages/cli/src/runtime/supabaseAuthDeviceCode.ts": 2,
       "packages/cli/src/runtime/updateChecker.ts": 3,
       "packages/desktop/src/main/desktopAgentExecution.ts": 1,
-      "packages/desktop/src/main/desktopHostRequests.ts": 5,
+      "packages/desktop/src/main/desktopHostRequests.ts": 4,
       "packages/desktop/src/main/desktopProcessStores.ts": 1,
       "packages/desktop/src/main/index.ts": 15,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,

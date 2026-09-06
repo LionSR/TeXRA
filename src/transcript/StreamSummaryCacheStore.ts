@@ -31,16 +31,15 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { filterNotNull } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { StorageFS } from '@utils/files/storageFS';
-
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
   nonterminalWorkflowCall,
   type StreamLogPreservedRawEntry,
-} from './StreamLog';
+} from '@shared/session/traceEntries';
+import { filterNotNull } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { StorageFS } from '@utils/files/storageFS';
 
 /** Logged under the store's channel: this is one of its internals. */
 const log = createLog('StreamLogStore');

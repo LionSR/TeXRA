@@ -72,13 +72,7 @@ export interface TranscriptRowContext {
 // Envelope
 // ---------------------------------------------------------------------------
 
-function spillPathOf(data: unknown): string | undefined {
-  if (!isObject(data)) return undefined;
-  return typeof data.spillPath === 'string' ? data.spillPath : undefined;
-}
-
 function rowBase(entry: StreamLogEntry): TranscriptRowBase {
-  const spillPath = spillPathOf(entry.data);
   return {
     id: entry.id,
     seqNo: entry.seqNo,
@@ -90,7 +84,6 @@ function rowBase(entry: StreamLogEntry): TranscriptRowBase {
     ...(entry.verbose !== undefined ? { verbose: entry.verbose } : {}),
     ...(entry.groupId !== undefined ? { groupId: entry.groupId } : {}),
     ...(entry.messageType ? { messageType: entry.messageType } : {}),
-    ...(spillPath ? { spillPath } : {}),
   };
 }
 

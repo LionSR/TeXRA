@@ -17,6 +17,7 @@ import {
   StreamLogEntrySchema,
   type StreamLogEntry,
 } from '@shared/schemas';
+import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import { createDeferred, waitForCondition } from '@test/support/asyncTestUtils';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import {
@@ -25,7 +26,6 @@ import {
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
 } from '@transcript';
-import type { StreamLogAppendInput } from '@transcript/StreamLog';
 import { clearPersistedSummaryParentStream } from '@transcript/StreamLogStore';
 import { delay } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';

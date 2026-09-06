@@ -8,7 +8,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type StreamTabId,
 } from '@shared/schemas';
-import type { StreamLogDelta } from '@transcript/StreamLog';
+import type { StreamLogDelta } from '@shared/session/traceEntries';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 import {

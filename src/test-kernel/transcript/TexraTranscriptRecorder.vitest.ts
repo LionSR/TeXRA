@@ -21,7 +21,6 @@ import {
 } from '@test/support/tempDirPlatform';
 import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
-import { resolveTranscriptSpillPath } from '@transcript/spillArtifacts';
 import { isObject } from '@utils/core';
 
 /** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
@@ -188,14 +187,15 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     output.finalize();
     // ...then the flow boundary emits the authoritative, replacement-clean
     // text once `assembly.lastResponse` is set.
-    trace.responseFinalized('Done \\checkmark');
+    const completedText = 'Done \\checkmark\n'.repeat(4000);
+    trace.responseFinalized(completedText);
 
     const modelResponseEntries = rows().filter(
       (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
     );
     expect(modelResponseEntries).toHaveLength(1);
     expect(modelResponseEntries[0]?.id).toBe(output.id);
-    expect(modelResponseEntries[0]?.text).toBe('Done \\checkmark');
+    expect(modelResponseEntries[0]?.text).toBe(completedText);
   });
 
   it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
@@ -622,163 +622,6 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
         error: '401 rejected key [redacted]',
       },
     });
-  });
-});
-
-describe('attachTranscriptRecorder spill artifacts', () => {
-  it.each([
-    [
-      'executions/abcdef123456/toolOutput/tool:spill.txt',
-      'executions/abcdef123456/toolOutput/tool:spill.txt',
-    ],
-    [
-      String.raw`executions\abcdef123456\toolOutput\tool.txt`,
-      'executions/abcdef123456/toolOutput/tool.txt',
-    ],
-    ['/executions/abcdef123456/toolOutput/tool.txt', undefined],
-    [String.raw`C:\executions\abcdef123456\toolOutput\tool.txt`, undefined],
-    ['executions/abcdef123456/toolOutput/../secret.txt', undefined],
-    ['executions/not-an-id/toolOutput/tool.txt', undefined],
-    ['executions/abcdef123456/toolOutput/nested/tool.txt', undefined],
-    ['executions/abcdef123456/toolOutput/tool.json', undefined],
-  ])('validates recorder-owned spill path %s', (candidate, expected) => {
-    expect(resolveTranscriptSpillPath(candidate)).toBe(expected);
-  });
-
-  it('spills redacted oversized terminal output and keeps a bounded preview', async () => {
-    const trace = new TraceEmitter();
-    const streamId = 'stream:spill' as StreamTabId;
-    const store = StreamLogStore.ephemeral('test');
-    store.ensureStream(streamId);
-    const rows = (): StreamLogEntry[] => store.get(streamId)?.getRange(0) ?? [];
-    const writes: Array<{ path: string; content: string }> = [];
-    const firstToolOutput = 'first tool snapshot'.repeat(4_000);
-    const recorder = attachTranscriptRecorder(
-      trace,
-      store.acquireWriter(streamId, streamId),
-      {
-        pathFor: (id) => `executions/test/toolOutput/${id}.txt`,
-        write: async (path, content) => {
-          writes.push({ path, content });
-        },
-      },
-    );
-
-    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-    output.append('partial response');
-    output.finalize();
-    const finalizedOutput = `${'line\n'.repeat(2_100)}API_KEY=super-secret-value`;
-    trace.responseFinalized(finalizedOutput);
-    const toolOutput = `${'界'.repeat(30_000)}API_KEY=keep-tool-output`;
-    trace.toolStart({
-      logId: 'tool:spill',
-      toolName: 'read',
-      input: { path: 'large.txt' },
-    });
-    trace.toolEnd({
-      logId: 'tool:spill',
-      status: TOOL_USE_STATUS.IN_PROGRESS,
-      result: { toolName: 'read', output: firstToolOutput },
-    });
-    const liveToolData = ToolUseLogSchema.parse(
-      dataOf(rows().find((candidate) => candidate.id === 'tool:spill')),
-    );
-    expect(liveToolData.output).toContain(
-      'truncated while the tool is running',
-    );
-    expect(liveToolData.output).not.toContain('retained in run artifacts');
-    expect(liveToolData.spillPath).toBeUndefined();
-    trace.toolEnd({
-      logId: 'tool:spill',
-      status: TOOL_USE_STATUS.COMPLETED,
-      result: { toolName: 'read', output: toolOutput },
-    });
-    await vi.waitFor(() =>
-      expect(
-        writes.filter(({ path }) => path.endsWith('/tool:spill.txt')),
-      ).toHaveLength(1),
-    );
-    recorder.flushPending();
-    await recorder.flushSpills();
-
-    const entry = rows().at(-1);
-    const modelEntry = rows().find((candidate) => candidate.id === output.id);
-    expect(modelEntry?.text?.length).toBeLessThan(50 * 1024);
-    expect(modelEntry?.text).toContain('retained in run artifacts');
-    expect(dataOf(modelEntry).spillPath).toBe(
-      `executions/test/toolOutput/${output.id}.txt`,
-    );
-    const toolData = ToolUseLogSchema.parse(dataOf(entry));
-    expect(toolData.output).toContain('retained in run artifacts');
-    expect(
-      new TextEncoder().encode(toolData.output as string).length,
-    ).toBeLessThanOrEqual(50 * 1024);
-    expect(toolData.spillPath).toBe(
-      'executions/test/toolOutput/tool:spill.txt',
-    );
-    expect(writes[0]?.content).toContain('line\nline');
-    expect(writes).toEqual([
-      expect.objectContaining({
-        path: `executions/test/toolOutput/${output.id}.txt`,
-        content: expect.not.stringContaining('super-secret-value'),
-      }),
-      {
-        path: 'executions/test/toolOutput/tool:spill.txt',
-        content: toolOutput,
-      },
-    ]);
-  });
-
-  it('surfaces a spill failure once without poisoning later drains', async () => {
-    const trace = new TraceEmitter();
-    const streamId = 'stream:spill-failure' as StreamTabId;
-    const store = StreamLogStore.ephemeral('test');
-    store.ensureStream(streamId);
-    const failure = new Error('spill write failed');
-    const recorder = attachTranscriptRecorder(
-      trace,
-      store.acquireWriter(streamId, streamId),
-      {
-        pathFor: (id) => `executions/test/toolOutput/${id}.txt`,
-        write: vi.fn().mockRejectedValueOnce(failure),
-      },
-    );
-
-    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-    output.append('oversized output\n'.repeat(4_000));
-    output.finalize();
-
-    await expect(recorder.flushSpills()).rejects.toBe(failure);
-    await expect(recorder.flushSpills()).resolves.toBeUndefined();
-  });
-
-  it('latches a delayed write failure instead of throwing from the timer', () => {
-    vi.useFakeTimers();
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:timer-failure' as StreamTabId;
-    const writer = store.acquireWriter(streamId, streamId);
-    const appendText = writer.appendText.bind(writer);
-    const failure = new Error('delayed transcript write failed');
-    vi.spyOn(writer, 'appendText')
-      .mockImplementationOnce(appendText)
-      .mockImplementationOnce(() => {
-        throw failure;
-      });
-    const recorder = attachTranscriptRecorder(trace, writer);
-
-    try {
-      const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
-      output.append('first');
-      output.append(' delayed');
-
-      expect(() => vi.advanceTimersByTime(50)).not.toThrow();
-      expect(() => recorder.flushPending()).toThrow(failure);
-      expect(() => recorder.unsubscribe()).toThrow(failure);
-    } finally {
-      writer.close();
-      vi.useRealTimers();
-    }
   });
 });
 

@@ -108,7 +108,10 @@ export const AggregateIdSchema = z
         onSuccess: (key) => JSON.stringify(key) === value,
         onFailure: () => false,
       }),
-    'Expected a canonical [kind, logicalId] aggregate key',
+    {
+      error: 'Expected a canonical [kind, logicalId] aggregate key',
+      abort: true,
+    },
   )
   .brand<'AggregateId'>();
 export type AggregateId = z.infer<typeof AggregateIdSchema>;
@@ -167,8 +170,20 @@ const envelope = {
   at: z.number(),
 };
 
-function durable<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
-  return z.object({ ...envelope, type: z.literal(type), ...shape });
+function durable<T extends string, S extends z.ZodRawShape>(
+  type: T,
+  shape: S,
+  kind: z.infer<typeof AggregateKeySchema>[0] = 'stream',
+) {
+  return z.object({
+    ...envelope,
+    aggregateId: AggregateIdSchema.refine(
+      (key) => aggregateTarget(key).kind === kind,
+      `Expected a ${kind} aggregate for ${type}`,
+    ),
+    type: z.literal(type),
+    ...shape,
+  });
 }
 
 /**
@@ -297,7 +312,11 @@ const SessionEventSchema = z.discriminatedUnion('type', [
    *  `GoalStore`. */
   durable('goalStateChanged', { state: GoalStateSchema }),
   /** Aggregate is the thread id; `parentStreamId` is the payload's edge. */
-  durable('inquiryThreadUpdated', InquiryThreadUpdatedEventSchema.shape),
+  durable(
+    'inquiryThreadUpdated',
+    InquiryThreadUpdatedEventSchema.shape,
+    'inquiry',
+  ),
   durable('updateQueuedFollowUps', { messages: z.array(z.string()) }),
   durable('approval.requested', {
     requestId: z.string(),
