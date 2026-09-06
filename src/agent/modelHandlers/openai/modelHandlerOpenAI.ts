@@ -29,7 +29,7 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkError/errorPatterns';
 import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
-import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
+import { attachPartialText } from '@common/errors/sdkError/errorMetadata';
 import {
   type FileLocation,
   type MediaAttachmentKind,
@@ -454,37 +454,29 @@ export class ModelHandlerOpenAI<
       );
       return finalResponse;
     } catch (streamError) {
-      return handleStreamingFailure(streamError, {
-        finalizeOnError: () =>
-          this.finalizeProgressStreamsOnError(thinking, output),
-        // On mid-stream failure, lift the partial content the SDK already
-        // accumulated (currentChatCompletionSnapshot) onto the error so the
-        // retry UI can show it and future continuation logic can reference
-        // the tail.
-        partialTail: () =>
-          extractOpenAIPartialTail(
-            stream?.currentChatCompletionSnapshot,
-            PARTIAL_TEXT_TAIL_MAX,
-          ),
-        decorateError: (err, tail) => {
-          // Tag at the boundary so abort identity survives wrapping and
-          // minification (mirrors the Anthropic stream catch).
-          this.sdkErrorTagger(err, this.config.provider);
-          if (requestId && err instanceof Error) {
-            (err as ErrorWithRequestId).request_id = requestId;
-          }
-          // Aborts are control flow; log at debug, skip warn.
-          if (!isUserAbort(err)) {
-            this.logger.warn('Stream failed', {
-              data: {
-                ...buildErrorLogData(err, { model: this.config.fullName }),
-                partialTextLength: tail.length,
-              },
-            });
-          }
-          return err;
-        },
-      });
+      this.finalizeProgressStreamsOnError(thinking, output);
+      // The SDK already owns the partial content; retain its tail for retry
+      // presentation and any later continuation.
+      const partialText = extractOpenAIPartialTail(
+        stream?.currentChatCompletionSnapshot,
+        PARTIAL_TEXT_TAIL_MAX,
+      );
+      // Tag at the provider boundary so abort identity survives wrapping and
+      // minification.
+      this.sdkErrorTagger(streamError, this.config.provider);
+      if (requestId && streamError instanceof Error) {
+        (streamError as ErrorWithRequestId).request_id = requestId;
+      }
+      if (!isUserAbort(streamError)) {
+        this.logger.warn('Stream failed', {
+          data: {
+            ...buildErrorLogData(streamError, { model: this.config.fullName }),
+            partialTextLength: partialText.length,
+          },
+        });
+      }
+      attachPartialText(streamError, partialText);
+      throw streamError;
     } finally {
       signal?.removeEventListener('abort', abortReconstructedStream);
       stream?.off('content.delta', onContentDelta);
