@@ -281,15 +281,18 @@ every row; neither is derived from the other.
 **every fact lives on the aggregate of its logical target**, so a
 latest-of-type lookup never has to disambiguate targets and no key column
 exists. Aggregate ids: a stream id for run-scoped trace `AgentEvent`s and for
-the stream's own lifecycle facts (`stream.removed`, the queued-follow-ups
-snapshot); an execution id for what the model sees, the byte-exact flow rows
+the stream's own lifecycle facts (`stream.removed`, `goal`, the queued-follow-ups
+snapshot). Goals are keyed by stream, as in `GoalStore.getForStream` and
+`GoalStore.list` (`src/tools/goal/goalStore.ts:176-215`); updating one stream's
+goal cannot replace another's, and deleting the stream deletes its goal rows.
+An execution id holds what the model sees, the byte-exact flow rows
 of `2026-09-04-agent-runtime-on-effect.md` §2.1 (`model.message`,
 `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`); which of
 a run's two aggregates each flow row lives on is decided in that §2.1, which
 places `flow.step` on the stream aggregate as a replay coordinate. The listing
 tier reads the canonical `status` fact for outcome, including failures before
 the runtime starts. An inquiry thread id holds that thread's facts; one fixed session aggregate id holds
-**singleton** session facts only (the goal). A fact that can have more than
+**singleton** session facts only. A fact that can have more than
 one live instance never goes on the session aggregate, because after two
 deletions a latest-of-type read would see only the newer tombstone. The
 execution-to-stream edge is on `run.start`. A stream exists iff its
@@ -378,9 +381,13 @@ inserts every row, updates the sequence rows, and commits. Failure of any
 member rolls back all members and sequence changes. `RunLedger` folds the
 complete returned batch before exposing its resulting state. `publish(event)` delegates its durable
 case to this operation with one element. Model configuration plus its
-snapshot, follow-up messages plus the remaining queue, and tool results
-plus their resulting state all use this same transaction (§2 of the runtime
-proposal).
+snapshot and follow-up messages plus the remaining queue use this same
+transaction. Each call's `tool.result`, including its causal state delta,
+commits with the matching display `tool.end`; one settlement owner builds
+this batch, and the tool executor never publishes that terminal display row
+independently. Once every call from a provider response has settled, its
+provider-native `model.message` follow-ups and `flow.step results.ready`
+also commit together (§2 of the runtime proposal).
 
 After commit the publisher advances a process-local wake level. It never
 delivers durable payloads directly: every subscriber reads them from the
@@ -415,12 +422,9 @@ publisher waits for a remote renderer.
   message-base read in runtime §2.3 uses the same execution index with an
   inclusive base and an upper bound at the snapshot commit.
 - `existing(aggregateIds)`: the subset of resident aggregate ids whose
-  sequence rows still exist, using the primary key. Each tail drain reads
-  this set and the new events in one read transaction, then applies the
-  shared removal rule to any missing resident aggregate. This also re-roots
-  surviving child streams. Thus a retention tombstone inserted and physically
-  removed between two reads cannot leave a stale displayed run. Only the
-  listed or opened aggregate ids are checked; no transcript bodies are read.
+  sequence rows still exist, using the primary key. The composed tail below
+  reads this set and the new events in one read transaction. Only the listed
+  or opened aggregate ids are checked; no transcript bodies are read.
 - `PRAGMA data_version`: changes when another connection commits. It is
   connection-local and does not move for the connection's own commits, so it
   is a wake trigger only, never a level in the `commit` number space.
@@ -429,12 +433,58 @@ publisher waits for a remote renderer.
   waits for a wake level above the one observed before that drain. Wakes
   carry no rows and are never interpreted as commit values.
 
+`SessionEvents.tail(fromCommit, residentIds)` composes `all` and `existing`;
+it is not another database query or a new persisted event arm. Each drain
+captures its subscription's resident ids and emits one transient fold input:
+
+```ts
+type ExistenceReconciliation = {
+  checkedAggregateIds: readonly AggregateId[];
+  removedAggregateIds: readonly AggregateId[];
+};
+type TailBatch = {
+  _tag: 'tail.batch';
+  cursor: SessionCursor;
+  events: SessionEvent[];
+  existence: ExistenceReconciliation;
+};
+```
+
+`removedAggregateIds` is exactly the captured checked set minus the ids
+returned by `existing` in the same read transaction as `events`. The fold
+applies the events, these removals, and the batch cursor together before
+publishing its view,
+using the same removal rule as a tombstone, including re-rooting surviving
+child streams. Absence is authoritative only for the checked ids; it never
+clears other residents or advances the durable cursor.
+
+The batch cursor is the last event commit drained by that read, or the prior
+cursor if there are no new events. It advances only when the complete batch
+folds, never while some of its events remain buffered.
+
+The same input reaches every renderer. The view-state PRD §8.1 adds
+`existence: ExistenceReconciliation | null` to `EventsFrame`. When a drain
+spans frames, only its final frame carries the reconciliation; the decoder
+buffers that drain and reconstructs one `TailBatch` with the final frame's
+existing `cursor` field. Earlier split frames cannot advance the retained
+view cursor, so reconnecting cannot skip their still-unapplied rows. A deletion-only drain
+still sends a frame with empty events and an unchanged commit cursor. The
+receiver accepts it by frame order and the current `Subscribe` generation,
+not by requiring a larger cursor; obsolete generations are discarded before
+any events or removals fold. Each subscription retains its own checked scope:
+ids introduced by its listing or delivered tail lifecycle/inquiry rows,
+including their stream, execution, and inquiry edges, plus its named transcript aggregates,
+until their removal is delivered or a new generation replaces the scope.
+It must not borrow the database-owning fold's resident set, which may have
+already forgotten a run the renderer still displays. Thus retention remains
+visible even when its tombstone is inserted and collected between polls.
+
 Cold hydration captures a commit anchor before its listing and aggregate
-reads, then tails `all(anchor)`. The fold handles overlap by latest-of-type
+reads, then uses `tail(anchor, residentIds)`. The fold handles overlap by latest-of-type
 listing facts and by each aggregate's settled `seq`, as in the view-state
-PRD §7.4. The tail also reconciles `existing` on local and foreign wakes,
-including when there are no new events. A surface's cursor advances only
-over table rows delivered in `commit` order; an aggregate's settled boundary
+PRD §7.4. The composed `tail` also reconciles `existing` on local and foreign
+wakes, including when there are no new events. A surface's cursor advances
+only to the completed drain's commit boundary; an aggregate's settled boundary
 is a `seq` value. The reserved migration aggregate is excluded from these
 session queries.
 
@@ -487,9 +537,12 @@ executions row. The exception is the fold snapshot stored as an event:
 external activity, then at turn or round end, before WAITING, and whenever
 bytes appended since the last snapshot exceed its size (the runtime proposal's
 byte-amortized rule). It contains the non-message family state, durable phase,
-pending intents, and a `messageBaseCommit` reference to the canonical
-conversation; it never copies the message array. It is a base point for the
-resume fold in the same table and lifecycle, and is never queried for listing
+pending intents, references to any pending tool response and its settled
+calls, and a `messageBaseCommit` reference to the canonical conversation.
+The pending references remain available even when their rows precede the
+snapshot; restoring them supplies delivery inputs without applying their
+state mutations a second time. The snapshot never copies the message array.
+It is a base point for the resume fold in the same table and lifecycle, and is never queried for listing
 status. Some non-message state is recorded at these boundaries rather than
 reconstructed from earlier messages. If any other query
 is measured too slow, add an index; if an index does not fix it, and only
@@ -499,17 +552,22 @@ then, a derived row with a rebuild rule, recorded here as a contract change.
 The model-visible conversation and the resume state are durable rows using
 the vocabulary of `2026-09-04-agent-runtime-on-effect.md` §2.1, which owns
 those names and decides each row's aggregate:
-`model.message` carries each provider-native message as appended, including
-thinking signatures and provider ids; `model.compaction` the full replacement
-array when a handler rewrites history; `tool.intent` and `tool.result` the
-barrier dispatch and each settled call; `flow.step` the round and turn
+`model.message` has two payloads: `pending-tools` records a completed
+tool-bearing response and its exact normalized builder inputs, including
+reasoning signatures, without adding it to provider history; `append`
+installs provider-native messages, with `sourceResponseCommit` identifying
+the single completed follow-up batch for a pending response. `tool.result`
+records per-call settlement and state changes, not a provider message.
+`model.compaction` carries the full replacement array when a handler
+rewrites history; `tool.intent` records barrier dispatch; `flow.step` the round and turn
 boundaries; `flow.snapshot` the family's non-message Zod state under C10.
-Resume reconstructs the active conversation from its message base through
-the snapshot, then folds the stream and execution rows after the snapshot's
+Resume reconstructs the active conversation from append payloads and
+compactions between its message base and the snapshot, restores any pending
+response/settlement references, then folds the stream and execution rows after the snapshot's
 commit using `aggregatesAfterCommit`. The state tail is bounded by a turn or
 round and the byte-amortized snapshot rule; reading the active conversation
-still costs its own size. This is what makes the checkpoint a fold and
-ends the double storage of run content. It is the one item in this contract
+still costs its own size. This replaces the separately rewritten checkpoint
+conversation. It is the one item in this contract
 the owner has not yet ratified.
 
 ### 6.2 Stages

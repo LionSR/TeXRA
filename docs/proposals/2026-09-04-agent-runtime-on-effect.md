@@ -124,17 +124,19 @@ Flow row types, all Zod-validated at the boundary, all carried as
 | Row                            | Written when                                                                                                                                                                                                                                                                          | Payload                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `flow.step` (stream aggregate) | round begin/end (reflection), turn begin/end, response ready/processed, `waiting`, `halted`                                                                                                                                                                                           | `{ family, step, round?, turn?, continuation?, outcome? }`; replay coordinates. Listing status comes from the canonical `status` fact, including failures before the runtime starts                                                                                                                                                                                                   |
-| `model.message`                | every provider-native message appended: initial prompt, round prompt, assistant response, user follow-up, synthetic continuation                                                                                                                                                      | handler-built `ProviderMessage[]` delta (z.custom), plus extracted `toolCalls: { callId, name, input }[]` for assistant rows; normalized response metadata needed for continuation and output processing, never a raw SDK response                                                                                                                                                    |
+| `model.message`                | a completed model response is recorded, or provider-native messages are appended: initial/round prompt, completed tool-follow-up batch, user follow-up, synthetic continuation                                                                                                        | a discriminated payload: `pending-tools` stores normalized response and builder inputs plus ordered extracted calls; `append` stores the handler-built `ProviderMessage[]` delta (z.custom), with `sourceResponseCommit` for a completed tool-follow-up batch. No raw SDK response                                                                                                    |
 | `model.compaction`             | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens                                                                                                                                                                                       | the full replacement array; later loads start here                                                                                                                                                                                                                                                                                                                                    |
 | `tool.intent`                  | unconditionally at the barrier dispatch site, before any barrier (non parallel-safe) call starts (`ToolUseDispatchNode._exec` today). Not from an approval hook: `onExecutionReady` exists for three tools only (`bash`, `codex`, `wolfram`), while about 38 of 50 tools are barriers | `{ callIds, attempt }`; the attempt increases only after an explicit re-run decision                                                                                                                                                                                                                                                                                                  |
-| `tool.result`                  | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | provider tool-result message + attachment references and that call's settled `stateSlices` mutation, byte-exact and atomic in the same row. The display result is the existing `tool.end` row on the stream aggregate, scrubbed at publish as today                                                                                                                                   |
+| `tool.result`                  | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | `{ sourceResponseCommit, callId, attempt, result, attachments, stateMutation }`: normalized `ToolResult`, attachment references, and that call's settled `stateSlices` mutation, without a provider message. Its terminal `tool.end` commits in the same cross-aggregate batch, scrubbed at publish                                                                                   |
 | `flow.snapshot`                | initially before the first external activity; at `turn.end` / `round.end`, before WAITING, and whenever bytes appended since the last snapshot exceed its size                                                                                                                        | the family's non-message Zod state: `structured`, `lastError`, `userCancelledRetry`, `shouldSkipCycle`, `systemPrompt`, `continuationGenerationId`, `stateSlices`, `modelId`, `modelHandlerCompatibilityKey`; `outputLocation`, `roundOutputs`, `continueRounds`, `endTurn`, `context`, compile-repair state, round counters, durable phase, pending intents, and `messageBaseCommit` |
 
 Snapshots omit the accumulated provider message array. `messageBaseCommit`
-references the latest `model.compaction`, or the first `model.message` if
+references the latest `model.compaction`, or the first `model.message` append if
 there has been no compaction (null for an empty initial conversation).
-`RunLedger.load` reconstructs messages from that row, inclusive, through the
-snapshot's commit; it restores the snapshot's non-message state and then
+`RunLedger.load` reconstructs messages from `append` payloads and compactions
+from that row, inclusive, through the snapshot's commit; `pending-tools`
+payloads are recovery inputs, not additions to the provider conversation.
+It restores the snapshot's non-message state and then
 folds later rows. Thus mandatory turn-end snapshots do not repeatedly store
 the complete conversation. The non-message tail is at most one turn or
 round; reading the current conversation necessarily scales with its size.
@@ -150,8 +152,68 @@ and deterministic settlement order; a whole-state copy taken while another
 call is mutating state is not a valid delta. Folding the result applies its
 mutation exactly once and removes its pending intent. A crash after the row
 commits therefore cannot retain the result while losing work-plan,
-file-interaction, or usage changes. Turn snapshots include the resulting
-state and all still-pending intents.
+file-interaction, or usage changes. Each settlement is one
+`RunLedger.appendBatch`, backed by C6 `publishBatch`: its `tool.result` and
+terminal stream-aggregate `tool.end` commit together, with the same call and
+attempt identity. The settlement owner constructs both rows; the executor
+must not publish completion earlier from `logAndProcessMediaFiles` or its
+cancellation path. A card can become terminal only when its recovery fact
+is durable, and a durable result cannot leave a running card behind.
+Each call's card correlation (`logId` and stage) is saved with the pending
+response, so a resumed settlement closes the same card. If no start card
+was published, the settlement batch includes its `tool.start` as well.
+Turn snapshots include the resulting state, pending intents, and references
+to any pending response and its already-settled calls.
+
+Per-call settlement and provider-message delivery are separate boundaries.
+The latter preserves `ModelHandler.requiresBatchedParallelToolResults` and
+`createBatchedToolUseFollowUpMessages` (`ToolUseDispatchNode.ts:566-605`).
+After **all calls from one model response** settle, including barriers and
+synthetic skips, the handler receives their normalized results and
+attachments in the original call order. For handlers requiring batching,
+it receives the complete set in one invocation; otherwise the current
+ordered single-entry invocations remain, with assistant text supplied only
+to the first. The complete returned message array is then persisted as one
+`model.message` append payload. Settlement order never changes provider
+message order, and the group is the response's complete call set, not an
+individual parallel execution partition.
+
+Some handlers return the original assistant message together with the
+results: Anthropic returns one assistant with every `tool_use` followed by
+one user message with every `tool_result`; Google returns the saved thought
+and function-call steps before the result steps. Accordingly, a response
+with tools first commits a `model.message` **`pending-tools` payload** and
+enters the tools phase; it does not append an independent assistant message
+to `RunState.messages`. Its row commit identifies the response. This payload
+preserves the exact extracted provider-specific calls, assistant text,
+reasoning/thinking blocks and their signatures, server-tool content, and
+every other normalized input the handler's follow-up builder consumes.
+Private handler caches are not presumed to survive a restart: construction
+of a resumed handler restores these inputs from the row before building
+follow-ups. An unsupported input shape fails validation rather than silently
+omitting reasoning. Non-tool responses remain ordinary `append` payloads.
+The shared display fold uses the source response identity for one assistant
+entry: it may show the pending content, then updates that entry when the
+completed batch arrives instead of adding a second copy.
+
+The completed batch names `sourceResponseCommit` and commits atomically with
+the builder's resulting non-message snapshot and `flow.step results.ready`.
+The append transaction requires that response to remain pending and
+undelivered. Folding the append installs its entire message array once,
+consumes the pending response, and clears its settlement references; neither
+the earlier pending payload nor a `tool.result` independently adds provider
+messages. The snapshot retains the delivery phase and, while still pending,
+the response/settlement row references needed for reconstruction even if
+they precede the snapshot. A crash before delivery rebuilds the batch from
+those facts without repeating settled tools or the model invocation. A
+crash after delivery sees the consumption and skips both rebuilding and
+reinsertion. Builder-side changes, such as clearing reasoning caches, are
+applied to reconstructed state and become durable only with this batch.
+
+Settlement data necessarily overlaps the eventual provider-formatted tool
+content: that per-call recovery record is deliberate. It does not
+justify copying complete message history into snapshots or installing the
+same assistant/tool turn twice in the provider conversation.
 
 Redaction: `redactSecrets` runs at publish on every stream-aggregate row
 (C3, unchanged from today's recorder), and never on execution-aggregate
@@ -254,13 +316,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
 `runTurn` re-yields the services it needs (they are in Context, not
 closures), drains queued follow-ups non-blockingly, calls `model.invoke`,
-appends any replacement `model.compaction` before the assistant row in one
-batch, partitions tool calls into parallel-safe runs and barriers as
+appends any replacement `model.compaction` before the normalized response
+row in one batch (`pending-tools` for a tool-bearing response, `append`
+otherwise), partitions tool calls into parallel-safe runs and barriers as
 `ToolUseDispatchNode` does today, writes `tool.intent` unconditionally at
 the dispatch site before invoking every barrier tool, runs a parallel-safe group with
 `Effect.forEach(..., { concurrency: MAX_PARALLEL_TOOL_CALLS })` and a typed
 `TurnEnded` failure for the `endsToolUseTurn` short-circuit, appends one
-`tool.result` with its state mutation per call, and ends with one batch
+`tool.result` with its state mutation and `tool.end` per call, commits the
+handler-built provider-message batch once the response's full call set has
+settled, and ends with one batch
 containing the resulting `flow.snapshot` and `flow.step turn.end`. Like the
 reflection loop below, `runTurn` examines the folded phase and persisted
 assistant/tool rows before choosing its next activity; it does not restart
@@ -352,12 +417,15 @@ unrecorded file append as evidence that another model call is needed.
 
 `foldRunState(rows) -> RunState` is one pure, data-only function in
 `src/shared`: restore the latest `flow.snapshot` and its referenced message
-history, then apply later `model.compaction`, `model.message`, `tool.intent`,
+history and any referenced pending tool response/settlements, then apply
+later `model.compaction`, `model.message`, `tool.intent`,
 `tool.result`, `flow.step`, and the existing approval rows in commit order.
 `RunState.pendingIntents` is keyed by call id and records its latest attempt;
 an explicitly approved new intent supersedes the previous attempt, and only
-a result for the current attempt removes the pending call. Snapshots retain
-this map, pending approval decisions, durable phase, and the reference to
+a result for the current attempt removes the pending call. Settled results
+remain available under the pending response until its single handler-built
+message batch is delivered, following §2.1. Snapshots retain
+these maps, pending approval decisions, durable phase, and the reference to
 any response still awaiting processing. It runs in
 `RunLedger.load` on resume and in the trace viewer's
 stepper, and nowhere else: there is no `run_state` summary, no projection
@@ -401,13 +469,16 @@ started; the loop surfaces an `approval.requested` row (one-fold PRD §6
 item 1), keyed by call id and attempt, asking to re-run or skip,
 never re-running a destructive call blindly and never fabricating CANCELLED
 for a tool that may have run. No provider result is appended while the
-decision is pending. Skip atomically commits `approval.resolved` and the
-single synthetic `tool.result`; re-run atomically commits the resolution
+decision is pending. Skip atomically commits `approval.resolved`, the
+single synthetic `tool.result`, and its terminal `tool.end`; re-run atomically
+commits the resolution
 and a new attempt's `tool.intent`, then invokes the tool and appends its
-single settled result. A second crash before that result returns the new
+single settled result with `tool.end`. A second crash before that result
+returns the new
 attempt to outcome-unknown; an earlier approval never authorizes another
-attempt implicitly. At most one provider result pairs with the original
-call id. Parallel-safe calls without results re-run. A
+attempt implicitly. Each original call supplies one settled result to the
+provider's complete follow-up batch; provider messages are installed only
+at that batch boundary. Parallel-safe calls without results re-run. A
 `waiting` step re-enters the follow-up wait; a subagent's per-cycle WAITING
 resumes from the snapshot committed with that transition, drains any queued
 batch, and returns WAITING only if none is available. Its non-message fold
@@ -418,12 +489,15 @@ preservation reasons in `runToolUseFlow.ts:606-685` are enumerated against
 the row model in PR 2; follow-up consumption uses the atomic queue/message
 transaction in §2.2.
 
-Unpaired tool calls: an assistant row whose `tool_use` blocks have no
-paired `tool.result` rows is resolved per call on resume, so the model
-never sees an unpaired `tool_use`: re-run if parallel-safe, outcome-unknown
+Unpaired tool calls: calls in a pending response without corresponding
+`tool.result` rows are resolved per call on resume: re-run if parallel-safe,
+outcome-unknown
 as above if a `tool.intent` exists, and a synthetic cancelled result if
-neither, which is the pairing `ToolUseDispatchNode.ts:527-543` enforces
-today. Blank-continuation synthetic messages
+neither. Once all are resolved, the handler builds the complete paired
+message batch before the next model invocation; no partial group or
+independently appended pending assistant enters provider history. This
+preserves the pairing `ToolUseDispatchNode.ts:527-605` enforces today.
+Blank-continuation synthetic messages
 (`ToolUseProcessNode.ts:208-275`) are ordinary `model.message` rows and
 fold without special handling.
 
@@ -767,3 +841,12 @@ exactly three tool files and `parallelSafe: true` in twelve;
 `/tmp/opencode-src` at `f12e14c`. Panel artifacts: workflow run
 `wf_70dfff59-094`, five design JSONs and nine refutation JSONs in the
 session scratchpad under `panel/`.
+
+The settlement and provider-batching amendment was checked against
+`toolUseRound/ToolUseDispatchNode.ts:443-605`,
+`ModelHandler.ts:1679-1713`,
+`anthropic/anthropicToolResults.ts:190-232`, and
+`google/modelHandlerGoogleInteractions.ts:1304-1345`: display completion
+currently precedes message construction, the provider requires original
+call order, and the builders can return the assistant content as well as
+results while consuming saved reasoning state.
