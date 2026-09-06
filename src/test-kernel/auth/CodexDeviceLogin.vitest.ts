@@ -24,7 +24,7 @@ function stubDeviceEndpoints(
         return jsonResponse({
           device_auth_id: 'device-auth-id',
           user_code: 'ABCD-EFGH',
-          interval: 0.001,
+          interval: 0.01,
           ...userCode,
         });
       }
@@ -76,7 +76,9 @@ describe('Codex device login', () => {
     const coordinator = coordinatorStub();
     vi.mocked(coordinator.completeDeviceLogin).mockImplementation(async () => {
       controller.abort();
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      // Real time: the flow's run boundary provides its own clock, so the
+      // store step is held long enough that the abort lands while it runs.
+      await new Promise((resolve) => setTimeout(resolve, 20));
       return { accessToken: 'stored' } as never;
     });
 
@@ -90,9 +92,9 @@ describe('Codex device login', () => {
   });
 
   it('gives up at the expiry the server reported, not the local fallback', async () => {
-    // 20 ms of polling at 1 ms; the 15-minute fallback would hang the test.
+    // 200 ms of polling at 10 ms; the 15-minute fallback would hang the test.
     let polls = 0;
-    stubDeviceEndpoints({ expires_in: 0.02 }, () => {
+    stubDeviceEndpoints({ expires_in: 0.2 }, () => {
       polls += 1;
       return jsonResponse({ error: 'authorization_pending' }, 403);
     });
