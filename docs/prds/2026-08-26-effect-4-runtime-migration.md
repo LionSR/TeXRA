@@ -1493,16 +1493,24 @@ lane D of the persistence cutover branch, sequenced and sized by
    The breaking behaviour instead: a run whose only durable state is a
    `flow_<id>.json` record is **reported as not resumable** after the
    cutover, with a message naming the release. The record is left on disk
-   for D8 to delete. Phase 2 deletes `persistedFlow.ts` with the rest of
+   for D8 to delete, and renamed to `flow_<id>.json.superseded` before this
+   run's first ledger append so a reverted release cannot resume from it (see
+   the rollout section). Phase 2 deletes `persistedFlow.ts` with the rest of
    `src/agent/node/`, and no code in the tree reads the old format again.
 
    _Amended 2026-09-06 (review finding):_ that deletion is only landable if
    **every** importer converts in this same phase, and at this commit
-   `persistedFlow.ts` has nine production importers, not the two the earlier
-   text implied: `RoundPersistedFlow`, `runReflectionFlow`, `runToolUseFlow`,
-   `AgentLaunchContext`, `SessionResumeRetrieval`, `persistedCompileRejection`,
-   `resumeRun`, `storage/executionLifecycle` (which imports `flowKey`), and
-   `storage/resumability`. Two of them were assigned elsewhere and move here:
+   `persistedFlow.ts` has **eleven** production importers: `RoundPersistedFlow`,
+   `runReflectionFlow`, `runToolUseFlow`, `AgentLaunchContext`,
+   `SessionResumeRetrieval`, `persistedCompileRejection`, `resumeRun`,
+   `storage/executionLifecycle` (which imports `flowKey`), `storage/resumability`,
+   `tools/executions/executionKvFiles` (`FLOW_KEY_PREFIX`), and
+   `tools/executions/executionLiveness` (`flowKey`). _(Corrected 2026-09-06
+   from "nine": the first inventory was taken from a truncated search and
+   dropped the two `tools/executions` readers.)_ `executionKvFiles` needs one
+   thing beyond conversion: since the cutover leaves legacy `flow_<id>.json`
+   files on disk, it must keep excluding them from execution file listings,
+   which is what its `FLOW_KEY_PREFIX` import does today. Two of them were assigned elsewhere and move here:
    `AgentRunLifecycle`'s `setFlowRecordDisposition` (declared at
    `AgentRunLifecycle.ts:104`, implemented at `:515`, called from
    `executeAgent.ts:171`) was left to Stage 3a, and `executionLifecycle`'s
@@ -1582,6 +1590,16 @@ lane D of the persistence cutover branch, sequenced and sized by
    execution id as its attempt identity, and the checkpoint's
    `checkpoint.inputs` rows (one-fold PRD 5.1) carry the script, arguments,
    and file sets `persistence.ts` restores and revises on relaunch today.
+   _Amended 2026-09-06 (review finding):_ the launch paths are not the only
+   readers. `src/tools/executions/turnAttribution.ts` also calls
+   `readTurnState()`, and it uses the active and last-completed turn tokens to
+   warn when `/report` or `/result` is showing an older turn after a newer one
+   was interrupted — so deleting the state after migrating only the launch
+   paths would either break that reader or silently drop the warning and
+   present a stale result as current. The replacement rows carry the same
+   stable turn token, and `turnAttribution` migrates onto them in this step
+   too.
+
    Only then are `ChildTurnState`, `workflowScript/persistence.ts`, and the
    turn-state writes in `childRunLoop.ts` deleted; nothing is deleted before
    its replacement lands. In scope, not optional: two ledgers would be
@@ -1803,12 +1821,30 @@ served. Its whole purpose was to keep the two stores consistent across a
 crash _and_ a revert, and it was intricate precisely because a SQLite append
 and a file rename cannot be made atomic: three steps, a `sha256` provenance
 field, and three repair cases each carrying its own correctness argument.
-With no importer there is no second store to keep consistent. The cutover
-release simply does not read `flow_<id>.json`, and a reverted release reads
-the untouched record it always could. In both directions a run interrupted
-across the boundary is **reported as not resumable**; nothing is repeated,
-because nothing is replayed. That is the same guarantee the protocol was
-built to provide, obtained by not having the mechanism. A phase lands only after all affected hosts have crossed
+With no importer there is no second store to keep consistent, so the
+three-step protocol, the `sha256` provenance field and the three repair cases
+all go.
+
+~~a reverted release reads the untouched record it always could. In both
+directions a run interrupted across the boundary is reported as not
+resumable~~ _Corrected 2026-09-06 (review finding):_ that was wrong, and in
+the dangerous direction. Leaving the record untouched means a reverted
+release finds a perfectly readable `flow_<id>.json` with its old cursor and
+resumes from it — repeating whatever model calls and side-effecting tool
+calls the run completed under the ledger. The cutover release not reading the
+file does nothing to stop the _old_ release reading it.
+
+One rename fixes it, and unlike the deleted protocol it needs no atomicity
+argument: the first time a run appends a ledger row, it first renames
+`flow_<id>.json` to `flow_<id>.json.superseded`. The rename is ordered
+**before** the first append, so the two crash windows are both safe — die
+before it and the old release resumes from a record that is still current
+(nothing was written to the ledger), die after it and the old release finds
+no record and reports the run not resumable, which is the intended breaking
+behaviour. No second store to reconcile, no provenance field, no repair
+pass: the ledger is never read by the old release and the record is never
+read by the new one, so the rename only has to make the file invisible, not
+consistent. A phase lands only after all affected hosts have crossed
 the same internal boundary; the repository does not ship one host on the Effect
 implementation and another on a separately maintained Promise implementation.
 
