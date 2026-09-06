@@ -1,21 +1,47 @@
 /**
- * Vitests for the LSP-style JSON-RPC framer. Uses an in-memory
+ * Vitests for the LSP-style JSON-RPC pipeline. Uses an in-memory
  * `PassThrough` pair to feed bytes both ways without spawning anything.
  */
 import { PassThrough } from 'node:stream';
-import { describe, expect, it, vi } from 'vitest';
 
-import { JsonRpcConnection } from '@tools/lean/direct/jsonRpc';
+import { it } from '@effect/vitest';
+import { Effect, Fiber, Queue, Sink, Stream } from 'effect';
+import { describe, expect, vi } from 'vitest';
 
-function makePair(): {
-  connection: JsonRpcConnection;
-  serverOut: PassThrough;
-  serverSends: (json: unknown) => void;
-  collectClientFrames: () => Promise<Record<string, unknown>[]>;
-} {
+import { makeJsonRpcConnection } from '@tools/lean/direct/jsonRpc';
+
+/** The peer's output as chunks; the listeners go when the consumer does. */
+const chunksOf = (stream: PassThrough) =>
+  Stream.callback<Uint8Array>((queue) =>
+    Effect.gen(function* () {
+      const onData = (chunk: Uint8Array) => {
+        Queue.offerUnsafe(queue, chunk);
+      };
+      stream.on('data', onData);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          stream.off('data', onData);
+        }),
+      );
+    }),
+  );
+
+const makePair = Effect.gen(function* () {
   const serverIn = new PassThrough(); // what the client writes (i.e. the server reads)
   const serverOut = new PassThrough(); // what the server writes (i.e. the client reads)
-  const connection = new JsonRpcConnection(serverIn, serverOut);
+  const notifications: Array<[method: string, params: unknown]> = [];
+  const connection = yield* makeJsonRpcConnection({
+    input: chunksOf(serverOut),
+    output: Sink.forEach((chunk: Uint8Array) =>
+      Effect.sync(() => {
+        serverIn.write(chunk);
+      }),
+    ),
+    onNotification: (method, params) =>
+      Effect.sync(() => {
+        notifications.push([method, params]);
+      }),
+  });
   let clientFrameBuffer = '';
 
   const serverSends = (json: unknown): void => {
@@ -25,7 +51,7 @@ function makePair(): {
   };
 
   /** Wait until serverIn has data, then parse and return all LSP frames. */
-  const collectClientFrames = () =>
+  const collectClientFrames = Effect.promise(() =>
     vi.waitFor(
       (): Record<string, unknown>[] => {
         let raw = serverIn.read() as Buffer | string | null;
@@ -57,132 +83,150 @@ function makePair(): {
         return frames;
       },
       { timeout: 500, interval: 5 },
+    ),
+  );
+
+  const notified = (expected: Array<[string, unknown]>) =>
+    Effect.promise(() =>
+      vi.waitFor(
+        () => {
+          expect(notifications).toEqual(expected);
+        },
+        { timeout: 2000, interval: 5 },
+      ),
     );
 
-  return {
-    connection,
-    serverOut,
-    serverSends,
-    collectClientFrames,
-  };
-}
+  return { connection, serverOut, serverSends, collectClientFrames, notified };
+});
 
 describe('JsonRpcConnection', () => {
-  it('emits a request frame with Content-Length and resolves on response', async () => {
-    const { connection, serverSends, collectClientFrames } = makePair();
-    const pending = connection.request<{ ok: boolean }>('test/method', {
-      x: 1,
-    });
-    const frames = await collectClientFrames();
-    expect(frames).toHaveLength(1);
-    expect(frames[0]).toMatchObject({
-      jsonrpc: '2.0',
-      method: 'test/method',
-      params: { x: 1 },
-    });
-    const id = frames[0]?.id;
-    expect(typeof id).toBe('number');
+  it.effect(
+    'emits a request frame with Content-Length and resolves on response',
+    () =>
+      Effect.gen(function* () {
+        const { connection, serverSends, collectClientFrames } =
+          yield* makePair;
+        const pending = yield* Effect.forkChild(
+          connection.request<{ ok: boolean }>('test/method', { x: 1 }),
+        );
+        const frames = yield* collectClientFrames;
+        expect(frames).toHaveLength(1);
+        expect(frames[0]).toMatchObject({
+          jsonrpc: '2.0',
+          method: 'test/method',
+          params: { x: 1 },
+        });
+        const id = frames[0]?.id;
+        expect(typeof id).toBe('number');
 
-    serverSends({ jsonrpc: '2.0', id, result: { ok: true } });
-    await expect(pending).resolves.toEqual({ ok: true });
-  });
-
-  it('rejects when the server returns an error', async () => {
-    const { connection, serverSends, collectClientFrames } = makePair();
-    const pending = connection.request('boom').catch((err: Error) => err);
-    const frames = await collectClientFrames();
-    serverSends({
-      jsonrpc: '2.0',
-      id: frames[0]?.id,
-      error: { code: -32601, message: 'unknown method' },
-    });
-    const err = await pending;
-    expect(err).toBeInstanceOf(Error);
-    // vscode-jsonrpc surfaces the code on the ResponseError object separately
-    // from the message string.
-    expect((err as Error).message).toContain('unknown method');
-    expect((err as { code?: number }).code).toBe(-32601);
-  });
-
-  it('routes notifications from the server to subscribed handlers', async () => {
-    const { connection, serverSends } = makePair();
-    const handler = vi.fn();
-    connection.onNotification('window/logMessage', handler);
-
-    serverSends({
-      jsonrpc: '2.0',
-      method: 'window/logMessage',
-      params: { type: 3, message: 'hello' },
-    });
-
-    await vi.waitFor(() => {
-      expect(handler).toHaveBeenCalledWith({ type: 3, message: 'hello' });
-    });
-  });
-
-  it('reassembles a frame whose body arrives across multiple chunks', async () => {
-    const { connection, serverOut } = makePair();
-    const handler = vi.fn();
-    connection.onNotification('split', handler);
-
-    const body = Buffer.from(
-      JSON.stringify({ jsonrpc: '2.0', method: 'split', params: { ok: true } }),
-      'utf8',
-    );
-    serverOut.write(`Content-Length: ${body.length}\r\n\r\n`);
-    serverOut.write(body.slice(0, 5));
-    serverOut.write(body.slice(5));
-
-    await vi.waitFor(() => {
-      expect(handler).toHaveBeenCalledWith({ ok: true });
-    });
-  });
-
-  it('reassembles a frame whose header arrives across multiple chunks', async () => {
-    const { connection, serverOut } = makePair();
-    const handler = vi.fn();
-    connection.onNotification('split-header', handler);
-
-    const body = Buffer.from(
-      JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'split-header',
-        params: { ok: true },
+        serverSends({ jsonrpc: '2.0', id, result: { ok: true } });
+        expect(yield* Fiber.join(pending)).toEqual({ ok: true });
       }),
-      'utf8',
-    );
-    const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`);
-    serverOut.write(header.subarray(0, 6));
-    serverOut.write(header.subarray(6));
-    serverOut.write(body);
+  );
 
-    await vi.waitFor(() => {
-      expect(handler).toHaveBeenCalledWith({ ok: true });
-    });
-  });
+  it.effect('fails the request when the server returns an error', () =>
+    Effect.gen(function* () {
+      const { connection, serverSends, collectClientFrames } = yield* makePair;
+      const pending = yield* Effect.forkChild(
+        Effect.flip(connection.request('boom')),
+      );
+      const frames = yield* collectClientFrames;
+      serverSends({
+        jsonrpc: '2.0',
+        id: frames[0]?.id,
+        error: { code: -32601, message: 'unknown method' },
+      });
+      const error = yield* Fiber.join(pending);
+      expect(error).toMatchObject({
+        _tag: 'JsonRpcRequestError',
+        method: 'boom',
+        code: -32601,
+      });
+      expect(error.message).toContain('unknown method');
+    }),
+  );
 
-  it('reassembles two frames written back-to-back', async () => {
-    const { connection, serverSends } = makePair();
-    const a = vi.fn();
-    const b = vi.fn();
-    connection.onNotification('a', a);
-    connection.onNotification('b', b);
+  it.effect('routes notifications from the server to the handler', () =>
+    Effect.gen(function* () {
+      const { serverSends, notified } = yield* makePair;
+      serverSends({
+        jsonrpc: '2.0',
+        method: 'window/logMessage',
+        params: { type: 3, message: 'hello' },
+      });
+      yield* notified([['window/logMessage', { type: 3, message: 'hello' }]]);
+    }),
+  );
 
-    serverSends({ jsonrpc: '2.0', method: 'a', params: 1 });
-    serverSends({ jsonrpc: '2.0', method: 'b', params: 2 });
+  it.effect(
+    'reassembles a frame whose body arrives across multiple chunks',
+    () =>
+      Effect.gen(function* () {
+        const { serverOut, notified } = yield* makePair;
+        const body = Buffer.from(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'split',
+            params: { ok: true },
+          }),
+          'utf8',
+        );
+        serverOut.write(`Content-Length: ${body.length}\r\n\r\n`);
+        serverOut.write(body.subarray(0, 5));
+        serverOut.write(body.subarray(5));
+        yield* notified([['split', { ok: true }]]);
+      }),
+  );
 
-    await vi.waitFor(() => {
-      expect(a).toHaveBeenCalledWith(1);
-      expect(b).toHaveBeenCalledWith(2);
-    });
-  });
+  it.effect(
+    'reassembles a frame whose header arrives across multiple chunks',
+    () =>
+      Effect.gen(function* () {
+        const { serverOut, notified } = yield* makePair;
+        const body = Buffer.from(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'split-header',
+            params: { ok: true },
+          }),
+          'utf8',
+        );
+        const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`);
+        serverOut.write(header.subarray(0, 6));
+        serverOut.write(header.subarray(6));
+        serverOut.write(body);
+        yield* notified([['split-header', { ok: true }]]);
+      }),
+  );
 
-  it('rejects pending requests when the connection is disposed', async () => {
-    const { connection } = makePair();
-    const pending = connection.request('never').catch((err: Error) => err);
-    connection.dispose('test teardown');
-    const err = await pending;
-    expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('test teardown');
-  });
+  it.effect('reassembles two frames written back-to-back', () =>
+    Effect.gen(function* () {
+      const { serverSends, notified } = yield* makePair;
+      serverSends({ jsonrpc: '2.0', method: 'a', params: 1 });
+      serverSends({ jsonrpc: '2.0', method: 'b', params: 2 });
+      yield* notified([
+        ['a', 1],
+        ['b', 2],
+      ]);
+    }),
+  );
+
+  it.effect('fails pending and later requests with the close reason', () =>
+    Effect.gen(function* () {
+      const { connection, collectClientFrames } = yield* makePair;
+      const pending = yield* Effect.forkChild(
+        Effect.flip(connection.request('never')),
+      );
+      yield* collectClientFrames;
+      yield* connection.close('test teardown');
+      expect(yield* Fiber.join(pending)).toMatchObject({
+        _tag: 'JsonRpcConnectionDisposed',
+        message: 'test teardown',
+      });
+      expect(yield* Effect.flip(connection.request('late'))).toMatchObject({
+        _tag: 'JsonRpcConnectionDisposed',
+        message: 'test teardown',
+      });
+    }),
+  );
 });
