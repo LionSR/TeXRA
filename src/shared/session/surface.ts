@@ -25,13 +25,11 @@ import type { SessionView } from './sessionView';
 
 /**
  * The new-task composer's selections: `MainViewPersistedState` minus the
- * host-derived fields. `openedFiles` and the LaTeXDiffs visibility are the
- * host's (`openedFiles`) or the Tools sheet's (`toolsSheetOpen` below), so
- * a per-view copy would answer a question the host snapshot already owns.
+ * host-derived `openedFiles`, which the host snapshot already owns, so a
+ * per-view copy would answer a question two surfaces cannot differ on.
  */
 export const LaunchSurfaceSchema = MainViewPersistedStateSchema.omit({
   openedFiles: true,
-  latexdiffsVisible: true,
 });
 type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
 

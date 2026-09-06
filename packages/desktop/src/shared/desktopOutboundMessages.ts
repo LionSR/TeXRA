@@ -28,7 +28,6 @@ import { DesktopShowPdfMessageSchema } from './desktopPdfMessages.js';
 import { DesktopShowPromptMessageSchema } from './desktopPromptMessages.js';
 import {
   DesktopOpenWorkbenchMessageSchema,
-  DesktopResetLauncherMessageSchema,
   DesktopSaveFileMessageSchema,
   DesktopShowLauncherMessageSchema,
   DesktopToggleLayoutMessageSchema,
@@ -71,7 +70,6 @@ export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
   DesktopOpenWorkbenchMessageSchema,
   DesktopSaveFileMessageSchema,
   DesktopShowLauncherMessageSchema,
-  DesktopResetLauncherMessageSchema,
   DesktopToggleLayoutMessageSchema,
   DesktopSetLogMessageSchema,
   DesktopOnboardingSetStateMessageSchema,

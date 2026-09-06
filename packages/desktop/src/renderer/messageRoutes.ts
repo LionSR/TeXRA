@@ -11,7 +11,6 @@ import {
 
 import {
   DesktopOpenWorkbenchMessageSchema,
-  DesktopResetLauncherMessageSchema,
   DesktopSaveFileMessageSchema,
   DesktopShowLauncherMessageSchema,
   DesktopToggleLayoutMessageSchema,
@@ -63,8 +62,6 @@ interface DesktopMessageRouteHandlers {
   /** Live read of whether bootstrap failed (routes must not fire then). */
   isBootstrapFailed(): boolean;
   returnToLauncher(): void;
-  /** The launcher's selections back to their defaults. */
-  resetLauncher(): void;
   openKind(kind: WorkbenchKind): void;
   toggleLayoutPanel(panel: DesktopLayoutPanel): void;
   onboarding: {
@@ -118,9 +115,6 @@ export function createMessageRoutes(
     }),
     messageRoute(DesktopShowLauncherMessageSchema, () => {
       if (!handlers.isBootstrapFailed()) handlers.returnToLauncher();
-    }),
-    messageRoute(DesktopResetLauncherMessageSchema, () => {
-      if (!handlers.isBootstrapFailed()) handlers.resetLauncher();
     }),
     messageRoute(DesktopOpenWorkbenchMessageSchema, (message) => {
       if (!handlers.isBootstrapFailed()) handlers.openKind(message.kind);

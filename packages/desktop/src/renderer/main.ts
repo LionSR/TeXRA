@@ -27,7 +27,6 @@ import { hostBridge, postMessage } from '@shared/hostBridge';
 import { DESKTOP_THEME_KIND } from '@shared/schemas';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
 import { applyShellAction, type Shell } from '@shared/session/shell';
-import { emptySurface } from '@shared/session/surface';
 import { PersistedState } from '@shared/state/PersistedState';
 
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
@@ -929,7 +928,9 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   toggleBottomBar: toggleBottomBarVisibility,
   toggleSidePanel: toggleSidePanelVisibility,
   toggleSummaryBar: toggleSummaryBarVisibility,
-  resetMainView: resetLauncher,
+  // New Session is the header's "+" (PRD 12.4): the New-task state with
+  // the launcher's selections as they are, the same as the extension.
+  resetMainView: returnToLauncher,
 };
 const shortcutBootstrap = createDesktopShortcutBootstrap({
   createRegistry: (openCommands) =>
@@ -963,15 +964,6 @@ function returnToLauncher(): void {
   paperSessions.act(shell.active, { kind: 'selectNew' });
 }
 
-// The launcher's selections back to their defaults, and the empty state.
-function resetLauncher(): void {
-  paperSessions.act(shell.active, {
-    kind: 'launch',
-    patch: emptySurface(shell.active).launch,
-  });
-  returnToLauncher();
-}
-
 const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
   bottomBar: toggleBottomBarVisibility,
   sidePanel: toggleSidePanelVisibility,
@@ -991,7 +983,6 @@ const MESSAGE_ROUTES = createMessageRoutes({
   },
   isBootstrapFailed: () => bootstrapFailed,
   returnToLauncher,
-  resetLauncher,
   openKind: (kind) =>
     paperWorkbenches.get(shell.active)?.workbench.openKind(kind),
   toggleLayoutPanel: (panel) => {
@@ -1186,6 +1177,10 @@ function wireShellEvents(): void {
     if (event.detail.kind === 'select' && key !== shell.active) {
       selectPaper(key);
     }
+  });
+  appRoot.addEventListener('composer-submit', (event) => {
+    const key = sessionOf(event);
+    if (key) paperSessions.submit(key);
   });
 }
 

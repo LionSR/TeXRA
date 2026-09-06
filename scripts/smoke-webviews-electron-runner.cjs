@@ -335,9 +335,7 @@ async function assertProgressComposerLayout(window, view) {
         const dock = findDeep('.conversation-composer-dock');
         const conversationLog = findDeep('.conversation-log');
         if (composer?.updateComplete) await composer.updateComplete;
-        const waTextarea = composer?.shadowRoot?.querySelector('wa-textarea');
-        if (waTextarea?.updateComplete) await waTextarea.updateComplete;
-        const textarea = waTextarea?.shadowRoot?.querySelector('textarea');
+        const textarea = composer?.shadowRoot?.querySelector('textarea');
 
         const missing = [
           ['session-composer', composer],

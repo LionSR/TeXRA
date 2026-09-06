@@ -10,6 +10,10 @@
 > No production code changes, and no benchmark script is checked in: the
 > script mirrors the fold's private spelling, so section 4 points at the
 > commit that carried it instead.
+>
+> **Adoption:** [PR #11915](https://github.com/LionSR/TeXRA/pull/11915) adopts
+> D5 in `sessionFold.ts` (2026-09-06); the adopted fold, re-measured with the
+> same method against `origin/main` on one machine, is tabled in that PR.
 
 ## 1. Question and gate
 
