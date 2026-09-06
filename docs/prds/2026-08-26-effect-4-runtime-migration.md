@@ -22,6 +22,16 @@ contract, or the SDK's public API, and no temporary adapter exists, so the
 `@adapter-until` marker is retired before it was ever merged. The remaining
 items of section 15 stay open; R2, R3, and R5 to R10 are unchanged.
 
+A third owner ruling, 2026-09-06: "with 0.41 we can be breaking if
+respecting legacy means too much tech debt." TeXRA is at 0.41.0, ships no
+npm package (publication is held until a named external consumer exists,
+CLAUDE.md), and updates all three hosts together, so a compatibility
+mechanism here buys one upgrade's convenience and is paid for in permanent
+machinery. The ruling is conditional and applied as such: break where the
+legacy path costs more than it protects, keep compatibility where it is
+cheap. Its consequences below are non-goal 6, Phase 2's `flow_<id>.json`
+importer, and the rollout section's rollback protocol.
+
 **Decision in one sentence:** TeXRA will adopt Effect 4 RC as the execution
 model for host-neutral asynchronous backend work, with the two agent flow
 families as plain Effect loops whose only durable act is appending rows to
@@ -476,14 +486,21 @@ is the execution substrate beneath those rulings.
    Stage 3b may introduce one explicit versioned representation for finer
    checkpoints under the rollout section's reader-outlives-writer rule.~~
    _Amended 2026-09-06:_ the `flow_<id>.json` record is retired in Phase 2
-   as amended, imported once into the execution aggregate's first
-   `flow.snapshot` row; the substrate contract (C1) owns versioning from
-   then on. One public schema does change, additively: `StreamView`, which
-   `@texra-ai/agent` exports and `AgentRun.view` returns, gains the nullable
-   field `flow` (one-fold PRD 5.1). That is lane D's only public-schema
-   change; it is recorded in the package changelog as a minor change, and
-   wire protocols, agent YAML, the exported trace, and result schemas stay
-   unchanged.
+   as amended; the substrate contract (C1) owns versioning from then on.
+   ~~imported once into the execution aggregate's first `flow.snapshot`
+   row~~ _Amended 2026-09-06 (third ruling):_ **not imported at all** — see
+   Phase 2 step 2. One public schema does change: `StreamView`, which
+   `@texra-ai/agent` exports and `AgentRun.view` returns, gains the field
+   `flow` (one-fold PRD 5.1). ~~additively … recorded in the package
+   changelog as a minor change~~ _Amended 2026-09-06 (third ruling):_ the
+   package is built and fenced but **not published**, and CLAUDE.md holds
+   publication until a named external consumer exists, so there is no
+   external consumer for an additive-only constraint to protect. Lane D
+   shapes `StreamView.flow` as the view wants it and the changelog records
+   the change; a nullable field is a reasonable shape, not a requirement.
+   Wire protocols, agent YAML and the exported trace stay unchanged, because
+   those are read by files on disk and by the standalone viewer, which the
+   ruling does not cover.
 7. No public `Effect` return types from `@texra-ai/agent` in the first release.
 8. No automatic retry expansion. Existing idempotency and retry ownership
    decisions remain binding.
@@ -1436,23 +1453,40 @@ lane D of the persistence cutover branch, sequenced and sized by
    public API is reached — `runAgent`'s host callers, the resume commands,
    and the SDK entry are where the run lands. Deferring the `executeAgent`
    interior to Stage 3a is what would make Phase 2 unlandable under the new
-   rule, so the interior moves with the surface; the importer's `flow_<id>.json` arm, which writes one
-   batch: the `flow.snapshot` carrying the record's `shared` state and the
-   canonical `flow.step` derived from the record's cursor and action (a
-   cursor at the wait node is `waiting`; a cursor at a round boundary is
-   `round.end` with its round number; any mid-cycle cursor maps to the last
-   completed turn or round boundary, which is safe because every completed
-   model response and tool result the record holds is already in `shared`
-   and nothing with a result is re-run), so the loop resumes from a
-   coordinate, never from a node identity. The importer is a temporary
-   compatibility reader under AGENTS.md's rule and
-   records beside itself its introduction date (the cutover release) and
-   its retirement condition: it is deleted three months after that release
-   ships, once every session root's C9 retention window has passed, so no
-   readable run can still lack a `flow.snapshot`; ~~the ratchet from Phase 1
-   carries an `@adapter-until` marker for it~~ _Amended 2026-09-06:_ it is
-   a compatibility reader under AGENTS.md's rule, not an adapter, and its
-   retirement is dated in its own header, since the marker is retired.
+   rule, so the interior moves with the surface.
+
+   ~~The importer's `flow_<id>.json` arm writes one batch: the
+   `flow.snapshot` carrying the record's `shared` state and the canonical
+   `flow.step` derived from the record's cursor and action (a cursor at the
+   wait node is `waiting`; a cursor at a round boundary is `round.end` with
+   its round number; any mid-cycle cursor maps to the last completed turn or
+   round boundary), so the loop resumes from a coordinate, never from a node
+   identity. The importer is a temporary compatibility reader under
+   AGENTS.md's rule and records beside itself its introduction date (the
+   cutover release) and its retirement condition: it is deleted three months
+   after that release ships, once every session root's C9 retention window
+   has passed, so no readable run can still lack a `flow.snapshot`; it is a
+   compatibility reader, not an adapter, so it carries no `@adapter-until`
+   marker.~~
+
+   _Amended 2026-09-06 (third ruling):_ **the importer is cut.** Everything
+   struck above — the `flow_<id>.json` arm, the cursor-and-action to
+   `flow.step` derivation with its three mapping rules, the introduction
+   date, the retirement condition and the C9 retention argument behind it —
+   exists so that a run _already in flight at the cutover_ survives the
+   upgrade. `FlowRecord` is `{ shared, cursor }`: the resume contract for an
+   interrupted run, and nothing else. Conversation history, transcripts and
+   results are separate stores under C9 and are untouched either way. So the
+   whole mechanism buys the resumability of whichever runs happen to be
+   interrupted at one upgrade, and is paid for with a reader, a derivation
+   whose three cases each need their own correctness argument, and a
+   retirement nobody will remember to perform.
+
+   The breaking behaviour instead: a run whose only durable state is a
+   `flow_<id>.json` record is **reported as not resumable** after the
+   cutover, with a message naming the release. The record is left on disk
+   for D8 to delete. Phase 2 deletes `persistedFlow.ts` with the rest of
+   `src/agent/node/`, and no code in the tree reads the old format again.
    Deletes `src/agent/node/`, `ModelInvocationNode`, `RoundPersistedFlow`,
    `ResponseCycleFlow`, `ToolUseRoundFlow`, all sixteen node classes, the
    disposition ladder, the flow-local uses of `linkAbortSignals` and
@@ -1489,6 +1523,7 @@ lane D of the persistence cutover branch, sequenced and sized by
    remains, and are reviewed rather than edited blindly. The PR re-runs that
    search and `npm run check:guidance-refs` is the gate. Reviewed as one
    because splitting it is what creates a shim.
+
 3. **Replay along the flow.** A step scrubber over `foldRunState` as a
    surface of the in-process hosts (the conversation shell's run detail on
    the extension and desktop, the TUI's run pane), reading rows from the
@@ -1721,7 +1756,7 @@ reader-outlives-writer rule cannot hold across it, because pre-cutover code
 has no reader for rows, so the revertibility claim is **withdrawn for runs
 that progressed under the ledger** and replaced by a weaker, explicit
 guarantee: such a run is interrupted on rollback, never silently resumed
-from a stale record and never repeated. The mechanism is the importer's
+from a stale record and never repeated. ~~The mechanism is the importer's
 three-step idempotent protocol, since a SQLite append and a file rename
 cannot be one atomic step: (1) rename `flow_<id>.json` to
 `flow_<id>.json.importing`; (2) append the import batch (`flow.snapshot`
@@ -1737,7 +1772,19 @@ progressed under the ledger, reports it as not resumable, and repeats no
 paid or side-effecting work; a run never resumed under the ledger keeps its
 untouched record and resumes after rollback exactly as before. The importer is the temporary compatibility
 reader of Phase 2 step 2 and follows the repository's compatibility and
-retirement policy. A phase lands only after all affected hosts have crossed
+retirement policy.~~
+
+_Amended 2026-09-06 (third ruling):_ the protocol goes with the importer it
+served. Its whole purpose was to keep the two stores consistent across a
+crash _and_ a revert, and it was intricate precisely because a SQLite append
+and a file rename cannot be made atomic: three steps, a `sha256` provenance
+field, and three repair cases each carrying its own correctness argument.
+With no importer there is no second store to keep consistent. The cutover
+release simply does not read `flow_<id>.json`, and a reverted release reads
+the untouched record it always could. In both directions a run interrupted
+across the boundary is **reported as not resumable**; nothing is repeated,
+because nothing is replayed. That is the same guarantee the protocol was
+built to provide, obtained by not having the mechanism. A phase lands only after all affected hosts have crossed
 the same internal boundary; the repository does not ship one host on the Effect
 implementation and another on a separately maintained Promise implementation.
 
