@@ -388,6 +388,7 @@ export async function initCliPlatform(
       afterFlushArtifacts: [() => UsageLogService.dispose()],
       afterExecutionSettlement: [
         () => teardownDefaultSession(),
+        () => flushNdjsonStdout(),
         () => disposeProcessRuntime(),
       ],
     });
