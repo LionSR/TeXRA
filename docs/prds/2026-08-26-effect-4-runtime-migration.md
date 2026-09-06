@@ -997,12 +997,17 @@ interrupts the owned root fiber.
   coordinate (the round) and opens each round under `Effect.scoped` with an
   `acquireRelease` stage.
 - `RunLedger`, a per-session-root `Context.Service` over `SessionEvents`:
-  `append(row) -> Effect<RunState>` and `load(executionId)`. The append is
-  the single uninterruptible region and runs under the publisher's permit.
-  `append` returns the state obtained by folding the new row into the
-  current state with the same `foldRunState` step; there is no second
-  reducer, so the state the loop sees after an append is the state a later
-  load would produce at that row.
+  `append(rows) -> Effect<RunState>` and `load(executionId)`. `append`
+  takes a batch of one or more rows and commits them in **one transaction**,
+  across the run's two aggregates when the batch spans them (as
+  `SessionEvents.publish` already does for `run.start` plus `run.activate`,
+  one-fold PRD §6 item 8); a turn's or a round's closing snapshot and its
+  `flow.step` are one batch, so neither is ever durable without the other.
+  The append is the single uninterruptible region and runs under the
+  publisher's permit. `append` returns the state obtained by folding the
+  batch into the current state with the same `foldRunState` step; there is
+  no second reducer, so the state the loop sees after an append is the state
+  a later load would produce at those rows.
 - `foldRunState(rows) -> RunState`, pure and data-only in `src/shared`: latest
   `flow.snapshot`, then later `model.compaction`, `model.message`,
   `tool.intent`, `tool.result`, and `flow.step` rows in order. A
@@ -1303,19 +1308,26 @@ converted; it is deleted with its replacement in the same change. This phase is
 lane D of the persistence cutover branch, sequenced and sized by
 `docs/proposals/2026-09-04-agent-runtime-on-effect.md` §3 and §5:
 
-1. **Foundation.** `RunLedger` over `SessionEvents`; the six row schemas in
-   Zod, split by aggregate: `flow.step` is the one new `AgentEvent` arm (a
-   display row on the stream aggregate, scrubbed at publish like every trace
-   row), while `model.message`, `model.compaction`, `tool.intent`,
-   `tool.result`, and `flow.snapshot` are a private `RunLedgerRow` schema in
-   `src/agent/runtime/ledger/`, published through `SessionEvents` under the
-   execution aggregate and never part of `AgentEvent`, so the public SDK
-   trace union (`packages/agent`, `AgentRun.events`) does not widen and no
-   byte-exact provider content can reach an SDK consumer unredacted
-   (contract C3; the proposal's §2.1 phrase "all carried as `AgentEvent`
-   arms" is corrected to this in its PR 0). Only `RunLedger` and the trace
-   viewer's stepper read those five. Also `foldRunState` in `src/shared`,
-   the in-memory ledger layer, one ledger test and one fold test under
+1. **Foundation.** `RunLedger` over `SessionEvents`; the six row schemas as
+   data-only Zod in `src/shared/schemas/runLedger.ts`, beside
+   `foldRunState`, so the fold reads them without an `@agent/*` import and
+   the runtime imports the schema, never the reverse. They split by
+   aggregate and by contract. `flow.step` is a run-scoped **session fact**
+   on the stream aggregate, published as a draft through
+   `SessionHandle.publish` exactly like the approval facts of one-fold PRD
+   §6 item 1, scrubbed at publish, and not a trace `AgentEvent` arm; the
+   public SDK trace union (`packages/agent`, `AgentRun.events`) and the
+   exported trace therefore do not change, and the SDK reads the coordinate
+   through the session view (`StreamView.flow`, lane 5). `model.message`,
+   `model.compaction`, `tool.intent`, `tool.result`, and `flow.snapshot` are
+   ledger rows published through `SessionEvents` under the execution
+   aggregate, never part of `AgentEvent` or of any export, so no byte-exact
+   provider content can reach an SDK consumer or a file unredacted (contract
+   C3); "private" means outside every public and exported contract, not a
+   directory. The proposal's §2.1 phrase "all carried as `AgentEvent` arms"
+   is corrected to this in its PR 0. Only `RunLedger` and the trace viewer's
+   stepper read those five. Also `foldRunState` in `src/shared`, the
+   in-memory ledger layer, one ledger test and one fold test under
    `it.effect`, and a load-time warning on rows-since-snapshot (proposal
    §8). Nothing deleted yet; nothing in production calls it.
 2. **Both families on the ledger, one PR.** `ModelInvoker`, `Tools`,
@@ -1341,15 +1353,27 @@ lane D of the persistence cutover branch, sequenced and sized by
    `docs/architecture/2026-06-20-pocketflow-state.md`; the PR re-runs that
    search and `npm run check:guidance-refs` is the gate. Reviewed as one
    because splitting it is what creates a shim.
-3. **Replay along the flow.** `TraceDocument.steps` with `commit`, the
-   viewer scrubber over `foldRunState`, the `flow.step` arm in the session
-   fold (the proposal's §5 PR 3 writes `flow.transition`; the declared row
-   type is `flow.step` and there is no seventh discriminator).
+3. **Replay along the flow.** The viewer scrubber over `foldRunState`,
+   reading rows from the local database through `RunLedger`; the `flow.step`
+   arm in the session fold (the proposal's §5 PR 3 writes `flow.transition`;
+   the declared row type is `flow.step` and there is no seventh
+   discriminator). No change to `TraceDocument` or to the exported trace
+   format: the frozen wire (one-fold PRD 10.3) stays byte-identical, replay
+   is a local-database feature, and an exported document carries no step
+   coordinates and no ledger rows. The proposal's §5 PR 3
+   `TraceDocument.steps` is withdrawn.
 4. **One child protocol.** Workflow-script journal rows into the event table
-   under the script run's aggregate; `workflowScript/persistence.ts`,
-   `ChildTurnState`, and the turn-state writes in `childRunLoop.ts` deleted.
-   In scope, not optional: two ledgers would be the intermediate this program
-   refuses.
+   under an aggregate keyed by the workflow's `checkpointId`, the resume
+   anchor of one-fold PRD decision 9, never by the run's execution id, which
+   mints fresh per relaunch: a relaunch reads the same journal, and the
+   journal's retention follows the checkpoint, not the run. Native
+   `ChildTurnRef` and the script journal entry become one attempt-identity
+   row on that aggregate in the same PR, so the active-versus-last-completed
+   turn distinction `ChildTurnState` records today is carried by the row
+   before `ChildTurnState`, `workflowScript/persistence.ts`, and the
+   turn-state writes in `childRunLoop.ts` are deleted; nothing is deleted
+   before its replacement lands. In scope, not optional: two ledgers would be
+   the intermediate this program refuses.
 
 Rules that bind every step: no interim column, no Promise shim so one family
 can run on the old engine while the other runs on the new service, no window
@@ -1425,8 +1449,13 @@ there, not as a second implementation.
   a reflection-round transition;~~ `RoundPersistedFlow` is deleted in Phase 2
   as amended; preserve the configured bound and the single persisted
   compile-repair grant on `flow.snapshot`.
-- Collapse response-cycle finalization to one canonical round-state commit
-  (`flow.step round.end`) and watermark-tracked derived projections.
+- Collapse response-cycle finalization to one canonical round-state commit:
+  `flow.snapshot` and `flow.step round.end` are appended as **one batch in
+  one transaction** across the run's two aggregates (`RunLedger.append`
+  takes a batch, as `SessionEvents.publish` already does for `run.start`
+  plus `run.activate`, one-fold PRD §6 item 8), so a consumed compile-repair
+  grant and the round's completion are never observable apart; and
+  watermark-tracked derived projections.
 
 The Promise-returning `runAgent` and SDK entry points remain adapters around the
 Effect program. Phase 3 cannot complete while the inner tool-use cycle remains

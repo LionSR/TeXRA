@@ -951,8 +951,12 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    PRD R4 as amended; enumerated in the runtime proposal §2.1). On the
    stream aggregate: `flow.step` (`{ family, step, round?, turn?, outcome? }`
    at round and turn begin and end, `waiting`, `halted`, and the terminal
-   outcome; the fold reads it latest-of-type into `StreamView.flow`). On the
-   execution aggregate, byte-exact and never scrubbed: `model.message`,
+   outcome; the fold reads it latest-of-type into `StreamView.flow`; it is
+   a run-scoped session fact published as a draft through
+   `SessionHandle.publish` like item 1's approval facts, not a trace
+   `AgentEvent`, so the exported trace and the SDK's `AgentRun.events` union
+   do not change). On the execution aggregate, byte-exact and never
+   scrubbed: `model.message`,
    `model.compaction`, `tool.intent`, `tool.result`, and `flow.snapshot`; the
    fold never reads them, only `RunLedger` and the trace viewer's stepper do.
    They are lane D's rows, not this document's lanes', and the eight changes
