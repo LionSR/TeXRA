@@ -1,53 +1,78 @@
 // Third-party imports
-import pThrottle from 'p-throttle';
+import { Cause, Clock, Data, Duration, Effect, Exit, Semaphore } from 'effect';
 
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError } from '@shared/schemas';
-import { wrapApiCall } from '@tools/utils';
-import { onAbort } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const limiters = new Map<
-  string,
-  { minDelayMs: number; wait: () => Promise<void> }
->();
-
-/**
- * Enforces a minimum delay between consecutive requests to the same API.
- * Observes the owning run's cancellation: the throttle wait itself is
- * raced against the tool call's abort signal, so an interrupt returns
- * immediately instead of waiting out queued rate-limit slots. The
- * abandoned wait still consumes its slot when it later resolves, which
- * only delays subsequent callers by at most one interval.
- */
-export async function waitForRateLimit(
-  apiName: string,
-  minDelayMs: number,
-): Promise<void> {
-  const signal = getCurrentToolCallContext()?.signal;
-  let limiter = limiters.get(apiName);
-  if (!limiter || limiter.minDelayMs !== minDelayMs) {
-    limiter = {
-      minDelayMs,
-      wait: pThrottle({ limit: 1, interval: minDelayMs })(() =>
-        Promise.resolve(),
-      ),
-    };
-    limiters.set(apiName, limiter);
-  }
-  await abandonOnAbort(limiter.wait(), signal, 'before contacting the API');
+interface Limiter {
+  readonly minDelayMs: number;
+  /** One permit: waiters take their slot in arrival order. */
+  readonly gate: Semaphore.Semaphore;
+  /** Clock time at which the next request may start. */
+  nextSlotAt: number;
 }
 
+const limiters = new Map<string, Limiter>();
+
 /**
- * Run a rate-limited, cancellable request against an external metadata API,
- * with uniform error wrapping via {@link wrapApiCall}.
+ * Take the next request slot for `apiName`: at most one request starts per
+ * `minDelayMs`, waiters run in arrival order, and an interrupted waiter
+ * gives its place back instead of consuming a slot nobody uses.
+ */
+export const acquireRateLimitSlot = Effect.fn(
+  'rateLimiter.acquireRateLimitSlot',
+)(function* (apiName: string, minDelayMs: number) {
+  let limiter = limiters.get(apiName);
+  if (!limiter || limiter.minDelayMs !== minDelayMs) {
+    limiter = { minDelayMs, gate: Semaphore.makeUnsafe(1), nextSlotAt: 0 };
+    limiters.set(apiName, limiter);
+  }
+  const slot = limiter;
+  yield* Semaphore.withPermit(slot.gate)(
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      if (now < slot.nextSlotAt) {
+        yield* Effect.sleep(Duration.millis(slot.nextSlotAt - now));
+      }
+      slot.nextSlotAt = (yield* Clock.currentTimeMillis) + minDelayMs;
+    }),
+  );
+});
+
+/** The API request rejected; `cause` is the client's own error. */
+class ApiCallFailed extends Data.TaggedError('ApiCallFailed')<{
+  readonly cause: unknown;
+}> {}
+
+const rateLimitedRequest = Effect.fn('rateLimiter.rateLimitedApiCall')(
+  <T>(apiName: string, minDelayMs: number, request: () => Promise<T>) =>
+    Effect.gen(function* () {
+      yield* acquireRateLimitSlot(apiName, minDelayMs);
+      // These clients expose no AbortSignal hook, so on interruption the
+      // in-flight request is *abandoned*: it settles in the background and
+      // its result is discarded. Only safe for the idempotent, read-only
+      // lookups these tools perform — never abandon a write.
+      return yield* Effect.tryPromise({
+        try: () => request(),
+        catch: (cause) => new ApiCallFailed({ cause }),
+      });
+    }),
+);
+
+/**
+ * Run a rate-limited, cancellable request against an external metadata API
+ * with uniform error wrapping — the exact pattern every arXiv/Crossref
+ * lookup repeats.
  *
- * Combines the throttle wait ({@link waitForRateLimit}) with cancellation
- * ({@link abandonOnAbort}) against the current tool call's signal, then
- * rethrows failures as a ToolError with a descriptive prefix — the exact
- * pattern every arXiv/Crossref lookup repeats. These clients expose no
- * AbortSignal hook, so on cancellation the in-flight request is *abandoned*:
- * only safe for the idempotent, read-only lookups these tools perform.
+ * Waits for the API's next slot ({@link acquireRateLimitSlot}), runs the
+ * request, and rethrows failures as a `ToolError` prefixed with
+ * `failureMessage` (a `ToolError` the request throws itself passes through
+ * unchanged). Cancelling the current tool call interrupts the slot wait and
+ * abandons the in-flight request, and the caller gets an immediate
+ * `ToolError` so a cancelled dispatch batch stops waiting.
  */
 export async function rateLimitedApiCall<T>(
   apiName: string,
@@ -56,48 +81,18 @@ export async function rateLimitedApiCall<T>(
   failureMessage: string,
   request: () => Promise<T>,
 ): Promise<T> {
-  return wrapApiCall(async () => {
-    await waitForRateLimit(apiName, minDelayMs);
-    return abandonOnAbort(
-      request(),
-      getCurrentToolCallContext()?.signal,
-      label,
-    );
-  }, failureMessage);
-}
-
-/**
- * Race an un-cancellable async operation against the owning tool call's
- * abort signal.
- *
- * On abort the in-flight operation is *abandoned*, not aborted: it settles
- * in the background and its result is discarded, while the caller gets an
- * immediate `ToolError` so a cancelled dispatch batch stops waiting.
- *
- * Only safe for idempotent, read-only operations (GET lookups, throttle
- * waits) — never abandon a write, since it may still complete after the
- * caller has reported cancellation.
- */
-export async function abandonOnAbort<T>(
-  operation: Promise<T>,
-  signal: AbortSignal | undefined,
-  what: string,
-): Promise<T> {
-  if (!signal) return operation;
-  let detach = (): void => {};
-  const abortRace = new Promise<never>((_, reject) => {
-    // `onAbort` fires immediately for an already-aborted signal, so the race
-    // below rejects at once — no separate aborted-check window to guard.
-    detach = onAbort(signal, () => reject(new ToolError(`Cancelled ${what}.`)));
-  });
-  try {
-    return await Promise.race([operation, abortRace]);
-  } catch (error) {
-    // Abandoned operation: swallow its eventual rejection (if any) so the
-    // orphaned promise never surfaces as an unhandled rejection.
-    operation.catch(() => {});
-    throw error;
-  } finally {
-    detach();
+  const exit = await effectRuntime().runPromiseExit(
+    rateLimitedRequest(apiName, minDelayMs, request),
+    { signal: getCurrentToolCallContext()?.signal },
+  );
+  if (Exit.isSuccess(exit)) return exit.value;
+  if (Cause.hasInterruptsOnly(exit.cause)) {
+    throw new ToolError(`Cancelled ${label}.`);
   }
+  const failure = Cause.squash(exit.cause);
+  if (!(failure instanceof ApiCallFailed)) throw failure;
+  if (failure.cause instanceof ToolError) throw failure.cause;
+  throw new ToolError(`${failureMessage}: ${toErrorMessage(failure.cause)}`, {
+    cause: failure.cause,
+  });
 }

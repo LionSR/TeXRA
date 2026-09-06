@@ -3,17 +3,12 @@ import { isIP } from 'node:net';
 
 // Third-party imports
 import ky from 'ky';
-import { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Local imports - core
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, ToolResult } from '@shared/schemas';
-import {
-  withRequestTimeout,
-  retryTransientFetch,
-  toFetchToolError,
-} from '@tools/timeouts';
+import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -24,10 +19,11 @@ const WEB_FETCH_RETRIES = 2;
 const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
- * Read a response body into a string, aborting with AbortError if accumulated
- * bytes exceed `maxBytes`. Enforces the cap on received data rather than
- * trusting the Content-Length header (chunked responses omit it entirely).
- * Respects the charset from the Content-Type header (falls back to UTF-8).
+ * Read a response body into a string, failing once accumulated bytes exceed
+ * `maxBytes` (a permanent failure: `retryTransientFetch` does not retry it).
+ * Enforces the cap on received data rather than trusting the Content-Length
+ * header (chunked responses omit it entirely). Respects the charset from the
+ * Content-Type header (falls back to UTF-8).
  */
 async function readBodyWithLimit(
   response: Response,
@@ -54,7 +50,7 @@ async function readBodyWithLimit(
       if (done) break;
       total += value.byteLength;
       if (total > maxBytes) {
-        throw new AbortError(
+        throw new Error(
           `Response too large (exceeds ${maxBytes / (1024 * 1024)} MB maximum).`,
         );
       }
@@ -135,32 +131,31 @@ export class WebFetchTool extends defineTool({
 
     try {
       ({ rawBody, contentType } = await retryTransientFetch(
-        () =>
-          withRequestTimeout(
-            WEB_FETCH_TIMEOUT_MS,
-            cancelSignal,
-            async (
-              signal,
-            ): Promise<{ rawBody: string; contentType: string }> => {
-              const response = await ky.get(url, {
-                timeout: false,
-                signal,
-                retry: 0,
-              });
+        async (signal): Promise<{ rawBody: string; contentType: string }> => {
+          const response = await ky.get(url, {
+            timeout: false,
+            signal,
+            retry: 0,
+          });
 
-              const lengthHeader = response.headers.get('content-length');
-              if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
-                throw new AbortError(
-                  `Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES / (1024 * 1024)} MB.`,
-                );
-              }
+          const lengthHeader = response.headers.get('content-length');
+          if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
+            // Permanent: not retried.
+            throw new Error(
+              `Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES / (1024 * 1024)} MB.`,
+            );
+          }
 
-              const ct = response.headers.get('content-type') ?? '';
-              const text = await readBodyWithLimit(response, MAX_CONTENT_BYTES);
-              return { rawBody: text, contentType: ct };
-            },
-          ),
-        { retries: WEB_FETCH_RETRIES, minTimeout: 500, cancelSignal },
+          const ct = response.headers.get('content-type') ?? '';
+          const text = await readBodyWithLimit(response, MAX_CONTENT_BYTES);
+          return { rawBody: text, contentType: ct };
+        },
+        {
+          retries: WEB_FETCH_RETRIES,
+          minTimeout: 500,
+          timeoutMs: WEB_FETCH_TIMEOUT_MS,
+          cancelSignal,
+        },
       ));
     } catch (error) {
       throw toFetchToolError(error, {

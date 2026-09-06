@@ -198,9 +198,6 @@ importers:
       p-retry:
         specifier: ^8.0.1
         version: 8.0.1
-      p-throttle:
-        specifier: ^8.1.0
-        version: 8.1.0
       p-timeout:
         specifier: ^7.0.1
         version: 7.0.1
@@ -541,9 +538,6 @@ importers:
       p-retry:
         specifier: ^8.0.1
         version: 8.0.1
-      p-throttle:
-        specifier: ^8.1.0
-        version: 8.1.0
       p-timeout:
         specifier: ^7.0.1
         version: 7.0.1
@@ -5546,10 +5540,6 @@ packages:
   p-retry@8.0.1:
     resolution: {integrity: sha512-NAigyu8hfvJe7MsS18mnc4is0MZtau3QMdBklaJKK23oBQb6occO3UPM3vHmTckW8KhfyjMZaUOqdTFEYliHgg==}
     engines: {node: '>=22'}
-
-  p-throttle@8.1.0:
-    resolution: {integrity: sha512-c1wmXavsHZIC4g1OLhOsafK6jZSAeMo0Ap3yivj59PUcCkpacy5YgWdgIp/dB4vp1JZrfBSsPCR0YuADB+ENLQ==}
-    engines: {node: '>=20'}
 
   p-timeout@6.1.4:
     resolution: {integrity: sha512-MyIV3ZA/PmyBN/ud8vV9XzwTrNtR4jFrObymZYnZqMmW0zA8Z17vnT0rBgFE/TlohB+YCHqXMgZzb3Csp49vqg==}
@@ -11490,8 +11480,6 @@ snapshots:
   p-retry@8.0.1:
     dependencies:
       is-network-error: 1.3.2
-
-  p-throttle@8.1.0: {}
 
   p-timeout@6.1.4: {}
 

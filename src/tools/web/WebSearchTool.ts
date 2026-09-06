@@ -1,16 +1,11 @@
 // Third-party imports
 import ky from 'ky';
-import { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 // Internal imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolResult } from '@shared/schemas';
-import {
-  withRequestTimeout,
-  retryTransientFetch,
-  toFetchToolError,
-} from '@tools/timeouts';
+import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
@@ -91,34 +86,36 @@ export class WebSearchTool extends defineTool({
     let data: DuckDuckGoResponse;
     try {
       data = await retryTransientFetch(
-        () =>
-          withRequestTimeout(DDG_TIMEOUT_MS, cancelSignal, async (signal) => {
-            const response = await ky.get('https://api.duckduckgo.com/', {
-              searchParams: {
-                q: query,
-                format: 'json',
-                no_redirect: 1,
-                no_html: 1,
-              },
-              timeout: false,
-              signal,
-              retry: 0,
-            });
-            const raw = await response.json();
-            // Validate the body at the boundary. A malformed shape is not
-            // transient, so abort retries and let the outer catch below
-            // surface it as a tool error.
-            const parsed = DuckDuckGoResponseSchema.safeParse(raw);
-            if (!parsed.success) {
-              throw new AbortError(
-                new Error(
-                  `Unexpected DuckDuckGo response shape: ${z.prettifyError(parsed.error)}`,
-                ),
-              );
-            }
-            return parsed.data;
-          }),
-        { retries: DDG_RETRIES, minTimeout: 500, cancelSignal },
+        async (signal) => {
+          const response = await ky.get('https://api.duckduckgo.com/', {
+            searchParams: {
+              q: query,
+              format: 'json',
+              no_redirect: 1,
+              no_html: 1,
+            },
+            timeout: false,
+            signal,
+            retry: 0,
+          });
+          const raw = await response.json();
+          // Validate the body at the boundary. A malformed shape is not
+          // transient, so it is not retried; the outer catch below surfaces
+          // it as a tool error.
+          const parsed = DuckDuckGoResponseSchema.safeParse(raw);
+          if (!parsed.success) {
+            throw new Error(
+              `Unexpected DuckDuckGo response shape: ${z.prettifyError(parsed.error)}`,
+            );
+          }
+          return parsed.data;
+        },
+        {
+          retries: DDG_RETRIES,
+          minTimeout: 500,
+          timeoutMs: DDG_TIMEOUT_MS,
+          cancelSignal,
+        },
       );
     } catch (error) {
       throw toFetchToolError(error, {

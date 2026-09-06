@@ -18,13 +18,15 @@
 
 // Third-party imports
 import { type Work } from '@jamesgopsill/crossref-client';
+import { Cause, Data, Duration, Effect, Exit } from 'effect';
 import { z } from 'zod';
-import pTimeout from 'p-timeout';
 
 // Local imports
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { waitForRateLimit } from '@tools/support/rateLimiter';
+import { acquireRateLimitSlot } from '@tools/support/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -194,74 +196,118 @@ interface CrossrefAuthor {
   name?: string;
 }
 
+/** The Crossref lookup for a DOI rejected or outlived its deadline. */
+class CrossrefLookupFailed extends Data.TaggedError('CrossrefLookupFailed')<{
+  readonly cause: unknown;
+}> {}
+
+/**
+ * Fetch a DOI's Crossref work under the shared Crossref rate limit and a
+ * deadline. The client has no timeout or cancellation hook of its own, so a
+ * timed-out or cancelled lookup is abandoned — safe for this read-only call.
+ */
+const crossrefWork = Effect.fn('ZoteroAddTool.crossrefWork')(function* (
+  doi: string,
+) {
+  yield* acquireRateLimitSlot(
+    'crossref',
+    CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+  );
+  return yield* Effect.tryPromise({
+    try: () => CrossrefClient.work(doi),
+    catch: (cause) => new CrossrefLookupFailed({ cause }),
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: Duration.millis(CROSSREF_RESOLVE_TIMEOUT_MS),
+      orElse: () =>
+        Effect.fail(
+          new CrossrefLookupFailed({
+            cause: new Error('Crossref lookup timed out'),
+          }),
+        ),
+    }),
+  );
+});
+
+/** Build the Zotero Connector item for a resolved Crossref work. */
+function workToZoteroItem(doi: string, work: Work): ZoteroConnectorItem {
+  const creators: ZoteroCreator[] | undefined = work.author?.length
+    ? work.author.map((a: CrossrefAuthor) => {
+        if (a.given && a.family) {
+          return {
+            firstName: a.given,
+            lastName: a.family,
+            creatorType: 'author' as const,
+          };
+        }
+        // name = Crossref org author; a person author with no family name
+        // (not a real Crossref shape) falls back to 'Unknown'.
+        return {
+          name: a.name || a.family || 'Unknown',
+          creatorType: 'author' as const,
+        };
+      })
+    : undefined;
+
+  // Extract year from published or created dateParts
+  const year =
+    work.published?.dateParts?.[0]?.[0] ?? work.created?.dateParts?.[0]?.[0];
+
+  // containerTitle is an array in Crossref responses (may be empty)
+  const rawContainer = Array.isArray(work.containerTitle)
+    ? work.containerTitle[0]
+    : undefined;
+  const containerTitle =
+    rawContainer != null ? String(rawContainer) : undefined;
+
+  const item: ZoteroConnectorItem = {
+    itemType: CROSSREF_TYPE_MAP[work.type || ''] || 'journalArticle',
+    DOI: doi,
+  };
+  if (work.title?.[0]) item.title = work.title[0];
+  if (creators?.length) item.creators = creators;
+  if (year != null) item.date = String(year);
+  if (containerTitle) item.publicationTitle = containerTitle;
+  if (work.volume) item.volume = String(work.volume);
+  if (work.issue) item.issue = String(work.issue);
+  if (work.page) item.pages = String(work.page);
+  if (work.abstract) item.abstractNote = work.abstract;
+  if (work.resource?.primary?.URL) item.url = work.resource.primary.URL;
+  return item;
+}
+
 /**
  * Resolve a DOI to full metadata via the Crossref API.
  * Uses the shared CrossrefClient and rate limiter from @tools/citation.
- * Returns a Zotero-format item object, or null if resolution fails.
+ * Returns a Zotero-format item object, or null if resolution fails; a
+ * cancelled tool call throws instead of degrading to the fallback metadata.
  */
 async function resolveDOI(doi: string): Promise<ZoteroConnectorItem | null> {
-  try {
-    await waitForRateLimit('crossref', CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS);
-
-    // The CrossrefClient has no timeout support, so we race against one.
-    const response = await pTimeout(CrossrefClient.work(doi), {
-      milliseconds: CROSSREF_RESOLVE_TIMEOUT_MS,
-      message: 'Crossref lookup timed out',
-    });
-
-    if (!response.ok || !response.content?.message) return null;
-
-    const work: Work = response.content.message;
-
-    const creators: ZoteroCreator[] | undefined = work.author?.length
-      ? work.author.map((a: CrossrefAuthor) => {
-          if (a.given && a.family) {
-            return {
-              firstName: a.given,
-              lastName: a.family,
-              creatorType: 'author' as const,
-            };
-          }
-          // name = Crossref org author; a person author with no family name
-          // (not a real Crossref shape) falls back to 'Unknown'.
-          return {
-            name: a.name || a.family || 'Unknown',
-            creatorType: 'author' as const,
-          };
-        })
-      : undefined;
-
-    // Extract year from published or created dateParts
-    const year =
-      work.published?.dateParts?.[0]?.[0] ?? work.created?.dateParts?.[0]?.[0];
-
-    // containerTitle is an array in Crossref responses (may be empty)
-    const rawContainer = Array.isArray(work.containerTitle)
-      ? work.containerTitle[0]
-      : undefined;
-    const containerTitle =
-      rawContainer != null ? String(rawContainer) : undefined;
-
-    const item: ZoteroConnectorItem = {
-      itemType: CROSSREF_TYPE_MAP[work.type || ''] || 'journalArticle',
-      DOI: doi,
-    };
-    if (work.title?.[0]) item.title = work.title[0];
-    if (creators?.length) item.creators = creators;
-    if (year != null) item.date = String(year);
-    if (containerTitle) item.publicationTitle = containerTitle;
-    if (work.volume) item.volume = String(work.volume);
-    if (work.issue) item.issue = String(work.issue);
-    if (work.page) item.pages = String(work.page);
-    if (work.abstract) item.abstractNote = work.abstract;
-    if (work.resource?.primary?.URL) item.url = work.resource.primary.URL;
-    return item;
-  } catch (err) {
-    // The caller still falls back to the user's own metadata; log so a
-    // silently degraded entry is traceable to the Crossref failure.
-    log.warn(`Crossref lookup failed for DOI ${doi}: ${toErrorMessage(err)}`);
-    return null;
+  const lookup = crossrefWork(doi).pipe(
+    Effect.map((response) =>
+      response.ok && response.content?.message
+        ? workToZoteroItem(doi, response.content.message)
+        : null,
+    ),
+    Effect.catchTag('CrossrefLookupFailed', (error) =>
+      Effect.sync(() => {
+        // The caller still falls back to the user's own metadata; log so a
+        // silently degraded entry is traceable to the Crossref failure.
+        log.warn(
+          `Crossref lookup failed for DOI ${doi}: ${toErrorMessage(error.cause)}`,
+        );
+        return null;
+      }),
+    ),
+  );
+  const exit = await effectRuntime().runPromiseExit(lookup, {
+    signal: getCurrentToolCallContext()?.signal,
+  });
+  if (Exit.isSuccess(exit)) return exit.value;
+  if (Cause.hasInterruptsOnly(exit.cause)) {
+    throw new ToolError('Cancelled Crossref DOI lookup.');
   }
+  throw Cause.squash(exit.cause);
 }
 
 /**

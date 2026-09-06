@@ -5,18 +5,12 @@
  */
 
 import ky from 'ky';
-import { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
 import { ToolResult } from '@shared/schemas';
-import {
-  isTimeoutError,
-  withRequestTimeout,
-  retryTransientFetch,
-  unwrapAbortError,
-} from '@tools/timeouts';
+import { isTimeoutError, retryTransientFetch } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { ensureArray } from '@utils/core';
@@ -148,34 +142,33 @@ Useful for finding the right lemma when you know roughly what type it should hav
     // to abort in-flight Loogle requests and their retry backoff.
     const cancelSignal = getCurrentToolCallContext()?.signal;
     return retryTransientFetch(
-      () =>
-        withRequestTimeout(LOOGLE_TIMEOUT_MS, cancelSignal, async (signal) => {
-          const raw = await ky
-            .get(LOOGLE_API_URL, {
-              searchParams: { q: query },
-              headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
-              timeout: false,
-              signal,
-              retry: 0,
-            })
-            .json<unknown>();
-          // Validate the body at the boundary. A malformed shape is not transient,
-          // so abort retries and let executeSingle surface it as a tool error.
-          const parsed = LoogleResponseSchema.safeParse(raw);
-          if (!parsed.success) {
-            throw new AbortError(
-              new Error(
-                `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
-              ),
-            );
-          }
-          return parsed.data;
-        }),
+      async (signal) => {
+        const raw = await ky
+          .get(LOOGLE_API_URL, {
+            searchParams: { q: query },
+            headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
+            timeout: false,
+            signal,
+            retry: 0,
+          })
+          .json<unknown>();
+        // Validate the body at the boundary. A malformed shape is not
+        // transient, so it is not retried; executeSingle surfaces it as a
+        // tool error.
+        const parsed = LoogleResponseSchema.safeParse(raw);
+        if (!parsed.success) {
+          throw new Error(
+            `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
+          );
+        }
+        return parsed.data;
+      },
       {
         retries: LOOGLE_RETRIES,
         minTimeout: 1000,
+        timeoutMs: LOOGLE_TIMEOUT_MS,
         cancelSignal,
-        onFailedAttempt: ({ error, retriesLeft }) => {
+        onFailedAttempt: (error, retriesLeft) => {
           log.debug(
             `Loogle query "${query}" failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
           );
@@ -233,11 +226,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         result: executed(formatted, formatResultCount(hits.length, 'result')),
       };
     } catch (error) {
-      // Defensive: ensure the checks below (and the surfaced message) see the
-      // real error even if a p-retry AbortError wrapper reaches here (p-retry v8
-      // already unwraps it to .originalError, so this is normally a no-op).
-      const err = unwrapAbortError(error);
-      if (isTimeoutError(err)) {
+      if (isTimeoutError(error)) {
         return fail(
           errorResult(
             `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
@@ -248,7 +237,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
         );
       }
       return fail(
-        errorResult(`Error: ${toErrorMessage(err)}`, {
+        errorResult(`Error: ${toErrorMessage(error)}`, {
           summary: 'Loogle search failed',
         }),
       );

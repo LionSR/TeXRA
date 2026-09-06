@@ -1514,12 +1514,6 @@
       "name": "publishAgentCliStreamUsage"
     },
     {
-      "file": "src/tools/support/rateLimiter.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "abandonOnAbort"
-    },
-    {
       "file": "src/tools/claudeAgent.ts",
       "category": "production-dead",
       "kind": "exports",
