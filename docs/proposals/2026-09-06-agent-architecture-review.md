@@ -64,6 +64,11 @@ This work belongs within the existing runtime/LLM cutover and its ownership boun
 
 ## Findings
 
+The [joint runtime/LLM implementation contract](2026-09-04-agent-runtime-on-effect.md#01-current-implementation-contract-runtime-and-llm-package)
+now records the required revisions below in the runtime proposal. This resolves
+where the contract is specified; it does not close R1–R4's implementation
+acceptance scenarios or claim provider parity.
+
 ### R1 — High: the completed-turn API does not define the background acceptance boundary
 
 **Location:** LLM study lines 65–82 and 113–117; runtime study lines 86–87 and 108.

@@ -1,0 +1,24 @@
+flowchart TB
+    H["CLI · Extension · Desktop · SDK<br/>Commands and external observations"]
+    A["Application owner<br/>One managed runtime per process"]
+    S["Paper / workspace session<br/>Admission · interactions · event publication"]
+    R["Live execution attempt<br/>Tool-use or reflection program<br/>Lease · model · policy · trace"]
+    C["Model / tool call<br/>Owned resources and cancellation"]
+    B["Session-owned background child<br/>Explicit lifetime and delivery policy"]
+    D[("Durable execution history<br/>Messages · phases · intents · results")]
+    V["Pure presentation fold<br/>Redacted state for readers"]
+    H --> A
+    A --> S
+    S --> R
+    R --> C
+    S --> B
+    S --> D
+    R <-->|"commit / restore"| D
+    D --> V
+    V -->|"observe"| H
+    classDef owner fill:#e9efff,stroke:#3154a4,color:#17264d
+    classDef durable fill:#e6f4ee,stroke:#267551,color:#143b2a
+    classDef consumer fill:#f3f4f6,stroke:#68717e,color:#202731
+    class A,S,R,C,B owner
+    class D durable
+    class H,V consumer

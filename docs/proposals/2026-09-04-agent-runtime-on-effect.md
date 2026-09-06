@@ -1,6 +1,14 @@
 # The agent runtime on Effect: one ledger, two loops, no graph (2026-09-04)
 
-Status: proposal for owner ratification. Reverses migration PRD R4 and 13.C,
+Status: the pure-Effect direction was ratified on 2026-09-06 in the
+[migration PRD](../prds/2026-08-26-effect-4-runtime-migration.md). The
+implementation contract in §0.1 below incorporates the current-main runtime/LLM
+study and review. Detailed implementation and acceptance evidence remain pending.
+The PRD's later boundary, privacy and 0.41 compatibility rulings supersede the
+historical sketches below wherever they differ: no internal Promise adapter,
+no old-flow importer, and no private ledger row in the public trace union.
+
+Historical scope: reverses migration PRD R4 and 13.C,
 amends persistence proposal §6 Stage 5 and §7, and the one-fold PRD non-goal
 at line 102. Companion to `2026-09-03-persistence-substrate-decision.md` and
 `docs/prds/2026-09-03-prd-one-fold-three-renderers.md` (PR #11821).
@@ -37,6 +45,121 @@ along the flow without requiring deterministic re-execution (which is what
 sank B and C); it needs no reducer or command vocabulary (which is what made
 E heavier than the problem); and it fits the reflection family with one
 extra coordinate rather than a second framework.
+
+### 0.1 Current implementation contract: runtime and LLM package
+
+Refreshed from `origin/main` at `542aea6e8425ec574ffa0fa9fd4fd05a878feb03`.
+The [agent architecture study](2026-09-06-agent-architecture-study.md) and
+[review](2026-09-06-agent-architecture-review.md) add a necessary dependency:
+settle the canonical LLM turn/continuation contract with the runtime before
+implementing its durable message rows. This section is the common contract;
+the studies' API sketches and the provider-native sketches below are inputs
+to it, not separate implementation targets. It specifies semantics; names
+of new TypeScript exports are not frozen by this document.
+
+**Ownership.** TeXRA's own `packages/llm` owns provider protocol behavior,
+request preparation, generation, streaming and provider-native operations.
+The runtime owns model selection, conversation, retries, tool dispatch,
+approvals, accounting attribution and durable transitions. The reflection
+program owns context preparation, TeX counting, media extraction, response
+continuation and output/compile policy, in their existing order. A helper
+completion uses the same LLM package without a session or document pipeline.
+There is no Effect AI/Chat framework underneath it, and no forwarding facade
+over `IModelHandler` or the old superclass.
+
+**Canonical values.** Zod owns the data schemas; derive types from those
+schemas. Provider SDK types stay inside protocol modules. The package's
+canonical content preserves ordering, local tool calls/results, provider-hosted
+output, reasoning, media and exact opaque values required by the provider.
+The ledger persists this representation directly. Do not first ship rows
+whose permanent API is the old SDK message union and then migrate them again.
+
+| Boundary value            | Required meaning and evidence                                                                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Portable turn request     | Author-facing semantic history, tools, output intent and generation controls; contains no executable tool, client or credential secret                                                                 |
+| Prepared invocation       | Validated effective controls, protocol/model/deployment and encoding identity, immutable content/history references, continuation binding and attempt correlation; fixes the admitted semantic request |
+| Accepted remote operation | Serializable remote ID, protocol/deployment binding, retrieval parameters, original absolute deadline and invocation attempt; sufficient to observe the same operation after restart                   |
+| Completed turn            | Canonical assistant content, the complete ordered call list, finish reason, observed usage and continuation evidence; validated and committed before any local tool dispatch                           |
+| Conversation continuation | Provider-owned versioned data bound to the exact immutable history prefix and protocol encoding it covers; distinct from an in-progress remote operation                                               |
+| Tool settlement           | Response/call/attempt identity, outcome, per-call state operations, immutable attachment references or explicit omissions, and display correlation                                                     |
+
+**Prepare, admit, submit, observe.** Request preparation resolves defaults
+and validates the selected protocol before the runtime commits invocation
+intent. Lowering the prepared invocation may not reread changing model
+defaults. Credentials are resolved when executing under the recorded route
+binding; secrets are never persisted. Uploads are external operations, not
+hidden side effects of a function described as pure preparation: materialize
+content and record upload evidence through the existing asset/ledger owners.
+An unsupported encoding version or unavailable asset fails explicitly;
+choosing different semantic input requires a newly admitted attempt.
+
+A background submission returns either a completed turn or an accepted
+operation handle. The runtime must commit that handle before calling its
+observation/retrieval operation. Both streaming and non-streaming callers
+use this same acceptance boundary. A progress callback cannot substitute for
+the commit barrier. Observation uses the saved retrieval data and deadline
+even if background settings change. A one-shot helper can compose these
+operations without persistence; it does not have a second generation backend.
+If submission fails before a handle is received, the remote outcome can be
+unknown. A local stop, remote cancel request and confirmed remote cancellation
+are separate facts.
+
+**Continuation validity.** Keep signed/encrypted data attached to its exact
+content parts, completed continuation anchors attached to their covered
+history prefix, and accepted operations attached to their invocation attempt.
+A provider label or model ID alone does not validate an anchor. Compaction
+atomically installs the replacement history and invalidates or replaces its
+continuation. A branch/model switch validates that binding before reuse.
+The canonical tool-exchange grammar associates one completed response with
+its ordered calls and each call's settlement; providers lower the exchange
+without the runtime inventing missing results or interpreting SDK payloads.
+
+**Tool state and observations.** Final tool state changes, settlement and
+terminal display facts commit together. Use per-call operations, not a whole
+shared-state snapshot that can overwrite concurrent calls. State that becomes
+meaningful before the result, such as a plan awaiting approval, gets its own
+named durable transition before waiting. Capture tool attachments as immutable
+content before settlement; delivery on resume never rereads a mutable workspace
+path. Model-visible tool messages are constructed from settlement evidence;
+they do not contain the runtime's whole mutation vocabulary.
+
+**Two concrete consumers settle the design.** Implement and review one full
+reflection path—context/TeX count/media, prepared invocation, continuation,
+output materialization, compile feedback, round decision—and the corresponding
+tool-use generation/dispatch/follow-up path against these same boundaries.
+Preserve stage order, hard round limits and waiting behavior. Deltas can be
+presented live, but incomplete responses never authorize local tool execution.
+A completed response is committed once and reused after restart. Usage is
+attributed once per recorded attempt/receipt, including child rollups; missing
+provider usage stays unknown.
+
+**Admission and resources.** Each invocation binds its selected model and
+resource scope. A later model switch affects a new invocation; a retired
+acquisition or completion cannot replace that selection. Effect programs
+compose to the actual host or SDK boundary. Final durable settlement is an
+observed operation before lease release; scoped cleanup cannot conceal its
+failure. Foreign I/O receives interruption and remains fenced if it can
+complete late. Keep the existing initial-persistence and exclusive-owner
+guarantees when deleting their current implementation.
+
+The following scenarios close the four review findings at implementation:
+
+- Restart after remote acceptance under changed background settings; retrieve
+  the same operation with its original deadline and no second submission.
+- Reload an admitted request after defaults change; preserve its semantic
+  controls or report an explicit unsupported/replacement decision.
+- Restart between two signed tool settlements, after compaction, or on a
+  branch; preserve ordering and validate continuation against exact history.
+- Recover a committed todo update, an attachment whose source file changed,
+  and a plan awaiting approval; preserve state/observations without rerunning
+  the settled tool.
+
+These are acceptance requirements, not newly verified runtime guarantees.
+The coordinated release deletes the old handler/graph APIs and checkpoint
+writers with their consumers. The PRD's no-importer rule applies to retired
+`flow_<id>.json` resume state; history retention and the substrate's other
+data decisions remain separate. Runtime/LLM changes integrate with the
+existing substrate lane instead of creating another database implementation.
 
 ## 1. What was evaluated
 
