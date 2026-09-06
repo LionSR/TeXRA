@@ -83,6 +83,18 @@ async function readStoragePrefix(
 }
 
 /**
+ * A directory could not be listed or an entry could not be stat'ed (race
+ * deletion, permission error). Nothing in the walk recovers from this: the
+ * failure ends the walk, and the Promise edge rethrows `cause` so the
+ * consumer sees the same Error instance (with its `code`) the filesystem
+ * raised.
+ */
+class MemoryEntryUnreadable extends Data.TaggedError('MemoryEntryUnreadable')<{
+  readonly storagePath: string;
+  readonly cause: unknown;
+}> {}
+
+/**
  * The frontmatter head of a memory file could not be read or parsed (race
  * deletion, permission error). Attribution is skipped rather than failing
  * the whole walk; the entry itself still lists.
@@ -157,7 +169,10 @@ const describeEntry = Effect.fn('memoryFileSystem.describeEntry')(function* (
   relativePath: string,
   type: number,
 ) {
-  const stats = yield* Effect.promise(() => StorageFS.stat(storagePath));
+  const stats = yield* Effect.tryPromise({
+    try: () => StorageFS.stat(storagePath),
+    catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
+  });
   const entry = {
     relativePath,
     storagePath,
@@ -183,9 +198,12 @@ function walkLevel(
   depth: number,
   options: MemoryWalkOptions,
   permits: Semaphore.Semaphore,
-): Stream.Stream<MemoryWalkEntry> {
+): Stream.Stream<MemoryWalkEntry, MemoryEntryUnreadable> {
   return Stream.fromEffect(
-    Effect.promise(() => StorageFS.readDir(storagePath)),
+    Effect.tryPromise({
+      try: () => StorageFS.readDir(storagePath),
+      catch: (cause) => new MemoryEntryUnreadable({ storagePath, cause }),
+    }),
   ).pipe(
     Stream.flatMap(Stream.fromIterable),
     // Skip symlinks to avoid cycles; we have no realpath/visited guard.
@@ -228,7 +246,8 @@ function walkLevel(
  * never followed rather than risking a cycle). Breaking out of the iteration
  * early interrupts the walk, so no further entries are read. The walk's
  * fibers are forked from the process runtime's context, like every other
- * Promise edge in this module's neighbours.
+ * Promise edge in this module's neighbours. An unreadable directory or entry
+ * rejects the iteration with the filesystem's own error.
  * @param storagePath - Directory to start walking from
  * @param relativeRoot - Path prefix used to build each entry's relativePath
  * @param options - `maxDepth` (levels below the root; unlimited if omitted)
@@ -244,6 +263,10 @@ export async function* walkMemoryDirectory(
       Stream.unwrap(
         Effect.map(Semaphore.make(MEMORY_LISTING_CONCURRENCY), (permits) =>
           walkLevel(storagePath, relativeRoot, 0, options, permits),
+        ),
+      ).pipe(
+        Stream.catchTag('MemoryEntryUnreadable', (error) =>
+          Stream.die(error.cause),
         ),
       ),
     ),
