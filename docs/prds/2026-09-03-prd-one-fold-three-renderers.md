@@ -278,18 +278,26 @@ placement rule (contract C2). The event key is `(aggregate_id, seq)`, and
 **every fact lives on the aggregate of its logical target**, so a
 latest-of-type lookup never has to disambiguate targets and no key column
 exists. The **checkpoint aggregate**, id = a workflow's `checkpointId`
-(decision 9's resume anchor), carries the workflow-script journal (attempt
-identities and call results, migration PRD Phase 2 step 4) and nothing
-else. Its lifecycle: created by the first launch under that `checkpointId`;
-reached from every launch through the `checkpointId` on that launch's
-`run.start` (the edge, as `run.start` carries the execution edge); never
-closed by a run's `stream.removed`, since runs are ephemeral and the
-checkpoint outlives them; closed only by `checkpoint.removed`, its last row,
-written when the user deletes the checkpoint (single-owner D8, "a
-checkpoint is deleted only by the user"), which sets `closed = 1` on it and
-on every dependent reachable through `parent_id`; retained under C9 on its
-own closure, never on a run's. Discovery is `aggregate(checkpointId,
-fromSeq)`; it never appears in `listing()`. Run-scoped trace facts and
+(decision 9's resume anchor), carries three things: as its first row,
+`checkpoint.created`, with the canonical script, arguments, and file sets
+that `workflowScript/persistence.ts` writes today, so a resume or relaunch
+with omitted inputs reconstructs them from the row; then the
+workflow-script journal (attempt identities and call results, migration PRD
+Phase 2 step 4); and `checkpoint.removed` last. Its lifecycle: created by
+the first launch under that `checkpointId`; every workflow stream launched
+under it has `event_sequence.parent_id = checkpointId` (the ownership
+edge; the stream's execution keeps `parent_id` = the stream under the
+existing rule, so the chain is checkpoint, stream, execution), while the
+`checkpointId` on each launch's `run.start` is the discovery edge readers
+follow; never closed by a run's `stream.removed`, since runs are ephemeral
+and the checkpoint outlives them; closed only by `checkpoint.removed`, its
+last row, written when the user deletes the checkpoint (single-owner D8,
+"a checkpoint is deleted only by the user"), which sets `closed = 1` on it
+and, through that `parent_id` chain, on every stream and execution it
+launched, in one transaction, so a deleted checkpoint leaves no writable
+run state; retained under C9 on its own closure, never on a run's.
+Discovery is `aggregate(checkpointId, fromSeq)`; it never appears in
+`listing()`. Run-scoped trace facts and
 the stream's own lifecycle facts use the stream as their aggregate:
 `run.start` (seq 1), the trace `AgentEvent`s, the status fact, `goal`
 (`GoalStore.getForStream` is keyed by stream), the queued-follow-ups
@@ -987,8 +995,11 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    3 it corresponds to (`publish` takes a batch), so `StreamView` can never
    durably show a settled `flow` beside a running `status`, and `status`
    stays the lifecycle authority while `flow` is only the coordinate. On the
-   checkpoint aggregate (5.1): the workflow-script journal rows (migration
-   PRD Phase 2 step 4) and **`checkpoint.removed`**, the aggregate's last
+   checkpoint aggregate (5.1): **`checkpoint.created`**, its first row,
+   carrying the canonical script, arguments, and file sets that
+   `workflowScript/persistence.ts` writes today, published by the launch
+   that creates the checkpoint; the workflow-script journal rows (migration
+   PRD Phase 2 step 4); and **`checkpoint.removed`**, the aggregate's last
    row, published only by the one path that deletes a workflow checkpoint
    today (single-owner D8), which sets `closed = 1` on the aggregate and its
    dependents; it is the checkpoint's tombstone as `stream.removed` is a

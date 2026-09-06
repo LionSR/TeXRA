@@ -1011,7 +1011,12 @@ interrupts the owned root fiber.
   coordinate (the round) and opens each round under `Effect.scoped` with an
   `acquireRelease` stage.
 - `RunLedger`, a per-session-root `Context.Service` over `SessionEvents`:
-  `append(rows) -> Effect<RunState>` and `load(executionId)`. `append`
+  `append(rows) -> Effect<RunState>` and `load(executionId)`. `load` reads
+  the execution aggregate and, through the execution-to-stream edge on
+  `run.start`, the stream aggregate's `flow.step` rows, merged in `commit`
+  order: the coordinate lives on the stream aggregate and the state rows on
+  the execution aggregate, and neither history alone can place a resume.
+  `append`
   takes a batch of one or more rows and commits them in **one transaction**,
   across the run's two aggregates when the batch spans them (as
   `SessionEvents.publish` already does for `run.start` plus `run.activate`,
@@ -1414,7 +1419,9 @@ lane D of the persistence cutover branch, sequenced and sized by
    retention follows the checkpoint, not the run. Native
    `ChildTurnRef` and the script journal entry become one attempt-identity
    row on that aggregate in the same PR, so the active-versus-last-completed
-   turn distinction `ChildTurnState` records today is carried by the row
+   turn distinction `ChildTurnState` records today is carried by the row,
+   and the checkpoint's `checkpoint.created` row (one-fold PRD 5.1) carries
+   the script, arguments, and file sets `persistence.ts` restores today,
    before `ChildTurnState`, `workflowScript/persistence.ts`, and the
    turn-state writes in `childRunLoop.ts` are deleted; nothing is deleted
    before its replacement lands. In scope, not optional: two ledgers would be
