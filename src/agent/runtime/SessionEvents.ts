@@ -23,6 +23,10 @@
  * called by `SessionHandle.publish` before the log moves, so it observes
  * every fact in publish order; renderers read `all(cursor)`.
  */
+// Node imports
+import { hostname } from 'node:os';
+
+// Third-party imports
 import {
   Context,
   Effect,
@@ -39,13 +43,15 @@ import {
   runWithWorkspaceRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
-import type {
-  AggregateId,
-  CommitOrdinal,
-  OwnerId,
-  SessionEvent,
-  SessionEventDraft,
-  StreamTabId,
+import {
+  aggregateTarget,
+  aggregateId as qualifyAggregateId,
+  type AggregateId,
+  type CommitOrdinal,
+  type OwnerId,
+  type SessionEvent,
+  type SessionEventDraft,
+  type StreamTabId,
 } from '@shared/schemas';
 import {
   ProcessIdentity,
@@ -61,21 +67,13 @@ import {
 
 const logger = createLog('sessionEvents');
 
-/** The start-identity half of an owner id when the host could not read its
- *  own: a process whose start no probe can compare is unprovable, never
- *  dead (`proveOwnerLiveness`). */
-const UNREADABLE_PROCESS_START = 'unreadable';
-
-/** This process's owner id (contract C5), from the host's start identity. */
+/** This process's complete owner identity (contract C5). */
 export function processOwnerId(processStart: string | undefined): OwnerId {
-  return `${process.pid}:${processStart ?? UNREADABLE_PROCESS_START}`;
-}
-
-/** The start identity an owner id carries, null when its host could not
- *  read one (the liveness probe then reports the owner unprovable). */
-export function ownerProcessStart(ownerId: OwnerId): string | null {
-  const start = ownerId.slice(ownerId.indexOf(':') + 1);
-  return start === UNREADABLE_PROCESS_START ? null : start;
+  return JSON.stringify([
+    hostname().toLowerCase(),
+    process.pid,
+    processStart ?? null,
+  ]);
 }
 
 /**
@@ -87,7 +85,7 @@ export function ownerProcessStart(ownerId: OwnerId): string | null {
  */
 interface TranscriptRef {
   readonly type: 'transcript.ref';
-  readonly aggregateId: StreamTabId;
+  readonly aggregateId: AggregateId;
   readonly entryId: string;
   readonly seq: number;
   readonly commit: CommitOrdinal;
@@ -211,14 +209,18 @@ export class SessionEventLog extends Context.Service<
         const nextSeq = (aggregateId: AggregateId): number => {
           const seq =
             (seqs.get(aggregateId) ??
-              transcripts.get(aggregateId as StreamTabId)?.head ??
+              (aggregateTarget(aggregateId).kind === 'stream'
+                ? transcripts.get(aggregateTarget(aggregateId).id)?.head
+                : 0) ??
               0) + 1;
           seqs.set(aggregateId, seq);
           return seq;
         };
         const materialize = (row: LogRow): SessionEvent | null => {
           if (row.type !== 'transcript.ref') return row;
-          const entry = transcripts.get(row.aggregateId)?.getById(row.entryId);
+          const entry = transcripts
+            .get(aggregateTarget(row.aggregateId).id)
+            ?.getById(row.entryId);
           if (entry) {
             return {
               type: 'transcript.entry',
@@ -233,7 +235,7 @@ export class SessionEventLog extends Context.Service<
           // A deleted stream's rows are behind its tombstone on the log; a
           // stream that left residency before a reader this far behind read
           // its rows has lost them to that reader.
-          if (transcripts.has(row.aggregateId)) {
+          if (transcripts.has(aggregateTarget(row.aggregateId).id)) {
             logger.warn(
               `Transcript row ${row.entryId} of stream ${row.aggregateId} left residency before commit ${row.commit} was read; the reader does not receive it`,
             );
@@ -252,7 +254,7 @@ export class SessionEventLog extends Context.Service<
                     if (draft.type === 'transcript.entry') {
                       rows.push({
                         type: 'transcript.ref',
-                        aggregateId: draft.aggregateId as StreamTabId,
+                        aggregateId: draft.aggregateId,
                         entryId: draft.entry.id,
                         seq,
                         commit,
@@ -316,10 +318,24 @@ export class SessionEventLog extends Context.Service<
           readAggregate: (aggregateId, fromSeq) =>
             Stream.unwrap(
               Effect.gen(function* () {
+                const target = aggregateTarget(aggregateId);
+                if (target.kind !== 'stream') {
+                  return Stream.fromIterable(
+                    rows
+                      .filter(
+                        (row) =>
+                          row.aggregateId === aggregateId && row.seq > fromSeq,
+                      )
+                      .flatMap((row) => {
+                        const event = materialize(row);
+                        return event === null ? [] : [event];
+                      }),
+                  );
+                }
                 const commit = yield* SubscriptionRef.get(level);
                 const entries = yield* Effect.promise(async () =>
                   runWithWorkspaceRoots(roots, () =>
-                    transcripts.readEntries(aggregateId as StreamTabId),
+                    transcripts.readEntries(target.id),
                   ),
                 );
                 return Stream.fromIterable(
@@ -345,11 +361,12 @@ export class SessionEventLog extends Context.Service<
               () =>
                 !closed.has(aggregateId) &&
                 (seqs.has(aggregateId) ||
-                  isHistoricalStream(
-                    transcripts,
-                    historical,
-                    aggregateId as StreamTabId,
-                  )),
+                  (aggregateTarget(aggregateId).kind === 'stream' &&
+                    isHistoricalStream(
+                      transcripts,
+                      historical,
+                      aggregateTarget(aggregateId).id,
+                    ))),
             ),
         };
       }),
@@ -472,14 +489,14 @@ export function runEventDraft(
     case 'run.config':
       return {
         type: event.type,
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         executionId: event.executionId,
         config: event.config,
       };
     case 'result':
       return {
         type: event.type,
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         outcome: event.outcome,
         executionId: event.executionId,
         category: event.category,
@@ -491,7 +508,7 @@ export function runEventDraft(
     case 'stage.start':
       return {
         type: event.type,
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         id: event.id,
         label: event.label,
         parentId: event.parentId,
@@ -502,37 +519,48 @@ export function runEventDraft(
     case 'conversation.progress':
       return {
         type: event.type,
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         progress: event.progress,
       };
     case 'usage':
       return {
         type: event.type,
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         storageKey: event.payload.storageKey,
         usage: event.payload.usage,
       };
     case 'context.state':
       return {
         type: event.type,
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         inputTokens: event.inputTokens,
         contextWindow: event.contextWindow,
       };
     case 'updateTodos':
-      return { type: event.type, aggregateId: streamId, todos: event.todos };
+      return {
+        type: event.type,
+        aggregateId: qualifyAggregateId('stream', streamId),
+        todos: event.todos,
+      };
     case 'updatePlan':
-      return { type: event.type, aggregateId: streamId, plan: event.plan };
+      return {
+        type: event.type,
+        aggregateId: qualifyAggregateId('stream', streamId),
+        plan: event.plan,
+      };
     case 'addOutputFiles':
     case 'updateMissingOutputs':
     case 'updateCompileFailures':
       return {
         type: event.type,
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         filesByRound: event.filesByRound,
       } as SessionEventDraft;
     case 'goalPaused':
-      return { type: event.type, aggregateId: streamId };
+      return {
+        type: event.type,
+        aggregateId: qualifyAggregateId('stream', streamId),
+      };
     case 'child.activity':
     case 'log':
     case 'stage.end':
@@ -554,7 +582,7 @@ export function runEventDraft(
 export function statusDraft(event: StatusEvent): SessionEventDraft {
   return {
     type: 'status',
-    aggregateId: event.streamId,
+    aggregateId: qualifyAggregateId('stream', event.streamId),
     phase: event.phase,
     previousPhase: event.previousPhase,
     cause: event.cause,

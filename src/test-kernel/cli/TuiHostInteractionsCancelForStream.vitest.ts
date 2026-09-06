@@ -28,6 +28,7 @@ import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
   type AgentProposal,
@@ -68,7 +69,7 @@ function port(): SessionHostInteractions {
     session.publish([
       {
         type: 'run.start',
-        aggregateId: streamId,
+        aggregateId: qualifyAggregateId('stream', streamId),
         executionId: `${streamId}-exec` as ExecutionId,
         identity: { kind: 'agent', agent: 'agent' },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

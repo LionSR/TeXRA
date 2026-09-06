@@ -7,7 +7,10 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
-import { RUN_OUTCOME } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  RUN_OUTCOME,
+} from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
@@ -544,10 +547,14 @@ describe('executeCliRequest', () => {
       defaultSession().publish([
         {
           type: 'updateStreamDescription',
-          aggregateId: streamId,
+          aggregateId: qualifyAggregateId('stream', streamId),
           description: 'chat / gpt54',
         },
-        { type: 'setParentStream', aggregateId: streamId, parentStreamId },
+        {
+          type: 'setParentStream',
+          aggregateId: qualifyAggregateId('stream', streamId),
+          parentStreamId,
+        },
       ]);
       return {
         category: 'toolUse',

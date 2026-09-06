@@ -30,12 +30,13 @@
  */
 import { Effect, Stream, SubscriptionRef, type Context } from 'effect';
 
-import type {
-  CommitOrdinal,
-  FoldInput,
-  LocalRuntimeState,
-  TextChunk,
-  TranscriptSubscription,
+import {
+  aggregateId as qualifyAggregateId,
+  type CommitOrdinal,
+  type FoldInput,
+  type LocalRuntimeState,
+  type TextChunk,
+  type TranscriptSubscription,
 } from '@shared/schemas';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -106,7 +107,7 @@ function cutFrame(
         break;
       }
       case 'chunk': {
-        if (!named.has(item.streamId)) continue;
+        if (!named.has(qualifyAggregateId('stream', item.streamId))) continue;
         const rowKey = `${item.streamId}/${item.rowId}`;
         const held = chunks.get(rowKey);
         chunks.set(

@@ -29,7 +29,11 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
 
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { InquiryThreadId, StreamTabId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  type InquiryThreadId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
@@ -167,7 +171,7 @@ describe('external inquiry continuation session routing', () => {
       expect(explicit.facts).toMatchObject([
         {
           type: 'inquiryThreadUpdated',
-          aggregateId: THREAD,
+          aggregateId: qualifyAggregateId('inquiry', THREAD),
           threadId: THREAD,
           parentStreamId: STREAM,
           parentExecutionId: null,
@@ -202,7 +206,7 @@ describe('external inquiry continuation session routing', () => {
       expect(run.facts).toMatchObject([
         expect.objectContaining({
           type: 'inquiryThreadUpdated',
-          aggregateId: THREAD,
+          aggregateId: qualifyAggregateId('inquiry', THREAD),
           threadId: THREAD,
           resumeOutcome: 'sent',
         }),

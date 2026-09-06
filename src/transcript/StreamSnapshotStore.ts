@@ -25,6 +25,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
 import {
+  aggregateTarget,
   CompileFailureSchema,
   cloneRoundIndexed,
   EMPTY_ROUND_INDEXED,
@@ -694,7 +695,7 @@ export class StreamSnapshotStore {
           // which enter the plane directly and never this projection.
           if (event.identity == null) return;
           this.setRunStart(
-            event.aggregateId,
+            aggregateTarget(event.aggregateId).id,
             event.executionId,
             event.identity,
             event.userFollowUpSupport,
@@ -705,47 +706,57 @@ export class StreamSnapshotStore {
           // (`runEventDraft` passes it through); the plane's schema names the
           // fields the fold reads, the sidecar keeps the run's full config.
           this.setRunConfig(
-            event.aggregateId,
+            aggregateTarget(event.aggregateId).id,
             event.config as AgentConfig,
             event.executionId,
           );
           return;
         case 'usage':
           // `addUsage`'s safeParse is the wire→domain narrowing boundary.
-          void this.addUsage(event.aggregateId, event.storageKey, event.usage);
+          void this.addUsage(
+            aggregateTarget(event.aggregateId).id,
+            event.storageKey,
+            event.usage,
+          );
           return;
         case 'updateTodos':
-          this.setTodos(event.aggregateId, event.todos);
+          this.setTodos(aggregateTarget(event.aggregateId).id, event.todos);
           return;
         case 'updatePlan':
-          this.setPlan(event.aggregateId, event.plan);
+          this.setPlan(aggregateTarget(event.aggregateId).id, event.plan);
           return;
         case 'addOutputFiles':
           this.applyRoundFieldFact(
-            event.aggregateId,
+            aggregateTarget(event.aggregateId).id,
             'outputFiles',
             event.filesByRound,
           );
           return;
         case 'updateMissingOutputs':
           this.applyRoundFieldFact(
-            event.aggregateId,
+            aggregateTarget(event.aggregateId).id,
             'missingOutputs',
             event.filesByRound,
           );
           return;
         case 'updateCompileFailures':
           this.applyRoundFieldFact(
-            event.aggregateId,
+            aggregateTarget(event.aggregateId).id,
             'compileFailures',
             event.filesByRound,
           );
           return;
         case 'updateStreamDescription':
-          this.setDescription(event.aggregateId, event.description);
+          this.setDescription(
+            aggregateTarget(event.aggregateId).id,
+            event.description,
+          );
           return;
         case 'setParentStream':
-          this.setParentStream(event.aggregateId, event.parentStreamId);
+          this.setParentStream(
+            aggregateTarget(event.aggregateId).id,
+            event.parentStreamId,
+          );
           return;
         // `status`, `run.activate`, `stage.start`, `result`, and
         // `stream.removed` carry liveness and lifecycle, which the class doc

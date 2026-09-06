@@ -7,7 +7,11 @@ import {
   getDisplayedInstruction,
 } from '@agent/runtime/sessionDescription';
 import * as logger from '@logger/logUtils';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
@@ -114,7 +118,7 @@ describe('session description helpers', () => {
     expect(recorded.events).toMatchObject([
       {
         type: 'updateStreamDescription',
-        aggregateId: 'stream-workflow',
+        aggregateId: qualifyAggregateId('stream', 'stream-workflow'),
         description: 'Correcting derivation signs',
       },
     ]);
@@ -165,7 +169,7 @@ describe('session description helpers', () => {
     expect(recorded.events).toMatchObject([
       {
         type: 'updateStreamDescription',
-        aggregateId: 'stream-tool',
+        aggregateId: qualifyAggregateId('stream', 'stream-tool'),
         description: 'Fixing proof typos',
       },
     ]);

@@ -1,7 +1,10 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionStores } from '@controllers/session/createSessionStores';
 import { createLog } from '@logger/logUtils';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -67,7 +70,7 @@ export function scheduleLeftoverStreamSweep(
         session.publish(
           sweptStreams.map((streamId) => ({
             type: 'stream.removed' as const,
-            aggregateId: streamId,
+            aggregateId: qualifyAggregateId('stream', streamId),
           })),
         );
       })

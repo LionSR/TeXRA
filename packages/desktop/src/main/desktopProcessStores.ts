@@ -4,6 +4,7 @@ import type { SessionHandle } from '@agent/runtime';
 import { createSessionStores } from '@controllers/session/createSessionStores';
 import { createLog } from '@logger/logUtils';
 import { effectRuntime } from '@platform/processRuntime';
+import { aggregateTarget } from '@shared/schemas';
 import { toLogData } from './desktopLogUtils.js';
 
 /**
@@ -22,11 +23,13 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {
         if (event.type !== 'stream.removed') return;
-        void stores.deleteStream(event.aggregateId).catch((error: unknown) => {
-          logger.warn('Failed to delete a headless desktop stream', {
-            data: toLogData(error),
+        void stores
+          .deleteStream(aggregateTarget(event.aggregateId).id)
+          .catch((error: unknown) => {
+            logger.warn('Failed to delete a headless desktop stream', {
+              data: toLogData(error),
+            });
           });
-        });
       }),
     ),
   );

@@ -9,7 +9,11 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { StateStore } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
@@ -275,21 +279,21 @@ describe('subscribeGoalStateChanges', () => {
       sessionB.publish([
         {
           type: 'goalStateChanged',
-          aggregateId: 'other-session' as StreamTabId,
+          aggregateId: qualifyAggregateId('stream', 'other-session'),
           state: { active: false },
         },
       ]);
       sessionA.publish([
         {
           type: 'updateStreamDescription',
-          aggregateId: 'same-session' as StreamTabId,
+          aggregateId: qualifyAggregateId('stream', 'same-session'),
           description: 'not a goal change',
         },
       ]);
       sessionA.publish([
         {
           type: 'goalStateChanged',
-          aggregateId: 'same-session' as StreamTabId,
+          aggregateId: qualifyAggregateId('stream', 'same-session'),
           state: { active: false },
         },
       ]);

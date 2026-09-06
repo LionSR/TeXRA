@@ -11,6 +11,7 @@ import {
 import * as logUtils from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
+  aggregateId as qualifyAggregateId,
   STREAM_TAB_META_SCHEMA_VERSION,
   USER_FOLLOW_UP_SUPPORT,
   AgentCategory,
@@ -306,7 +307,7 @@ describe('StreamSnapshotStore', () => {
 
     apply({
       type: 'run.start',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       executionId,
       identity: { kind: 'agent', agent: 'session-label' },
       category: AgentCategory.ToolUse,
@@ -315,50 +316,53 @@ describe('StreamSnapshotStore', () => {
     });
     apply({
       type: 'run.config',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       executionId,
       config: runConfig,
     });
     apply({
       type: 'updateTodos',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       todos: [TODO],
     });
     apply({
       type: 'updatePlan',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       plan: PLAN,
     });
     apply({
       type: 'addOutputFiles',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       filesByRound: { 1: [output] },
     });
     apply({
       type: 'updateMissingOutputs',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       filesByRound: { 1: ['paper.pdf'] },
     });
     apply({
       type: 'updateCompileFailures',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       filesByRound: { 1: [failure] },
     });
     apply({
       type: 'usage',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       storageKey: RUN,
       usage: extendedUsage,
     });
-    apply({ type: 'goalPaused', aggregateId: OTHER_STREAM });
+    apply({
+      type: 'goalPaused',
+      aggregateId: qualifyAggregateId('stream', OTHER_STREAM),
+    });
     apply({
       type: 'updateStreamDescription',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       description: 'session-search / kimi26T',
     });
     apply({
       type: 'setParentStream',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       parentStreamId: OTHER_STREAM,
     });
 
@@ -419,7 +423,7 @@ describe('StreamSnapshotStore', () => {
 
     apply({
       type: 'run.config',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       executionId,
       config: runConfig,
     });
@@ -428,7 +432,7 @@ describe('StreamSnapshotStore', () => {
 
     apply({
       type: 'run.start',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       executionId,
       identity: workflowIdentity,
       category: AgentCategory.ToolUse,
@@ -1049,7 +1053,7 @@ describe('StreamSnapshotStore', () => {
 
     apply({
       type: 'run.start',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       executionId,
       identity: { kind: 'agent', agent: 'search' },
       category: AgentCategory.ToolUse,
@@ -1064,7 +1068,7 @@ describe('StreamSnapshotStore', () => {
     });
     apply({
       type: 'updateStreamDescription',
-      aggregateId: STREAM,
+      aggregateId: qualifyAggregateId('stream', STREAM),
       description: 'Current label',
     });
     expect(store.getRunMetadata(STREAM).description).toBe('Current label');

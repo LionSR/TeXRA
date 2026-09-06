@@ -2,7 +2,10 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { StreamTabId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import type * as VSCode from 'vscode';
 
@@ -122,7 +125,7 @@ async function emitOutputFiles(
   session.publish([
     {
       type: 'addOutputFiles',
-      aggregateId: streamId,
+      aggregateId: qualifyAggregateId('stream', streamId),
       filesByRound: {
         1: [
           {

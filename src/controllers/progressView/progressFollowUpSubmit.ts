@@ -6,7 +6,10 @@ import {
 import type { SessionHandle } from '@agent/runtime';
 import type { FollowUpQueueInput } from '@agent/followUp';
 import { createLog } from '@logger/logUtils';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createLog('ProgressFollowUpSubmit');
@@ -53,7 +56,7 @@ export function submitProgressFollowUp(
       session.publish([
         {
           type: 'updateQueuedFollowUps',
-          aggregateId: streamId,
+          aggregateId: qualifyAggregateId('stream', streamId),
           messages: session.followUps.getAll(streamId),
         },
       ]);

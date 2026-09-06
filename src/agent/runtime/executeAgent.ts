@@ -24,13 +24,14 @@ import {
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
-import type {
-  ExecutionId,
-  RequestEnsureProgressViewPayload,
-  RunOutcome,
-  StreamTabId,
-  SubagentProgressUpdate,
-  UserFollowUpSupport,
+import {
+  aggregateId as qualifyAggregateId,
+  type ExecutionId,
+  type RequestEnsureProgressViewPayload,
+  type RunOutcome,
+  type StreamTabId,
+  type SubagentProgressUpdate,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import {
   AgentCategory,
@@ -161,7 +162,7 @@ async function launchToolUseRun(
         session.publish([
           {
             type: 'updateQueuedFollowUps',
-            aggregateId: streamId,
+            aggregateId: qualifyAggregateId('stream', streamId),
             messages: session.followUps.getAll(streamId),
           },
         ]);

@@ -10,6 +10,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
+  aggregateId as qualifyAggregateId,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ActiveChildInfo,
@@ -776,7 +777,7 @@ export class ExecutionRegistry {
     this.publish([
       {
         type: 'setParentStream',
-        aggregateId: payload.childStreamId,
+        aggregateId: qualifyAggregateId('stream', payload.childStreamId),
         parentStreamId: payload.parentStreamId,
       },
     ]);

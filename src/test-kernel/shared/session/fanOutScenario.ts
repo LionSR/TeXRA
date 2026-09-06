@@ -6,6 +6,7 @@
 // the two can never drift.
 
 import {
+  aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -27,8 +28,8 @@ import {
 } from '@shared/session/sessionView';
 
 /** A process identity, never a lease token (contract C5). */
-export const OWNER = '4242:2026-09-04T00:00:00.000Z';
-export const OTHER_OWNER = '4343:2026-09-04T00:00:00.000Z';
+export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
+export const OTHER_OWNER = '["test-host",4343,"2026-09-04T00:00:00.000Z"]';
 export const ROOT = 'review#aaaaaaaaaaaa' as StreamTabId;
 export const CHILD = 'search#bbbbbbbbbbbb' as StreamTabId;
 export const GRANDCHILD = 'lint#dddddddddddd' as StreamTabId;
@@ -103,13 +104,17 @@ export class Log {
     body: SessionEventBody,
     ownerId: string | null = OWNER,
   ): SessionEvent {
-    const seq = (this.seq.get(aggregateId) ?? 0) + 1;
-    this.seq.set(aggregateId, seq);
+    const key = qualifyAggregateId(
+      body.type === 'inquiryThreadUpdated' ? 'inquiry' : 'stream',
+      aggregateId,
+    );
+    const seq = (this.seq.get(key) ?? 0) + 1;
+    this.seq.set(key, seq);
     this.commit += 1;
     // A body is a distributive omit over the union, so the spread cannot be
     // typed back into the union without this assertion.
     const event = {
-      aggregateId,
+      aggregateId: key,
       seq,
       commit: this.commit,
       ownerId,
@@ -160,7 +165,7 @@ export const tail = (event: SessionEvent): FoldInput => ({
 
 export const subscribe = (...ids: StreamTabId[]): FoldInput => ({
   _tag: 'subscriptions',
-  set: ids.map((id) => ({ id, fromSeq: 0 })),
+  set: ids.map((id) => ({ id: qualifyAggregateId('stream', id), fromSeq: 0 })),
 });
 
 export function local(state: Partial<LocalRuntimeState>): FoldInput {
@@ -518,7 +523,8 @@ function ownedBy(
   ownerId: string,
 ): FoldInput[] {
   return inputs.map((input) =>
-    input._tag === 'event' && input.event.aggregateId === aggregateId
+    input._tag === 'event' &&
+    input.event.aggregateId === qualifyAggregateId('stream', aggregateId)
       ? { ...input, event: { ...input.event, ownerId } }
       : input,
   );
@@ -554,7 +560,8 @@ export function withWaitingGrandchild(): SessionView {
     (input) =>
       !(
         input._tag === 'event' &&
-        ((input.event.aggregateId === GRANDCHILD &&
+        ((input.event.aggregateId ===
+          qualifyAggregateId('stream', GRANDCHILD) &&
           settled.has(input.event.type) &&
           input.event.at === T.grandchildDone) ||
           input.event.type === 'approval.requested')
