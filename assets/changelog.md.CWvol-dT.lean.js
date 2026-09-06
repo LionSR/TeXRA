@@ -1,0 +1,1 @@
+import{at as e,it as t,o as n,yt as r}from"./chunks/framework.B-d2E8F-.js";var i=JSON.parse(`{"title":"Changelog","description":"","frontmatter":{},"headers":[],"relativePath":"changelog.md","filePath":"changelog.md"}`),a={name:`changelog.md`};function o(n,i,a,o,s,c){return r(),t(`div`,null,[...i[0]||=[e("",996)]])}var s=n(a,[[`render`,o]]);export{i as __pageData,s as default};
