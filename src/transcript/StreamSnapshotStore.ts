@@ -747,24 +747,33 @@ export class StreamSnapshotStore {
         case 'setParentStream':
           this.setParentStream(event.aggregateId, event.parentStreamId);
           return;
-        // `status` carries liveness, which the class doc above says this
-        // store deliberately does not persist. The rest — goal, inquiry,
-        // follow-up, active-stream, hold, and removal facts — are
-        // session/render state owned by SessionFactApplier/SessionState, not
-        // by this sidecar. Both groups are listed explicitly so a newly
-        // added SessionFact fails the `never` check below instead of
-        // silently no-op'ing.
+        // `status`, `run.activate`, `stage.start`, `result`, and
+        // `stream.removed` carry liveness and lifecycle, which the class doc
+        // above says this store deliberately does not persist; the three
+        // approval facts, `context.state`, and `conversation.progress` are
+        // run-scoped session facts the fold owns; `transcript.entry` is the transcript
+        // tier; goal, inquiry, and follow-up facts are session/render state
+        // owned by SessionFactApplier/SessionState, not by this sidecar.
+        // Every arm is listed explicitly so a newly added SessionEvent type
+        // fails the `never` check below instead of silently no-op'ing.
         case 'status':
+        case 'run.activate':
+        case 'stage.start':
+        case 'result':
+        case 'stream.removed':
+        case 'approval.policy':
+        case 'approval.requested':
+        case 'approval.resolved':
+        case 'context.state':
+        case 'conversation.progress':
+        case 'transcript.entry':
         case 'goalStateChanged':
+        case 'goalPaused':
         case 'inquiryThreadUpdated':
         case 'updateQueuedFollowUps':
-        case 'followUpSent':
-        case 'setActiveStream':
-        case 'streamHoldChanged':
-        case 'removeStream':
           return;
         default: {
-          const unhandled: never = fact;
+          const unhandled: never = event;
           return unhandled;
         }
       }
