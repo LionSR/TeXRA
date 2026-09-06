@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Data, Deferred, Duration, Effect } from 'effect';
+import { Deferred, Duration, Effect } from 'effect';
 
 // Local imports
 import {
@@ -114,20 +114,6 @@ const log = createLog('ExecutionsTool');
  * fan-out is bounded rather than page-wide.
  */
 const DURABLE_READ_CONCURRENCY = 16;
-
-/**
- * One row's durable metadata read (its meta file, and for an unresolved row
- * its lease and checkpoint stat) rejected: race deletion, permission error,
- * a corrupt file. Nothing in the fan-out recovers from this: it fails fast,
- * and the Promise edge rethrows `cause` so the tool surfaces the same Error
- * instance the store raised.
- */
-class ExecutionMetaUnreadable extends Data.TaggedError(
-  'ExecutionMetaUnreadable',
-)<{
-  readonly executionId: ExecutionId;
-  readonly cause: unknown;
-}> {}
 
 /**
  * Block until one of `executionIds` changes status, the caller's stream
@@ -373,21 +359,15 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       offset,
       limit,
     );
-    // One page, not one directory — see DURABLE_READ_CONCURRENCY.
+    // One page, not one directory — see DURABLE_READ_CONCURRENCY. A rejected
+    // read (race deletion, permission error, a corrupt file) is nothing the
+    // fan-out recovers from, so `Effect.promise` surfaces it as a defect —
+    // the same Error instance the store raised.
     const lines = await effectRuntime().runPromise(
       Effect.forEach(
         page,
-        (entry) =>
-          Effect.tryPromise({
-            try: () => formatListingLine(entry),
-            catch: (cause) =>
-              new ExecutionMetaUnreadable({ executionId: entry.id, cause }),
-          }),
+        (entry) => Effect.promise(() => formatListingLine(entry)),
         { concurrency: DURABLE_READ_CONCURRENCY },
-      ).pipe(
-        Effect.catchTag('ExecutionMetaUnreadable', (error) =>
-          Effect.die(error.cause),
-        ),
       ),
     );
 
@@ -552,20 +532,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       Effect.forEach(
         children,
         (child) =>
-          Effect.tryPromise({
-            try: async () =>
-              formatChildLine(
-                child,
-                await getExecutionStore(child.id).readMeta(),
-              ),
-            catch: (cause) =>
-              new ExecutionMetaUnreadable({ executionId: child.id, cause }),
-          }),
+          Effect.promise(async () =>
+            formatChildLine(
+              child,
+              await getExecutionStore(child.id).readMeta(),
+            ),
+          ),
         { concurrency: DURABLE_READ_CONCURRENCY },
-      ).pipe(
-        Effect.catchTag('ExecutionMetaUnreadable', (error) =>
-          Effect.die(error.cause),
-        ),
       ),
     );
   }

@@ -131,14 +131,6 @@ let lifecycleHost: LifecycleHost | undefined;
 let extensionShutdownPromise: Promise<void> | undefined;
 
 /**
- * Make the process runtime over the process identity and install it beside
- * the platform: the session graphs and every Promise-facing fiber run on it.
- */
-async function installRuntime(): Promise<void> {
-  installProcessRuntime(await platform().processes.selfIdentity());
-}
-
-/**
  * The platform, the process runtime, and the process roots, wired once for
  * both activation paths: the credential-only path without a folder and the
  * workspace path, which adds the ports only a folder can answer.
@@ -168,7 +160,9 @@ async function initVscodePlatform(
       ...extras,
     }),
   );
-  await installRuntime();
+  // Make the process runtime over the process identity and install it beside
+  // the platform: the session graphs and every Promise-facing fiber run on it.
+  installProcessRuntime(await platform().processes.selfIdentity());
   initProcessWorkspaceRoots(
     createNodeWorkspaceRoots({
       workspacePath: workspaceRoot,

@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { StreamTabIdSchema } from '../identifiers';
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,

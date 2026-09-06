@@ -429,11 +429,11 @@ export class AnthropicStreamHandler {
     const input = this.state.pendingServerTools.get(toolUseId)?.input;
     this.state.pendingServerTools.delete(toolUseId);
     if (!input) return '';
-    const parsed = safeParseJson(input);
-    if (Result.isSuccess(parsed))
-      return (parsed.success as Record<string, string>)[field] ?? '';
-    const match = input.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
-    return match?.[1] ?? '';
+    return Result.match(safeParseJson(input), {
+      onSuccess: (value) => (value as Record<string, string>)[field] ?? '',
+      onFailure: () =>
+        input.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`))?.[1] ?? '',
+    });
   }
 
   /**

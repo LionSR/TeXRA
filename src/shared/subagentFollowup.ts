@@ -13,7 +13,7 @@
 
 import escapeRegExp from 'escape-string-regexp';
 import { Result } from 'effect';
-import { safeParseJson } from '@common/parsing/safeParseJson';
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 import {
   DELIVERY_TAG,
   DELIVERY_TAGS,
@@ -199,12 +199,11 @@ export function parseWorkflowScriptDeliverySummary(
 ): WorkflowScriptDeliverySummary | undefined {
   const rawSummary = innerTag(xml, 'workflow-summary');
   if (!rawSummary) return undefined;
-  const parsedJson = safeParseJson(decodeXmlEntities(rawSummary));
-  if (Result.isFailure(parsedJson)) return undefined;
-  const parsed = WorkflowScriptDeliverySummarySchema.safeParse(
-    parsedJson.success,
+  const parsed = parseJsonWith(
+    decodeXmlEntities(rawSummary),
+    WorkflowScriptDeliverySummarySchema,
   );
-  return parsed.success ? parsed.data : undefined;
+  return Result.getOrUndefined(parsed);
 }
 
 /** Collapse a parsed workflow delivery summary to its transcript lines. */

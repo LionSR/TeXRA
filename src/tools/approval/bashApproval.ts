@@ -42,20 +42,13 @@ const DEFAULT_BASH_REJECTION_GUIDANCE =
  * the host owns one (extension, desktop); the CLI hosts run on the default
  * session.
  */
-function isBashApprovalBypassedForStream(
-  streamId: StreamTabId,
-  session: SessionHandle = currentSession(),
-): boolean {
-  return session.approvals.bash.bypass.isBypassed(streamId);
-}
-
 function prepareBashApprovalPrompt(
   request: Omit<HostBashApprovalRequest, 'permission'>,
   session?: SessionHandle,
 ): BashPermission {
   const streamId = request.streamId ?? undefined;
   const isBypassed = streamId
-    ? isBashApprovalBypassedForStream(streamId, session)
+    ? (session ?? currentSession()).approvals.bash.bypass.isBypassed(streamId)
     : false;
   const cwd = request.cwd?.trim();
   return {
