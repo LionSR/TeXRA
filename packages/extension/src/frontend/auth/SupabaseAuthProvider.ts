@@ -6,6 +6,12 @@ import { z } from 'zod';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
+import {
+  callPort,
+  installAuthProgramEdge,
+  runAuthProgram,
+} from '@auth/authProgram';
+import { withPkcePermit } from '@auth/pkcePermit';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   AUTH_BRIDGE_URL,
@@ -24,6 +30,7 @@ import {
 import { classifyAuthFailureStatus } from '@auth/TokenProvider';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SupabaseUriHandler } from './UriHandler';
@@ -77,6 +84,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private activeAttempt: ExtensionAuthAttempt | undefined;
 
   constructor(private readonly notifier: AuthNotifier) {
+    // The auth subsystem's run edge lives at this host entry (PRD R1): every
+    // Promise-facing auth surface settles on the process runtime from here.
+    installAuthProgramEdge((program) =>
+      effectRuntime().runPromiseExit(program),
+    );
     const hostPlatform = platform();
     this.secrets = hostPlatform.secrets;
     this.sessionCoordinator = createHostAuthCoordinator({
@@ -243,7 +255,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   /** Store a newly created session and fire the session-change event. */
   private async storeSession(session: SupabaseSession): Promise<void> {
-    await this.sessionCoordinator.storeSession(session);
+    await runAuthProgram(this.sessionCoordinator.storeSession(session));
     this._onDidChangeSessions.fire({
       added: [this.toVSCodeSession(session)],
       removed: [],
@@ -286,13 +298,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const flowId = await this.claimCallback(uri.query);
       if (!flowId) return;
 
-      const existingSession = await this.sessionCoordinator.loadSession();
+      const existingSession = await runAuthProgram(
+        this.sessionCoordinator.loadSession(),
+      );
       if (existingSession) return;
 
-      const result = await SupabaseClient.runPkceOperation(() =>
-        this.sessionCoordinator.createSessionFromCallback(
-          { path: uri.path, query: uri.query },
-          flowId,
+      const result = await runAuthProgram(
+        withPkcePermit(
+          this.sessionCoordinator.createSessionFromCallback(
+            { path: uri.path, query: uri.query },
+            flowId,
+          ),
         ),
       );
 
@@ -323,14 +339,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     _scopes?: readonly string[],
     _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
-    const session = await this.sessionCoordinator.loadSession();
+    const session = await runAuthProgram(this.sessionCoordinator.loadSession());
     if (!session) {
       return [];
     }
 
     try {
       if (Date.now() >= session.expiresAt) {
-        const refreshed = await this.sessionCoordinator.refreshSession(session);
+        const refreshed = await runAuthProgram(
+          this.sessionCoordinator.refreshSession(session),
+        );
         if (!refreshed) {
           if (this.sessionCoordinator.getLastRefreshFailure() === 'invalid') {
             await this.handleInvalidSession(session, 'expired');
@@ -479,11 +497,15 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           if (this.activeAttempt !== attempt) throw interruptedError();
 
           const options = await this.buildOAuthOptions(attempt.nonce);
-          const { data, error } = await SupabaseClient.runPkceOperation(() =>
-            SupabaseClient.getClient().auth.signInWithOAuth({
-              provider,
-              options,
-            }),
+          const { data, error } = await runAuthProgram(
+            withPkcePermit(
+              callPort(() =>
+                SupabaseClient.getClient().auth.signInWithOAuth({
+                  provider,
+                  options,
+                }),
+              ),
+            ),
           );
 
           if (error || !data.url) {
@@ -508,7 +530,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             if (this.activeAttempt !== attempt) return;
             await this.storeSession(session);
             if (this.activeAttempt !== attempt) {
-              await this.sessionCoordinator.clearSessionIfCurrent(session);
+              await runAuthProgram(
+                this.sessionCoordinator.clearSessionIfCurrent(session),
+              );
             }
           });
           if (this.activeAttempt !== attempt) throw interruptedError();
@@ -555,9 +579,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * its own sign-in prompt and duplicate the caller's authentication action.
    */
   async clearStoredSession(): Promise<boolean> {
-    const session = await this.sessionCoordinator.loadSession();
+    const session = await runAuthProgram(this.sessionCoordinator.loadSession());
     if (!session) return false;
-    if ((await this.sessionCoordinator.getStoredSessionState()) !== 'invalid') {
+    const storedState = await runAuthProgram(
+      this.sessionCoordinator.getStoredSessionState(),
+    );
+    if (storedState !== 'invalid') {
       return false;
     }
     return this.clearLocalSessionIfCurrent(session);
@@ -566,22 +593,23 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   /** Remove the currently stored session without resolving it. */
   async removeStoredSession(): Promise<boolean> {
     await this.cancelPendingAttempt();
-    const session = await this.sessionCoordinator.loadSession();
+    const session = await runAuthProgram(this.sessionCoordinator.loadSession());
     if (!session) return false;
     await this.clearLocalSession(session.id);
     return true;
   }
 
   private async clearLocalSession(sessionId: string): Promise<void> {
-    await this.sessionCoordinator.clearSession();
+    await runAuthProgram(this.sessionCoordinator.clearSession());
     await this.afterLocalSessionCleared(sessionId);
   }
 
   private async clearLocalSessionIfCurrent(
     session: SupabaseSession,
   ): Promise<boolean> {
-    const cleared =
-      await this.sessionCoordinator.clearSessionIfCurrent(session);
+    const cleared = await runAuthProgram(
+      this.sessionCoordinator.clearSessionIfCurrent(session),
+    );
     if (!cleared) return false;
     await this.afterLocalSessionCleared(session.id);
     return true;
@@ -640,10 +668,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           if (!flowId) return;
           cleanupListeners();
 
-          const result = await SupabaseClient.runPkceOperation(() =>
-            this.sessionCoordinator.createSessionFromCallback(
-              { path: uri.path, query: uri.query },
-              flowId,
+          const result = await runAuthProgram(
+            withPkcePermit(
+              this.sessionCoordinator.createSessionFromCallback(
+                { path: uri.path, query: uri.query },
+                flowId,
+              ),
             ),
           );
 
