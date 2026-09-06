@@ -6,7 +6,8 @@
  * consistent failure policy across tools (built around the `ky` HTTP client).
  *
  * The request programs run on Effect: a deadline is `Effect.timeoutOrElse`,
- * the transient-failure retry is a jittered exponential `Schedule`, and the
+ * the transient-failure retry is an exponential `Schedule` with full jitter
+ * (see {@link transientBackoff}), and the
  * caller's cancellation `AbortSignal` becomes fiber interruption at the one
  * run boundary of each exported helper — `Effect.tryPromise` hands the
  * interrupted attempt's own signal to the underlying fetch, so an
@@ -14,7 +15,7 @@
  * deadline or the next backoff.
  */
 
-import { Cause, Data, Duration, Effect, Exit, Schedule } from 'effect';
+import { Cause, Data, Duration, Effect, Exit, Random, Schedule } from 'effect';
 import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
 
@@ -157,7 +158,10 @@ export async function withRequestTimeout<T>(
 interface RetryTransientFetchOptions {
   /** Retries after the first attempt. */
   readonly retries: number;
-  /** Base backoff before the first retry; doubles per retry, jittered. */
+  /**
+   * Base backoff before the first retry; doubles per retry, then scaled by
+   * a uniform factor in [1, 2) — see {@link transientBackoff}.
+   */
   readonly minTimeout: number;
   /** Deadline for each attempt, connection and body read included. */
   readonly timeoutMs: number;
@@ -169,6 +173,22 @@ interface RetryTransientFetchOptions {
    * left to report.
    */
   readonly onFailedAttempt?: (error: unknown, retriesLeft: number) => void;
+}
+
+/**
+ * Backoff before retry `n` (1-based): `minTimeout * 2^(n-1)` scaled by a
+ * uniform factor in [1, 2). This is the window the tools were tuned to under
+ * p-retry's `randomize: true`; `Schedule.jittered` scales by [0.8, 1.2]
+ * instead, which would cut the mean wait before a 429/5xx retry by a third.
+ */
+function transientBackoff(minTimeout: number) {
+  return Schedule.exponential(Duration.millis(minTimeout)).pipe(
+    Schedule.modifyDelay(({ duration }) =>
+      Effect.map(Random.next, (random) =>
+        Duration.millis(Duration.toMillis(duration) * (1 + random)),
+      ),
+    ),
+  );
 }
 
 const retryingRequest = Effect.fn('timeouts.retryTransientFetch')(
@@ -188,9 +208,7 @@ const retryingRequest = Effect.fn('timeouts.retryTransientFetch')(
         }),
       ),
       Effect.retry({
-        schedule: Schedule.exponential(
-          Duration.millis(options.minTimeout),
-        ).pipe(Schedule.jittered),
+        schedule: transientBackoff(options.minTimeout),
         times: options.retries,
         while: isTransientRequestError,
       }),
@@ -199,8 +217,8 @@ const retryingRequest = Effect.fn('timeouts.retryTransientFetch')(
 
 /**
  * Run `fetchOnce` under a per-attempt deadline, retrying only transient
- * failures (timeout, network error, 429, 5xx) with jittered exponential
- * backoff — the pattern every network-boundary tool (web fetch/search,
+ * failures (timeout, network error, 429, 5xx) with exponential backoff and
+ * full jitter — the pattern every network-boundary tool (web fetch/search,
  * Loogle) repeats. Any other rejection — a non-transient HTTP status, a
  * response-shape or size-limit check `fetchOnce` throws itself — ends the
  * retry immediately and is rethrown unchanged. Cancellation stops both the
