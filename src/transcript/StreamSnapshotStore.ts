@@ -747,8 +747,26 @@ export class StreamSnapshotStore {
         case 'setParentStream':
           this.setParentStream(event.aggregateId, event.parentStreamId);
           return;
-        default:
+        // `status` carries liveness, which the class doc above says this
+        // store deliberately does not persist. The rest — goal, inquiry,
+        // follow-up, active-stream, hold, and removal facts — are
+        // session/render state owned by SessionFactApplier/SessionState, not
+        // by this sidecar. Both groups are listed explicitly so a newly
+        // added SessionFact fails the `never` check below instead of
+        // silently no-op'ing.
+        case 'status':
+        case 'goalStateChanged':
+        case 'inquiryThreadUpdated':
+        case 'updateQueuedFollowUps':
+        case 'followUpSent':
+        case 'setActiveStream':
+        case 'streamHoldChanged':
+        case 'removeStream':
           return;
+        default: {
+          const unhandled: never = fact;
+          return unhandled;
+        }
       }
     };
   }
