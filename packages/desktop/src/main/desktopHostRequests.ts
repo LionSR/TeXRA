@@ -27,7 +27,12 @@ import {
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
+import {
+  latexdiffPackMessage,
+  runPackLatexdiffvc,
+} from '@housekeeping/packLatexdiffvc';
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
+import { LaTeXdiffService } from '@latex/latexdiff';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   cloneRoundIndexed,
@@ -51,6 +56,10 @@ import {
   SPILL_ARTIFACT_DELETED_MESSAGE,
 } from '@transcript/spillArtifacts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  createExternalLocation,
+  pathToLocation,
+} from '@utils/files/fileLocation';
 
 import {
   DESKTOP_DOCS_URL,
@@ -109,6 +118,8 @@ export interface DesktopHostRequests {
   /** Stops a recording this window owns; the take is discarded. */
   dispose(): void;
 }
+
+const LATEXDIFF_CHANNEL = 'DesktopHostRequests';
 
 function operationLabel(operation: WorkflowFileOperation): {
   verb: string;
@@ -427,6 +438,66 @@ export function createDesktopHostRequests(
     }
   }
 
+  /**
+   * A refusal the user has to see. The renderer's settle path drops
+   * `Rejected` reasons (`sessionSurfaces.ts` `settleHost` early-returns), so
+   * a latexdiff refusal goes through the host's error dialog first, the way
+   * the extension's latexdiff commands report the same failures.
+   */
+  async function showRefusal(reason: string): Promise<Rejected> {
+    await host.showErrorMessage(reason);
+    return new Rejected({ reason });
+  }
+
+  /**
+   * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
+   * them: latexdiff-vc over the base file against a commit, and the pack
+   * and clean housekeeping of what it produced. The diff opens in the PDF
+   * tab through the build display, as a run's outputs do. The math markup
+   * is left to `diffCommandExecutor`, which reads the workspace's saved
+   * `LATEXDIFF_MATH_MARKUP` for every host.
+   */
+  async function latexdiffAgainstCommit(
+    action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
+    baseFile: string | undefined,
+    commit: string,
+  ): Promise<void> {
+    if (!baseFile) {
+      throw await showRefusal('Choose a base file first.');
+    }
+    const base = pathToLocation(baseFile);
+    if (action === 'latexdiffvc') {
+      const result = await new LaTeXdiffService(LATEXDIFF_CHANNEL).runDiffVc(
+        base,
+        commit,
+      );
+      if (!result.success) throw await showRefusal(result.message);
+      await host.openBuildDisplay(createExternalLocation(result.diffPath));
+      return;
+    }
+    // The workspace-relative base, as the extension passes: the collector
+    // resolves it from the workspace root. A filesystem failure here, a
+    // read-only Diffs directory or a locked artifact, reaches the renderer
+    // as a result its settle path drops, so it is reported the way the
+    // extension's latexdiff commands report the same failures, then
+    // rethrown so the request still settles as a failure.
+    let packed;
+    try {
+      packed = await runPackLatexdiffvc(
+        baseFile,
+        commit,
+        action === 'cleanLatexdiffvc',
+      );
+    } catch (error) {
+      await host.showErrorMessage(
+        `Error packing LaTeX diff: ${toErrorMessage(error)}`,
+      );
+      throw error;
+    }
+    const message = latexdiffPackMessage(packed);
+    if (message) await host.showInfoMessage(message);
+  }
+
   /** The Tools sheet's verbs over the launcher's base and edited files. */
   async function latexdiffs(
     request: Extract<HostRequest, { kind: 'latexdiffs' }>,
@@ -437,14 +508,17 @@ export function createDesktopHostRequests(
       case 'latexdiffvc':
       case 'packLatexdiffvc':
       case 'cleanLatexdiffvc':
-        throw notOnDesktop('latexdiff against a commit');
+        await latexdiffAgainstCommit(
+          request.action,
+          baseFile,
+          request.commit ?? 'HEAD',
+        );
+        return;
       default:
         break;
     }
     if (!baseFile || !editedFile) {
-      throw new Rejected({
-        reason: 'Choose a base file and an edited file first.',
-      });
+      throw await showRefusal('Choose a base file and an edited file first.');
     }
     switch (request.action) {
       case 'compare':
@@ -512,7 +586,6 @@ export function createDesktopHostRequests(
 
   const notOnDesktop = (what: string) =>
     new Rejected({ reason: `${what} is not available in the desktop app.` });
-
   async function handle(
     request: HostRequest,
     port: string,

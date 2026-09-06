@@ -74,7 +74,6 @@ import {
   setSidebarWidth,
   setWorkbenchWidth,
   toggleFiles,
-  togglePapersLayout,
   toggleSidebar,
   toggleSummaryBar,
   workspaceName,
@@ -176,7 +175,6 @@ let shell: Shell = {
   active: '',
   open: [],
   collapsed: persistedShell.getState().collapsed,
-  search: '',
 };
 let papersKnown = false;
 let applyingPaperList = false;
@@ -440,8 +438,7 @@ function taskConversationTemplate(): TemplateResult {
           }
         </span>
         ${
-          // In the focus layout the rail's switcher is the paper's one home.
-          shellState().papersLayout === 'sections' && papers.length > 0
+          papers.length > 0
             ? paperChipTemplate(papers, activePaper, selectPaper)
             : nothing
         }
@@ -525,6 +522,7 @@ function taskConversationTemplate(): TemplateResult {
               ? html`
                   <section
                     class="task-launcher-surface"
+                    data-session=${activePaper ? activePaper.display.key : nothing}
                     ?hidden=${startupPanelVisible}
                   >
                     ${conversationView} ${conversationDockTemplate()}
@@ -579,7 +577,7 @@ function paperWorkbenchesTemplate(
     (paper) =>
       html` <div
         class="task-paper-workbench"
-        data-workbench-session=${paper.session}
+        data-session=${paper.session}
         ?hidden=${paper.session !== shell.active || !activeWorkbenchTab(paper.getState(), placement)}
       >
         ${paper.workbench.template(placement)}
@@ -676,7 +674,6 @@ function shellTemplate(): TemplateResult {
             filesExpanded: shellState().filesExpanded,
             papers: railPapers(),
             shell,
-            papersLayout: shellState().papersLayout,
             subagentsOpen: shellState().workbenchTabs.some(
               (tab) => tab.kind === 'subagents',
             ),
@@ -709,8 +706,6 @@ function shellTemplate(): TemplateResult {
                   collapsed: !shell.collapsed.includes(key),
                 }),
               ),
-            onTogglePapersLayout: () =>
-              updateShell(togglePapersLayout(shellState())),
             onOpenTerminal: () =>
               currentWorkbench().workbench.openKind('terminal'),
             onOpenBrowser: () =>
@@ -787,7 +782,6 @@ function rerenderShell(): void {
   revealSidebarForOffScreenApproval();
   const active = activeRailPaper(railPapers());
   const session = active ? paperSessions.get(active.display.key) : undefined;
-  conversationView.dataset.session = active?.display.key ?? '';
   conversationView.view = active?.view ?? null;
   conversationView.surface = active?.surface ?? null;
   conversationView.host = session?.host$.get() ?? null;
@@ -1030,13 +1024,6 @@ const MESSAGE_ROUTES = createMessageRoutes({
         }),
       );
     },
-    close: (session) => {
-      const paper = paperWorkbenches.get(session);
-      if (!paper) return;
-      for (const tab of paper.getState().workbenchTabs) {
-        if (tab.kind === 'pdf') paper.workbench.disposeWorkbenchTab(tab.id);
-      }
-    },
   },
   prompt: { open: (message) => promptOverlay.open(message) },
   terminal: {
@@ -1150,8 +1137,9 @@ window.addEventListener('resize', () => {
 //
 // Every component dispatches the arm it wants as a bubbling, composed event
 // (`uiEvents.ts`); the root forwards it to the paper it came from. The paper
-// is the nearest `data-session` on the event's path: the conversation shell
-// carries the shown paper's key and every rail tree its own.
+// is the nearest `data-session` on the event's path: the conversation column
+// (the shell and its dock) carries the shown paper's key, and each paper's
+// workbench and rail tree its own.
 
 // The guard below protects the wiring against double-registration: a
 // bootstrap recovery attempt that itself fails re-renders the same fallback
@@ -1182,7 +1170,13 @@ function wireShellEvents(): void {
   });
   appRoot.addEventListener('surface-action', (event) => {
     const key = sessionOf(event);
-    if (key) paperSessions.act(key, event.detail);
+    if (!key) return;
+    paperSessions.act(key, event.detail);
+    // The rail is bound to one active stream across every section: picking
+    // a stream in another paper's tree picks that paper too (PRD 12.2).
+    if (event.detail.kind === 'select' && key !== shell.active) {
+      selectPaper(key);
+    }
   });
   appRoot.addEventListener('composer-submit', (event) => {
     const key = sessionOf(event);

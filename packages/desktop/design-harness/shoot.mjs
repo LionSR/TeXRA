@@ -18,7 +18,9 @@ const scenes = process.env.SCENES
       'ext-process',
       'run-board',
       'desktop-papers',
-      'desktop-switcher',
+      'desktop-one-paper',
+      'desktop-empty-paper',
+      'desktop-narrow',
       'desktop-subagents',
       'desktop-run',
     ];

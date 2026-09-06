@@ -19,6 +19,23 @@ export type LatexdiffPackResult =
       outputFolder: string;
     };
 
+/** What a host tells the user after a pack or clean run; nothing when the
+ *  run only processed files in place. Both hosts read it from here. */
+export function latexdiffPackMessage(
+  result: LatexdiffPackResult,
+): string | undefined {
+  switch (result.status) {
+    case 'no-files':
+      return 'No LaTeX diff files found to process';
+    case 'cleaned':
+      return 'LaTeXdiff files cleaned';
+    case 'packed':
+      return `Files packed into ${result.outputFolder}`;
+    case 'processed':
+      return undefined;
+  }
+}
+
 export async function runPackLatexdiffvc(
   inputFile: string,
   commitHash: string,
