@@ -1,7 +1,13 @@
+import { Effect } from 'effect';
+
+import { effectRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import type { MemoryViewItem } from '@shared/schemas';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/constants';
-import { loadMemoryPreview } from '@tools/memory/memoryFileSystem';
+import {
+  loadMemoryPreview,
+  type MemoryEntryUnreadable,
+} from '@tools/memory/memoryFileSystem';
 import { displayToStoragePath, toDisplayPath } from '@tools/memory/memoryUtils';
 import { filterNotNullish, normalizeFilePath } from '@utils/core';
 import {
@@ -81,16 +87,31 @@ export interface CliMemoryDetail {
 }
 
 /** Resolve a CLI memory path argument and load its preview exactly once. */
-export async function loadCliMemoryDetail(
-  inputPath: string,
-): Promise<CliMemoryDetail> {
-  const storagePath = cliMemoryStoragePathFromInput(inputPath);
-  const preview = await loadMemoryPreview(storagePath);
-  return {
-    path: toDisplayPath(storagePath),
-    lineCount: preview.lineCount,
-    preview: preview.preview,
-  };
+export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
+  function* (inputPath: string) {
+    const storagePath = cliMemoryStoragePathFromInput(inputPath);
+    const preview = yield* loadMemoryPreview(storagePath);
+    return {
+      path: toDisplayPath(storagePath),
+      lineCount: preview.lineCount,
+      preview: preview.preview,
+    } satisfies CliMemoryDetail;
+  },
+);
+
+/**
+ * The CLI's run edge for a memory program (PRD run-edge category a): the
+ * command action, the slash-command handler, and the list form each call
+ * this once. An unreadable memory ends the command with the error the
+ * filesystem raised, not with the tagged wrapper — the CLI's error reporter
+ * prints that message.
+ */
+export function runCliMemory<A>(
+  program: Effect.Effect<A, MemoryEntryUnreadable>,
+): Promise<A> {
+  return effectRuntime().runPromise(
+    Effect.catch(program, (error) => Effect.die(error.cause)),
+  );
 }
 
 export function formatCliMemoryPreview(detail: CliMemoryDetail): string {

@@ -14,6 +14,8 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
+import { Effect } from 'effect';
+
 import type { Disposable } from '@platform/interfaces';
 import {
   formatIssueClosed,
@@ -29,7 +31,9 @@ import {
   DEFAULT_POLLING_BACKOFF_CONFIG,
   dedupeComments,
   type DedupedResource,
+  type PollHookRejected,
   PollingSourceBase,
+  pollRequest,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
@@ -101,96 +105,107 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     );
   }
 
-  protected async pollOne(
+  protected pollOne(
     _key: string,
     state: SubscriptionState,
-  ): Promise<void> {
-    const { issue } = state;
-    const issuePath = `/repos/${issue.owner}/${issue.repo}/issues/${issue.issueNumber}`;
-    const commentsUrl = withSince(
-      `${issuePath}/comments?per_page=100`,
-      state.comments.sinceCursor,
-    );
-
-    // The two endpoints are independent — fetch in parallel.
-    const [issueRes, commentsRes] = await Promise.all([
-      ghGet<GhIssue>(issuePath, state.etags.issue),
-      ghGet<GhIssueComment[]>(commentsUrl, state.etags.comments),
-    ]);
-
-    if (issueRes.status === 200) {
-      // Validate the issue payload non-throwingly (never throw on the 200
-      // path — see validateOrSkip). On failure, skip ONLY the issue-state
-      // check (don't advance state.etags.issue) and fall through to the
-      // independent comments fetch below — a malformed issue payload must
-      // not block comment delivery.
-      const parsedIssue = this.validateOrSkip(
-        issueRes,
-        GhIssueSchema,
-        `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: malformed issue payload`,
-      );
-      if (parsedIssue) {
-        const issueData = parsedIssue.data;
-        state.etags.issue = issueRes.etag;
-        const newState = issueData.state;
-        // Issues, unlike PRs, can reopen after close — and that's a genuine
-        // signal a subscriber wants. So we keep polling on close: emit the
-        // close event but stay subscribed so a later reopen surfaces too.
-        // Slot release is via explicit unsubscribe or the 24 h unreachable
-        // failsafe. Bound by `maxConcurrent`.
-        if (state.initialized && state.state !== newState) {
-          if (state.state === 'open' && newState === 'closed') {
-            this.emit(
-              state,
-              formatIssueClosed(state.slug, issue.issueNumber, issueData),
-            );
-          } else if (state.state === 'closed') {
-            this.emit(
-              state,
-              formatIssueReopened(state.slug, issue.issueNumber, issueData),
-            );
-          }
-        }
-        state.state = newState;
-      }
-    }
-
-    // Validate the comments array non-throwingly: on a malformed payload, log
-    // + skip this tick. state.etags.comments and the comments cursor are
-    // advanced only after a successful parse, so a skip re-fetches next tick
-    // (no If-None-Match) and lastSuccessAt still advances → no 24 h detach. A
-    // bad single element triggers a whole-array skip instead of a mid-loop
-    // TypeError throw. The skip covers this tick's comment diff ONLY:
-    // `state.initialized` still advances at the end of the tick so the
-    // close/reopen gate arms on schedule, while `commentsSeeded` stays false so
-    // the next successful fetch seeds rather than replaying the whole history
-    // (handled by the shared consumeCommentList choreography).
-    if (commentsRes.status === 200) {
-      const parsedComments = this.validateOrSkip(
-        commentsRes,
-        GhIssueCommentArraySchema,
-        `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,
-      );
-      if (parsedComments) {
-        this.consumeCommentList(
-          parsedComments,
-          (etag) => {
-            state.etags.comments = etag;
-          },
-          state.comments,
-          (c) =>
-            this.emit(
-              state,
-              formatIssueComment(state.slug, issue.issueNumber, c),
-            ),
-          () => state.commentsSeeded,
-        );
-        state.commentsSeeded = true;
-      }
-    }
-
-    state.initialized = true;
+  ): Effect.Effect<void, PollHookRejected> {
+    return this.pollIssue(state);
   }
+
+  private readonly pollIssue = Effect.fn('IssuePollingSource.pollIssue')(
+    function* (this: IssuePollingSource, state: SubscriptionState) {
+      const { issue } = state;
+      const issuePath = `/repos/${issue.owner}/${issue.repo}/issues/${issue.issueNumber}`;
+      const commentsUrl = withSince(
+        `${issuePath}/comments?per_page=100`,
+        state.comments.sinceCursor,
+      );
+
+      // The two endpoints are independent — fetch in parallel.
+      const [issueRes, commentsRes] = yield* Effect.all(
+        [
+          pollRequest(() => ghGet<GhIssue>(issuePath, state.etags.issue)),
+          pollRequest(() =>
+            ghGet<GhIssueComment[]>(commentsUrl, state.etags.comments),
+          ),
+        ],
+        { concurrency: 2 },
+      );
+
+      if (issueRes.status === 200) {
+        // Validate the issue payload non-throwingly (never throw on the 200
+        // path — see validateOrSkip). On failure, skip ONLY the issue-state
+        // check (don't advance state.etags.issue) and fall through to the
+        // independent comments fetch below — a malformed issue payload must
+        // not block comment delivery.
+        const parsedIssue = this.validateOrSkip(
+          issueRes,
+          GhIssueSchema,
+          `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: malformed issue payload`,
+        );
+        if (parsedIssue) {
+          const issueData = parsedIssue.data;
+          state.etags.issue = issueRes.etag;
+          const newState = issueData.state;
+          // Issues, unlike PRs, can reopen after close — and that's a genuine
+          // signal a subscriber wants. So we keep polling on close: emit the
+          // close event but stay subscribed so a later reopen surfaces too.
+          // Slot release is via explicit unsubscribe or the 24 h unreachable
+          // failsafe. Bound by `maxConcurrent`.
+          if (state.initialized && state.state !== newState) {
+            if (state.state === 'open' && newState === 'closed') {
+              this.emit(
+                state,
+                formatIssueClosed(state.slug, issue.issueNumber, issueData),
+              );
+            } else if (state.state === 'closed') {
+              this.emit(
+                state,
+                formatIssueReopened(state.slug, issue.issueNumber, issueData),
+              );
+            }
+          }
+          state.state = newState;
+        }
+      }
+
+      // Validate the comments array non-throwingly: on a malformed payload, log
+      // + skip this tick. state.etags.comments and the comments cursor are
+      // advanced only after a successful parse, so a skip re-fetches next tick
+      // (no If-None-Match) and lastSuccessAt still advances → no 24 h detach. A
+      // bad single element triggers a whole-array skip instead of a mid-loop
+      // TypeError throw. The skip covers this tick's comment diff ONLY:
+      // `state.initialized` still advances at the end of the tick so the
+      // close/reopen gate arms on schedule, while `commentsSeeded` stays false so
+      // the next successful fetch seeds rather than replaying the whole history
+      // (handled by the shared consumeCommentList choreography).
+      if (commentsRes.status === 200) {
+        const parsedComments = this.validateOrSkip(
+          commentsRes,
+          GhIssueCommentArraySchema,
+          `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,
+        );
+        if (parsedComments) {
+          this.consumeCommentList(
+            parsedComments,
+            (etag) => {
+              state.etags.comments = etag;
+            },
+            state.comments,
+            (c) =>
+              this.emit(
+                state,
+                formatIssueComment(state.slug, issue.issueNumber, c),
+              ),
+            () => state.commentsSeeded,
+          );
+          state.commentsSeeded = true;
+        }
+      }
+
+      state.initialized = true;
+    },
+  );
 }
 
 export const SharedIssuePollingSource = new IssuePollingSource();

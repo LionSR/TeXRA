@@ -1,9 +1,11 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - tools
 import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@tools/github/checkAnnotationLevels';
 import { GitHubRateLimitError } from '@tools/github/githubClient';
+import type { PollHookRejected } from '@tools/github/PollingSourceBase';
 import {
   PRPollingSource,
   prKeyToString,
@@ -37,7 +39,7 @@ interface AnnotationDrainAccess {
   drainAnnotationQueues(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now?: number,
-  ): Promise<void>;
+  ): Effect.Effect<void, PollHookRejected>;
   getSubscriptionState(key: string): PRSubscriptionState | undefined;
 }
 
@@ -98,7 +100,9 @@ describe('PRPollingSource annotation drain', () => {
     const rateLimit = new GitHubRateLimitError(1_800_000_000);
     mocks.fetchAnnotations.mockRejectedValue(rateLimit);
 
-    await drainAccess(source).drainAnnotationQueues([['owner/repo#7', state]]);
+    await Effect.runPromise(
+      drainAccess(source).drainAnnotationQueues([['owner/repo#7', state]]),
+    );
 
     expect(mocks.fetchAnnotations).toHaveBeenCalledWith(
       'owner',
@@ -131,11 +135,13 @@ describe('PRPollingSource annotation drain', () => {
     ]);
     mocks.fetchAnnotations.mockResolvedValue([]);
 
-    await drainAccess(source).drainAnnotationQueues([
-      ['first', firstState],
-      ['second', secondState],
-      ['third', thirdState],
-    ]);
+    await Effect.runPromise(
+      drainAccess(source).drainAnnotationQueues([
+        ['first', firstState],
+        ['second', secondState],
+        ['third', thirdState],
+      ]),
+    );
 
     expect(mocks.fetchAnnotations.mock.calls.map((call) => call[2])).toEqual([
       1, 4, 7, 2, 5, 8, 3, 6, 9,
@@ -167,7 +173,9 @@ describe('PRPollingSource annotation drain', () => {
       annotation('failure', 'blocking failure'),
     ]);
 
-    await drainAccess(source).drainAnnotationQueues([['owner/repo#7', state]]);
+    await Effect.runPromise(
+      drainAccess(source).drainAnnotationQueues([['owner/repo#7', state]]),
+    );
 
     expect(defaultListener).toHaveBeenCalledOnce();
     const defaultMessage = defaultListener.mock.calls[0][0] as string;
@@ -203,7 +211,9 @@ describe('PRPollingSource annotation drain', () => {
     state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
       pendingAnnotationRuns: [createCheckRun(13)],
     });
-    await drainAccess(source).drainAnnotationQueues([[key, state]]);
+    await Effect.runPromise(
+      drainAccess(source).drainAnnotationQueues([[key, state]]),
+    );
 
     expect(listener).not.toHaveBeenCalled();
 
@@ -215,7 +225,9 @@ describe('PRPollingSource annotation drain', () => {
       pendingAnnotationRuns: [createCheckRun(14)],
     });
 
-    await drainAccess(source).drainAnnotationQueues([[key, state]]);
+    await Effect.runPromise(
+      drainAccess(source).drainAnnotationQueues([[key, state]]),
+    );
 
     expect(listener).toHaveBeenCalledOnce();
     expect(listener.mock.calls[0][0]).toContain('[WARNING]');

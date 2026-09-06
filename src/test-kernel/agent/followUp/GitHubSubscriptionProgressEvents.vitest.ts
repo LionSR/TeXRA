@@ -4,6 +4,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const submitFollowUpMock = vi.hoisted(() =>
@@ -25,6 +26,7 @@ import { GitHubAuthError } from '@tools/github/githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
+  type PollHookRejected,
 } from '@tools/github/PollingSourceBase';
 import {
   StreamSubscriptionRegistry,
@@ -74,8 +76,8 @@ class TestPollingSource extends PollingSourceBase<
     });
   }
 
-  protected pollOne(): Promise<void> {
-    return Promise.resolve();
+  protected pollOne(): Effect.Effect<void, PollHookRejected> {
+    return Effect.void;
   }
 
   protected formatErrorEvent(): string {
@@ -83,11 +85,16 @@ class TestPollingSource extends PollingSourceBase<
   }
 
   failWithAuthError(state: BasePollSubscriptionState): void {
-    this.handleFailure('owner/repo', state, new GitHubAuthError('bad token'));
+    this.handleFailure(
+      'owner/repo',
+      state,
+      new GitHubAuthError('bad token'),
+      Date.now(),
+    );
   }
 
   failWithTransient(key: string, state: BasePollSubscriptionState): void {
-    this.handleFailure(key, state, new Error('network down'));
+    this.handleFailure(key, state, new Error('network down'), Date.now());
   }
 }
 

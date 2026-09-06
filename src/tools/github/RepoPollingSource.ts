@@ -34,6 +34,7 @@
  * - **CI / check-run status and inline annotations.** Per-PR by design.
  */
 
+import { Effect, Exit } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { Disposable } from '@platform/interfaces';
@@ -54,7 +55,9 @@ import {
   DEFAULT_POLLING_BACKOFF_CONFIG,
   dedupeComments,
   type DedupedResource,
+  type PollHookRejected,
   PollingSourceBase,
+  pollRequest,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
@@ -178,142 +181,151 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     return formatRepoSubscriptionError(state.slug, detail);
   }
 
-  protected async pollOne(
+  protected pollOne(
     _key: RepoKey,
     state: SubscriptionState,
-  ): Promise<void> {
-    const { owner, repo } = state;
-    const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.issueComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
-    const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.reviewComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
-    // The /pulls list endpoint does NOT support `since`; we get the top
-    // 100 most-recently-updated PRs every tick. The `prStateByNumber`
-    // transition tracker is what makes that safe.
-    const pullsPath = `/repos/${owner}/${repo}/pulls?state=all&per_page=${PER_PAGE}&sort=updated&direction=desc`;
-
-    const [rawIssueRes, rawReviewRes, rawPullsRes] = await Promise.all([
-      ghGet<unknown>(issuePath),
-      ghGet<unknown>(reviewPath),
-      ghGet<unknown>(pullsPath),
-    ]);
-
-    // Non-throwing 200-path validation (never throw — see validateOrSkip).
-    // Skipping is safe because no parsed response has been committed yet: the
-    // DedupedResource instances and PR transition/probe maps are untouched, so
-    // the same window is re-evaluated idempotently next tick.
-    const issueRes = this.validateOrSkip(
-      rawIssueRes,
-      GhIssueCommentArraySchema,
-      `Skipping ${owner}/${repo} tick: issue-comments payload failed validation`,
-    );
-    if (!issueRes) return;
-    const reviewRes = this.validateOrSkip(
-      rawReviewRes,
-      GhReviewCommentArraySchema,
-      `Skipping ${owner}/${repo} tick: review-comments payload failed validation`,
-    );
-    if (!reviewRes) return;
-    const pullsRes = this.validateOrSkip(
-      rawPullsRes,
-      GhPullsListEntryArraySchema,
-      `Skipping ${owner}/${repo} tick: pulls-list payload failed validation`,
-    );
-    if (!pullsRes) return;
-
-    // First tick seeds state but emits nothing — we don't want to replay
-    // history when an orchestrator first attaches to a repo.
-    if (!state.initialized) {
-      if (pullsRes.status === 200) {
-        for (const pr of pullsRes.data) {
-          state.prStateByNumber.set(pr.number, classifyPRState(pr));
-          // Seed the updated_at cursor so the next tick only treats real
-          // *advances* as probe triggers — without this the second tick
-          // would see every PR's updated_at as "advanced" relative to
-          // undefined and stampede MAX_PROBES probes on irrelevant PRs.
-          state.prUpdatedAtByNumber.set(pr.number, pr.updated_at);
-        }
-      }
-      if (issueRes.status === 200) {
-        state.issueComments.seed(issueRes.data);
-      }
-      if (reviewRes.status === 200) {
-        state.reviewComments.seed(reviewRes.data);
-      }
-      state.initialized = true;
-      return;
-    }
-
-    // Emit PR transitions before comments so "PR opened" precedes any reply.
-    if (pullsRes.status === 200) {
-      // API returns newest-first; reverse for chronological notification order.
-      const sorted = [...pullsRes.data].reverse();
-      for (const pr of sorted) {
-        const next = classifyPRState(pr);
-        const prev = state.prStateByNumber.get(pr.number);
-        state.prStateByNumber.set(pr.number, next);
-        // Same author gate on both transitions: a bot-authored PR whose
-        // open we suppressed shouldn't surface a close/merge orphan event.
-        if (shouldDropBotEvent(pr.user)) continue;
-        const transition = classifyTransition(
-          prev,
-          next,
-          pr,
-          state.subscribedAt,
-        );
-        if (transition === 'opened') {
-          this.emit(state, formatRepoPROpened(state.slug, pr));
-        } else if (transition === 'closed') {
-          this.emit(
-            state,
-            formatRepoPRClosed(state.slug, pr.number, next === 'merged'),
-          );
-        }
-      }
-    }
-
-    // Diff + emit new comments through the shared consumeCommentList (ETag
-    // slot is a no-op here — the repo poller tracks cursors, not ETags), with
-    // the bot filter applied centrally. The per-resource number-parsing gates
-    // stay in the emit closures. The seed phase for these resources lives
-    // inline in the first-tick block above.
-    this.consumeCommentList(
-      issueRes,
-      () => {},
-      state.issueComments,
-      (c) => {
-        const number = parseTargetNumberFromIssueUrl(c);
-        if (number === undefined) return;
-        this.emit(state, formatRepoIssueComment(state.slug, number, c));
-      },
-      () => state.initialized,
-    );
-
-    this.consumeCommentList(
-      reviewRes,
-      () => {},
-      state.reviewComments,
-      (c) => {
-        const prNumber = parsePRNumberFromReviewCommentUrl(c.html_url);
-        if (prNumber === undefined) return;
-        this.emit(state, formatRepoReviewComment(state.slug, prNumber, c));
-      },
-      () => state.initialized,
-    );
-    // Bare APPROVED/DISMISSED reviews without comments aren't surfaced — they
-    // live only on /pulls/{n}/reviews, which is per-PR. An orchestrator that
-    // needs that fidelity should delegate a worker that calls
-    // github_subscription with path="owner/repo#N".
-
-    // Holistic merge-conflict detection. The list endpoint doesn't return
-    // `mergeable_state`, so we probe `/pulls/{N}` for a bounded number of
-    // open PRs whose `updated_at` advanced since the prior tick. That
-    // signal naturally covers head pushes (the most common cause of new
-    // conflicts) and surfaces base-branch conflicts via the comments /
-    // reviews that typically follow a base merge. PRs that don't make the
-    // per-tick cap roll over: the next tick re-evaluates the candidate set.
-    if (pullsRes.status === 200) {
-      await this.probeMergeableStates(state, pullsRes.data);
-    }
+  ): Effect.Effect<void, PollHookRejected> {
+    return this.pollRepo(state);
   }
+
+  private readonly pollRepo = Effect.fn('RepoPollingSource.pollRepo')(
+    function* (this: RepoPollingSource, state: SubscriptionState) {
+      const { owner, repo } = state;
+      const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.issueComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
+      const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.reviewComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
+      // The /pulls list endpoint does NOT support `since`; we get the top
+      // 100 most-recently-updated PRs every tick. The `prStateByNumber`
+      // transition tracker is what makes that safe.
+      const pullsPath = `/repos/${owner}/${repo}/pulls?state=all&per_page=${PER_PAGE}&sort=updated&direction=desc`;
+
+      const [rawIssueRes, rawReviewRes, rawPullsRes] = yield* Effect.all(
+        [
+          pollRequest(() => ghGet<unknown>(issuePath)),
+          pollRequest(() => ghGet<unknown>(reviewPath)),
+          pollRequest(() => ghGet<unknown>(pullsPath)),
+        ],
+        { concurrency: 3 },
+      );
+
+      // Non-throwing 200-path validation (never throw — see validateOrSkip).
+      // Skipping is safe because no parsed response has been committed yet: the
+      // DedupedResource instances and PR transition/probe maps are untouched, so
+      // the same window is re-evaluated idempotently next tick.
+      const issueRes = this.validateOrSkip(
+        rawIssueRes,
+        GhIssueCommentArraySchema,
+        `Skipping ${owner}/${repo} tick: issue-comments payload failed validation`,
+      );
+      if (!issueRes) return;
+      const reviewRes = this.validateOrSkip(
+        rawReviewRes,
+        GhReviewCommentArraySchema,
+        `Skipping ${owner}/${repo} tick: review-comments payload failed validation`,
+      );
+      if (!reviewRes) return;
+      const pullsRes = this.validateOrSkip(
+        rawPullsRes,
+        GhPullsListEntryArraySchema,
+        `Skipping ${owner}/${repo} tick: pulls-list payload failed validation`,
+      );
+      if (!pullsRes) return;
+
+      // First tick seeds state but emits nothing — we don't want to replay
+      // history when an orchestrator first attaches to a repo.
+      if (!state.initialized) {
+        if (pullsRes.status === 200) {
+          for (const pr of pullsRes.data) {
+            state.prStateByNumber.set(pr.number, classifyPRState(pr));
+            // Seed the updated_at cursor so the next tick only treats real
+            // *advances* as probe triggers — without this the second tick
+            // would see every PR's updated_at as "advanced" relative to
+            // undefined and stampede MAX_PROBES probes on irrelevant PRs.
+            state.prUpdatedAtByNumber.set(pr.number, pr.updated_at);
+          }
+        }
+        if (issueRes.status === 200) {
+          state.issueComments.seed(issueRes.data);
+        }
+        if (reviewRes.status === 200) {
+          state.reviewComments.seed(reviewRes.data);
+        }
+        state.initialized = true;
+        return;
+      }
+
+      // Emit PR transitions before comments so "PR opened" precedes any reply.
+      if (pullsRes.status === 200) {
+        // API returns newest-first; reverse for chronological notification order.
+        const sorted = [...pullsRes.data].reverse();
+        for (const pr of sorted) {
+          const next = classifyPRState(pr);
+          const prev = state.prStateByNumber.get(pr.number);
+          state.prStateByNumber.set(pr.number, next);
+          // Same author gate on both transitions: a bot-authored PR whose
+          // open we suppressed shouldn't surface a close/merge orphan event.
+          if (shouldDropBotEvent(pr.user)) continue;
+          const transition = classifyTransition(
+            prev,
+            next,
+            pr,
+            state.subscribedAt,
+          );
+          if (transition === 'opened') {
+            this.emit(state, formatRepoPROpened(state.slug, pr));
+          } else if (transition === 'closed') {
+            this.emit(
+              state,
+              formatRepoPRClosed(state.slug, pr.number, next === 'merged'),
+            );
+          }
+        }
+      }
+
+      // Diff + emit new comments through the shared consumeCommentList (ETag
+      // slot is a no-op here — the repo poller tracks cursors, not ETags), with
+      // the bot filter applied centrally. The per-resource number-parsing gates
+      // stay in the emit closures. The seed phase for these resources lives
+      // inline in the first-tick block above.
+      this.consumeCommentList(
+        issueRes,
+        () => {},
+        state.issueComments,
+        (c) => {
+          const number = parseTargetNumberFromIssueUrl(c);
+          if (number === undefined) return;
+          this.emit(state, formatRepoIssueComment(state.slug, number, c));
+        },
+        () => state.initialized,
+      );
+
+      this.consumeCommentList(
+        reviewRes,
+        () => {},
+        state.reviewComments,
+        (c) => {
+          const prNumber = parsePRNumberFromReviewCommentUrl(c.html_url);
+          if (prNumber === undefined) return;
+          this.emit(state, formatRepoReviewComment(state.slug, prNumber, c));
+        },
+        () => state.initialized,
+      );
+      // Bare APPROVED/DISMISSED reviews without comments aren't surfaced — they
+      // live only on /pulls/{n}/reviews, which is per-PR. An orchestrator that
+      // needs that fidelity should delegate a worker that calls
+      // github_subscription with path="owner/repo#N".
+
+      // Holistic merge-conflict detection. The list endpoint doesn't return
+      // `mergeable_state`, so we probe `/pulls/{N}` for a bounded number of
+      // open PRs whose `updated_at` advanced since the prior tick. That
+      // signal naturally covers head pushes (the most common cause of new
+      // conflicts) and surfaces base-branch conflicts via the comments /
+      // reviews that typically follow a base merge. PRs that don't make the
+      // per-tick cap roll over: the next tick re-evaluates the candidate set.
+      if (pullsRes.status === 200) {
+        yield* this.probeMergeableStates(state, pullsRes.data);
+      }
+    },
+  );
 
   /**
    * Probe up to `MAX_MERGEABLE_PROBES_PER_TICK` open PRs for
@@ -331,10 +343,13 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
    * and PRs we've already classified as `'dirty'` so we don't re-emit
    * every time updated_at advances on an already-conflicted PR.
    */
-  private async probeMergeableStates(
+  private readonly probeMergeableStates = Effect.fn(
+    'RepoPollingSource.probeMergeableStates',
+  )(function* (
+    this: RepoPollingSource,
     state: SubscriptionState,
     pulls: readonly GhPullsListEntry[],
-  ): Promise<void> {
+  ) {
     // Build the candidate list: open PRs whose updated_at advanced since
     // our last definite observation. First-seen PRs are seeded silently —
     // probing on first observation would surface "merge conflict detected"
@@ -358,35 +373,17 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     // Pulls list is already sorted by updated_at desc, so slicing yields
     // the freshest candidates when the per-tick cap bites.
     const probes = candidates.slice(0, MAX_MERGEABLE_PROBES_PER_TICK);
-    const probeResults = await Promise.allSettled(
-      probes.map(async (pr) => {
-        const path = `/repos/${state.owner}/${state.repo}/pulls/${pr.number}`;
-        const res = await ghGet<GhPullRequest>(path);
-        if (res.status !== 200) return undefined;
-        // Non-throwing: drop just this PR's probe (return undefined) instead of
-        // throwing. A throw would abort the whole pollOne tick and, if it
-        // persisted 24 h, detach the subscription. Dropping the probe leaves
-        // this PR's updated_at cursor un-advanced (it only advances after a
-        // definite reading below), so it is simply re-probed next tick.
-        const parsed = GhPullRequestSchema.safeParse(res.data);
-        if (!parsed.success) {
-          this.logger.warn(
-            `Skipping merge probe for ${state.owner}/${state.repo}#${pr.number}: payload failed validation`,
-            { data: parsed.error },
-          );
-          return undefined;
-        }
-        return {
-          number: pr.number,
-          updatedAt: pr.updated_at,
-          mergeable: parsed.data.mergeable_state,
-        };
-      }),
+    // Each probe settles on its own: one PR's failed GET must not drop the
+    // readings of the others, which is what `Promise.allSettled` gave here.
+    const probeResults = yield* Effect.forEach(
+      probes,
+      (pr) => Effect.exit(this.probeOne(state, pr)),
+      { concurrency: 'unbounded' },
     );
 
     const newlyDirty: { number: number; prev: string }[] = [];
     for (const result of probeResults) {
-      if (result.status !== 'fulfilled' || !result.value) continue;
+      if (!Exit.isSuccess(result) || !result.value) continue;
       const { number, updatedAt, mergeable } = result.value;
       // Defer the cursor advance until we have a *definite* mergeable
       // reading. GitHub commonly returns `'unknown'` for a few seconds
@@ -425,7 +422,39 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
         );
       }
     }
-  }
+  });
+
+  /**
+   * One PR's `mergeable_state` reading, or undefined when this tick cannot
+   * establish one. A non-200, or a payload that fails validation, drops just
+   * this probe rather than the whole round: a failure that persisted 24 h
+   * would detach the subscription, and leaving the PR's `updated_at` cursor
+   * un-advanced simply re-probes it next tick.
+   */
+  private readonly probeOne = Effect.fn('RepoPollingSource.probeOne')(
+    function* (
+      this: RepoPollingSource,
+      state: SubscriptionState,
+      pr: GhPullsListEntry,
+    ) {
+      const path = `/repos/${state.owner}/${state.repo}/pulls/${pr.number}`;
+      const res = yield* pollRequest(() => ghGet<GhPullRequest>(path));
+      if (res.status !== 200) return undefined;
+      const parsed = GhPullRequestSchema.safeParse(res.data);
+      if (!parsed.success) {
+        this.logger.warn(
+          `Skipping merge probe for ${state.owner}/${state.repo}#${pr.number}: payload failed validation`,
+          { data: parsed.error },
+        );
+        return undefined;
+      }
+      return {
+        number: pr.number,
+        updatedAt: pr.updated_at,
+        mergeable: parsed.data.mergeable_state,
+      };
+    },
+  );
 }
 
 function createInitialState(input: RepoSubscribeInput): SubscriptionState {

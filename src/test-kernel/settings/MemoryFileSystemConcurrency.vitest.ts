@@ -4,7 +4,9 @@ import * as path from 'node:path';
 import { Readable } from 'node:stream';
 
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Stream } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
@@ -62,98 +64,102 @@ describe('memory filesystem listing', () => {
     vi.restoreAllMocks();
   });
 
-  it('bounds metadata reads while walking large memory directories', async () => {
-    vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
-      if (target === MEMORY_STORAGE_DIR) {
-        return [
-          ['alpha', FileType.Directory],
-          ['beta', FileType.Directory],
-        ];
-      }
-      if (
-        target === path.join(MEMORY_STORAGE_DIR, 'alpha') ||
-        target === path.join(MEMORY_STORAGE_DIR, 'beta')
-      ) {
-        return memoryFiles();
-      }
-      throw new Error(`Unexpected readDir target: ${target}`);
-    });
+  it.effect(
+    'bounds metadata reads while walking large memory directories',
+    () =>
+      Effect.gen(function* () {
+        vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
+          if (target === MEMORY_STORAGE_DIR) {
+            return [
+              ['alpha', FileType.Directory],
+              ['beta', FileType.Directory],
+            ];
+          }
+          if (
+            target === path.join(MEMORY_STORAGE_DIR, 'alpha') ||
+            target === path.join(MEMORY_STORAGE_DIR, 'beta')
+          ) {
+            return memoryFiles();
+          }
+          throw new Error(`Unexpected readDir target: ${target}`);
+        });
 
-    let activeMetadataReads = 0;
-    let maxActiveMetadataReads = 0;
-    vi.spyOn(StorageFS, 'stat').mockImplementation(async () => {
-      activeMetadataReads += 1;
-      maxActiveMetadataReads = Math.max(
-        maxActiveMetadataReads,
-        activeMetadataReads,
+        let activeMetadataReads = 0;
+        let maxActiveMetadataReads = 0;
+        vi.spyOn(StorageFS, 'stat').mockImplementation(async () => {
+          activeMetadataReads += 1;
+          maxActiveMetadataReads = Math.max(
+            maxActiveMetadataReads,
+            activeMetadataReads,
+          );
+
+          await delay(5);
+          activeMetadataReads -= 1;
+          return testFileStat(TEST_FRONTMATTER);
+        });
+
+        vi.spyOn(StorageFS, 'createReadStream').mockImplementation(() =>
+          readStreamFromText(TEST_FRONTMATTER),
+        );
+
+        const items = yield* Stream.runCollect(
+          walkMemoryDirectory(MEMORY_STORAGE_DIR),
+        );
+
+        expect(items).toHaveLength(FILE_COUNT_PER_DIRECTORY * 2);
+        expect(maxActiveMetadataReads).toBeGreaterThan(1);
+        expect(maxActiveMetadataReads).toBeLessThanOrEqual(
+          MEMORY_LISTING_CONCURRENCY,
+        );
+      }),
+  );
+
+  it.effect(
+    'stops metadata reads once the pinned-memory limit is reached',
+    () =>
+      Effect.gen(function* () {
+        const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
+        const files: [string, number][] = [
+          ['cycle', FileType.Directory | FileType.SymbolicLink],
+          ...Array.from({ length: 100 }, (_, index): [string, number] => [
+            `pinned-${index}.md`,
+            FileType.File,
+          ]),
+        ];
+        vi.spyOn(StorageFS, 'exists').mockResolvedValue(true);
+        vi.spyOn(StorageFS, 'readDir').mockResolvedValue(files);
+        vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
+          if (target === cyclePath) {
+            throw new Error('The symlink cycle must not be statted');
+          }
+          return testFileStat(PINNED_FRONTMATTER);
+        });
+        const readStream = vi
+          .spyOn(StorageFS, 'createReadStream')
+          .mockImplementation(() => readStreamFromText(PINNED_FRONTMATTER));
+
+        expect(yield* countPinnedMemories(1)).toBe(1);
+        expect(readStream.mock.calls.length).toBeLessThan(files.length);
+      }),
+  );
+
+  it.effect('fails the walk with the filesystem error itself', () =>
+    Effect.gen(function* () {
+      const cause = Object.assign(
+        new Error('ENOENT: no such file or directory'),
+        {
+          code: 'ENOENT',
+        },
+      );
+      vi.spyOn(StorageFS, 'readDir').mockRejectedValue(cause);
+
+      const failure = yield* Effect.flip(
+        Stream.runDrain(walkMemoryDirectory(MEMORY_STORAGE_DIR)),
       );
 
-      await delay(5);
-      activeMetadataReads -= 1;
-      return testFileStat(TEST_FRONTMATTER);
-    });
-
-    vi.spyOn(StorageFS, 'createReadStream').mockImplementation(() =>
-      readStreamFromText(TEST_FRONTMATTER),
-    );
-
-    const items = [];
-    for await (const item of walkMemoryDirectory(MEMORY_STORAGE_DIR)) {
-      items.push(item);
-    }
-
-    expect(items).toHaveLength(FILE_COUNT_PER_DIRECTORY * 2);
-    expect(maxActiveMetadataReads).toBeGreaterThan(1);
-    expect(maxActiveMetadataReads).toBeLessThanOrEqual(
-      MEMORY_LISTING_CONCURRENCY,
-    );
-  });
-
-  it('stops metadata reads once the pinned-memory limit is reached', async () => {
-    const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
-    const files: [string, number][] = [
-      ['cycle', FileType.Directory | FileType.SymbolicLink],
-      ...Array.from({ length: 100 }, (_, index): [string, number] => [
-        `pinned-${index}.md`,
-        FileType.File,
-      ]),
-    ];
-    vi.spyOn(StorageFS, 'exists').mockResolvedValue(true);
-    vi.spyOn(StorageFS, 'readDir').mockResolvedValue(files);
-    vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
-      if (target === cyclePath) {
-        throw new Error('The symlink cycle must not be statted');
-      }
-      return testFileStat(PINNED_FRONTMATTER);
-    });
-    const readStream = vi
-      .spyOn(StorageFS, 'createReadStream')
-      .mockImplementation(() => readStreamFromText(PINNED_FRONTMATTER));
-
-    await expect(countPinnedMemories(1)).resolves.toBe(1);
-    expect(readStream.mock.calls.length).toBeLessThan(files.length);
-  });
-
-  it('rejects the iteration with the filesystem error itself', async () => {
-    const cause = Object.assign(
-      new Error('ENOENT: no such file or directory'),
-      {
-        code: 'ENOENT',
-      },
-    );
-    vi.spyOn(StorageFS, 'readDir').mockRejectedValue(cause);
-
-    const walk = async () => {
-      for await (const entry of walkMemoryDirectory(MEMORY_STORAGE_DIR)) {
-        throw new Error(`Unexpected entry: ${entry.relativePath}`);
-      }
-    };
-    const rejection: unknown = await walk().then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-
-    expect(rejection).toBe(cause);
-    expect(rejection).toMatchObject({ code: 'ENOENT' });
-  });
+      expect(failure._tag).toBe('MemoryEntryUnreadable');
+      expect(failure.cause).toBe(cause);
+      expect(failure.cause).toMatchObject({ code: 'ENOENT' });
+    }),
+  );
 });

@@ -5,7 +5,10 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 
-import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import {
+  makeAgentCliSessionRegistry,
+  type AgentCliSessions,
+} from './agentCliSessionRegistry';
 
 /**
  * Owns the two session-keyed stores (`codexThreadsFor`, `claudeAgentSessionsFor`)
@@ -19,13 +22,13 @@ import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 // agent-CLI children and a registry dies with its session instead of living
 // as a process singleton.
 function sessionRegistries(persistedSessionKey: string) {
-  const registries = new WeakMap<SessionHandle, AgentCliSessionRegistry>();
+  const registries = new WeakMap<SessionHandle, AgentCliSessions>();
   return {
     registries,
-    for: (session: SessionHandle): AgentCliSessionRegistry => {
+    for: (session: SessionHandle): AgentCliSessions => {
       let registry = registries.get(session);
       if (!registry) {
-        registry = new AgentCliSessionRegistry(
+        registry = makeAgentCliSessionRegistry(
           persistedSessionKey,
           session.executions,
         );

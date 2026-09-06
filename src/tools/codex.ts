@@ -18,6 +18,7 @@
  */
 
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -29,6 +30,7 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
+import { effectRuntime } from '@platform/processRuntime';
 import type {
   ExecutionId,
   StreamTabId,
@@ -458,13 +460,20 @@ export class CodexTool extends defineTool({
     'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
 }) {
-  protected async execute(input: CodexInput): Promise<ToolResult> {
+  /** The one run edge of this tool (PRD run-edge category b). */
+  protected execute(input: CodexInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(this.run(input));
+  }
+
+  private readonly run = Effect.fn('CodexTool.run')(function* (
+    input: CodexInput,
+  ) {
     // Resolve the effective sandbox mode once (per-call override, else the
     // user-configured default) rather than mutating the parsed input object.
-    const sandboxMode =
-      input.sandbox_mode ?? (await getCodexConfig()).getCodexSandboxMode();
+    const config = yield* Effect.promise(() => getCodexConfig());
+    const sandboxMode = input.sandbox_mode ?? config.getCodexSandboxMode();
 
-    return dispatchAgentCliTool({
+    return yield* dispatchAgentCliTool({
       agentName: 'codex',
       approvalLabel: `[codex ${sandboxMode}] ${input.prompt}`,
       store: codexThreadsFor,
@@ -486,7 +495,7 @@ export class CodexTool extends defineTool({
           context.releaseFallbackClaim,
         ),
     });
-  }
+  });
 }
 
 async function launchCodexSession(

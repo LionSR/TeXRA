@@ -11,6 +11,8 @@
  * layer above.
  */
 
+import { Clock, Effect } from 'effect';
+
 import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -64,7 +66,9 @@ import {
   dedupeComments,
   DedupedResource,
   MAX_SEEN_IDS,
+  type PollHookRejected,
   PollingSourceBase,
+  pollRequest,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -266,22 +270,30 @@ export class PRPollingSource extends PollingSourceBase<
     return formatSubscriptionError(state.slug, state.pr.pullNumber, detail);
   }
 
-  protected override async afterTick(
+  protected override afterTick(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now: number,
-  ): Promise<void> {
-    await this.drainAnnotationQueues(entries, now);
+  ): Effect.Effect<void, PollHookRejected> {
+    return this.drainAnnotationQueues(entries, now);
   }
 
-  protected async pollOne(
+  protected pollOne(
     key: string,
     state: PRSubscriptionState,
-  ): Promise<void> {
+  ): Effect.Effect<void, PollHookRejected> {
+    return this.pollPr(key, state);
+  }
+
+  private readonly pollPr = Effect.fn('PRPollingSource.pollPr')(function* (
+    this: PRPollingSource,
+    key: string,
+    state: PRSubscriptionState,
+  ) {
     const { pr } = state;
     const prPath = `/repos/${pr.owner}/${pr.repo}/pulls/${pr.pullNumber}`;
     const issuePath = `/repos/${pr.owner}/${pr.repo}/issues/${pr.pullNumber}`;
 
-    if (!(await this.refreshPrMetadata(key, state, prPath))) return;
+    if (!(yield* this.refreshPrMetadata(key, state, prPath))) return;
 
     // `stagedCheckRunsCache` stays uncommitted here on purpose: it is written
     // to `currentShaState.checkRunsCache` only at the end of the success path
@@ -301,23 +313,40 @@ export class PRPollingSource extends PollingSourceBase<
       reviewCommentsRes,
       reviewsRes,
       { response: checksRes, stagedCache: stagedCheckRunsCache },
-    ] = await Promise.all([
-      ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
-      ghGet<GhReviewComment[]>(reviewCommentsUrl, state.etags.reviewComments),
-      ghGet<GhReview[]>(`${prPath}/reviews?per_page=100`, state.etags.reviews),
-      state.currentShaState?.sha
-        ? fetchAllCheckRunsClient(
-            pr.owner,
-            pr.repo,
-            state.currentShaState.sha,
-            state.currentShaState.checkRunsCache,
-            this.logger,
-          )
-        : Promise.resolve({
-            response: { status: 304 as const },
-            stagedCache: undefined,
-          }),
-    ]);
+    ] = yield* Effect.all(
+      [
+        pollRequest(() =>
+          ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
+        ),
+        pollRequest(() =>
+          ghGet<GhReviewComment[]>(
+            reviewCommentsUrl,
+            state.etags.reviewComments,
+          ),
+        ),
+        pollRequest(() =>
+          ghGet<GhReview[]>(
+            `${prPath}/reviews?per_page=100`,
+            state.etags.reviews,
+          ),
+        ),
+        state.currentShaState?.sha
+          ? pollRequest(() =>
+              fetchAllCheckRunsClient(
+                pr.owner,
+                pr.repo,
+                state.currentShaState!.sha,
+                state.currentShaState!.checkRunsCache,
+                this.logger,
+              ),
+            )
+          : Effect.succeed({
+              response: { status: 304 as const },
+              stagedCache: undefined,
+            }),
+      ],
+      { concurrency: 4 },
+    );
 
     // Issue/review comment lists: seed on the first tick (nothing emitted),
     // diff + emit on later ticks. consumeCommentList branches on
@@ -380,7 +409,7 @@ export class PRPollingSource extends PollingSourceBase<
     // Commit the deferred check-runs cache only after successfully consuming
     // the response (including the diff branch above).
     this.commitStagedCheckRunsCache(state, stagedCheckRunsCache);
-  }
+  });
 
   /**
    * Conditional GET of the PR detail, applying every subscription-state
@@ -391,13 +420,18 @@ export class PRPollingSource extends PollingSourceBase<
    * malformed payload or a closed PR that was already detached. A 304 (or any
    * non-200) leaves state untouched and continues.
    */
-  private async refreshPrMetadata(
+  private readonly refreshPrMetadata = Effect.fn(
+    'PRPollingSource.refreshPrMetadata',
+  )(function* (
+    this: PRPollingSource,
     key: string,
     state: PRSubscriptionState,
     prPath: string,
-  ): Promise<boolean> {
+  ) {
     const { pr } = state;
-    const prRes = await ghGet<GhPullRequest>(prPath, state.etags.pr);
+    const prRes = yield* pollRequest(() =>
+      ghGet<GhPullRequest>(prPath, state.etags.pr),
+    );
     if (prRes.status !== 200) return true;
 
     // Validate the state-driving PR payload non-throwingly (never throw on
@@ -473,7 +507,7 @@ export class PRPollingSource extends PollingSourceBase<
       }
     }
     return true;
-  }
+  });
 
   /**
    * First tick for a subscription: seed the review and check-run cursors so
@@ -662,11 +696,15 @@ export class PRPollingSource extends PollingSourceBase<
     state.lastAnnotationKeys = newCurrentKeys;
   }
 
-  private async drainAnnotationQueues(
+  private readonly drainAnnotationQueues = Effect.fn(
+    'PRPollingSource.drainAnnotationQueues',
+  )(function* (
+    this: PRPollingSource,
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
-    now = Date.now(),
-  ): Promise<void> {
-    const pendingEntries = this.orderAnnotationDrainEntries(entries, now);
+    now?: number,
+  ) {
+    const at = now ?? (yield* Clock.currentTimeMillis);
+    const pendingEntries = this.orderAnnotationDrainEntries(entries, at);
     if (pendingEntries.length === 0) return;
 
     const claimsByKey = new Map<string, number>();
@@ -680,25 +718,30 @@ export class PRPollingSource extends PollingSourceBase<
         }
         const claims = claimsByKey.get(key) ?? 0;
         if (claims >= MAX_ANNOTATION_RUNS_PER_SUBSCRIPTION_TICK) continue;
-        try {
-          const drained = await this.drainNextAnnotationRun(state, now);
-          if (!drained) {
+        // Only `drainNextAnnotationRun`'s own rate-limit re-raise is a
+        // typed failure here; a defect stays a defect and ends the round.
+        const drained = yield* this.drainNextAnnotationRun(state, at).pipe(
+          Effect.map((value) => ({ ok: true as const, value })),
+          Effect.catchTag('PollHookRejected', (failure) =>
+            Effect.succeed({ ok: false as const, failure }),
+          ),
+        );
+        if (!drained.ok) {
+          this.handleFailure(key, state, drained.failure.cause, at);
+          if (drained.failure.cause instanceof GitHubRateLimitError) {
             this.nextAnnotationDrainKey = key;
             return;
           }
-        } catch (err) {
-          this.handleFailure(key, state, err);
-          if (err instanceof GitHubRateLimitError) {
-            this.nextAnnotationDrainKey = key;
-            return;
-          }
+        } else if (!drained.value) {
+          this.nextAnnotationDrainKey = key;
+          return;
         }
         claimsByKey.set(key, claims + 1);
         madeProgress = true;
       }
     }
     this.advanceAnnotationDrainStart(pendingEntries);
-  }
+  });
 
   private orderAnnotationDrainEntries(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
@@ -744,52 +787,55 @@ export class PRPollingSource extends PollingSourceBase<
    *   governs every GitHub endpoint.
    * - Anything else (network, timeout): rotate to the back of the queue.
    */
-  private async drainNextAnnotationRun(
-    state: PRSubscriptionState,
-    now: number,
-  ): Promise<boolean> {
+  private readonly drainNextAnnotationRun = Effect.fn(
+    'PRPollingSource.drainNextAnnotationRun',
+  )(function* (this: PRPollingSource, state: PRSubscriptionState, now: number) {
     const run = state.currentShaState?.pendingAnnotationRuns[0];
     if (!run) return true;
     const { pr } = state;
-    try {
-      const annotations = await fetchAnnotationsClient(
+    const fetched = yield* pollRequest(() =>
+      fetchAnnotationsClient(
         pr.owner,
         pr.repo,
         run.id,
         this.logger,
         SharedAnnotationFetchBudget,
         now,
-      );
+      ),
+    ).pipe(
+      Effect.map((annotations) => ({ ok: true as const, annotations })),
+      Effect.catchTag('PollHookRejected', (failure) =>
+        Effect.succeed({ ok: false as const, failure }),
+      ),
+    );
+    if (fetched.ok) {
       this.removePendingAnnotationRun(state, run.id);
-      if (annotations.length > 0) {
-        this.emitCheckAnnotations(state, run, annotations);
+      if (fetched.annotations.length > 0) {
+        this.emitCheckAnnotations(state, run, fetched.annotations);
       }
-      return true;
-    } catch (err) {
-      if (err instanceof AnnotationFetchBudgetExhaustedError) return false;
-      if (err instanceof GitHubRateLimitError) throw err;
-      if (
-        err instanceof GitHubPermanentError ||
-        err instanceof GitHubAuthError
-      ) {
-        const reason =
-          err instanceof GitHubAuthError ? 'forbidden' : 'unavailable';
-        this.logger.warn(
-          `Annotations for check ${run.id} ${reason}; dropping.`,
-          { data: err },
-        );
-        this.removePendingAnnotationRun(state, run.id);
-        return true;
-      }
-      this.removePendingAnnotationRun(state, run.id);
-      state.currentShaState?.pendingAnnotationRuns.push(run);
-      this.logger.warn(
-        `Annotation fetch for check ${run.id} failed; rotating to back of queue`,
-        { data: err },
-      );
       return true;
     }
-  }
+    const { failure } = fetched;
+    const err = failure.cause;
+    if (err instanceof AnnotationFetchBudgetExhaustedError) return false;
+    if (err instanceof GitHubRateLimitError) return yield* Effect.fail(failure);
+    if (err instanceof GitHubPermanentError || err instanceof GitHubAuthError) {
+      const reason =
+        err instanceof GitHubAuthError ? 'forbidden' : 'unavailable';
+      this.logger.warn(`Annotations for check ${run.id} ${reason}; dropping.`, {
+        data: err,
+      });
+      this.removePendingAnnotationRun(state, run.id);
+      return true;
+    }
+    this.removePendingAnnotationRun(state, run.id);
+    state.currentShaState?.pendingAnnotationRuns.push(run);
+    this.logger.warn(
+      `Annotation fetch for check ${run.id} failed; rotating to back of queue`,
+      { data: err },
+    );
+    return true;
+  });
 
   private removePendingAnnotationRun(
     state: PRSubscriptionState,

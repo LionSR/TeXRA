@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
@@ -30,8 +31,10 @@ export class MemoryHandlers {
   ) {}
 
   async sendMemoryData(webview: vscode.Webview): Promise<void> {
-    await this.settingsHost.sendMemoryData((message) =>
-      webview.postMessage(message),
+    await effectRuntime().runPromise(
+      this.settingsHost.sendMemoryData((message) =>
+        webview.postMessage(message),
+      ),
     );
   }
 
@@ -39,16 +42,18 @@ export class MemoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
   ): Promise<void> {
     await this.ctx.withActiveWebview(async (webview) => {
-      await this.settingsHost.sendMemoryPreview(data, {
-        respond: (message) => webview.postMessage(message),
-        onError: async (error) => {
-          await showLoggedErrorMessage(
-            this.ctx.channel,
-            'Failed to load memory preview',
-            error,
-          );
-        },
-      });
+      await effectRuntime().runPromise(
+        this.settingsHost.sendMemoryPreview(data, {
+          respond: (message) => webview.postMessage(message),
+          onError: async (error) => {
+            await showLoggedErrorMessage(
+              this.ctx.channel,
+              'Failed to load memory preview',
+              error,
+            );
+          },
+        }),
+      );
     });
   }
 
@@ -99,9 +104,11 @@ export class MemoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
     try {
-      await this.settingsHost.deleteMemory(
-        data,
-        this.ctx.postMessageToActiveWebview,
+      await effectRuntime().runPromise(
+        this.settingsHost.deleteMemory(
+          data,
+          this.ctx.postMessageToActiveWebview,
+        ),
       );
     } catch (error) {
       await showLoggedErrorMessage(
@@ -118,10 +125,12 @@ export class MemoryHandlers {
       this.ctx,
       `Failed to ${pinned ? 'pin' : 'unpin'} memory`,
       () =>
-        this.settingsHost.setMemoryPinned(
-          storagePath,
-          pinned,
-          this.ctx.postMessageToActiveWebview,
+        effectRuntime().runPromise(
+          this.settingsHost.setMemoryPinned(
+            storagePath,
+            pinned,
+            this.ctx.postMessageToActiveWebview,
+          ),
         ),
     );
   }
