@@ -129,51 +129,94 @@ under `src/agent/` where the third segment is used so that `runtime`,
 | `src/utils`                 |        7 |       10 |       2 |           6 |           1 |           11 |      3 |       40 |
 | **all**                     |  **330** |  **182** | **124** |     **206** |      **52** |      **147** | **18** | **1059** |
 
-## 3. Reading for the migration
+## 3. The deletion plan
 
-Each category collapses into one Effect construct. What follows is not a
-plan; it is the list of where each construct will be applied, so that the
-Phase 1 and Phase 2 work can be sized by area.
+The owner's second ruling on the migration ("fully embrace Effect; no
+pass-throughs, no adapters", recorded against R1 in
+`docs/prds/2026-08-26-effect-4-runtime-migration.md`) decides what this
+census is for. A catch clause is **not** translated into an Effect
+equivalent. It is deleted, unless it is one of exactly two things:
 
-**boundary-translation (330)** becomes `Effect.tryPromise` / `Effect.try`
-adapters at the edge, each with one error mapper into a `Data.TaggedError`.
-This is the largest category and the one with the least semantic risk: the
-clause already turns a foreign throw into a domain value, so the rewrite is
-mechanical once the adapter exists. It concentrates in `packages/cli` (71:
-command handlers writing to stderr and setting an exit code, and the
+1. **The single wrap at a genuine foreign boundary** — one `Effect.tryPromise`
+   or `Effect.try` per foreign call site (`node:fs`, `fetch`,
+   `node:child_process`, a provider SDK, the VS Code API, Electron IPC, the
+   SQLite driver), with one mapper into a tagged error.
+2. **A typed recovery** — a branch that inspects the failure and continues,
+   which `Effect.catchTag` expresses directly.
+
+Everything else in the tree is a clause that exists because a `Promise` had
+no failure channel. Once the surface above it is Effect-typed, the clause has
+nothing left to do and the migration's job is to delete it, not to find it a
+new spelling. A converted file that still contains a catch is a leftover,
+which is what the `catch:effect-importer` row of
+`config/ratchets/effect-migration-baseline.json` measures: for a file the
+migration has passed through, that row must be **zero**, not smaller.
+
+Read against that rule, the 1,059 clauses divide as follows.
+
+| Category               | Count | Under the ruling                                                                             |
+| ---------------------- | ----: | -------------------------------------------------------------------------------------------- |
+| typed-recovery         |   182 | **Survives as code** (`catchTag`, or `retry` on a `Schedule`)                                |
+| boundary-translation   |   330 | **Collapses** to one wrap per distinct foreign boundary; every downstream re-wrap is deleted |
+| cleanup                |   124 | **Deleted** — `Scope` / `acquireRelease` / `ensuring` replace the clause outright            |
+| best-effort-projection |   206 | **Deleted or made loud** — no silent survivor                                                |
+| control-flow           |   147 | **Deleted** — `Option` / `Either` / a typed `E`, never a throw                               |
+| failure-aggregation    |    52 | **Deleted** — `Cause` composes what the manual arrays built                                  |
+| defect-suppression     |    18 | **Deleted or fixed** — none migrate                                                          |
+
+So the honest target is not "1,059 clauses become 1,059 Effect
+constructs". It is: **at most 182 survive as recoveries, plus one wrap per
+distinct foreign boundary — a number far below 330, because the same
+foreign call is caught repeatedly on its way up.** Every other row in
+Appendix A is a deletion with a name and a file path.
+
+What that means per category, and where the work concentrates:
+
+**boundary-translation (330) — collapse, don't relocate.** The clause already
+turns a foreign throw into a domain value, so the rewrite is mechanical; the
+discipline is that only the _lowest_ clause on a call path survives. Where
+three tools each caught the same `fetch` rejection and re-wrapped it as a
+`ToolError`, the ruling leaves one `Effect.tryPromise` at the fetch and
+deletes the two above it. It concentrates in `packages/cli` (71: command
+handlers writing to stderr and setting an exit code, and the
 `doctor`/`models`/`resumeExecution` commands), `src/tools` (63: `ToolError`
-wrapping in `delegation/`, `lean/`, `zotero/`, `web/`), and the two GUI hosts
+wrapping in `delegation/`, `lean/`, `zotero/`, `web/`), the two GUI hosts
 (`packages/extension` 44, `packages/desktop` 32, nearly all of them
-`showLoggedErrorMessage` or `showErrorMessage` at a command boundary).
-`src/agent/workflowScript` (21) is the other notable cluster, where the
-realm boundary and the checkpoint journal both translate.
+`showLoggedErrorMessage` or `showErrorMessage` at a command boundary), and
+`src/agent/workflowScript` (21, the realm boundary and the checkpoint
+journal). Each lane reports its own collapse ratio in its PR body; a lane
+that converts N clauses into N wraps has not followed the ruling.
 
-**typed-recovery (182)** becomes a typed E channel with `catchTag`, or a
-retry with a `Schedule` where the clause is already a retry. These are the
-clauses whose category depends on reading the branch inside the catch: the
-same `try` can rethrow on abort, retry on one SDK code, and fall back on
-another. The concentration is in `src/agent/modelHandlers` (26: media upload
-fallbacks, compaction retries, `handleCreateResponseError` branches),
-`src/tools` (25: probe-and-default in `setup/`, `github/` polling backoff,
-lease-lost repair in `delegation/`), and the extension host (16), followed
-by `src/auth` (11: pending-sentinel returns in the OAuth device flows) and
-`packages/cli` (13).
+**typed-recovery (182) — the only category that survives as code.** A typed
+`E` with `catchTag`, or `Effect.retry` on a `Schedule` where the clause is
+already a retry. These are the clauses whose category depends on reading the
+branch inside the catch: the same `try` can rethrow on abort, retry on one
+SDK code, and fall back on another. Concentrated in
+`src/agent/modelHandlers` (26: media upload fallbacks, compaction retries,
+`handleCreateResponseError` branches), `src/tools` (25: probe-and-default in
+`setup/`, `github/` polling backoff, lease-lost repair in `delegation/`),
+the extension host (16), `src/auth` (11: pending-sentinel returns in the
+OAuth device flows), and `packages/cli` (13). Even here the count should
+fall: a fallback that fires on _any_ failure is not a typed recovery, it is a
+best-effort projection wearing a `try`.
 
-**cleanup (124)** becomes `Scope` / `acquireRelease` / `Effect.ensuring`, and
-the clause is deleted rather than rewritten. It concentrates in
-`src/agent/runtime` (25: lease release, resource dispose, and rollback in
-`childRunLoop`, `executeAgent`, `resumeRun`, `SessionHandle`), `src/tools`
-(21: `childStream` rollback, `leanSession` teardown, temp-file removal), and
-then `packages/cli` (13), `packages/desktop` (12), and `src/transcript`
-(11: staged-deletion rollback and writer close). Many of these already
-preserve primary-error precedence by hand, which is the manual work `Exit`
-and `Cause` remove.
+**cleanup (124) — zero survive.** `Scope`, `acquireRelease`, and
+`Effect.ensuring` run the release on success, failure, **and** interruption,
+which the `try`/`finally` never did. Concentrated in `src/agent/runtime`
+(25: lease release, resource dispose, and rollback in `childRunLoop`,
+`executeAgent`, `resumeRun`, `SessionHandle`), `src/tools` (21:
+`childStream` rollback, `leanSession` teardown, temp-file removal),
+`packages/cli` (13), `packages/desktop` (12), and `src/transcript` (11:
+staged-deletion rollback and writer close). Many of these hand-preserve
+primary-error precedence, which is exactly the bookkeeping `Exit` and `Cause`
+delete.
 
-**best-effort-projection (206)** becomes a forked or ignored effect with an
-explicit warn-level log, or an entry on the review checklist's accepted
-exceptions (§15 L3). This is the category with the most silent entries after
-`control-flow`, and the one where the migration should not be allowed to hide
-a failure that today is at least commented. It concentrates in
+**best-effort-projection (206) — no silent survivor.** CLAUDE.md's rule is
+that a fallback masking a failure must be loud or not exist, and 161 of the
+tree's handlers are silent today. Under the ruling each of these becomes
+either an explicit `Effect.ignoreLogged` / a forked effect with a warn-level
+log, or nothing at all — and a lane may not convert a silent catch into a
+silent `catchAll`, which is the same defect in new spelling. Concentrated in
 `packages/desktop` (48: `reportAsyncError` and `reportBackgroundError` on
 dialog and IPC promises, `desktopSupabaseAuth` notifications),
 `packages/extension` (32: refresh rejections in `extension.ts`, `setup.ts`
@@ -181,31 +224,43 @@ registrations), `src/agent/runtime` (26: listener and hook fan-out in
 `SessionHandle`, `HostInteractions`, `AgentRunLifecycle`), and `src/tools`
 (20).
 
-**failure-aggregation (52)** becomes `Cause` composition or `Effect.all` with
-mode `'either'` / `'validate'`; the manual failure arrays and
-`throwAggregated` calls are deleted when the semantics match. It concentrates
-in `src/agent/runtime` (12: `runAgent`, `waitingTermination`,
-`HostInteractions` dispose), `src/transcript` (10: `StagedDeletionCoordinator`
-and `TexraTranscriptRecorder`), and then `packages/cli` (6, all in
-`runExecution` and `subscribeApprovals`), `src/agent/storage` (5), and
-`src/tools` (5).
+**control-flow (147) — deleted.** The bulk is ENOENT/ENOTDIR-means-absent on
+filesystem probes and parse-or-default on JSON, URLs, and headers: an
+`Option` or an `Either`, with no throw and no catch. Concentrated in
+`packages/cli` (22) and `src/tools` (22), then `src/auth` (14),
+`src/utils` (11: `baseFS`, `externalRoots`, `platformPaths`), and
+`packages/extension` (11). The 23 Zod schema `.catch(default)` combinators
+counted here are a separate matter: on persisted, security, accounting, or
+lifecycle data a `.catch` turns corruption into a silent default, and if that
+value feeds a later whole-file write it becomes permanent data loss. Those
+are **defects to fix, not clauses to migrate** — ten of them sit on JWT and
+session shapes in `src/auth`.
 
-**control-flow (146)** becomes `Option` / `Either` or a typed E, never a
-throw. The bulk is ENOENT/ENOTDIR-means-absent on filesystem probes and
-parse-or-default on JSON, URLs, and headers; the Zod schema `.catch(...)`
-hits counted by the grep also land here (see section 4). It concentrates in
-`packages/cli` (22) and `src/tools` (22), then `src/auth` (14, ten of them
-Zod schema defaults on JWT and session shapes), `src/utils` (11: `baseFS`,
-`externalRoots`, `platformPaths`), and `packages/extension` (11).
+**failure-aggregation (52) — deleted.** `Cause` composition, or `Effect.all`
+with mode `'either'` / `'validate'`; the manual failure arrays and
+`throwAggregated` calls go with them. Concentrated in `src/agent/runtime`
+(12: `runAgent`, `waitingTermination`, `HostInteractions` dispose),
+`src/transcript` (10: `StagedDeletionCoordinator`, `TexraTranscriptRecorder`),
+`packages/cli` (6, in `runExecution` and `subscribeApprovals`),
+`src/agent/storage` (5), and `src/tools` (5).
 
-**defect-suppression (18)** is not migrated; each entry is either fixed or
-allowed to die in the defect channel. Fifteen of the eighteen are silent.
-They concentrate in `packages/cli` (6: `registerBuiltins` abort swallow,
-`imagePasteQueue`, `EntryErrorBoundary`, `logSinks`, `runExecution`
-resumability at shutdown), `src/latex` (3: `labelSearch` and two
-`LatexMediaManager` extraction swallows), and `src/utils` (3, all in
-`platformPaths` probe loops), with two in `packages/desktop`. This is the
-short list to review first, before any Effect code lands.
+**defect-suppression (18) — none migrate.** Each is fixed or allowed to die
+in the defect channel; fifteen are silent. `packages/cli` (6:
+`registerBuiltins` abort swallow, `imagePasteQueue`, `EntryErrorBoundary`,
+`logSinks`, `runExecution` resumability at shutdown), `src/latex` (3:
+`labelSearch` and two `LatexMediaManager` extraction swallows), `src/utils`
+(3, all in `platformPaths` probe loops), and `packages/desktop` (2). This is
+the short list to review before any further Effect code lands, because a
+suppressed defect that survives the migration is a defect the defect channel
+would have surfaced for free.
+
+**Where to start.** The 18 defect-suppression clauses and the 23 Zod
+`.catch` combinators are 41 rows that need a decision rather than a
+conversion, and none of them depends on the migration's phase order. After
+that, the highest-deletion-per-file areas are `src/agent/runtime` (cleanup 25
+
+- aggregation 12) and `packages/desktop` (best-effort 48), neither of which
+  has a lane yet.
 
 ## 4. Method and limits
 
