@@ -39,10 +39,15 @@ const DATABASE_MODULE = 'src/controllers/session/Database.ts';
 const SQLITE_IMPORT =
   /\b(?:from|import|require)\s*\(?\s*['"]node:sqlite['"]|\bfrom\s+['"]sqlite['"]/;
 
-/** An `INSERT`, `UPDATE`, or `DELETE` naming either C1 table. Written to
- *  survive the line breaks a formatted SQL template literal introduces. */
+/** A statement naming either C1 table that could change its rows: the plain
+ *  `INSERT INTO`, every `INSERT OR <conflict>` and `REPLACE INTO` upsert form
+ *  (the allowlisted module's own sequence assignment is an upsert, so that is
+ *  the likeliest shape of a second writer), `UPDATE`, `DELETE FROM`, and
+ *  `DROP TABLE`. A schema qualifier (`main.event`) is part of the name.
+ *  Written to survive the line breaks a formatted SQL template literal
+ *  introduces. */
 const EVENT_TABLE_WRITE =
-  /\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+"?(?:event|event_sequence)"?\b/i;
+  /\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|DELETE\s+FROM|DROP\s+TABLE(?:\s+IF\s+EXISTS)?)\s+(?:"?\w+"?\s*\.\s*)?"?(?:event|event_sequence)"?\b/i;
 
 function offenders(pattern: RegExp): string[] {
   return ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder)

@@ -21,9 +21,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
+import { Clock, Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
 import { afterAll, describe, expect, vi } from 'vitest';
-import { z } from 'zod';
 
 import {
   SessionEventLog,
@@ -34,7 +33,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { closeSession, openSession } from '@agent/runtime/sessionGraph';
-import { Database, SESSION_DATABASE_FILE } from '@controllers/session/Database';
+import { Database } from '@controllers/session/Database';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -46,9 +45,6 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   AgentCategory,
-  eventFromRow,
-  EventRowSchema,
-  EventSequenceRowSchema,
   STREAM_PHASE,
   type ExecutionId,
   type SessionEventDraft,
@@ -405,7 +401,8 @@ describe('Sessions owner', () => {
 /**
  * The cutover substrate (persistence-substrate-decision 6.1, stage 1): the
  * C1 tables and the C6 write path. Nothing production reads them yet, so
- * these assertions are the whole acceptance for the schema and the publisher.
+ * these assertions are the whole acceptance for the schema and the
+ * publisher.
  */
 describe('the C1 event table and the C6 publisher', () => {
   const roots: string[] = [];
@@ -426,9 +423,10 @@ describe('the C1 event table and the C6 publisher', () => {
 
   const olderStart: SessionEventDraft = { ...runStart, aggregateId: OLDER };
 
-  /** A connection of the kind another host process would open. */
+  /** A connection of the kind another host process would open, on the file
+   *  name a session root gives its database. */
   const reader = (storage: string): DatabaseSync => {
-    const db = new DatabaseSync(join(storage, SESSION_DATABASE_FILE));
+    const db = new DatabaseSync(join(storage, 'session.db'));
     db.exec('PRAGMA busy_timeout = 5000');
     return db;
   };
@@ -439,8 +437,9 @@ describe('the C1 event table and the C6 publisher', () => {
       const storage = workspace();
       return Effect.gen(function* () {
         const db = yield* Database;
-        const first = yield* db.appendAll([runStart, olderStart, waiting], 17);
-        const second = yield* db.appendAll([requested], 18);
+        const now = yield* Clock.currentTimeMillis;
+        const first = yield* db.appendAll([runStart, olderStart, waiting]);
+        const second = yield* db.appendAll([requested]);
 
         expect(
           [...first, ...second].map((e) => [e.aggregateId, e.seq, e.commit]),
@@ -450,9 +449,9 @@ describe('the C1 event table and the C6 publisher', () => {
           [STREAM, 2, 3],
           [STREAM, 3, 4],
         ]);
-        // The writer is the process, stamped by the layer (C5): no caller
-        // passes it, and `at` is the publish clock the batch was given.
-        expect(first.every((e) => e.ownerId === SELF && e.at === 17)).toBe(
+        // The writer is the process, stamped by the layer (C5), and `at` is
+        // the layer's own clock: no caller passes either.
+        expect(first.every((e) => e.ownerId === SELF && e.at === now)).toBe(
           true,
         );
         // The wake level is the last commit, and carries no payload (C6).
@@ -467,11 +466,9 @@ describe('the C1 event table and the C6 publisher', () => {
       const storage = workspace();
       return Effect.gen(function* () {
         const db = yield* Database;
-        yield* db.appendAll([runStart, olderStart], 17);
+        const now = yield* Clock.currentTimeMillis;
+        yield* db.appendAll([runStart, olderStart]);
 
-        // Both tables are read back through their declared row schemas, so
-        // a column that drifted from `@shared/schemas/eventRow` fails here
-        // rather than at the first read of a real workspace.
         const observed = yield* Effect.sync(() => {
           const raw = reader(storage);
           try {
@@ -479,24 +476,20 @@ describe('the C1 event table and the C6 publisher', () => {
               journal: raw.prepare('PRAGMA journal_mode').get()?.journal_mode,
               foreignKeys: raw.prepare('PRAGMA foreign_keys').get()
                 ?.foreign_keys,
-              events: z.array(EventRowSchema).parse(
-                raw
-                  .prepare(
-                    `SELECT "commit" AS "commit", aggregate_id AS aggregateId,
-                            seq, type, owner_id AS ownerId, at, data
-                     FROM event ORDER BY "commit"`,
-                  )
-                  .all(),
-              ),
-              sequences: z.array(EventSequenceRowSchema).parse(
-                raw
-                  .prepare(
-                    `SELECT aggregate_id AS aggregateId, seq,
-                            owner_id AS ownerId, parent_id AS parentId, closed
-                     FROM event_sequence ORDER BY aggregate_id`,
-                  )
-                  .all(),
-              ),
+              events: raw
+                .prepare(
+                  `SELECT "commit" AS "commit", aggregate_id AS aggregateId,
+                          seq, type, owner_id AS ownerId, at, data
+                   FROM event ORDER BY "commit"`,
+                )
+                .all(),
+              sequences: raw
+                .prepare(
+                  `SELECT aggregate_id AS aggregateId, seq,
+                          owner_id AS ownerId, parent_id AS parentId, closed
+                   FROM event_sequence ORDER BY aggregate_id`,
+                )
+                .all(),
               integrity: raw.prepare('PRAGMA integrity_check').get()
                 ?.integrity_check,
             };
@@ -508,37 +501,55 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(observed.journal).toBe('wal');
         expect(observed.foreignKeys).toBe(1);
         expect(observed.integrity).toBe('ok');
-        expect(
-          observed.events.map((row) => [row.aggregateId, row.seq, row.type]),
-        ).toEqual([
-          [STREAM, 1, 'run.start'],
-          [OLDER, 1, 'run.start'],
+        // The envelope C1 gives its own columns is in those columns, and the
+        // payload holds the arm and nothing the envelope already carries.
+        expect(observed.events).toEqual([
+          {
+            commit: 1,
+            aggregateId: STREAM,
+            seq: 1,
+            type: 'run.start',
+            ownerId: SELF,
+            at: now,
+            data: JSON.stringify({
+              executionId: EXECUTION,
+              identity: runStart.identity,
+              userFollowUpSupport: 'unsupported',
+              category: AgentCategory.ToolUse,
+              isRemote: false,
+            }),
+          },
+          {
+            commit: 2,
+            aggregateId: OLDER,
+            seq: 1,
+            type: 'run.start',
+            ownerId: SELF,
+            at: now,
+            data: JSON.stringify({
+              executionId: EXECUTION,
+              identity: runStart.identity,
+              userFollowUpSupport: 'unsupported',
+              category: AgentCategory.ToolUse,
+              isRemote: false,
+            }),
+          },
         ]);
-        // The payload column holds the arm and nothing the envelope columns
-        // already carry, and decodes back to the event that was published.
-        expect(eventFromRow(observed.events[0]!)).toMatchObject({
-          type: 'run.start',
-          aggregateId: STREAM,
-          seq: 1,
-          commit: 1,
-          ownerId: SELF,
-          at: 17,
-          executionId: EXECUTION,
-        });
-        // A sequence row per aggregate, claimed by its creator, an independent
-        // root, and open (C9's closure is stage 6).
+        // A sequence row per aggregate: an independent root, open (C9's
+        // closure is stage 6), and unclaimed, because a claim is one atomic
+        // acquire or takeover under C5 and stage 6 owns it.
         expect(observed.sequences).toEqual([
           {
             aggregateId: STREAM,
             seq: 1,
-            ownerId: SELF,
+            ownerId: null,
             parentId: null,
             closed: 0,
           },
           {
             aggregateId: OLDER,
             seq: 1,
-            ownerId: SELF,
+            ownerId: null,
             parentId: null,
             closed: 0,
           },
@@ -547,38 +558,41 @@ describe('the C1 event table and the C6 publisher', () => {
     },
   );
 
-  it.effect(
-    'rejects a batch before it opens a transaction, leaving nothing behind',
-    () => {
-      const storage = workspace();
-      return Effect.gen(function* () {
-        const db = yield* Database;
-        yield* db.appendAll([runStart], 17);
-        // The publish clock must be whole milliseconds: C1 stores it in an
-        // INTEGER column of a STRICT table, and validation happens before
-        // BEGIN IMMEDIATE so a rejected batch never holds the write lock.
-        const failure = yield* Effect.flip(db.appendAll([waiting], 17.5));
+  it.effect('rolls a rejected batch back whole, leaving nothing behind', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const db = yield* Database;
+      yield* db.appendAll([runStart]);
+      // C1 gives `aggregate_id` its own NOT NULL column, so a draft with no
+      // aggregate is an error at insert rather than a row nothing can read.
+      // C6 is all-or-nothing: the valid member ahead of it in the same batch
+      // does not survive either.
+      const failure = yield* Effect.flip(
+        db.appendAll([
+          waiting,
+          { ...waiting, aggregateId: null as unknown as StreamTabId },
+        ]),
+      );
 
-        expect(failure._tag).toBe('DatabaseWriteFailed');
-        const rows = yield* Effect.sync(() => {
-          const raw = reader(storage);
-          try {
-            return raw.prepare('SELECT seq FROM event').all();
-          } finally {
-            raw.close();
-          }
-        });
-        expect(rows).toEqual([{ seq: 1 }]);
-        expect(yield* SubscriptionRef.get(db.level)).toBe(1);
-      }).pipe(Effect.provide(substrate(storage)));
-    },
-  );
+      expect(failure._tag).toBe('DatabaseWriteFailed');
+      const rows = yield* Effect.sync(() => {
+        const raw = reader(storage);
+        try {
+          return raw.prepare('SELECT seq FROM event').all();
+        } finally {
+          raw.close();
+        }
+      });
+      expect(rows).toEqual([{ seq: 1 }]);
+      expect(yield* SubscriptionRef.get(db.level)).toBe(1);
+    }).pipe(Effect.provide(substrate(storage)));
+  });
 
   it.effect('reopens at the committed ordinal and never reuses one', () => {
     const storage = workspace();
     const append = Effect.gen(function* () {
       const db = yield* Database;
-      return yield* db.appendAll([runStart, waiting], 17);
+      return yield* db.appendAll([runStart, waiting]);
     }).pipe(Effect.provide(substrate(storage)));
     return Effect.gen(function* () {
       yield* append;
@@ -604,7 +618,7 @@ describe('the C1 event table and the C6 publisher', () => {
         const db = yield* Database;
         return {
           level: yield* SubscriptionRef.get(db.level),
-          next: yield* db.appendAll([runStart], 18),
+          next: yield* db.appendAll([runStart]),
         };
       }).pipe(Effect.provide(substrate(storage)));
 
@@ -617,7 +631,7 @@ describe('the C1 event table and the C6 publisher', () => {
     const storage = workspace();
     return Effect.gen(function* () {
       const db = yield* Database;
-      yield* db.appendAll([runStart, olderStart, waiting], 17);
+      yield* db.appendAll([runStart, olderStart, waiting]);
 
       const plans = yield* Effect.sync(() => {
         const raw = reader(storage);

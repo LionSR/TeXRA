@@ -21,7 +21,7 @@ subscriptions.
 # VS Code (or Cursor, Windsurf, Antigravity)
 code --install-extension texra-ai.texra
 
-# Terminal — requires Node.js >=22.9.0
+# Terminal — requires Node.js >=22.13.0
 npm install -g @texra-ai/cli
 
 # Or via Homebrew (macOS / Linux)
@@ -122,7 +122,7 @@ In the CLI, export the same variables in your shell and run with
 ## Requirements
 
 - **VS Code 1.125+** (also runs in Cursor, Windsurf, Antigravity), or
-  **Node.js >=22.9.0** for the CLI
+  **Node.js >=22.13.0** for the CLI
 - **LaTeX distribution** (TeX Live, MiKTeX, or MacTeX)
 - **Perl** (for `latexindent` and `latexdiff`)
 - Optional: ImageMagick + Ghostscript (for PDF/image processing),

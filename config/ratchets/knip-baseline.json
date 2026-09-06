@@ -1418,36 +1418,6 @@
       "name": "ActiveSkillSummarySchema"
     },
     {
-      "file": "src/shared/schemas/eventRow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "eventFromRow"
-    },
-    {
-      "file": "src/shared/schemas/eventRow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "eventPayload"
-    },
-    {
-      "file": "src/shared/schemas/eventRow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "EventRowSchema"
-    },
-    {
-      "file": "src/shared/schemas/eventRow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "EventSequenceRowSchema"
-    },
-    {
-      "file": "src/shared/schemas/eventRow.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "EventRow"
-    },
-    {
       "file": "src/shared/schemas/roundIndexed.ts",
       "category": "production-dead",
       "kind": "exports",

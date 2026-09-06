@@ -76,4 +76,3 @@ export * from './subscriptionUsage';
 export * from './streamState';
 export * from './streamSnapshot';
 export * from './sessionEvent';
-export * from './eventRow';

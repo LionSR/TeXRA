@@ -10,7 +10,16 @@
  * Nothing reads this yet. The memory log (`SessionEventLog.memoryLayer`)
  * stays the authoritative store until stage 2 moves the C7 reads onto the
  * table; this module is stage 1 of the cutover, and no production caller
- * reaches it.
+ * reaches it. It cannot be provided in `sessionLayer.ts` before then either:
+ * the roots a session is opened over are virtual under the test platform
+ * (`/workspace/.texra/storage`), and C1 requires a real local file, so the
+ * layer is built by whoever holds a real root until the substrate owns them.
+ *
+ * Validation and redaction of a batch are the publish boundary's (C3, C6):
+ * they run above this layer, on the drafts, before the substrate sees them.
+ * What this layer owns is the envelope C1 gives its own columns: the writer
+ * (C5, from `ProcessIdentity`), the publish clock, and the `seq` and
+ * `commit` ordinals, none of which a caller can supply.
  *
  * `node:sqlite` and `node:fs` are used directly rather than through a
  * `Platform` port on purpose: SQLite opens the path itself, and C1 requires
@@ -26,36 +35,34 @@ import { join } from 'node:path';
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 
 import {
+  Clock,
   Context,
   Data,
   Effect,
+  Exit,
   Layer,
   Semaphore,
   SubscriptionRef,
 } from 'effect';
 
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import {
-  eventFromRow,
-  eventPayload,
-  EventRowSchema,
-  type CommitOrdinal,
-  type SessionEvent,
-  type SessionEventDraft,
+import type {
+  CommitOrdinal,
+  SessionEvent,
+  SessionEventDraft,
 } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 /** The database file of a session root, beside the stores it replaces. */
-export const SESSION_DATABASE_FILE = 'session.db';
+const SESSION_DATABASE_FILE = 'session.db';
 
 /**
  * The C1 schema. Two tables and nothing else app-owned on disk.
  *
  * `commit` is a SQLite keyword, so the column is quoted at every site; the
  * stage 0 spike measured `CREATE TABLE t (commit INTEGER ...)` failing with a
- * syntax error on every host floor. The Zod row vocabulary
- * (`@shared/schemas/eventRow`) keeps the name unquoted, and every query below
- * aliases the snake-case columns onto it.
+ * syntax error on every host floor. The event vocabulary keeps the name
+ * unquoted, and every query below aliases the snake-case columns onto it.
  *
  * `event_sequence` is declared first because `event` references it, and the
  * parent edge is self-referential, so both cascades exist the moment the
@@ -116,10 +123,17 @@ export class DatabaseWriteFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
-/** Assign each aggregate its next `seq`, creating its sequence row on first use. */
+/**
+ * Assign each aggregate its next `seq`, creating its sequence row on first
+ * use. `owner_id` is left NULL: C1 defines that column as the *current*
+ * sequence writer, and a claim is one atomic acquire or takeover under C5,
+ * which stage 6 implements. A first writer stamped here and never verified,
+ * released, or taken over would say "owned forever" in a column that means
+ * "owned now".
+ */
 const NEXT_SEQ = `
-INSERT INTO event_sequence (aggregate_id, seq, owner_id)
-VALUES (?, 1, ?)
+INSERT INTO event_sequence (aggregate_id, seq)
+VALUES (?, 1)
 ON CONFLICT(aggregate_id) DO UPDATE SET seq = event_sequence.seq + 1
 RETURNING seq
 `;
@@ -130,15 +144,6 @@ INSERT INTO event (aggregate_id, seq, type, owner_id, at, data)
 VALUES (?, ?, ?, ?, ?, ?)
 RETURNING "commit" AS "commit"
 `;
-
-/** One validated draft, ready to bind: nothing is computed inside the
- *  transaction, because a busy timeout is a blocking wait on the only
- *  JavaScript thread and every other writer waits behind it. */
-interface PreparedDraft {
-  readonly aggregateId: string;
-  readonly type: string;
-  readonly data: string;
-}
 
 export class Database extends Context.Service<
   Database,
@@ -154,7 +159,6 @@ export class Database extends Context.Service<
      */
     readonly appendAll: (
       drafts: readonly SessionEventDraft[],
-      at?: number,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>;
     /**
      * C6's process-local wake level, advanced after each commit. It carries
@@ -177,40 +181,105 @@ export class Database extends Context.Service<
       const roots = yield* WorkspaceRoots;
       const identity = yield* ProcessIdentity;
       const path = join(roots.storage, SESSION_DATABASE_FILE);
+      const openFailed = (cause: unknown): DatabaseOpenFailed =>
+        new DatabaseOpenFailed({ path, cause });
 
+      // The connection is scoped before it is configured, so a pragma that
+      // does not verify or a schema that does not apply closes the handle it
+      // failed on instead of leaving the file and its WAL locked for the
+      // life of the process.
       const db = yield* Effect.acquireRelease(
         Effect.try({
-          try: () => open(roots.storage, path),
-          catch: (cause) => new DatabaseOpenFailed({ path, cause }),
+          try: () => {
+            mkdirSync(roots.storage, { recursive: true });
+            return new DatabaseSync(path);
+          },
+          catch: openFailed,
         }),
         (connection) => Effect.sync(() => connection.close()),
       );
+      const { nextSeq, insertEvent, lastCommit } = yield* Effect.try({
+        try: () => configure(db),
+        catch: openFailed,
+      });
 
-      const nextSeq = db.prepare(NEXT_SEQ);
-      const insertEvent = db.prepare(INSERT_EVENT);
-      const level = yield* SubscriptionRef.make<CommitOrdinal>(lastCommit(db));
+      const level = yield* SubscriptionRef.make<CommitOrdinal>(lastCommit);
       const gate = yield* Semaphore.make(1);
+      const writeFailed = (cause: unknown): DatabaseWriteFailed =>
+        new DatabaseWriteFailed({ path, cause });
 
       return {
         level,
-        appendAll: (drafts, at = Date.now()) =>
+        appendAll: (drafts) =>
           gate.withPermit(
             Effect.uninterruptible(
               Effect.gen(function* () {
                 if (drafts.length === 0) return [];
-                const committed = yield* Effect.try({
-                  try: () =>
-                    writeBatch(db, nextSeq, insertEvent, {
-                      drafts,
-                      at,
-                      ownerId: identity.ownerId,
+                const at = yield* Clock.currentTimeMillis;
+                // Serialized before the transaction opens. A busy timeout is
+                // a blocking wait on the only JavaScript thread, so anything
+                // computed under the write lock is time every other writer
+                // spends blocked; the spike measured a deliberately held
+                // transaction blocking the other process for its full
+                // duration.
+                const payloads = drafts.map(payloadOf);
+                const committed = yield* Effect.acquireUseRelease(
+                  Effect.try({
+                    try: () => db.exec('BEGIN IMMEDIATE'),
+                    catch: writeFailed,
+                  }),
+                  () =>
+                    Effect.try({
+                      try: () =>
+                        drafts.map((draft, index): SessionEvent => {
+                          const seq = nextSeq.get(draft.aggregateId)?.seq;
+                          if (typeof seq !== 'number') {
+                            throw new Error(
+                              `No seq assigned for aggregate ${draft.aggregateId}`,
+                            );
+                          }
+                          const commit = insertEvent.get(
+                            draft.aggregateId,
+                            seq,
+                            draft.type,
+                            identity.ownerId,
+                            at,
+                            payloads[index]!,
+                          )?.commit;
+                          if (typeof commit !== 'number') {
+                            throw new Error(
+                              `No commit assigned for aggregate ${draft.aggregateId}`,
+                            );
+                          }
+                          return {
+                            ...draft,
+                            seq,
+                            commit,
+                            ownerId: identity.ownerId,
+                            at,
+                          } as SessionEvent;
+                        }),
+                      catch: writeFailed,
                     }),
-                  catch: (cause) => new DatabaseWriteFailed({ path, cause }),
-                });
-                const last = committed.at(-1);
-                if (last !== undefined) {
-                  yield* SubscriptionRef.set(level, last.commit);
-                }
+                  // The exit decides the verb, so an interrupted or failed
+                  // batch rolls back whole and a `COMMIT` that cannot land
+                  // rolls back rather than leaving the transaction open.
+                  (_, exit) =>
+                    Exit.isSuccess(exit)
+                      ? Effect.try({
+                          try: () => db.exec('COMMIT'),
+                          catch: writeFailed,
+                        }).pipe(
+                          Effect.tapError(() =>
+                            Effect.sync(() => db.exec('ROLLBACK')),
+                          ),
+                        )
+                      : Effect.try({
+                          try: () => db.exec('ROLLBACK'),
+                          catch: writeFailed,
+                        }),
+                );
+                yield* SubscriptionRef.set(level, committed.at(-1)!.commit);
                 return committed;
               }),
             ),
@@ -221,7 +290,18 @@ export class Database extends Context.Service<
 }
 
 /**
- * Open the connection and bring it to the state C1 requires.
+ * The `data` column of a draft: the arm minus the two fields C1 gives their
+ * own columns. The rest of the envelope is not on a draft at all, so no
+ * caller can smuggle a `seq`, `commit`, `ownerId`, or `at` into the payload.
+ */
+function payloadOf(draft: SessionEventDraft): string {
+  const { type, aggregateId, ...payload } = draft;
+  return JSON.stringify(payload);
+}
+
+/**
+ * Bring an open connection to the state C1 requires, and prepare the two
+ * statements the write path binds.
  *
  * The pragma order is load-bearing, not stylistic. `PRAGMA busy_timeout` is
  * the first statement on every connection because `PRAGMA journal_mode = WAL`
@@ -237,10 +317,18 @@ export class Database extends Context.Service<
  * `kill -9` mid-transaction leaving zero uncommitted rows and a clean
  * `integrity_check` at `NORMAL`, which is exactly the C4 guarantee that a
  * crash loses the in-flight message and nothing else.
+ *
+ * `lastCommit` is the wake level a reopened database starts from: the
+ * committed `AUTOINCREMENT` high-water mark, which is what C7 bounds a read
+ * by. It is read from `sqlite_sequence` rather than `MAX("commit")`, because
+ * the maximum falls when retention removes rows while the high-water mark,
+ * and so every cursor already handed out, does not.
  */
-function open(root: string, path: string): DatabaseSync {
-  mkdirSync(root, { recursive: true });
-  const db = new DatabaseSync(path);
+function configure(db: DatabaseSync): {
+  readonly nextSeq: StatementSync;
+  readonly insertEvent: StatementSync;
+  readonly lastCommit: CommitOrdinal;
+} {
   db.exec('PRAGMA busy_timeout = 5000');
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
@@ -248,7 +336,14 @@ function open(root: string, path: string): DatabaseSync {
   verifyPragma(db, 'journal_mode', 'wal');
   verifyPragma(db, 'foreign_keys', 1);
   db.exec(SCHEMA);
-  return db;
+  const high = db
+    .prepare(`SELECT seq FROM sqlite_sequence WHERE name = 'event'`)
+    .get();
+  return {
+    nextSeq: db.prepare(NEXT_SEQ),
+    insertEvent: db.prepare(INSERT_EVENT),
+    lastCommit: typeof high?.seq === 'number' ? high.seq : 0,
+  };
 }
 
 /** C1 requires every connection to verify its pragmas rather than assume
@@ -265,85 +360,5 @@ function verifyPragma(
     throw new Error(
       `PRAGMA ${pragma} is ${String(value)}, expected ${String(expected)}`,
     );
-  }
-}
-
-/**
- * The wake level a reopened database starts from: the committed
- * `AUTOINCREMENT` high-water mark, which is what C7 bounds a read by. It is
- * read from `sqlite_sequence` rather than `MAX("commit")`, because the
- * maximum falls when retention removes rows while the high-water mark, and so
- * every cursor already handed out, does not.
- */
-function lastCommit(db: DatabaseSync): CommitOrdinal {
-  const row = db
-    .prepare(`SELECT seq FROM sqlite_sequence WHERE name = 'event'`)
-    .get();
-  return typeof row?.seq === 'number' ? row.seq : 0;
-}
-
-/**
- * The C6 transaction. Every draft is validated and serialized before
- * `BEGIN IMMEDIATE`, so the write lock is held only for the inserts: the
- * spike measured a deliberately held transaction blocking the other process
- * for its full duration, so slow work inside the lock is a hard rule and not
- * a preference.
- */
-function writeBatch(
-  db: DatabaseSync,
-  nextSeq: StatementSync,
-  insertEvent: StatementSync,
-  batch: {
-    readonly drafts: readonly SessionEventDraft[];
-    readonly at: number;
-    readonly ownerId: string;
-  },
-): readonly SessionEvent[] {
-  if (!Number.isInteger(batch.at)) {
-    throw new Error(`Publish clock ${batch.at} is not an integer millisecond`);
-  }
-  const prepared: PreparedDraft[] = batch.drafts.map((draft) => ({
-    aggregateId: draft.aggregateId,
-    type: draft.type,
-    data: eventPayload(draft),
-  }));
-
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    const committed = prepared.map((entry) => {
-      const seq = nextSeq.get(entry.aggregateId, batch.ownerId)?.seq;
-      if (typeof seq !== 'number') {
-        throw new Error(`No seq assigned for aggregate ${entry.aggregateId}`);
-      }
-      const commit = insertEvent.get(
-        entry.aggregateId,
-        seq,
-        entry.type,
-        batch.ownerId,
-        batch.at,
-        entry.data,
-      )?.commit;
-      if (typeof commit !== 'number') {
-        throw new Error(
-          `No commit assigned for aggregate ${entry.aggregateId}`,
-        );
-      }
-      return eventFromRow(
-        EventRowSchema.parse({
-          commit,
-          aggregateId: entry.aggregateId,
-          seq,
-          type: entry.type,
-          ownerId: batch.ownerId,
-          at: batch.at,
-          data: entry.data,
-        }),
-      );
-    });
-    db.exec('COMMIT');
-    return committed;
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
   }
 }

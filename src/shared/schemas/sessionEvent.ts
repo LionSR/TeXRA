@@ -66,7 +66,7 @@ export type AggregateId = z.infer<typeof AggregateIdSchema>;
 
 /** Per-aggregate append order; `run.start` is seq 1 of its stream. Dense
  *  from 1, assigned by the substrate's publisher and by nothing else. */
-export const AggregateSeqSchema = z.int().positive();
+const SeqSchema = z.int().positive();
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
  *  first commit", the cursor an empty view starts from. */
@@ -95,11 +95,14 @@ export type ApprovalPolicySnapshot = z.infer<
  */
 const envelope = {
   aggregateId: AggregateIdSchema,
-  seq: AggregateSeqSchema,
+  seq: SeqSchema,
   commit: CommitOrdinalSchema,
   /** Owner of the process that appended the event; null on legacy imports. */
   ownerId: OwnerIdSchema.nullable(),
-  at: z.number(),
+  /** The publish clock in whole milliseconds: C1 stores it in an `INTEGER`
+   *  column of a `STRICT` table, so the vocabulary states that rule here and
+   *  the substrate restates it nowhere. */
+  at: z.int(),
 };
 
 function durable<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
@@ -150,7 +153,7 @@ const RunStartEventSchema = durable('run.start', {
  * facts with the payload flattened. `stream.removed` is the tombstone: the
  * last row of its aggregate, final (PRD 5.2, "Existence").
  */
-export const SessionEventSchema = z.discriminatedUnion('type', [
+const SessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema,
   /**
    * Every activation of a run, the first launch and each resume (PRD 6,
