@@ -164,7 +164,8 @@ export class SupabaseClient {
   // Effect-typed, these convert with it in that PR, and the host hands the
   // coordinator's exchange program to an Effect-typed sibling of
   // `runPkceOperation` composed under the same permit, retiring the Promise
-  // callback with its suite. @adapter-until 2026-11-05
+  // callback with its suite. Introduced 2026-09-06 (lane w2 of the Effect 4
+  // migration). @adapter-until 2026-11-05
   /**
    * Check if auth system is fully initialized and ready for use.
    */
