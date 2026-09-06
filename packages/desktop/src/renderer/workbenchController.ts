@@ -103,7 +103,7 @@ export function createWorkbenchController({
     requestAnimationFrame(() => {
       if (!isActive()) return;
       const slot = document.querySelector(
-        `[data-workbench-session="${CSS.escape(session)}"] [data-browser-slot="${CSS.escape(tabId)}"]`,
+        `[data-session="${CSS.escape(session)}"] [data-browser-slot="${CSS.escape(tabId)}"]`,
       );
       if (!slot) return;
       const rect = slot.getBoundingClientRect();

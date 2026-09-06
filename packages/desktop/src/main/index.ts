@@ -657,7 +657,8 @@ function createWindow(options: {
       confirmDialog({ message, confirmLabel: 'Replace file' }),
     chooseTeamAvailability,
     signInForRemoteAgentCatalog,
-    showInfoMessage,
+    showInfoMessage: (message) =>
+      showInfoMessage(message).catch(reportBackgroundError),
     showWarningMessage,
     showErrorMessage: (message) =>
       showErrorMessage(message).catch(reportBackgroundError),
@@ -677,13 +678,6 @@ function createWindow(options: {
         cancelId: TRANSCRIPT_EXPORT_FORMAT_CHOICES.length,
       });
       return TRANSCRIPT_EXPORT_FORMAT_CHOICES[response]?.format;
-    },
-    // Recompute the onboarding funnel after a run completes so a user's first
-    // successful run leaves the setup card without waiting for a restart
-    // (the run lifecycle has already persisted firstRunDone). Mirrors the
-    // extension's post-run refresh hooks in MainViewMessageHandler.
-    onRunCompleted: () => {
-      void onboardingIpcRef.current?.refreshOnboardingFunnel();
     },
   };
   const openFileDialog = async (dialogOptions: {
@@ -745,12 +739,10 @@ function createWindow(options: {
     const execution = createDesktopAgentExecution({
       host: agentExecutionHost,
       session: paper.session,
-      showAgentConfigBanner: ({ agentName }) =>
-        snapshot.setAgentConfigBanner({
-          visible: true,
-          agentName,
-          customDirSet: true,
-        }),
+      showAgentConfigBanner: ({ agentName, category }) =>
+        snapshot.showAgentConfigBanner(agentName, category),
+      onLaunched: (streamId) =>
+        bridge.surfaceAction({ kind: 'select', streamId }),
     });
     const hostRequests = createDesktopHostRequests({
       session: paper.session,
@@ -787,11 +779,6 @@ function createWindow(options: {
         postToRendererIfAlive(message);
       },
     });
-    // A run launched from this window is the window's selection: the
-    // launching surface selects the stream (PRD 9).
-    const detachLaunched = execution.onLaunched((streamId) =>
-      bridge.surfaceAction({ kind: 'select', streamId }),
-    );
     void snapshot.refresh();
     return {
       paper,
@@ -804,7 +791,6 @@ function createWindow(options: {
       dispose() {
         workspace.disposeRendererResources();
         workspace.dispose();
-        detachLaunched();
         detachSnapshot();
         bridge.dispose();
         hostRequests.dispose();
@@ -1219,6 +1205,7 @@ function createWindow(options: {
       }
     }),
   );
+  void onboardingIpc.refreshOnboardingFunnel().catch(reportAsyncError);
   const shellActions = createDesktopShellActions(
     { postToRenderer: postToRendererIfAlive },
     {

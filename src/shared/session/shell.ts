@@ -4,7 +4,8 @@
  * choose a paper: a `Surface` is per session and cannot say which session,
  * a `SessionView` is a fact about one session, and the layer map is a
  * cache, not a selection. On the extension and the TUI it is degenerate,
- * one root and `open` of length one.
+ * one root and `open` of length one. Search has one home, the command
+ * palette, so the record carries no needle of its own.
  */
 
 export interface Shell {
@@ -14,8 +15,6 @@ export interface Shell {
   readonly open: readonly string[];
   /** Rail rows the user folded shut. */
   readonly collapsed: readonly string[];
-  /** The rail's search, across papers. Never persisted. */
-  readonly search: string;
 }
 
 export type ShellAction =
@@ -26,8 +25,7 @@ export type ShellAction =
       readonly kind: 'collapse';
       readonly session: string;
       readonly collapsed: boolean;
-    }
-  | { readonly kind: 'search'; readonly value: string };
+    };
 
 export function applyShellAction(shell: Shell, action: ShellAction): Shell {
   switch (action.kind) {
@@ -60,7 +58,5 @@ export function applyShellAction(shell: Shell, action: ShellAction): Shell {
         collapsed: action.collapsed ? [...without, action.session] : without,
       };
     }
-    case 'search':
-      return { ...shell, search: action.value };
   }
 }

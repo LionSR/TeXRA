@@ -120,52 +120,37 @@ async function seedMessages(window, view) {
   const messages = Array.isArray(view.messages) ? view.messages : [];
   if (messages.length === 0) return;
 
-  if (view.messageMode === 'postMessage') {
-    await execute(
-      window,
-      `
-        (async () => {
-          const messages = ${JSON.stringify(messages)};
-          for (const message of messages) {
-            window.postMessage(message, '*');
-            await new Promise((resolve) => requestAnimationFrame(resolve));
-          }
-        })();
-      `,
-    );
-  } else {
-    await execute(
-      window,
-      `
-        (async () => {
-          const element = document.querySelector(${JSON.stringify(view.tagName)});
-          if (!element || typeof element.handleMessage !== 'function') {
-            throw new Error(${JSON.stringify(
-              `Cannot seed ${view.tagName}: handleMessage is unavailable.`,
-            )});
-          }
-          const messages = ${JSON.stringify(messages)};
-          for (const message of messages) {
-            element.handleMessage(message);
-            if (element.updateComplete && typeof element.updateComplete.then === 'function') {
-              await Promise.race([
-                element.updateComplete,
-                new Promise((_, reject) =>
-                  setTimeout(
-                    () => reject(new Error(${JSON.stringify(
-                      `Timed out applying messages to ${view.tagName}.`,
-                    )})),
-                    ${JSON.stringify(RENDER_TIMEOUT_MS)},
-                  ),
+  await execute(
+    window,
+    `
+      (async () => {
+        const element = document.querySelector(${JSON.stringify(view.tagName)});
+        if (!element || typeof element.handleMessage !== 'function') {
+          throw new Error(${JSON.stringify(
+            `Cannot seed ${view.tagName}: handleMessage is unavailable.`,
+          )});
+        }
+        const messages = ${JSON.stringify(messages)};
+        for (const message of messages) {
+          element.handleMessage(message);
+          if (element.updateComplete && typeof element.updateComplete.then === 'function') {
+            await Promise.race([
+              element.updateComplete,
+              new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error(${JSON.stringify(
+                    `Timed out applying messages to ${view.tagName}.`,
+                  )})),
+                  ${JSON.stringify(RENDER_TIMEOUT_MS)},
                 ),
-              ]);
-            }
-            await new Promise((resolve) => requestAnimationFrame(resolve));
+              ),
+            ]);
           }
-        })();
-      `,
-    );
-  }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      })();
+    `,
+  );
 
   await flushUpdates(window, view.tagName);
 }
@@ -174,19 +159,19 @@ function targetScript(target) {
   switch (target) {
     case 'agent-model-selection':
       return `
-        const app = document.querySelector('main-app');
-        const panel = app?.shadowRoot?.querySelector('instruction-panel');
+        const app = document.querySelector('progress-app');
+        const panel = app?.shadowRoot?.querySelector('session-composer');
         const controls = [
-          ...(panel?.shadowRoot?.querySelectorAll('.model-selection-footer .select-group') ?? []),
+          ...(panel?.shadowRoot?.querySelectorAll('.chips .chip-trigger') ?? []),
         ];
         if (controls.length === 0) throw new Error('Cannot find agent/model controls.');
         return padRect(unionRects(controls.map((control) => control.getBoundingClientRect())), 10, 8);
       `;
     case 'file-selection':
       return `
-        const app = document.querySelector('main-app');
+        const app = document.querySelector('progress-app');
         const root = app?.shadowRoot;
-        const details = root?.querySelector('.file-selection-details');
+        const details = root?.querySelector('.context');
         if (!details) throw new Error('Cannot find file selection details.');
         if (!details.open && typeof details.show === 'function') {
           await details.show();
@@ -195,28 +180,8 @@ function targetScript(target) {
         }
         await nextFrame();
 
-        const groups = [...(root.querySelectorAll('file-select-group') ?? [])].slice(0, 4);
-        for (const group of groups) {
-          group.style.marginBottom = '';
-          for (const dropdown of group.shadowRoot?.querySelectorAll('wa-dropdown') ?? []) {
-            if (dropdown.open && typeof dropdown.hide === 'function') {
-              await dropdown.hide();
-            } else {
-              dropdown.open = false;
-            }
-          }
-        }
-        await nextFrame();
-        for (const group of groups) {
-          const fileSelect = group.shadowRoot?.querySelector('.file-select');
-          const toggle = group.shadowRoot?.querySelector('.toggle-icon');
-          if (fileSelect?.dataset?.expanded !== 'true') {
-            toggle?.click();
-          }
-        }
-        await nextFrame();
-
-        const summary = root.querySelector('.file-selection-summary');
+        const groups = [...root.querySelectorAll('file-select-group')];
+        const summary = root.querySelector('.context');
         const rects = groups
           .map((group) => group.shadowRoot?.querySelector('.file-select')?.getBoundingClientRect())
           .concat(summary?.getBoundingClientRect())
@@ -232,9 +197,9 @@ function targetScript(target) {
       `;
     case 'auto-extract-options':
       return `
-        const app = document.querySelector('main-app');
+        const app = document.querySelector('progress-app');
         const root = app?.shadowRoot;
-        const details = root?.querySelector('.file-selection-details');
+        const details = root?.querySelector('.context');
         if (!details) throw new Error('Cannot find file selection details.');
         if (!details.open && typeof details.show === 'function') {
           await details.show();
@@ -242,28 +207,22 @@ function targetScript(target) {
           details.open = true;
         }
         await nextFrame();
-        const groups = [...(root?.querySelectorAll('file-select-group') ?? [])];
-        const mediaGroup = groups.find((group) => group.shadowRoot?.textContent?.includes('Media'));
-        if (mediaGroup) {
-          mediaGroup.style.marginBottom = '150px';
-        }
+        const mediaGroup = [...root.querySelectorAll('file-select-group')]
+          .find((group) => group.config.type === 'media');
         mediaGroup?.scrollIntoView({ block: 'center', inline: 'nearest' });
         await nextFrame();
-        const fileSelect = mediaGroup?.shadowRoot?.querySelector('.file-select');
-        if (fileSelect?.dataset?.expanded === 'true') {
-          mediaGroup.shadowRoot?.querySelector('.toggle-icon')?.click();
-          await nextFrame();
-        }
         const button = mediaGroup?.shadowRoot?.querySelector('#toggleAutoExtract');
         if (!mediaGroup || !button) throw new Error('Cannot find auto-extract control.');
         button.click();
         await nextFrame();
         const dropdown = mediaGroup.shadowRoot.querySelector('wa-dropdown');
-        const labelGroup = mediaGroup.shadowRoot.querySelector('.file-select-label-group');
         const menu = dropdown?.shadowRoot?.querySelector('[part~="menu"], [part="menu"]')?.getBoundingClientRect();
         const trigger = button.getBoundingClientRect();
+        const labels = [...mediaGroup.shadowRoot.querySelectorAll(
+          '.file-select-icon, .file-select-label, .file-select-count',
+        )];
         const rects = [
-          labelGroup?.getBoundingClientRect(),
+          ...labels.map((label) => label.getBoundingClientRect()),
           menu,
           trigger,
         ].filter((rect) => rect && rect.width > 0 && rect.height > 0);

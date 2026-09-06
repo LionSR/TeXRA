@@ -153,9 +153,13 @@ export async function* findFilesFromPatterns(
     return;
   }
 
-  const searchDirs = [path.join(workspacePath, inputDir)];
+  // `resolve`, not `join`: an inputDir that is already absolute names the
+  // directory it says, while a workspace-relative one is taken from the
+  // workspace root. Joining an absolute path onto the root duplicated the
+  // prefix and found nothing.
+  const searchDirs = [path.resolve(workspacePath, inputDir)];
   if (!inputDir.includes('build')) {
-    searchDirs.push(path.join(workspacePath, inputDir, 'build'));
+    searchDirs.push(path.resolve(workspacePath, inputDir, 'build'));
   }
 
   for (const pattern of patterns) {

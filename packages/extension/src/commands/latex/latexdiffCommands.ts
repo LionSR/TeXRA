@@ -10,10 +10,12 @@ import {
 } from '@frontend/latex/openBuild';
 import {
   showLoggedErrorMessage,
+  showLoggedInfoMessage,
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
 import {
+  latexdiffPackMessage,
   runPackLatexdiffvc,
   type LatexdiffPackResult,
 } from '@housekeeping/packLatexdiffvc';
@@ -47,12 +49,6 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-
-// Local file imports
-import {
-  getLatexdiffPackNotifications,
-  showLatexHousekeepingNotification,
-} from './latexHousekeepingNotifications';
 
 const log = createLog(CHANNEL);
 
@@ -256,10 +252,8 @@ async function runDiffAndOpen(
 // Turn pack/clean run results into user notifications. Folds the notification
 // derivation and display that every latexdiff-vc handler invoked together.
 function reportLatexdiff(result: LatexdiffPackResult): void {
-  const notification = getLatexdiffPackNotifications(result);
-  if (notification) {
-    void showLatexHousekeepingNotification(CHANNEL, notification);
-  }
+  const message = latexdiffPackMessage(result);
+  if (message) void showLoggedInfoMessage(CHANNEL, message);
 }
 
 export function registerLatexdiffCommands(

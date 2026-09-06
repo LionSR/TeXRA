@@ -79,6 +79,30 @@ export function taskGroupDisplayStatus(
     : group.status;
 }
 
+type TaskGroupLifecycleEntry = Extract<
+  StreamLogEntry,
+  {
+    type:
+      | typeof STREAM_LOG_ENTRY_TYPES.GROUP_START
+      | typeof STREAM_LOG_ENTRY_TYPES.GROUP_END;
+  }
+>;
+
+/**
+ * Whether an entry is a task-group lifecycle row: the one rule for what
+ * `upsertTaskGroupFromStreamLog` writes, so a caller that must know before
+ * the call (the session fold, which copies the array it is about to write)
+ * reads the same answer the reducer does.
+ */
+export function isTaskGroupLifecycleEntry(
+  entry: StreamLogEntry,
+): entry is TaskGroupLifecycleEntry {
+  return (
+    entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
+    entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END
+  );
+}
+
 /**
  * Apply one StreamLog entry to an existing task-group projection.
  *
@@ -92,12 +116,7 @@ export function upsertTaskGroupFromStreamLog(
   taskGroupIndex: Map<string, number>,
   entry: StreamLogEntry,
 ): boolean {
-  if (
-    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
-    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
-  ) {
-    return false;
-  }
+  if (!isTaskGroupLifecycleEntry(entry)) return false;
 
   const cachedIndex = taskGroupIndex.get(entry.id);
   const groupIndex =

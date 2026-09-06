@@ -107,7 +107,7 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
     policy: { kind: 'suppressed' },
   },
   showAgentConfigBanner: {
-    payload: { agentName: 'polish' },
+    payload: { agentName: 'polish', category: AgentCategory.ToolUse },
     policy: {
       kind: 'log',
       level: 'error',
@@ -1151,9 +1151,12 @@ describe('CLI run progress renderer', () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const host = createCliRuntimeHost(context({ outputFormat: 'text' }));
 
-      expect(host.emit('showAgentConfigBanner', { agentName: 'ghost' })).toBe(
-        true,
-      );
+      expect(
+        host.emit('showAgentConfigBanner', {
+          agentName: 'ghost',
+          category: AgentCategory.ToolUse,
+        }),
+      ).toBe(true);
 
       await host.close();
     });

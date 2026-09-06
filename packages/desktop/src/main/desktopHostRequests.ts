@@ -9,8 +9,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { SubscriptionRef } from 'effect';
-import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
-import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
+import type { SessionHandle } from '@agent/runtime';
+import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportStreamTranscript } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
@@ -27,7 +27,12 @@ import {
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import { listWorkspaceFilesOfType } from '@controllers/session/workspaceFileOptions';
+import {
+  latexdiffPackMessage,
+  runPackLatexdiffvc,
+} from '@housekeeping/packLatexdiffvc';
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
+import { LaTeXdiffService } from '@latex/latexdiff';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   cloneRoundIndexed,
@@ -35,9 +40,12 @@ import {
   type FileOpResult,
   type StreamTabId,
 } from '@shared/schemas';
-import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { Rejected, Unavailable } from '@shared/session/requestErrors';
+import {
+  Cancelled,
+  Rejected,
+  Unavailable,
+} from '@shared/session/requestErrors';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -48,6 +56,10 @@ import {
   SPILL_ARTIFACT_DELETED_MESSAGE,
 } from '@transcript/spillArtifacts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  createExternalLocation,
+  pathToLocation,
+} from '@utils/files/fileLocation';
 
 import {
   DESKTOP_DOCS_URL,
@@ -107,6 +119,8 @@ export interface DesktopHostRequests {
   dispose(): void;
 }
 
+const LATEXDIFF_CHANNEL = 'DesktopHostRequests';
+
 function operationLabel(operation: WorkflowFileOperation): {
   verb: string;
   gerund: string;
@@ -120,7 +134,7 @@ export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
   const { session, host, execution, logger } = options;
-  const stopObservingRecording = options.draftRequests.subscribe((recording) =>
+  const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
   const snapshots = session.snapshots;
@@ -139,22 +153,7 @@ export function createDesktopHostRequests(
 
   const runActions = createHostRunActions({
     session,
-    runExecutionRequest: (request, runOptions) =>
-      execution.runExecutionRequest(request, {
-        ...(runOptions?.preferHelperModel ? { preferHelperModel: true } : {}),
-      }),
-    runUntilStarted: async (request, runOptions) => {
-      let started = false;
-      await execution.runExecutionRequest(request, {
-        ...(runOptions.copilotRouteOverride
-          ? { copilotRouteOverride: runOptions.copilotRouteOverride }
-          : {}),
-        onRun: () => {
-          started = true;
-        },
-      });
-      return started;
-    },
+    runExecutionRequest: execution.runExecutionRequest,
     loadModelOptions: () => computeModelOptionsData(),
     // Only the "ask the user for a key" step is host-specific: on the
     // desktop that means opening the Models tab rather than a modal prompt.
@@ -174,16 +173,9 @@ export function createDesktopHostRequests(
     logError: (message, error) =>
       logger.error(message, { data: toLogData(error) }),
   });
-  const { getRunMetadata } = runActions;
+  const { getRunMetadata } = runActions.snapshotPort;
 
-  const snapshotPort = {
-    getRunMetadata,
-    getOutputFiles: (streamId: StreamTabId) =>
-      snapshots.getOutputFiles(streamId),
-    getKnownWorkspaceOutputPaths: (streamId: StreamTabId) =>
-      snapshots.getKnownFilePaths(streamId, { workspaceOnly: true }),
-    preload: (streamId: StreamTabId) => snapshots.preload([streamId]),
-  };
+  const { snapshotPort } = runActions;
 
   const listWorkspaceCandidateFiles = async (): Promise<string[]> => {
     const workspacePath = options.workspacePath;
@@ -285,18 +277,7 @@ export function createDesktopHostRequests(
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
     },
-    // Programmatic send with no composer behind it (the workflow-file
-    // "user modified the suggested output" note), so `acknowledge` is a
-    // no-op: there is no draft to hand back.
-    sendFollowUp: async (streamId, text) => {
-      await submitProgressFollowUp({
-        session,
-        streamId,
-        input: { text },
-        acknowledge: () => {},
-        showInfo: (message) => host.showInfoMessage(message),
-      });
-    },
+    sendFollowUp: runActions.sendFollowUp,
   });
 
   async function runWorkflowDiff(request: WorkflowDiffRequest): Promise<void> {
@@ -457,6 +438,66 @@ export function createDesktopHostRequests(
     }
   }
 
+  /**
+   * A refusal the user has to see. The renderer's settle path drops
+   * `Rejected` reasons (`sessionSurfaces.ts` `settleHost` early-returns), so
+   * a latexdiff refusal goes through the host's error dialog first, the way
+   * the extension's latexdiff commands report the same failures.
+   */
+  async function showRefusal(reason: string): Promise<Rejected> {
+    await host.showErrorMessage(reason);
+    return new Rejected({ reason });
+  }
+
+  /**
+   * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
+   * them: latexdiff-vc over the base file against a commit, and the pack
+   * and clean housekeeping of what it produced. The diff opens in the PDF
+   * tab through the build display, as a run's outputs do. The math markup
+   * is left to `diffCommandExecutor`, which reads the workspace's saved
+   * `LATEXDIFF_MATH_MARKUP` for every host.
+   */
+  async function latexdiffAgainstCommit(
+    action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
+    baseFile: string | undefined,
+    commit: string,
+  ): Promise<void> {
+    if (!baseFile) {
+      throw await showRefusal('Choose a base file first.');
+    }
+    const base = pathToLocation(baseFile);
+    if (action === 'latexdiffvc') {
+      const result = await new LaTeXdiffService(LATEXDIFF_CHANNEL).runDiffVc(
+        base,
+        commit,
+      );
+      if (!result.success) throw await showRefusal(result.message);
+      await host.openBuildDisplay(createExternalLocation(result.diffPath));
+      return;
+    }
+    // The workspace-relative base, as the extension passes: the collector
+    // resolves it from the workspace root. A filesystem failure here, a
+    // read-only Diffs directory or a locked artifact, reaches the renderer
+    // as a result its settle path drops, so it is reported the way the
+    // extension's latexdiff commands report the same failures, then
+    // rethrown so the request still settles as a failure.
+    let packed;
+    try {
+      packed = await runPackLatexdiffvc(
+        baseFile,
+        commit,
+        action === 'cleanLatexdiffvc',
+      );
+    } catch (error) {
+      await host.showErrorMessage(
+        `Error packing LaTeX diff: ${toErrorMessage(error)}`,
+      );
+      throw error;
+    }
+    const message = latexdiffPackMessage(packed);
+    if (message) await host.showInfoMessage(message);
+  }
+
   /** The Tools sheet's verbs over the launcher's base and edited files. */
   async function latexdiffs(
     request: Extract<HostRequest, { kind: 'latexdiffs' }>,
@@ -467,14 +508,17 @@ export function createDesktopHostRequests(
       case 'latexdiffvc':
       case 'packLatexdiffvc':
       case 'cleanLatexdiffvc':
-        throw notOnDesktop('latexdiff against a commit');
+        await latexdiffAgainstCommit(
+          request.action,
+          baseFile,
+          request.commit ?? 'HEAD',
+        );
+        return;
       default:
         break;
     }
     if (!baseFile || !editedFile) {
-      throw new Rejected({
-        reason: 'Choose a base file and an edited file first.',
-      });
+      throw await showRefusal('Choose a base file and an edited file first.');
     }
     switch (request.action) {
       case 'compare':
@@ -488,41 +532,6 @@ export function createDesktopHostRequests(
         return;
       case 'latexdiff':
         await runLatexdiffFile(baseFile, editedFile);
-        return;
-    }
-  }
-
-  /** An output file's verbs on a workflow run's file list. */
-  async function fileAction(
-    request: Extract<HostRequest, { kind: 'fileAction' }>,
-  ): Promise<void> {
-    const base = request.base ?? undefined;
-    switch (request.action) {
-      case 'compareOriginal':
-        await workflowFileActions.compareOriginal(
-          request.file,
-          base,
-          request.streamId,
-        );
-        return;
-      case 'comparePrevious':
-        await workflowFileActions.comparePrevious(
-          request.file,
-          request.prev ?? undefined,
-        );
-        return;
-      case 'accept':
-        await workflowFileActions.acceptFile(
-          request.file,
-          base,
-          request.streamId,
-        );
-        return;
-      case 'merge':
-        await workflowFileActions.mergeFile(request.file, base);
-        return;
-      case 'latexdiff':
-        await workflowFileActions.latexdiffFile(request.file, base);
         return;
     }
   }
@@ -577,7 +586,6 @@ export function createDesktopHostRequests(
 
   const notOnDesktop = (what: string) =>
     new Rejected({ reason: `${what} is not available in the desktop app.` });
-
   async function handle(
     request: HostRequest,
     port: string,
@@ -600,7 +608,6 @@ export function createDesktopHostRequests(
         return done;
       }
       case 'openTaskStorage':
-        stream(request.streamId);
         await workflowFileActions.openTaskStorage(request.streamId);
         return done;
       case 'exportTranscript':
@@ -622,12 +629,10 @@ export function createDesktopHostRequests(
         await runActions.useOwnApiKey(request);
         return done;
       case 'latexdiff':
-        stream(request.streamId);
         await workflowRunActions.diffStream(request.streamId);
         return done;
       case 'pack':
       case 'clean':
-        stream(request.streamId);
         await workflowRunActions.runFileOperation(
           request.streamId,
           request.kind,
@@ -639,7 +644,7 @@ export function createDesktopHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return options.draftRequests.handle(session, request, port);
+        return draftRequests.handle(request, port);
       case 'popOut':
       case 'popBack':
         throw notOnDesktop('Pop-out to editor');
@@ -664,7 +669,7 @@ export function createDesktopHostRequests(
           throw notOnDesktop(`A picker for ${request.fileType} files`);
         }
         const paths = await options.files.pickFiles(request.fileType);
-        if (paths === null) throw new Rejected({ reason: 'No files chosen.' });
+        if (paths === null) throw new Cancelled();
         return { kind: 'files', paths };
       }
       case 'useCurrentFile':
@@ -678,30 +683,9 @@ export function createDesktopHostRequests(
             request.category,
           ),
         };
-      case 'launch': {
-        const { launch: form } = request;
-        await execution.handleExecute(
-          buildMainViewExecuteMessage({
-            sessionType: form.sessionType,
-            agent: form.agent,
-            model: form.model,
-            instruction: request.instruction,
-            multiFiles: {
-              inputFiles: form.inputFiles,
-              contextFiles: form.contextFiles,
-              mediaFiles: form.mediaFiles,
-              outputFiles: form.outputFiles,
-            },
-            checkboxValues: form,
-            session: {
-              launchTarget: form.launchTarget,
-              teamId: form.selectedTeamId || undefined,
-              workingDirectory: form.workingDirectory || undefined,
-            },
-          }),
-        );
+      case 'launch':
+        await execution.runValidated(await prepareSurfaceLaunch(request, host));
         return done;
-      }
       case 'compileInputPdf':
         throw notOnDesktop('Compiling the input PDF');
       case 'extractFigures':
@@ -714,22 +698,11 @@ export function createDesktopHostRequests(
         );
         return done;
       case 'fileAction':
-        stream(request.streamId);
-        await fileAction(request);
+        await workflowFileActions.handle(request);
         return done;
-      case 'restoreProposalConfig': {
-        const parsed = AgentConfigSchema.safeParse(request.proposal);
-        if (!parsed.success) {
-          logger.warn('Invalid proposal config', {
-            data: { errors: parsed.error.issues },
-          });
-          throw new Rejected({
-            reason: 'This proposal does not carry a restorable setup.',
-          });
-        }
-        restoreIntoLauncher(parsed.data);
+      case 'restoreProposalConfig':
+        await restoreIntoLauncher(runActions.restoreProposal(request.proposal));
         return done;
-      }
       case 'apiKeyBanner':
         if (request.action === 'set') {
           postDesktopSettingsView(
@@ -780,10 +753,7 @@ export function createDesktopHostRequests(
 
   return {
     handle,
-    closePort: (port) => options.draftRequests.cancel(session, port),
-    dispose() {
-      stopObservingRecording();
-      options.draftRequests.cancel(session);
-    },
+    closePort: draftRequests.closePort,
+    dispose: draftRequests.dispose,
   };
 }

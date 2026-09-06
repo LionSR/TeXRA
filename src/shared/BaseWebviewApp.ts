@@ -4,10 +4,6 @@ import { LitElement } from 'lit';
 // Local imports - shared handlers
 import { COMMON_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import {
-  CommonViewMessageSchema,
-  type StateRestoreMessage,
-} from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 
@@ -21,47 +17,9 @@ import { installToolbarTooltips } from '@shared/litControllers/TooltipController
  */
 
 abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
-  protected debugMode = false;
-
   private readonly messageListener = (event: MessageEvent) => {
-    if (!this.handleCommonMessage(event.data)) {
-      this.handleMessage(event.data as TMessage);
-    }
+    this.handleMessage(event.data as TMessage);
   };
-
-  /**
-   * Handle the commands every webview app shares, reporting whether this class
-   * consumed the message. An unparseable payload and any command not listed
-   * below (including SWITCH_VIEW) report `false` so the subclass's
-   * `handleMessage` still sees them.
-   */
-  private handleCommonMessage(raw: unknown): boolean {
-    const result = CommonViewMessageSchema.safeParse(raw);
-    if (!result.success) {
-      this.logSchemaError(
-        '[CommonMessage] Schema validation failed.',
-        result.error,
-      );
-      return false;
-    }
-
-    switch (result.data.command) {
-      case COMMON_COMMANDS.DEBUG_MODE_SET:
-        this.debugMode = result.data.debugMode;
-        return true;
-      case COMMON_COMMANDS.STATE_RESTORE:
-        this.onStateRestore(result.data);
-        return true;
-      // THEME_SET carries no work here: the theme reaches these apps through
-      // the host's own document classes (`@shared/wa/waColorScheme` observes
-      // them), so the message is only consumed so it stops before the subclass.
-      case COMMON_COMMANDS.THEME_SET:
-      case COMMON_COMMANDS.WEBVIEW_READY:
-        return true;
-      default:
-        return false;
-    }
-  }
 
   /**
    * True when this webview is mounted by the Electron desktop renderer.
@@ -81,16 +39,6 @@ abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
   }
 
   /**
-   * Log schema validation errors in debug mode.
-   */
-  protected logSchemaError(context: string, error: unknown): void {
-    if (!this.debugMode) {
-      return;
-    }
-    console.warn(context, error);
-  }
-
-  /**
    * Dispatcher `onError` reporter: names the command the raw message claimed
    * so a validation failure points at one command instead of the whole union.
    * `appLabel` is the bracketed app tag (e.g. `[ProgressApp]`).
@@ -104,17 +52,10 @@ abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
       raw && typeof raw === 'object' && 'command' in raw
         ? String((raw as { command: unknown }).command)
         : 'unknown';
-    this.logSchemaError(
+    console.warn(
       `${appLabel} Message validation failed for command "${command}".`,
       error,
     );
-  }
-
-  /**
-   * Handle state restoration from the extension host.
-   */
-  protected onStateRestore(_message: StateRestoreMessage): void {
-    // Override in subclasses if needed.
   }
 
   override connectedCallback(): void {
