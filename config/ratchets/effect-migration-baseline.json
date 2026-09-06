@@ -203,8 +203,6 @@
       "src/tools/arxiv/ArxivSearchTool.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 2,
       "src/tools/lean/direct/leanServer.ts": 1,
-      "src/tools/web/WebFetchTool.ts": 2,
-      "src/tools/zotero/bbtClient.ts": 1,
       "src/utils/files/relativeFS.ts": 2
     }
   },
