@@ -37,6 +37,7 @@ import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
@@ -1881,11 +1882,15 @@ registerBuiltinSlashCommands({
   },
   onModelAccessSelect: (selection) => {
     if (selection.provider === 'kimi-code' && selection.state === 'on') {
-      return updateCliModelAccess(HARNESS_CLI_CONTEXT, selection, {
-        writeProgress: appendHarnessAssistantTranscript,
-      }).then((access) => {
-        appendHarnessAssistantTranscript(access.message);
-      });
+      return effectRuntime()
+        .runPromise(
+          updateCliModelAccess(HARNESS_CLI_CONTEXT, selection, {
+            writeProgress: appendHarnessAssistantTranscript,
+          }),
+        )
+        .then((access) => {
+          appendHarnessAssistantTranscript(access.message);
+        });
     }
     appendHarnessAssistantTranscript(
       `${selection.provider} preference set to ${selection.state}.`,

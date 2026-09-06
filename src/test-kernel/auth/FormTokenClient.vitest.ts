@@ -4,31 +4,12 @@ import { z } from 'zod';
 
 import {
   exchangeAuthorizationCode,
-  oauthTokenErrorKind,
   refreshOAuthTokens,
   type OAuthFormEndpoint,
 } from '@auth/oauth/formTokenClient';
 import { decodeJwtClaimsWithSchema } from '@auth/oauth/jwtDecode';
-import { postOAuth } from '@auth/oauth/oauthRequest';
+import { oauthTokenErrorKind, postOAuth } from '@auth/oauth/oauthRequest';
 import { stubJsonFetch } from '@test/support/fetchTestUtils';
-
-class TestAuthError extends Error {
-  readonly kind: 'fatal' | 'expired' | 'transient' | 'config' | 'pending';
-  readonly status?: number;
-  readonly needsReauth = false;
-
-  constructor(
-    message: string,
-    kind: TestAuthError['kind'],
-    status?: number,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = 'TestAuthError';
-    this.kind = kind;
-    this.status = status;
-  }
-}
 
 const TokenSchema = z.object({
   access_token: z.string().min(1),
@@ -40,7 +21,6 @@ const TokenSchema = z.object({
 const ENDPOINT: OAuthFormEndpoint<z.infer<typeof TokenSchema>> = {
   tokenUrl: 'https://example.test/token',
   clientId: 'client-1',
-  ErrorType: TestAuthError,
   tokenResponseSchema: TokenSchema,
 };
 
@@ -57,11 +37,13 @@ describe('form token endpoint (declarative)', () => {
       expires_in: 3600,
     });
 
-    const tokens = await exchangeAuthorizationCode(ENDPOINT, {
-      code: 'code-1',
-      verifier: 'verifier-1',
-      redirectUri: 'http://127.0.0.1/callback',
-    });
+    const tokens = await Effect.runPromise(
+      exchangeAuthorizationCode(ENDPOINT, {
+        code: 'code-1',
+        verifier: 'verifier-1',
+        redirectUri: 'http://127.0.0.1/callback',
+      }),
+    );
 
     expect(tokens.access_token).toBe('access');
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -82,7 +64,9 @@ describe('form token endpoint (declarative)', () => {
       expires_in: 1800,
     });
 
-    const tokens = await refreshOAuthTokens(ENDPOINT, 'old-refresh');
+    const tokens = await Effect.runPromise(
+      refreshOAuthTokens(ENDPOINT, 'old-refresh'),
+    );
     expect(tokens.access_token).toBe('new-access');
     const body = new URLSearchParams(String(fetchMock.mock.calls[0]![1]?.body));
     expect(body.get('grant_type')).toBe('refresh_token');
@@ -95,8 +79,11 @@ describe('form token endpoint (declarative)', () => {
       vi.fn(async () => new Response('nope', { status: 401 })),
     );
 
-    await expect(refreshOAuthTokens(ENDPOINT, 'bad')).rejects.toMatchObject({
-      name: 'TestAuthError',
+    await expect(
+      Effect.runPromise(refreshOAuthTokens(ENDPOINT, 'bad')),
+    ).rejects.toMatchObject({
+      _tag: 'OAuthHttpError',
+      message: 'Token refresh failed (HTTP 401): nope',
       kind: 'fatal',
       status: 401,
     });

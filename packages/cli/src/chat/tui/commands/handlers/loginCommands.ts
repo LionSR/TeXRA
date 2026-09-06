@@ -28,6 +28,7 @@ import {
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   ACCOUNT_OUTCOME,
   CHATGPT_AUTH,
@@ -92,11 +93,13 @@ async function loginToSubscription(
   output: SlashCommandOutput,
   signal: AbortSignal,
 ): Promise<void> {
-  const account = await signInCliSubscription(providerId, args, {
-    writeProgress: (message) =>
-      output.writeProgress(message, { copyable: true }),
-    signal,
-  });
+  const account = await effectRuntime().runPromise(
+    signInCliSubscription(providerId, args, {
+      writeProgress: (message) =>
+        output.writeProgress(message, { copyable: true }),
+    }),
+    { signal },
+  );
   const update = await setCliSubscriptionPreference(providerId, true);
   const auth = SUBSCRIPTION_AUTH_COPY[providerId];
   output.appendOutcome(
@@ -115,14 +118,16 @@ async function loginToTexraAccount(
   if (accountWarning) output.writeProgress(accountWarning);
 
   const session = args.device
-    ? await signInCliSupabaseDeviceCode({
-        onDeviceCode: (authorization) => {
-          output.writeProgress(formatCliDeviceAuthMessage(authorization), {
-            copyable: true,
-          });
-        },
-        signal,
-      })
+    ? await effectRuntime().runPromise(
+        signInCliSupabaseDeviceCode({
+          onDeviceCode: (authorization) => {
+            output.writeProgress(formatCliDeviceAuthMessage(authorization), {
+              copyable: true,
+            });
+          },
+        }),
+        { signal },
+      )
     : await signInCliSupabase({
         provider: args.provider,
         openBrowser: !args.noBrowser,

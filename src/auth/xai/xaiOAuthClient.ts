@@ -1,10 +1,10 @@
 /**
  * Network calls against xAI's auth endpoints for the Grok OAuth flow.
  *
- * Token grants share a declarative {@link OAuthFormEndpoint} and the
- * Promise-facing helpers from `@auth/oauth` for the coordinator. The RFC 8628
- * device form posts are Effect programs the device-login flow runs on one
- * fiber.
+ * Token grants share a declarative {@link OAuthFormEndpoint} and the shared
+ * grant programs; the RFC 8628 device form posts are the flow's own. Every
+ * export is an Effect program: the device-login flow runs them on one fiber
+ * and the session coordinator runs the grants at its Promise boundary.
  */
 // Third-party imports
 import { Data, Effect } from 'effect';
@@ -15,13 +15,13 @@ import { isObject } from '@utils/core';
 import { DeviceAuthorizationPending } from '../oauth/deviceAuthorization';
 import {
   exchangeAuthorizationCode as exchangeFormAuthorizationCode,
-  oauthTokenErrorKind,
   refreshOAuthTokens,
   type OAuthFormEndpoint,
 } from '../oauth/formTokenClient';
 import {
   OAuthHttpError,
   oauthHttpError,
+  oauthTokenErrorKind,
   parseOAuthJson,
   postOAuth,
 } from '../oauth/oauthRequest';
@@ -33,7 +33,6 @@ import {
   XAI_TOKEN_URL,
 } from './xaiConstants';
 import {
-  XaiAuthError,
   XaiDeviceCodeSchema,
   XaiTokenResponseSchema,
   type XaiTokenResponse,
@@ -50,7 +49,6 @@ const FORM_HEADERS = {
 const XAI_FORM_ENDPOINT: OAuthFormEndpoint<XaiTokenResponse> = {
   tokenUrl: XAI_TOKEN_URL,
   clientId: XAI_CLIENT_ID,
-  ErrorType: XaiAuthError,
   tokenResponseSchema: XaiTokenResponseSchema,
   requestTimeoutMs: REQUEST_TIMEOUT_MS,
 };
@@ -69,17 +67,17 @@ class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
   readonly status: number;
 }> {}
 
-export function exchangeAuthorizationCode(params: {
-  code: string;
-  verifier: string;
-  redirectUri: string;
-}): Promise<XaiTokenResponse> {
-  return exchangeFormAuthorizationCode(XAI_FORM_ENDPOINT, params);
-}
+export const exchangeAuthorizationCode = Effect.fn(
+  'xaiOAuthClient.exchangeAuthorizationCode',
+)(function* (params: { code: string; verifier: string; redirectUri: string }) {
+  return yield* exchangeFormAuthorizationCode(XAI_FORM_ENDPOINT, params);
+});
 
-export function refreshTokens(refreshToken: string): Promise<XaiTokenResponse> {
-  return refreshOAuthTokens(XAI_FORM_ENDPOINT, refreshToken);
-}
+export const refreshTokens = Effect.fn('xaiOAuthClient.refreshTokens')(
+  function* (refreshToken: string) {
+    return yield* refreshOAuthTokens(XAI_FORM_ENDPOINT, refreshToken);
+  },
+);
 
 function postForm(url: string, body: URLSearchParams) {
   return postOAuth({

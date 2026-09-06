@@ -1,21 +1,18 @@
 /**
- * Effect-native POSTs against OAuth endpoints, for the device-code flows.
+ * Effect-native POSTs against OAuth endpoints, shared by the token grants
+ * (`formTokenClient.ts`) and the device-code flows.
  *
  * One request is one fiber: headers and body are read under one
  * `Effect.timeoutOrElse`, and fiber interruption reaches `fetch` and the body
  * stream through the `AbortSignal` that `Effect.tryPromise` hands the request.
  * Expected transport failures are yieldable tagged errors carrying the
- * provider-facing message; the Promise edge of each flow re-mints them as that
- * provider's auth error.
- *
- * Token grants (code exchange, refresh) still go through the Promise-facing
- * `formTokenClient` because their callers are the Promise coordinators.
+ * user-facing message; the flows above pass them up unchanged and the hosts
+ * render `message` at their run edge.
  */
 import { Data, Duration, Effect } from 'effect';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { oauthTokenErrorKind } from './formTokenClient';
 import type { z } from 'zod';
 import type { SubscriptionOAuthErrorKind } from './subscriptionOAuthError';
 
@@ -23,7 +20,7 @@ import type { SubscriptionOAuthErrorKind } from './subscriptionOAuthError';
  * The endpoint could not be reached, or did not answer (headers and body)
  * within the timeout.
  */
-export class OAuthNetworkError extends Data.TaggedError('OAuthNetworkError')<{
+class OAuthNetworkError extends Data.TaggedError('OAuthNetworkError')<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -36,15 +33,28 @@ export class OAuthHttpError extends Data.TaggedError('OAuthHttpError')<{
 }> {}
 
 /** A 2xx body that did not match the expected schema. */
-export class OAuthUnexpectedResponse extends Data.TaggedError(
+class OAuthUnexpectedResponse extends Data.TaggedError(
   'OAuthUnexpectedResponse',
 )<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
 
+/** Every failure one OAuth request can raise. */
+export type OAuthRequestError =
+  OAuthNetworkError | OAuthHttpError | OAuthUnexpectedResponse;
+
+/** 4xx grant rejections are the session's end; everything else may pass. */
+export function oauthTokenErrorKind(
+  status: number,
+): SubscriptionOAuthErrorKind {
+  return status === 400 || status === 401 || status === 403
+    ? 'fatal'
+    : 'transient';
+}
+
 /** A fully read response: status and the body text. */
-interface OAuthResponse {
+export interface OAuthResponse {
   readonly status: number;
   readonly ok: boolean;
   readonly text: string;

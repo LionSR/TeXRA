@@ -14,6 +14,7 @@ import {
   type SubscriptionAccount,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
+import { effectRuntime } from '@platform/processRuntime';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 
 import { withCliAuthError } from './cliAuthError';
@@ -58,10 +59,12 @@ export function defineSubscriptionAuthCommand(
     const writeProgress = cliProgressWriter(context);
 
     const signInResult = await withCliAuthError(() =>
-      signInCliSubscription(
-        options.providerId,
-        { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
-        { writeProgress },
+      effectRuntime().runPromise(
+        signInCliSubscription(
+          options.providerId,
+          { ...init, device: shouldUseSubscriptionDeviceCode(context, init) },
+          { writeProgress },
+        ),
       ),
     );
     if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
