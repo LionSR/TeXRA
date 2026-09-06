@@ -16,15 +16,12 @@
 // Effect. No more pass-throughs nor adapters"; PRD R1 and execution rule 3
 // as amended): there are no temporary adapters, so a separate hard check
 // fails on the presence of any `@adapter-until` marker in production scope,
-// not on its expiry; and the `Effect.run*` row separates runs at R1's three
-// boundary kinds (a host entry under packages/extension, packages/desktop,
-// or packages/cli; a tool `execute()` contract, until lane D; the SDK's
-// public API under packages/agent/src) from runs below them. A run below the
-// boundary is not refused — a refusal made the base branch un-greenable once
-// the first wave landed — but it is never anonymous: `--update` records it in
-// `debtLanes` as UNASSIGNED and the check fails on UNASSIGNED, so admitting
-// one is a deliberate act that names the lane deleting it, in the same PR.
-// The count stays shrink-only like every other row. Neither
+// not on its expiry; and the `Effect.run*` row admits a new file through
+// `--update` only when its path is one of R1's three boundary kinds (a host
+// entry under packages/extension, packages/desktop, or packages/cli; a tool
+// `execute()` contract, src/tools/**/*Tool.ts, until lane D; the SDK's
+// public API under packages/agent/src). Baseline rows outside those paths
+// are wave-0 debt the lanes pay down: frozen as-is, never widened. Neither
 // check can recognize an adapter written without a marker, since "adapter"
 // is not mechanically recognizable; that stays a review obligation.
 //
@@ -100,7 +97,7 @@ function isBoundaryPath(file, toolExecuteFiles) {
   );
 }
 
-const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them, or — when this PR deliberately leaves the run here — name the lane that deletes it in the baseline's debtLanes map`;
+const BELOW_BOUNDARY = `below the boundary: only ${BOUNDARY_PATHS_TEXT} may run an Effect (owner ruling 2026-09-06, ${PRD} R1); convert this file and its callers to Effect, do not allowlist it`;
 
 const ROW_PLATFORM = 'platform()';
 const ROW_SET_SERVICES = 'setServices()';
@@ -156,33 +153,11 @@ const SEMANTICS =
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Sources whose `runsOnlyInExecute` the survey must report exactly. */
+/** Sources whose `declaresExecute` the survey must report exactly. */
 const EXECUTE_CASES = [
-  // The run sits inside `execute()` on the class that declares the tool
-  // contract: this is boundary kind (b), and the only shape that is.
-  [
-    'class T extends defineTool({ name: "t" }) { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
-    true,
-  ],
-  // The same method on a class that is not a tool: a helper's `execute` is
-  // its own method, not the tool's run edge.
-  ['class H { execute(i) { return rt().runPromise(this.run(i)); } }\n', false],
-  // A tool class, but the run is elsewhere in the file.
-  [
-    'class T extends defineTool({ name: "t" }) { execute() {} }\nrt().runPromise(program);\n',
-    false,
-  ],
-  // A class with an `execute()` method, but the run is elsewhere in the file.
-  ['class H { execute() {} }\nrt().runPromise(program);\n', false],
-  // An object literal's `execute` shorthand is not a tool edge.
-  ['const o = { execute() { return rt().runPromise(p); } };\n', false],
-  // A free function named execute is not a tool edge.
-  ['function execute() { return rt().runPromise(p); }\n', false],
-  // No run at all: nothing to admit.
-  [
-    'class T extends defineTool({ name: "t" }) { execute(i) { return i; } }\n',
-    false,
-  ],
+  ['class T { protected execute(i) { return this.run(i); } }\n', true],
+  ['const o = { execute(i) { return i; } };\n', false],
+  ['function execute(i) { return i; }\n', false],
 ];
 
 /** Production TypeScript files, repo-relative and '/'-joined, sorted. */
@@ -423,10 +398,9 @@ function surveySource(text, fileName) {
         callee.expression.name.text === 'Effect'));
   let effectImporter = false;
   let catches = 0;
-  let runsInExecute = 0;
-  let runsOutsideExecute = 0;
+  let declaresExecute = false;
 
-  const visit = (node, inExecute) => {
+  const visit = (node) => {
     const specifier = moduleSpecifier(node);
     if (specifier != null) {
       if (SUPERSEDED_PACKAGES.includes(specifier)) bump(importRow(specifier));
@@ -437,11 +411,7 @@ function surveySource(text, fileName) {
       const name = calleeName(node);
       if (isPlatformRead(callee)) bump(ROW_PLATFORM);
       if (name === 'setServices') bump(ROW_SET_SERVICES);
-      if (name != null && RUN_BOUNDARY_NAMES.has(name)) {
-        bump(ROW_RUN_BOUNDARY);
-        if (inExecute) runsInExecute += 1;
-        else runsOutsideExecute += 1;
-      }
+      if (name != null && RUN_BOUNDARY_NAMES.has(name)) bump(ROW_RUN_BOUNDARY);
       if (
         name === 'catch' &&
         ts.isPropertyAccessExpression(callee) &&
@@ -457,58 +427,26 @@ function surveySource(text, fileName) {
       bump(ROW_ABORT_CONTROLLER);
     } else if (ts.isCatchClause(node)) {
       catches += 1;
+    } else if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+      // A tool's run edge is `execute()` on the tool class; an object
+      // literal's `execute` shorthand is the same AST node kind and is not.
+      if (
+        node.members.some(
+          (member) =>
+            ts.isMethodDeclaration(member) &&
+            ts.isIdentifier(member.name) &&
+            member.name.text === 'execute',
+        )
+      ) {
+        declaresExecute = true;
+      }
     }
-    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
-      // A tool's run edge is `execute()` on the tool class, and the tool
-      // class is the one that extends `defineTool(...)` — every tool in the
-      // repo is declared that way, so the contract is checkable rather than
-      // guessed from a method name. Recurse with the flag set only through
-      // that member's subtree, so a run elsewhere in the file is still
-      // counted as below the boundary: in a sibling helper class, and in a
-      // helper's own `execute` too, since a helper is not the tool. An
-      // object literal's `execute` shorthand is the same AST node kind and
-      // never sets the flag, because it is not a class member.
-      const isTool = extendsDefineTool(node);
-      ts.forEachChild(node, (child) =>
-        visit(
-          child,
-          inExecute ||
-            (isTool &&
-              ts.isMethodDeclaration(child) &&
-              ts.isIdentifier(child.name) &&
-              child.name.text === 'execute'),
-        ),
-      );
-      return;
-    }
-    ts.forEachChild(node, (child) => visit(child, inExecute));
+    ts.forEachChild(node, visit);
   };
-  visit(sourceFile, false);
+  visit(sourceFile);
 
   if (effectImporter && catches > 0) counts.set(ROW_CATCH, catches);
-  // A file is a tool run edge when it runs Effects and every one of them sits
-  // inside an `execute()` class method — not merely when such a method exists.
-  const runsOnlyInExecute = runsInExecute > 0 && runsOutsideExecute === 0;
-  return { counts, runsOnlyInExecute };
-}
-
-/**
- * Whether a class declares the tool contract: `class X extends defineTool({
- * ... })`. Every tool in `src/tools/` is written that way, which is what
- * makes "is this the tool class?" a question the AST can answer instead of a
- * guess from the name of a method.
- */
-function extendsDefineTool(node) {
-  return (node.heritageClauses ?? []).some(
-    (clause) =>
-      clause.token === ts.SyntaxKind.ExtendsKeyword &&
-      clause.types.some(
-        (type) =>
-          ts.isCallExpression(type.expression) &&
-          ts.isIdentifier(type.expression.expression) &&
-          type.expression.expression.text === 'defineTool',
-      ),
-  );
+  return { counts, declaresExecute };
 }
 
 /** Fail the ratchet itself if the classifier regresses. */
@@ -607,11 +545,11 @@ function surveyTree(files) {
   for (const file of files) {
     const text = readFileSync(join(rootDir, file), 'utf8');
     texts.set(file, text);
-    const { counts, runsOnlyInExecute } = surveySource(text, file);
+    const { counts, declaresExecute } = surveySource(text, file);
     for (const [row, count] of counts) {
       rows[row][file] = count;
     }
-    if (runsOnlyInExecute && file.startsWith(BOUNDARY_TOOL_ROOT)) {
+    if (declaresExecute && file.startsWith(BOUNDARY_TOOL_ROOT)) {
       toolExecuteFiles.add(file);
     }
   }
@@ -670,25 +608,6 @@ function unassignedDebt(current, lanes, toolExecuteFiles) {
         lane === UNASSIGNED_LANE
       );
     });
-}
-
-/**
- * Lane entries the register no longer needs: a file the map names that is no
- * longer below the boundary — converted, moved into a recognized `execute()`,
- * or deleted. `diffRows` cannot see this, because a run that merely moves
- * inside its own file leaves the counted total untouched; only the lane map
- * goes stale. Rejecting it keeps the register a statement about the debt that
- * exists now rather than an archive of debt that once did.
- */
-function staleDebtLanes(current, lanes, toolExecuteFiles) {
-  const below = new Set(
-    Object.keys(current).filter(
-      (file) => !isBoundaryPath(file, toolExecuteFiles),
-    ),
-  );
-  return Object.keys(lanes ?? {})
-    .filter((file) => !below.has(file))
-    .toSorted(compareCodePoints);
 }
 
 /** Fail the ratchet itself if the marker scan or the boundary gate regresses. */
@@ -751,11 +670,9 @@ function selfTestBoundaryAndMarkers() {
   }
 
   for (const [text, expected] of EXECUTE_CASES) {
-    if (
-      surveySource(text, 'src/tools/probe.ts').runsOnlyInExecute !== expected
-    ) {
+    if (surveySource(text, 'src/tools/probe.ts').declaresExecute !== expected) {
       console.error(
-        `runsOnlyInExecute self-test failed for ${JSON.stringify(text)}`,
+        `declaresExecute self-test failed for ${JSON.stringify(text)}`,
       );
       process.exit(1);
     }
@@ -795,23 +712,6 @@ function selfTestBoundaryAndMarkers() {
     console.error('unassignedDebt self-test failed');
     process.exit(1);
   }
-  const stale = staleDebtLanes(
-    debtRow,
-    {
-      'src/agent/runtime/newRunner.ts': UNASSIGNED_LANE,
-      'src/tools/goal/goalStore.ts': 'lane D',
-      'src/tools/lean/lspTools.ts': 'Lean LSP follow-up',
-      'packages/cli/src/main.ts': 'host entry',
-    },
-    new Set(),
-  );
-  if (
-    JSON.stringify(stale) !==
-    JSON.stringify(['packages/cli/src/main.ts', 'src/tools/lean/lspTools.ts'])
-  ) {
-    console.error('staleDebtLanes self-test failed:', JSON.stringify(stale));
-    process.exit(1);
-  }
 }
 
 const BASELINE_MISSING = `Baseline missing: ${baselinePath}. Restore it from git; it cannot be regenerated from scratch, because the lane names in its debtLanes map are written by hand and --update cannot recover them.`;
@@ -848,17 +748,14 @@ function readBaseline() {
       }
     }
   }
-  // Absent means an empty register, which is the end state the migration is
-  // aiming at: no run below a boundary, so no lane to name. writeBaseline
-  // omits the key in exactly that case, so the two must agree.
-  const debtLanes = parsed?.debtLanes ?? {};
+  const debtLanes = parsed?.debtLanes;
   if (
+    debtLanes == null ||
     typeof debtLanes !== 'object' ||
-    Array.isArray(debtLanes) ||
     Object.values(debtLanes).some((lane) => typeof lane !== 'string')
   ) {
     throw new Error(
-      `Baseline debtLanes is not a map of file to lane name: ${baselinePath}. Run --update, then name each lane.`,
+      `Baseline debtLanes missing or not a map of file to lane name: ${baselinePath}. Run --update, then name each lane.`,
     );
   }
   if (parsed.semantics !== SEMANTICS) {
@@ -876,13 +773,11 @@ function writeBaseline(rows, debtLanes) {
   writeFileSync(
     baselinePath,
     `${JSON.stringify(
-      Object.keys(debtLanes).length === 0
-        ? { semantics: SEMANTICS, rows: sortedRows }
-        : {
-            semantics: SEMANTICS,
-            rows: sortedRows,
-            debtLanes: sortObject(debtLanes),
-          },
+      {
+        semantics: SEMANTICS,
+        rows: sortedRows,
+        debtLanes: sortObject(debtLanes),
+      },
       null,
       2,
     )}\n`,
@@ -1039,26 +934,6 @@ function main() {
     }
     console.error(
       `\nName the lane that deletes each one in the baseline's debtLanes map (replace ${UNASSIGNED_LANE}), or convert the file and its callers in this PR.`,
-    );
-  }
-
-  const staleLanes = staleDebtLanes(
-    rows[ROW_RUN_BOUNDARY],
-    debtLanes,
-    toolExecuteFiles,
-  );
-  if (staleLanes.length > 0) {
-    failed = true;
-    console.error(
-      `\nEffect migration ratchet failed: debtLanes names ${staleLanes.length} file(s) that are no longer below the boundary.`,
-    );
-    for (const file of staleLanes) {
-      console.error(
-        `  - ${file}: ${debtLanes[file]} — the debt is gone, the entry is not.`,
-      );
-    }
-    console.error(
-      '\nGood news; lock it in: run `node scripts/check-effect-migration-ratchet.mjs --update` and commit the baseline in this PR.',
     );
   }
 
