@@ -1,0 +1,15 @@
+{
+  "name": "texra-agent-effect-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Runs @texra-ai/agent/effect from a packed tarball, as a consumer would",
+  "scripts": {
+    "start": "node effectSession.mjs"
+  },
+  "dependencies": {
+    "@texra-ai/agent": "file:texra-ai-agent-0.40.9.tgz",
+    "effect": "4.0.0-rc.112",
+    "zod": "^4.4.3"
+  }
+}

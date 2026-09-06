@@ -1,22 +1,26 @@
+/**
+ * `@texra-ai/agent` — the package's Promise surface, and nothing else.
+ *
+ * This module is the boundary the Effect migration's rule R1 names
+ * (`docs/prds/2026-08-26-effect-4-runtime-migration.md`, §7 R1, boundary
+ * kind 3: the published SDK speaks Promises). Every decision this package
+ * makes is stated once, in Effect, on `@texra-ai/agent/effect`; what
+ * follows renders those services as Promises and AsyncIterables and adds no
+ * logic of its own. Every `Effect.runPromise` / `runFork` in the package is
+ * here and nowhere below it.
+ */
 // Third-party imports
-import { Effect, Fiber, Stream } from 'effect';
+import { Effect, Exit, Fiber, Stream } from 'effect';
 
 // Local imports - agent runtime
 //
-// Values, and types used only inside function bodies, come through the curated
-// `@agent/runtime` barrel rather than by module path, so this package stops
-// pinning the runtime's internal file layout — the same fold-in the three hosts
-// took in #10011. These never reach the emitted declarations, so they carry no
-// provider-type leak risk.
-import type { AgentEvent, AgentTrace } from '@agent/trace';
-import { loadAgents, resolveAgent } from '@agent/index';
-import {
-  closeSession as closeRuntimeSession,
-  openSessionAsync,
-  runAgent as runValidatedAgent,
-  type AgentRunHandle as RuntimeAgentRunHandle,
-  type SessionHandle as RuntimeSessionHandle,
-} from '@agent/runtime';
+// Values, and types used only inside function bodies, come through the
+// curated `@agent/runtime` barrel rather than by module path, so this
+// package stops pinning the runtime's internal file layout — the same
+// fold-in the three hosts took in #10011. These never reach the emitted
+// declarations, so they carry no provider-type leak risk.
+import type { AgentEvent } from '@agent/trace';
+import { closeSession as closeOwnedSession } from '@agent/runtime';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 
 // `AgentFlowResult` is deliberately sourced from its own module rather than
@@ -28,31 +32,17 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 // `scripts/validate-artifacts.mjs` (`@anthropic-ai/sdk`).
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
-// Local imports - config and host services
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  disposeProcessRuntime,
-  installProcessRuntime,
-} from '@controllers/session/sessionLayer';
-import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
-import {
-  initProcessWorkspaceRoots,
-  type WorkspaceRoots,
-} from '@platform/workspaceRoots';
+// Local imports - host services this boundary wires
+import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { effectRuntime } from '@platform/processRuntime';
-import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
-import {
-  AgentCategory,
-  type SessionCloseReport,
-  type StreamTabId,
-} from '@shared/schemas';
-import type {
-  SessionView as RuntimeSessionView,
-  StreamView as RuntimeStreamView,
-  TranscriptView as RuntimeTranscriptView,
-} from '@shared/session/sessionView';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { SessionCloseReport } from '@shared/schemas';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import { StreamLogStore } from '@transcript/StreamLogStore';
+
+// Local imports - the Effect surface this entry renders
+import { RunFailure } from './effect/errors.js';
+import { composeProcess, type AgentPlatform } from './effect/runtime.js';
+import { makeSessions, type SessionView } from './effect/sessions.js';
 
 export type { AgentEvent } from '@agent/trace';
 export type { SessionCloseReport } from '@shared/schemas';
@@ -69,40 +59,12 @@ export type {
   ToolUseFlowResult,
   WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
-
-/**
- * A runtime value as the embedder may hold it: read-only all the way down,
- * every map, array, and record included. The value itself is not copied
- * (the fold's own view is what every host reads, PRD 10.3); the type is what
- * keeps a write from reaching it.
- */
-type ReadonlyDeep<T> = T extends (...args: never[]) => unknown
-  ? T
-  : T extends ReadonlyMap<infer K, infer V>
-    ? ReadonlyMap<K, ReadonlyDeep<V>>
-    : T extends ReadonlySet<infer V>
-      ? ReadonlySet<ReadonlyDeep<V>>
-      : T extends readonly (infer E)[]
-        ? readonly ReadonlyDeep<E>[]
-        : T extends object
-          ? { readonly [P in keyof T]: ReadonlyDeep<T[P]> }
-          : T;
-
-/** The session view as {@link AgentRun.view} yields it (PRD 5.1). */
-export type SessionView = ReadonlyDeep<RuntimeSessionView>;
-/** One stream of the {@link SessionView}. */
-export type StreamView = ReadonlyDeep<RuntimeStreamView>;
-/** A stream's transcript slice: what hosts paint. */
-export type TranscriptView = ReadonlyDeep<RuntimeTranscriptView>;
-
-/**
- * The process platform together with the workspace roots the package's runs
- * work in. `nodePlatform()` builds both; an embedder supplying its own
- * platform names its workspace roots beside it.
- */
-export interface AgentPlatform extends Platform {
-  readonly roots: WorkspaceRoots;
-}
+export type { AgentPlatform } from './effect/runtime.js';
+export type {
+  SessionView,
+  StreamView,
+  TranscriptView,
+} from './effect/sessions.js';
 
 /** Input accepted by the public package-level run function. */
 export interface RunAgentInput {
@@ -116,9 +78,11 @@ export interface RunAgentInput {
 /**
  * A running agent's single-consumer event stream and eventual terminal result.
  *
- * Event delivery begins with the iterator's first `next()` call. Awaiting only
- * `result` does not retain trace events, and ending iteration detaches the
- * event source while the run itself continues.
+ * Trace events are buffered from the moment the run enters its session, so
+ * an iteration begun right after `runAgent()` misses none of the launch
+ * events. Ending the iteration detaches the event source while the run
+ * itself continues, and a run that settles without ever being iterated
+ * discards what it buffered.
  */
 export interface AgentRun extends AsyncIterable<AgentEvent> {
   readonly result: Promise<AgentFlowResult>;
@@ -153,243 +117,38 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
   interrupt(): void;
 }
 
-/** A run that exists in its session: the view levels it folds into and the
- *  stream the fold keys it by. */
-interface EnteredRun {
-  readonly streamId: StreamTabId;
-  readonly view: RuntimeSessionHandle['viewChanges'];
-}
-
-/** The session of the platform's storage root, as the runtime's owner
- *  holds it: built on the first open, over what the package supplies then.
- *  Registered with the owner before the returned promise is awaited, so a
- *  close issued after `runAgent` returns finds this open. */
-function sessionFor(platform: AgentPlatform): Promise<RuntimeSessionHandle> {
-  return openSessionAsync({
-    roots: platform.roots,
-    transcripts: StreamLogStore.ephemeral('npm package consumer'),
-    // The session's one host, for its whole life, like every TeXRA host
-    // attaches one per session: the interaction hub keeps a single active
-    // host and tells runs apart by the stream its requests and cancellations
-    // name. Attaching per run instead would make each new run displace the
-    // previous run's host. The package has no interactive prompts, so there
-    // is nothing for a cancellation to settle; a retry prompt is denied so
-    // that it never parks the run waiting for a host.
-    interactions: {
-      cancel: () => {},
-      requestRetry: async () => ({
-        action: 'deny',
-        reason: 'Interactive retries are unavailable in the agent package.',
-      }),
-    },
-  });
-}
-
-/** The run's stream and every descendant the view holds. */
-function runStreamIds(
-  view: RuntimeSessionView,
-  streamId: StreamTabId,
-): StreamTabId[] {
-  const ids: StreamTabId[] = [];
-  for (const stream of view.streams.values()) {
-    if (
-      stream.id === streamId ||
-      stream.ancestors.some((ancestor) => ancestor.id === streamId)
-    ) {
-      ids.push(stream.id);
-    }
-  }
-  return ids;
-}
-
-class AgentRunStream implements AgentRun {
-  private readonly events: AgentEvent[] = [];
-  private readonly readers: Array<{
-    readonly resolve: (result: IteratorResult<AgentEvent>) => void;
-    readonly reject: (reason?: unknown) => void;
-  }> = [];
-  private liveHandle: RuntimeAgentRunHandle | undefined;
-  private detachEvents: (() => void) | undefined;
-  private ended = false;
-  private iteratorClosed = false;
-  private iteratorStarted = false;
-  private failure: { readonly error: unknown } | undefined;
-  private readonly launchAbortController = new AbortController();
-  private enter!: (run: EnteredRun | null) => void;
-  private readonly viewChanges: Stream.Stream<RuntimeSessionView>;
-  /** The package's own reader of the run's view levels, from attach to the
-   *  run's final view; what the run's settlement joins. */
-  private drain: Fiber.Fiber<void> | undefined;
-  readonly launchSignal = this.launchAbortController.signal;
-  readonly result: Promise<AgentFlowResult>;
-  readonly view: AsyncIterable<SessionView>;
-
-  constructor(start: (stream: AgentRunStream) => Promise<AgentFlowResult>) {
-    const entered = new Promise<EnteredRun | null>((resolve) => {
-      this.enter = resolve;
-    });
-    // The session's view levels, read through Effect's own async-iterable
-    // destructor once the run exists in the session. The level replays on
-    // subscribe, so no level is missed, and the fold lands the run's
-    // `run.start` asynchronously, so a replayed level can predate the run:
-    // `dropWhile` skips it. The view itself is the end condition:
-    // `takeUntil` delivers the first view holding the run's durable outcome
-    // as the last element, whether that view folds during the iteration or
-    // was current before it began. Breaking the loop closes the stream's
-    // scope.
-    this.viewChanges = Stream.unwrap(
-      Effect.map(
-        Effect.promise(() => entered),
-        (run) =>
-          run === null
-            ? Stream.empty
-            : run.view.pipe(
-                Stream.dropWhile((view) => !view.streams.has(run.streamId)),
-                Stream.takeUntil(
-                  (view) =>
-                    view.streams.get(run.streamId)?.durableOutcome != null,
-                ),
-              ),
-      ),
-    );
-    this.view = Stream.toAsyncIterable(this.viewChanges);
-    this.result = start(this);
-    void this.result.then(
-      () => this.end(),
-      (error: unknown) => this.end({ error }),
-    );
-  }
-
-  /**
-   * The existence fact: the run's stream is in the session (its `run.start`
-   * has been published, and every launch failure from here ends it with a
-   * terminal `result`), and the run's own trace is the event source: every
-   * trace event of the run, durable or not, in emission order. The launcher
-   * hands both over before the run's first trace event (the instruction
-   * log, the root stage, the launch warnings), so an iteration begun right
-   * after `runAgent()` misses none of them.
-   */
-  attachRun(
-    streamId: StreamTabId,
-    session: RuntimeSessionHandle,
-    trace: AgentTrace,
-  ): void {
-    this.enter({ streamId, view: session.viewChanges });
-    this.detachEvents = trace.subscribe((event) => {
-      if (this.iteratorStarted) this.push(event);
-    });
-    // The transcript tier folds only for subscribed aggregates (PRD 7.2), on
-    // a port of this run's own: its stream now, its descendants as the view
-    // gains them. The port is never cleared, by choice: the run's rows stay
-    // resident for the life of the package session (the README's residency
-    // contract), as a TUI's do, so a consumer can read the transcript of a
-    // finished run from the latest level as well as from the one it held.
-    const port = `sdk/${streamId}`;
-    let subscribed = '';
-    const subscribe = (ids: readonly StreamTabId[]): void => {
-      const key = ids.join('\0');
-      if (key === subscribed) return;
-      subscribed = key;
-      session.setTranscriptSubscriptions(
-        port,
-        ids.map((id) => ({ id, fromSeq: 0 })),
-      );
-    };
-    subscribe([streamId]);
-    // The package owns this drain, from here: the descendants join the
-    // subscription as the view gains them, and the run's `result` waits for
-    // its final fold even when the embedder never iterates `view` or stops
-    // early, and fails if the fold dies before publishing it.
-    this.drain = effectRuntime().runFork(
-      Stream.runDrain(
-        this.viewChanges.pipe(
-          Stream.tap((view) =>
-            Effect.sync(() => subscribe(runStreamIds(view, streamId))),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /** The run's final view in the session, or the fold's defect: what the
-   *  run settles on. Nothing to wait for while the run never entered. */
-  finalView(): Effect.Effect<void> {
-    return this.drain ? Fiber.join(this.drain) : Effect.void;
-  }
-
-  /** The live handle once the run is tracked: what `interrupt()` targets. */
-  attachHandle(handle: RuntimeAgentRunHandle): void {
-    this.liveHandle = handle;
-  }
-
-  interrupt(): void {
-    if (this.liveHandle) {
-      this.liveHandle.interrupt();
-    } else {
-      this.launchAbortController.abort();
-    }
-  }
-
-  [Symbol.asyncIterator](): AsyncIterator<AgentEvent> {
-    return {
-      next: () => {
-        this.iteratorStarted = true;
-        if (this.iteratorClosed) {
-          return Promise.resolve({ done: true, value: undefined });
-        }
-        const event = this.events.shift();
-        if (event) return Promise.resolve({ done: false, value: event });
-        if (this.failure) return Promise.reject(this.failure.error);
-        if (this.ended) {
-          return Promise.resolve({ done: true, value: undefined });
-        }
-        return new Promise((resolve, reject) =>
-          this.readers.push({ resolve, reject }),
+/**
+ * The package's services over the process it composes.
+ *
+ * `composeProcess` is synchronous, so everything from the platform check to
+ * the owner's registration of this run's root happens before `runAgent`
+ * returns: a `closeSession` or a `runShutdown` issued right after it settles
+ * this launch too. It is the same call `Runtime.layer` acquires, so
+ * composition has one implementation with two entry paths.
+ *
+ * The composing call also puts the session on the embedder's shutdown path:
+ * the session's agent-spawned children and agent-CLI sessions are stopped,
+ * then the platform's session is closed through its owner under the phase's
+ * own budget, then the runtime that held it goes, and its owner with it, so
+ * a later `closeSession` answers as a process with none does. An Effect
+ * embedder reaches the same closure through `Runtime.layer`'s scope.
+ */
+function agentServices(
+  platform: AgentPlatform,
+): ReturnType<typeof makeSessions> {
+  const runtime = composeProcess(platform);
+  const sessions = makeSessions(runtime);
+  if (runtime.composed) {
+    registerRuntimeShutdownHandlers(platform.lifecycle, {
+      flushArtifacts: async (signal) => {
+        await effectRuntime().runPromise(
+          sessions.close(platform.roots, signal),
         );
       },
-      return: () => {
-        this.closeIterator();
-        return Promise.resolve({ done: true, value: undefined });
-      },
-    };
+      afterExecutionSettlement: [() => disposeProcessRuntime()],
+    });
   }
-
-  private push(event: AgentEvent): void {
-    if (this.iteratorClosed) return;
-    const reader = this.readers.shift();
-    if (reader) {
-      reader.resolve({ done: false, value: event });
-    } else {
-      this.events.push(event);
-    }
-  }
-
-  private detach(): void {
-    this.detachEvents?.();
-    this.detachEvents = undefined;
-  }
-
-  private closeIterator(): void {
-    this.iteratorClosed = true;
-    this.events.splice(0);
-    this.detach();
-    for (const reader of this.readers.splice(0)) {
-      reader.resolve({ done: true, value: undefined });
-    }
-  }
-
-  private end(failure?: { readonly error: unknown }): void {
-    this.ended = true;
-    this.failure = failure;
-    // A run that settled without ever entering the session has no view to
-    // wait for; a no-op once `attachRun` has resolved the same promise.
-    this.enter(null);
-    this.detach();
-    for (const reader of this.readers.splice(0)) {
-      if (failure) reader.reject(failure.error);
-      else reader.resolve({ done: true, value: undefined });
-    }
-  }
+  return sessions;
 }
 
 /**
@@ -409,7 +168,7 @@ export function closeSession(
   roots: WorkspaceRoots,
   signal?: AbortSignal,
 ): Promise<SessionCloseReport> {
-  return closeRuntimeSession(roots.storage, signal);
+  return effectRuntime().runPromise(closeOwnedSession(roots.storage, signal));
 }
 
 /**
@@ -419,101 +178,56 @@ export function closeSession(
  * one platform, then reuse it for every run in that process.
  */
 export function runAgent(input: RunAgentInput): AgentRun {
-  return new AgentRunStream(async (stream) => {
-    const approvalToolNames =
-      input.tools
-        ?.filter((tool) => tool.requiresApproval)
-        .map((tool) => tool.definition.name) ?? [];
-    if (approvalToolNames.length > 0) {
-      throw new Error(
-        `The agent package cannot run approval-requiring tools: ${approvalToolNames.join(', ')}`,
-      );
-    }
-
-    // Everything from the platform check to the session open is
-    // synchronous: two first runs cannot both pass the check, and the owner
-    // holds this run's session before the run's first await, so a
-    // `closeSession` or a `runShutdown` issued right after `runAgent`
-    // returns settles this launch too (the run then fails at admission
-    // instead of starting model work after the cleanup). The process
-    // identity is read while the session builds.
-    const activePlatform = tryPlatform();
-    if (activePlatform && activePlatform !== input.platform) {
-      throw new Error(
-        'The agent package is already using another platform in this process.',
-      );
-    }
-    if (!activePlatform) {
-      // No composition root has run in this process, so the package is its
-      // composition root: the platform, the one Effect runtime holding the
-      // sessions' owner (PRD 7.7), the node agent runtime, and the hosts'
-      // shutdown order on the embedder's shutdown path. A run beside a host
-      // that already ran its own (the same platform object) reuses all four,
-      // its session included: the owner is process-wide, and nothing here
-      // may be installed twice.
-      initPlatform(input.platform);
-      initProcessWorkspaceRoots(input.platform.roots);
-      // The runtime is installed before the agent runtime, as the CLI and
-      // desktop roots do: registering the direct Lean language services
-      // builds their layer graph on it, so a registration ahead of the
-      // install throws before any agent work begins.
-      installProcessRuntime(input.platform.processes.selfIdentity());
-      initNodeAgentRuntime(input.platform.lifecycle);
-      // The session's agent-spawned children and agent-CLI sessions are
-      // stopped, then the platform's session is closed through its owner
-      // under the phase's own budget (its runs stopped and settled, its
-      // artifacts flushed, the session released: the headless shape, as the
-      // CLI's headless run stops and awaits its run in this phase), then
-      // the runtime that held it goes, and its owner with it: a later
-      // `closeSession` answers as a process with none does.
-      registerRuntimeShutdownHandlers(input.platform.lifecycle, {
-        flushArtifacts: async (signal) => {
-          await closeSession(input.platform.roots, signal);
-        },
-        afterExecutionSettlement: [() => disposeProcessRuntime()],
-      });
-    }
-    const session = await sessionFor(input.platform);
-    await loadAgents({ includeRemote: false });
-    const resolved = resolveAgent(input.agent);
-    if (!resolved) {
-      throw new Error(
-        `Agent "${input.agent}" was not found in the configured agent directory.`,
-      );
-    }
-    if (
-      input.tools &&
-      input.tools.length > 0 &&
-      resolved.entry.category !== AgentCategory.ToolUse
-    ) {
-      throw new Error(
-        `Custom tools are supported only for tool-use agents; "${input.agent}" is a workflow agent.`,
-      );
-    }
-    const config = AgentConfigSchema.parse({
-      agent: resolved.entry.name,
-      agentCategory: resolved.entry.category,
-      agentSource: resolved.entry.source,
-      instruction: input.instruction,
-      ...(input.model ? { model: input.model } : {}),
+  const sessions = agentServices(input.platform);
+  // One fiber on the process runtime, which `runFork` evaluates to its
+  // first yield before returning: the owner holds this run's session by the
+  // time `runAgent` does.
+  const started = effectRuntime().runFork(
+    Effect.flatMap(sessions.open(), (session) => session.start(input)),
+  );
+  const result = effectRuntime()
+    .runPromise(Fiber.join(started).pipe(Effect.flatMap((run) => run.result)))
+    .catch((error: unknown) => {
+      throw embedderError(error);
     });
-    const result = await runValidatedAgent(
-      { kind: 'fresh', config },
-      {
-        approvalPromptsUnavailable: true,
-        launchSignal: stream.launchSignal,
-        onRun: (handle) => stream.attachHandle(handle),
-        onStreamResolved: (streamId, trace) =>
-          stream.attachRun(streamId, session, trace),
-        session,
-        stopAfterCycle: true,
-        tools: input.tools,
-      },
-    );
-    // A run that completed settles only once the asynchronous fold holds its
-    // final view, or has died trying. A run that failed on its own settled
-    // above, with its own error: the fold's fate never replaces it.
-    await effectRuntime().runPromise(stream.finalView());
-    return result;
-  });
+  // An embedder that only iterates events must not take an unhandled
+  // rejection for the result it never asked for: allSettled subscribes to
+  // the rejection and settles regardless, so it is observed either way.
+  void Promise.allSettled([result]);
+  return {
+    result,
+    view: Stream.toAsyncIterable(
+      Stream.unwrap(
+        Fiber.join(started).pipe(
+          Effect.map((run) => run.view),
+          // A run that fails before it enters the session has no view.
+          Effect.catchCause(() => Effect.succeed(Stream.empty)),
+        ),
+      ),
+    ),
+    interrupt: () => {
+      // Two windows, one expression: before admission the interrupt reaches
+      // the launch's abort signal; after it, the live run's handle.
+      effectRuntime().runFork(
+        Fiber.interrupt(started).pipe(
+          Effect.andThen(Fiber.await(started)),
+          Effect.flatMap((exit) =>
+            Exit.isSuccess(exit) ? exit.value.interrupt : Effect.void,
+          ),
+        ),
+      );
+    },
+    [Symbol.asyncIterator]: () =>
+      Stream.toAsyncIterable(
+        Stream.unwrap(
+          Fiber.join(started).pipe(Effect.map((run) => run.events)),
+        ).pipe(Stream.mapError(embedderError)),
+      )[Symbol.asyncIterator](),
+  };
+}
+
+/** The error an embedder catches: a run's own failure carries what the
+ *  launch path threw, and a refusal is itself the error. */
+function embedderError(error: unknown): unknown {
+  return error instanceof RunFailure ? error.cause : error;
 }

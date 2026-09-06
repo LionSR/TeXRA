@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   activePlatform: null as object | null,
   agentCategory: 'toolUse',
   /** The runtime owner's close, as the package reaches it: by storage root. */
-  closeSession: vi.fn(async (_root: string) => ({
+  closeSession: vi.fn((_root: string) => ({
     settled: true,
     abandoned: [] as string[],
   })),
@@ -109,7 +109,15 @@ vi.mock('@agent/runtime', async () => {
       ),
     );
 
-    readonly setTranscriptSubscriptions = mocks.setTranscriptSubscriptions;
+    /** The transcript interest port, as the owner's graph exposes it. */
+    readonly subscriptions = {
+      set: (port: string, set: readonly unknown[]) =>
+        Effect.sync(() => {
+          mocks.setTranscriptSubscriptions(port, set);
+        }),
+    };
+
+    readonly roots: { readonly storage: string };
 
     constructor(
       init: (typeof mocks.sessionInits)[number] & {
@@ -118,25 +126,27 @@ vi.mock('@agent/runtime', async () => {
     ) {
       mocks.sessionInits.push(init);
       mocks.sessionView = this.view;
+      this.roots = init.roots;
       if (init.interactions) mocks.useInteractions(init.interactions);
     }
   }
   const sessions = new Map<string, FakeSession>();
   return {
-    openSessionAsync: async (
-      init: ConstructorParameters<typeof FakeSession>[0],
-    ) => {
-      let session = sessions.get(init.roots.storage);
-      if (!session) {
-        session = new FakeSession(init);
-        sessions.set(init.roots.storage, session);
-      }
-      return session;
-    },
-    closeSession: async (root: string) => {
-      sessions.delete(root);
-      return mocks.closeSession(root);
-    },
+    openSessionEffect: (init: ConstructorParameters<typeof FakeSession>[0]) =>
+      Effect.sync(() => {
+        let session = sessions.get(init.roots.storage);
+        if (!session) {
+          session = new FakeSession(init);
+          sessions.set(init.roots.storage, session);
+        }
+        return session;
+      }),
+    listSessions: () => Effect.sync(() => [...sessions.values()]),
+    closeSession: (root: string) =>
+      Effect.sync(() => {
+        sessions.delete(root);
+        return mocks.closeSession(root);
+      }),
     runAgent: mocks.runValidatedAgent,
   };
 });
@@ -189,6 +199,7 @@ import {
   type AgentPlatform,
   type SessionView,
 } from '../../../packages/agent/src/index';
+import { Runtime, Sessions } from '../../../packages/agent/src/effect';
 import { nodePlatform } from '../../../packages/agent/src/node';
 
 const PLATFORM = {
@@ -412,6 +423,61 @@ describe('agent package run lifecycle', () => {
     // process); only the reset owner is observed here.
     await runAgent(INPUT).result;
     expect(mocks.sessionInits).toHaveLength(2);
+  });
+
+  it('composes into an embedder own runtime: the Effect surface starts a run and lists the one session the Promise entry already opened', async () => {
+    // The Promise entry composes the process and opens the platform's root.
+    await runAgent(INPUT).result;
+    expect(mocks.sessionInits).toHaveLength(1);
+
+    const program = Effect.gen(function* () {
+      const sessions = yield* Sessions;
+      const session = yield* sessions.open();
+      const run = yield* session.start({
+        agent: 'assistant',
+        instruction: 'Test instruction',
+      });
+      const result = yield* run.result;
+      const open = yield* sessions.list;
+      return { open: open.length, result, streamId: run.streamId };
+    }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
+
+    const seen = await Effect.runPromise(program);
+    expect(seen.result).toBe(RESULT);
+    expect(seen.streamId).toBe('stream-1');
+    // One session per storage root, held by the runtime's own owner: the
+    // Effect surface resolved the session the Promise entry ran on, and the
+    // package built no registry of its own.
+    expect(seen.open).toBe(1);
+    expect(mocks.sessionInits).toHaveLength(1);
+  });
+
+  it('a scoped reader holds its own transcript interest and clears it at the scope, leaving the run its own', async () => {
+    await runAgent(INPUT).result;
+    const interest = [{ id: 'stream-1', fromSeq: 0 }];
+
+    const program = Effect.gen(function* () {
+      const sessions = yield* Sessions;
+      const session = yield* sessions.open();
+      yield* Effect.scoped(session.subscribe(interest as never));
+    }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
+    await Effect.runPromise(program);
+
+    const ports = mocks.setTranscriptSubscriptions.mock.calls as [
+      string,
+      readonly unknown[],
+    ][];
+    const reader = ports.filter(([port]) => port.startsWith('sdk/reader/'));
+    // The reader's own port: set for the scope, emptied when it closed.
+    expect(reader).toHaveLength(2);
+    expect(reader[0]?.[1]).toEqual(interest);
+    expect(reader[1]?.[0]).toBe(reader[0]?.[0]);
+    expect(reader[1]?.[1]).toEqual([]);
+    // The run's port is the run's: the reader never touched it, so the
+    // README's residency contract still holds for a finished run.
+    expect(ports.filter(([port]) => port === 'sdk/stream-1')).toEqual([
+      ['sdk/stream-1', interest],
+    ]);
   });
 
   it('fails the run instead of hanging when the session fold dies before the final view', async () => {
