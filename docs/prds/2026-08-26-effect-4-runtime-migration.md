@@ -950,11 +950,21 @@ Every migration PR states:
 - which existing carriers or lifecycle stages collapse, if any;
 - which imports or dependencies are removed;
 - whether lines and architectural elements decrease;
-- the temporary adapter's deletion phase and deadline, if one is unavoidable.
+- ~~the temporary adapter's deletion phase and deadline, if one is unavoidable.~~
 
-An adapter may live for at most sixty days or until the next named migration
+~~An adapter may live for at most sixty days or until the next named migration
 phase completes, whichever comes first. It carries its introduction date and
-retirement condition beside the code.
+retirement condition beside the code.~~
+
+_Amended 2026-09-06 (second ruling):_ struck. There is no temporary-adapter
+allowance and no retirement clock, because there are no temporary adapters:
+the ruling in R1 requires the surface to become Effect-typed and its
+consumers to be converted upward until a genuine host, tool, or SDK boundary
+is reached. A PR that cannot do that has found a boundary it did not
+recognise, or a lane it should not have started; it says which, rather than
+booking sixty days. The `@adapter-until` marker this clause justified is
+retired, and `check:effect-migration-ratchet` fails on the presence of any
+such marker.
 
 ## 8. Target architecture
 
@@ -1069,13 +1079,28 @@ interrupts the owned root fiber.
   a later load would produce at those rows.
 - `foldRunState(rows) -> RunState`, pure and data-only in `src/shared`: latest
   `flow.snapshot`, then later `model.compaction`, `model.message`,
-  `tool.intent`, `tool.result`, and `flow.step` rows in order. A
+  `tool.intent`, `tool.result`, `flow.step`, `approval.requested`, and
+  `approval.resolved` rows in order. The two approval arms are in the fold
+  because resume needs them: a process that dies with a model-retry or
+  tool-outcome approval pending must recover the original request id, its
+  authorization state, and its attempt binding, or it re-prompts the user and
+  loses the one-attempt authorization (runtime proposal §2.3, and its PR-2
+  confirmation item, which makes those rows a precondition for the
+  outcome-unknown and manual-retry paths). An `approval.requested` with no
+  matching `approval.resolved` stays in the state as a pending decision, the
+  same way an unmatched `tool.intent` does. A
   `tool.intent` with no matching `tool.result` stays in the state as an
   unresolved intent, which is what lets resume enter the outcome-unknown path
   for a barrier tool instead of repeating the call (R4.2, proposal §2.3).
   The function has exactly three callers: `RunLedger.load`,
-  `RunLedger.append` (one step), and the trace viewer's stepper; "state at
-  step k" and "resume would continue after step k" are the same fact.
+  `RunLedger.append` (one step), and the in-process step scrubber that runs
+  in the runtime process (the conversation shell's run detail on the
+  extension and desktop, and the TUI's run pane — see Phase 2 step 3); "state
+  at step k" and "resume would continue after step k" are the same fact. It
+  is deliberately **not** the standalone `packages/trace-viewer`, which stays
+  `TraceDocument`-only and is given no database transport: the fold reads
+  private ledger rows, and trusting a separate application with them is a
+  redaction boundary this program does not cross.
 
 Persistence validation and atomic writing remain the substrate's boundaries
 (contract C1 to C10 in the persistence substrate decision); nothing in the
@@ -1394,15 +1419,24 @@ lane D of the persistence cutover branch, sequenced and sized by
    provider content can reach an SDK consumer or a file unredacted (contract
    C3); "private" means outside every public and exported contract, not a
    directory. The proposal's §2.1 phrase "all carried as `AgentEvent` arms"
-   is corrected to this in its PR 0. Only `RunLedger` and the trace viewer's
-   stepper read those five. Also `foldRunState` in `src/shared`, the
+   is corrected to this in its PR 0. Only `RunLedger` and the in-process step
+   scrubber read those five (not the standalone `packages/trace-viewer`; see
+   the target-architecture note on `foldRunState`'s callers). Also `foldRunState` in `src/shared`, the
    in-memory ledger layer, one ledger test and one fold test under
    `it.effect`, and a load-time warning on rows-since-snapshot (proposal
    §8). Nothing deleted yet; nothing in production calls it.
 2. **Both families on the ledger, one PR.** `ModelInvoker`, `Tools`,
    `FollowUps`, `RunContext`, `OutputPipeline`, `runToolUse`, `runReflection`;
-   `executeAgent` and every resume arm call `runtime.runPromiseExit` with the
-   fiber's signal; the importer's `flow_<id>.json` arm, which writes one
+   ~~`executeAgent` and every resume arm call `runtime.runPromiseExit` with the
+   fiber's signal;~~ _amended 2026-09-06 (second ruling):_ `executeAgent` is a
+   runtime operation, not one of R1's three boundary kinds, so a run call
+   there is the Effect-to-Promise pass-through the ruling rejects. It and
+   every resume arm become Effect programs in this same PR, and their callers
+   are converted upward until a host entry, a tool `execute()`, or the SDK's
+   public API is reached — `runAgent`'s host callers, the resume commands,
+   and the SDK entry are where the run lands. Deferring the `executeAgent`
+   interior to Stage 3a is what would make Phase 2 unlandable under the new
+   rule, so the interior moves with the surface; the importer's `flow_<id>.json` arm, which writes one
    batch: the `flow.snapshot` carrying the record's `shared` state and the
    canonical `flow.step` derived from the record's cursor and action (a
    cursor at the wait node is `waiting`; a cursor at a round boundary is
@@ -1434,12 +1468,25 @@ lane D of the persistence cutover branch, sequenced and sized by
    cancellation race, `AbortError` unwrapping, approvals past the former
    ceiling), which move into `ModelInvoker`'s existing suite because R8 and
    F7 preserve that behavior, and every guidance passage
-   that names the engine: at this commit `rg -l PocketFlow` finds CLAUDE.md,
-   AGENTS.md, `src/README.md`, `.claude/agents/our-code-simplifier.md`,
+   that names the engine. _Corrected 2026-09-06:_ the earlier inventory was
+   taken over a narrower path set and missed live guidance that instructs
+   reviewers and workflows to preserve the engine's hooks and node-call
+   shape; a repo-wide `git grep -l PocketFlow` over tracked files finds, as
+   **live guidance that must be updated**: CLAUDE.md, AGENTS.md,
+   `src/README.md`, `.claude/agents/our-code-simplifier.md`,
    `.claude/skills/code-review/SKILL.md` and its
    `references/review-checklist.md`,
-   `.claude/skills/find-simplification/SKILL.md`, and
-   `docs/architecture/2026-06-20-pocketflow-state.md`; the PR re-runs that
+   `.claude/skills/find-simplification/SKILL.md`,
+   `.claude/workflows/debt-audit.js`, `.claude/workflows/tech-debt-tournament.mjs`,
+   `.github/prompts/claude-code-review-prompt.md`,
+   `.github/prompts/claude-code-review-system-prompt.md`,
+   `.github/prompts/claude-code-system-prompt.md`,
+   `.github/prompts/texra-code-review-prompt.md`, and
+   `docs/architecture/2026-06-20-pocketflow-state.md`. Dated audits,
+   surveys, and superseded PRDs under `docs/` keep their text: they record
+   what was true when written. `NOTICE` and the four package `NOTICE.txt`
+   files keep the upstream attribution for as long as any derived code
+   remains, and are reviewed rather than edited blindly. The PR re-runs that
    search and `npm run check:guidance-refs` is the gate. Reviewed as one
    because splitting it is what creates a shim.
 3. **Replay along the flow.** A step scrubber over `foldRunState` as a
@@ -1508,11 +1555,21 @@ that record comes to exist.
 Phase 3 lands as two separately revertible stages. Stage 3a changes no
 durable format: it converts the run interiors, collapses the dependency
 carriers onto `AgentRun`, moves lifecycle under scopes, and replaces internal
-abort choreography. Stage 3b carries the persistence amendment, the round
+abort choreography. ~~Stage 3b carries the persistence amendment, the round
 commit, and the finer checkpoints — every item that writes a new durable
 shape. The split isolates the only rollback-constrained work of the program
 in one small stage; the rollout section defines what revertibility means for
-it.
+it.~~
+
+_Amended 2026-09-06:_ Phase 2 as amended writes the new durable shape
+itself (`tool.intent` / `tool.result` rows, `flow.step` round coordinates,
+`flow.snapshot`), so Phase 2 — not Stage 3b — is the program's first durable-
+format change and carries its rollback constraint, as the rollout section now
+says. Stage 3b keeps only what Phase 2 does not deliver: the recovery
+behaviour for an unknown external outcome and the version-retirement policy,
+plus validation that the checkpoints Phase 2 writes meet this stage's
+acceptance. Stage 3a is therefore the whole of Phase 3's implementation work,
+and Stage 3b is a validation gate rather than a second implementation.
 
 Stage 3a — lifecycle and carriers, no durable format change:
 
@@ -1726,8 +1783,11 @@ custom runtime machinery.
 - Zero new `AbortController` constructions inside completed Effect zones.
 - Zero raw catch clauses inside completed Effect zones except named Promise,
   synchronous-callback, filesystem, SDK, or sandbox-realm adapters.
-- Every temporary Promise/Effect adapter has a checked retirement date and
-  condition.
+- ~~Every temporary Promise/Effect adapter has a checked retirement date and
+  condition.~~ _Amended 2026-09-06 (second ruling):_ replaced by its
+  opposite — zero `@adapter-until` markers in the tree, enforced by
+  `check:effect-migration-ratchet`, which fails on the presence of any
+  marker rather than on an expired one.
 
 ### Runtime correctness
 
