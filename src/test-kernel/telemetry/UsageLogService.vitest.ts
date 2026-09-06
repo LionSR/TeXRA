@@ -12,10 +12,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import * as logger from '@logger/logUtils';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
-import {
-  USAGE_LOG_FLUSH_OUTCOME,
-  UsageLogService,
-} from '@telemetry/UsageLogService';
+import { UsageLogService } from '@telemetry/UsageLogService';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   createFakePlatform,
@@ -77,8 +74,9 @@ function stubBatchFetch(
 
 describe('UsageLogService', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     UsageLogService.initialize({
-      batchSize: 100,
+      batchSize: 1,
       flushIntervalMs: 60_000,
       enabled: true,
     });
@@ -86,6 +84,7 @@ describe('UsageLogService', () => {
 
   afterEach(async () => {
     await UsageLogService.dispose();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
@@ -103,51 +102,16 @@ describe('UsageLogService', () => {
     });
 
     UsageLogService.log(usageEntry('first'));
-    const firstFlush = UsageLogService.flush();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     UsageLogService.log(usageEntry('second'));
-    const secondFlush = UsageLogService.flush();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     releaseFirstFetch();
-    await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
-      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-    ]);
-
+    await vi.waitFor(() =>
+      expect(batches.map(batchModels)).toEqual([['first'], ['second']]),
+    );
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
-  });
-
-  it('shares a rejection with a flush that arrives while it is in flight', async () => {
-    stubAccessToken();
-
-    const { promise: rejectionReleased, resolve: releaseRejection } =
-      createDeferred();
-    const { fetchMock } = stubBatchFetch(async (callCount) => {
-      if (callCount !== 1) return;
-      await rejectionReleased;
-      return jsonResponse({
-        success: false,
-        accepted: 0,
-        error: 'invalid batch',
-        retryable: false,
-      });
-    });
-
-    UsageLogService.log(usageEntry('invalid'));
-    const firstFlush = UsageLogService.flush();
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-
-    UsageLogService.log(usageEntry('valid'));
-    const secondFlush = UsageLogService.flush();
-
-    releaseRejection();
-    await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
-      USAGE_LOG_FLUSH_OUTCOME.REJECTED,
-      USAGE_LOG_FLUSH_OUTCOME.REJECTED,
-    ]);
   });
 
   it('waits for successive active batches during disposal', async () => {
@@ -163,11 +127,9 @@ describe('UsageLogService', () => {
     });
 
     UsageLogService.log(usageEntry('first'));
-    const firstFlush = UsageLogService.flush();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     UsageLogService.log(usageEntry('second'));
-    const secondFlush = UsageLogService.flush();
     const disposal = UsageLogService.dispose();
 
     releaseFirstFetch();
@@ -181,10 +143,6 @@ describe('UsageLogService', () => {
     expect(disposed).toBe(false);
 
     releaseSecondFetch();
-    await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
-      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-    ]);
     await expect(disposal).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -218,7 +176,7 @@ describe('UsageLogService', () => {
       disposed = true;
     });
     // Long enough for a dispose that abandons the send to have resolved.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await vi.advanceTimersByTimeAsync(50);
     expect(request.signal.aborted).toBe(false);
     expect(disposed).toBe(false);
 
@@ -233,6 +191,7 @@ describe('UsageLogService', () => {
   // empty loop, so the ticker's timer is unref'd while the request a flush
   // sends holds the loop on its own.
   it('schedules the ticker on a timer that does not hold the event loop', () => {
+    vi.useRealTimers();
     const timers = vi.spyOn(globalThis, 'setTimeout');
     UsageLogService.initialize({
       batchSize: 100,
@@ -256,10 +215,8 @@ describe('UsageLogService', () => {
     });
 
     UsageLogService.log(usageEntry('slow'));
-    const flush = UsageLogService.flush();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const disposal = UsageLogService.dispose();
     let disposed = false;
     void disposal.then(() => {
@@ -280,10 +237,8 @@ describe('UsageLogService', () => {
     expect(disposed).toBe(false);
 
     releaseFetch();
-    await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.ACCEPTED);
     await expect(disposal).resolves.toBeUndefined();
     expect(batches.map(batchModels)).toEqual([['slow']]);
-    vi.useRealTimers();
   });
 
   it('keeps queued entries when setup fails before dequeue', async () => {
@@ -294,15 +249,11 @@ describe('UsageLogService', () => {
     const { batches, fetchMock } = stubBatchFetch();
 
     UsageLogService.log(usageEntry('first'));
-    await expect(UsageLogService.flush()).resolves.toBe(
-      USAGE_LOG_FLUSH_OUTCOME.PENDING,
-    );
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(fetchMock).not.toHaveBeenCalled();
 
-    await expect(UsageLogService.flush()).resolves.toBe(
-      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-    );
+    await vi.advanceTimersByTimeAsync(60_000);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(batches.map(batchModels)).toEqual([['first']]);
@@ -326,12 +277,9 @@ describe('UsageLogService', () => {
     });
 
     UsageLogService.log(usageEntry('first'));
-    await expect(UsageLogService.flush()).resolves.toBe(
-      USAGE_LOG_FLUSH_OUTCOME.PENDING,
-    );
-    await expect(UsageLogService.flush()).resolves.toBe(
-      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
@@ -356,20 +304,17 @@ describe('UsageLogService', () => {
     });
 
     UsageLogService.log(usageEntry('invalid'));
-    const flush = UsageLogService.flush();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     UsageLogService.log(usageEntry('valid'));
     releaseRejection();
 
-    await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.REJECTED);
+    await vi.advanceTimersByTimeAsync(0);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['invalid'], ['valid']]);
     expect(batchId(batches[1])).not.toBe(batchId(batches[0]));
 
-    await expect(UsageLogService.flush()).resolves.toBe(
-      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-    );
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(batches.map(batchModels)).toEqual([
       ['invalid'],
       ['valid'],
@@ -388,14 +333,10 @@ describe('UsageLogService', () => {
     });
 
     UsageLogService.log(usageEntry('first'));
-    await expect(UsageLogService.flush()).resolves.toBe(
-      USAGE_LOG_FLUSH_OUTCOME.PENDING,
-    );
+    await vi.advanceTimersByTimeAsync(0);
 
     UsageLogService.log(usageEntry('second'));
-    await expect(UsageLogService.flush()).resolves.toBe(
-      USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-    );
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(batches.map(batchModels)).toEqual([
@@ -414,16 +355,12 @@ describe('UsageLogService', () => {
     // every suite that runs afterwards.
     setupPlatform({}, { config: new FakeScopedConfigProvider() });
 
-    // Shared tail of every opt-out case: an optional entry must vanish without
-    // a single fetch, and the flush still reports ACCEPTED — the entry is
-    // gone, not kept for retry (that would be PENDING).
-    async function expectOptedOutFlush(): Promise<void> {
+    // Optional entries must be discarded without a request.
+    async function expectNoOptionalUsageSent(): Promise<void> {
       const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('optional'));
-      await expect(UsageLogService.flush()).resolves.toBe(
-        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-      );
+      await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).not.toHaveBeenCalled();
       expect(batches).toEqual([]);
@@ -437,7 +374,7 @@ describe('UsageLogService', () => {
         'global',
       );
 
-      await expectOptedOutFlush();
+      await expectNoOptionalUsageSent();
     });
 
     it('honours a workspace-scoped telemetry opt-out', async () => {
@@ -448,7 +385,7 @@ describe('UsageLogService', () => {
         'workspace',
       );
 
-      await expectOptedOutFlush();
+      await expectNoOptionalUsageSent();
     });
 
     it('does not let a project opt in over a user-wide opt-out', async () => {
@@ -464,13 +401,14 @@ describe('UsageLogService', () => {
         'workspace',
       );
 
-      await expectOptedOutFlush();
+      await expectNoOptionalUsageSent();
     });
 
     // The setting is read live, so turning it off has to drop rounds already
     // queued under the old value rather than letting the next flush ship them.
     it('discards entries queued before the setting was turned off', async () => {
       stubAccessToken();
+      UsageLogService.initialize({ batchSize: 100, flushIntervalMs: 60_000 });
 
       const { batches, fetchMock } = stubBatchFetch();
 
@@ -481,11 +419,7 @@ describe('UsageLogService', () => {
         'global',
       );
 
-      // ACCEPTED, not PENDING: the entry is gone, and PENDING means "kept for a
-      // later retry" everywhere else in this service.
-      await expect(UsageLogService.flush()).resolves.toBe(
-        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-      );
+      await vi.advanceTimersByTimeAsync(60_000);
 
       expect(fetchMock).not.toHaveBeenCalled();
       expect(batches).toEqual([]);
@@ -502,7 +436,7 @@ describe('UsageLogService', () => {
       const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('dropped'));
-      await UsageLogService.flush();
+      await vi.advanceTimersByTimeAsync(0);
       expect(fetchMock).not.toHaveBeenCalled();
 
       await workspaceRoots().config.update(
@@ -511,9 +445,7 @@ describe('UsageLogService', () => {
         'global',
       );
       UsageLogService.log(usageEntry('sent'));
-      await expect(UsageLogService.flush()).resolves.toBe(
-        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-      );
+      await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(batches.map(batchModels)).toEqual([['sent']]);
@@ -540,9 +472,7 @@ describe('UsageLogService', () => {
         const { batches, fetchMock } = stubBatchFetch();
 
         UsageLogService.log({ ...usageEntry('hosted'), usageRoute });
-        await expect(UsageLogService.flush()).resolves.toBe(
-          USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-        );
+        await vi.advanceTimersByTimeAsync(0);
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(batches.map(batchModels)).toEqual([['hosted']]);
@@ -551,6 +481,7 @@ describe('UsageLogService', () => {
 
     it('drops optional entries from a batch but keeps the accounted ones', async () => {
       stubAccessToken();
+      UsageLogService.initialize({ batchSize: 100, flushIntervalMs: 60_000 });
 
       const { batches, fetchMock } = stubBatchFetch();
 
@@ -565,9 +496,7 @@ describe('UsageLogService', () => {
         'global',
       );
 
-      await expect(UsageLogService.flush()).resolves.toBe(
-        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-      );
+      await vi.advanceTimersByTimeAsync(60_000);
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(batches.map(batchModels)).toEqual([['hosted']]);
@@ -588,7 +517,6 @@ describe('UsageLogService', () => {
       const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('optional'));
-      const flush = UsageLogService.flush();
 
       await workspaceRoots().config.update(
         TELEMETRY_ENABLED_KEY,
@@ -597,7 +525,7 @@ describe('UsageLogService', () => {
       );
       releaseToken();
 
-      await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.ACCEPTED);
+      await vi.advanceTimersByTimeAsync(0);
       expect(fetchMock).not.toHaveBeenCalled();
       expect(batches).toEqual([]);
     });
@@ -618,7 +546,7 @@ describe('UsageLogService', () => {
       );
       vi.stubEnv(name, value);
 
-      await expectOptedOutFlush();
+      await expectNoOptionalUsageSent();
     });
 
     it.each(['0', 'false', ''])(
@@ -635,9 +563,7 @@ describe('UsageLogService', () => {
         const { batches, fetchMock } = stubBatchFetch();
 
         UsageLogService.log(usageEntry('optional'));
-        await expect(UsageLogService.flush()).resolves.toBe(
-          USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-        );
+        await vi.advanceTimersByTimeAsync(0);
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(batches.map(batchModels)).toEqual([['optional']]);
@@ -656,9 +582,7 @@ describe('UsageLogService', () => {
         ...usageEntry('hosted'),
         usageRoute: 'chatgpt-subscription',
       });
-      await expect(UsageLogService.flush()).resolves.toBe(
-        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
-      );
+      await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(batches.map(batchModels)).toEqual([['hosted']]);
@@ -679,7 +603,7 @@ describe('UsageLogService', () => {
         const { batches, fetchMock } = stubBatchFetch();
 
         UsageLogService.log(usageEntry('optional'));
-        await UsageLogService.flush();
+        await vi.advanceTimersByTimeAsync(0);
 
         expect(fetchMock).not.toHaveBeenCalled();
         expect(batches).toEqual([]);
@@ -702,7 +626,7 @@ describe('UsageLogService', () => {
       const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('optional'));
-      await UsageLogService.flush();
+      await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).not.toHaveBeenCalled();
       expect(batches).toEqual([]);
