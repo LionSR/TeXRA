@@ -83,7 +83,6 @@
     "lru-cache": "^11.5.2",
     "mime-types": "^3.0.1",
     "nanoid": "^6.0.1",
-    "neverthrow": "^8.2.0",
     "nunjucks": "^3.2.4",
     "openai": "^7.10.0",
     "p-defer": "^4.0.1",

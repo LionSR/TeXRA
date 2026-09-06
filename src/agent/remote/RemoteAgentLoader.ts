@@ -2,6 +2,7 @@
  * Config-loading half of the remote-agent client. The listing half — which the
  * agent index does reach — lives in `./remoteAgentList`.
  */
+import { Result } from 'effect';
 import {
   type AgentSettingInput,
   AgentPromptSchema,
@@ -46,13 +47,13 @@ export async function loadRemoteAgent(
 
     log.debug(`Parsing YAML for remote agent: ${agentName}`);
     const parsedYaml = parseYamlWith(configYaml, AgentDefinitionSchema);
-    if (parsedYaml.isErr()) {
+    if (Result.isFailure(parsedYaml)) {
       throw new Error(
-        `Failed to parse YAML for remote agent "${agentName}": ${parsedYaml.error.message}`,
-        { cause: parsedYaml.error },
+        `Failed to parse YAML for remote agent "${agentName}": ${parsedYaml.failure.message}`,
+        { cause: parsedYaml.failure },
       );
     }
-    const validated = parsedYaml.value;
+    const validated = parsedYaml.success;
 
     const settings: AgentSettingInput = validated.settings;
     const toolNames = extractToolNames(settings.tools);

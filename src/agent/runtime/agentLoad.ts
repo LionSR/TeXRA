@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { Result } from 'effect';
 import { resolveAgent } from '@agent/index';
 import type { ResolvedAgent } from '@agent/index/agentEntry';
 import {
@@ -29,12 +30,12 @@ const CHANNEL = 'agentLoad';
  */
 export function validateAgentYamlContent(content: string): void {
   const parsed = parseYamlWith(content, AgentDefinitionSchema);
-  if (parsed.isErr()) {
-    throw new Error(`Failed to parse agent YAML: ${parsed.error.message}`, {
-      cause: parsed.error,
+  if (Result.isFailure(parsed)) {
+    throw new Error(`Failed to parse agent YAML: ${parsed.failure.message}`, {
+      cause: parsed.failure,
     });
   }
-  const data = parsed.value;
+  const data = parsed.success;
 
   if (!data.inherits) {
     AgentSettingSchema.parse(
@@ -52,13 +53,13 @@ async function loadYaml(absolutePath: string): Promise<object> {
 
   const yamlContent = await AbsoluteFS.read(absolutePath);
   const parsed = safeParseYaml(yamlContent);
-  if (parsed.isErr()) {
+  if (Result.isFailure(parsed)) {
     throw new Error(
-      `Failed to parse YAML at ${absolutePath}: ${parsed.error.message}`,
-      { cause: parsed.error },
+      `Failed to parse YAML at ${absolutePath}: ${parsed.failure.message}`,
+      { cause: parsed.failure },
     );
   }
-  return parsed.value as object;
+  return parsed.success as object;
 }
 
 export async function loadAgentSettingAndPrompts(

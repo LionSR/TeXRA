@@ -10,6 +10,7 @@
 import PQueue from 'p-queue';
 
 // Local imports
+import { Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -143,14 +144,14 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     const raw = await this.storage.get();
     if (!raw) return null;
     const parsedJson = safeParseJson(raw);
-    if (parsedJson.isErr()) {
+    if (Result.isFailure(parsedJson)) {
       // Present-but-corrupt is not the same as never signed in.
       log.warn(
-        `Stored subscription session is not valid JSON; treating as signed out: ${toErrorMessage(parsedJson.error)}`,
+        `Stored subscription session is not valid JSON; treating as signed out: ${toErrorMessage(parsedJson.failure)}`,
       );
       return null;
     }
-    const parsed = this.policy.sessionSchema.safeParse(parsedJson.value);
+    const parsed = this.policy.sessionSchema.safeParse(parsedJson.success);
     if (!parsed.success) {
       log.warn(
         `Stored subscription session failed schema validation; treating as signed out: ${toErrorMessage(parsed.error)}`,

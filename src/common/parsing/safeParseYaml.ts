@@ -1,30 +1,32 @@
-import { type ZodType } from 'zod';
-import { type Result, ok, err } from 'neverthrow';
+import { Result } from 'effect';
 import * as yaml from 'yaml';
+import { type ZodType } from 'zod';
 
 import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * Parse YAML text without throwing.
  *
- * Returns an `Ok<unknown>` with the parsed value typed as `unknown` (the
- * honest type for untrusted text), or an `Err<Error>` carrying the parse
- * error raised by `yaml.parse`. Use this instead of a bare `yaml.parse(...)`
- * wrapped in try/catch. Branch with `result.isOk()` / `result.isErr()`, or
- * chain with `.map` / `.andThen` / `.match`.
+ * Returns a `Result.Success<unknown>` with the parsed value typed as
+ * `unknown` (the honest type for untrusted text), or a `Result.Failure<Error>`
+ * carrying the parse error raised by `yaml.parse`. Use this instead of a bare
+ * `yaml.parse(...)` wrapped in try/catch. Branch with `Result.isSuccess` /
+ * `Result.isFailure`, or chain with `Result.map` / `Result.flatMap` /
+ * `Result.getOrElse`.
  */
-export function safeParseYaml(text: string): Result<unknown, Error> {
+export function safeParseYaml(text: string): Result.Result<unknown, Error> {
   try {
-    return ok(yaml.parse(text) as unknown);
+    return Result.succeed(yaml.parse(text) as unknown);
   } catch (error) {
-    return err(ensureError(error));
+    return Result.fail(ensureError(error));
   }
 }
 
 /**
  * Parse YAML text and validate the result against a Zod schema, without
- * throwing. A parse failure or a schema mismatch both yield an `Err<Error>`;
- * on success the `Ok` value is the validated, typed result.
+ * throwing. A parse failure or a schema mismatch both yield a
+ * `Result.Failure<Error>`; on success the `Result.Success` value is the
+ * validated, typed result.
  *
  * Prefer this over `yaml.parse(text) as T` / `Schema.parse(yaml.parse(text))`
  * whenever the text comes from an untrusted source (disk, network, remote
@@ -34,9 +36,11 @@ export function safeParseYaml(text: string): Result<unknown, Error> {
 export function parseYamlWith<T>(
   text: string,
   schema: ZodType<T>,
-): Result<T, Error> {
-  return safeParseYaml(text).andThen((value) => {
+): Result.Result<T, Error> {
+  return Result.flatMap(safeParseYaml(text), (value) => {
     const result = schema.safeParse(value);
-    return result.success ? ok(result.data) : err(result.error);
+    return result.success
+      ? Result.succeed(result.data)
+      : Result.fail(result.error);
   });
 }

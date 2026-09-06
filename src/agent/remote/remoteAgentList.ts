@@ -14,6 +14,7 @@
 import ky, { HTTPError } from 'ky';
 import { z } from 'zod';
 
+import { Result } from 'effect';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
@@ -120,9 +121,10 @@ async function fetchRemoteAgentListRows(
 
     const rawBody = errorDataToString(error.data);
     const parsedError = rawBody
-      ? parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema).unwrapOr({
-          message: rawBody,
-        })
+      ? Result.getOrElse(
+          parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema),
+          () => ({ message: rawBody }),
+        )
       : {};
     const fallbackMessage =
       `${error.response.status} ${error.response.statusText}`.trim();

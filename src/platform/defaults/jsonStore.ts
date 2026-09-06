@@ -1,38 +1,34 @@
 import { chmod, mkdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
+import { Cause, Effect, Exit } from 'effect';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
-import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
-import type PQueue from 'p-queue';
+import {
+  type PerKeySemaphore,
+  withPerKeyPermit,
+} from '@utils/core/perKeyQueue';
 
-import type { FileLockProvider, StateStore } from '../interfaces';
+import type { StateStore } from '../interfaces';
+import type { FileLockTuning } from './fileLocks';
 
 /**
- * Cross-process lock for the read-modify-write flush below. Shares its
- * mechanics (KeyedMutex in-process serialization, onCompromised handling,
- * error aggregation) with `fileLocks.ts`'s other callers, tuned for this
- * store's short, frequent flushes rather than long-running work. Loaded
- * lazily, on first flush, so importing `JsonStore` doesn't pull in
- * `proper-lockfile` before any write actually happens.
+ * Cross-process lock policy for the read-modify-write flush below, tuned
+ * for this store's short, frequent flushes rather than long-running work.
+ * `fileLocks` itself is loaded on the first flush so importing `JsonStore`
+ * doesn't pull in `proper-lockfile` before any write actually happens.
  */
-let jsonStoreFileLocksPromise: Promise<FileLockProvider> | undefined;
-function getJsonStoreFileLocks(): Promise<FileLockProvider> {
-  jsonStoreFileLocksPromise ??= import('./fileLocks.js').then(
-    ({ createNodeFileLocks }) =>
-      createNodeFileLocks({
-        staleMs: 10_000,
-        retries: {
-          retries: 120,
-          factor: 1.2,
-          minTimeout: 10,
-          maxTimeout: 100,
-        },
-      }),
-  );
-  return jsonStoreFileLocksPromise;
-}
+const FLUSH_LOCK_TUNING: FileLockTuning = {
+  staleMs: 10_000,
+  retries: {
+    retries: 120,
+    factor: 1.2,
+    minTimeout: 10,
+    maxTimeout: 100,
+  },
+};
+const fileLocks = Effect.promise(() => import('./fileLocks.js'));
 
 type JsonRecord = Record<string, unknown>;
 
@@ -56,29 +52,100 @@ function dirModeFor(fileMode: number): number {
   return fileMode | ((fileMode & 0o444) >> 2);
 }
 
-async function readJsonRecord(
+/**
+ * Read the store file as a JSON object. A missing file reads as a copy of
+ * `missingFallback`; unreadable or non-object content fails with the
+ * original error (`SyntaxError`, `TypeError`, or the fs error).
+ */
+const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
   filePath: string,
   missingFallback: JsonRecord = {},
-): Promise<JsonRecord> {
-  try {
-    const content = await readFile(filePath, 'utf8');
-    const parsed: unknown = JSON.parse(content);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as JsonRecord;
-    }
-    throw new TypeError(`Expected ${filePath} to contain a JSON object.`);
-  } catch (error) {
-    if (isFileNotFoundError(error)) return { ...missingFallback };
-    throw error;
+) {
+  const content = yield* Effect.tryPromise({
+    try: () => readFile(filePath, 'utf8'),
+    catch: (cause) => cause,
+  }).pipe(Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)));
+  if (content === undefined) return { ...missingFallback };
+  const parsed = yield* Effect.try({
+    try: () => JSON.parse(content) as unknown,
+    catch: (cause) => cause,
+  });
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    return parsed as JsonRecord;
   }
-}
+  return yield* Effect.fail(
+    new TypeError(`Expected ${filePath} to contain a JSON object.`),
+  );
+});
 
 /**
- * One-at-a-time flush queue per resolved store path. Module-wide (not per
+ * Creates `dir` if missing. When `fileMode` is set, also chmods the
+ * directory to {@link dirModeFor} — `mkdir`'s own `mode` only applies at
+ * creation time, so a pre-existing directory with looser permissions needs
+ * the explicit follow-up chmod too.
+ */
+const ensureDir = Effect.fn('JsonStore.ensureDir')(function* (
+  dir: string,
+  fileMode: number | undefined,
+) {
+  const dirMode = fileMode === undefined ? undefined : dirModeFor(fileMode);
+  yield* Effect.tryPromise({
+    try: () => mkdir(dir, { recursive: true, mode: dirMode }),
+    catch: (cause) => cause,
+  });
+  if (dirMode !== undefined) {
+    yield* Effect.tryPromise({
+      try: () => chmod(dir, dirMode),
+      catch: (cause) => cause,
+    });
+  }
+});
+
+/**
+ * One-at-a-time flush lane per resolved store path. Module-wide (not per
  * instance) so writers holding separate `JsonStore` instances on the same
  * file preserve call order before entering the cross-process lock.
  */
-const writeQueues = new Map<string, PQueue>();
+const writeLanes = new Map<string, PerKeySemaphore>();
+
+/**
+ * Persist one mutation as a read-modify-write under the file's cross-process
+ * lock: prepare the directory, re-read the file (falling back to
+ * `missingFallback` when it is gone), apply the mutation, and write the
+ * result atomically.
+ */
+const flush = Effect.fn('JsonStore.flush')(function* (
+  filePath: string,
+  mode: number | undefined,
+  key: string,
+  value: unknown,
+  missingFallback: JsonRecord,
+) {
+  yield* ensureDir(dirname(filePath), mode);
+  const { withFileLock } = yield* fileLocks;
+  yield* withFileLock(
+    filePath,
+    FLUSH_LOCK_TUNING,
+  )(
+    Effect.gen(function* () {
+      const record = yield* readJsonRecord(filePath, missingFallback);
+      if (value === undefined) {
+        delete record[key];
+      } else {
+        record[key] = value;
+      }
+      yield* Effect.tryPromise({
+        try: () =>
+          writeFileAtomic(
+            filePath,
+            `${JSON.stringify(record, null, 2)}\n`,
+            mode === undefined ? undefined : { mode },
+          ),
+        catch: (cause) => cause,
+      });
+    }),
+  );
+});
 
 /**
  * File-backed key-value store, persisted as a flat JSON object.
@@ -94,7 +161,7 @@ const writeQueues = new Map<string, PQueue>();
  * operation (e.g. a network fetch) can't clobber keys a concurrent writer —
  * another process, or another instance on the same file — persisted in the
  * meantime. Flushes for a given file path are serialized through
- * {@link writeQueues} for in-process ordering, then guarded by a filesystem
+ * {@link writeLanes} for in-process ordering, then guarded by a filesystem
  * lock for cross-process exclusion. Reads (`get`, `has`, `snapshot`, `keys`)
  * still serve this instance's view: open-time contents plus its own
  * mutations; they don't observe other writers' changes.
@@ -117,7 +184,9 @@ export class JsonStore implements StateStore {
     options: JsonStoreOptions = {},
   ): Promise<JsonStore> {
     const storePath = resolve(filePath);
-    return new JsonStore(storePath, await readJsonRecord(storePath), options);
+    const exit = await Effect.runPromiseExit(readJsonRecord(storePath));
+    if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+    return new JsonStore(storePath, exit.value, options);
   }
 
   get<T>(key: string, defaultValue?: T): T {
@@ -129,13 +198,26 @@ export class JsonStore implements StateStore {
     return Object.hasOwn(this.data, key);
   }
 
+  /**
+   * Apply the mutation in memory, then flush it on the file's lane in
+   * {@link writeLanes}. The lane is claimed synchronously, before any
+   * await, so flushes run in `set()` call order rather than racing on
+   * `mkdir`/read/`write-file-atomic` timing; a failed flush doesn't stop
+   * the lane from running subsequent flushes.
+   */
   async set(key: string, value: unknown): Promise<void> {
     if (value === undefined) {
       delete this.data[key];
     } else {
       this.data[key] = value;
     }
-    await this.enqueueFlush(key, value, this.snapshot());
+    const exit = await Effect.runPromiseExit(
+      withPerKeyPermit(
+        writeLanes,
+        this.filePath,
+      )(flush(this.filePath, this.options.mode, key, value, this.snapshot())),
+    );
+    if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
   }
 
   /** {@link StateStore} conformance; same persistence semantics as `set`. */
@@ -150,60 +232,4 @@ export class JsonStore implements StateStore {
   keys(): string[] {
     return Object.keys(this.data);
   }
-
-  /**
-   * Add the flush to the file's entry in {@link writeQueues} so flushes run
-   * in `set()` call order. The task is enqueued synchronously, before any
-   * await, so order is captured at call time rather than racing on
-   * `mkdir`/read/`write-file-atomic` timing. A failed flush doesn't stop the
-   * queue from running subsequent flushes.
-   */
-  private enqueueFlush(
-    key: string,
-    value: unknown,
-    missingFallback: JsonRecord,
-  ): Promise<void> {
-    return runOnPerKeyQueue(writeQueues, this.filePath, () =>
-      this.flush(key, value, missingFallback),
-    );
-  }
-
-  private async flush(
-    key: string,
-    value: unknown,
-    missingFallback: JsonRecord,
-  ): Promise<void> {
-    await ensureDir(dirname(this.filePath), this.options.mode);
-    const fileLocks = await getJsonStoreFileLocks();
-    await fileLocks.runExclusive(this.filePath, async () => {
-      const record = await readJsonRecord(this.filePath, missingFallback);
-      if (value === undefined) {
-        delete record[key];
-      } else {
-        record[key] = value;
-      }
-      await writeFileAtomic(
-        this.filePath,
-        `${JSON.stringify(record, null, 2)}\n`,
-        this.options.mode === undefined
-          ? undefined
-          : { mode: this.options.mode },
-      );
-    });
-  }
-}
-
-/**
- * Creates `dir` if missing. When `fileMode` is set, also chmods the
- * directory to {@link dirModeFor} — `mkdir`'s own `mode` only applies at
- * creation time, so a pre-existing directory with looser permissions needs
- * the explicit follow-up chmod too.
- */
-async function ensureDir(
-  dir: string,
-  fileMode: number | undefined,
-): Promise<void> {
-  const dirMode = fileMode === undefined ? undefined : dirModeFor(fileMode);
-  await mkdir(dir, { recursive: true, mode: dirMode });
-  if (dirMode !== undefined) await chmod(dir, dirMode);
 }

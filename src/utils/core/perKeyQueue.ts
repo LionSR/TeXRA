@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect, Semaphore } from 'effect';
 import PQueue from 'p-queue';
 
 interface QueueMap<Key> {
@@ -43,4 +44,49 @@ export async function runOnPerKeyQueue<Key, T>(
       queues.delete(key);
     }
   }
+}
+
+/**
+ * One in-process exclusive lane per key for Effect programs: a single-permit
+ * semaphore plus the number of fibers holding or waiting on it. The count is
+ * what lets the entry leave its map once the last fiber settles — a
+ * `Semaphore` exposes no waiter count of its own.
+ */
+export interface PerKeySemaphore {
+  readonly semaphore: Semaphore.Semaphore;
+  fibers: number;
+}
+
+/**
+ * Run `self` holding `key`'s permit — the Effect-side sibling of
+ * {@link runOnPerKeyQueue}. The lane is created on first use and deleted from
+ * `semaphores` once the last fiber holding or waiting on it settles, whether
+ * `self` succeeded, failed, or was interrupted. The lane is claimed
+ * synchronously when the effect starts, so fibers started in sequence enter
+ * in that order.
+ */
+export function withPerKeyPermit<Key>(
+  semaphores: Map<Key, PerKeySemaphore>,
+  key: Key,
+): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
+  return (self) =>
+    Effect.suspend(() => {
+      let lane = semaphores.get(key);
+      if (!lane) {
+        lane = { semaphore: Semaphore.makeUnsafe(1), fibers: 0 };
+        semaphores.set(key, lane);
+      }
+      const held = lane;
+      held.fibers += 1;
+      return held.semaphore.withPermit(self).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            held.fibers -= 1;
+            if (held.fibers === 0 && semaphores.get(key) === held) {
+              semaphores.delete(key);
+            }
+          }),
+        ),
+      );
+    });
 }
