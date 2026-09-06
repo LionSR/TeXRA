@@ -363,6 +363,8 @@ export function createTranscriptFold(
         const state = streams.get(event.id);
         if (!state) return;
         state.chunks.push(event.text);
+        // Partial chunks can split a secret. The complete text is redacted
+        // again at settlement or when the transcript boundary closes.
         writer.appendText(event.id, redactSecrets(event.text));
         return;
       }

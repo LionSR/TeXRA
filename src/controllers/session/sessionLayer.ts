@@ -235,12 +235,22 @@ const transcriptBridge = (transcripts: StreamLogStore) =>
               for (const entry of rows) {
                 const key = `${streamId}/${entry.id}`;
                 if (isRunningStreamingTextEntry(entry)) {
-                  next.set(key, entry.text ?? '');
+                  const text = entry.text ?? '';
+                  next.set(key, {
+                    previous: undefined,
+                    text,
+                    length: text.length,
+                  });
                 } else next.delete(key);
               }
               for (const chunk of delta.textChunks) {
                 const key = `${streamId}/${chunk.id}`;
-                next.set(key, (next.get(key) ?? '') + chunk.appendText);
+                const previous = next.get(key);
+                next.set(key, {
+                  previous,
+                  text: chunk.appendText,
+                  length: (previous?.length ?? 0) + chunk.appendText.length,
+                });
               }
               return next;
             });

@@ -24,6 +24,7 @@ import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
+  type InflightTextChunk,
 } from '@controllers/session/sessionSources';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
@@ -47,6 +48,13 @@ import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript/StreamLogStore';
+
+function textTail(
+  text: string,
+  previous?: InflightTextChunk,
+): InflightTextChunk {
+  return { previous, text, length: (previous?.length ?? 0) + text.length };
+}
 
 const SELF = '["test-host",4242,"self-start"]';
 const KEY = '/workspace/framing';
@@ -254,15 +262,16 @@ describe('session framer', () => {
         // to one row in one window merge into one chunk, never two; a chunk
         // of an aggregate the Subscribe did not name is left out.
         yield* events.publish([running]);
+        const first = textTail('Hel');
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, 'Hel']]),
+          new Map([[`${STREAM}/row-1`, first]]),
         );
         yield* SubscriptionRef.set(
           chunks.ref,
           new Map([
-            [`${STREAM}/row-1`, 'Hello'],
-            ['stream:unnamed/row-1', 'hidden'],
+            [`${STREAM}/row-1`, textTail('lo', first)],
+            ['stream:unnamed/row-1', textTail('hidden')],
           ]),
         );
         const tail: EventsFrame[] = [];
@@ -303,7 +312,7 @@ describe('session framer', () => {
         const chunks = yield* TextChunkSource;
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, 'Hello']]),
+          new Map([[`${STREAM}/row-1`, textTail('Hello')]]),
         );
         const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
         const webview = yield* WebviewSessions.open(KEY);
@@ -371,7 +380,7 @@ describe('session framer', () => {
         yield* events.publish([running]);
         yield* SubscriptionRef.set(
           chunks.ref,
-          new Map([[`${STREAM}/row-1`, 'Hello again']]),
+          new Map([[`${STREAM}/row-1`, textTail('Hello again')]]),
         );
         yield* settle(
           view.ref,
@@ -399,7 +408,7 @@ describe('session framer', () => {
         ]);
         yield* SubscriptionRef.update(
           chunks.ref,
-          (held) => new Map([...held, [`${child}/row-2`, 'First']]),
+          (held) => new Map([...held, [`${child}/row-2`, textTail('First')]]),
         );
         yield* settle(
           view.ref,
@@ -407,7 +416,14 @@ describe('session framer', () => {
         );
         yield* SubscriptionRef.update(
           chunks.ref,
-          (held) => new Map([...held, [`${child}/row-2`, 'First suffix']]),
+          (held) =>
+            new Map([
+              ...held,
+              [
+                `${child}/row-2`,
+                textTail(' suffix', held.get(`${child}/row-2`)),
+              ],
+            ]),
         );
         yield* settle(
           view.ref,
