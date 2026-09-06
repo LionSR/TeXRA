@@ -1,4 +1,4 @@
-import PQueue from 'p-queue';
+import { Semaphore } from 'effect';
 import {
   createClient,
   SupabaseClient as Client,
@@ -7,6 +7,7 @@ import {
 } from '@supabase/supabase-js';
 import { createLog } from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { callPort, runAuthProgram } from './authProgram';
 import { SUPABASE_GOTRUE_STORAGE_KEY } from './config';
 import type { SessionSecretStore } from './oauth/sessionAccess';
 import type { AuthTokenProvider, StoredSessionState } from './TokenProvider';
@@ -95,7 +96,7 @@ export class SupabaseClient {
   private static instance: Client | null = null;
   private static config: { url: string; publicKey: string } | null = null;
   private static authProvider: AuthTokenProvider | null = null;
-  private static pkceOperations = new PQueue({ concurrency: 1 });
+  private static pkceOperations = Semaphore.makeUnsafe(1);
 
   /**
    * Error that occurred during initialization, if any.
@@ -119,16 +120,19 @@ export class SupabaseClient {
     this.authProvider = null;
     this.initError = null;
     this.readinessError = null;
-    this.pkceOperations = new PQueue({ concurrency: 1 });
+    this.pkceOperations = Semaphore.makeUnsafe(1);
   }
 
   /**
    * Serialize PKCE callback exchange with OAuth initialization. Auth-js keeps
-   * each verifier in a flow-specific slot, while this queue prevents an older
-   * exchange from racing initialization in the same extension host.
+   * each verifier in a flow-specific slot, while this single permit prevents
+   * an older exchange from racing initialization in the same extension host.
+   * The operation's own rejection reaches the caller unchanged.
    */
   static async runPkceOperation<T>(operation: () => Promise<T>): Promise<T> {
-    return this.pkceOperations.add(operation) as Promise<T>;
+    return runAuthProgram(
+      this.pkceOperations.withPermits(1)(callPort(operation)),
+    );
   }
 
   /**

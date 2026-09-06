@@ -5,16 +5,27 @@
  * differences (authorize URL, claim extraction, refresh buffer) live in the
  * {@link SubscriptionOAuthPolicy}; this class owns single-flight refresh,
  * generation supersede, and serialized storage writes.
+ *
+ * The Promise methods are the boundary; each runs one of the Effect programs
+ * below through {@link runAuthProgram}. Inside, the shared-machine
+ * {@link SubscriptionOAuthError} is the typed failure and a port rejection
+ * travels as {@link AuthPortError}; the edge re-mints both as the provider's
+ * own error type.
  */
 // Third-party imports
-import PQueue from 'p-queue';
+import { Deferred, Effect, Result, Semaphore } from 'effect';
 
 // Local imports
-import { Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import {
+  AuthPortError,
+  awaitWritesAhead,
+  callPort,
+  runAuthProgram,
+} from '../authProgram';
 import { generateOAuthState, generatePkcePair } from './pkce';
 import {
   rethrowAsProviderAuthError,
@@ -113,14 +124,27 @@ export interface SubscriptionOAuthCoordinatorInit<
   errorType: ProviderAuthErrorCtor;
 }
 
+type MachineFailure = SubscriptionOAuthError | AuthPortError;
+
+/**
+ * A client or policy throw: the provider's own error (a
+ * {@link SubscriptionOAuthError} subclass) stays first-class so the machine
+ * can read its `kind`; anything else is that call's rejection.
+ */
+function asMachineFailure(cause: unknown): MachineFailure {
+  return cause instanceof SubscriptionOAuthError
+    ? cause
+    : new AuthPortError({ cause });
+}
+
 export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   private readonly storage: SubscriptionSessionStorage;
   private readonly policy: SubscriptionOAuthPolicy<S>;
   private readonly client: SubscriptionOAuthClient;
   private readonly now: () => number;
   private readonly errorType: ProviderAuthErrorCtor;
-  private refreshInFlight: Promise<S> | null = null;
-  private readonly sessionMutations = new PQueue({ concurrency: 1 });
+  private refreshInFlight: Deferred.Deferred<S, MachineFailure> | null = null;
+  private readonly sessionMutations = Semaphore.makeUnsafe(1);
   private sessionGeneration = 0;
 
   constructor(init: SubscriptionOAuthCoordinatorInit<S>) {
@@ -131,110 +155,33 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     this.errorType = init.errorType;
   }
 
-  /** Map shared-machine errors into the provider's own error type. */
-  private async mapErrors<T>(op: () => Promise<T>): Promise<T> {
-    try {
-      return await op();
-    } catch (error) {
-      rethrowAsProviderAuthError(error, this.errorType);
-    }
-  }
+  /** Re-throw a program failure as the provider's own error type. */
+  private readonly rethrowAsProviderError = (error: MachineFailure): never =>
+    rethrowAsProviderAuthError(
+      error instanceof AuthPortError ? error.cause : error,
+      this.errorType,
+    );
 
   async loadSession(): Promise<S | null> {
-    const raw = await this.storage.get();
-    if (!raw) return null;
-    const parsedJson = safeParseJson(raw);
-    if (Result.isFailure(parsedJson)) {
-      // Present-but-corrupt is not the same as never signed in.
-      log.warn(
-        `Stored subscription session is not valid JSON; treating as signed out: ${toErrorMessage(parsedJson.failure)}`,
-      );
-      return null;
-    }
-    const parsed = this.policy.sessionSchema.safeParse(parsedJson.success);
-    if (!parsed.success) {
-      log.warn(
-        `Stored subscription session failed schema validation; treating as signed out: ${toErrorMessage(parsed.error)}`,
-      );
-      return null;
-    }
-    return parsed.data;
-  }
-
-  private async storeSession(session: S): Promise<void> {
-    await this.storage.store(JSON.stringify(session));
-  }
-
-  private mutateSession(op: () => Promise<void>): Promise<void> {
-    return this.sessionMutations.add(op);
-  }
-
-  private async loadStableSession(): Promise<{
-    generation: number;
-    session: S | null;
-  }> {
-    while (true) {
-      const generation = this.sessionGeneration;
-      await this.sessionMutations.onIdle();
-      const session = await this.loadSession();
-      if (generation === this.sessionGeneration) {
-        return { generation, session };
-      }
-    }
-  }
-
-  private supersedeInFlightRefresh(): void {
-    this.sessionGeneration += 1;
-    this.refreshInFlight = null;
-  }
-
-  /**
-   * After a refresh is superseded (concurrent login/sign-out), take a stable
-   * storage snapshot and:
-   * - return a *replacement* session (different credentials) — concurrent
-   *   sign-in succeeded; do not force re-auth;
-   * - return a still-fresh same session (rare: supersede without replace);
-   * - throw `expired` when storage is empty (sign-out won);
-   * - throw `transient` when the pre-refresh session is still the only
-   *   stored value and still needs refresh (failed concurrent store, or a
-   *   server-rotated refresh that never landed) — never hand back a known-
-   *   stale token as if the refresh completed.
-   */
-  private async sessionAfterSupersede(previous: S): Promise<S> {
-    const { session } = await this.loadStableSession();
-    if (!session) {
-      throw new SubscriptionOAuthError(
-        this.policy.sessionChangedMessage,
-        'expired',
-      );
-    }
-    const replaced =
-      session.accessToken !== previous.accessToken ||
-      session.refreshToken !== previous.refreshToken;
-    if (replaced || !this.isExpiringSoon(session)) {
-      return session;
-    }
-    throw new SubscriptionOAuthError(
-      this.policy.sessionChangedMessage,
-      'transient',
-    );
+    return runAuthProgram(this.load());
   }
 
   async signOut(): Promise<void> {
-    await this.mapErrors(async () => {
-      this.supersedeInFlightRefresh();
-      await this.mutateSession(() => this.storage.delete());
-    });
+    await runAuthProgram(this.clearSession(), this.rethrowAsProviderError);
   }
 
   async getStatus(): Promise<SubscriptionSessionStatus> {
-    const session = await this.loadSession();
-    if (!session) return { signedIn: false };
-    return {
-      signedIn: true,
-      email: session.email,
-      accountId: session.accountId,
-    };
+    return runAuthProgram(
+      Effect.map(this.load(), (session) =>
+        session
+          ? {
+              signedIn: true,
+              email: session.email,
+              accountId: session.accountId,
+            }
+          : { signedIn: false },
+      ),
+    );
   }
 
   buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest {
@@ -248,23 +195,21 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     verifier: string;
     redirectUri: string;
   }): Promise<S> {
-    return this.mapErrors(async () => {
-      const tokens = await this.client.exchangeAuthorizationCode(params);
-      const session = this.policy.buildSession(tokens, this.now());
-      this.supersedeInFlightRefresh();
-      await this.mutateSession(() => this.storeSession(session));
-      return session;
-    });
+    return runAuthProgram(
+      Effect.flatMap(
+        this.clientCall(() => this.client.exchangeAuthorizationCode(params)),
+        (tokens) => this.adoptTokens(tokens),
+      ),
+      this.rethrowAsProviderError,
+    );
   }
 
   /** Persist tokens from a successful device-code (or other) grant. */
   async storeTokens(tokens: SubscriptionTokenResponse): Promise<S> {
-    return this.mapErrors(async () => {
-      const session = this.policy.buildSession(tokens, this.now());
-      this.supersedeInFlightRefresh();
-      await this.mutateSession(() => this.storeSession(session));
-      return session;
-    });
+    return runAuthProgram(
+      this.adoptTokens(tokens),
+      this.rethrowAsProviderError,
+    );
   }
 
   isExpiringSoon(session: S): boolean {
@@ -272,52 +217,211 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   }
 
   async getFreshAccessToken(): Promise<string> {
-    const session = await this.getFreshSession();
-    return session.accessToken;
+    return runAuthProgram(
+      Effect.map(this.freshSession(), (session) => session.accessToken),
+      this.rethrowAsProviderError,
+    );
   }
 
   async getFreshSession(): Promise<S> {
-    return this.mapErrors(async () => {
-      const { generation, session } = await this.loadStableSession();
-      if (!session) {
-        throw new SubscriptionOAuthError(
-          this.policy.notSignedInMessage,
-          'expired',
+    return runAuthProgram(this.freshSession(), this.rethrowAsProviderError);
+  }
+
+  private readonly load = Effect.fn('SubscriptionOAuthCoordinator.loadSession')(
+    function* (this: SubscriptionOAuthCoordinator<S>) {
+      const raw = yield* callPort(() => this.storage.get());
+      if (!raw) return null;
+      const parsedJson = safeParseJson(raw);
+      if (Result.isFailure(parsedJson)) {
+        // Present-but-corrupt is not the same as never signed in.
+        log.warn(
+          `Stored subscription session is not valid JSON; treating as signed out: ${toErrorMessage(parsedJson.failure)}`,
         );
+        return null;
       }
-      if (!this.isExpiringSoon(session)) return session;
-      return this.refresh(session, generation);
+      const parsed = this.policy.sessionSchema.safeParse(parsedJson.success);
+      if (!parsed.success) {
+        log.warn(
+          `Stored subscription session failed schema validation; treating as signed out: ${toErrorMessage(parsed.error)}`,
+        );
+        return null;
+      }
+      return parsed.data;
+    },
+  );
+
+  private store(session: S): Effect.Effect<void, AuthPortError> {
+    return callPort(() => this.storage.store(JSON.stringify(session)));
+  }
+
+  private clientCall<A>(
+    call: () => Promise<A>,
+  ): Effect.Effect<A, MachineFailure> {
+    return Effect.tryPromise({ try: call, catch: asMachineFailure });
+  }
+
+  private buildSession(
+    tokens: SubscriptionTokenResponse,
+    previous?: S,
+  ): Effect.Effect<S, MachineFailure> {
+    return Effect.try({
+      try: () => this.policy.buildSession(tokens, this.now(), previous),
+      catch: asMachineFailure,
     });
   }
 
-  private async refresh(previous: S, generation: number): Promise<S> {
-    if (this.refreshInFlight) return this.refreshInFlight;
-    const task = this.performRefresh(previous, generation).finally(() => {
-      if (this.refreshInFlight === task) this.refreshInFlight = null;
-    });
-    this.refreshInFlight = task;
-    return task;
+  /** Serialize one storage write behind the single mutation permit. */
+  private mutate<E>(write: Effect.Effect<void, E>): Effect.Effect<void, E> {
+    return this.sessionMutations.withPermits(1)(write);
   }
 
-  private async performRefresh(previous: S, generation: number): Promise<S> {
-    let tokens: SubscriptionTokenResponse;
-    try {
-      tokens = await this.client.refreshTokens(previous.refreshToken);
-    } catch (error) {
-      if (error instanceof SubscriptionOAuthError && error.kind === 'fatal') {
-        await this.mutateSession(async () => {
-          if (generation !== this.sessionGeneration) return;
-          await this.storage.delete();
-        });
+  private readonly stableSession = Effect.fn(
+    'SubscriptionOAuthCoordinator.stableSession',
+  )(function* (this: SubscriptionOAuthCoordinator<S>) {
+    for (;;) {
+      const generation = this.sessionGeneration;
+      // A mutation that starts after the barrier bumps the generation and
+      // re-loops.
+      yield* awaitWritesAhead(this.sessionMutations);
+      const session = yield* this.load();
+      if (generation === this.sessionGeneration) {
+        return { generation, session };
       }
-      throw error;
     }
-    const session = this.policy.buildSession(tokens, this.now(), previous);
-    await this.mutateSession(async () => {
-      if (generation !== this.sessionGeneration) return;
-      await this.storeSession(session);
-    });
-    if (generation === this.sessionGeneration) return session;
-    return this.sessionAfterSupersede(previous);
+  });
+
+  private supersedeInFlightRefresh(): void {
+    this.sessionGeneration += 1;
+    this.refreshInFlight = null;
   }
+
+  /**
+   * After a refresh is superseded (concurrent login/sign-out), take a stable
+   * storage snapshot and:
+   * - return a *replacement* session (different credentials) — concurrent
+   *   sign-in succeeded; do not force re-auth;
+   * - return a still-fresh same session (rare: supersede without replace);
+   * - fail `expired` when storage is empty (sign-out won);
+   * - fail `transient` when the pre-refresh session is still the only
+   *   stored value and still needs refresh (failed concurrent store, or a
+   *   server-rotated refresh that never landed) — never hand back a known-
+   *   stale token as if the refresh completed.
+   */
+  private readonly sessionAfterSupersede = Effect.fn(
+    'SubscriptionOAuthCoordinator.sessionAfterSupersede',
+  )(function* (this: SubscriptionOAuthCoordinator<S>, previous: S) {
+    const { session } = yield* this.stableSession();
+    if (!session) {
+      return yield* Effect.fail(
+        new SubscriptionOAuthError(
+          this.policy.sessionChangedMessage,
+          'expired',
+        ),
+      );
+    }
+    const replaced =
+      session.accessToken !== previous.accessToken ||
+      session.refreshToken !== previous.refreshToken;
+    if (replaced || !this.isExpiringSoon(session)) {
+      return session;
+    }
+    return yield* Effect.fail(
+      new SubscriptionOAuthError(
+        this.policy.sessionChangedMessage,
+        'transient',
+      ),
+    );
+  });
+
+  private readonly clearSession = Effect.fn(
+    'SubscriptionOAuthCoordinator.signOut',
+  )(function* (this: SubscriptionOAuthCoordinator<S>) {
+    this.supersedeInFlightRefresh();
+    yield* this.mutate(callPort(() => this.storage.delete()));
+  });
+
+  /** Make the session for a fresh grant the stored one, superseding any refresh in flight. */
+  private readonly adoptTokens = Effect.fn(
+    'SubscriptionOAuthCoordinator.adoptTokens',
+  )(function* (
+    this: SubscriptionOAuthCoordinator<S>,
+    tokens: SubscriptionTokenResponse,
+  ) {
+    const session = yield* this.buildSession(tokens);
+    this.supersedeInFlightRefresh();
+    yield* this.mutate(this.store(session));
+    return session;
+  });
+
+  private readonly freshSession = Effect.fn(
+    'SubscriptionOAuthCoordinator.getFreshSession',
+  )(function* (this: SubscriptionOAuthCoordinator<S>) {
+    const { generation, session } = yield* this.stableSession();
+    if (!session) {
+      return yield* Effect.fail(
+        new SubscriptionOAuthError(this.policy.notSignedInMessage, 'expired'),
+      );
+    }
+    if (!this.isExpiringSoon(session)) return session;
+    return yield* this.refresh(session, generation);
+  });
+
+  /** Single-flight refresh: concurrent callers share the in-flight result. */
+  private readonly refresh = Effect.fn('SubscriptionOAuthCoordinator.refresh')(
+    function* (
+      this: SubscriptionOAuthCoordinator<S>,
+      previous: S,
+      generation: number,
+    ) {
+      if (this.refreshInFlight) {
+        return yield* Deferred.await(this.refreshInFlight);
+      }
+      const inFlight = yield* Deferred.make<S, MachineFailure>();
+      this.refreshInFlight = inFlight;
+      return yield* this.performRefresh(previous, generation).pipe(
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            Deferred.doneUnsafe(inFlight, exit);
+            if (this.refreshInFlight === inFlight) this.refreshInFlight = null;
+          }),
+        ),
+      );
+    },
+  );
+
+  private readonly performRefresh = Effect.fn(
+    'SubscriptionOAuthCoordinator.performRefresh',
+  )(function* (
+    this: SubscriptionOAuthCoordinator<S>,
+    previous: S,
+    generation: number,
+  ) {
+    const tokens = yield* this.clientCall(() =>
+      this.client.refreshTokens(previous.refreshToken),
+    ).pipe(
+      // A fatal rejection means the stored session is dead: clear it, unless
+      // a concurrent login or sign-out already replaced it.
+      Effect.tapError((error) =>
+        error instanceof SubscriptionOAuthError && error.kind === 'fatal'
+          ? this.mutate(
+              Effect.suspend(() =>
+                generation === this.sessionGeneration
+                  ? callPort(() => this.storage.delete())
+                  : Effect.void,
+              ),
+            )
+          : Effect.void,
+      ),
+    );
+    const session = yield* this.buildSession(tokens, previous);
+    yield* this.mutate(
+      Effect.suspend(() =>
+        generation === this.sessionGeneration
+          ? this.store(session)
+          : Effect.void,
+      ),
+    );
+    if (generation === this.sessionGeneration) return session;
+    return yield* this.sessionAfterSupersede(previous);
+  });
 }

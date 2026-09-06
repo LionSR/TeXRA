@@ -1,10 +1,16 @@
-import PQueue from 'p-queue';
+import { Clock, Deferred, Effect, Semaphore } from 'effect';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   parseAuthCallbackCode,
   type AuthCallbackUriParts,
 } from './authCallback';
+import {
+  awaitWritesAhead,
+  callPort,
+  runAuthProgram,
+  type AuthPortError,
+} from './authProgram';
 import {
   parseStoredSupabaseSession,
   toStorableSupabaseSession,
@@ -51,27 +57,25 @@ const NOOP_SUPABASE_SESSION_LOG: Required<SupabaseSessionLog> = {
   error: () => undefined,
 };
 
-interface StableSessionSnapshot {
-  session: SupabaseSession | null;
-  version: number;
-}
-
 /**
  * Host-neutral coordinator for Supabase session storage, token freshness,
  * OAuth callback conversion, and refresh. Host wrappers own UI and registration.
+ *
+ * The Promise methods are the boundary; each runs one of the Effect programs
+ * below through {@link runAuthProgram}. Storage and GoTrue rejections travel
+ * as {@link AuthPortError} and reach the caller as the port's own error.
  */
 export class SupabaseSessionCoordinator implements AuthTokenProvider {
-  private refreshPromise: Promise<SupabaseSession | null> | null = null;
+  private refreshInFlight: Deferred.Deferred<SupabaseSession | null> | null =
+    null;
   private sessionMutationVersion = 0;
-  private lastStoredSession: SupabaseSession | null = null;
-  private lastStoredSessionVersion = 0;
   private lastRefreshFailure: SessionRefreshFailure | null = null;
-  // Single-flight serialized writes, same mechanism as
-  // SubscriptionOAuthCoordinator's `sessionMutations`: concurrency:1 makes
-  // `.onIdle()` alone a sufficient "no mutation in flight, and none can start
-  // without bumping sessionMutationVersion first" barrier for
-  // `loadStableSessionSnapshot`'s version-recheck loop below.
-  private readonly sessionMutations = new PQueue({ concurrency: 1 });
+  // Single-permit serialization of writes, same mechanism as
+  // SubscriptionOAuthCoordinator's `sessionMutations`: every write bumps
+  // `sessionMutationVersion` under the permit, so taking the permit alone is
+  // a sufficient "no mutation in flight, and none can start without bumping
+  // the version first" barrier for `stableSnapshot`'s version-recheck loop.
+  private readonly sessionMutations = Semaphore.makeUnsafe(1);
   private readonly log: Required<SupabaseSessionLog>;
 
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {
@@ -83,20 +87,17 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   async loadSession(): Promise<SupabaseSession | null> {
-    return parseStoredSupabaseSession(await this.options.storage.get(), {
-      logSource: 'SupabaseSession',
-      warn: this.log.warn,
-    });
+    return runAuthProgram(this.load());
   }
 
   async storeSession(session: SupabaseSession): Promise<void> {
-    await this.runSessionMutation(session, () =>
-      this.options.storage.store(JSON.stringify(session)),
-    );
+    await runAuthProgram(this.mutate(this.write(session)));
   }
 
   async clearSession(): Promise<void> {
-    await this.runSessionMutation(null, () => this.options.storage.delete());
+    await runAuthProgram(
+      this.mutate(callPort(() => this.options.storage.delete())),
+    );
   }
 
   /**
@@ -106,23 +107,9 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * delete the replacement.
    */
   async clearSessionIfCurrent(expected: SupabaseSession): Promise<boolean> {
-    return this.sessionMutations.add(async () => {
-      const current = await this.loadSession();
-      if (
-        !current ||
-        current.accessToken !== expected.accessToken ||
-        current.refreshToken !== expected.refreshToken
-      ) {
-        return false;
-      }
-
-      this.sessionMutationVersion += 1;
-      const mutationVersion = this.sessionMutationVersion;
-      await this.options.storage.delete();
-      this.lastStoredSession = null;
-      this.lastStoredSessionVersion = mutationVersion;
-      return true;
-    });
+    return runAuthProgram(
+      this.sessionMutations.withPermits(1)(this.clearIfCurrent(expected)),
+    );
   }
 
   /**
@@ -131,8 +118,12 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * @returns Fresh access token, or null if no session or refresh failed.
    */
   async ensureFreshToken(): Promise<string | null> {
-    const session = await this.getFreshSession();
-    return session?.accessToken ?? null;
+    return runAuthProgram(
+      Effect.map(
+        this.freshSession(),
+        (session) => session?.accessToken ?? null,
+      ),
+    );
   }
 
   /**
@@ -141,25 +132,19 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * the old credential's failure to the new one.
    */
   async getStoredSessionState(): Promise<StoredSessionState> {
-    try {
-      for (;;) {
-        const before = await this.loadStableSessionSnapshot();
-        if (!before.session) return 'none';
-        if (await this.getSessionTokens()) return 'authenticated';
-
-        const after = await this.loadStableSessionSnapshot();
-        if (!after.session) return 'none';
-        if (after.version !== before.version) continue;
-
-        return this.lastRefreshFailure === 'invalid' ? 'invalid' : 'transient';
-      }
-    } catch (error) {
-      this.log.error(
-        'SupabaseSession',
-        `Error classifying stored session: ${toErrorMessage(error)}`,
-      );
-      return 'transient';
-    }
+    return runAuthProgram(
+      this.storedSessionState().pipe(
+        Effect.catchTag('AuthPortError', (error) =>
+          Effect.sync(() => {
+            this.log.error(
+              'SupabaseSession',
+              `Error classifying stored session: ${toErrorMessage(error.cause)}`,
+            );
+            return 'transient' as const;
+          }),
+        ),
+      ),
+    );
   }
 
   /**
@@ -168,8 +153,9 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * unreadable — the caller decides what to show in its place.
    */
   async getStoredAccountLabel(): Promise<string | null> {
-    const session = await this.loadSession();
-    return session?.account.label ?? null;
+    return runAuthProgram(
+      Effect.map(this.load(), (session) => session?.account.label ?? null),
+    );
   }
 
   getLastRefreshFailure(): SessionRefreshFailure | null {
@@ -178,12 +164,16 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
 
   /** Get access and refresh tokens from secure storage. */
   async getSessionTokens(): Promise<SessionTokens | null> {
-    const session = await this.getFreshSession();
-    if (!session) return null;
-    return {
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken,
-    };
+    return runAuthProgram(
+      Effect.map(this.freshSession(), (session) =>
+        session
+          ? {
+              accessToken: session.accessToken,
+              refreshToken: session.refreshToken,
+            }
+          : null,
+      ),
+    );
   }
 
   /** Convert a PKCE OAuth callback into a host-neutral session record. */
@@ -193,17 +183,90 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   ): Promise<SupabaseCallbackResult> {
     const parsedCode = parseAuthCallbackCode(uri);
     return parsedCode.success
-      ? this.createSessionViaCodeExchange(parsedCode.code, flowId)
+      ? runAuthProgram(this.exchangeCode(parsedCode.code, flowId))
       : parsedCode;
   }
 
-  private async createSessionViaCodeExchange(
+  /** Refresh session via Supabase native refresh, with concurrency protection. */
+  async refreshSession(
+    session: SupabaseSession,
+    expectedVersion = this.sessionMutationVersion,
+  ): Promise<SupabaseSession | null> {
+    return runAuthProgram(this.refresh(session, expectedVersion));
+  }
+
+  /** Read and parse the stored session. */
+  private readonly load = Effect.fn('SupabaseSessionCoordinator.load')(
+    function* (this: SupabaseSessionCoordinator) {
+      const raw = yield* callPort(() => this.options.storage.get());
+      return parseStoredSupabaseSession(raw, {
+        logSource: 'SupabaseSession',
+        warn: this.log.warn,
+      });
+    },
+  );
+
+  private write(session: SupabaseSession): Effect.Effect<void, AuthPortError> {
+    return callPort(() => this.options.storage.store(JSON.stringify(session)));
+  }
+
+  /** Run one storage write behind the permit, bumping the version it ran at. */
+  private mutate(
+    write: Effect.Effect<void, AuthPortError>,
+  ): Effect.Effect<void, AuthPortError> {
+    return this.sessionMutations.withPermits(1)(
+      Effect.suspend(() => {
+        this.sessionMutationVersion += 1;
+        return write;
+      }),
+    );
+  }
+
+  /** The body of {@link clearSessionIfCurrent}; the caller holds the permit. */
+  private readonly clearIfCurrent = Effect.fn(
+    'SupabaseSessionCoordinator.clearSessionIfCurrent',
+  )(function* (this: SupabaseSessionCoordinator, expected: SupabaseSession) {
+    const current = yield* this.load();
+    if (
+      !current ||
+      current.accessToken !== expected.accessToken ||
+      current.refreshToken !== expected.refreshToken
+    ) {
+      return false;
+    }
+    this.sessionMutationVersion += 1;
+    yield* callPort(() => this.options.storage.delete());
+    return true;
+  });
+
+  /** A stable read: no mutation in flight, and none started during the read. */
+  private readonly stableSnapshot = Effect.fn(
+    'SupabaseSessionCoordinator.stableSnapshot',
+  )(function* (this: SupabaseSessionCoordinator) {
+    for (;;) {
+      const versionBeforeLoad = this.sessionMutationVersion;
+      // A mutation that starts after the barrier bumps the version and
+      // re-loops.
+      yield* awaitWritesAhead(this.sessionMutations);
+      const session = yield* this.load();
+      if (versionBeforeLoad === this.sessionMutationVersion) {
+        return { session, version: versionBeforeLoad };
+      }
+    }
+  });
+
+  private readonly exchangeCode = Effect.fn(
+    'SupabaseSessionCoordinator.createSessionFromCallback',
+  )(function* (
+    this: SupabaseSessionCoordinator,
     code: string,
     flowId?: string,
-  ): Promise<SupabaseCallbackResult> {
-    const { data, error } = await this.options
-      .getClient()
-      .auth.exchangeCodeForSession(code, flowId ? { flowId } : undefined);
+  ) {
+    const { data, error } = yield* callPort(() =>
+      this.options
+        .getClient()
+        .auth.exchangeCodeForSession(code, flowId ? { flowId } : undefined),
+    );
 
     if (error || !data.session) {
       // A missing verifier means this callback belongs to a sign-in attempt
@@ -220,49 +283,65 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
               'sign-in again.'
             : error?.message || 'Code exchange failed',
         isAuthError: true,
-      };
+      } as const;
     }
 
-    return { success: true, session: toStorableSupabaseSession(data.session) };
-  }
+    return {
+      success: true,
+      session: toStorableSupabaseSession(data.session),
+    } as const;
+  });
 
-  /** Refresh session via Supabase native refresh, with concurrency protection. */
-  async refreshSession(
+  /**
+   * Single-flight refresh: concurrent callers share the in-flight result. A
+   * port rejection anywhere in the attempt is a transient failure, logged
+   * here where its disposition is decided.
+   */
+  private readonly refresh = Effect.fn(
+    'SupabaseSessionCoordinator.refreshSession',
+  )(function* (
+    this: SupabaseSessionCoordinator,
     session: SupabaseSession,
-    expectedVersion = this.sessionMutationVersion,
-  ): Promise<SupabaseSession | null> {
-    if (this.refreshPromise) {
-      return this.refreshPromise;
+    expectedVersion: number,
+  ) {
+    if (this.refreshInFlight) {
+      return yield* Deferred.await(this.refreshInFlight);
     }
-
+    const inFlight = yield* Deferred.make<SupabaseSession | null>();
+    this.refreshInFlight = inFlight;
     this.lastRefreshFailure = null;
-    this.refreshPromise = this.refreshViaSupabase(session)
-      .then((refreshed) =>
-        refreshed
-          ? this.storeRefreshIfCurrent(refreshed, expectedVersion)
-          : null,
-      )
-      .catch((error) => {
-        this.lastRefreshFailure = 'transient';
-        this.log.error(
-          'SupabaseSession',
-          `Error refreshing session: ${toErrorMessage(error)}`,
-        );
-        return null;
-      })
-      .finally(() => {
-        this.refreshPromise = null;
-      });
+    return yield* this.performRefresh(session, expectedVersion).pipe(
+      Effect.catchTag('AuthPortError', (error) =>
+        Effect.sync(() => {
+          this.lastRefreshFailure = 'transient';
+          this.log.error(
+            'SupabaseSession',
+            `Error refreshing session: ${toErrorMessage(error.cause)}`,
+          );
+          return null;
+        }),
+      ),
+      Effect.onExit((exit) =>
+        Effect.sync(() => {
+          Deferred.doneUnsafe(inFlight, exit);
+          if (this.refreshInFlight === inFlight) this.refreshInFlight = null;
+        }),
+      ),
+    );
+  });
 
-    return this.refreshPromise;
-  }
-
-  private async refreshViaSupabase(
+  private readonly performRefresh = Effect.fn(
+    'SupabaseSessionCoordinator.performRefresh',
+  )(function* (
+    this: SupabaseSessionCoordinator,
     session: SupabaseSession,
-  ): Promise<SupabaseSession | null> {
-    const { data, error } = await this.options.getClient().auth.refreshSession({
-      refresh_token: session.refreshToken,
-    });
+    expectedVersion: number,
+  ) {
+    const { data, error } = yield* callPort(() =>
+      this.options.getClient().auth.refreshSession({
+        refresh_token: session.refreshToken,
+      }),
+    );
 
     if (error || !data.session) {
       this.lastRefreshFailure = classifyAuthFailureStatus(error?.status);
@@ -270,98 +349,83 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     this.lastRefreshFailure = null;
-    return toStorableSupabaseSession(data.session);
-  }
+    const refreshed = toStorableSupabaseSession(data.session);
+    // Decided under the permit: a mutation queued behind this refresh has not
+    // bumped the version yet, and the refreshed session must not overwrite
+    // what that mutation is about to write.
+    const stored = yield* this.sessionMutations.withPermits(1)(
+      Effect.suspend((): Effect.Effect<boolean, AuthPortError> => {
+        if (this.sessionMutationVersion !== expectedVersion) {
+          return Effect.succeed(false);
+        }
+        this.sessionMutationVersion += 1;
+        return Effect.as(this.write(refreshed), true);
+      }),
+    );
+    if (stored) return refreshed;
+    return (yield* this.stableSnapshot()).session;
+  });
 
-  private async getFreshSession(): Promise<SupabaseSession | null> {
-    try {
-      const { session, version } = await this.loadStableSessionSnapshot();
-      if (!session) {
-        return null;
-      }
-
-      const timeUntilExpiry = session.expiresAt - Date.now();
-
-      if (timeUntilExpiry < this.options.tokenRefreshThresholdMs) {
-        this.log.info(
-          'SupabaseSession',
-          `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
-        );
-        const refreshed = await this.refreshSession(session, version);
-        if (refreshed) return refreshed;
-        if (timeUntilExpiry <= 0) {
-          this.log.warn(
+  /**
+   * The stored session, refreshed if it is near expiry. A port rejection on
+   * the read is a transient failure; refresh never fails.
+   */
+  private readonly freshSession = Effect.fn(
+    'SupabaseSessionCoordinator.freshSession',
+  )(function* (this: SupabaseSessionCoordinator) {
+    const snapshot = yield* this.stableSnapshot().pipe(
+      Effect.catchTag('AuthPortError', (error) =>
+        Effect.sync(() => {
+          this.lastRefreshFailure = 'transient';
+          this.log.error(
             'SupabaseSession',
-            'Token expired and refresh failed, returning null',
+            `Error loading fresh session: ${toErrorMessage(error.cause)}`,
           );
           return null;
-        }
-      }
-
-      this.lastRefreshFailure = null;
-      return session;
-    } catch (error) {
-      this.lastRefreshFailure = 'transient';
-      this.log.error(
-        'SupabaseSession',
-        `Error loading fresh session: ${toErrorMessage(error)}`,
-      );
-      return null;
-    }
-  }
-
-  private async loadStableSession(): Promise<SupabaseSession | null> {
-    return (await this.loadStableSessionSnapshot()).session;
-  }
-
-  private async loadStableSessionSnapshot(): Promise<StableSessionSnapshot> {
-    for (;;) {
-      const versionBeforeLoad = this.sessionMutationVersion;
-      await this.sessionMutations.onIdle();
-      const session = await this.loadSession();
-      if (versionBeforeLoad === this.sessionMutationVersion) {
-        return { session, version: versionBeforeLoad };
-      }
-    }
-  }
-
-  private async runSessionMutation(
-    session: SupabaseSession | null,
-    operation: () => Promise<void>,
-  ): Promise<void> {
-    await this.sessionMutations.add(async () => {
-      this.sessionMutationVersion += 1;
-      const mutationVersion = this.sessionMutationVersion;
-      await operation();
-      this.lastStoredSession = session;
-      this.lastStoredSessionVersion = mutationVersion;
-    });
-  }
-
-  private async storeRefreshIfCurrent(
-    refreshed: SupabaseSession,
-    expectedVersion: number,
-  ): Promise<SupabaseSession | null> {
-    if (
-      this.sessionMutationVersion !== expectedVersion ||
-      this.sessionMutations.size > 0 ||
-      this.sessionMutations.pending > 0
-    ) {
-      return this.loadStableSession();
-    }
-
-    await this.storeSession(refreshed);
-    return this.isCurrentStoredSession(refreshed)
-      ? refreshed
-      : this.loadStableSession();
-  }
-
-  private isCurrentStoredSession(session: SupabaseSession): boolean {
-    return (
-      this.lastStoredSessionVersion === this.sessionMutationVersion &&
-      this.lastStoredSession?.accessToken === session.accessToken &&
-      this.lastStoredSession.refreshToken === session.refreshToken &&
-      this.lastStoredSession.id === session.id
+        }),
+      ),
     );
-  }
+    if (!snapshot?.session) return null;
+    const { session, version } = snapshot;
+
+    const timeUntilExpiry =
+      session.expiresAt - (yield* Clock.currentTimeMillis);
+
+    if (timeUntilExpiry < this.options.tokenRefreshThresholdMs) {
+      this.log.info(
+        'SupabaseSession',
+        `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
+      );
+      const refreshed = yield* this.refresh(session, version);
+      if (refreshed) return refreshed;
+      if (timeUntilExpiry <= 0) {
+        this.log.warn(
+          'SupabaseSession',
+          'Token expired and refresh failed, returning null',
+        );
+        return null;
+      }
+    }
+
+    this.lastRefreshFailure = null;
+    return session;
+  });
+
+  private readonly storedSessionState = Effect.fn(
+    'SupabaseSessionCoordinator.getStoredSessionState',
+  )(function* (this: SupabaseSessionCoordinator) {
+    for (;;) {
+      const before = yield* this.stableSnapshot();
+      if (!before.session) return 'none' as const;
+      if (yield* this.freshSession()) return 'authenticated' as const;
+
+      const after = yield* this.stableSnapshot();
+      if (!after.session) return 'none' as const;
+      if (after.version !== before.version) continue;
+
+      return this.lastRefreshFailure === 'invalid'
+        ? ('invalid' as const)
+        : ('transient' as const);
+    }
+  });
 }
