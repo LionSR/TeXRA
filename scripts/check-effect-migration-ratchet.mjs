@@ -16,12 +16,15 @@
 // Effect. No more pass-throughs nor adapters"; PRD R1 and execution rule 3
 // as amended): there are no temporary adapters, so a separate hard check
 // fails on the presence of any `@adapter-until` marker in production scope,
-// not on its expiry; and the `Effect.run*` row admits a new file through
-// `--update` only when its path is one of R1's three boundary kinds (a host
-// entry under packages/extension, packages/desktop, or packages/cli; a tool
-// `execute()` contract, src/tools/**/*Tool.ts, until lane D; the SDK's
-// public API under packages/agent/src). Baseline rows outside those paths
-// are wave-0 debt the lanes pay down: frozen as-is, never widened. Neither
+// not on its expiry; and the `Effect.run*` row separates runs at R1's three
+// boundary kinds (a host entry under packages/extension, packages/desktop,
+// or packages/cli; a tool `execute()` contract, until lane D; the SDK's
+// public API under packages/agent/src) from runs below them. A run below the
+// boundary is not refused — a refusal made the base branch un-greenable once
+// the first wave landed — but it is never anonymous: `--update` records it in
+// `debtLanes` as UNASSIGNED and the check fails on UNASSIGNED, so admitting
+// one is a deliberate act that names the lane deleting it, in the same PR.
+// The count stays shrink-only like every other row. Neither
 // check can recognize an adapter written without a marker, since "adapter"
 // is not mechanically recognizable; that stays a review obligation.
 //
@@ -97,7 +100,7 @@ function isBoundaryPath(file, toolExecuteFiles) {
   );
 }
 
-const BELOW_BOUNDARY = `below the boundary: only ${BOUNDARY_PATHS_TEXT} may run an Effect (owner ruling 2026-09-06, ${PRD} R1); convert this file and its callers to Effect, do not allowlist it`;
+const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them, or — when this PR deliberately leaves the run here — name the lane that deletes it in the baseline's debtLanes map`;
 
 const ROW_PLATFORM = 'platform()';
 const ROW_SET_SERVICES = 'setServices()';
@@ -773,14 +776,17 @@ function readBaseline() {
       }
     }
   }
-  const debtLanes = parsed?.debtLanes;
+  // Absent means an empty register, which is the end state the migration is
+  // aiming at: no run below a boundary, so no lane to name. writeBaseline
+  // omits the key in exactly that case, so the two must agree.
+  const debtLanes = parsed?.debtLanes ?? {};
   if (
-    debtLanes == null ||
     typeof debtLanes !== 'object' ||
+    Array.isArray(debtLanes) ||
     Object.values(debtLanes).some((lane) => typeof lane !== 'string')
   ) {
     throw new Error(
-      `Baseline debtLanes missing or not a map of file to lane name: ${baselinePath}. Run --update, then name each lane.`,
+      `Baseline debtLanes is not a map of file to lane name: ${baselinePath}. Run --update, then name each lane.`,
     );
   }
   if (parsed.semantics !== SEMANTICS) {
