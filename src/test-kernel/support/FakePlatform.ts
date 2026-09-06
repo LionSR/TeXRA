@@ -30,6 +30,7 @@ import {
   type FileTypeProbe,
 } from '@platform/defaults/fsEntryTypeBits';
 import { getCoreSettingDefault } from '@shared/schemas';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 function fakeFsError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
@@ -589,31 +590,16 @@ export function createFakePlatform(
   options: FakePlatformOptions = {},
   overrides: Partial<Platform> = {},
 ): Platform {
-  const lockTails = new Map<string, Promise<void>>();
+  // No file system to lock: the fake lane is the in-process one the real
+  // provider also takes before reaching `proper-lockfile`.
+  const lockLanes = new Map<string, PerKeyLane>();
   return {
     globalState: new FakeStateStore(options.globalState),
     fs: new FakeFileSystemProvider(options.files),
     storage: new FakeStorageProvider(options.globalStoragePath),
     processes: new FakeProcesses(),
     fileLocks: {
-      async runExclusive<T>(
-        lockPath: string,
-        operation: () => Promise<T>,
-      ): Promise<T> {
-        const previous = lockTails.get(lockPath) ?? Promise.resolve();
-        let release: (() => void) | undefined;
-        const tail = new Promise<void>((resolve) => {
-          release = resolve;
-        });
-        lockTails.set(lockPath, tail);
-        await previous;
-        try {
-          return await operation();
-        } finally {
-          release?.();
-          if (lockTails.get(lockPath) === tail) lockTails.delete(lockPath);
-        }
-      },
+      withFileLock: (lockPath) => withPerKeyLane(lockLanes, lockPath),
     },
     secrets: new FakeSecrets(options.secrets, options.secretsEnv),
     lifecycle: createLifecycleHost(),

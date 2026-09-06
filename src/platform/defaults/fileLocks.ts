@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Cause, Effect, Exit, Result } from 'effect';
+import { Cause, Effect, Result } from 'effect';
 import { lock, type LockOptions } from 'proper-lockfile';
 
 import { aggregateError } from '@utils/core';
@@ -76,10 +76,9 @@ const acquireLock = Effect.fn('fileLocks.acquireLock')(function* (
 /**
  * Hold `lockPath`'s in-process lane and its cross-process lock around
  * `self`, releasing both on success, failure, and interruption. A failure
- * of `self`, of the lock, or of both reaches the caller as one value with
- * the identity the Promise API has always thrown: the lone error itself, or
- * one `AggregateError` naming the path when the operation and the lock both
- * failed. The lock's own errors are `proper-lockfile`'s (`code` ELOCKED,
+ * of `self`, of the lock, or of both reaches the caller as one value: the
+ * lone error itself, or one `AggregateError` naming the path when the
+ * operation and the lock both failed. The lock's own errors are `proper-lockfile`'s (`code` ELOCKED,
  * ECOMPROMISED, …), which hosts match on, so nothing wraps them; they and
  * the directory's fs error are the `Error` the failure channel adds to
  * `self`'s own `E`. Defects and interruption pass through untouched.
@@ -124,36 +123,7 @@ export function withFileLock(
  * sections may safely exceed the stale horizon.
  */
 export function createNodeFileLocks(tuning: FileLockTuning): FileLockProvider {
-  return {
-    async runExclusive<T>(
-      lockPath: string,
-      operation: () => Promise<T>,
-    ): Promise<T> {
-      // Runs on Effect's default runtime, not `effectRuntime()`: hosts hand
-      // `nodeFileLocks` to `createNodePlatform`, and the CLI and desktop
-      // hosts open their `JsonStore`s (which flush through `withFileLock`),
-      // before they call `installProcessRuntime` — see the CLI's
-      // `initPlatform` (`createCliStateStores`, `openTexraConfigStores`, then
-      // `installProcessRuntime`) — so the process runtime may not exist yet.
-      // The site is pinned by the "Effect run boundaries" ratchet in
-      // src/test-kernel/architecture/dependencyDirection.vitest.ts.
-      // `operation` is the caller's own Promise, so its rejection keeps its
-      // identity and its type stays `unknown` at this edge.
-      const exit = await Effect.runPromiseExit(
-        withFileLock(
-          lockPath,
-          tuning,
-        )(
-          Effect.tryPromise({
-            try: () => operation(),
-            catch: (cause) => cause,
-          }),
-        ),
-      );
-      if (Exit.isSuccess(exit)) return exit.value;
-      throw Cause.squash(exit.cause);
-    },
-  };
+  return { withFileLock: (lockPath) => withFileLock(lockPath, tuning) };
 }
 
 /** Default-tuned provider for general local shared-storage paths. */

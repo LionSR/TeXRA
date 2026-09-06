@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -34,8 +35,8 @@ describe('JsonStore lock compromise boundary', () => {
       ) => {
         // Simulate proper-lockfile's renewal timer firing mid-flush: this
         // must not throw synchronously (that would escape as an uncaught
-        // exception outside JsonStore.set()'s promise), and its error must
-        // still surface through set() rather than being silently dropped.
+        // exception outside the fiber JsonStore.set() runs on), and its error
+        // must still surface through set() rather than being silently dropped.
         expect(() => options.onCompromised(compromised)).not.toThrow();
         return async () => {
           throw alreadyReleased;
@@ -46,8 +47,10 @@ describe('JsonStore lock compromise boundary', () => {
     const { JsonStore } = await loadSourceModule(
       '@platform/defaults/jsonStore',
     );
-    const store = await JsonStore.open(filePath);
+    const store = await Effect.runPromise(JsonStore.open(filePath));
 
-    await expect(store.set('key', 'value')).rejects.toBe(compromised);
+    await expect(Effect.runPromise(store.set('key', 'value'))).rejects.toBe(
+      compromised,
+    );
   });
 });

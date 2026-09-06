@@ -3,6 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
@@ -151,10 +152,12 @@ describe('workspace storage defaults', () => {
     });
     const warnings: string[] = [];
 
-    const stores = await openTexraConfigStores(storage, workspacePath, (m) =>
-      warnings.push(m),
+    const stores = await Effect.runPromise(
+      openTexraConfigStores(storage, workspacePath, (m) => warnings.push(m)),
     );
-    await stores.workspace.set('texra.files.exclude', ['dist']);
+    await Effect.runPromise(
+      stores.workspace.set('texra.files.exclude', ['dist']),
+    );
 
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('Cannot open project .texra/config.json');

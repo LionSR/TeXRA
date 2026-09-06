@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
@@ -167,14 +168,16 @@ vi.mock('@platform/defaults/nodeWorkspace', () => ({
 }));
 
 vi.mock('@cli/runtime/cliStateStores', () => ({
-  createCliStateStores: vi.fn().mockResolvedValue({
-    globalState: mocks.cliGlobalState,
-    workspaceState: {},
-    storage: {
-      getStoragePath: () => '/workspace/.texra/storage',
-      getGlobalStoragePath: () => '/tmp/texra-global',
-    },
-  }),
+  createCliStateStores: vi.fn(() =>
+    Effect.succeed({
+      globalState: mocks.cliGlobalState,
+      workspaceState: {},
+      storage: {
+        getStoragePath: () => '/workspace/.texra/storage',
+        getGlobalStoragePath: () => '/tmp/texra-global',
+      },
+    }),
+  ),
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
@@ -258,11 +261,10 @@ describe('CLI platform init', () => {
     mocks.cliGlobalState.update.mockReset();
     mocks.tryPlatform.mockReset();
     mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
-    mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
-    mocks.openTexraConfigStores.mockResolvedValue({
-      workspace: {},
-      global: {},
-    });
+    mocks.bootstrapNodeAgentDirectories.mockReturnValue(Effect.void);
+    mocks.openTexraConfigStores.mockReturnValue(
+      Effect.succeed({ workspace: {}, global: {} }),
+    );
     isAuthenticatedSpy.mockResolvedValue(false);
   });
 
@@ -386,16 +388,13 @@ describe('CLI platform init', () => {
     mocks.tryPlatform.mockReturnValueOnce(undefined);
     stubStaleCopilotRouteModels();
     mocks.openTexraConfigStores.mockImplementationOnce(
-      async (
-        _storage: unknown,
-        _cwd: string,
-        warn: (message: string) => void,
-      ) => {
-        warn(
-          'Cannot open project .texra/config.json; using the internal workspace config store. Cause: Unexpected token } in JSON at position 0',
-        );
-        return { workspace: {}, global: {} };
-      },
+      (_storage: unknown, _cwd: string, warn: (message: string) => void) =>
+        Effect.sync(() => {
+          warn(
+            'Cannot open project .texra/config.json; using the internal workspace config store. Cause: Unexpected token } in JSON at position 0',
+          );
+          return { workspace: {}, global: {} };
+        }),
     );
     const stderrWrite = vi
       .spyOn(process.stderr, 'write')
@@ -561,7 +560,7 @@ describe('CLI platform interactive signal ownership', () => {
     mocks.tryPlatform.mockReturnValue({
       globalState: stubGlobalState(() => undefined),
     });
-    mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
+    mocks.bootstrapNodeAgentDirectories.mockReturnValue(Effect.void);
   });
 
   it('initInteractiveCliPlatform keeps the platform handler live until an explicit handoff', async () => {

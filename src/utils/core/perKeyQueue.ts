@@ -7,7 +7,16 @@ interface QueueMap<Key> {
   set(key: Key, queue: PQueue): unknown;
 }
 
-/** Return the queue for a key, creating it with the requested concurrency. */
+/**
+ * Return the queue for a key, creating it with the requested concurrency.
+ *
+ * The Promise-shaped half of this module, kept for the two transcript call
+ * sites whose contracts are still synchronous or Promise-returning and whose
+ * layer may not import `@platform/processRuntime` to run an Effect. The
+ * transcript lane converts them and deletes both functions with the last
+ * caller; until then, code that already has a runtime at hand should reach
+ * for {@link withPerKeyLane} instead.
+ */
 export function getOrCreatePQueue<Key>(
   queues: QueueMap<Key>,
   key: Key,
@@ -58,6 +67,18 @@ export interface PerKeyLane {
 }
 
 /**
+ * Where the lanes live. A `Map` is the usual choice; a `WeakMap` keyed by an
+ * owning object works too and does not need the idle cleanup (its entries'
+ * lifetime is the key's own), which is why only these three methods are
+ * required.
+ */
+export interface PerKeyLanes<Key> {
+  get(key: Key): PerKeyLane | undefined;
+  set(key: Key, lane: PerKeyLane): unknown;
+  delete(key: Key): unknown;
+}
+
+/**
  * Run `self` on `key`'s lane — the Effect-side sibling of
  * {@link runOnPerKeyQueue}, and FIFO like it: each entrant claims the lane
  * synchronously when its effect starts by swapping its own `Deferred` in as
@@ -85,7 +106,7 @@ export interface PerKeyLane {
  * chain does not have.
  */
 export function withPerKeyLane<Key>(
-  lanes: Map<Key, PerKeyLane>,
+  lanes: PerKeyLanes<Key>,
   key: Key,
 ): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
   return (self) =>
