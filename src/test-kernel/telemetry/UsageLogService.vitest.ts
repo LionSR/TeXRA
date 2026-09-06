@@ -161,6 +161,43 @@ describe('UsageLogService', () => {
     expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
   });
 
+  // The ticker only schedules; each flush runs on a fiber of its own.
+  // Interrupting the ticker on dispose must leave a send already in flight
+  // alone and wait behind it, not abort the request and lose the batch it
+  // had already taken from the queue.
+  it('waits for a timer-driven flush during disposal instead of aborting it', async () => {
+    stubAccessToken();
+    UsageLogService.initialize({
+      batchSize: 100,
+      flushIntervalMs: 20,
+      enabled: true,
+    });
+
+    const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
+    const { batches, fetchMock } = stubBatchFetch(async () => {
+      await fetchReleased;
+    });
+
+    UsageLogService.log(usageEntry('timer'));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const request = fetchMock.mock.calls[0]?.[0] as Request;
+
+    const disposal = UsageLogService.dispose();
+    let disposed = false;
+    void disposal.then(() => {
+      disposed = true;
+    });
+    // Long enough for a dispose that abandons the send to have resolved.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(request.signal.aborted).toBe(false);
+    expect(disposed).toBe(false);
+
+    releaseFetch();
+    await expect(disposal).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(batches.map(batchModels)).toEqual([['timer']]);
+  });
+
   it('warns after five seconds without bounding disposal', async () => {
     stubAccessToken();
     const warn = vi.spyOn(logger, 'warn');

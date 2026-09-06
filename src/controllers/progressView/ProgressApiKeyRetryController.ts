@@ -2,6 +2,7 @@ import { Effect, Exit, Semaphore } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
+import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveDirectModelApiKeyProvider } from '@model/openRouterRouting';
@@ -17,6 +18,9 @@ import {
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
 import { isNonEmptyString } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const log = createLog('ProgressApiKeyRetryController');
 
 interface ProgressApiKeyRetryRequest {
   stream: StreamTabId;
@@ -215,15 +219,29 @@ export class ProgressApiKeyRetryController {
       // mutate in memory and then reject on persistence, so a throw midway
       // must roll back every switch that may have landed instead of
       // stranding global toggles the retry never uses. Finalizers run last
-      // registered first, so the rollback is in reverse application order,
-      // every restore is attempted, and the first failure surfaces once the
-      // rest have run. A restore that fails is a defect in the cause: it
-      // never displaces the failure that doomed the switch.
+      // registered first, so the rollback is in reverse application order
+      // and every restore is attempted. A restore that fails is logged here,
+      // where the rollback is owned, then dies: when a switch or the action
+      // failed, the caller sees that failure and the restore's defect stays
+      // behind it in the Cause; when the action reported no retry, the first
+      // restore to fail (the last switch applied) reaches the caller as its
+      // own error.
       yield* Effect.addFinalizer((exit) =>
         Exit.isSuccess(exit) && exit.value !== undefined
           ? Effect.void
-          : Effect.promise(() =>
-              runtime.restoreEnabled(before.quotaRoutes.get(reason) ?? false),
+          : Effect.tryPromise({
+              try: () =>
+                runtime.restoreEnabled(before.quotaRoutes.get(reason) ?? false),
+              catch: (error) => error,
+            }).pipe(
+              Effect.tapError((error) =>
+                Effect.sync(() => {
+                  log.warn(
+                    `Failed to restore the ${reason} quota-fallback preference after the retry did not use it: ${toErrorMessage(error)}`,
+                  );
+                }),
+              ),
+              Effect.orDie,
             ),
       );
       yield* port(() => runtime.setEnabled(false));

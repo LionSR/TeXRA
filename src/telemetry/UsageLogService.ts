@@ -189,7 +189,9 @@ class UsageBatchUndelivered extends Data.TaggedError('UsageBatchUndelivered')<{
 class UsageLogServiceImpl {
   private queue: QueuedUsageEntry[] = [];
   private retryBatch: RetryBatch | null = null;
-  /** The periodic flush, forked by `initialize` and interrupted by `dispose`. */
+  /** The ticker that schedules the periodic flush, forked by `initialize`
+   *  and interrupted by `dispose`. It only schedules: each flush runs on a
+   *  fiber of its own, so interrupting the ticker never touches a send. */
   private flushTimer: Fiber.Fiber<never> | null = null;
   /** One permit: a flush holds it while it drains, so batches leave in order
    *  and a second caller (or `dispose`) waits behind the one in flight. */
@@ -463,13 +465,21 @@ class UsageLogServiceImpl {
   private startFlushTimer(): void {
     const runtime = effectRuntime();
     if (this.flushTimer) runtime.runFork(Fiber.interrupt(this.flushTimer));
-    // The periodic flush lives until dispose() interrupts it: every host
-    // disposes on its shutdown path, and a short-lived host (the CLI) exits
-    // through that path rather than by an empty event loop.
+    // The ticker lives until dispose() interrupts it: every host disposes on
+    // its shutdown path, and a short-lived host (the CLI) exits through that
+    // path rather than by an empty event loop.
+    //
+    // Detached on purpose: a flush belongs to the lane, not to the tick that
+    // scheduled it. `sendNextBatch` takes the batch before the request goes
+    // out, and an interrupt landing there would abort the request without
+    // failing it, so nothing would requeue what was taken. Running the flush
+    // on its own fiber keeps a dispose (or re-initialize) that lands mid-send
+    // from reaching it: dispose waits behind the send on the lane instead.
+    // The flush ends with its drain and is observed by nothing else.
     this.flushTimer = runtime.runFork(
       Effect.forever(
         Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
-          Effect.andThen(this.backgroundFlush()),
+          Effect.andThen(Effect.forkDetach(this.backgroundFlush())),
         ),
       ),
     );
@@ -488,9 +498,9 @@ class UsageLogServiceImpl {
     }
     this.config.enabled = false;
 
-    // An in-flight flush is waited for without bound; past the deadline the
-    // wait is reported, not abandoned. The warning is withdrawn the moment
-    // the lane is ours.
+    // An in-flight flush — a caller's or the timer's — is waited for without
+    // bound; past the deadline the wait is reported, not abandoned. The
+    // warning is withdrawn the moment the lane is ours.
     const warning = yield* Effect.forkChild(
       Effect.sleep(Duration.millis(DISPOSE_WARNING_TIMEOUT_MS)).pipe(
         Effect.andThen(
