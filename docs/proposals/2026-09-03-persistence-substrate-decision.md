@@ -266,6 +266,19 @@ event_sequence
   INDEX (parent_id)
 ```
 
+The ordinal column is named `commit` in the event vocabulary and quoted as
+`"commit"` at every SQL declaration and reference, including all C7 queries.
+The stage 0 host measurements rejected the unquoted SQLite keyword on every
+supported floor.
+
+Every connection sets a nonzero `PRAGMA busy_timeout` before any other
+configuration statement, including `PRAGMA journal_mode = WAL`, which can
+itself contend with another opener. Stage 0 measured 26 to 55 percent failed
+appends with no busy timeout and zero failures with it across 800 concurrent
+four-kilobyte appends. The initial timeout is 5000 ms. Exhausting it fails the
+transaction explicitly; it never permits dropping an event or assigning an
+ordinal outside the transaction.
+
 Every connection enables and verifies `PRAGMA foreign_keys = ON` before any
 transaction. Parents are inserted before dependents and an aggregate's
 sequence row before its first event. The two foreign keys make deleting a

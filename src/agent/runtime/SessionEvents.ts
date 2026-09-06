@@ -23,6 +23,10 @@
  * called by `SessionHandle.publish` before the log moves, so it observes
  * every fact in publish order; renderers read `all(cursor)`.
  */
+// Node imports
+import { hostname } from 'node:os';
+
+// Third-party imports
 import {
   Context,
   Effect,
@@ -61,21 +65,13 @@ import {
 
 const logger = createLog('sessionEvents');
 
-/** The start-identity half of an owner id when the host could not read its
- *  own: a process whose start no probe can compare is unprovable, never
- *  dead (`proveOwnerLiveness`). */
-const UNREADABLE_PROCESS_START = 'unreadable';
-
-/** This process's owner id (contract C5), from the host's start identity. */
+/** This process's complete owner identity (contract C5). */
 export function processOwnerId(processStart: string | undefined): OwnerId {
-  return `${process.pid}:${processStart ?? UNREADABLE_PROCESS_START}`;
-}
-
-/** The start identity an owner id carries, null when its host could not
- *  read one (the liveness probe then reports the owner unprovable). */
-export function ownerProcessStart(ownerId: OwnerId): string | null {
-  const start = ownerId.slice(ownerId.indexOf(':') + 1);
-  return start === UNREADABLE_PROCESS_START ? null : start;
+  return JSON.stringify([
+    hostname().toLowerCase(),
+    process.pid,
+    processStart ?? null,
+  ]);
 }
 
 /**

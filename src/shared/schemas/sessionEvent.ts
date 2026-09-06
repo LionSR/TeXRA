@@ -15,7 +15,10 @@
  * transport stay free of `@agent/*` (`dependencyDirection.vitest.ts` keeps the
  * shared-to-agent allowlist empty).
  */
+import { Result } from 'effect';
 import { z } from 'zod';
+
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
@@ -43,19 +46,44 @@ import { StageKindSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
 import { ExtendedTokenUsageStatsSchema } from './usage';
 
+/** C5's complete process identity, encoded canonically without losing null. */
+const OwnerIdentitySchema = z.tuple([
+  z.string().min(1),
+  z.int().positive(),
+  z.string().min(1).nullable(),
+]);
+
 /**
- * The identity of a TeXRA process: `${pid}:${processStart}`, the
- * `owner_id` the substrate stamps at insert from the writing process
- * (contract C5). One value per process, stamped on every run it launched;
- * liveness is probed per owner, never per run (PRD 5.2). Never a lease token.
+ * JSON.stringify([hostname.toLowerCase(), pid, processStart]). Host identity
+ * is necessary: a missing local pid cannot prove a foreign process dead.
  */
-export const OwnerIdSchema = z.string().regex(/^\d+:.+$/);
+export const OwnerIdSchema = z.string().refine(
+  (value) =>
+    Result.match(parseJsonWith(value, OwnerIdentitySchema), {
+      onSuccess: (identity) =>
+        identity[0] === identity[0].toLowerCase() &&
+        JSON.stringify(identity) === value,
+      onFailure: () => false,
+    }),
+  'Expected a canonical [hostname, pid, processStart] process identity',
+);
 export type OwnerId = z.infer<typeof OwnerIdSchema>;
 
-/** The pid half of an owner id, the one part of a process identity a user
- *  can act on (`kill`, Activity Monitor). */
-export function ownerPid(ownerId: string): number {
-  return Number(ownerId.slice(0, ownerId.indexOf(':')));
+/** Decode an owner already validated at the event or transport boundary. */
+export function ownerIdentity(ownerId: OwnerId): {
+  hostname: string;
+  pid: number;
+  processStart: string | null;
+} {
+  const [hostname, pid, processStart] = JSON.parse(ownerId) as z.infer<
+    typeof OwnerIdentitySchema
+  >;
+  return { hostname, pid, processStart };
+}
+
+/** The recorded pid shown when another process holds a run. */
+export function ownerPid(ownerId: OwnerId): number {
+  return ownerIdentity(ownerId).pid;
 }
 
 /** A stream id or an inquiry thread id: the `aggregate_id` half of the

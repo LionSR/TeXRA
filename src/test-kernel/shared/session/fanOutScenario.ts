@@ -27,8 +27,8 @@ import {
 } from '@shared/session/sessionView';
 
 /** A process identity, never a lease token (contract C5). */
-export const OWNER = '4242:2026-09-04T00:00:00.000Z';
-export const OTHER_OWNER = '4343:2026-09-04T00:00:00.000Z';
+export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
+export const OTHER_OWNER = '["test-host",4343,"2026-09-04T00:00:00.000Z"]';
 export const ROOT = 'review#aaaaaaaaaaaa' as StreamTabId;
 export const CHILD = 'search#bbbbbbbbbbbb' as StreamTabId;
 export const GRANDCHILD = 'lint#dddddddddddd' as StreamTabId;

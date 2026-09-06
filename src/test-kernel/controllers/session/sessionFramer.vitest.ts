@@ -44,7 +44,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
-const SELF = '4242:self-start';
+const SELF = '["test-host",4242,"self-start"]';
 const KEY = '/workspace/framing';
 const STREAM = 'stream:framing' as StreamTabId;
 const EXECUTION = 'ab12cd' as ExecutionId;

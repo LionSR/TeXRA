@@ -49,8 +49,8 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
-const SELF = '4242:self-start';
-const OTHER = '4343:other-start';
+const SELF = '["test-host",4242,"self-start"]';
+const OTHER = '["test-host",4343,"other-start"]';
 const STREAM = 'stream:framing' as StreamTabId;
 const EXECUTION = 'ab12cd' as ExecutionId;
 const OLDER = 'stream:older' as StreamTabId;
