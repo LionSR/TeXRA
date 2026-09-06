@@ -38,6 +38,7 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
 import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -84,7 +85,7 @@ import {
   getLastCheckResults,
   refreshToolAvailability,
 } from '@tools/toolAvailability';
-import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
+import { GoalStore } from '@tools/goal';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
