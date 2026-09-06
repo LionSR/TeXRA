@@ -14,6 +14,7 @@ import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { spawnOverride } = vi.hoisted(() => ({
@@ -733,7 +734,7 @@ describe('createDirectLspLeanAdapter', () => {
     try {
       // Start without run ownership so the reuser below is the only owner.
       await adapter.fetchDiagnosticsForFile(filePath);
-      const originalEnsureReady = LeanSession.prototype.ensureReady;
+      const originalReady = LeanSession.prototype.ready;
       let enteredReady!: () => void;
       const readyEntered = new Promise<void>((resolve) => {
         enteredReady = resolve;
@@ -742,13 +743,16 @@ describe('createDirectLspLeanAdapter', () => {
       const readyGate = new Promise<void>((resolve) => {
         releaseReady = resolve;
       });
-      vi.spyOn(LeanSession.prototype, 'ensureReady').mockImplementation(
-        async function (this: LeanSession): Promise<void> {
-          enteredReady();
-          await readyGate;
-          await originalEnsureReady.call(this);
-        },
-      );
+      // Hold the adapter's readiness wait open: the owner must be recorded
+      // before it, so a run end that lands meanwhile sees the reuser.
+      vi.spyOn(LeanSession.prototype, 'ready').mockImplementation(function (
+        this: LeanSession,
+      ) {
+        enteredReady();
+        return Effect.promise(() => readyGate).pipe(
+          Effect.andThen(originalReady.call(this)),
+        );
+      });
 
       const request = asRun('e00002', () =>
         adapter.fetchDiagnosticsForFile(filePath),

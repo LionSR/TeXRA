@@ -9,6 +9,12 @@
  * run-end hook fires; the server stops after its final owner and final lease
  * are gone. An unused one is otherwise stopped after thirty minutes. Sessions
  * are also torn down on platform shutdown.
+ *
+ * Effect inside, Promises at the {@link LeanLanguageServices} edge: starts
+ * are serialized under one permit, the idle stop is a detached fiber the
+ * tracked session owns (interrupted on use, forget, or dispose), an
+ * in-progress disposal is a `Deferred` later callers join, and a stop
+ * (`stop_server`, shutdown) invalidates every queued start by generation.
  */
 
 // Node imports
@@ -16,7 +22,15 @@ import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import PQueue from 'p-queue';
+import {
+  Data,
+  Deferred,
+  Duration,
+  Effect,
+  Fiber,
+  Result,
+  Semaphore,
+} from 'effect';
 
 // Local imports
 import {
@@ -25,11 +39,12 @@ import {
 } from '@agent/runtime/RunContext';
 import { info, warn } from '@logger/logUtils';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
+import { effectRuntime } from '@platform/processRuntime';
 import type { ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runLakeCommand } from './lakeCommands';
-import { LeanSession } from './leanSession';
+import { LeanSession, type LeanSessionError } from './leanSession';
 import {
   setLeanLanguageServices,
   type LeanLanguageServices,
@@ -45,7 +60,6 @@ import type {
 } from '../leanTypes';
 
 const LOG_CHANNEL = 'lean.direct';
-const ADAPTER_STOPPED_MESSAGE = 'Lean adapter was stopped.';
 
 /** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
 const DEFAULT_LEAN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -61,6 +75,23 @@ const LAKE_PROJECT_ARGS = {
   fetch_cache: ['exe', 'cache', 'get'],
   fetch_file_cache: ['exe', 'cache', 'get'],
 } satisfies Partial<Record<LeanProjectCommand, readonly string[]>>;
+
+/** A stop (`stop_server` or shutdown) superseded the start this call queued. */
+class LeanAdapterStopped extends Data.TaggedError('LeanAdapterStopped') {
+  override readonly message = 'Lean adapter was stopped.';
+}
+
+/** No `lakefile.lean` / `lakefile.toml` above the file. */
+class LeanProjectNotFound extends Data.TaggedError('LeanProjectNotFound')<{
+  readonly message: string;
+}> {}
+
+/** A project command could not run or reported failure. */
+class LeanProjectCommandError extends Data.TaggedError(
+  'LeanProjectCommandError',
+)<{ readonly message: string }> {}
+
+type DisposeReason = 'idle' | 'exhausted' | 'restart' | 'run-end' | 'shutdown';
 
 export interface DirectLspLeanAdapterOptions {
   /** Path or name of the `lake` binary (defaults to `lake` on PATH). */
@@ -97,78 +128,61 @@ export function createDirectLspLeanAdapter(
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_LEAN_IDLE_TIMEOUT_MS;
   const now = options.now ?? Date.now;
   const sessions = new Map<string, TrackedLeanSession>();
-  const startQueue = new PQueue({ concurrency: 1 });
-  const startsIdleWaiters = new Set<() => void>();
-  let startsInFlight = 0;
+  const starts = Semaphore.makeUnsafe(1);
   let startGeneration = 0;
-  let startAbort = new AbortController();
 
-  async function getSession(filePath: string): Promise<LeanSession> {
+  /** Fails once a stop has moved the generation past the one a call captured. */
+  const stoppedUnless = (
+    generation: number,
+  ): Effect.Effect<void, LeanAdapterStopped> =>
+    startGeneration === generation
+      ? Effect.void
+      : Effect.fail(new LeanAdapterStopped());
+
+  const getSession = Effect.fn('DirectLspAdapter.getSession')(function* (
+    filePath: string,
+    runId: ExecutionId | undefined,
+  ) {
     const generation = startGeneration;
-    // Capture the run here, at the tool-call entry point: the ambient run
-    // context does not reliably survive the start queue's scheduling hop.
-    const runId = currentRunId();
     const absolute = path.resolve(filePath);
-    const root = await defaultResolveWorkspaceRoot(absolute);
-    throwIfStopped(generation);
+    const root = yield* resolveWorkspaceRoot(absolute);
+    yield* stoppedUnless(generation);
     if (!root) {
-      throw new Error(
-        `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
-      );
+      return yield* new LeanProjectNotFound({
+        message: `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
+      });
     }
-    return enqueueStart(() => getOrStartSessionLocked(root, generation, runId));
-  }
+    return yield* starts.withPermit(
+      getOrStartSessionLocked(root, generation, runId),
+    );
+  });
 
-  function throwIfStopped(generation: number): void {
-    if (startGeneration !== generation) {
-      throw new Error(ADAPTER_STOPPED_MESSAGE);
-    }
-  }
-
-  function notifyStartsIdle(): void {
-    for (const resolve of startsIdleWaiters) resolve();
-    startsIdleWaiters.clear();
-  }
-
-  function waitForStartsIdle(): Promise<void> {
-    if (startsInFlight === 0) return Promise.resolve();
-    return new Promise((resolve) => {
-      startsIdleWaiters.add(resolve);
-    });
-  }
-
-  function beginUse(root: string): TrackedLeanSession | undefined {
+  const beginUse = Effect.fn('DirectLspAdapter.beginUse')(function* (
+    root: string,
+  ) {
     const tracked = sessions.get(root);
     if (!tracked || tracked.disposing) return undefined;
     tracked.inFlight += 1;
     tracked.lastUsedAt = now();
-    if (tracked.idleTimer) {
-      clearTimeout(tracked.idleTimer);
-      tracked.idleTimer = undefined;
-    }
+    yield* disarmIdleStop(tracked);
     return tracked;
-  }
+  });
 
-  async function endUse(root: string, session: LeanSession): Promise<void> {
+  const endUse = Effect.fn('DirectLspAdapter.endUse')(function* (
+    root: string,
+    session: LeanSession,
+  ) {
     const tracked = sessions.get(root);
-    if (!tracked) return;
-    if (tracked.session !== session) return;
+    if (!tracked || tracked.session !== session) return;
     tracked.inFlight = Math.max(0, tracked.inFlight - 1);
     if (tracked.inFlight > 0) return;
     tracked.lastUsedAt = now();
     if (tracked.stopWhenIdle) {
-      try {
-        await disposeSession(root, 'run-end');
-      } catch (error) {
-        warn(
-          LOG_CHANNEL,
-          `Deferred run-end stop failed for ${root}: ${toErrorMessage(error)}`,
-        );
-      }
+      yield* disposeSession(root, 'run-end');
       return;
     }
-    armIdleTimer(root, tracked);
-  }
+    yield* armIdleStop(root, tracked);
+  });
 
   function registerSessionOwner(
     tracked: TrackedLeanSession,
@@ -181,89 +195,102 @@ export function createDirectLspLeanAdapter(
     tracked.stopWhenIdle = false;
   }
 
-  async function leaseSession(
+  const leaseSession = Effect.fn('DirectLspAdapter.leaseSession')(function* (
     root: string,
     session: LeanSession,
-  ): Promise<LeanSession> {
-    if (!beginUse(root)) {
-      throw new Error(ADAPTER_STOPPED_MESSAGE);
-    }
-    try {
-      await session.ensureReady();
-      return session;
-    } catch (error) {
-      await endUse(root, session);
-      throw error;
-    }
-  }
+  ) {
+    if (!(yield* beginUse(root))) return yield* new LeanAdapterStopped();
+    return yield* session.ready().pipe(
+      Effect.onError(() => endUse(root, session)),
+      Effect.as(session),
+    );
+  });
 
-  async function withSession<T>(
+  const withSession = <A, E>(
     filePath: string,
-    invoke: (session: LeanSession) => Promise<T>,
-  ): Promise<T> {
-    const session = await getSession(filePath);
-    try {
-      return await invoke(session);
-    } finally {
-      await endUse(session.workspaceRoot, session);
-    }
-  }
-
-  function armIdleTimer(root: string, tracked: TrackedLeanSession): void {
-    if (tracked.idleTimer) {
-      clearTimeout(tracked.idleTimer);
-      tracked.idleTimer = undefined;
-    }
-    if (idleTimeoutMs <= 0 || tracked.inFlight > 0) return;
-    const timer = setTimeout(() => {
-      void disposeSession(root, 'idle').catch((error) => {
-        warn(
-          LOG_CHANNEL,
-          `Idle stop failed for ${root}: ${toErrorMessage(error)}`,
-        );
-      });
-    }, idleTimeoutMs);
-    timer.unref?.();
-    tracked.idleTimer = timer;
-  }
-
-  function forgetSession(root: string, session: LeanSession): void {
-    const tracked = sessions.get(root);
-    if (!tracked) return;
-    if (tracked.session !== session) return;
-    if (tracked.idleTimer) clearTimeout(tracked.idleTimer);
-    sessions.delete(root);
-  }
-
-  async function disposeSession(
-    root: string,
-    reason: 'idle' | 'exhausted' | 'restart' | 'run-end' | 'shutdown',
-  ): Promise<void> {
-    const tracked = sessions.get(root);
-    if (!tracked) return;
-    if (tracked.disposing) {
-      await tracked.disposing;
-      return;
-    }
-    let settleDisposing!: () => void;
-    tracked.disposing = new Promise<void>((resolve) => {
-      settleDisposing = resolve;
+    runId: ExecutionId | undefined,
+    invoke: (session: LeanSession) => Effect.Effect<A, E>,
+  ) =>
+    Effect.gen(function* () {
+      const session = yield* getSession(filePath, runId);
+      return yield* invoke(session).pipe(
+        Effect.ensuring(endUse(session.workspaceRoot, session)),
+      );
     });
-    if (tracked.idleTimer) {
-      clearTimeout(tracked.idleTimer);
-      tracked.idleTimer = undefined;
-    }
-    // 'restart' and 'shutdown' stops are caller-initiated and already logged.
-    if (reason !== 'restart' && reason !== 'shutdown') {
-      info(LOG_CHANNEL, `Stopping Lean server at ${root} (${reason})`);
-    }
-    try {
-      await tracked.session.dispose();
-    } finally {
-      forgetSession(root, tracked.session);
-      settleDisposing();
-    }
-  }
+
+  const disarmIdleStop = Effect.fn('DirectLspAdapter.disarmIdleStop')(
+    function* (tracked: TrackedLeanSession) {
+      const idleStop = tracked.idleStop;
+      if (!idleStop) return;
+      tracked.idleStop = undefined;
+      yield* Fiber.interrupt(idleStop);
+    },
+  );
+
+  const armIdleStop = Effect.fn('DirectLspAdapter.armIdleStop')(function* (
+    root: string,
+    tracked: TrackedLeanSession,
+  ) {
+    yield* disarmIdleStop(tracked);
+    if (idleTimeoutMs <= 0 || tracked.inFlight > 0) return;
+    // Detached: the stop must outlive the tool call that armed it. Its owner
+    // is the tracked entry, which interrupts it on use, forget, or dispose.
+    // The fiber drops its own handle before stopping so the disposal never
+    // interrupts the fiber it runs on.
+    tracked.idleStop = yield* Effect.forkDetach(
+      Effect.sleep(Duration.millis(idleTimeoutMs)).pipe(
+        Effect.andThen(
+          Effect.suspend(() => {
+            tracked.idleStop = undefined;
+            return disposeSession(root, 'idle');
+          }),
+        ),
+      ),
+    );
+  });
+
+  const forgetSession = Effect.fn('DirectLspAdapter.forgetSession')(function* (
+    root: string,
+    session: LeanSession,
+  ) {
+    const tracked = sessions.get(root);
+    if (!tracked || tracked.session !== session) return;
+    yield* disarmIdleStop(tracked);
+    sessions.delete(root);
+  });
+
+  const disposeSession = Effect.fn('DirectLspAdapter.disposeSession')(
+    function* (root: string, reason: DisposeReason) {
+      const tracked = sessions.get(root);
+      if (!tracked) return;
+      if (tracked.disposing) {
+        yield* Deferred.await(tracked.disposing);
+        return;
+      }
+      const disposing = Deferred.makeUnsafe<void>();
+      tracked.disposing = disposing;
+      yield* disarmIdleStop(tracked);
+      // 'restart' and 'shutdown' stops are caller-initiated and already logged.
+      if (reason !== 'restart' && reason !== 'shutdown') {
+        info(LOG_CHANNEL, `Stopping Lean server at ${root} (${reason})`);
+      }
+      yield* tracked.session
+        .close()
+        .pipe(
+          Effect.ensuring(
+            forgetSession(root, tracked.session).pipe(
+              Effect.andThen(Deferred.succeed(disposing, undefined)),
+            ),
+          ),
+        );
+    },
+  );
+
+  const disposeSessions = (reason: DisposeReason, roots: Iterable<string>) =>
+    Effect.forEach(roots, (root) => disposeSession(root, reason), {
+      concurrency: 'unbounded',
+      discard: true,
+    });
 
   /**
    * Run-end hook: release the ended run's ownership of every server it used.
@@ -271,33 +298,37 @@ export function createDirectLspLeanAdapter(
    * owner ends during an in-flight request, disposal waits for the final lease.
    * Sessions started outside any run have no owners and use the idle timeout.
    */
-  async function stopSessionsForRun(runId: ExecutionId): Promise<void> {
-    const roots: string[] = [];
-    for (const [root, tracked] of sessions) {
-      if (tracked.disposing || !tracked.ownerRunIds.delete(runId)) continue;
-      if (tracked.ownerRunIds.size > 0) continue;
-      if (tracked.inFlight > 0) {
-        tracked.stopWhenIdle = true;
-      } else {
-        roots.push(root);
+  const stopSessionsForRun = Effect.fn('DirectLspAdapter.stopSessionsForRun')(
+    function* (runId: ExecutionId) {
+      const roots: string[] = [];
+      for (const [root, tracked] of sessions) {
+        if (tracked.disposing || !tracked.ownerRunIds.delete(runId)) continue;
+        if (tracked.ownerRunIds.size > 0) continue;
+        if (tracked.inFlight > 0) {
+          tracked.stopWhenIdle = true;
+        } else {
+          roots.push(root);
+        }
       }
-    }
-    await Promise.all(roots.map((root) => disposeSession(root, 'run-end')));
-  }
+      yield* disposeSessions('run-end', roots);
+    },
+  );
 
-  async function evictIdleSessions(): Promise<void> {
-    if (idleTimeoutMs <= 0) return;
-    const cutoff = now() - idleTimeoutMs;
-    const idleRoots = [...sessions.entries()]
-      .filter(
-        ([, tracked]) =>
-          !tracked.disposing &&
-          tracked.inFlight === 0 &&
-          tracked.lastUsedAt <= cutoff,
-      )
-      .map(([root]) => root);
-    await Promise.all(idleRoots.map((root) => disposeSession(root, 'idle')));
-  }
+  const evictIdleSessions = Effect.fn('DirectLspAdapter.evictIdleSessions')(
+    function* () {
+      if (idleTimeoutMs <= 0) return;
+      const cutoff = now() - idleTimeoutMs;
+      const idleRoots = [...sessions.entries()]
+        .filter(
+          ([, tracked]) =>
+            !tracked.disposing &&
+            tracked.inFlight === 0 &&
+            tracked.lastUsedAt <= cutoff,
+        )
+        .map(([root]) => root);
+      yield* disposeSessions('idle', idleRoots);
+    },
+  );
 
   /**
    * Stop currently-idle other workspaces after EMFILE/ENFILE, then return so
@@ -305,13 +336,12 @@ export function createDirectLspLeanAdapter(
    * their descriptors are gone first. Do not wait for busy sessions: position
    * RPCs have no timeout, so one hung hover/goal would stall the start queue.
    */
-  async function evictOthersForExhausted(
-    exceptRoot: string,
-    generation: number,
-  ): Promise<void> {
-    throwIfStopped(generation);
+  const evictOthersForExhausted = Effect.fn(
+    'DirectLspAdapter.evictOthersForExhausted',
+  )(function* (exceptRoot: string, generation: number) {
+    yield* stoppedUnless(generation);
     const idleOthers: string[] = [];
-    const alreadyDisposing: Array<Promise<void>> = [];
+    const alreadyDisposing: Array<Deferred.Deferred<void>> = [];
     for (const [key, tracked] of sessions) {
       if (key === exceptRoot) continue;
       if (tracked.disposing) {
@@ -320,180 +350,307 @@ export function createDirectLspLeanAdapter(
       }
       if (tracked.inFlight === 0) idleOthers.push(key);
     }
-    await Promise.all([
-      ...idleOthers.map((key) => disposeSession(key, 'exhausted')),
-      ...alreadyDisposing,
-    ]);
-  }
+    yield* Effect.all(
+      [
+        disposeSessions('exhausted', idleOthers),
+        ...alreadyDisposing.map((disposing) => Deferred.await(disposing)),
+      ],
+      { concurrency: 'unbounded', discard: true },
+    );
+  });
 
-  /** Dispose every session and reject starts that have not begun. */
-  async function disposeAll(): Promise<void> {
+  /**
+   * Dispose every session and fail starts that have not begun: they observe
+   * the new generation once they hold the permit, so holding it here means
+   * every start has drained and the second pass catches any it readied.
+   */
+  const disposeAll = Effect.fn('DirectLspAdapter.disposeAll')(function* () {
     startGeneration += 1;
-    // Abort queued `add()` promises in place. `clear()` would drop them
-    // without settling, leaving Lean tool calls pending forever.
-    startAbort.abort(new Error(ADAPTER_STOPPED_MESSAGE));
-    startAbort = new AbortController();
-    await Promise.all(
-      [...sessions.keys()].map((root) => disposeSession(root, 'shutdown')),
+    yield* disposeSessions('shutdown', [...sessions.keys()]);
+    yield* starts.withPermit(
+      Effect.suspend(() => disposeSessions('shutdown', [...sessions.keys()])),
     );
-    await waitForStartsIdle();
-    await Promise.all(
-      [...sessions.keys()].map((root) => disposeSession(root, 'shutdown')),
-    );
-  }
+  });
 
-  function enqueueStart<T>(task: () => Promise<T>): Promise<T> {
-    return startQueue.add(
-      async () => {
-        startsInFlight += 1;
-        try {
-          return await task();
-        } finally {
-          startsInFlight -= 1;
-          if (startsInFlight === 0) notifyStartsIdle();
-        }
-      },
-      { signal: startAbort.signal },
-    ) as Promise<T>;
-  }
-
-  async function getOrStartSessionLocked(
+  const getOrStartSessionLocked = Effect.fn(
+    'DirectLspAdapter.getOrStartSessionLocked',
+  )(function* (
     root: string,
     generation: number,
-    runId?: ExecutionId,
-  ): Promise<LeanSession> {
-    throwIfStopped(generation);
-    const existing = sessions.get(root);
-    if (existing?.disposing) {
-      await existing.disposing;
-      throwIfStopped(generation);
-      return getOrStartSessionLocked(root, generation, runId);
+    runId: ExecutionId | undefined,
+  ) {
+    yield* stoppedUnless(generation);
+    let existing = sessions.get(root);
+    while (existing?.disposing) {
+      yield* Deferred.await(existing.disposing);
+      yield* stoppedUnless(generation);
+      existing = sessions.get(root);
     }
     if (existing) {
-      // Register before ensureReady's await so a concurrent run-end hook sees
+      // Register before the readiness wait so a concurrent run-end hook sees
       // this owner. Reusers join the owner set rather than displacing a parent
       // or sibling that may use the shared-worktree server again.
       registerSessionOwner(existing, runId);
-      return leaseSession(root, existing.session);
+      return yield* leaseSession(root, existing.session);
     }
-    await evictIdleSessions();
-    throwIfStopped(generation);
-    try {
-      return await startAndLease(root, generation, runId);
-    } catch (error) {
-      if (!isFileTableExhausted(error) || sessions.size === 0) {
-        throw error;
-      }
-      warn(
-        LOG_CHANNEL,
-        `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
-      );
-      await evictOthersForExhausted(root, generation);
-      throwIfStopped(generation);
-      return startAndLease(root, generation, runId);
-    }
-  }
+    yield* evictIdleSessions();
+    yield* stoppedUnless(generation);
+    return yield* startAndLease(root, generation, runId).pipe(
+      Effect.catchIf(
+        (error) => isFileTableExhausted(error) && sessions.size > 0,
+        (error) =>
+          Effect.gen(function* () {
+            warn(
+              LOG_CHANNEL,
+              `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
+            );
+            yield* evictOthersForExhausted(root, generation);
+            yield* stoppedUnless(generation);
+            return yield* startAndLease(root, generation, runId);
+          }),
+      ),
+    );
+  });
 
-  async function startFreshSession(
-    root: string,
-    generation: number,
-    runId?: ExecutionId,
-  ): Promise<LeanSession> {
-    throwIfStopped(generation);
-    const session = new LeanSession({
-      workspaceRoot: root,
-      lakeCommand,
-      onExit: () => {
-        const tracked = sessions.get(root);
-        if (tracked?.disposing) return;
-        forgetSession(root, session);
-      },
-    });
-    sessions.set(root, {
-      session,
-      lastUsedAt: now(),
-      inFlight: 0,
-      ownerRunIds: new Set(runId === undefined ? [] : [runId]),
-    });
-    try {
-      await session.ensureReady();
-      // Re-check after the await: a concurrent disposeAll must not leave a
+  const startFreshSession = Effect.fn('DirectLspAdapter.startFreshSession')(
+    function* (
+      root: string,
+      generation: number,
+      runId: ExecutionId | undefined,
+    ) {
+      yield* stoppedUnless(generation);
+      const session: LeanSession = new LeanSession({
+        workspaceRoot: root,
+        lakeCommand,
+        onExit: () =>
+          Effect.suspend(() => {
+            const tracked = sessions.get(root);
+            if (tracked?.disposing) return Effect.void;
+            return forgetSession(root, session);
+          }),
+      });
+      sessions.set(root, {
+        session,
+        lastUsedAt: now(),
+        inFlight: 0,
+        ownerRunIds: new Set(runId === undefined ? [] : [runId]),
+      });
+      // Re-check after readiness: a concurrent disposeAll must not leave a
       // freshly readied session behind. Any failure here (including this
       // stop) tears the just-tracked session down again.
-      throwIfStopped(generation);
-      return session;
-    } catch (error) {
-      await disposeSession(root, 'shutdown');
-      throw error;
-    }
-  }
+      return yield* Effect.gen(function* () {
+        yield* session.ready();
+        yield* stoppedUnless(generation);
+        return session;
+      }).pipe(Effect.onError(() => disposeSession(root, 'shutdown')));
+    },
+  );
 
-  async function startAndLease(
+  const startAndLease = Effect.fn('DirectLspAdapter.startAndLease')(function* (
     root: string,
     generation: number,
-    runId?: ExecutionId,
-  ): Promise<LeanSession> {
-    const session = await startFreshSession(root, generation, runId);
-    return leaseSession(root, session);
-  }
+    runId: ExecutionId | undefined,
+  ) {
+    const session = yield* startFreshSession(root, generation, runId);
+    return yield* leaseSession(root, session);
+  });
 
-  function restartSession(root: string, runId?: ExecutionId): Promise<void> {
-    const generation = startGeneration;
-    return enqueueStart(async () => {
-      throwIfStopped(generation);
-      await disposeSession(root, 'restart');
-      throwIfStopped(generation);
-      await evictIdleSessions();
-      throwIfStopped(generation);
-      await startFreshSession(root, generation, runId);
-      const tracked = sessions.get(root);
-      if (tracked) armIdleTimer(root, tracked);
-    });
-  }
+  const restartSession = Effect.fn('DirectLspAdapter.restartSession')(
+    function* (root: string, runId: ExecutionId | undefined) {
+      const generation = startGeneration;
+      yield* starts.withPermit(
+        Effect.gen(function* () {
+          yield* stoppedUnless(generation);
+          yield* disposeSession(root, 'restart');
+          yield* stoppedUnless(generation);
+          yield* evictIdleSessions();
+          yield* stoppedUnless(generation);
+          yield* startFreshSession(root, generation, runId);
+          const tracked = sessions.get(root);
+          if (tracked) yield* armIdleStop(root, tracked);
+        }),
+      );
+    },
+  );
 
-  return {
-    async fetchDiagnosticsForFile(
-      file: string,
-    ): Promise<FetchDiagnosticsResult> {
-      let session: LeanSession;
-      try {
-        session = await getSession(file);
-      } catch (error) {
-        // Session start covers both "not a Lake project" and a missing or
-        // broken `lake`/`lean` toolchain — report it as toolchain_unavailable
-        // so the tool can give actionable setup guidance instead of a generic
-        // "could not open file".
-        const message = toErrorMessage(error);
-        warn(
-          LOG_CHANNEL,
-          `fetchDiagnosticsForFile: no Lean session for ${file}: ${message}`,
-        );
-        return { ok: false, kind: 'toolchain_unavailable', message };
-      }
-
-      try {
-        const diagnostics = await session.fetchDiagnostics(file);
-        return { ok: true, diagnostics };
-      } catch (error) {
-        const message = toErrorMessage(error);
-        if (isInterruptedLeanSession(message)) {
+  const fetchDiagnosticsForFile = Effect.fn(
+    'DirectLspAdapter.fetchDiagnosticsForFile',
+  )(function* (file: string, runId: ExecutionId | undefined) {
+    const started = yield* Effect.result(getSession(file, runId));
+    if (Result.isFailure(started)) {
+      // Session start covers both "not a Lake project" and a missing or
+      // broken `lake`/`lean` toolchain — report it as toolchain_unavailable
+      // so the tool can give actionable setup guidance instead of a generic
+      // "could not open file".
+      const message = toErrorMessage(started.failure);
+      warn(
+        LOG_CHANNEL,
+        `fetchDiagnosticsForFile: no Lean session for ${file}: ${message}`,
+      );
+      const result: FetchDiagnosticsResult = {
+        ok: false,
+        kind: 'toolchain_unavailable',
+        message,
+      };
+      return result;
+    }
+    const session = started.success;
+    return yield* session.diagnostics(file).pipe(
+      Effect.map((diagnostics): FetchDiagnosticsResult => ({
+        ok: true,
+        diagnostics,
+      })),
+      Effect.catchTag(
+        ['LeanSessionDisposed', 'LeanSessionNotRunning'],
+        (error): Effect.Effect<FetchDiagnosticsResult> => {
+          const message = toErrorMessage(error);
           warn(
             LOG_CHANNEL,
             `fetchDiagnosticsForFile: session interrupted for ${file}: ${message}`,
           );
-          return { ok: false, kind: 'toolchain_unavailable', message };
-        }
+          return Effect.succeed({
+            ok: false,
+            kind: 'toolchain_unavailable',
+            message,
+          });
+        },
+      ),
+      Effect.catch((error): Effect.Effect<FetchDiagnosticsResult> => {
         // Opening/reading the file itself failed (e.g. ENOENT) — the file is
         // the problem, so the tool keeps its "could not open file" framing.
+        const message = toErrorMessage(error);
         warn(
           LOG_CHANNEL,
           `fetchDiagnosticsForFile: could not read ${file}: ${message}`,
         );
-        return { ok: false, kind: 'file_missing', message };
-      } finally {
-        await endUse(session.workspaceRoot, session);
-      }
+        return Effect.succeed({ ok: false, kind: 'file_missing', message });
+      }),
+      Effect.ensuring(endUse(session.workspaceRoot, session)),
+    );
+  });
+
+  const executeFileCommand = Effect.fn('DirectLspAdapter.executeFileCommand')(
+    function* (
+      command: LeanFileCommand,
+      filePath: string,
+      runId: ExecutionId | undefined,
+    ) {
+      // Both file commands have the same effect from our point of view: drop
+      // the cached open state and re-open with fresh contents.
+      return yield* withSession(filePath, runId, (session) =>
+        session.restartFile(filePath),
+      ).pipe(
+        Effect.as(true),
+        // Return false (LeanFileTool surfaces it as a failure result) and log
+        // the cause. Honors the `Promise<boolean>` contract so a missing/broken
+        // `lake` doesn't throw out of the JSON-RPC path.
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            warn(
+              LOG_CHANNEL,
+              `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,
+            );
+            return false;
+          }),
+        ),
+      );
     },
+  );
+
+  const executeProjectCommand = Effect.fn(
+    'DirectLspAdapter.executeProjectCommand',
+  )(function* (command: LeanProjectCommand, runId: ExecutionId | undefined) {
+    // Project commands aren't tied to a file. We apply to every active
+    // session; lake commands serialize per workspace via the mutex.
+    switch (command) {
+      case 'restart_server': {
+        const roots = [...sessions.keys()];
+        if (roots.length === 0) {
+          return yield* new LeanProjectCommandError({
+            message: 'No Lean server running to restart.',
+          });
+        }
+        yield* Effect.forEach(roots, (root) => restartSession(root, runId), {
+          concurrency: 'unbounded',
+          discard: true,
+        });
+        return;
+      }
+      case 'stop_server':
+        yield* disposeAll();
+        return;
+      // `fetch_file_cache` normally needs the active editor's file; we don't
+      // have one in CLI/desktop, so it falls back to the project-wide cache
+      // fetch (same as `fetch_cache`). All four fan out one lake-arg set per
+      // active session via the LAKE_PROJECT_ARGS lookup below.
+      case 'build':
+      case 'clean':
+      case 'fetch_cache':
+      case 'fetch_file_cache': {
+        const acquired: TrackedLeanSession[] = [];
+        for (const [root] of [...sessions]) {
+          const tracked = yield* beginUse(root);
+          if (tracked) {
+            registerSessionOwner(tracked, runId);
+            acquired.push(tracked);
+          }
+        }
+        yield* runForAllSessions(
+          acquired.map((tracked) => tracked.session),
+          lakeCommand,
+          LAKE_PROJECT_ARGS[command],
+        ).pipe(
+          Effect.ensuring(
+            Effect.forEach(
+              acquired,
+              (tracked) =>
+                endUse(tracked.session.workspaceRoot, tracked.session),
+              { concurrency: 'unbounded', discard: true },
+            ),
+          ),
+        );
+        return;
+      }
+      case 'install_elan':
+      case 'install_deps':
+      case 'update_elan':
+      case 'select_toolchain':
+        return yield* new LeanProjectCommandError({
+          message:
+            `Command "${command}" is only available inside VS Code with the leanprover.lean4 extension. ` +
+            'In CLI/desktop builds, run the matching shell command directly (see https://leanprover-community.github.io/install/linux.html).',
+        });
+    }
+  });
+
+  const positionRequest = <T>(
+    filePath: string,
+    line: number,
+    column: number,
+    method: string,
+  ): Effect.Effect<LspResult<T>> =>
+    withSession(filePath, currentRunId(), (session) =>
+      session.requestSettled<T | null>(filePath, line, column, method),
+    ).pipe(
+      Effect.map((data): LspResult<T> =>
+        data
+          ? { data }
+          : { data: null, error: 'Lean returned no data for this position.' },
+      ),
+      Effect.catch((error) =>
+        Effect.succeed<LspResult<T>>({
+          data: null,
+          error: toErrorMessage(error),
+        }),
+      ),
+    );
+
+  // The Promise edge: one run per public entry. The run is captured here,
+  // before the fiber starts, because the ambient run context is a property
+  // of the calling turn, not of the scheduler the fiber resumes on.
+  return {
+    fetchDiagnosticsForFile: (file) =>
+      effectRuntime().runPromise(fetchDiagnosticsForFile(file, currentRunId())),
 
     // No navigateToFirstError here: CLI/desktop have no editor to move the
     // cursor, and the interface declares it an optional host capability so
@@ -501,156 +658,41 @@ export function createDirectLspLeanAdapter(
     // The tool result still carries the diagnostic list for the agent to act
     // on.
 
-    async executeFileCommand(
-      command: LeanFileCommand,
-      filePath: string,
-    ): Promise<boolean> {
-      try {
-        // Both file commands have the same effect from our point of view: drop
-        // the cached open state and re-open with fresh contents.
-        await withSession(filePath, (session) => session.restartFile(filePath));
-        return true;
-      } catch (error) {
-        // Return false (LeanFileTool surfaces it as a failure result) and log
-        // the cause. Honors the `Promise<boolean>` contract so a missing/broken
-        // `lake` doesn't throw out of the JSON-RPC path.
-        warn(
-          LOG_CHANNEL,
-          `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,
-        );
-        return false;
-      }
-    },
+    executeFileCommand: (command, filePath) =>
+      effectRuntime().runPromise(
+        executeFileCommand(command, filePath, currentRunId()),
+      ),
 
-    async executeProjectCommand(command: LeanProjectCommand): Promise<void> {
-      // Capture attribution before any asynchronous work can leave the ambient
-      // run context, matching file-scoped calls through getSession().
-      const runId = currentRunId();
-      // Project commands aren't tied to a file. We apply to every active
-      // session; lake commands serialize per workspace via the mutex.
-      switch (command) {
-        case 'restart_server': {
-          const roots = [...sessions.keys()];
-          if (roots.length === 0) {
-            throw new Error('No Lean server running to restart.');
-          }
-          await Promise.all(roots.map((root) => restartSession(root, runId)));
-          return;
-        }
-        case 'stop_server':
-          await disposeAll();
-          return;
-        // `fetch_file_cache` normally needs the active editor's file; we don't
-        // have one in CLI/desktop, so it falls back to the project-wide cache
-        // fetch (same as `fetch_cache`). All four fan out one lake-arg set per
-        // active session via the LAKE_PROJECT_ARGS lookup below.
-        case 'build':
-        case 'clean':
-        case 'fetch_cache':
-        case 'fetch_file_cache': {
-          const acquired: TrackedLeanSession[] = [];
-          for (const [root] of [...sessions]) {
-            const tracked = beginUse(root);
-            if (tracked) {
-              registerSessionOwner(tracked, runId);
-              acquired.push(tracked);
-            }
-          }
-          try {
-            await runForAllSessions(
-              acquired.map((tracked) => tracked.session),
-              lakeCommand,
-              LAKE_PROJECT_ARGS[command],
-            );
-          } finally {
-            await Promise.all(
-              acquired.map((tracked) =>
-                endUse(tracked.session.workspaceRoot, tracked.session),
-              ),
-            );
-          }
-          return;
-        }
-        case 'install_elan':
-        case 'install_deps':
-        case 'update_elan':
-        case 'select_toolchain':
-          throw new Error(
-            `Command "${command}" is only available inside VS Code with the leanprover.lean4 extension. ` +
-              'In CLI/desktop builds, run the matching shell command directly (see https://leanprover-community.github.io/install/linux.html).',
-          );
-      }
-    },
+    executeProjectCommand: (command) =>
+      effectRuntime().runPromise(
+        executeProjectCommand(command, currentRunId()),
+      ),
 
-    async getGoalState(
-      filePath: string,
-      line: number,
-      column: number,
-    ): Promise<LspResult<PlainGoal>> {
-      return positionRequest<PlainGoal>(filePath, (session) =>
-        session.requestSettled<PlainGoal | null>(
-          filePath,
-          line,
-          column,
-          '$/lean/plainGoal',
-        ),
-      );
-    },
+    getGoalState: (filePath, line, column) =>
+      effectRuntime().runPromise(
+        positionRequest<PlainGoal>(filePath, line, column, '$/lean/plainGoal'),
+      ),
 
-    async getTermGoal(
-      filePath: string,
-      line: number,
-      column: number,
-    ): Promise<LspResult<PlainTermGoal>> {
-      return positionRequest<PlainTermGoal>(filePath, (session) =>
-        session.requestSettled<PlainTermGoal | null>(
+    getTermGoal: (filePath, line, column) =>
+      effectRuntime().runPromise(
+        positionRequest<PlainTermGoal>(
           filePath,
           line,
           column,
           '$/lean/plainTermGoal',
         ),
-      );
-    },
+      ),
 
-    async getHoverInfo(
-      filePath: string,
-      line: number,
-      column: number,
-    ): Promise<LspResult<LspHover>> {
-      return positionRequest<LspHover>(filePath, (session) =>
-        session.requestSettled<LspHover | null>(
-          filePath,
-          line,
-          column,
-          'textDocument/hover',
-        ),
-      );
-    },
+    getHoverInfo: (filePath, line, column) =>
+      effectRuntime().runPromise(
+        positionRequest<LspHover>(filePath, line, column, 'textDocument/hover'),
+      ),
 
-    stopSessionsForRun,
+    stopSessionsForRun: (runId) =>
+      effectRuntime().runPromise(stopSessionsForRun(runId)),
 
-    dispose: disposeAll,
+    dispose: () => effectRuntime().runPromise(disposeAll()),
   };
-
-  async function positionRequest<T>(
-    filePath: string,
-    invoke: (session: LeanSession) => Promise<T | null>,
-  ): Promise<LspResult<T>> {
-    try {
-      const data = await withSession(filePath, invoke);
-      if (!data)
-        return {
-          data: null,
-          error: 'Lean returned no data for this position.',
-        };
-      return { data };
-    } catch (error) {
-      return {
-        data: null,
-        error: toErrorMessage(error),
-      };
-    }
-  }
 }
 
 interface TrackedLeanSession {
@@ -661,21 +703,15 @@ interface TrackedLeanSession {
   ownerRunIds: Set<ExecutionId>;
   /** Final owner ended while a request was still leased. */
   stopWhenIdle?: boolean;
-  idleTimer?: ReturnType<typeof setTimeout>;
-  disposing?: Promise<void>;
+  /** The armed idle stop; interrupted on use, forget, or dispose. */
+  idleStop?: Fiber.Fiber<void>;
+  /** Settles when an in-progress disposal has fully released the session. */
+  disposing?: Deferred.Deferred<void>;
 }
 
 /** The agent run the current tool call executes for, when it runs inside one. */
 function currentRunId(): ExecutionId | undefined {
   return getRunContextExecutionId(tryUseRunContext());
-}
-
-function isInterruptedLeanSession(message: string): boolean {
-  return (
-    message.includes('Lean session has been disposed') ||
-    message.includes('Lean session is not running') ||
-    message.includes(ADAPTER_STOPPED_MESSAGE)
-  );
 }
 
 function isFileTableExhausted(error: unknown): boolean {
@@ -688,61 +724,68 @@ function isFileTableExhausted(error: unknown): boolean {
   return false;
 }
 
-async function runForAllSessions(
-  activeSessions: LeanSession[],
-  lakeCommand: string,
-  args: readonly string[],
-): Promise<void> {
-  if (activeSessions.length === 0) {
-    throw new Error(
-      `No Lean project session active. Run a Lean tool against a file in your project first, then retry "${args.join(' ')}".`,
+const runForAllSessions = Effect.fn('DirectLspAdapter.runForAllSessions')(
+  function* (
+    activeSessions: LeanSession[],
+    lakeCommand: string,
+    args: readonly string[],
+  ) {
+    if (activeSessions.length === 0) {
+      return yield* new LeanProjectCommandError({
+        message: `No Lean project session active. Run a Lean tool against a file in your project first, then retry "${args.join(' ')}".`,
+      });
+    }
+    // `runLakeCommand` resolves with the exit code, never rejects on it.
+    const results = yield* Effect.forEach(
+      activeSessions,
+      (session) =>
+        Effect.promise(() =>
+          runLakeCommand({
+            workspaceRoot: session.workspaceRoot,
+            lakeCommand,
+            args,
+            serialize: true,
+          }),
+        ),
+      { concurrency: 'unbounded' },
     );
-  }
-  const results = await Promise.all(
-    activeSessions.map((session) =>
-      runLakeCommand({
-        workspaceRoot: session.workspaceRoot,
-        lakeCommand,
-        args,
-        serialize: true,
-      }),
-    ),
-  );
-  const failed = results.filter((r) => r.exitCode !== 0);
-  if (failed.length > 0) {
-    throw new Error(
-      `lake ${args.join(' ')} failed in ${failed.length} workspace(s):\n${failed
-        .map((r) => r.stderr.trim() || r.stdout.trim())
-        .join('\n---\n')}`,
-    );
-  }
-}
+    const failed = results.filter((r) => r.exitCode !== 0);
+    if (failed.length > 0) {
+      return yield* new LeanProjectCommandError({
+        message: `lake ${args.join(' ')} failed in ${failed.length} workspace(s):\n${failed
+          .map((r) => r.stderr.trim() || r.stdout.trim())
+          .join('\n---\n')}`,
+      });
+    }
+  },
+);
 
-// Uses fs/promises directly — must not call platform() because this function
-// is invoked before initPlatform() during early startup / test harness setup.
-async function fsPathExists(target: string): Promise<boolean> {
-  try {
-    await access(target);
-    return true;
-  } catch {
-    return false;
-  }
-}
+// Uses fs/promises directly — must not call platform() because this runs
+// before initPlatform() during early startup / test harness setup.
+const pathExists = (target: string): Effect.Effect<boolean> =>
+  Effect.isSuccess(Effect.tryPromise(() => access(target)));
 
 /** Walk up from `filePath` looking for a Lake project root. */
-export async function defaultResolveWorkspaceRoot(
+const resolveWorkspaceRoot = Effect.fn('DirectLspAdapter.resolveWorkspaceRoot')(
+  function* (filePath: string) {
+    let dir = path.dirname(path.resolve(filePath));
+    const root = path.parse(dir).root;
+    for (;;) {
+      if (
+        (yield* pathExists(path.join(dir, 'lakefile.lean'))) ||
+        (yield* pathExists(path.join(dir, 'lakefile.toml')))
+      ) {
+        return dir;
+      }
+      if (dir === root) return null;
+      dir = path.dirname(dir);
+    }
+  },
+);
+
+/** Walk up from `filePath` looking for a Lake project root. */
+export function defaultResolveWorkspaceRoot(
   filePath: string,
 ): Promise<string | null> {
-  let dir = path.dirname(path.resolve(filePath));
-  const root = path.parse(dir).root;
-  for (;;) {
-    if (
-      (await fsPathExists(path.join(dir, 'lakefile.lean'))) ||
-      (await fsPathExists(path.join(dir, 'lakefile.toml')))
-    ) {
-      return dir;
-    }
-    if (dir === root) return null;
-    dir = path.dirname(dir);
-  }
+  return effectRuntime().runPromise(resolveWorkspaceRoot(filePath));
 }

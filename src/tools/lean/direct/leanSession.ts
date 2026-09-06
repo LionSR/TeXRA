@@ -6,6 +6,14 @@
  * first request that touches a file. Diagnostics arrive asynchronously via
  * `textDocument/publishDiagnostics` and are buffered per file.
  *
+ * The server is one fiber forked into the session's scope: its child process
+ * and JSON-RPC connection are scoped resources released when the server
+ * exits, when its start fails, or when {@link LeanSession.close} closes the
+ * scope. Callers await a startup `Deferred`, so a caller's interruption never
+ * cancels a start another caller shares. Every wait is on the runtime clock:
+ * the handshake, the graceful shutdown, the process-close escalation, and the
+ * diagnostics quiet window.
+ *
  * Lives under `src/tools/lean/direct/` (host-neutral): Node-only, no `vscode`
  * imports, suitable for both the CLI and the desktop main process.
  */
@@ -15,9 +23,19 @@ import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import pTimeout from 'p-timeout';
+import {
+  Clock,
+  Data,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Result,
+  Scope,
+} from 'effect';
 
 import { debug, info, warn } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import {
@@ -25,7 +43,11 @@ import {
   unregisterLeanServer,
   updateLeanServer,
 } from '../leanServerRegistry';
-import { JsonRpcConnection } from './jsonRpc';
+import {
+  JsonRpcConnection,
+  type JsonRpcConnectionDisposed,
+  type JsonRpcRequestError,
+} from './jsonRpc';
 import type {
   LeanDiagnostic,
   LspDiagnostic,
@@ -35,34 +57,126 @@ import type {
 const LOG_CHANNEL = 'lean.direct';
 
 const LEAN_LANGUAGE_ID = 'lean4';
-const HANDSHAKE_TIMEOUT_MS = 15_000;
-const SHUTDOWN_TIMEOUT_MS = 2_000;
-const DIAGNOSTICS_WAIT_MS = 10_000;
+const HANDSHAKE_TIMEOUT = Duration.millis(15_000);
+const SHUTDOWN_TIMEOUT = Duration.millis(2_000);
+const DIAGNOSTICS_WAIT = Duration.millis(10_000);
 const DIAGNOSTICS_QUIET_WINDOW_MS = 400;
+const STDERR_TAIL_LIMIT = 4096;
+
+/** The session was disposed, or the file state a wait was pinned to is gone. */
+export class LeanSessionDisposed extends Data.TaggedError(
+  'LeanSessionDisposed',
+) {
+  override readonly message = 'Lean session has been disposed.';
+}
+
+/** No live server: never started, already exited, or disposed. */
+export class LeanSessionNotRunning extends Data.TaggedError(
+  'LeanSessionNotRunning',
+) {
+  override readonly message = 'Lean session is not running';
+}
+
+/** The server could not be spawned or did not complete `initialize`. */
+export class LeanStartError extends Data.TaggedError('LeanStartError')<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/** The file to open could not be read from disk. */
+export class LeanFileReadError extends Data.TaggedError('LeanFileReadError')<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+export type LeanSessionError =
+  | LeanSessionDisposed
+  | LeanSessionNotRunning
+  | LeanStartError
+  | LeanFileReadError
+  | JsonRpcRequestError
+  | JsonRpcConnectionDisposed;
 
 interface OpenedFile {
   version: number;
   diagnostics: LeanDiagnostic[];
   lastDiagnosticsAt: number;
-  // Resolved when diagnostics arrive after the next `didOpen`/`didChange`.
-  diagnosticsWaiters: Array<{
-    resolve: () => void;
-    timeout: NodeJS.Timeout;
-  }>;
+  /** Completed by the next `publishDiagnostics`; failed when the state is abandoned. */
+  next: Deferred.Deferred<void, LeanSessionDisposed>;
+}
+
+interface ServerEnd {
+  readonly status: 'stopped' | 'error';
+  readonly message?: string;
+}
+
+interface SpawnedServer {
+  readonly child: ChildProcessWithoutNullStreams;
+  /** Settles on the child's `close` event, once its stdio has drained. */
+  readonly closed: Deferred.Deferred<void>;
 }
 
 interface LeanSessionOptions {
   workspaceRoot: string;
   lakeCommand: string;
-  onExit?: () => void;
+  onExit?: () => Effect.Effect<void>;
 }
 
+function isAlive(child: ChildProcessWithoutNullStreams): boolean {
+  return child.exitCode == null && child.signalCode == null;
+}
+
+const spawnServer = Effect.fn('LeanSession.spawnServer')(function* (
+  lakeCommand: string,
+  root: string,
+) {
+  const child = yield* Effect.try({
+    try: () =>
+      spawn(lakeCommand, ['env', 'lean', '--server'], {
+        cwd: root,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        // Force POSIX behavior on Windows-Node by relying on lake's resolver.
+        windowsHide: true,
+      }),
+    catch: (error) =>
+      new LeanStartError({
+        message: `Failed to spawn 'lake env lean --server': ${toErrorMessage(error)}`,
+        cause: error,
+      }),
+  });
+  const closed = Deferred.makeUnsafe<void>();
+  child.once('close', () => Deferred.doneUnsafe(closed, Effect.void));
+  return { child, closed } satisfies SpawnedServer;
+});
+
+/** Terminate the server and wait for its stdio to close, escalating to SIGKILL. */
+const stopProcess = Effect.fn('LeanSession.stopProcess')(function* ({
+  child,
+  closed,
+}: SpawnedServer) {
+  if (isAlive(child)) child.kill();
+  yield* Deferred.await(closed).pipe(
+    Effect.timeoutOrElse({
+      duration: SHUTDOWN_TIMEOUT,
+      orElse: () =>
+        Effect.suspend(() => {
+          if (isAlive(child)) child.kill('SIGKILL');
+          return Deferred.await(closed).pipe(
+            Effect.timeoutOption(SHUTDOWN_TIMEOUT),
+          );
+        }),
+    }),
+  );
+});
+
 export class LeanSession {
-  private spawned?: ChildProcessWithoutNullStreams;
-  private rpc?: JsonRpcConnection;
-  private closeWait?: Promise<void>;
   private readonly id: string;
-  private readyPromise?: Promise<void>;
+  private readonly scope = Scope.makeUnsafe();
+  private rpc?: JsonRpcConnection;
+  private startup?: Deferred.Deferred<
+    void,
+    LeanStartError | LeanSessionDisposed
+  >;
   private disposed = false;
   private readonly openFiles = new Map<string, OpenedFile>();
 
@@ -75,70 +189,102 @@ export class LeanSession {
   }
 
   /** Start (or reuse) the server and complete `initialize`. Idempotent. */
-  async ensureReady(): Promise<void> {
-    if (this.disposed) {
-      throw new Error('Lean session has been disposed.');
-    }
-    this.readyPromise ??= this.spawnAndInitialize();
-    await this.readyPromise;
+  ensureReady(): Promise<void> {
+    return effectRuntime().runPromise(this.ready());
   }
 
   /** Tear down the server and clear cached file state. */
-  async dispose(): Promise<void> {
-    if (this.disposed) return;
-    this.disposed = true;
-    const spawned = this.spawned;
-    const rpc = this.rpc;
-    const closeWait = this.closeWait;
-    this.spawned = undefined;
-    this.rpc = undefined;
-    this.readyPromise = undefined;
-    this.releaseAllDiagnosticsWaiters();
-    this.openFiles.clear();
-    unregisterLeanServer(this.id);
-    try {
-      if (rpc && spawned) {
-        try {
-          await pTimeout(rpc.request('shutdown'), {
-            milliseconds: SHUTDOWN_TIMEOUT_MS,
-            message: 'Lean LSP shutdown timeout',
-          }).catch(() => undefined);
-          rpc.notify('exit');
-        } finally {
-          rpc.dispose('LeanSession.dispose');
+  dispose(): Promise<void> {
+    return effectRuntime().runPromise(this.close());
+  }
+
+  fetchDiagnostics(filePath: string): Promise<LeanDiagnostic[]> {
+    return effectRuntime().runPromise(this.diagnostics(filePath));
+  }
+
+  /** Start the server unless one is starting or running, then await `initialize`. */
+  ready(): Effect.Effect<void, LeanSessionDisposed | LeanStartError> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.disposed) return yield* new LeanSessionDisposed();
+      if (!this.startup) {
+        const startup = Deferred.makeUnsafe<
+          void,
+          LeanStartError | LeanSessionDisposed
+        >();
+        this.startup = startup;
+        yield* Effect.forkIn(this.serve(startup), this.scope);
+      }
+      yield* Deferred.await(this.startup);
+    });
+  }
+
+  /**
+   * Stop the server and release everything the session holds. Runs to
+   * completion once begun: a graceful `shutdown`/`exit` bounded by the
+   * shutdown timeout, then the scope close that kills the process and waits
+   * for its stdio to drain.
+   */
+  close(): Effect.Effect<void> {
+    return Effect.uninterruptible(
+      Effect.gen({ self: this }, function* () {
+        if (this.disposed) return;
+        this.disposed = true;
+        unregisterLeanServer(this.id);
+        if (this.startup) {
+          Deferred.doneUnsafe(
+            this.startup,
+            Effect.fail(new LeanSessionDisposed()),
+          );
         }
-      }
-      if (spawned && spawned.exitCode == null && spawned.signalCode == null) {
-        spawned.kill();
-      }
-    } finally {
-      if (spawned) {
-        await waitForProcessClose(spawned, closeWait);
-      }
-    }
+        this.abandonFiles();
+        const rpc = this.rpc;
+        if (rpc) {
+          yield* rpc.request('shutdown').pipe(
+            Effect.timeout(SHUTDOWN_TIMEOUT),
+            Effect.catch((error) =>
+              Effect.sync(() =>
+                debug(
+                  LOG_CHANNEL,
+                  `[${this.workspaceRoot}] shutdown request failed: ${toErrorMessage(error)}`,
+                ),
+              ),
+            ),
+          );
+          yield* rpc.notify('exit');
+        }
+        yield* Scope.close(this.scope, Exit.void);
+      }),
+    );
   }
 
-  async fetchDiagnostics(filePath: string): Promise<LeanDiagnostic[]> {
-    const absolute = await this.openAndSettle(filePath);
-    const diagnostics = this.openFiles.get(absolute)?.diagnostics;
-    if (this.disposed || diagnostics == null) {
-      throw new Error('Lean session has been disposed.');
-    }
-    return diagnostics;
+  diagnostics(
+    filePath: string,
+  ): Effect.Effect<LeanDiagnostic[], LeanSessionError> {
+    return Effect.gen({ self: this }, function* () {
+      const absolute = yield* this.openAndSettle(filePath);
+      const diagnostics = this.openFiles.get(absolute)?.diagnostics;
+      if (this.disposed || diagnostics == null) {
+        return yield* new LeanSessionDisposed();
+      }
+      return diagnostics;
+    });
   }
 
-  async restartFile(filePath: string): Promise<void> {
-    const absolute = path.resolve(filePath);
-    if (!this.rpc) return;
-    const state = this.openFiles.get(absolute);
-    if (state) {
-      this.rpc.notify('textDocument/didClose', {
-        textDocument: { uri: pathToUri(absolute) },
-      });
-      this.releaseDiagnosticsWaiters(state);
-      this.openFiles.delete(absolute);
-    }
-    await this.ensureFileOpen(absolute, true);
+  restartFile(filePath: string): Effect.Effect<void, LeanSessionError> {
+    return Effect.gen({ self: this }, function* () {
+      const absolute = path.resolve(filePath);
+      const rpc = this.rpc;
+      if (!rpc) return;
+      const state = this.openFiles.get(absolute);
+      if (state) {
+        yield* rpc.notify('textDocument/didClose', {
+          textDocument: { uri: pathToUri(absolute) },
+        });
+        Deferred.doneUnsafe(state.next, Effect.fail(new LeanSessionDisposed()));
+        this.openFiles.delete(absolute);
+      }
+      yield* this.ensureFileOpen(absolute, true);
+    });
   }
 
   /**
@@ -147,252 +293,320 @@ export class LeanSession {
    * `$/lean/plainGoal` return stale data if the elaborator hasn't finished —
    * the quiet-window wait is the only way to get correct goal state.
    */
-  async requestSettled<T>(
+  requestSettled<T>(
     filePath: string,
     line: number,
     column: number,
     method: string,
-  ): Promise<T> {
-    const absolute = await this.openAndSettle(filePath);
-    const params = {
-      textDocument: { uri: pathToUri(absolute) },
-      position: { line, character: column },
-    };
-    return this.requireRpc().request<T>(method, params);
-  }
-
-  /** Return the live JSON-RPC connection, or throw if the session is down. */
-  private requireRpc(): JsonRpcConnection {
-    if (this.disposed || !this.rpc) {
-      throw new Error('Lean session is not running');
-    }
-    return this.rpc;
-  }
-
-  private async openAndSettle(filePath: string): Promise<string> {
-    const absolute = path.resolve(filePath);
-    await this.ensureReady();
-    await this.ensureFileOpen(absolute, false);
-    await this.waitForDiagnosticsQuiet(absolute);
-    return absolute;
-  }
-
-  private async spawnAndInitialize(): Promise<void> {
-    const root = this.options.workspaceRoot;
-    const lake = this.options.lakeCommand;
-    registerLeanServer({
-      id: this.id,
-      workspaceRoot: root,
-      mode: 'direct-lsp',
-      status: 'starting',
-    });
-    let child: ChildProcessWithoutNullStreams;
-    try {
-      child = spawn(lake, ['env', 'lean', '--server'], {
-        cwd: root,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        // Force POSIX behavior on Windows-Node by relying on lake's resolver.
-        windowsHide: true,
-      });
-    } catch (error) {
-      const message = toErrorMessage(error);
-      updateLeanServer(this.id, { status: 'error', errorMessage: message });
-      throw new Error(`Failed to spawn 'lake env lean --server': ${message}`, {
-        cause: error,
-      });
-    }
-    this.spawned = child;
-    this.closeWait = new Promise<void>((resolve) => {
-      child.once('close', () => resolve());
-    });
-    let stderrTail = '';
-    const STDERR_TAIL_LIMIT = 4096;
-    let finalized = false;
-    const finalizeServer = (status: 'stopped' | 'error', message?: string) => {
-      if (finalized) return;
-      finalized = true;
-      this.options.onExit?.();
-      updateLeanServer(this.id, { status, errorMessage: message });
-      this.rpc?.dispose(message ?? 'Lean server stopped');
-      this.rpc = undefined;
-      this.readyPromise = undefined;
-      this.releaseAllDiagnosticsWaiters();
-      this.openFiles.clear();
-    };
-    const childError = new Promise<never>((_resolve, reject) => {
-      child.once('error', (error) => {
-        const message = toErrorMessage(error);
-        finalizeServer('error', message);
-        reject(
-          new Error(`Failed to spawn 'lake env lean --server': ${message}`, {
-            cause: error,
-          }),
-        );
+  ): Effect.Effect<T, LeanSessionError> {
+    return Effect.gen({ self: this }, function* () {
+      const absolute = yield* this.openAndSettle(filePath);
+      const rpc = yield* this.requireRpc();
+      return yield* rpc.request<T>(method, {
+        textDocument: { uri: pathToUri(absolute) },
+        position: { line, character: column },
       });
     });
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
-      stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
-      warn(LOG_CHANNEL, `[${root}] ${chunk.trimEnd()}`);
-    });
-    child.on('exit', (code, signal) => {
-      const tail = stderrTail.slice(-1000);
-      info(
-        LOG_CHANNEL,
-        `lake env lean --server exited (code=${code}, signal=${signal}) at ${root}${tail ? `\n${tail}` : ''}`,
-      );
-      finalizeServer(
-        code === 0 ? 'stopped' : 'error',
-        code === 0 ? undefined : `Server exited with code ${code}`,
-      );
-    });
+  }
 
-    const rpc = new JsonRpcConnection(child.stdin, child.stdout);
-    this.rpc = rpc;
-    rpc.onNotification('textDocument/publishDiagnostics', (params) =>
-      this.handlePublishDiagnostics(params as LspPublishDiagnosticsParams),
+  /** The live JSON-RPC connection, or `LeanSessionNotRunning`. */
+  private requireRpc(): Effect.Effect<
+    JsonRpcConnection,
+    LeanSessionNotRunning
+  > {
+    return Effect.suspend(() =>
+      this.disposed || !this.rpc
+        ? Effect.fail(new LeanSessionNotRunning())
+        : Effect.succeed(this.rpc),
     );
-    rpc.onNotification('window/logMessage', (params) => {
-      debug(LOG_CHANNEL, `[${root}] ${JSON.stringify(params)}`);
-    });
-    rpc.onNotification('window/showMessage', (params) => {
-      info(LOG_CHANNEL, `[${root}] ${JSON.stringify(params)}`);
-    });
+  }
 
-    try {
-      await pTimeout(
-        Promise.race([
-          rpc.request('initialize', {
-            processId: process.pid,
-            clientInfo: { name: 'texra-direct-lsp' },
-            rootUri: pathToUri(root),
-            workspaceFolders: [
-              { uri: pathToUri(root), name: path.basename(root) },
-            ],
-            capabilities: {
-              textDocument: {
-                synchronization: { didSave: false, willSave: false },
-                hover: { contentFormat: ['plaintext', 'markdown'] },
-                publishDiagnostics: {},
+  private openAndSettle(
+    filePath: string,
+  ): Effect.Effect<string, LeanSessionError> {
+    return Effect.gen({ self: this }, function* () {
+      const absolute = path.resolve(filePath);
+      yield* this.ready();
+      yield* this.ensureFileOpen(absolute, false);
+      yield* this.waitForDiagnosticsQuiet(absolute);
+      return absolute;
+    });
+  }
+
+  /**
+   * The server's lifetime as one fiber: spawn, handshake, then wait for the
+   * process to exit. Its process and connection are scoped to the fiber, so
+   * they are released whether the start fails, the server exits on its own,
+   * or `close()` interrupts the fiber. `startup` settles when `initialize`
+   * completes or fails; `close()` fails it first when it interrupts a start.
+   */
+  private serve(
+    startup: Deferred.Deferred<void, LeanStartError | LeanSessionDisposed>,
+  ): Effect.Effect<void> {
+    const root = this.options.workspaceRoot;
+    let end: ServerEnd | undefined;
+    return Effect.gen({ self: this }, function* () {
+      registerLeanServer({
+        id: this.id,
+        workspaceRoot: root,
+        mode: 'direct-lsp',
+        status: 'starting',
+      });
+      const clock = yield* Clock.clockWith(Effect.succeed);
+      const exited = Deferred.makeUnsafe<ServerEnd>();
+      const settle = (ended: ServerEnd): void => {
+        end ??= ended;
+        Deferred.doneUnsafe(exited, Effect.succeed(ended));
+      };
+
+      const started = yield* Effect.result(
+        Effect.gen({ self: this }, function* () {
+          const { child } = yield* Effect.acquireRelease(
+            spawnServer(this.options.lakeCommand, root),
+            stopProcess,
+          );
+          let stderrTail = '';
+          child.stderr.setEncoding('utf8');
+          child.stderr.on('data', (chunk: string) => {
+            stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
+            warn(LOG_CHANNEL, `[${root}] ${chunk.trimEnd()}`);
+          });
+          child.once('error', (error) => {
+            settle({
+              status: 'error',
+              message: `Failed to spawn 'lake env lean --server': ${toErrorMessage(error)}`,
+            });
+          });
+          child.on('exit', (code, signal) => {
+            const tail = stderrTail.slice(-1000);
+            info(
+              LOG_CHANNEL,
+              `lake env lean --server exited (code=${code}, signal=${signal}) at ${root}${tail ? `\n${tail}` : ''}`,
+            );
+            settle(
+              code === 0
+                ? { status: 'stopped' }
+                : {
+                    status: 'error',
+                    message: `Server exited with code ${code}`,
+                  },
+            );
+          });
+
+          const rpc = yield* Effect.acquireRelease(
+            Effect.sync(() => new JsonRpcConnection(child.stdin, child.stdout)),
+            (rpc) =>
+              Effect.sync(() => {
+                rpc.dispose(
+                  end
+                    ? (end.message ?? 'Lean server stopped')
+                    : 'LeanSession.dispose',
+                );
+              }),
+          );
+          rpc.onNotification('textDocument/publishDiagnostics', (params) =>
+            this.handlePublishDiagnostics(
+              params as LspPublishDiagnosticsParams,
+              clock.currentTimeMillisUnsafe(),
+            ),
+          );
+          rpc.onNotification('window/logMessage', (params) => {
+            debug(LOG_CHANNEL, `[${root}] ${JSON.stringify(params)}`);
+          });
+          rpc.onNotification('window/showMessage', (params) => {
+            info(LOG_CHANNEL, `[${root}] ${JSON.stringify(params)}`);
+          });
+
+          yield* rpc
+            .request('initialize', {
+              processId: process.pid,
+              clientInfo: { name: 'texra-direct-lsp' },
+              rootUri: pathToUri(root),
+              workspaceFolders: [
+                { uri: pathToUri(root), name: path.basename(root) },
+              ],
+              capabilities: {
+                textDocument: {
+                  synchronization: { didSave: false, willSave: false },
+                  hover: { contentFormat: ['plaintext', 'markdown'] },
+                  publishDiagnostics: {},
+                },
+                workspace: {},
               },
-              workspace: {},
-            },
-          }),
-          childError,
-        ]),
-        {
-          milliseconds: HANDSHAKE_TIMEOUT_MS,
-          message: 'Lean LSP initialize timeout',
-        },
+            })
+            .pipe(
+              Effect.raceFirst(
+                Deferred.await(exited).pipe(
+                  Effect.flatMap((ended) =>
+                    Effect.fail(
+                      new LeanStartError({
+                        message: ended.message ?? 'Lean server stopped',
+                      }),
+                    ),
+                  ),
+                ),
+              ),
+              Effect.timeoutOrElse({
+                duration: HANDSHAKE_TIMEOUT,
+                orElse: () =>
+                  Effect.fail(
+                    new LeanStartError({
+                      message: 'Lean LSP initialize timeout',
+                    }),
+                  ),
+              }),
+              Effect.catchTag(
+                ['JsonRpcRequestError', 'JsonRpcConnectionDisposed'],
+                (error) =>
+                  Effect.fail(
+                    new LeanStartError({
+                      message: error.message,
+                      cause: error,
+                    }),
+                  ),
+              ),
+            );
+          yield* rpc.notify('initialized', {});
+          return rpc;
+        }),
       );
-      rpc.notify('initialized', {});
-      updateLeanServer(this.id, { status: 'running' });
-    } catch (error) {
-      // No error status is recorded here: `dispose()` unregisters this server,
-      // so the row a status write would target is gone before any reader sees
-      // it. `ensureReady` rethrows and the Lean tools surface the cause.
-      await this.dispose();
-      throw error;
-    }
-  }
 
-  private async ensureFileOpen(
-    absolute: string,
-    forceReload: boolean,
-  ): Promise<void> {
-    this.requireRpc();
-    let existing = this.openFiles.get(absolute);
-    if (existing && !forceReload) return;
-    // Uses fs/promises directly rather than platform().fs: this must read the
-    // same real on-disk bytes the spawned `lean --server` process itself sees,
-    // not a host's virtual/faked workspace fs.
-    const text = await readFile(absolute, 'utf8').catch((error) => {
-      throw new Error(`Failed to read ${absolute}: ${toErrorMessage(error)}`, {
-        cause: error,
-      });
-    });
-    existing = this.openFiles.get(absolute);
-    if (existing && !forceReload) return;
-    // Re-check after the await: the session may have been disposed mid-read.
-    const rpc = this.requireRpc();
-    const version = (existing?.version ?? 0) + 1;
-    if (existing) {
-      rpc.notify('textDocument/didChange', {
-        textDocument: { uri: pathToUri(absolute), version },
-        contentChanges: [{ text }],
-      });
-      existing.version = version;
-      existing.diagnostics = [];
-      existing.lastDiagnosticsAt = 0;
-    } else {
-      this.openFiles.set(absolute, {
-        version,
-        diagnostics: [],
-        lastDiagnosticsAt: 0,
-        diagnosticsWaiters: [],
-      });
-      rpc.notify('textDocument/didOpen', {
-        textDocument: {
-          uri: pathToUri(absolute),
-          languageId: LEAN_LANGUAGE_ID,
-          version,
-          text,
-        },
-      });
-    }
-  }
-
-  private async waitForDiagnosticsQuiet(absolute: string): Promise<void> {
-    const state = this.openFiles.get(absolute);
-    if (!state) return;
-    const start = Date.now();
-    while (Date.now() - start < DIAGNOSTICS_WAIT_MS) {
-      if (this.disposed || this.openFiles.get(absolute) !== state) {
-        throw new Error('Lean session has been disposed.');
-      }
-      const sinceLast = state.lastDiagnosticsAt
-        ? Date.now() - state.lastDiagnosticsAt
-        : 0;
-      if (state.lastDiagnosticsAt && sinceLast >= DIAGNOSTICS_QUIET_WINDOW_MS) {
+      if (Result.isFailure(started)) {
+        end ??= { status: 'error', message: started.failure.message };
+        Deferred.doneUnsafe(startup, Effect.fail(started.failure));
         return;
       }
-      await new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-          // Clean up the waiter entry on timeout.
-          const idx = state.diagnosticsWaiters.findIndex(
-            (w) => w.timeout === timeout,
-          );
-          if (idx >= 0) state.diagnosticsWaiters.splice(idx, 1);
-          resolve();
-        }, DIAGNOSTICS_QUIET_WINDOW_MS);
-        state.diagnosticsWaiters.push({ resolve, timeout });
-      });
-    }
+      this.rpc = started.success;
+      updateLeanServer(this.id, { status: 'running' });
+      Deferred.doneUnsafe(startup, Effect.void);
+      yield* Deferred.await(exited);
+    }).pipe(
+      Effect.scoped,
+      Effect.ensuring(
+        Effect.suspend(() => this.finalize(end ?? { status: 'stopped' })),
+      ),
+    );
   }
 
-  private handlePublishDiagnostics(params: LspPublishDiagnosticsParams): void {
-    const uri = params.uri;
-    const absolute = fileUriToPath(uri);
+  /** The server is gone: drop its state, record its end, tell the owner. */
+  private finalize(end: ServerEnd): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      updateLeanServer(this.id, {
+        status: end.status,
+        errorMessage: end.message,
+      });
+      this.rpc = undefined;
+      this.startup = undefined;
+      this.abandonFiles();
+      return this.options.onExit?.() ?? Effect.void;
+    });
+  }
+
+  private ensureFileOpen(
+    absolute: string,
+    forceReload: boolean,
+  ): Effect.Effect<void, LeanSessionNotRunning | LeanFileReadError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.requireRpc();
+      if (this.openFiles.has(absolute) && !forceReload) return;
+      // Uses fs/promises directly rather than platform().fs: this must read the
+      // same real on-disk bytes the spawned `lean --server` process itself sees,
+      // not a host's virtual/faked workspace fs.
+      const text = yield* Effect.tryPromise({
+        try: (signal) => readFile(absolute, { encoding: 'utf8', signal }),
+        catch: (error) =>
+          new LeanFileReadError({
+            message: `Failed to read ${absolute}: ${toErrorMessage(error)}`,
+            cause: error,
+          }),
+      });
+      const existing = this.openFiles.get(absolute);
+      if (existing && !forceReload) return;
+      // Re-check after the read: the session may have been disposed meanwhile.
+      const rpc = yield* this.requireRpc();
+      const version = (existing?.version ?? 0) + 1;
+      if (existing) {
+        existing.version = version;
+        existing.diagnostics = [];
+        existing.lastDiagnosticsAt = 0;
+        yield* rpc.notify('textDocument/didChange', {
+          textDocument: { uri: pathToUri(absolute), version },
+          contentChanges: [{ text }],
+        });
+      } else {
+        this.openFiles.set(absolute, {
+          version,
+          diagnostics: [],
+          lastDiagnosticsAt: 0,
+          next: Deferred.makeUnsafe(),
+        });
+        yield* rpc.notify('textDocument/didOpen', {
+          textDocument: {
+            uri: pathToUri(absolute),
+            languageId: LEAN_LANGUAGE_ID,
+            version,
+            text,
+          },
+        });
+      }
+    });
+  }
+
+  /**
+   * Wait until diagnostics have arrived and none followed for a quiet window,
+   * giving up silently after the overall diagnostics wait.
+   */
+  private waitForDiagnosticsQuiet(
+    absolute: string,
+  ): Effect.Effect<void, LeanSessionDisposed> {
+    const state = this.openFiles.get(absolute);
+    if (!state) return Effect.void;
+    return Effect.gen({ self: this }, function* () {
+      for (;;) {
+        if (this.disposed || this.openFiles.get(absolute) !== state) {
+          return yield* new LeanSessionDisposed();
+        }
+        const now = yield* Clock.currentTimeMillis;
+        if (
+          state.lastDiagnosticsAt &&
+          now - state.lastDiagnosticsAt >= DIAGNOSTICS_QUIET_WINDOW_MS
+        ) {
+          return;
+        }
+        yield* Deferred.await(state.next).pipe(
+          Effect.timeoutOption(Duration.millis(DIAGNOSTICS_QUIET_WINDOW_MS)),
+        );
+      }
+    }).pipe(
+      Effect.timeoutOrElse({
+        duration: DIAGNOSTICS_WAIT,
+        orElse: () => Effect.void,
+      }),
+    );
+  }
+
+  private handlePublishDiagnostics(
+    params: LspPublishDiagnosticsParams,
+    now: number,
+  ): void {
+    const absolute = fileUriToPath(params.uri);
     if (!absolute) return;
     const state = this.openFiles.get(absolute);
     if (!state) return;
     state.diagnostics = params.diagnostics.map(toLeanDiagnostic);
-    state.lastDiagnosticsAt = Date.now();
-    // Release any waiters — the quiet-window check above re-arms if needed.
-    this.releaseDiagnosticsWaiters(state);
+    state.lastDiagnosticsAt = now;
+    // Wake the quiet-window waiters; each re-arms on the fresh deferred.
+    const arrived = state.next;
+    state.next = Deferred.makeUnsafe();
+    Deferred.doneUnsafe(arrived, Effect.void);
   }
 
-  private releaseAllDiagnosticsWaiters(): void {
+  /** Fail every pending diagnostics wait and forget the open files. */
+  private abandonFiles(): void {
     for (const state of this.openFiles.values()) {
-      this.releaseDiagnosticsWaiters(state);
+      Deferred.doneUnsafe(state.next, Effect.fail(new LeanSessionDisposed()));
     }
-  }
-
-  private releaseDiagnosticsWaiters(state: OpenedFile): void {
-    for (const waiter of state.diagnosticsWaiters.splice(0)) {
-      clearTimeout(waiter.timeout);
-      waiter.resolve();
-    }
+    this.openFiles.clear();
   }
 }
 
@@ -419,35 +633,6 @@ function lspSeverityToVsCode(severity: number): DiagnosticSeverity {
   // unexpected out-of-range value is still dropped by SEVERITY_CONFIG's
   // numeric lookup downstream, exactly as before).
   return Math.max(0, severity - 1) as DiagnosticSeverity;
-}
-
-async function waitForProcessClose(
-  child: ChildProcessWithoutNullStreams,
-  alreadyClosed?: Promise<void>,
-): Promise<void> {
-  const closed =
-    alreadyClosed ??
-    new Promise<void>((resolve) => {
-      if (child.exitCode != null || child.signalCode != null) {
-        resolve();
-        return;
-      }
-      child.once('close', () => resolve());
-    });
-  try {
-    await pTimeout(closed, {
-      milliseconds: SHUTDOWN_TIMEOUT_MS,
-      message: 'Lean process close timeout',
-    });
-  } catch {
-    if (child.exitCode == null && child.signalCode == null) {
-      child.kill('SIGKILL');
-    }
-    await pTimeout(closed, {
-      milliseconds: SHUTDOWN_TIMEOUT_MS,
-      message: 'Lean process close timeout after SIGKILL',
-    }).catch(() => undefined);
-  }
 }
 
 function pathToUri(absolute: string): string {

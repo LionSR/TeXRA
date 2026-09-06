@@ -3,6 +3,7 @@
  * `PassThrough` pair to feed bytes both ways without spawning anything.
  */
 import { PassThrough } from 'node:stream';
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { JsonRpcConnection } from '@tools/lean/direct/jsonRpc';
@@ -70,9 +71,9 @@ function makePair(): {
 describe('JsonRpcConnection', () => {
   it('emits a request frame with Content-Length and resolves on response', async () => {
     const { connection, serverSends, collectClientFrames } = makePair();
-    const pending = connection.request<{ ok: boolean }>('test/method', {
-      x: 1,
-    });
+    const pending = Effect.runPromise(
+      connection.request<{ ok: boolean }>('test/method', { x: 1 }),
+    );
     const frames = await collectClientFrames();
     expect(frames).toHaveLength(1);
     expect(frames[0]).toMatchObject({
@@ -89,7 +90,9 @@ describe('JsonRpcConnection', () => {
 
   it('rejects when the server returns an error', async () => {
     const { connection, serverSends, collectClientFrames } = makePair();
-    const pending = connection.request('boom').catch((err: Error) => err);
+    const pending = Effect.runPromise(connection.request('boom')).catch(
+      (err: Error) => err,
+    );
     const frames = await collectClientFrames();
     serverSends({
       jsonrpc: '2.0',
@@ -179,7 +182,9 @@ describe('JsonRpcConnection', () => {
 
   it('rejects pending requests when the connection is disposed', async () => {
     const { connection } = makePair();
-    const pending = connection.request('never').catch((err: Error) => err);
+    const pending = Effect.runPromise(connection.request('never')).catch(
+      (err: Error) => err,
+    );
     connection.dispose('test teardown');
     const err = await pending;
     expect(err).toBeInstanceOf(Error);

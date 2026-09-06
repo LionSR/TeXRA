@@ -3,13 +3,16 @@
  *
  * The Lean language server speaks the standard LSP wire format:
  * `Content-Length: <n>\r\n\r\n<json>`. vscode-jsonrpc handles the framing and
- * routing; this module exposes a simple typed API over those primitives.
+ * routing; this module exposes a typed Effect API over those primitives.
+ * Requests and notifications are Effects; a request pending when the
+ * connection is disposed fails with the dispose reason as
+ * {@link JsonRpcConnectionDisposed}.
  */
 
 import { type Readable, Writable } from 'node:stream';
 
+import { Data, Effect } from 'effect';
 import {
-  ConnectionErrors,
   createMessageConnection,
   StreamMessageReader,
   StreamMessageWriter,
@@ -23,10 +26,27 @@ const log = createLog('JsonRpcConnection');
 
 type NotificationHandler = (params: unknown) => void;
 
+/** The connection was disposed; `message` is the caller's dispose reason. */
+export class JsonRpcConnectionDisposed extends Data.TaggedError(
+  'JsonRpcConnectionDisposed',
+)<{ readonly message: string }> {}
+
+/**
+ * The peer answered a request with a JSON-RPC error, or the transport failed
+ * before it answered. `code` is the JSON-RPC error code when the peer sent one.
+ */
+export class JsonRpcRequestError extends Data.TaggedError(
+  'JsonRpcRequestError',
+)<{
+  readonly method: string;
+  readonly message: string;
+  readonly code?: number;
+  readonly cause: unknown;
+}> {}
+
 export class JsonRpcConnection {
   private readonly conn: MessageConnection;
-  private disposed = false;
-  private disposeError?: Error;
+  private disposeReason?: string;
 
   constructor(stdin: Writable, stdout: Readable) {
     this.conn = createMessageConnection(
@@ -43,43 +63,62 @@ export class JsonRpcConnection {
     this.conn.onNotification(method, handler);
   }
 
-  notify(method: string, params?: unknown): void {
-    if (this.disposed) return;
-    const p =
-      params === undefined
-        ? this.conn.sendNotification(method)
-        : this.conn.sendNotification(method, params);
-    p.catch((err) => {
-      this.logLiveError('notification failed', err);
+  /** Send a notification; a failed write is logged, never surfaced. */
+  notify(method: string, params?: unknown): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (this.disposeReason !== undefined) return Effect.void;
+      return Effect.tryPromise({
+        try: () =>
+          params === undefined
+            ? this.conn.sendNotification(method)
+            : this.conn.sendNotification(method, params),
+        catch: (error) => error,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => this.logLiveError('notification failed', error)),
+        ),
+      );
     });
   }
 
-  async request<T>(method: string, params?: unknown): Promise<T> {
-    if (this.disposed) {
-      throw this.disposeError ?? new Error('JsonRpcConnection is disposed');
-    }
-    try {
-      return await (params === undefined
-        ? this.conn.sendRequest<T>(method)
-        : this.conn.sendRequest<T>(method, params));
-    } catch (err) {
-      // Propagate the caller's dispose reason rather than vscode-jsonrpc's
-      // generic "connection got disposed" message.
-      if (
-        this.disposed &&
-        this.disposeError &&
-        isConnectionDisposedError(err)
-      ) {
-        throw this.disposeError;
+  request<T>(
+    method: string,
+    params?: unknown,
+  ): Effect.Effect<T, JsonRpcRequestError | JsonRpcConnectionDisposed> {
+    return Effect.suspend(() => {
+      if (this.disposeReason !== undefined) {
+        return Effect.fail(
+          new JsonRpcConnectionDisposed({ message: this.disposeReason }),
+        );
       }
-      throw err;
-    }
+      return Effect.tryPromise({
+        try: () =>
+          params === undefined
+            ? this.conn.sendRequest<T>(method)
+            : this.conn.sendRequest<T>(method, params),
+        // A rejection observed after dispose is the disposal itself: report
+        // the caller's reason rather than vscode-jsonrpc's generic message.
+        catch: (error) => {
+          if (this.disposeReason !== undefined) {
+            return new JsonRpcConnectionDisposed({
+              message: this.disposeReason,
+            });
+          }
+          const code = (error as { code?: unknown } | null)?.code;
+          return new JsonRpcRequestError({
+            method,
+            message: toErrorMessage(error),
+            code: typeof code === 'number' ? code : undefined,
+            cause: error,
+          });
+        },
+      });
+    });
   }
 
-  dispose(reason?: string): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.disposeError = new Error(reason ?? 'JsonRpcConnection disposed');
+  dispose(reason = 'JsonRpcConnection disposed'): void {
+    if (this.disposeReason !== undefined) return;
+    this.disposeReason = reason;
     this.conn.dispose();
   }
 
@@ -124,15 +163,7 @@ export class JsonRpcConnection {
   }
 
   private logLiveError(context: string, err: unknown): void {
-    if (this.disposed || !err) return;
+    if (this.disposeReason !== undefined || !err) return;
     log.debug(`${context}: ${toErrorMessage(err)}`);
   }
-}
-
-function isConnectionDisposedError(err: unknown): boolean {
-  const code = (err as { code?: unknown } | null)?.code;
-  if (code === ConnectionErrors.Disposed || code === ConnectionErrors.Closed) {
-    return true;
-  }
-  return /\bconnection\b.*\b(disposed|closed)\b/i.test(toErrorMessage(err));
 }
