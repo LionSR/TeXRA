@@ -81,8 +81,8 @@ import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { notify } from '../notifications/terminalNotifier';
+import { bumpCodexPreferenceVersion } from './cliState';
 import {
-  refreshSubscriptionPreferenceViews,
   setCliCodingPlanSubscription,
   setCliSubscriptionPreference,
 } from './subscriptionPreference';
@@ -542,7 +542,7 @@ function codingPlanRollbackConfig(
     needsRollback: () => runtime.getEnabled() !== previous,
     restore: async () => {
       await runtime.restoreEnabled(previous);
-      refreshSubscriptionPreferenceViews();
+      bumpCodexPreferenceVersion();
       if (runtime.getEnabled() !== previous) {
         throw new Error(
           `${runtime.descriptor.displayName} remained ${String(runtime.getEnabled())}.`,

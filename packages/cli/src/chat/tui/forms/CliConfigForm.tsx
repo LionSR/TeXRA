@@ -22,7 +22,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { refreshSubscriptionPreferenceViews } from '../state/subscriptionPreference';
+import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm, type ConfigFormProps } from './ConfigForm';
 import {
@@ -188,7 +188,7 @@ export function createCliConfigFormProps(
         );
     }
     if (entry.onWrite?.invalidatesModelOptions) {
-      refreshSubscriptionPreferenceViews();
+      bumpCodexPreferenceVersion();
     }
   };
   return {

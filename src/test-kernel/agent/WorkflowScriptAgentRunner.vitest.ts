@@ -1,3 +1,7 @@
+import { promises as fs } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowAgentInvocation } from '@agent/workflowScript';
@@ -10,6 +14,7 @@ import {
   fingerprintWorkflowAgentDependencies,
 } from '@tools/delegation/workflowScriptAgentRunner';
 import { SubagentDurabilityError } from '@tools/delegation/inBandSubagentExecution';
+import { StorageFS } from '@utils/files/storageFS';
 
 const mocks = vi.hoisted(() => ({
   executeStableSubagentInBand: vi.fn(),
@@ -21,7 +26,8 @@ const mocks = vi.hoisted(() => ({
   assertWorkflowFilesExist: vi.fn(),
   rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
-  workspaceReadBytes: vi.fn(),
+  workspaceToAbsolute: vi.fn(),
+  realpath: vi.fn(),
   absoluteReadBytes: vi.fn(),
   readExecutionMeta: vi.fn(),
 }));
@@ -67,7 +73,11 @@ vi.mock('@tools/delegation/inputFields', () => ({
 }));
 
 vi.mock('@utils/files/workspaceFS', () => ({
-  WorkspaceFS: { readBytes: mocks.workspaceReadBytes },
+  WorkspaceFS: { toAbsolute: mocks.workspaceToAbsolute },
+}));
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:fs/promises')>()),
+  realpath: mocks.realpath,
 }));
 vi.mock('@utils/files/absoluteFS', () => ({
   AbsoluteFS: { readBytes: mocks.absoluteReadBytes },
@@ -222,7 +232,10 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.assertWorkflowFilesExist.mockResolvedValue(undefined);
     mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
-    mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('workspace bytes'));
+    mocks.workspaceToAbsolute.mockImplementation((file: string) =>
+      path.resolve('/workspace', file),
+    );
+    mocks.realpath.mockImplementation(async (file: string) => file);
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
     mocks.readExecutionMeta.mockResolvedValue(undefined);
     mocks.executeStableSubagentInBand.mockImplementation(
@@ -232,24 +245,70 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it('fingerprints file bytes rather than only their paths', async () => {
     const options = { inputFiles: ['proof.tex'] };
-    mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
+    mocks.absoluteReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
     const oldFingerprint = await fingerprintWorkflowAgentDependencies(
       runExecutionId,
       options,
     );
-    mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('new proof'));
+    mocks.absoluteReadBytes.mockResolvedValueOnce(Buffer.from('new proof'));
     const newFingerprint = await fingerprintWorkflowAgentDependencies(
       runExecutionId,
       options,
     );
 
     expect(oldFingerprint).not.toBe(newFingerprint);
-    expect(mocks.workspaceReadBytes).toHaveBeenCalledWith('proof.tex');
+    expect(mocks.absoluteReadBytes).toHaveBeenCalledWith(
+      '/workspace/proof.tex',
+    );
   });
+
+  it.each(['absolute', 'relative traversal', 'workspace symlink'] as const)(
+    'rejects a private storage file supplied through %s before reading dependencies',
+    async (spelling) => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-inputs-'));
+      const workspace = path.join(root, 'workspace');
+      const storage = path.join(root, 'storage');
+      const privateFile = path.join(storage, 'streamLogs/private.json');
+      const link = path.join(workspace, 'input.json');
+      const storagePath = vi
+        .spyOn(StorageFS, 'fullPath')
+        .mockImplementation((file: string) => path.join(storage, file));
+      try {
+        await fs.mkdir(workspace);
+        await fs.mkdir(path.dirname(privateFile), { recursive: true });
+        await fs.writeFile(privateFile, 'private transcript');
+        await fs.symlink(privateFile, link);
+        mocks.realpath.mockImplementation((file: string) => fs.realpath(file));
+        mocks.workspaceToAbsolute.mockImplementation((file: string) =>
+          path.resolve(workspace, file),
+        );
+        const spellings = {
+          absolute: privateFile,
+          'relative traversal': path.relative(workspace, privateFile),
+          'workspace symlink': 'input.json',
+        };
+        const file = spellings[spelling];
+
+        await expect(
+          fingerprintWorkflowAgentDependencies(runExecutionId, {
+            inputFiles: [file],
+          }),
+        ).rejects.toMatchObject({
+          name: 'WorkflowRunAbortError',
+          message: expect.stringContaining(file),
+        });
+        expect(mocks.assertWorkflowFilesExist).not.toHaveBeenCalled();
+        expect(mocks.absoluteReadBytes).not.toHaveBeenCalled();
+      } finally {
+        storagePath.mockRestore();
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    },
+  );
 
   it('keeps dependency fingerprints stable for unchanged binary bytes', async () => {
     const bytes = Buffer.from([0, 255, 1, 128]);
-    mocks.workspaceReadBytes.mockResolvedValue(bytes);
+    mocks.absoluteReadBytes.mockResolvedValue(bytes);
     const options = {
       inputFiles: ['proof.bin'],
       contextFiles: ['context.bin'],
@@ -262,6 +321,44 @@ describe('createWorkflowScriptAgentRunner', () => {
 
     expect(first).toEqual(expect.any(String));
     expect(first).toBe(second);
+  });
+
+  it('keeps the requested workspace symlink name in the launched inputs', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-inputs-'));
+    const workspace = path.join(root, 'workspace');
+    const storage = path.join(root, 'storage');
+    const target = path.join(workspace, 'versions/v1.tex');
+    const requested = path.join(workspace, 'chapters/current.tex');
+    const storagePath = vi
+      .spyOn(StorageFS, 'fullPath')
+      .mockImplementation((file: string) => path.join(storage, file));
+    try {
+      await fs.mkdir(storage);
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.mkdir(path.dirname(requested), { recursive: true });
+      await fs.writeFile(target, 'Current chapter');
+      await fs.symlink(target, requested);
+      mocks.realpath.mockImplementation((file: string) => fs.realpath(file));
+      mocks.workspaceToAbsolute.mockImplementation((file: string) =>
+        path.resolve(workspace, file),
+      );
+
+      await defaultRunner()(
+        invocation({ inputFiles: ['chapters/current.tex'] }),
+      );
+
+      expect(mocks.preparedOptions[0]).toEqual(
+        expect.objectContaining({
+          configPayload: expect.objectContaining({
+            inputFiles: ['chapters/current.tex'],
+          }),
+        }),
+      );
+      expect(mocks.resolveChildRunOutput).not.toHaveBeenCalled();
+    } finally {
+      storagePath.mockRestore();
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 
   it('uses delegation policy and executes a direct in-band child', async () => {
@@ -290,16 +387,16 @@ describe('createWorkflowScriptAgentRunner', () => {
     await expect(runner(call)).resolves.toBe(result);
     expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
-      { label: 'Input file', files: ['paper.tex'] },
+      { label: 'Input file', files: ['/workspace/paper.tex'] },
     ]);
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
-      { label: 'Context file', files: ['notes.tex'] },
+      { label: 'Context file', files: ['/workspace/notes.tex'] },
     ]);
     expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith([
       'notes.tex',
     ]);
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
-      { label: 'Media file', files: ['figure.pdf'] },
+      { label: 'Media file', files: ['/workspace/figure.pdf'] },
     ]);
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
@@ -448,6 +545,11 @@ describe('createWorkflowScriptAgentRunner', () => {
         executionId: file === firstRequested ? 'bbbbbb222222' : 'cccccc333333',
       }),
     );
+    mocks.realpath.mockImplementation(async (file: string) => {
+      if (file === firstRequested) return firstCanonical;
+      if (file === secondRequested) return secondCanonical;
+      return file;
+    });
     const runner = defaultRunner();
 
     await runner(
@@ -476,7 +578,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       secondRequested,
     );
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
-      { label: 'Input file', files: ['notes.tex'] },
+      { label: 'Input file', files: ['/workspace/notes.tex'] },
     ]);
     expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({

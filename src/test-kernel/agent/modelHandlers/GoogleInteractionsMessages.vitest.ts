@@ -1,12 +1,14 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
+import type { MediaAttachmentContext } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/types/mediaTypes';
+import type { FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local file imports
@@ -53,10 +55,16 @@ function textOf(step: Step): string {
  */
 class MediaProbeHandler extends ModelHandlerGoogleInteractions {
   private stubbedMedia: Interactions.Content[] = [];
+  private stubbedEntries?: MediaEntry[];
 
   /** Canned media the loader override returns, so no platform/fs is touched. */
   setMediaContent(content: Interactions.Content[]): void {
     this.stubbedMedia = content;
+  }
+
+  /** Run loaded entries through the real upload pipeline. */
+  setMediaEntries(entries: MediaEntry[]): void {
+    this.stubbedEntries = entries;
   }
 
   /** Replace the client factory with a canned client (e.g. files.upload stub). */
@@ -66,13 +74,16 @@ class MediaProbeHandler extends ModelHandlerGoogleInteractions {
 
   /** Invoke the media-upload pipeline directly. */
   async uploadEntries(entries: MediaEntry[]): Promise<Interactions.Content[]> {
-    return (await this.uploadMediaEntries(entries)).media;
+    return (await this.uploadMediaEntries(entries, 'initial')).media;
   }
 
-  protected override async createMediaMessage(): Promise<
-    CreatedMedia<Interactions.Content>
-  > {
-    return { media: this.stubbedMedia, entries: [] };
+  protected override async createMediaMessage(
+    _files: FileLocation[],
+    context: MediaAttachmentContext,
+  ): Promise<CreatedMedia<Interactions.Content>> {
+    return this.stubbedEntries
+      ? this.uploadMediaEntries(this.stubbedEntries, context)
+      : { media: this.stubbedMedia, entries: [] };
   }
 }
 
@@ -218,11 +229,9 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     let uploadCalls = 0;
     handler.setClient({
       files: {
-        upload: async ({ file }: { file: string }) => {
+        upload: async () => {
           uploadCalls += 1;
-          return file === '/x/big.png'
-            ? { uri: 'files/abc', mimeType: 'image/png' }
-            : { mimeType: 'image/png' };
+          return { uri: 'files/abc', mimeType: 'image/png' };
         },
       },
     } as unknown as GoogleGenAI);
@@ -244,14 +253,6 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
         source_path: '/x/big.png',
         bytes_match_source: true,
       },
-      {
-        file_name: 'failed.png',
-        media_type: 'image/png',
-        media_category: 'image',
-        data: Buffer.from('also too big').toString('base64'),
-        source_path: '/x/failed.png',
-        bytes_match_source: true,
-      },
     ];
 
     const content = await handler.uploadEntries(entries);
@@ -270,8 +271,102 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(uploaded.uri).toBe('files/abc');
     expect(uploaded.data).toBeUndefined();
     expect(uploaded.resolution).toBe('high');
-    expect(textOf({ type: 'user_input', content })).not.toContain('failed.png');
-    expect(uploadCalls).toBe(2);
+    expect(uploadCalls).toBe(1);
+  });
+
+  it.each(['missing source', 'missing URI', 'upload rejection'])(
+    'rejects an initial request when its attachment has a %s',
+    async (failure) => {
+      const handler = createMediaProbe();
+      handler.setClient({
+        files: {
+          upload: async () => {
+            if (failure === 'upload rejection') {
+              throw new Error('Upload service unavailable');
+            }
+            return { mimeType: 'image/png' };
+          },
+        },
+      } as unknown as GoogleGenAI);
+      handler.setMediaEntries([
+        {
+          file_name: 'failed.png',
+          data: '',
+          media_type: 'image/png',
+          media_category: 'image',
+          source_path:
+            failure === 'missing source' ? undefined : '/x/failed.png',
+        },
+      ]);
+
+      await expect(
+        handler.initializeMessages('PREFIX', 'Explain the attached figure', [
+          { absolutePath: '/x/failed.png' } as never,
+        ]),
+      ).rejects.toThrow(
+        failure === 'upload rejection'
+          ? 'Upload service unavailable'
+          : 'failed.png',
+      );
+      expect(handler.consumeInsertedAttachmentKinds('initial')).toEqual([]);
+    },
+  );
+
+  it('retains valid follow-up attachments around a failed upload and reports that file', async () => {
+    const handler = createMediaProbe();
+    const error = vi.fn();
+    handler.setLogger({ ...noopTrace, error });
+    handler.setClient({
+      files: {
+        upload: async ({ file }: { file: string }) => {
+          if (file === '/x/failed.pdf') throw new Error('Upload unavailable');
+          return { uri: 'files/figure', mimeType: 'image/png' };
+        },
+      },
+    } as unknown as GoogleGenAI);
+    handler.setMediaEntries([
+      {
+        file_name: 'inline.png',
+        data: Buffer.from('figure').toString('base64'),
+        media_type: 'image/png',
+        media_category: 'image',
+      },
+      {
+        file_name: 'failed.pdf',
+        data: '',
+        source_path: '/x/failed.pdf',
+        media_type: 'application/pdf',
+        media_category: 'document',
+      },
+      {
+        file_name: 'uploaded.png',
+        data: '',
+        source_path: '/x/uploaded.png',
+        media_type: 'image/png',
+        media_category: 'image',
+      },
+    ]);
+
+    const steps = await handler.createRoundMessages([], 'Compare the figures', [
+      { absolutePath: '/x/inline.png' } as FileLocation,
+      { absolutePath: '/x/failed.pdf' } as FileLocation,
+      { absolutePath: '/x/uploaded.png' } as FileLocation,
+    ]);
+
+    const content = (steps[0] as Interactions.UserInputStep).content ?? [];
+    expect(content.filter((part) => part.type === 'image')).toEqual([
+      expect.objectContaining({
+        data: Buffer.from('figure').toString('base64'),
+      }),
+      expect.objectContaining({ uri: 'files/figure' }),
+    ]);
+    expect(textOf(steps[0])).not.toContain('failed.pdf');
+    expect(handler.consumeInsertedAttachmentKinds('followUp')).toEqual([
+      'image',
+      'image',
+    ]);
+    expect(error).toHaveBeenCalledOnce();
+    expect(error.mock.calls[0][0]).toContain('failed.pdf');
   });
 
   it('builds typed Interactions media content for audio, video, and documents', async () => {
