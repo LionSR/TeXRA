@@ -258,16 +258,16 @@ chunks, and `local` do (8.1). Every type that _is_ on the wire uses arrays
 and records, so nothing depends on a `Map` surviving `JSON.stringify`; the
 same rule governs the persisted `Surface` (9).
 
-Four aggregate kinds, one key shape, one placement rule (contract C2).
+Aggregate kinds share one key shape and one placement rule (contract C2).
 `AggregateId` is a kind-qualified storage key, encoded only through
 `aggregateId(kind, logicalId) = JSON.stringify([kind, logicalId])`. Thus
 `aggregateId('stream', id)` and `aggregateId('execution', id)` are distinct
-even when their logical ids are equal. The same encoding applies to inquiry
-and singleton-session ids. C2 fixes the session logical id as `singleton`
+even when their logical ids are equal. The same encoding applies to inquiry,
+`workflow-checkpoint`, and singleton-session ids. C2 fixes the session logical id as `singleton`
 and the reserved migration logical id as `cutover`, in their distinct kinds. Event envelopes, read/claim arguments, `parent_id`,
 `folded`, `claims`, `latest`, subscription entries, and reconciliation scopes
-all use this qualified key. Payload `streamId`, `executionId`, and thread
-ids retain their logical values; consumers qualify them from the edge's
+all use this qualified key. Payload `streamId`, `executionId`, `checkpointId`,
+and thread ids retain their logical values; consumers qualify them from the edge's
 known kind, and the importer does so before assigning sequences. No reader
 infers kind from an id's spelling. The event key is `(aggregate_id, seq)`, and **every fact lives on the aggregate
 of its logical target**, so a latest-of-type lookup never has to
@@ -292,7 +292,12 @@ proposal owns this placement and the substrate contract owns the schema, with th
 execution-to-stream edge on `run.start`: consumers qualify its logical
 `executionId` with kind `execution` and its logical `streamId` with kind
 `stream`. An inquiry thread's facts (`inquiryThreadUpdated`, parented or not)
-use `aggregateId('inquiry', threadId)`. The **one session aggregate** per paper carries singleton session
+use `aggregateId('inquiry', threadId)`. A workflow's shared journal uses
+`aggregateId('workflow-checkpoint', checkpointId)`, an independently claimed
+root named by its `run.start.checkpointId` edge (decision 9, C5). Deleting
+one execution does not cascade that journal. Explicit deletion of its last
+referring run may collect it under C9 only after acquiring a reclaimable
+checkpoint claim and verifying that no retained history still references it. The **one session aggregate** per paper carries singleton session
 facts only; `goal` is per stream and never a singleton session fact. A fact that can
 have more than one live instance never goes there, because after two
 deletions a latest-of-type read of one aggregate would see only the newer
@@ -439,6 +444,10 @@ process-wide alive set cannot determine whether the waiting aggregate is
 held. `local.self` identifies this process only; it grants no ownership
 without the matching current aggregate claim. Run launch/resume claims the
 stream and execution together, and actions verify the relevant pair.
+Workflow launch/resume also acquires the checkpoint claim in that same
+transaction before journal or run mutation. Its runtime scope releases
+only the run and checkpoint claims that scope acquired; deleting or closing
+a different saved run cannot release an active run's checkpoint claim.
 
 - **Existence** is decided by the stream's own aggregate (contract C2, C9):
   `run.start` and `stream.removed` are the first and the last row of one
@@ -598,7 +607,13 @@ stream and execution together, and actions verify the relevant pair.
   under it. The fold carries it only because `RunIdentity` deliberately does
   not, and the execution-scoped requests of 8.2 (`skip`, `retry`, `kill`)
   name it.
-- **Unavailable.** `readOnly` is true for an unsampled required claim,
+- **Unavailable.** A workflow's required claim set includes its
+  `workflow-checkpoint` aggregate as well as its stream and execution. A
+  saved workflow whose own run claims are released cannot offer Resume
+  while that checkpoint is held, even by another run in the same process;
+  the local admission guard and the atomic C5 acquisition enforce the same
+  rule. This affects action availability, not the saved run's execution
+  category or status. `readOnly` is true for an unsampled required claim,
   for a current foreign claim whose owner is alive or unprovable (including
   no verdict yet), or for a stream in `local.unreadable`. It is false for
   an explicitly released or proven-dead claim unless the unreadable overlay
@@ -679,46 +694,34 @@ stream and execution together, and actions verify the relevant pair.
   append-only scrollback (12.3). Using `settledSeq` would print a row its
   finalizing event (`stream.end`) still changes; using a count would print
   a still-streaming row 1 the moment row 2 finalized.
-- **Incremental.** One rule, keyed on what a change _names_. A durable event names the
-  streams its _type_ declares - not `event.streamId`, which an inquiry
-  fact does not have: `setParentStream` names its `childStreamId` and its new
-  parent, an unparented `inquiryThreadUpdated` names none. That mapping is
-  exhaustive and already written: `sessionFactStreamIds`
-  (`SessionFactApplier.ts:116-125`) is the function, and the fold takes it
-  over rather than reinventing it - with one addition it cannot make, since
-  the payload does not carry it: on a `setParentStream` the fold also names
-  the child's **prior** parent, read from the view before the event applies.
-  A `stream.removed` names its prior parent for the same reason: the fold
-  recomputes the deleted stream's arm first, after which the edge is gone,
-  so the old parent would keep the deleted child in its `childIds`,
-  `rollup`, and memoized run model forever. Without both, the walk starts
-  at the new relationship - or at none - which is the two-chain requirement
-  below. A fact naming no stream still folds - it
-  updates session-level state such as `inquiries` - it simply names no arm.
-  A **lifecycle** event (`run.start`, `stream.removed`) additionally names its
-  stream's subtree: a child's
-  placement is derived from whether its parent exists, so deleting a parent
-  re-roots its children and shortens every descendant's `ancestors` (see
-  `ancestors` above). That walk is O(subtree) and happens only when a parent
-  appears or is tombstoned. A `LocalRuntimeState` snapshot names the symmetric
-  difference in explicit liveness verdicts and unreadable streams. It
-  names only streams whose current claims refer to those owner ids.
-  `Drained` additionally names streams whose checked claims changed or
-  disappeared, including a release with no new event. Thus a living owner
-  releasing one aggregate updates that stream without changing its others. A
-  `TextChunk` names its row's stream. For each named stream the fold
-  recomputes its arm, then
-  walks `parent` to the root updating each ancestor's `childIds`,
-  `rollup`, `approval`, and `group`, then `order` when a top-level stream
-  appeared or changed status. An event that _changes_ `parent` walks two
-  chains, the old and the new: detach is a real runtime transition
-  (`onChildrenDetached` emits `setParentStream` with a null parent,
-  `createSessionStores.ts:30-44`), so a child's parent genuinely moves and
-  the abandoned branch would otherwise keep the child in its `childIds` and
-  its `rollup` forever. The old parent needs no extra bookkeeping: the fold
-  holds it in the view until the event applies. Cost is O(depth) per named
-  stream and the named set is bounded by what actually changed, never a
-  whole-view pass. `transcript.run` is memoized on
+- **Incremental.** One rule, keyed on what a change _names_. An exhaustive
+  mapping from durable event type and payload names its affected streams;
+  an unparented `inquiryThreadUpdated` names none but still updates the
+  session's inquiry state. Before applying a lifecycle change, the fold
+  retains the affected streams' prior effective parent links. `run.start`,
+  `stream.removed`, and current-lifecycle reconciliation from
+  `ReplayComplete` or `Drained` recompute the affected subtree against the
+  canonical existence/open-state and `parentStartCommit` rule above.
+  Removing a parent re-roots surviving children and shortens every
+  descendant's `ancestors`; a changed lifecycle can likewise change whether
+  a declared parent is effective. These changes require O(subtree) work,
+  including when retention removed the tombstone before this reader saw it.
+  No separate parent-assignment event is required.
+
+  A `LocalRuntimeState` snapshot names the symmetric difference in explicit
+  liveness verdicts and unreadable streams, affecting only streams whose
+  current claims refer to those owners. Reconciliation also names streams
+  whose checked claims changed or disappeared, including a release with
+  no new event. A `TextChunk` names its row's stream. For each named stream,
+  the fold recomputes its arm and walks the effective parent chain to update
+  each ancestor's `childIds`, `rollup`, `approval`, and `group`, then `order`
+  when top-level membership or status changes. When the effective parent
+  changes, it updates both the saved old chain and the new chain; otherwise
+  an abandoned ancestor would retain the child in its rollup and memoized
+  run model. Lifecycle removal likewise updates the deleted stream's prior
+  chain after its own arm disappears. Ordinary updates cost O(depth) per
+  named stream; the larger subtree pass is confined to lifecycle changes,
+  never a whole-view pass. `transcript.run` is memoized on
   `(streamId, commitOrdinal, childRevision)` - the **session** ordinal, not
   `settledSeq`: `seq` is per aggregate (above) and a transcript spans two,
   so a per-aggregate key can stay unchanged or repeat across the two and
@@ -734,6 +737,7 @@ stream and execution together, and actions verify the relevant pair.
   walk that has to bump it is already visiting every ancestor.
   Recomputing `workflowRunModel` over a whole transcript per event would be
   quadratic.
+
 - **Legacy.** The fold has no legacy arm and no event carries a
   `StreamLogEntry`. The importer normalizes each old entry into the
   canonical events of section 6 at the import boundary, where
@@ -1321,12 +1325,14 @@ that preceded that text. Independent event and text streams merged at the
 consumer do not provide this ordering.
 
 The checked scope belongs to this reader: ids from its completed listing,
-ids and stream/execution/inquiry edges introduced by delivered live-tail
-facts, and its requested transcript aggregates. It retains them until it has
+ids and stream/execution/inquiry/workflow-checkpoint edges introduced by
+delivered live-tail facts, and its requested transcript aggregates. It retains them until it has
 delivered their removal. Each transport subscription has its own scope;
 it never borrows the database-owning fold's current ids, which may already
 omit a stream the renderer still holds. No absence is inferred for an id
-outside this expanded checked scope.
+outside this expanded checked scope. The `run.start.checkpointId` edge
+includes its qualified checkpoint key for claim checks; journal payloads
+remain on-demand runtime/resume reads, not automatic transcript subscriptions.
 
 The same reader serves the runtime fold and each transport framer. Each
 finite read is one ordered batch: durable prefix, captured text/local
@@ -1693,7 +1699,8 @@ text/local inputs, appends `{ _tag: 'drained', cursor, existence }`, and
 releases that complete batch. Earlier listing/history frames carry null; the final `replayComplete` frame
 carries its replay transaction's reconciliation and releases a complete
 replay ending in `ReplayComplete`, which retains the pre-replay tail anchor. Each reader's scope includes listing ids,
-ids and stream/execution/inquiry edges from delivered live-tail facts, and
+ids and stream/execution/inquiry/workflow-checkpoint edges from delivered
+live-tail facts, and
 requested transcript ids until removal is delivered (7.2). Old generations
 are discarded before buffering or applying absence. An unchanged-cursor
 frame still carries inputs; cursor comparison cannot discard it.
@@ -1706,7 +1713,8 @@ with `from: 0` chunks for the streaming rows (5.2, 7.4), so there is no
 `Resync` shape, no replacement fold arm, and no repair path for a tombstone
 retention removed while the surface was away. Every event carries
 its aggregate id, its `seq`, and its session `commit` ordinal (the aggregate
-being a kind-qualified stream, execution, inquiry, or session key, 5.1), and
+being a kind-qualified stream, execution, inquiry, workflow-checkpoint, or
+session key, 5.1), and
 every chunk carries its stream and
 its `from`/`to`, so a frame needs no per-stream range. Within one read the
 rows of a frame are in that read's order (commit order for `all`, seq order
@@ -2817,7 +2825,7 @@ As tests:
    `SessionState.ts:487-501`), so an id names a name, and every reference to
    one is ambiguous until it is paired with an `executionId`. Successive
    review rounds found that single ambiguity in **thirteen** places: the
-   tombstone, the `parent` link, `setParentStream`, `run.activate`, every
+   tombstone, the `parent` link, parent routing, `run.activate`, every
    stream-scoped request, the misc request arms, conversation drafts, queued
    follow-ups, in-flight text, the dictation destination, and the unreadable
    holds. Each was found separately, each was individually correct, and none
@@ -2846,10 +2854,15 @@ As tests:
    key: a relaunch while the prior run is in flight shares that id, so the
    fresh-lease acquisition fails closed rather than starting a second run
    over one journal (`WorkflowScriptTool.ts:465-477`). Fresh ids would
-   remove that guard, so a workflow launch takes a lease on its
-   `checkpointId` as well as its execution - the journal is the shared
-   resource, so the exclusion belongs on the journal's identity, not on a
-   run id that happened to be derived from it. Same correction as the resume
+   remove that guard, so a workflow launch/resume atomically claims
+   `aggregateId('workflow-checkpoint', checkpointId)` together with its
+   stream and execution aggregates before any journal or run mutation (C5).
+   The journal lives on that independent checkpoint aggregate, so both
+   exclusion and replay use its stable identity. Deleting an execution
+   leaves the checkpoint intact while any retained run still refers to it.
+   Explicit deletion of the last referring run may collect the checkpoint
+   under C9 only after acquiring its reclaimable claim and rechecking the
+   absence of references in the final deletion transaction. Same correction as the resume
    anchor, applied to exclusion. Reusing the execution id instead - what an
    earlier draft of this decision proposed - is not merely redundant but
    unsafe: two live rows would share one execution id, and deletion resolves

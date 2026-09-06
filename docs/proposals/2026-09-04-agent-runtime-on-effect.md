@@ -128,7 +128,7 @@ Flow row types, all Zod-validated at the boundary, all carried as
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `flow.step` (stream aggregate) | round begin/end (reflection), turn begin/end, response ready/processed, `waiting`, `halted`                                                                                                                                                                                           | `{ family, step, round?, turn?, continuation?, outcome? }`; replay coordinates. Listing status comes from the canonical `status` fact, including failures before the runtime starts                                                                                                                                                                                                   |
 | `model.message`                | a completed model response is recorded, or provider-native messages are appended: initial/round prompt, completed tool-follow-up batch, user follow-up, synthetic continuation                                                                                                        | a discriminated payload: `pending-tools` stores normalized response and builder inputs plus ordered extracted calls; `append` stores the handler-built `ProviderMessage[]` delta (z.custom), with `sourceResponseCommit` for a completed tool-follow-up batch. No raw SDK response                                                                                                    |
-| `model.compaction`             | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens                                                                                                                                                                                       | the full replacement array; later loads start here                                                                                                                                                                                                                                                                                                                                    |
+| `model.compaction`             | a handler returns `updatedMessages` that is not a prefix extension, or a reflection round opens                                                                                                                                                                                       | the full replacement array after runtime context injection; later loads start here                                                                                                                                                                                                                                                                                                    |
 | `tool.intent`                  | unconditionally at the barrier dispatch site, before any barrier (non parallel-safe) call starts (`ToolUseDispatchNode._exec` today). Not from an approval hook: `onExecutionReady` exists for three tools only (`bash`, `codex`, `wolfram`), while about 38 of 50 tools are barriers | `{ callIds, attempt }`; the attempt increases only after an explicit re-run decision                                                                                                                                                                                                                                                                                                  |
 | `tool.result`                  | after each tool call settles, one row per call including duplicates (`duplicateOf`)                                                                                                                                                                                                   | `{ sourceResponseCommit, callId, attempt, result, attachments, stateMutation }`: normalized `ToolResult`, immutable attachment payloads encoded as below, and that call's settled `stateSlices` mutation, without a provider message. Its terminal `tool.end` commits in the same cross-aggregate batch, scrubbed at publish                                                          |
 | `flow.snapshot`                | initially before the first external activity; at `turn.end` / `round.end`, before WAITING, and whenever bytes appended since the last snapshot exceed its size                                                                                                                        | the family's non-message Zod state: `structured`, `lastError`, `userCancelledRetry`, `shouldSkipCycle`, `systemPrompt`, `continuationGenerationId`, `stateSlices`, `modelId`, `modelHandlerCompatibilityKey`; `outputLocation`, `roundOutputs`, `continueRounds`, `endTurn`, `context`, compile-repair state, round counters, durable phase, pending intents, and `messageBaseCommit` |
@@ -220,6 +220,12 @@ to `RunState.messages`. Its row commit identifies the response. This payload
 preserves the exact extracted provider-specific calls, assistant text,
 reasoning/thinking blocks and their signatures, server-tool content, and
 every other normalized input the handler's follow-up builder consumes.
+Before dispatch it also records each call's partition and duplicate-primary
+identity. An `endTurn` settlement atomically records skipped dispositions
+and their normalized synthetic results for later undispatched partitions
+in its non-message state; other calls in
+the already admitted parallel partition still settle normally. These facts
+survive a snapshot and are consulted before any recovery dispatch.
 Private handler caches are not presumed to survive a restart: construction
 of a resumed handler restores these inputs from the row before building
 follow-ups. An unsupported input shape fails validation rather than silently
@@ -353,8 +359,9 @@ row in one batch (`pending-tools` for a tool-bearing response, `append`
 otherwise), partitions tool calls into parallel-safe runs and barriers as
 `ToolUseDispatchNode` does today, writes `tool.intent` unconditionally at
 the dispatch site before invoking every barrier tool, runs a parallel-safe group with
-`Effect.forEach(..., { concurrency: MAX_PARALLEL_TOOL_CALLS })` and a typed
-`TurnEnded` failure for the `endsToolUseTurn` short-circuit, appends one
+`Effect.forEach(..., { concurrency: MAX_PARALLEL_TOOL_CALLS })` and raises
+the typed `TurnEnded` short-circuit only after the current partition settles,
+appends one
 `tool.result` with its state mutation and `tool.end` per call, commits the
 handler-built provider-message batch once the response's full call set has
 settled, and ends with one batch
@@ -408,9 +415,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (start) {
           }
           s = yield* processCommittedResponse(s); // uses the saved response; never calls the model
         }
-        const out = yield* produceOutput(s); // phase is output.ready
+        const out = yield* produceOutput(s); // commits output.pending plan, or reconciles that saved phase
         const next = finishRound(s, out, shouldContinue(s, out));
         return yield* ledger.appendBatch([
+          ...out.facts, // output/compile facts settle once with the phase
           snapshot(next), // includes next round/phase, or done; never repeats a settled round
           step('round.end', s.round, out),
         ]);
@@ -432,7 +440,32 @@ phase (`model.ready` or `output.ready`) and non-message state in one batch.
 An interrupted run therefore processes a committed response before it can
 issue another invocation. `replacementRows` emits a compaction only for a
 non-prefix replacement; the full replacement precedes the assistant so
-folding cannot discard the completed response.
+folding cannot discard the completed response. That replacement includes
+the provider-formatted post-compaction context appended by
+`ModelInvocationNode.post` (`ModelInvocationNode.ts:760-773`), not just the
+handler's `updatedMessages`. Capture the context once, including its
+clock-dependent values, before recording the response. If the completed
+array is a prefix extension, persist its entire appended delta instead.
+Both paths commit the exact post-injection history before the assistant
+in the same batch; resume never regenerates that context.
+
+`produceOutput` first commits an `output.pending` snapshot with a stable
+round/operation identity, planned targets, and the immutable input content
+or existing run-owned artifact references and digests needed for extraction,
+latexdiff, and compilation. Re-entry reconciles that plan with the files and
+canonical facts: matching completed artifacts are reused, matching partial
+writes can finish, and a changed user file is never blindly overwritten.
+Each external build's start and observed result are saved through the same
+snapshot/activity boundaries; a started build with no recoverable result
+requires explicit retry or reconciliation, rather than being run again
+automatically. The output and compile-failure facts returned by this phase
+commit once with the resulting snapshot and `round.end`, conditional on the
+saved operation still being pending. Host open-file/instruction actions run
+only after that new commit and are not emitted by replay. They are
+best-effort, at-most-once notifications: a crash can lose an automatic open,
+and no exactly-once UI delivery is promised. PR 3 must exercise interruptions
+after file writes, builds, and fact publication against these boundaries;
+wrapping today's `OutputNode.exec`/`post` in a replayed activity is insufficient.
 
 The raw output file still grows per continuation, as at
 `ResponseCycleFlow.ts:321-337`, and compile-repair state stays in the
@@ -515,7 +548,7 @@ returns the new
 attempt to outcome-unknown; an earlier approval never authorizes another
 attempt implicitly. Each original call supplies one settled result to the
 provider's complete follow-up batch; provider messages are installed only
-at that batch boundary. Parallel-safe calls without results re-run. A
+at that batch boundary. Eligible parallel-safe calls without results re-run. A
 `waiting` step re-enters the follow-up wait; a subagent's per-cycle WAITING
 resumes from the snapshot committed with that transition, drains any queued
 batch, and returns WAITING only if none is available. Its non-message fold
@@ -526,11 +559,15 @@ preservation reasons in `runToolUseFlow.ts:606-685` are enumerated against
 the row model in PR 2; follow-up consumption uses the atomic queue/message
 transaction in §2.2.
 
-Unpaired tool calls: calls in a pending response without corresponding
-`tool.result` rows are resolved per call on resume: re-run if parallel-safe,
-outcome-unknown
-as above if a `tool.intent` exists, and a synthetic cancelled result if
-neither. Once all are resolved, the handler builds the complete paired
+Unpaired tool calls first consult the saved dispatch dispositions. A
+duplicate waits for its primary's settlement, then derives the same
+`duplicateOf` result as the live dispatcher, with empty edits, attachments,
+and state mutation; it never executes or reapplies the primary's effects.
+A call skipped by an earlier `endTurn` receives its saved synthetic skip
+result even if parallel-safe. Only the remaining eligible calls use the
+ordinary rule: re-run if parallel-safe, outcome-unknown if a `tool.intent`
+exists, and a synthetic cancelled result if neither. Once all are resolved,
+the handler builds the complete paired
 message batch before the next model invocation; no partial group or
 independently appended pending assistant enters provider history. This
 preserves the pairing `ToolUseDispatchNode.ts:527-605` enforces today.
@@ -582,17 +619,23 @@ the Promise boundary in `executeAgent`: `RunContext`, `ModelInvoker`
 `Effect.retry` with a `Schedule`, the manual approval loop, `prepareRetry`
 rebind), `Tools` (overlay registry plus the `submit_output` terminal tool),
 `FollowUps` (scoped lease over the follow-up queue, `wait` and `drain`).
-`OutputPipeline` wraps the untouched `output/` directory for reflection.
+`OutputPipeline` keeps reflection's output helpers and adds the phase
+boundaries and reconciliation specified in §2.2.
 
 Interruption: the host's stop is `Fiber.interrupt` delivered through
 `runtime.runPromiseExit(program, { signal })`; model handlers and tools are
 called through `Effect.tryPromise((signal) => ...)` so the fiber's signal
-reaches the in-flight request. The append is the single uninterruptible
-region: the loop body runs under `Effect.uninterruptibleMask((restore) =>
-...)` with only the activity itself under `restore`, so a user stop cannot
-lose a completed model response between completion and its row. Process
-death in that window still re-runs the call, as today; the mask is a fiber
-construct, not crash protection. A manually authorized retry is the narrow
+reaches the in-flight request. Each activity/append pair uses
+`Effect.uninterruptibleMask((restore) => ...)`, with the activity and all
+asynchronous preparation under `restore`: normalization, attachment capture,
+and provider-message construction remain interruptible. The activity returns
+a fully prepared append payload; only its synchronous handoff and durable
+append stay masked, never the entire loop. An interruption during preparation
+leaves no settlement: a barrier retains its outcome-unknown intent, and other
+activities follow their saved phase/retry rules. After preparation returns,
+a user stop cannot split the handoff from its append. Process death still
+has the documented unknown-outcome window; the mask is a fiber construct,
+not crash protection. A manually authorized retry is the narrow
 exception: its consumed permit requires renewed consent under §2.3.
 The append runs inside the publisher's
 `Semaphore(1)` and `BEGIN IMMEDIATE`, so stop latency is bounded by the

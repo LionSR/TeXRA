@@ -290,7 +290,8 @@ every row; neither is derived from the other.
 latest-of-type lookup never has to disambiguate targets and no key column
 exists. A database `AggregateId` is the canonical encoding
 `aggregateId(kind, logicalId) = JSON.stringify([kind, logicalId])`, with kind
-`stream`, `execution`, `inquiry`, `session`, or the temporary `migration`.
+`stream`, `execution`, `workflow-checkpoint`, `inquiry`, `session`, or the
+temporary `migration`.
 This encoding is injective even when logical ids coincide or contain
 punctuation. Raw logical ids never serve as database keys. The constructor
 accepts a kind and an unencoded logical id; encoded keys are a distinct type
@@ -330,6 +331,15 @@ in the same transaction. A child's declared parent edge pairs the logical
 `parentStreamId` with `parentStartCommit`, the parent's `run.start` commit.
 The commit distinguishes parent incarnations even if a logical id is reused
 after physical retention. C9 defines the effective parent used for routing.
+
+A workflow journal lives on
+`aggregateId('workflow-checkpoint', checkpointId)`, independently of any
+launch's stream or execution id. Every workflow `run.start` records that
+same logical `checkpointId` as its resume anchor (view-state PRD decision 9).
+Fresh launches and resumes of that checkpoint therefore share one journal
+and one claim, even when both launch ids are fresh. Journal reads and writes
+use this aggregate; individual launch trace and result rows retain their
+stream and execution targets.
 
 During the import window, one reserved migration aggregate holds the
 workspace migration claim and its progress facts (§8). It is excluded from
@@ -420,6 +430,14 @@ The process also admits only one local run holding a claim for an aggregate.
 An execution acquires and releases its stream and execution claims together;
 the current stream claim therefore supplies its displayed ownership, while
 an action rechecks both targets before writing.
+For a workflow, admission acquires its checkpoint claim in the same atomic
+transaction as its stream and execution claims, before reading the journal
+for execution or performing any mutation. This applies to fresh launch,
+retry, and resume alike. A competing launch for the same `checkpointId`
+cannot proceed merely because its run ids differ; the local admission guard
+also covers this checkpoint key. Every journal append checks that claim.
+Completion or suspension releases all three runtime claims together without
+deleting the checkpoint. This replaces the checkpoint launch file lease.
 Release clears only the caller's own claim. Every append verifies both the
 claim and `closed = 0` inside its transaction; a serialized non-owner write
 still fails. The legacy import additionally preserves the old claims until
@@ -515,8 +533,9 @@ one read transaction. Within that transaction it captures the log's committed
 `AUTOINCREMENT` high-water mark and reads `all(cursor, bound)`. It extends the
 checked scope with every identity and typed edge introduced by that read's
 listing/lifecycle/inquiry rows, then reads `aggregateState(expandedScope)`
-before closing the transaction. Newly delivered streams and their execution
-or inquiry aggregates therefore receive current claims in the same batch,
+before closing the transaction. The typed edges include a workflow's
+`checkpointId` under its `workflow-checkpoint` kind. Newly delivered streams
+and their execution, checkpoint, or inquiry aggregates receive current claims in the same batch,
 without waiting for another event. The bound is the SQLite-maintained committed ordinal,
 not `MAX(event.commit)`, which can fall when retention removes rows.
 
@@ -576,7 +595,7 @@ any inputs fold.
 
 Each subscription retains its own checked scope: ids introduced by its
 listing or delivered tail lifecycle/inquiry rows, including their stream,
-execution, and inquiry edges, plus its named transcript aggregates, until
+execution, workflow-checkpoint, and inquiry edges, plus its named transcript aggregates, until
 their removal is delivered or a new generation replaces the scope. It must
 not borrow the database-owning fold's resident set, which may have already
 forgotten a run the renderer still displays. Thus retention remains visible
@@ -603,7 +622,7 @@ aggregates a surface has subscribed to via `aggregate(id, fromSeq)`, and the
 fold drops that tier when the last subscriber leaves. This is the rule that
 keeps #9952 from returning.
 
-**C9. Existence, deletion, retention.** `run.start` creates. Every aggregate
+**C9. Existence, deletion, retention.** `run.start` creates a run. Every aggregate
 records its current **owning lifecycle**, and only that, as a qualified key
 in `event_sequence.parent_id`: an execution's parent is its stream (from
 the `run.start` edge); an inquiry's parent is its most recent asker. An
@@ -633,6 +652,19 @@ existing detach operation to active handles and approval ancestry. A still
 present, open parent remains the parent even if its owner has released it
 or died. The runtime proposal §2.4 owns this reconstruction rule; no new
 detach event is needed.
+
+A workflow-checkpoint aggregate is also an independent root with
+`parent_id = NULL`, created with its first journal fact. Deleting one launch
+does not close or cascade its checkpoint: another saved history or a later
+launch may still need that journal. Releasing runtime claims leaves the
+checkpoint open and available for resume, without an age limit. Explicit
+deletion of the last referring run may also collect the checkpoint: acquire
+its unowned or reclaimable claim under C5 and, in the final deletion
+transaction, verify that no retained run's `run.start.checkpointId` still
+references it before closing and removing its journal. Otherwise retain the
+checkpoint. A concurrent launch must acquire that same claim before
+recording its reference, so it cannot race the reference check and deletion.
+This uses the existing run-deletion operation, with no new deletion surface.
 
 `stream.removed` is the last row on the stream's own
 aggregate and, in the same transaction, sets `event_sequence.closed = 1` on
@@ -992,19 +1024,19 @@ keys (`ExecutionKVStore.ts:43-58`) are not the entire inventory: current
 production callers also use the namespaces below. These are named domain
 records in the event table, not a replacement generic key/value API.
 
-| Current key or namespace                                                              | Canonical representation and preserved content                                                                                                                                                                                                                            |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `meta`                                                                                | `run.start` identity, timestamp, category, stream and parent edges; current workflow metadata and description facts; canonical `status` for outcome. Preserve readable incomplete records without inventing missing fields.                                               |
-| `config`                                                                              | `execution.config`, preserving the current `RunRecord` used by history, export, and resume.                                                                                                                                                                               |
-| `report`                                                                              | `execution.report`, preserving the report text consumed by history and child-result delivery.                                                                                                                                                                             |
-| `result-meta`                                                                         | `execution.result`, preserving the current result envelope, application-level failure detail, and attribution; the canonical `status` remains the sole execution-outcome authority, as in the current result accessor.                                                    |
-| `workspace-files`                                                                     | `execution.workspaceFiles`, preserving the normalized path list used for launch context and export.                                                                                                                                                                       |
-| `turn-state`                                                                          | The current child-turn protocol's active and last-completed turn tokens (runtime proposal §3, step 4), preserving report/result attribution.                                                                                                                              |
-| `child-<id>`                                                                          | Canonical child launch and parent facts, including the recorded child id, agent, and timestamp; the parent edge is the same `run.start` edge, not another stored parent map.                                                                                              |
-| `codex_thread_id`, `claude_agent_session_id`                                          | Named `execution.codexThread` and `execution.claudeSession` records preserving the external continuation ids.                                                                                                                                                             |
-| `workflow-script-*`                                                                   | The current workflow-script journal's invocation identity, script, arguments, files, and ordered activity results, moved to its canonical event protocol in runtime §3, step 4; each invocation remains independently addressable. No retired journal version is revived. |
-| `stable-subagent-attempt`, `stable-subagent-sequence-*`                               | The current delegation attempt and sequence facts, preserving logical execution identity, parent identity, phase, and next-attempt counter per logical execution.                                                                                                         |
-| Supported `flow_<id>` and stream sidecar keys, including any supported work-plan file | The explicit flow and sidecar normalization above; present values must agree with their canonical authority or stop import for resolution.                                                                                                                                |
+| Current key or namespace                                                              | Canonical representation and preserved content                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `meta`                                                                                | `run.start` identity, timestamp, category, stream and parent edges; current workflow metadata and description facts; canonical `status` for outcome. Preserve readable incomplete records without inventing missing fields.                                                                                                       |
+| `config`                                                                              | `execution.config`, preserving the current `RunRecord` used by history, export, and resume.                                                                                                                                                                                                                                       |
+| `report`                                                                              | `execution.report`, preserving the report text consumed by history and child-result delivery.                                                                                                                                                                                                                                     |
+| `result-meta`                                                                         | `execution.result`, preserving the current result envelope, application-level failure detail, and attribution; the canonical `status` remains the sole execution-outcome authority, as in the current result accessor.                                                                                                            |
+| `workspace-files`                                                                     | `execution.workspaceFiles`, preserving the normalized path list used for launch context and export.                                                                                                                                                                                                                               |
+| `turn-state`                                                                          | The current child-turn protocol's active and last-completed turn tokens (runtime proposal §3, step 4), preserving report/result attribution.                                                                                                                                                                                      |
+| `child-<id>`                                                                          | Canonical child launch and parent facts, including the recorded child id, agent, and timestamp; the parent edge is the same `run.start` edge, not another stored parent map.                                                                                                                                                      |
+| `codex_thread_id`, `claude_agent_session_id`                                          | Named `execution.codexThread` and `execution.claudeSession` records preserving the external continuation ids.                                                                                                                                                                                                                     |
+| `workflow-script-*`                                                                   | The current workflow-script journal's checkpoint identity, script, arguments, files, and ordered activity results, moved to `aggregateId('workflow-checkpoint', checkpointId)` under runtime §3, step 4. Imports sharing a checkpoint use the same aggregate, independently of launch ids. No retired journal version is revived. |
+| `stable-subagent-attempt`, `stable-subagent-sequence-*`                               | The current delegation attempt and sequence facts, preserving logical execution identity, parent identity, phase, and next-attempt counter per logical execution.                                                                                                                                                                 |
+| Supported `flow_<id>` and stream sidecar keys, including any supported work-plan file | The explicit flow and sidecar normalization above; present values must agree with their canonical authority or stop import for resolution.                                                                                                                                                                                        |
 
 The converter inventory is checked against every current production key
 writer before cutover. The manifest records each discovered app-state key,
@@ -1091,6 +1123,10 @@ was not short, it was deferred.
   next open needs no repair pass;
 - saved histories survive age-based cleanup, including imported and terminal
   histories; every retained execution key preserves its typed read result;
+- two launches with fresh stream/execution ids but the same `checkpointId`
+  cannot mutate its journal concurrently; after claim release, resume reads
+  the same journal, which survives deletion of one launch while another
+  saved launch still refers to it;
 - deleting a stream closes its state in one transaction; generated-file
   cleanup retries after a crash before final collection, and no state holder
   observes a half-deleted stream;
