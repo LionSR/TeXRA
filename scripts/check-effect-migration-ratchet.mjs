@@ -11,7 +11,10 @@
 // raw catch clauses in files that already import `effect` at runtime (rule
 // R7). Every row is a per-file allowlist: a file absent from a row fails on
 // its first site. A separate hard check expires `@adapter-until YYYY-MM-DD`
-// markers on temporary adapters. The PR that zeroes a row deletes the row.
+// markers on temporary adapters: it validates the date and fails once it has
+// passed, but it cannot detect an adapter added without a marker, since
+// "temporary adapter" is not mechanically recognizable; presence stays a
+// review obligation. The PR that zeroes a row deletes the row.
 //
 // Files are parsed with the TypeScript compiler API (the repo's `typescript`
 // devDependency, as scripts/check-browser-safe-utils.mjs does) rather than
