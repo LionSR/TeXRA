@@ -22,18 +22,18 @@ export type ProviderAuthErrorCtor = new (
   options?: ErrorOptions,
 ) => ProviderAuthError;
 
-/** Re-throw as the provider error type; leave unrelated errors untouched. */
-export function rethrowAsProviderAuthError(
+/** The provider error type for a machine failure; unrelated errors pass through. */
+export function toProviderAuthError(
   error: unknown,
   ErrorType: ProviderAuthErrorCtor,
-): never {
-  if (error instanceof ErrorType) throw error;
+): unknown {
+  if (error instanceof ErrorType) return error;
   if (error instanceof SubscriptionOAuthError) {
-    throw new ErrorType(error.message, error.kind, error.status, {
+    return new ErrorType(error.message, error.kind, error.status, {
       cause: error,
     });
   }
-  throw error;
+  return error;
 }
 
 /**
