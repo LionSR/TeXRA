@@ -39,6 +39,7 @@ export async function launchDesktopAgent(
     session: context.session,
     runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+    copilotRouteOverride: options.copilotRouteOverride,
     ...(options.preferHelperModel && { preferHelperModel: true }),
     onRun: options.onRun,
     onStreamResolved: options.onStreamResolved,

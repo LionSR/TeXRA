@@ -37,12 +37,16 @@
  * immutable, and untouched branches are shared by reference between levels.
  * `view.streams`, `view.policy`, `view.folded`, `view.latest`,
  * `view.inflight`, `view.queuedFollowUps`, and a transcript's `rows` and
- * `taskGroups` are copied at most once per `fold` call, on the first write
- * (`writableMap`, `writableTranscript`), and never written after the call
- * returns; every `StreamView` value, every `TranscriptView` value, and the
- * `SessionView` envelope are replaced on change and never mutated. A host
- * that compares any of these by identity sees exactly what changed, and an
- * older view is stable to read for as long as it is held. It is not a fold
+ * `taskGroups` are copied at most once per `fold` call, by the write that
+ * touches them (`writableMap`, `writableTranscriptArray`), and never
+ * written after the call returns. The copy belongs to the write, not to the
+ * input: an entry that projects no row, one that lands no task group, and a
+ * delete of a key its map never held all leave those branches the objects
+ * the previous level published. Every `StreamView` value, every
+ * `TranscriptView` value, and the `SessionView` envelope are replaced on
+ * change and never mutated. A host that compares any of these by identity
+ * sees exactly what changed, and an older view is stable to read for as
+ * long as it is held. It is not a fold
  * input: the fold's own indexes live in module-private maps keyed by the
  * value they index, per transcript (row and group positions, the measured
  * live text, the newest thinking row) and per view (streams by owner, the
@@ -113,7 +117,10 @@ import {
   streamInterruptedMessage,
   streamStatusCopy,
 } from '@shared/streams/streamStatusDisplay';
-import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
+import {
+  isTaskGroupLifecycleEntry,
+  upsertTaskGroupFromStreamLog,
+} from '@shared/streams/taskGroupProjection';
 import {
   workflowMarkerOf,
   workflowRunModel,
@@ -278,10 +285,24 @@ function writableMap<K extends ViewMapKey>(
   return copy;
 }
 
-function writableArray<T>(array: T[]): T[] {
-  if (owned.has(array)) return array;
-  const copy = [...array];
+type TranscriptArrayKey = 'rows' | 'taskGroups';
+
+/**
+ * The transcript's array under `key`, copied once per call before its first
+ * write and landed on the transcript value. Only a value this call built
+ * (`replaceTranscript`) is passed here, so the copy never reaches a
+ * published level, and a branch this call never writes stays the array the
+ * previous level published.
+ */
+function writableTranscriptArray<K extends TranscriptArrayKey>(
+  transcript: TranscriptView,
+  key: K,
+): TranscriptView[K] {
+  const current = transcript[key];
+  if (owned.has(current)) return current;
+  const copy = [...current] as TranscriptView[K];
   owned.add(copy);
+  transcript[key] = copy;
   return copy;
 }
 
@@ -347,15 +368,6 @@ function replaceTranscript(
   const next: TranscriptView = { ...transcript, ...patch };
   INDEXES.set(next, indexesOf(transcript));
   return next;
-}
-
-/** A replaced transcript value whose rows this call may write: the arms
- *  that upsert rows start here, once per call. `applyEntry`, the one arm
- *  that also writes task groups, copies that array itself. */
-function writableTranscript(transcript: TranscriptView): TranscriptView {
-  return replaceTranscript(transcript, {
-    rows: writableArray(transcript.rows),
-  });
 }
 
 function emptyTranscript(): TranscriptView {
@@ -499,17 +511,17 @@ function reindexOwner(
 ): void {
   const { byOwner } = sessionIndexesOf(view);
   if (from !== null) {
-    const owned = byOwner.get(from);
-    owned?.delete(streamId);
-    if (owned?.size === 0) byOwner.delete(from);
+    const ownedIds = byOwner.get(from);
+    ownedIds?.delete(streamId);
+    if (ownedIds?.size === 0) byOwner.delete(from);
   }
   if (to !== null) {
-    let owned = byOwner.get(to);
-    if (!owned) {
-      owned = new Set();
-      byOwner.set(to, owned);
+    let ownedIds = byOwner.get(to);
+    if (!ownedIds) {
+      ownedIds = new Set();
+      byOwner.set(to, ownedIds);
     }
-    owned.add(streamId);
+    ownedIds.add(streamId);
   }
 }
 
@@ -859,7 +871,9 @@ function walkUp(
 // ---------------------------------------------------------------------------
 
 function upsertRow(transcript: TranscriptView, row: TranscriptRow): void {
-  const { rows } = transcript;
+  // The one writer of `rows`: the copy belongs to the write, so an entry
+  // that projects no row leaves the array the previous level published.
+  const rows = writableTranscriptArray(transcript, 'rows');
   const { rowIndex } = indexesOf(transcript);
   const at = rowIndex.get(row.id);
   if (at !== undefined) {
@@ -964,12 +978,17 @@ function applyEntry(
   stream: StreamView,
   entry: StreamLogEntry,
 ): TranscriptView {
-  const next = replaceTranscript(stream.transcript, {
-    rows: writableArray(stream.transcript.rows),
-    taskGroups: writableArray(stream.transcript.taskGroups),
-  });
+  const next = replaceTranscript(stream.transcript, {});
   const indexes = indexesOf(next);
-  upsertTaskGroupFromStreamLog(next.taskGroups, indexes.taskGroupIndex, entry);
+  // Task groups are copied by the entry that lands one, never by an
+  // ordinary model or log entry, which the projection would not write.
+  if (isTaskGroupLifecycleEntry(entry)) {
+    upsertTaskGroupFromStreamLog(
+      writableTranscriptArray(next, 'taskGroups'),
+      indexes.taskGroupIndex,
+      entry,
+    );
+  }
   const marker = workflowMarkerOf(entry);
   if (marker) {
     indexes.workflowAttemptId = marker.attemptId ?? indexes.workflowAttemptId;
@@ -1011,7 +1030,7 @@ function applyEntry(
     });
   } else {
     indexes.streaming.delete(entry.id);
-    writableMap(view, 'inflight').delete(key);
+    if (view.inflight.has(key)) writableMap(view, 'inflight').delete(key);
   }
   return next;
 }
@@ -1027,7 +1046,7 @@ function withSettledTranscript(
     { finishedAt },
   );
   if (changed.length === 0) return stream;
-  const transcript = writableTranscript(stream.transcript);
+  const transcript = replaceTranscript(stream.transcript, {});
   reconcileCompactionRows(transcript, changed);
   return { ...stream, transcript };
 }
@@ -1232,7 +1251,7 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
     chunk.from === held.length
       ? appendTranscriptText(cursor.text, chunk.text, held.at(-1) ?? '')
       : transcriptText(text);
-  const transcript = writableTranscript(stream.transcript);
+  const transcript = replaceTranscript(stream.transcript, {});
   const at = indexes.rowIndex.get(chunk.rowId);
   const row = at === undefined ? undefined : transcript.rows[at];
   if (at !== undefined && row && isStreamingTextRow(row)) {
@@ -1241,7 +1260,7 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
       row.kind === 'assistant' && (wasPending || chunk.text.includes('<'))
         ? hasIncompleteEmbeddedSubagentFollowup(cursor.text.full)
         : wasPending;
-    transcript.rows[at] = {
+    writableTranscriptArray(transcript, 'rows')[at] = {
       ...rest,
       text: cursor.text,
       ...(pending ? { pendingEmbeddedFollowup: true } : {}),
@@ -1675,9 +1694,13 @@ function foldStreamRemoved(
   if (!stream) return false;
   dropStream(view, stream);
   clearInflight(view, stream);
-  writableMap(view, 'policy').delete(stream.id);
-  writableMap(view, 'queuedFollowUps').delete(stream.id);
-  writableMap(view, 'folded').delete(stream.id);
+  // A map that never held this stream is left alone: a delete that removes
+  // nothing must not copy the map it publishes.
+  if (view.policy.has(stream.id)) writableMap(view, 'policy').delete(stream.id);
+  if (view.queuedFollowUps.has(stream.id)) {
+    writableMap(view, 'queuedFollowUps').delete(stream.id);
+  }
+  if (view.folded.has(stream.id)) writableMap(view, 'folded').delete(stream.id);
   if (view.approvals.some((a) => a.streamId === stream.id)) {
     view.approvals = view.approvals.filter((a) => a.streamId !== stream.id);
   }

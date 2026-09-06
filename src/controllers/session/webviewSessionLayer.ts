@@ -3,8 +3,8 @@
  * one per session key, in a `LayerMap`, built on the one `ManagedRuntime`
  * a webview entry makes with `installWebviewRuntime`. SessionInputs is fed
  * directly by the ordered frames; the same SessionViewService folds them
- * in the sidebar, editor tab, and Electron renderer. HostState carries the
- * host snapshot separately from the fold.
+ * in the sidebar, editor tab, and Electron renderer. SessionFrames carries
+ * the host snapshot separately from the fold.
  *
  * The shell opens a session with `WebviewSessions.open(key)`, begins a
  * generation on its frames right before it posts the `Subscribe` up, and
@@ -12,43 +12,13 @@
  * that installed the runtime disposes it, once, on the shutdown path its
  * entry drives.
  */
-import {
-  Context,
-  Effect,
-  Layer,
-  LayerMap,
-  ManagedRuntime,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Effect, Layer, LayerMap, ManagedRuntime } from 'effect';
 
 import { SessionInputs } from '@shared/session/sessionInputs';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { SessionFrames } from '@shared/session/sessionFrames';
 import { TranscriptSubscriptions } from './sessionSources';
 import { SessionViewService } from './SessionView';
 import { WorkspaceRoots } from './WorkspaceRoots';
-
-/** The host snapshot level (PRD 8.1): what the shell renders but does not
- *  own, as the frames carry it; null until the first frame carries one. */
-class HostState extends Context.Service<
-  HostState,
-  {
-    readonly ref: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
-    readonly changes: Stream.Stream<HostSnapshot | null>;
-  }
->()('@texra/session/HostState') {
-  static readonly layer = Layer.effect(
-    HostState,
-    Effect.gen(function* () {
-      const frames = yield* SessionFrames;
-      return {
-        ref: frames.host,
-        changes: SubscriptionRef.changes(frames.host),
-      };
-    }),
-  );
-}
 
 /** The graph of one session key. `Layer.fresh` for the same reason as the
  *  runtime's: static layers memoize by reference across the map. */
@@ -64,7 +34,6 @@ const webviewSessionLayer = (key: string) =>
             })),
           ),
           TranscriptSubscriptions.layer,
-          HostState.layer,
         ),
       ),
       Layer.provideMerge(SessionFrames.layer),
@@ -78,7 +47,6 @@ interface WebviewSession {
   readonly key: string;
   readonly frames: Context.Service.Shape<typeof SessionFrames>;
   readonly view: Context.Service.Shape<typeof SessionViewService>;
-  readonly host: Context.Service.Shape<typeof HostState>;
   /** The shell is the graph's one port. */
   readonly subscriptions: Context.Service.Shape<typeof TranscriptSubscriptions>;
 }
@@ -95,7 +63,6 @@ export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
         key,
         frames: Context.get(context, SessionFrames),
         view: Context.get(context, SessionViewService),
-        host: Context.get(context, HostState),
         subscriptions: Context.get(context, TranscriptSubscriptions),
       })),
     );

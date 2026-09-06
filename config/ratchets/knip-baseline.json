@@ -1256,12 +1256,6 @@
       "name": "selectSetupCredentialModelExcludingOpenRouter"
     },
     {
-      "file": "src/controllers/progressView/ProgressFollowUpController.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "ProgressFollowUpState"
-    },
-    {
       "file": "src/controllers/settingsView/LatexToolingController.ts",
       "category": "production-dead",
       "kind": "types",

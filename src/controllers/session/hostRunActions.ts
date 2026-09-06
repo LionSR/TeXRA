@@ -8,9 +8,14 @@
  */
 import { SubscriptionRef } from 'effect';
 
+import { resolveAgentKey } from '@agent/index/agentRegistry';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
   API_PROVIDERS,
@@ -29,32 +34,33 @@ import {
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected, Unavailable } from '@shared/session/requestErrors';
+import { LaunchSurfaceSchema } from '@shared/session/surface';
 import type { RunMetadata } from '@transcript/StreamSnapshotStore';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
-import { buildMainViewState } from '../mainView/MainViewStateRestoreController';
+import { submitProgressFollowUp } from '../progressView/progressFollowUpSubmit';
 import { applyFollowUpPlan } from '../progressView/followUpApply';
 import { ProgressApiKeyRetryController } from '../progressView/ProgressApiKeyRetryController';
 import {
   ProgressFollowUpController,
   type ProgressFollowUpModelOption,
+  type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
+
+const log = createLog('HostRunActions');
 
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
   /** Launch or resume a run; the host's own launcher reaches `runAgent`. */
   runExecutionRequest(
     request: ExecutionRequest,
-    options?: { preferHelperModel?: boolean },
+    options?: {
+      preferHelperModel?: boolean;
+      copilotRouteOverride?: 'direct';
+      onRun?: () => void;
+    },
   ): Promise<void>;
-  /** Launch and report once the runtime owns a run handle (the Copilot
-   *  fallback settles the pending retry only after its replacement run
-   *  started). */
-  runUntilStarted(
-    request: ExecutionRequest,
-    options: { copilotRouteOverride?: 'direct' },
-  ): Promise<boolean>;
   loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
   /** Ask the user for a provider key; the controller re-reads the store. */
   promptForApiKey(provider?: ApiProvider): Promise<void>;
@@ -73,8 +79,12 @@ export interface HostRunActions {
   ): Promise<void>;
   /** The launcher's form of a settled run's saved setup. */
   restoreState(streamId: StreamTabId): Promise<AgentConfig>;
-  /** The sidecar-backed run record, the view's execution id filling in. */
-  getRunMetadata(streamId: StreamTabId): RunMetadata;
+  /** The shared sidecar readers used by the workflow controllers. */
+  readonly snapshotPort: ProgressFollowUpState & {
+    getKnownWorkspaceOutputPaths(streamId: StreamTabId): Set<string>;
+  };
+  restoreProposal(proposal: unknown): AgentConfig;
+  sendFollowUp(streamId: StreamTabId, text: string): Promise<void>;
 }
 
 export function createHostRunActions(
@@ -269,10 +279,16 @@ export function createHostRunActions(
       },
       async (copilotRouteOverride) => {
         if (!isRetryPending(streamId, requestId)) return false;
-        return ports.runUntilStarted(
-          { config: { ...config, model } },
-          { copilotRouteOverride },
-        );
+        // Start acknowledges ownership of the replacement run. Settlement
+        // without an onRun callback means no replacement was launched.
+        return new Promise<boolean>((resolve, reject) => {
+          void ports
+            .runExecutionRequest(
+              { config: { ...config, model } },
+              { copilotRouteOverride, onRun: () => resolve(true) },
+            )
+            .then(() => resolve(false), reject);
+        });
       },
     );
     if (!started) return;
@@ -280,7 +296,29 @@ export function createHostRunActions(
   }
 
   return {
-    getRunMetadata,
+    snapshotPort,
+    restoreProposal(proposal) {
+      const parsed = AgentConfigSchema.safeParse(proposal);
+      if (!parsed.success) {
+        log.warn('Invalid proposal config', {
+          data: parsed.error.issues,
+        });
+        throw new Rejected({
+          reason: 'This proposal does not carry a restorable setup.',
+        });
+      }
+      return parsed.data;
+    },
+    async sendFollowUp(streamId, text) {
+      await submitProgressFollowUp({
+        session,
+        streamId,
+        input: { text },
+        // Programmatic file feedback has no composer to acknowledge.
+        acknowledge: () => {},
+        showInfo: ports.showWarning,
+      });
+    },
     /**
      * Resume the run behind a stream: a workflow relaunches through the
      * host's launcher with its execution id; a tool-use run carries
@@ -353,7 +391,22 @@ export function createHostRunActions(
 
 /** The launcher's form of a run configuration (PRD 8.5, `launch`). */
 export function launchPatchOf(config: AgentConfig) {
-  const state = buildMainViewState(config);
-  const { openedFiles: _opened, ...launch } = state;
-  return launch;
+  const toolConfig = config.toolConfig;
+  const agentCategory = config.agentCategory;
+  const resolvedAgent = resolveAgentKey(config.agent, agentCategory);
+  return LaunchSurfaceSchema.parse({
+    sessionType: agentCategory,
+    agent: { [agentCategory]: resolvedAgent },
+    model: config.model,
+    instruction: { [agentCategory]: config.instruction },
+    editedFile: config.editedFile,
+    inputFiles: config.inputFiles,
+    contextFiles: config.contextFiles,
+    mediaFiles: config.mediaFiles,
+    outputFiles: config.outputFiles,
+    autoExtractFigure: toolConfig.autoExtractFigure,
+    autoExtractTikzFigure: toolConfig.autoExtractTikzFigure,
+    autoCompileInputPdf: toolConfig.autoCompileInputPdf,
+    attachTeXCount: toolConfig.attachTeXCount,
+  });
 }

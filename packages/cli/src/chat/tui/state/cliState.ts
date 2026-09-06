@@ -8,7 +8,12 @@ import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { AgentDelegationScope, StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type AgentDelegationScope,
+  type StreamTabId,
+} from '@shared/schemas';
+import type { StreamView } from '@shared/session/sessionView';
 import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
 import type { WorkPlanProvenance } from '@transcript';
 import { sessionView } from './sessionView';
@@ -120,6 +125,81 @@ export function focusStream(
   if (options.onlyIfUnset && activeStreamId.get() !== undefined) return;
   activeStreamId.set(streamId);
 }
+
+/** Expansion is a Surface choice; the fold's forceExpanded takes precedence. */
+export const expandedStreams = signal<ReadonlyMap<StreamTabId, boolean>>(
+  new Map(),
+);
+
+export type SessionListRow =
+  | {
+      readonly kind: 'group';
+      readonly label: string;
+    }
+  | {
+      readonly kind: 'stream';
+      readonly stream: StreamView;
+      readonly depth: number;
+      readonly expanded: boolean;
+    };
+
+/** The visible tree, including section headings, shared by the list and its shortcuts. */
+export const sessionListRows = computed<readonly SessionListRow[]>(() => {
+  const view = sessionView().get();
+  const expanded = expandedStreams.get();
+  const rows: SessionListRow[] = [];
+  const groups: Record<StreamView['group'], StreamView[]> = {
+    running: [],
+    waiting: [],
+    interrupted: [],
+    recent: [],
+  };
+  for (const id of view.order) {
+    const stream = view.streams.get(id)!;
+    groups[stream.group].push(stream);
+  }
+  const append = (stream: StreamView, depth: number): void => {
+    const open =
+      stream.category !== AgentCategory.Workflow &&
+      (stream.forceExpanded || expanded.get(stream.id) === true);
+    rows.push({ kind: 'stream', stream, depth, expanded: open });
+    // A workflow's calls belong to its existing popup.
+    if (open) {
+      for (const id of stream.childIds)
+        append(view.streams.get(id)!, depth + 1);
+    }
+  };
+  for (const streams of Object.values(groups)) {
+    const first = streams.at(0);
+    if (!first) continue;
+    const group = first.group;
+    let label: string;
+    switch (group) {
+      case 'running':
+        label = 'Running';
+        break;
+      case 'waiting':
+        label = 'Waiting on you';
+        break;
+      case 'interrupted':
+        label = 'Interrupted';
+        break;
+      case 'recent':
+        label = 'Recent';
+        break;
+    }
+    rows.push({ kind: 'group', label });
+    for (const stream of streams) append(stream, 0);
+  }
+  return rows;
+});
+
+/** Stream shortcuts follow the visible tree and skip section headings. */
+export const sessionListStreamIds = computed(() =>
+  sessionListRows
+    .get()
+    .flatMap((row) => (row.kind === 'stream' ? [row.stream.id] : [])),
+);
 
 /** The top-level stream the current session rooted at. */
 export const rootStreamId = signal<StreamTabId | undefined>(undefined);
@@ -500,6 +580,7 @@ export function resetCliState(
   sessionMeta.set(nextSessionMeta);
   activeStreamId.set(undefined);
   rootStreamId.set(undefined);
+  expandedStreams.set(new Map());
   rootRunPending.set(false);
   rootRunStreamId.set(undefined);
   activeForm.set(undefined);

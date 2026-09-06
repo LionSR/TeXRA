@@ -24,10 +24,7 @@ import {
 import { DesktopSetLogMessageSchema } from './desktopLogMessages.js';
 import { DesktopOnboardingSetStateMessageSchema } from './desktopOnboardingMessages.js';
 import { DesktopPapersMessageSchema } from './desktopPaperMessages.js';
-import {
-  DesktopClosePdfMessageSchema,
-  DesktopShowPdfMessageSchema,
-} from './desktopPdfMessages.js';
+import { DesktopShowPdfMessageSchema } from './desktopPdfMessages.js';
 import { DesktopShowPromptMessageSchema } from './desktopPromptMessages.js';
 import {
   DesktopOpenWorkbenchMessageSchema,
@@ -68,7 +65,6 @@ export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
   DesktopShowDiffMessageSchema,
   DesktopCloseDiffMessageSchema,
   DesktopShowPdfMessageSchema,
-  DesktopClosePdfMessageSchema,
   DesktopShowPromptMessageSchema,
   // Shell, logs, onboarding
   DesktopOpenWorkbenchMessageSchema,

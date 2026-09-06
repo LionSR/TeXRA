@@ -34,20 +34,6 @@ test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
 });
 
-/** True while the lazy-created PDF overlay dialog is open. */
-async function pdfOverlayIsOpen(): Promise<boolean> {
-  return launched.page.evaluate(() => {
-    const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
-    if (dialog == null) return false;
-    // The overlay is created lazily, so there is a window where the custom
-    // element is not upgraded yet and only the reflected attribute is visible.
-    return (
-      (dialog as unknown as { open: boolean }).open === true ||
-      dialog.hasAttribute('open')
-    );
-  });
-}
-
 /**
  * Trajectory 1 — first launch on an empty workspace.
  * The launcher must mount without crashing the renderer.
@@ -65,11 +51,11 @@ test('first launch shows a usable launcher chrome', async () => {
   await expect(
     launched.page.locator('.task-header-button[aria-label="Show Commands"]'),
   ).toBeVisible();
-  // The main view itself either renders <main-app> or the no-workspace empty
+  // The conversation view renders the launcher or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
   // one each user actually hits.
   const mainSection = launched.page.locator(
-    '.task-conversation-pane[data-pane="launcher"]',
+    '.task-conversation-pane[data-pane="conversation"]',
   );
   await expect(mainSection).toBeVisible();
 });
@@ -236,7 +222,9 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   };
 
   await launched.page.evaluate((message) => {
-    window.postMessage(message, '*');
+    const session =
+      document.querySelector<HTMLElement>('progress-app')?.dataset.session;
+    window.postMessage({ ...message, session }, '*');
   }, payload);
 
   const reviewTab = launched.page.locator(
@@ -279,108 +267,73 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
 
   // Close via desktop:closeDiff — the Review tab should close.
   await launched.page.evaluate(() => {
-    window.postMessage({ command: 'desktop:closeDiff' }, '*');
+    window.postMessage(
+      {
+        command: 'desktop:closeDiff',
+        session:
+          document.querySelector<HTMLElement>('progress-app')?.dataset.session,
+      },
+      '*',
+    );
   });
   await expect(
     launched.page.locator('.task-workbench-tab[data-kind="review"]'),
   ).toHaveCount(0);
 });
 
-/**
- * Trajectory 17 — in-app PDF preview overlay (audit item B).
- *
- * `desktopPreviewHost.openBuildDisplay` posts `desktop:showPdf` to the
- * renderer; the renderer lazy-creates a wa-dialog overlay containing
- * an `<iframe>` pointed at `file://${pdfPath}` (Electron's bundled
- * Chromium PDF viewer). We simulate the IPC by `window.postMessage`-ing
- * the same payload and assert the dialog opens with an iframe whose
- * `src` resolves to the supplied PDF path.
- *
- * We don't wait for the iframe to load the PDF (Chromium's PDF plugin
- * is heavy + the test PDF doesn't exist on disk); verifying the
- * contract — dialog open, title populated, iframe src matches — is
- * enough to catch wiring regressions.
- */
-test('desktop:showPdf opens the in-app PDF overlay', async () => {
-  // Reset chrome — previous tests may have left dialogs open.
-  await launched.page.evaluate(() => {
-    const dialogs = document.querySelectorAll('wa-dialog');
-    dialogs.forEach((d) => {
-      (d as unknown as { open: boolean }).open = false;
-    });
-  });
-
+/** The host opens compiled PDFs in the originating paper's workbench. */
+test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
+  const { page } = launched;
   const pdfPath = '/tmp/texra-trajectory/output.pdf';
-  const payload = {
-    command: 'desktop:showPdf',
-    title: 'output.pdf',
-    pdfPath,
-  };
+  const session = await page
+    .locator('progress-app')
+    .getAttribute('data-session');
+  const pdfTab = page.locator('.task-workbench-tab[data-kind="pdf"]');
+  const frame = page.locator('iframe.task-workbench-pdf-frame');
 
-  await launched.page.evaluate((message) => {
-    window.postMessage(message, '*');
-  }, payload);
+  await page.evaluate(
+    ({ session, pdfPath }) => {
+      window.postMessage(
+        {
+          command: 'desktop:showPdf',
+          session,
+          title: 'output.pdf',
+          pdfPath,
+        },
+        '*',
+      );
+    },
+    { session, pdfPath },
+  );
+  await expect(pdfTab).toBeVisible();
+  await expect(pdfTab).toHaveAttribute('data-active', 'true');
+  await expect(pdfTab).toContainText('output.pdf');
+  await expect(frame).toBeVisible();
+  await expect(frame).toHaveAttribute('src', `file://${pdfPath}`);
+  await expect(frame).toHaveAttribute('sandbox', 'allow-same-origin');
+  await expect(frame).toHaveAttribute('title', 'output.pdf');
 
-  await expect.poll(pdfOverlayIsOpen).toBe(true);
-
-  const dialog = launched.page.locator('wa-dialog.desktop-pdf-overlay');
-  await expect(dialog).toHaveCount(1);
-  await expect(dialog.locator('.desktop-pdf-title')).toHaveText('output.pdf');
-  await expect(dialog.locator('.desktop-pdf-subtitle')).toHaveText(pdfPath);
-
-  const iframeProps = await launched.page.evaluate(() => {
-    const el = document.querySelector(
-      'wa-dialog.desktop-pdf-overlay iframe.desktop-pdf-frame',
-    ) as HTMLIFrameElement | null;
-    if (!el) return null;
-    return {
-      src: el.getAttribute('src'),
-      sandbox: el.getAttribute('sandbox'),
-    };
-  });
-  expect(iframeProps).not.toBeNull();
-  expect(iframeProps?.src).toBe(`file://${pdfPath}`);
-  expect(iframeProps?.sandbox).toBe('allow-same-origin');
-
-  // Unsafe paths must be rejected — the renderer logs + ignores them
-  // rather than assigning to iframe.src. Reset the dialog first so
-  // we can prove no state change.
-  await launched.page.evaluate(() => {
-    const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
-    if (dialog) (dialog as unknown as { open: boolean }).open = false;
-  });
-  await expect.poll(pdfOverlayIsOpen).toBe(false);
-  await launched.page.evaluate(() => {
+  const rejectedPath = page.waitForEvent('console', (message) =>
+    message.text().includes('[desktop] rejected unsafe PDF path'),
+  );
+  await page.evaluate((session) => {
     window.postMessage(
       {
         command: 'desktop:showPdf',
+        session,
         title: 'malicious',
         pdfPath: 'http://evil.com/x.pdf',
       },
       '*',
     );
-  });
-  // Give the message handler a chance to run; the dialog must NOT
-  // open because the path was rejected.
-  await launched.page.waitForTimeout(200);
-  expect(await pdfOverlayIsOpen()).toBe(false);
+  }, session);
+  await rejectedPath;
+  await expect(pdfTab).toHaveCount(1);
+  await expect(frame).toHaveAttribute('src', `file://${pdfPath}`);
 
-  // Re-open with a valid path to verify the close pathway.
-  await launched.page.evaluate((path) => {
-    window.postMessage(
-      {
-        command: 'desktop:showPdf',
-        title: 'output.pdf',
-        pdfPath: path,
-      },
-      '*',
-    );
-  }, pdfPath);
-  await expect.poll(pdfOverlayIsOpen).toBe(true);
-
-  // Close via desktop:closePdf — the dialog should close.
-  await launched.page.evaluate(() => {
-    window.postMessage({ command: 'desktop:closePdf' }, '*');
-  });
-  await expect.poll(pdfOverlayIsOpen).toBe(false);
+  await page.evaluate((session) => {
+    window.postMessage({ command: 'desktop:closePdf', session }, '*');
+  }, session);
+  await expect(pdfTab).toHaveCount(0);
+  await expect(frame).toHaveCount(0);
 });

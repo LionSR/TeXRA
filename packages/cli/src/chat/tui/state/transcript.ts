@@ -221,6 +221,8 @@ export function mergedSettledRows(
 /** The refusal a request error reads as, for the local transcript. */
 export function describeRequestError(error: RequestError): string {
   switch (error._tag) {
+    case 'Cancelled':
+      return 'The operation was cancelled.';
     case 'NotOwner':
       return 'Another process owns this conversation.';
     case 'Unavailable':

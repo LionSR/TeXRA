@@ -6,7 +6,7 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import { type StreamTabId } from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import type { StreamView } from '@shared/session/sessionView';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -15,19 +15,16 @@ import { childElapsed } from '../state/childControls';
 import {
   cumulativeUsageOf,
   killableExecutionId,
-  sessionView,
-  streamLabelOf,
   streamPhaseOf,
-  streamViewOf,
 } from '../state/sessionView';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
   childRowMetadataText,
-  childStatusColor,
+  CHILD_TONE_COLOR,
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
-import { useSignal } from '../state/useSignal';
+import { expandedStreams, type SessionListRow } from '../state/cliState';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
@@ -83,7 +80,8 @@ function SessionRow({
   active,
   focused,
   hiddenRowSummary,
-  isListRoot,
+  depth,
+  expanded,
   metadataColumn,
   nowMs,
   pendingKinds,
@@ -92,7 +90,8 @@ function SessionRow({
   readonly active: boolean;
   readonly focused: boolean;
   readonly hiddenRowSummary: string | undefined;
-  readonly isListRoot: boolean;
+  readonly depth: number;
+  readonly expanded: boolean;
   readonly metadataColumn: boolean;
   readonly nowMs: number;
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
@@ -106,7 +105,7 @@ function SessionRow({
   );
   const approval = pendingApprovalRowDisplay(pendingKinds);
   const stageLabel = formatStageLabel(stream.stage ?? undefined);
-  const modelLabel = isListRoot ? undefined : stream.modelLabel;
+  const modelLabel = stream.parentId === null ? undefined : stream.modelLabel;
   const metadataText = metadataColumn
     ? childRowMetadataText({
         elapsed,
@@ -114,9 +113,8 @@ function SessionRow({
         toolCallCount: stream.conversationProgress.toolCallCount,
       })
     : undefined;
-  const summary = isListRoot
-    ? undefined
-    : (stream.description ?? stream.latestLine ?? undefined);
+  const summary = stream.description;
+  const color = CHILD_TONE_COLOR[stream.tone];
   return (
     <Box
       flexDirection="row"
@@ -131,16 +129,32 @@ function SessionRow({
       <Text aria-hidden color={active ? COLOR_HINT : undefined}>
         {active ? ` ${TICK} ` : '   '}
       </Text>
-      <Text aria-hidden color={childStatusColor(status)}>
+      <Text aria-hidden color={color}>
+        {'  '.repeat(depth)}
+        {stream.category !== AgentCategory.Workflow &&
+        stream.childIds.length > 0
+          ? `${expanded ? '▾' : '▸'} `
+          : '  '}
         {CHILD_STATUS_MARKER}
       </Text>
-      <RowSegment bold={active} flexShrink={1}>
-        {streamLabelOf(stream)}
+      <RowSegment bold={active} color={color} flexShrink={1}>
+        {stream.label}
         {statusLabel ? ` ${statusLabel}` : ''}
         {stageLabel ? ` · ${stageLabel}` : ''}
         {modelLabel ? ` · ${modelLabel}` : ''}
         {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
       </RowSegment>
+      {!expanded && stream.rollup.total > 0 ? (
+        <RowSegment color={color} flexShrink={metadataColumn ? 0 : 1}>
+          {` [${stream.rollup.total} total · ${stream.rollup.running} running · ${stream.rollup.finished} finished]`}
+        </RowSegment>
+      ) : null}
+      {stream.group === 'interrupted' && stream.resumeEligible ? (
+        <RowSegment color={color} flexShrink={0}>
+          {' '}
+          · Resume
+        </RowSegment>
+      ) : null}
       {summary ? (
         <RowSegment dimColor flexShrink={2}>
           {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
@@ -177,37 +191,32 @@ export interface SubagentListProps {
     readonly PendingApprovalKind[]
   >;
   readonly selectedValue?: StreamTabId;
-  /** The focus tree: the list root first, then its children. */
-  readonly sessions?: readonly StreamTabId[];
-  readonly listRootStreamId?: StreamTabId;
+  readonly rows: readonly SessionListRow[];
 }
 
 export function SubagentList(
-  props: SubagentListProps = {},
+  props: SubagentListProps,
 ): React.JSX.Element | null {
-  const view = useSignal(sessionView());
-  const sessions = props.sessions ?? [];
-  const streams = useMemo(
+  const rows = props.rows;
+  const items = useMemo<SelectItem<SessionListRow>[]>(
     () =>
-      sessions.flatMap((streamId) => {
-        const stream = streamViewOf(view, streamId);
-        return stream ? [stream] : [];
-      }),
-    [sessions, view],
+      rows.map((row) => ({
+        value: row,
+        label: row.kind === 'group' ? row.label : row.stream.label,
+        disabled: row.kind === 'group',
+      })),
+    [rows],
   );
   const startedAts = useMemo(
-    () => streams.map((stream) => stream.runStartedAt ?? undefined),
-    [streams],
+    () =>
+      rows.flatMap((row) =>
+        row.kind === 'stream' ? [row.stream.runStartedAt ?? undefined] : [],
+      ),
+    [rows],
   );
-  const { items, streamsByValue } = useMemo(() => {
-    const nextItems: SelectItem<StreamTabId>[] = [];
-    const byValue = new Map<StreamTabId, StreamView>();
-    for (const stream of streams) {
-      nextItems.push({ label: streamLabelOf(stream), value: stream.id });
-      byValue.set(stream.id, stream);
-    }
-    return { items: nextItems, streamsByValue: byValue };
-  }, [streams]);
+  const selectedRow = rows.find(
+    (row) => row.kind === 'stream' && row.stream.id === props.selectedValue,
+  );
   const nowMs = useLiveNowMsSince(startedAts);
   const { columns } = useWindowSize();
   const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
@@ -215,17 +224,28 @@ export function SubagentList(
     props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
   useInput(
     (input, key) => {
-      if (key.ctrl || key.meta) return;
-      const streamId = props.selectedValue;
-      if (!streamId) return;
-      if (input.toLowerCase() !== 'k') return;
-      const executionId = killableExecutionId(streamsByValue.get(streamId));
-      if (executionId) props.onKillExecution?.(executionId);
+      if (key.ctrl || key.meta || selectedRow?.kind !== 'stream') return;
+      const { stream, expanded } = selectedRow;
+      if (key.leftArrow || key.rightArrow || input === ' ') {
+        const next = key.rightArrow || (!key.leftArrow && !expanded);
+        expandedStreams.set(
+          new Map(expandedStreams.get()).set(stream.id, next),
+        );
+      } else if (
+        input.toLowerCase() === 'r' &&
+        stream.group === 'interrupted' &&
+        stream.resumeEligible
+      ) {
+        props.onFocusStream?.(stream.id);
+      } else if (input.toLowerCase() === 'k') {
+        const executionId = killableExecutionId(stream);
+        if (executionId) props.onKillExecution?.(executionId);
+      }
     },
     { isActive: props.keyboardActive ?? false },
   );
-  if (items.length === 0) return null;
-  if (contentRows !== undefined && contentRows <= 0) return null;
+  if (items.length === 0 || (contentRows !== undefined && contentRows <= 0))
+    return null;
   return (
     <Box
       flexDirection="column"
@@ -236,37 +256,46 @@ export function SubagentList(
       width={metadataColumn ? columns : undefined}
     >
       <Select
-        activeValue={props.activeStreamId}
-        highlightedValue={props.selectedValue ?? null}
+        activeValue={rows.find(
+          (row) =>
+            row.kind === 'stream' && row.stream.id === props.activeStreamId,
+        )}
+        highlightedValue={selectedRow ?? null}
         hotkeys={false}
         isActive={props.keyboardActive}
         items={items}
         maxVisibleItems={contentRows}
         onCancel={props.onCancel ?? (() => undefined)}
         wrap={false}
-        onHighlightChange={(value) => props.onSelectionChange?.(value)}
-        onSelect={(value) => {
-          if (value) props.onFocusStream?.(value);
+        onHighlightChange={(row) => {
+          if (row.kind === 'stream') props.onSelectionChange?.(row.stream.id);
         }}
-        renderItem={(item, state) => {
-          const stream = streamsByValue.get(item.value);
-          return stream ? (
+        onSelect={(row) => {
+          if (row.kind === 'stream') props.onFocusStream?.(row.stream.id);
+        }}
+        renderItem={({ value: row }, state) =>
+          row.kind === 'group' ? (
+            <Text bold dimColor>
+              {row.label}
+            </Text>
+          ) : (
             <SessionRow
-              isListRoot={stream.id === props.listRootStreamId}
+              depth={row.depth}
+              expanded={row.expanded}
               active={state.active}
               focused={state.focused}
               hiddenRowSummary={
                 state.hiddenItemCount > 0
-                  ? `+${formatResultCount(state.hiddenItemCount, 'agent')}`
+                  ? `+${formatResultCount(state.hiddenItemCount, 'row')}`
                   : undefined
               }
               metadataColumn={metadataColumn}
               nowMs={nowMs}
-              pendingKinds={props.pendingApprovals?.get(stream.id)}
-              stream={stream}
+              pendingKinds={props.pendingApprovals?.get(row.stream.id)}
+              stream={row.stream}
             />
-          ) : null;
-        }}
+          )
+        }
       />
     </Box>
   );

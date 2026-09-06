@@ -17,6 +17,9 @@ import {
   resetCliState,
   setTransientNotice,
   transientNotice,
+  expandedStreams,
+  sessionListRows,
+  sessionListStreamIds,
 } from '@cli/chat/tui/state/cliState';
 import {
   allocateConversationPanelRows,
@@ -35,11 +38,7 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { focusedChildAcceptsFollowUps } from '@cli/chat/tui/state/sessionView';
-import {
-  numericFocusTargetForActiveStream,
-  resolveChildListTarget,
-} from '@cli/chat/tui/state/childControls';
-import { focusTreeOf } from '@cli/chat/tui/state/sessionView';
+import { resolveChildListTarget } from '@cli/chat/tui/state/childControls';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -106,14 +105,37 @@ function familyView(
 describe('focus over the session view', () => {
   beforeAll(bindTestSessionView);
 
-  it('orders the focus tree root first, then its children newest first', () => {
-    const view = familyView();
-    seedView(view);
-    expect(focusTreeOf(view, root)).toEqual([root, child2, child1]);
-    expect(focusTreeOf(view, child2)).toEqual([child2, grandchild]);
-    expect(numericFocusTargetForActiveStream(view, root, 0)).toBe(child2);
-    expect(numericFocusTargetForActiveStream(view, root, 1)).toBe(child1);
-    expect(numericFocusTargetForActiveStream(view, root, 2)).toBeUndefined();
+  it('keeps keyboard order identical to the grouped, expanded tree', () => {
+    resetCliState();
+    seedView(familyView({ [child2]: { forceExpanded: true } }));
+    expect(sessionListStreamIds.get()).toEqual([root]);
+    expandedStreams.set(new Map([[root, true]]));
+    expect(sessionListStreamIds.get()).toEqual([
+      root,
+      child2,
+      grandchild,
+      child1,
+    ]);
+    expandedStreams.set(
+      new Map([
+        [root, true],
+        [child2, false],
+      ]),
+    );
+    expect(sessionListStreamIds.get()).toEqual([
+      root,
+      child2,
+      grandchild,
+      child1,
+    ]);
+    expect(
+      sessionListRows
+        .get()
+        .filter((row) => row.kind === 'group')
+        .map((row) => row.label),
+    ).toEqual(['Running']);
+    resetCliState();
+    expect(sessionListStreamIds.get()).toEqual([root]);
   });
 
   it('resolves the child list to the nearest ancestor with children', () => {

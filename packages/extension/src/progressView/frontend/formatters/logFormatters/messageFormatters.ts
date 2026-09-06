@@ -29,6 +29,7 @@ import type {
   PhaseRow,
   ProgressStatusRow,
   UserRow,
+  WorkflowTaskRow,
 } from '@shared/transcript';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -118,17 +119,31 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details banner-details--error" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
+function plainLineText(row: LogRow | PhaseRow | WorkflowTaskRow): string {
+  switch (row.kind) {
+    case 'phase':
+      return row.heading;
+    case 'workflowTask':
+      return row.line;
+    case 'log':
+      return row.text.full;
+  }
+}
+
 /**
- * Format a plain log line as TemplateResult. `PhaseRow` shares the shape and is
- * in the union to keep the row dispatch exhaustive; this host routes every
- * phase heading to its task-group surface (see `logSlice`), so that arm is
- * unreachable here today.
+ * Format a plain log line as TemplateResult. `PhaseRow` and
+ * `WorkflowTaskRow` share the shape and are in the union to keep the row
+ * dispatch exhaustive; this host routes every phase heading to its
+ * task-group surface (see `logSlice`) and every workflow call to the run
+ * board (`workflow-run-board`, painted whenever the fold set
+ * `transcript.run`), so both arms are unreachable here today: a call only
+ * lands on this line for a legacy import with no run identity.
  */
 export function formatDefaultLogMessageTemplate(
-  row: LogRow | PhaseRow,
+  row: LogRow | PhaseRow | WorkflowTaskRow,
 ): FormatResult {
   const { id, level, timestamp, groupId, verbose } = row;
-  const text = row.kind === 'phase' ? row.heading : row.text.full;
+  const text = plainLineText(row);
   const levelIcon = buildLevelIcon(level);
   const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
     new Date(timestamp),

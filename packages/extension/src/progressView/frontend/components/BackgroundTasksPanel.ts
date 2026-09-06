@@ -1,11 +1,17 @@
 /**
- * The dispatch card (board E2): what a stream has fanned out, inline in its
- * transcript. A `<wa-details>` headed "Dispatched N subagents" with the
- * parent's `rollup` as badges, one row per child stream (nested children
- * indented under theirs), and the inquiry threads the stream opened. Every
- * row is a child of the fold: label, status, tone, latest line, and clock
- * facts come from `view.streams`; the host paints the glyph and the time.
- * Selecting a row is the navigation.
+ * The dispatch card (board E2): what a stream has fanned out, in its
+ * conversation prelude. A `<wa-details>` headed "Dispatched N subagents"
+ * with the parent's `rollup` as badges and "since <time>" from the earliest
+ * child still running (the fold clears `runStartedAt` when a run ends, so a
+ * settled fan-out carries no since), one row per child stream (nested children
+ * indented under theirs), the inquiry threads the stream opened, and a
+ * "Waiting on N subagents" line while any run. The `inquiries` scope is the
+ * same card over the inquiry threads alone (the workflow body, whose run
+ * board already lists every call). Every row is a child of the fold: label,
+ * status, tone, latest line, and clock facts come from `view.streams`; the
+ * host paints the glyph and the time. The card's open state is the
+ * surface's (`Surface.groups`, key {@link DISPATCH_GROUP_KEY}); a toggle
+ * goes out as a `group` action. Selecting a row is the navigation.
  */
 
 // Third-party imports
@@ -25,6 +31,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { InquiryThreadUpdatedEvent, StreamTabId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
+import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -33,6 +40,10 @@ import {
   formatCompactDuration,
   formatResultCount,
 } from '@utils/text/stringUtils';
+import { getTimeFormatter } from '../formatters/timestampUtils';
+
+/** The card's key in `Surface.groups` for its stream. */
+const DISPATCH_GROUP_KEY = 'dispatch';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
 const TONE_ICONS: Record<StreamView['tone'], TeXRAIconName> = {
@@ -78,6 +89,11 @@ export class BackgroundTasksPanel extends LitElement {
         font-size: 10px;
         line-height: 1;
         padding: 2px 6px;
+      }
+      .dispatch-since {
+        font-weight: var(--font-weight-normal);
+        font-variant-numeric: tabular-nums;
+        color: var(--color-text-secondary);
       }
 
       .task-list {
@@ -215,6 +231,8 @@ export class BackgroundTasksPanel extends LitElement {
   /** The dispatching stream: its `childIds` are the rows. */
   @property({ attribute: false }) stream: StreamView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
+  /** The card's open state lives here (`groups`, key `dispatch`). */
+  @property({ attribute: false }) surface: Surface | null = null;
   /** The host's clock, for a running row's elapsed time (G4). */
   @property({ type: Number }) nowMs: number | null = null;
 
@@ -228,6 +246,16 @@ export class BackgroundTasksPanel extends LitElement {
     return stream.childIds
       .map((id) => view.streams.get(id))
       .filter((child): child is StreamView => child !== undefined);
+  }
+
+  /** Every descendant `rollup` counts, so the card's running badge and its
+   *  since time read the same set: a direct child that finishes while a
+   *  grandchild runs leaves the badge lit and the time standing. */
+  private descendantsOf(streams: readonly StreamView[]): StreamView[] {
+    return streams.flatMap((child) => [
+      child,
+      ...this.descendantsOf(this.childrenOf(child)),
+    ]);
   }
 
   private inquiriesOf(stream: StreamView): InquiryThreadUpdatedEvent[] {
@@ -244,6 +272,14 @@ export class BackgroundTasksPanel extends LitElement {
     if (children.length === 0 && inquiries.length === 0) return nothing;
 
     const { rollup } = stream;
+    // When the fan-out began: the earliest descendant still running, over
+    // the set `rollup.running` counts. The fold clears `runStartedAt` on a
+    // terminal status, so a settled fan-out has no start to name and the
+    // line drops.
+    const starts = this.descendantsOf(children).flatMap(
+      (descendant) => descendant.runStartedAt ?? [],
+    );
+    const since = starts.length > 0 ? Math.min(...starts) : null;
     const summary =
       this.scope === 'inquiries'
         ? html`${waIcon('comments')} Inquiries
@@ -266,10 +302,23 @@ export class BackgroundTasksPanel extends LitElement {
                     >${waIcon('triangle-exclamation')}</wa-badge
                   >`
                 : nothing
+            }${
+              since === null
+                ? nothing
+                : html`<span class="dispatch-since"
+                    >since ${getTimeFormatter().format(new Date(since))}</span
+                  >`
             }`;
+    const open =
+      this.surface?.groups.get(stream.id)?.get(DISPATCH_GROUP_KEY) !== false;
 
     return html`
-      <wa-details class="dispatch" open>
+      <wa-details
+        class="dispatch"
+        ?open=${open}
+        @wa-show=${this.handleToggle}
+        @wa-hide=${this.handleToggle}
+      >
         <span slot="summary" class="dispatch-summary">${summary}</span>
         <div class="task-list" role="list">
           ${this.renderChildren(children, 0)}
@@ -296,6 +345,18 @@ export class BackgroundTasksPanel extends LitElement {
         }
       </wa-details>
     `;
+  }
+
+  private handleToggle(event: Event): void {
+    if (event.target !== event.currentTarget || !this.stream) return;
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'group',
+        streamId: this.stream.id,
+        key: DISPATCH_GROUP_KEY,
+        expanded: event.type === 'wa-show',
+      }),
+    );
   }
 
   private renderChildren(

@@ -746,6 +746,7 @@ describe('session.interactions request bookkeeping', () => {
       session.interactions.emit('requestEnsureProgressView', {});
       session.interactions.emit('showAgentConfigBanner', {
         agentName: 'proofreader',
+        category: AgentCategory.ToolUse,
       });
 
       session.interactions.use({ emit, cancel: vi.fn() });
@@ -762,7 +763,7 @@ describe('session.interactions request bookkeeping', () => {
       expect(
         session.interactions.emit(
           'showAgentConfigBanner',
-          { agentName: 'ghost' },
+          { agentName: 'ghost', category: AgentCategory.ToolUse },
           { replayWhenAttached: true },
         ),
       ).toBe(false);

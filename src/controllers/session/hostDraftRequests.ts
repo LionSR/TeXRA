@@ -7,7 +7,7 @@ import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import { effectRuntime } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import { Rejected } from '@shared/session/requestErrors';
+import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import {
   killActiveRecording,
@@ -39,6 +39,23 @@ interface Take {
 export class HostDraftRequests {
   private take: Take | null = null;
   private readonly listeners = new Set<(recording: Recording | null) => void>();
+
+  /** Bind one session's requests, recorder level, and disposal together. */
+  attach(
+    session: SessionHandle,
+    onRecording: (recording: Recording | null) => void,
+  ) {
+    const stopObserving = this.subscribe(onRecording);
+    return {
+      handle: (request: DraftRequest, port: string) =>
+        this.handle(session, request, port),
+      closePort: (port: string) => this.cancel(session, port),
+      dispose: () => {
+        stopObserving();
+        this.cancel(session);
+      },
+    };
+  }
 
   /** Every open paper observes the same recorder and its destination. */
   subscribe(listener: (recording: Recording | null) => void): () => void {
@@ -101,10 +118,7 @@ export class HostDraftRequests {
     )
       return;
     take.cancelled = true;
-    Deferred.doneUnsafe(
-      take.result,
-      Effect.fail(new Rejected({ reason: 'The recording was cancelled.' })),
-    );
+    Deferred.doneUnsafe(take.result, Effect.fail(new Cancelled()));
     this.notify();
     Deferred.doneUnsafe(take.settled, Effect.void);
   }

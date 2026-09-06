@@ -4,8 +4,9 @@
  * controls a run without a chat offers instead of a composer.
  *
  * Reads `stream.transcript.run` (the fold's `workflowRunModel`), the child
- * streams the model joins by row, and the surface's phase, groups, and
- * focus. Dispatches `workflow.control` and `stream.stop` runtime
+ * streams the model joins by row, the stream's `readOnly` and
+ * `durableOutcome` (a settled run keeps its rows but nothing acts), and the
+ * surface's phase, groups, and focus. Dispatches `workflow.control` and `stream.stop` runtime
  * requests and `phase`, `group`, `select`, and `focusRow` surface actions;
  * it holds no state of its own. The host passes its clock as `nowMs` (G4).
  */
@@ -30,7 +31,11 @@ import type {
   SessionView,
   StreamView,
 } from '@shared/session/sessionView';
-import { resolvePhase, type Surface } from '@shared/session/surface';
+import {
+  resolvePhase,
+  type Surface,
+  type SurfaceRefusal,
+} from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { formatWorkflowTally } from '@shared/copy/workflowCall';
 import {
@@ -41,6 +46,7 @@ import {
   type WorkflowRowGroup,
   type WorkflowRunModel,
 } from '@shared/streams/workflowRunModel';
+import { terminalStatusIcon } from '@shared/wa/statusIcons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 import {
@@ -50,7 +56,6 @@ import {
 } from '@utils/text/stringUtils';
 
 // Local imports - progress view
-import { workflowCallStatusIcon } from '../formatters/logFormatters/workflowCallFormatter';
 import { totalRunUsage } from '../usageTotals';
 import { workflowRunBoardStyles } from './WorkflowRunBoard.styles';
 
@@ -90,6 +95,33 @@ type Block =
       readonly group: Extract<WorkflowPhaseRow, { kind: 'group' }>;
       readonly members: readonly WorkflowPhaseRow[];
     };
+
+/** One icon per call status, for the tally and for a row alike. */
+function workflowCallStatusIcon(
+  status: WorkflowCallProgress['status'],
+): Parameters<typeof waIcon>[0] {
+  switch (status) {
+    case 'declared':
+      return 'circle';
+    case 'planned':
+    case 'queued':
+      return 'circle-dot';
+    case 'running':
+      return terminalStatusIcon('running');
+    case 'completed':
+      return terminalStatusIcon('completed');
+    case 'cached':
+      // A replayed result from an earlier attempt: nothing ran this time.
+      return 'clock-rotate-left';
+    case 'skipped':
+    case 'cancelled':
+      return terminalStatusIcon('cancelled');
+    case 'failed':
+      return terminalStatusIcon('failed');
+    default:
+      return assertNever(status, 'Unhandled workflow call status');
+  }
+}
 
 /** What a waiting child asks for, in the words the terminal's rows use. */
 function approvalLine(payload: PermissionPayload): string {
@@ -142,9 +174,20 @@ export class WorkflowRunBoard extends LitElement {
   /** The desktop's headline: the tally leads the strip instead of closing
    *  the board. */
   @property({ type: Boolean, reflect: true }) summary = false;
-
   private get run(): WorkflowRunModel | null {
     return this.stream.transcript.run;
+  }
+
+  /** The run has a durable outcome: nothing on the board can act any more,
+   *  and the strip paints closed. */
+  private get settled(): boolean {
+    return this.stream.durableOutcome !== null;
+  }
+
+  /** Skip, retry, and kill act only on a run this process owns that is
+   *  still open. */
+  private get canControl(): boolean {
+    return !this.stream.readOnly && !this.settled;
   }
 
   /** The child a card opened, when the model resolved one. */
@@ -245,13 +288,16 @@ export class WorkflowRunBoard extends LitElement {
 
   // -- events --------------------------------------------------------------
 
+  /** Skip and retry act on one call, so the request names that call's own
+   *  child stream: `Retry failed` fires one per failed row and each row
+   *  keeps its own answer instead of N sharing the run's slot. */
   private control(rowId: string, action: 'skip' | 'retry'): void {
     const child = this.childOf(rowId);
     if (!child) return;
     this.dispatchEvent(
       SessionUiEvents.runtime({
         kind: 'workflow.control',
-        streamId: this.stream.id,
+        streamId: child.id,
         executionId: child.executionId,
         action,
       }),
@@ -433,7 +479,7 @@ export class WorkflowRunBoard extends LitElement {
       >`;
     }
     if (row.call.status !== 'failed') return nothing;
-    const canAct = !this.stream.readOnly && child !== undefined;
+    const canAct = this.canControl && child !== undefined;
     return html`<span class="row-actions"
       ><wa-button
         size="s"
@@ -491,6 +537,8 @@ export class WorkflowRunBoard extends LitElement {
       ? approvalLine(approval.payload)
       : (row.detail?.text ?? child?.latestLine ?? child?.statusLabel ?? '');
     const actions = this.renderActions(row, child, approval?.streamId);
+    const rejected =
+      child === undefined ? undefined : this.surface.rejected.get(child.id);
     return html`<div
       class=${classMap({
         row: true,
@@ -524,6 +572,13 @@ export class WorkflowRunBoard extends LitElement {
         })}
         ><bdi dir="auto">${last}</bdi></span
       >
+      ${
+        rejected === undefined
+          ? nothing
+          : html`<span class="row-rejected" role="status"
+              >${this.renderRejection(rejected)}</span
+            >`
+      }
       ${
         meta.length > 0
           ? html`<span class="row-meta">${meta.join(' · ')}</span>`
@@ -600,10 +655,35 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
+  /** The runtime's refusal of a request this surface made, in the runtime's
+   *  words; the next request on that stream clears it (`Surface.rejected`).
+   *  Kill answers on the run's stream, skip and retry on the call's. */
+  private renderRejection(error: SurfaceRefusal): TemplateResult {
+    switch (error._tag) {
+      case 'NotOwner':
+        return html`Another process holds this run.`;
+      case 'Unavailable':
+      case 'Rejected':
+      case 'Invalid':
+        return html`${error.reason}`;
+      case 'Internal':
+        return html`The request failed; the host log has it under ${error.ref}.`;
+      default:
+        return assertNever(error, 'Unhandled request error');
+    }
+  }
+
+  /** Next failed only navigates, so it stays live on a settled run that
+   *  has failures to read; the two that act follow `canControl`. The note
+   *  carries the run's own refusal, which is Kill's; a call's lands on its
+   *  row. */
   private renderControls(): TemplateResult {
     const failed = this.failedRows().length;
-    const disabled = this.stream.readOnly;
-    return html`<div class="controls">
+    const disabled = !this.canControl;
+    const rejected = this.surface.rejected.get(this.stream.id);
+    return html`<div
+      class=${classMap({ controls: true, settled: this.settled })}
+    >
       <wa-button
         size="s"
         appearance="outlined"
@@ -618,17 +698,23 @@ export class WorkflowRunBoard extends LitElement {
         @click=${this.retryFailed}
         >Retry failed</wa-button
       >
-      <span class="note"
-        ><span class="note-narrow">This run has no chat</span
-        ><span class="note-wide"
-          >Skip and retry are per call; Kill is the run's stop.</span
-        ></span
-      >
+      ${
+        rejected === undefined
+          ? html`<span class="note"
+              ><span class="note-narrow">This run has no chat</span
+              ><span class="note-wide"
+                >Skip and retry are per call; Kill is the run's stop.</span
+              ></span
+            >`
+          : html`<span class="note note-rejected" role="status"
+              >${this.renderRejection(rejected)}</span
+            >`
+      }
       <wa-button
         size="s"
         variant="danger"
         appearance="outlined"
-        ?disabled=${disabled || this.stream.durableOutcome !== null}
+        ?disabled=${disabled}
         @click=${this.killRun}
         >Kill run</wa-button
       >
@@ -641,7 +727,7 @@ export class WorkflowRunBoard extends LitElement {
     const active = resolvePhase(this.surface, this.stream.id, run.phases);
     return html`${this.summary ? this.renderSummary(run) : nothing}
       <wa-tab-group
-        class="phases"
+        class=${classMap({ phases: true, settled: this.settled })}
         active=${active ?? nothing}
         @wa-tab-show=${this.handleTabShow}
       >
