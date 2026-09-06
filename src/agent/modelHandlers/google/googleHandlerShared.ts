@@ -3,7 +3,11 @@ import { basename } from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/types/mediaTypes';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
+import {
+  reportMediaAttachmentFailure,
+  type MediaAttachmentContext,
+} from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { isNonEmptyString } from '@utils/core';
 
 import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
@@ -22,9 +26,9 @@ interface UploadGoogleMediaEntriesOptions<T> {
   getClient: () => Promise<GoogleGenAI>;
   inlineLimit: number;
   logger: AgentTrace;
+  context: MediaAttachmentContext;
   buildMedia: (source: GoogleMediaSource, mimeType: string) => T;
   buildLabel: (media: T, fileName: string) => T;
-  onInsertedEntry?: (entry: MediaEntry) => void;
 }
 
 /**
@@ -35,62 +39,50 @@ interface UploadGoogleMediaEntriesOptions<T> {
 export async function uploadGoogleMediaEntries<T>(
   entries: MediaEntry[],
   options: UploadGoogleMediaEntriesOptions<T>,
-): Promise<T[]> {
+): Promise<CreatedMedia<T>> {
   if (entries.length === 0) {
-    return [];
+    return { media: [], entries: [] };
   }
 
-  const {
-    getClient,
-    inlineLimit,
-    logger,
-    buildMedia,
-    buildLabel,
-    onInsertedEntry,
-  } = options;
+  const { getClient, inlineLimit, logger, buildMedia, buildLabel } = options;
   const client = await getClient();
   const parts: T[] = [];
+  const insertedEntries: MediaEntry[] = [];
   const appendMedia = (entry: MediaEntry, media: T): void => {
     parts.push(buildLabel(media, entry.file_name), media);
-    onInsertedEntry?.(entry);
+    insertedEntries.push(entry);
   };
-  let hadFailure = false;
-  const failures: string[] = [];
 
   for (const entry of entries) {
-    const fileName = entry.file_name;
-    const mimeType = entry.media_type;
-    const inlinePayload = isNonEmptyString(entry.data) ? entry.data : null;
-
-    if (inlinePayload) {
-      const payloadBytes = Buffer.byteLength(inlinePayload, 'base64');
-      if (payloadBytes <= inlineLimit) {
-        logger.debug(
-          `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
-        );
-        const media = buildMedia({ data: inlinePayload }, mimeType);
-        appendMedia(entry, media);
-        continue;
-      }
-      logger.debug(
-        'Media entry exceeds inline limit; falling back to upload.',
-        {
-          data: { fileName, payloadBytes, inlineLimit },
-        },
-      );
-    }
-
-    const uploadPath =
-      entry.bytes_match_source !== false ? entry.source_path : undefined;
-    if (!uploadPath) {
-      logger.error(
-        `Skipping media entry ${fileName} due to missing upload source`,
-      );
-      hadFailure = true;
-      continue;
-    }
-
     try {
+      const fileName = entry.file_name;
+      const mimeType = entry.media_type;
+      const inlinePayload = isNonEmptyString(entry.data) ? entry.data : null;
+
+      if (inlinePayload) {
+        const payloadBytes = Buffer.byteLength(inlinePayload, 'base64');
+        if (payloadBytes <= inlineLimit) {
+          logger.debug(
+            `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
+          );
+          const media = buildMedia({ data: inlinePayload }, mimeType);
+          appendMedia(entry, media);
+          continue;
+        }
+        logger.debug(
+          'Media entry exceeds inline limit; falling back to upload.',
+          {
+            data: { fileName, payloadBytes, inlineLimit },
+          },
+        );
+      }
+
+      const uploadPath =
+        entry.bytes_match_source !== false ? entry.source_path : undefined;
+      if (!uploadPath) {
+        throw new Error(`Media entry ${fileName} is missing an upload source.`);
+      }
+
       logger.debug(
         `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
       );
@@ -101,32 +93,21 @@ export async function uploadGoogleMediaEntries<T>(
       });
       const fileUri = uploaded.uri;
       if (!fileUri) {
-        logger.error(
-          `Upload result for ${fileName} is missing a URI. Skipping entry.`,
-        );
-        hadFailure = true;
-        continue;
+        throw new Error(`Upload result for ${fileName} is missing a URI.`);
       }
       const resolvedMimeType =
         uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
       const media = buildMedia({ uri: fileUri }, resolvedMimeType);
       appendMedia(entry, media);
     } catch (error) {
-      hadFailure = true;
-      failures.push(`${fileName}: ${getSdkErrorMessage(error)}`);
+      reportMediaAttachmentFailure(
+        logger,
+        options.context,
+        error,
+        entry.file_name,
+      );
     }
   }
 
-  if (hadFailure) {
-    const failureSummary = failures.join('; ');
-    logger.warn(
-      failureSummary
-        ? `Some media files failed to upload via Google GenAI SDK: ${failureSummary}`
-        : 'Some media files failed to upload via Google GenAI SDK',
-      {
-        data: failures,
-      },
-    );
-  }
-  return parts;
+  return { media: parts, entries: insertedEntries };
 }

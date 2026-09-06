@@ -249,10 +249,8 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
 // Zotero desktop to be running; no authentication (purely local).
 // ============================================================================
 
-export interface ConnectorResult {
-  status: 'success' | 'error';
-  message?: string;
-}
+export type ConnectorResult =
+  { status: 'success' } | { status: 'error'; message: string };
 
 /**
  * Check that Zotero is running by pinging the connector. Fails with a

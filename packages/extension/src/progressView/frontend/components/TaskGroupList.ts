@@ -180,9 +180,6 @@ export class TaskGroupList extends LitElement {
   /** Whether there are any streams in the current filter (controls placeholder) */
   @property({ attribute: false }) hasStreams = false;
 
-  /** Whether the active stream is an interactive tool-use stream. */
-  @property({ type: Boolean }) isToolUse = false;
-
   /** Status for the active stream, used while a run exists before logs arrive. */
   @property({ attribute: false }) streamStatus:
     StreamLifecycleStatus | undefined = undefined;

@@ -205,5 +205,3 @@ export function buildBaseModelOption(
     hint: buildModelHint(hintConfig),
   };
 }
-
-/** Build model options from static config without provider availability checks. */

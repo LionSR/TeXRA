@@ -70,7 +70,6 @@ import {
   type SessionType,
   type StreamTabId,
 } from '@shared/schemas';
-import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { paperDisplayOf } from '@shared/session/hostSnapshot';
 import type {
   DownMessage,
@@ -196,23 +195,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
       ),
-      showToolEditPermission: () => undefined,
-      resolveToolEditPermission: () => undefined,
-      detachCause: SESSION_DISPOSED_CAUSE,
     });
-    // The session's events from now on: a resolved approval discards its
-    // staged preview, and a workflow run's `result` is the completion
-    // chime, one per process (PRD 12.4), never a renderer transition hook
-    // that every subscriber would replay. A failed run does not chime.
+    // A workflow run's `result` is the completion chime, one per process
+    // (PRD 12.4), never a renderer transition hook that every subscriber
+    // would replay. A failed run does not chime.
     const sessionEvents = effectRuntime().runFork(
       Stream.runForEach(session.events.all(session.now()), (event) =>
         Effect.sync(() => {
-          if (event.type === 'approval.resolved') {
-            this.toolEditApprovals.handleAction({
-              requestId: event.requestId,
-              action: 'reject',
-            });
-          } else if (
+          this.toolEditApprovals.handleSessionEvent(event);
+          if (
             event.type === 'result' &&
             event.category === 'workflow' &&
             event.outcome !== 'failed'

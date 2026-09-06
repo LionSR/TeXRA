@@ -22,7 +22,6 @@ import {
   type SubscriptionUsageProvider,
   type StreamPhase,
   type StreamStage,
-  type StreamSubstate,
   type ApprovalPolicySnapshot,
   type StreamTabId,
   type TokenUsageStats,

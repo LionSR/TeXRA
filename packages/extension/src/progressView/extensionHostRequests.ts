@@ -619,9 +619,6 @@ export function createExtensionHostRequests(
     }
   }
 
-  const notOnExtension = (what: string) =>
-    new Rejected({ reason: `${what} is not available in VS Code yet.` });
-
   async function handle(
     request: HostRequest,
     port: string,
@@ -750,7 +747,9 @@ export function createExtensionHostRequests(
         await launch(request);
         return done;
       case 'compileInputPdf':
-        throw notOnExtension('Compiling the input PDF');
+        throw new Rejected({
+          reason: 'Compiling the input PDF is not available in VS Code yet.',
+        });
       case 'extractFigures':
         await runCommand('texra.extractTikzFigures');
         return done;

@@ -904,6 +904,7 @@ export abstract class ModelHandler<
    */
   protected async createMediaMessage(
     mediaFiles: FileLocation[],
+    _context: MediaAttachmentContext,
   ): Promise<CreatedMedia<Media>> {
     const { entries, results } =
       await this.mediaProcessor.loadEntries(mediaFiles);
@@ -936,7 +937,10 @@ export abstract class ModelHandler<
   ): Promise<Media[]> {
     this.insertedAttachmentKinds.set(context, []);
     try {
-      const { media, entries } = await this.createMediaMessage(mediaFiles);
+      const { media, entries } = await this.createMediaMessage(
+        mediaFiles,
+        context,
+      );
       if (media.length > 0) {
         this.insertedAttachmentKinds.set(
           context,

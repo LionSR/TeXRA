@@ -158,10 +158,19 @@ const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Sources whose `runsOnlyInExecute` the survey must report exactly. */
 const EXECUTE_CASES = [
-  // The run sits inside a class `execute()`: this is boundary kind (b).
+  // The run sits inside `execute()` on the class that declares the tool
+  // contract: this is boundary kind (b), and the only shape that is.
   [
-    'class T { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
+    'class T extends defineTool({ name: "t" }) { protected execute(i) { return rt().runPromise(this.run(i)); } }\n',
     true,
+  ],
+  // The same method on a class that is not a tool: a helper's `execute` is
+  // its own method, not the tool's run edge.
+  ['class H { execute(i) { return rt().runPromise(this.run(i)); } }\n', false],
+  // A tool class, but the run is elsewhere in the file.
+  [
+    'class T extends defineTool({ name: "t" }) { execute() {} }\nrt().runPromise(program);\n',
+    false,
   ],
   // A class with an `execute()` method, but the run is elsewhere in the file.
   ['class H { execute() {} }\nrt().runPromise(program);\n', false],
@@ -170,7 +179,10 @@ const EXECUTE_CASES = [
   // A free function named execute is not a tool edge.
   ['function execute() { return rt().runPromise(p); }\n', false],
   // No run at all: nothing to admit.
-  ['class T { execute(i) { return i; } }\n', false],
+  [
+    'class T extends defineTool({ name: "t" }) { execute(i) { return i; } }\n',
+    false,
+  ],
 ];
 
 /** Production TypeScript files, repo-relative and '/'-joined, sorted. */
@@ -447,17 +459,22 @@ function surveySource(text, fileName) {
       catches += 1;
     }
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
-      // A tool's run edge is `execute()` on the tool class. Recurse with the
-      // flag set only through that member's subtree, so a run elsewhere in
-      // the file — including in a sibling helper class that happens to have
-      // its own `execute` — is still counted as below the boundary. An
+      // A tool's run edge is `execute()` on the tool class, and the tool
+      // class is the one that extends `defineTool(...)` — every tool in the
+      // repo is declared that way, so the contract is checkable rather than
+      // guessed from a method name. Recurse with the flag set only through
+      // that member's subtree, so a run elsewhere in the file is still
+      // counted as below the boundary: in a sibling helper class, and in a
+      // helper's own `execute` too, since a helper is not the tool. An
       // object literal's `execute` shorthand is the same AST node kind and
       // never sets the flag, because it is not a class member.
+      const isTool = extendsDefineTool(node);
       ts.forEachChild(node, (child) =>
         visit(
           child,
           inExecute ||
-            (ts.isMethodDeclaration(child) &&
+            (isTool &&
+              ts.isMethodDeclaration(child) &&
               ts.isIdentifier(child.name) &&
               child.name.text === 'execute'),
         ),
@@ -473,6 +490,25 @@ function surveySource(text, fileName) {
   // inside an `execute()` class method — not merely when such a method exists.
   const runsOnlyInExecute = runsInExecute > 0 && runsOutsideExecute === 0;
   return { counts, runsOnlyInExecute };
+}
+
+/**
+ * Whether a class declares the tool contract: `class X extends defineTool({
+ * ... })`. Every tool in `src/tools/` is written that way, which is what
+ * makes "is this the tool class?" a question the AST can answer instead of a
+ * guess from the name of a method.
+ */
+function extendsDefineTool(node) {
+  return (node.heritageClauses ?? []).some(
+    (clause) =>
+      clause.token === ts.SyntaxKind.ExtendsKeyword &&
+      clause.types.some(
+        (type) =>
+          ts.isCallExpression(type.expression) &&
+          ts.isIdentifier(type.expression.expression) &&
+          type.expression.expression.text === 'defineTool',
+      ),
+  );
 }
 
 /** Fail the ratchet itself if the classifier regresses. */
@@ -636,6 +672,25 @@ function unassignedDebt(current, lanes, toolExecuteFiles) {
     });
 }
 
+/**
+ * Lane entries the register no longer needs: a file the map names that is no
+ * longer below the boundary — converted, moved into a recognized `execute()`,
+ * or deleted. `diffRows` cannot see this, because a run that merely moves
+ * inside its own file leaves the counted total untouched; only the lane map
+ * goes stale. Rejecting it keeps the register a statement about the debt that
+ * exists now rather than an archive of debt that once did.
+ */
+function staleDebtLanes(current, lanes, toolExecuteFiles) {
+  const below = new Set(
+    Object.keys(current).filter(
+      (file) => !isBoundaryPath(file, toolExecuteFiles),
+    ),
+  );
+  return Object.keys(lanes ?? {})
+    .filter((file) => !below.has(file))
+    .toSorted(compareCodePoints);
+}
+
 /** Fail the ratchet itself if the marker scan or the boundary gate regresses. */
 function selfTestBoundaryAndMarkers() {
   const markerFailures = checkAdapterMarkers(
@@ -738,6 +793,23 @@ function selfTestBoundaryAndMarkers() {
     JSON.stringify(['src/agent/runtime/newRunner.ts'])
   ) {
     console.error('unassignedDebt self-test failed');
+    process.exit(1);
+  }
+  const stale = staleDebtLanes(
+    debtRow,
+    {
+      'src/agent/runtime/newRunner.ts': UNASSIGNED_LANE,
+      'src/tools/goal/goalStore.ts': 'lane D',
+      'src/tools/lean/lspTools.ts': 'Lean LSP follow-up',
+      'packages/cli/src/main.ts': 'host entry',
+    },
+    new Set(),
+  );
+  if (
+    JSON.stringify(stale) !==
+    JSON.stringify(['packages/cli/src/main.ts', 'src/tools/lean/lspTools.ts'])
+  ) {
+    console.error('staleDebtLanes self-test failed:', JSON.stringify(stale));
     process.exit(1);
   }
 }
@@ -967,6 +1039,26 @@ function main() {
     }
     console.error(
       `\nName the lane that deletes each one in the baseline's debtLanes map (replace ${UNASSIGNED_LANE}), or convert the file and its callers in this PR.`,
+    );
+  }
+
+  const staleLanes = staleDebtLanes(
+    rows[ROW_RUN_BOUNDARY],
+    debtLanes,
+    toolExecuteFiles,
+  );
+  if (staleLanes.length > 0) {
+    failed = true;
+    console.error(
+      `\nEffect migration ratchet failed: debtLanes names ${staleLanes.length} file(s) that are no longer below the boundary.`,
+    );
+    for (const file of staleLanes) {
+      console.error(
+        `  - ${file}: ${debtLanes[file]} — the debt is gone, the entry is not.`,
+      );
+    }
+    console.error(
+      '\nGood news; lock it in: run `node scripts/check-effect-migration-ratchet.mjs --update` and commit the baseline in this PR.',
     );
   }
 

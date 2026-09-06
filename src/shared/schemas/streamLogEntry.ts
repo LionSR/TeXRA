@@ -212,16 +212,3 @@ export const TraceStreamLogEntrySchema = z
       data: entry.data,
     });
   });
-
-/**
- * Live deltas are a batch transport boundary. Recover each well-formed row
- * independently so one stale nested payload cannot discard later entries in
- * the same frame. Rows without even a stream-log envelope are omitted: there
- * is no stable id, sequence, or type from which to construct a safe row.
- */
-const StreamLogEntryBatchSchema = z.array(z.unknown()).transform((entries) =>
-  entries.flatMap((entry) => {
-    const parsed = TraceStreamLogEntrySchema.safeParse(entry);
-    return parsed.success ? [parsed.data] : [];
-  }),
-);

@@ -79,7 +79,7 @@ describe('Codex loopback login', () => {
   it('does not exchange a code when cancellation follows its callback', async () => {
     const controller = new AbortController();
     let request!: SubscriptionAuthorizeRequest;
-    const completeLoginWithCode = vi.fn();
+    const loginWithCode = vi.fn();
     const completion = runLogin(
       {
         coordinator: coordinatorStub({
@@ -89,7 +89,7 @@ describe('Codex loopback login', () => {
             request = loopbackRequest(port);
             return request;
           },
-          completeLoginWithCode,
+          loginWithCode,
         }),
         openBrowser: async () => {
           const callback = new URL(request.redirectUri);
@@ -103,7 +103,7 @@ describe('Codex loopback login', () => {
     );
 
     await expect(completion).rejects.toThrow(/interrupted/);
-    expect(completeLoginWithCode).not.toHaveBeenCalled();
+    expect(loginWithCode).not.toHaveBeenCalled();
   });
 
   it('ignores stale callback errors and accepts a later valid callback', async () => {
@@ -111,7 +111,7 @@ describe('Codex loopback login', () => {
     const verifier = 'verifier';
     const expectedSession = testSession();
     let request!: SubscriptionAuthorizeRequest;
-    const completeLoginWithCode = vi.fn(async () => expectedSession);
+    const loginWithCode = vi.fn(() => Effect.succeed(expectedSession));
     const coordinator = coordinatorStub({
       buildAuthorizeRequest: (port: number): SubscriptionAuthorizeRequest => {
         const redirectUri = `http://localhost:${port}${CODEX_CALLBACK_PATH}`;
@@ -126,7 +126,7 @@ describe('Codex loopback login', () => {
         };
         return request;
       },
-      completeLoginWithCode,
+      loginWithCode,
     });
 
     const session = await runLogin({
@@ -150,7 +150,7 @@ describe('Codex loopback login', () => {
     });
 
     expect(session).toEqual(expectedSession);
-    expect(completeLoginWithCode).toHaveBeenCalledWith({
+    expect(loginWithCode).toHaveBeenCalledWith({
       code: 'valid-code',
       verifier,
       redirectUri: request.redirectUri,

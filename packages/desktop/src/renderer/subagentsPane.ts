@@ -4,6 +4,7 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 
+import type { StreamTabId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -12,9 +13,7 @@ export interface SubagentsPaneModel {
   readonly view: SessionView;
   readonly surface: Surface;
   /** The stream whose family the tab shows; null when nothing is selected. */
-  readonly selected: SessionView['streams'] extends Map<infer K, unknown>
-    ? K | null
-    : never;
+  readonly selected: StreamTabId | null;
 }
 
 export function subagentsPaneTemplate(

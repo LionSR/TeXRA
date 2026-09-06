@@ -21,13 +21,12 @@ import {
   cumulativeUsageOf,
   currentView,
   runningChildCount,
-  streamPhaseOf,
   streamViewOf,
 } from '@cli/chat/tui/state/sessionView';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
   appendLocalAssistantTranscript,
-  describeRequestError,
+  appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { effectRuntime } from '@platform/processRuntime';
@@ -214,21 +213,18 @@ export function requestCliSessionCompaction(): void {
     return;
   }
   const session = defaultSession();
-  void effectRuntime()
-    .runPromise(
-      session.requests.request({ kind: 'stream.compact', streamId }).pipe(
-        Effect.match({
-          onFailure: describeRequestError,
-          onSuccess: () => undefined,
-        }),
-      ),
-    )
-    .then((refusal) => {
-      if (refusal === undefined) notifyFollowUpSent(streamId, session);
-      appendLocalAssistantTranscript(
-        refusal ??
-          'Context compaction requested. The agent will process it on the next model call.',
-        streamId,
-      );
-    });
+  void effectRuntime().runPromise(
+    session.requests.request({ kind: 'stream.compact', streamId }).pipe(
+      Effect.match({
+        onFailure: (error) => appendLocalRequestRefusal(error, streamId),
+        onSuccess: () => {
+          notifyFollowUpSent(streamId, session);
+          appendLocalAssistantTranscript(
+            'Context compaction requested. The agent will process it on the next model call.',
+            streamId,
+          );
+        },
+      }),
+    ),
+  );
 }

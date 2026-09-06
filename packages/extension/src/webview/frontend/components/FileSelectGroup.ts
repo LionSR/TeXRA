@@ -80,7 +80,7 @@ export class FileSelectGroup extends LitElement {
   private sortableController = new SortableController(
     this,
     () => this.fileListElement,
-    () => [...this.currentFiles],
+    () => [...this.files],
     (result) =>
       this.dispatchEvent(
         MainViewEvents.filesReordered({
@@ -125,7 +125,7 @@ export class FileSelectGroup extends LitElement {
   private handleMoveClick(button: HTMLElement): void {
     const index = Number(button.dataset.moveIndex);
     const direction = Number(button.dataset.moveDirection);
-    const files = this.currentFiles;
+    const files = this.files;
     const target = index + direction;
     if (!Number.isInteger(index) || target < 0 || target >= files.length) {
       return;
@@ -152,14 +152,6 @@ export class FileSelectGroup extends LitElement {
     if (moveButton) {
       this.handleMoveClick(moveButton);
     }
-  }
-
-  private get currentCheckboxValues(): CheckboxValues {
-    return this.checkboxValues;
-  }
-
-  private get currentFiles(): readonly string[] {
-    return this.files;
   }
 
   private get isFileInputDisabled(): boolean {
@@ -216,7 +208,7 @@ export class FileSelectGroup extends LitElement {
   }
 
   private renderToolConfigMenu(): TemplateResult {
-    const values = this.currentCheckboxValues;
+    const values = this.checkboxValues;
     return this.renderConfigDropdown({
       id: 'toggleToolConfig',
       icon: 'screwdriver-wrench',
@@ -236,7 +228,7 @@ export class FileSelectGroup extends LitElement {
   }
 
   private renderAutoExtractMenu(): TemplateResult {
-    const values = this.currentCheckboxValues;
+    const values = this.checkboxValues;
     return this.renderConfigDropdown({
       id: 'toggleAutoExtract',
       icon: 'wand-magic-sparkles',
@@ -272,20 +264,20 @@ export class FileSelectGroup extends LitElement {
   }
 
   private renderFileList(): TemplateResult {
-    if (this.currentFiles.length === 0) {
+    if (this.files.length === 0) {
       return html`<div class="file-list-placeholder">
         No files selected. Add or drop files here.
       </div>`;
     }
 
-    const movable = this.currentFiles.length > 1;
+    const movable = this.files.length > 1;
     return html`<div
       role="list"
       aria-label=${`${this.config.label} files`}
       @click=${this.handleFileListClick}
     >
       ${repeat(
-        this.currentFiles,
+        this.files,
         (file) => file,
         (file, index) => {
           const display = this.formatFilePath(file);
@@ -343,7 +335,7 @@ export class FileSelectGroup extends LitElement {
                         aria-label=${`Move ${file} down`}
                         data-move-index=${index}
                         data-move-direction="1"
-                        ?disabled=${index === this.currentFiles.length - 1}
+                        ?disabled=${index === this.files.length - 1}
                       >
                         ${waIcon('arrow-down')}
                       </wa-button>
@@ -411,9 +403,9 @@ export class FileSelectGroup extends LitElement {
             <span id=${labelId} class="file-select-label">${config.label}</span>
             <span class="file-select-count" role="status" aria-atomic="true">
               ${
-                this.currentFiles.length === 0
+                this.files.length === 0
                   ? nothing
-                  : formatResultCount(this.currentFiles.length, 'file')
+                  : formatResultCount(this.files.length, 'file')
               }
             </span>
             ${
@@ -440,7 +432,7 @@ export class FileSelectGroup extends LitElement {
               icon: 'trash',
               label: config.emptyListLabel,
               tooltip: config.emptyListLabel,
-              disabled: this.currentFiles.length === 0,
+              disabled: this.files.length === 0,
               onClick: this.handleEmptyFiles,
             })}
             ${renderIconActionButton({

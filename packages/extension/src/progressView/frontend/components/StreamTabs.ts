@@ -13,7 +13,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { SessionView, StreamView } from '@shared/session/sessionView';
 import { resolveSelected, type Surface } from '@shared/session/surface';

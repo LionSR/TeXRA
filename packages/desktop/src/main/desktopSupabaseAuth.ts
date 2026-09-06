@@ -347,7 +347,6 @@ export function createDesktopSupabaseAuth(
     } catch (error) {
       if (ownsAttempt(attempt)) activeAttempt = undefined;
       await callbackState.clearAwaitingCallback(nonce);
-      await host.showErrorMessage(`Sign-in failed: ${toErrorMessage(error)}`);
       throw error;
     }
   };
