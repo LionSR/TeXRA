@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 // Offline study probe against an installed Effect package. All model output
 // is supplied by a fake provider; no credentials, network, or paid calls.
@@ -53,29 +54,40 @@ const result = await Effect.runPromise(
       generateText: () => Effect.sync(makeParts),
       streamText: () => Stream.suspend(() => Stream.fromIterable(makeParts())),
     });
-    const controlled = yield* model.generateText({
+    const controlledResponse = yield* model.generateText({
       prompt: 'Use the tool',
       toolkit,
       disableToolCallResolution: true,
     });
-    assert.equal(providerCalls, 1);
-    assert.equal(handlerCalls, 0);
-    assert.deepEqual(controlled.toolCalls[0].params, input);
-    const automatic = yield* model
+    const controlled = {
+      providerCalls,
+      handlerCalls,
+      handlerLayerProvided: false,
+      inputPreserved: isDeepStrictEqual(
+        controlledResponse.toolCalls[0].params,
+        input,
+      ),
+    };
+    assert.equal(controlled.providerCalls, 1);
+    assert.equal(controlled.handlerCalls, 0);
+    assert.equal(controlled.inputPreserved, true);
+    const automaticResponse = yield* model
       .generateText({ prompt: 'Use the tool', toolkit })
       .pipe(Effect.provide(handlerLayer));
-    assert.equal(providerCalls, 2);
-    assert.equal(handlerCalls, 1);
-    assert.ok(automatic.content.some((part) => part.type === 'tool-result'));
+    const automatic = {
+      providerCalls: providerCalls - controlled.providerCalls,
+      handlerCalls: handlerCalls - controlled.handlerCalls,
+      toolResultPresent: automaticResponse.content.some(
+        (part) => part.type === 'tool-result',
+      ),
+    };
+    assert.equal(automatic.providerCalls, 1);
+    assert.equal(automatic.handlerCalls, 1);
+    assert.equal(automatic.toolResultPresent, true);
     return {
       effectVersion: require('effect/package.json').version,
-      controlled: {
-        providerCalls: 1,
-        handlerCalls: 0,
-        handlerLayerProvided: false,
-        inputPreserved: true,
-      },
-      automatic: { providerCalls: 1, handlerCalls: 1, toolResultPresent: true },
+      controlled,
+      automatic,
       interpretation:
         'One generation resolves tools by default but does not perform the next model turn. Disabling resolution leaves tool execution with the application. This does not validate a TeXRA provider integration or durability.',
     };
