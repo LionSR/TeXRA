@@ -346,14 +346,16 @@ export const WORKFLOW_SKIPPED_RESULT = '__WORKFLOW_SKIPPED__';
  * {@link WorkflowScriptRunOptions.onControl}. It is keyed by the execution id
  * of the child the attempt actually runs under — the same identity the host
  * uses for focus and kill, reported by the runner through
- * {@link WorkflowAttemptFacts.childExecutionId} — and no-ops when that child is
- * not currently in flight. Control actions are control-plane only: they never
- * touch the journal, checkpoint, or per-call resume identity.
+ * {@link WorkflowAttemptFacts.childExecutionId} — and answers whether that
+ * child was in flight: true when the action took, false when the id belongs
+ * to no live attempt of this run, so a host can tell a settled call from an
+ * acted one. Control actions are control-plane only: they never touch the
+ * journal, checkpoint, or per-call resume identity.
  */
 export type WorkflowScriptControl = (
   childExecutionId: ExecutionId,
   action: WorkflowControlAction,
-) => void;
+) => boolean;
 
 export interface WorkflowScriptRunOptions {
   /** Full script source, starting with `export const meta = {...}`. */

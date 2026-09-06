@@ -86,9 +86,9 @@ export function createDesktopPreviewHost(
     }
   }
 
-  // Renders the PDF in the wa-dialog overlay (an `<iframe>` on Electron's
-  // built-in Chromium viewer), or reports `false` so the caller falls back
-  // to `shell.openPath`.
+  // Opens the PDF in the renderer's pdf workbench tab (an `<iframe>` on
+  // Electron's built-in Chromium viewer), or reports `false` so the caller
+  // falls back to `shell.openPath`.
   function tryShowPdfInRenderer(pdfPath: string, title: string): boolean {
     return tryShowInRenderer(
       { ...options, source: 'desktopPreviewHost', fallback: 'external viewer' },

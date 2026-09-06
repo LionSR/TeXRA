@@ -56,7 +56,7 @@ test('keeps onboarding readable inside a narrow conversation split', async () =>
   await page.waitForFunction(
     () =>
       document
-        .querySelector('main-app')
+        .querySelector('progress-app')
         ?.shadowRoot?.querySelector('onboarding-welcome-card') != null,
   );
 
@@ -69,8 +69,8 @@ test('keeps onboarding readable inside a narrow conversation split', async () =>
   });
 
   const metrics = await page.evaluate(() => {
-    const mainRoot = document.querySelector('main-app')?.shadowRoot;
-    const onboarding = mainRoot?.querySelector<HTMLElement>(
+    const progressRoot = document.querySelector('progress-app')?.shadowRoot;
+    const onboarding = progressRoot?.querySelector<HTMLElement>(
       'onboarding-welcome-card',
     );
     const root = onboarding?.shadowRoot;
@@ -83,7 +83,7 @@ test('keeps onboarding readable inside a narrow conversation split', async () =>
     const buttons = [
       ...(root?.querySelectorAll<HTMLElement>('.choice wa-button') ?? []),
     ];
-    if (!container || steps.length !== 3 || buttons.length !== 3) {
+    if (!container || steps.length !== 3 || buttons.length !== 2) {
       throw new Error('Responsive onboarding controls were not mounted.');
     }
     const containerRect = container.getBoundingClientRect();

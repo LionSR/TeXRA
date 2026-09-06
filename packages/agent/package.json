@@ -1,6 +1,6 @@
 {
   "name": "@texra-ai/agent",
-  "version": "0.40.9",
+  "version": "0.41.0",
   "description": "Embeddable TeXRA agent runtime",
   "license": "Apache-2.0",
   "author": "TeXRA.ai",

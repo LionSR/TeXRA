@@ -84,7 +84,7 @@ it('returns transcription to Start when another paper stops the process recorder
     'origin',
   );
   const cancelled = expect(nextTake).rejects.toMatchObject({
-    _tag: 'Rejected',
+    _tag: 'Cancelled',
   });
   requests.cancel(first, 'other');
   expect(snapshot).toHaveBeenLastCalledWith({

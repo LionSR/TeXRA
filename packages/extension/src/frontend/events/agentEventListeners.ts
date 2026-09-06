@@ -117,7 +117,10 @@ function handleShowAgentConfigBanner(
   payload: ShowAgentConfigBannerPayload,
   progressViewProvider: ProgressViewProvider,
 ): boolean {
-  progressViewProvider.showAgentConfigBanner(payload.agentName);
+  progressViewProvider.showAgentConfigBanner(
+    payload.agentName,
+    payload.category,
+  );
   return true;
 }
 

@@ -22,6 +22,7 @@ import type { Response } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   applySurfaceAction,
+  canSendFollowUp,
   EMPTY_DRAFT,
   loadSurface,
   persistSurface,
@@ -55,7 +56,6 @@ export interface SessionSurfaces {
   /** Open the sessions the host names and close the rest. */
   sync(keys: readonly string[]): void;
   get(key: string): SessionSurface | undefined;
-  list(): readonly SessionSurface[];
   /** Apply a surface action to one session's surface. */
   act(key: string, action: SurfaceAction): void;
   runtimeRequest(key: string, request: RuntimeRequest): void;
@@ -213,6 +213,15 @@ export function createSessionSurfaces(options: {
     });
   }
 
+  function presentResult(entry: Held, result: Response['result']): void {
+    if (!result.ok && result.error._tag !== 'Cancelled') {
+      setSurface(entry, {
+        ...entry.surface$.get(),
+        requestError: result.error,
+      });
+    }
+  }
+
   /** The response of a `host.request`, folded onto the surface. */
   function settleHost(
     entry: Held,
@@ -335,12 +344,14 @@ export function createSessionSurfaces(options: {
           polishing.delete(target);
           setSurface(entry, { ...current, polishing });
         }
+        presentResult(entry, result);
         settleHost(entry, request, origin, result);
       });
   }
 
   function runtimeRequestFor(entry: Held, request: RuntimeRequest): void {
     const { key } = entry;
+    const streamId = 'streamId' in request ? request.streamId : null;
     if (request.kind === 'followUp.send') {
       const current = entry.surface$.get();
       if (current.sending.has(request.streamId)) return;
@@ -348,6 +359,13 @@ export function createSessionSurfaces(options: {
         ...current,
         sending: new Set([...current.sending, request.streamId]),
       });
+    }
+    // A new request on the stream retires the answer to the last one.
+    if (streamId !== null && entry.surface$.get().rejected.has(streamId)) {
+      const current = entry.surface$.get();
+      const rejected = new Map(current.rejected);
+      rejected.delete(streamId);
+      setSurface(entry, { ...current, rejected });
     }
     // Keep text and images until admission succeeds. A rejection needs
     // no restoration, and a later edit remains independent of this send.
@@ -363,7 +381,23 @@ export function createSessionSurfaces(options: {
         request,
       })
       .then((result) => {
-        if (held.get(key) !== entry || request.kind !== 'followUp.send') return;
+        if (held.get(key) !== entry) return;
+        presentResult(entry, result);
+        // The runtime's refusal also reaches the stream it was made on
+        // (7.6): that stream's controls paint it, and nothing here
+        // swallows it.
+        if (
+          !result.ok &&
+          result.error._tag !== 'Cancelled' &&
+          streamId !== null
+        ) {
+          const current = entry.surface$.get();
+          setSurface(entry, {
+            ...current,
+            rejected: new Map(current.rejected).set(streamId, result.error),
+          });
+        }
+        if (request.kind !== 'followUp.send') return;
         const current = entry.surface$.get();
         const sending = new Set(current.sending);
         sending.delete(request.streamId);
@@ -386,12 +420,16 @@ export function createSessionSurfaces(options: {
    *  empty draft, like an empty launcher instruction, sends nothing. */
   function submit(entry: Held): void {
     const surface = entry.surface$.get();
-    const streamId = resolveSelected(entry.view$.get(), surface);
+    const view = entry.view$.get();
+    const streamId = resolveSelected(view, surface);
     if (streamId !== null) {
+      const stream = view.streams.get(streamId);
       const draft = surface.drafts.get(streamId) ?? EMPTY_DRAFT;
+      // The same decision the composer's Send takes, from the same fold
+      // fields: a run that ended or that another process owns takes no
+      // follow-up, however the send was reached.
+      if (!stream || !canSendFollowUp(stream, draft)) return;
       const text = draft.text.trim();
-      if (text === '' && draft.images.length === 0) return;
-      if (draft.images.some((image) => image.path === null)) return;
       const mediaFiles = draft.images.flatMap((image) =>
         image.path === null ? [] : [image.path],
       );
@@ -441,7 +479,6 @@ export function createSessionSurfaces(options: {
       notify();
     },
     get: (key) => held.get(key),
-    list: () => [...held.values()],
     act(key, action) {
       const entry = held.get(key);
       if (entry) act(entry, action);
