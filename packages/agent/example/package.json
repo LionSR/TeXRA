@@ -8,7 +8,7 @@
     "start": "node effectSession.mjs"
   },
   "dependencies": {
-    "@texra-ai/agent": "file:texra-ai-agent-0.40.9.tgz",
+    "@texra-ai/agent": "file:agent.tgz",
     "effect": "4.0.0-rc.112",
     "zod": "^4.4.3"
   }

@@ -52,6 +52,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 // `scripts/validate-artifacts.mjs`.
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
+import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
@@ -137,7 +138,9 @@ export interface Run {
    * when the run settles, fails with {@link RunFailure} when the run failed,
    * and drops what it holds when the run settles unread. Running it once is
    * the contract: ending the iteration detaches the trace while the run
-   * continues.
+   * continues. The pre-reader buffer is bounded: a run whose events pass
+   * {@link TRACE_HANDOVER_EVENTS} with nobody reading has no reader, so it
+   * warns and detaches rather than retaining the whole trace.
    */
   readonly events: Stream.Stream<AgentEvent, RunFailure>;
   /** Before the runtime hands over the live handle this aborts the launch;
@@ -214,6 +217,19 @@ const HEADLESS_HOST = {
  *  contract broke, and a caller waiting on admission must hear it. */
 const NEVER_ENTERED = 'The run ended without entering the session.';
 
+const log = createLog('agentPackage');
+
+/**
+ * How many trace events a run holds for a reader that has yet to attach.
+ * The buffer exists only to bridge admission to the reader's first pull, so
+ * a run that passes it with nobody reading has no reader: it says so and
+ * detaches its trace, instead of retaining a long run's whole trace (every
+ * `stream.chunk` included) until the run settles. A reader that did attach
+ * is never dropped: past its first pull the buffer is the reader's, and
+ * nothing here discards what it has yet to read.
+ */
+const TRACE_HANDOVER_EVENTS = 512;
+
 /** The run's stream and every descendant the view holds. */
 function runStreamIds(view: SessionView, streamId: StreamTabId): StreamTabId[] {
   const ids: StreamTabId[] = [];
@@ -232,7 +248,10 @@ function runStreamIds(view: SessionView, streamId: StreamTabId): StreamTabId[] {
  *  work: the three the package states. */
 function admitInput(
   input: StartInput,
-): Effect.Effect<ReturnType<typeof AgentConfigSchema.parse>, LaunchError> {
+): Effect.Effect<
+  ReturnType<typeof AgentConfigSchema.parse>,
+  LaunchError | RunFailure
+> {
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
     const needApproval = tools
@@ -244,7 +263,15 @@ function admitInput(
         message: `The agent package cannot run approval-requiring tools: ${needApproval.join(', ')}`,
       });
     }
-    yield* Effect.promise(() => loadAgents({ includeRemote: false }));
+    // The agent scan reads the configured directories through the
+    // platform, so it can fail on the environment. That is a failure of
+    // `start`, in the vocabulary the surface already names, not a defect
+    // an embedder's `catchTag` never sees.
+    yield* Effect.tryPromise({
+      try: () => loadAgents({ includeRemote: false }),
+      catch: (cause) =>
+        new RunFailure({ cause, message: toErrorMessage(cause) }),
+    });
     const resolved = resolveAgent(input.agent);
     if (!resolved) {
       return yield* new AgentNotFound({
@@ -286,6 +313,7 @@ function start(
     let handle: RuntimeAgentRunHandle | undefined;
     let detach: (() => void) | undefined;
     let reading = false;
+    let buffered = 0;
     /** Detach the trace, once: the reader's close does it while the run
      *  continues, and the run's settlement does it for a reader that never
      *  came. */
@@ -327,6 +355,13 @@ function start(
               },
               onStreamResolved: (streamId, runTrace) => {
                 detach = runTrace.subscribe((event) => {
+                  if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
+                    log.warn(
+                      `Run ${executionId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; detaching its trace. Iterate the run's events in the turn that starts it, or await only its result.`,
+                    );
+                    release();
+                    return;
+                  }
                   Queue.offerUnsafe(trace, event);
                 });
                 Deferred.doneUnsafe(admitted, Effect.succeed(streamId));

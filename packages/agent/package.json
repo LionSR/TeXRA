@@ -44,7 +44,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "example:packed": "npm run build && rm -f example/*.tgz && corepack pnpm pack --pack-destination example && cd example && npm install ./texra-ai-agent-*.tgz && npm start",
+    "example:packed": "npm run build && rm -f example/*.tgz && corepack pnpm pack --pack-destination example && mv example/texra-ai-agent-*.tgz example/agent.tgz && cd example && npm install ./agent.tgz && npm start",
     "prepack": "npm run build"
   },
   "dependencies": {

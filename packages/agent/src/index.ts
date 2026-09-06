@@ -34,7 +34,6 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - host services this boundary wires
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
-import { effectRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SessionCloseReport } from '@shared/schemas';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
@@ -43,6 +42,14 @@ import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { RunFailure } from './effect/errors.js';
 import { composeProcess, type AgentPlatform } from './effect/runtime.js';
 import { makeSessions, type SessionView } from './effect/sessions.js';
+
+/**
+ * The owner's session effects supply their own context, so every run site
+ * below runs on Effect's own runtime rather than borrowing the process
+ * runtime the composition installs. That is what lets `closeSession`
+ * answer for a process no run has initialized, and for one whose shutdown
+ * has already disposed that runtime, exactly as its contract says.
+ */
 
 export type { AgentEvent } from '@agent/trace';
 export type { SessionCloseReport } from '@shared/schemas';
@@ -82,7 +89,15 @@ export interface RunAgentInput {
  * an iteration begun right after `runAgent()` misses none of the launch
  * events. Ending the iteration detaches the event source while the run
  * itself continues, and a run that settles without ever being iterated
- * discards what it buffered.
+ * discards what it buffered. That pre-reader buffer is bounded: a run whose
+ * events pass it with nobody reading warns and detaches its trace, so
+ * awaiting only `result` never retains a long run's whole trace.
+ *
+ * Every failure arrives on `result`, never as a throw from `runAgent()`
+ * itself. A refusal before any model work is the tagged error the Effect
+ * surface names (`AgentNotFound`, `ToolsRefused`, `PlatformConflict`); a
+ * run that fails after it entered the session rejects with exactly what the
+ * launch path threw.
  */
 export interface AgentRun extends AsyncIterable<AgentEvent> {
   readonly result: Promise<AgentFlowResult>;
@@ -130,8 +145,9 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
  * the session's agent-spawned children and agent-CLI sessions are stopped,
  * then the platform's session is closed through its owner under the phase's
  * own budget, then the runtime that held it goes, and its owner with it, so
- * a later `closeSession` answers as a process with none does. An Effect
- * embedder reaches the same closure through `Runtime.layer`'s scope.
+ * a later `closeSession` answers as a process with none does and a later
+ * `runAgent` composes the process again. An Effect embedder reaches the
+ * same closure through `Runtime.layer`'s scope.
  */
 function agentServices(
   platform: AgentPlatform,
@@ -141,9 +157,7 @@ function agentServices(
   if (runtime.composed) {
     registerRuntimeShutdownHandlers(platform.lifecycle, {
       flushArtifacts: async (signal) => {
-        await effectRuntime().runPromise(
-          sessions.close(platform.roots, signal),
-        );
+        await Effect.runPromise(sessions.close(platform.roots, signal));
       },
       afterExecutionSettlement: [() => disposeProcessRuntime()],
     });
@@ -168,28 +182,41 @@ export function closeSession(
   roots: WorkspaceRoots,
   signal?: AbortSignal,
 ): Promise<SessionCloseReport> {
-  return effectRuntime().runPromise(closeOwnedSession(roots.storage, signal));
+  return Effect.runPromise(closeOwnedSession(roots.storage, signal));
 }
 
 /**
  * Start one agent run and expose its trace as an asynchronous event stream.
  *
  * The platform and agent registry are process-wide. Applications should create
- * one platform, then reuse it for every run in that process.
+ * one platform, then reuse it for every run in that process; a second,
+ * different platform is refused, and the refusal arrives on the returned
+ * run's `result` like every other launch refusal.
  */
 export function runAgent(input: RunAgentInput): AgentRun {
-  const sessions = agentServices(input.platform);
-  // One fiber on the process runtime, which `runFork` evaluates to its
-  // first yield before returning: the owner holds this run's session by the
-  // time `runAgent` does.
-  const started = effectRuntime().runFork(
-    Effect.flatMap(sessions.open(), (session) => session.start(input)),
+  // One fiber, which `runFork` evaluates to its first yield before it
+  // returns: the process is composed and this run's root is the owner's by
+  // the time `runAgent` returns. The composition runs inside the fiber so
+  // that its one refusal, `PlatformConflict`, reaches the caller on
+  // `result`, where every other launch refusal arrives, rather than
+  // throwing from a call whose declared shape is an `AgentRun`.
+  const started = Effect.runFork(
+    Effect.try({
+      try: () => agentServices(input.platform),
+      catch: (refusal) => refusal,
+    }).pipe(
+      Effect.flatMap((sessions) => sessions.open()),
+      Effect.flatMap((session) => session.start(input)),
+    ),
   );
-  const result = effectRuntime()
-    .runPromise(Fiber.join(started).pipe(Effect.flatMap((run) => run.result)))
-    .catch((error: unknown) => {
-      throw embedderError(error);
-    });
+  const result = Effect.runPromise(
+    Fiber.join(started).pipe(
+      Effect.flatMap((run) => run.result),
+      // The error an embedder catches, named once, inside the Effect, as
+      // the events path names it with the same function.
+      Effect.mapError(embedderError),
+    ),
+  );
   // An embedder that only iterates events must not take an unhandled
   // rejection for the result it never asked for: allSettled subscribes to
   // the rejection and settles regardless, so it is observed either way.
@@ -208,7 +235,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
     interrupt: () => {
       // Two windows, one expression: before admission the interrupt reaches
       // the launch's abort signal; after it, the live run's handle.
-      effectRuntime().runFork(
+      Effect.runFork(
         Fiber.interrupt(started).pipe(
           Effect.andThen(Fiber.await(started)),
           Effect.flatMap((exit) =>

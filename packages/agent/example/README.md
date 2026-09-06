@@ -17,8 +17,13 @@ which is, step by step:
 # from the repository root
 corepack pnpm --filter @texra-ai/agent build
 cd packages/agent && rm -f example/*.tgz && corepack pnpm pack --pack-destination example
-cd example && npm install ./texra-ai-agent-*.tgz && npm start
+mv example/texra-ai-agent-*.tgz example/agent.tgz
+cd example && npm install ./agent.tgz && npm start
 ```
+
+The pack is renamed to a fixed `agent.tgz` so this folder's `package.json`
+pins one filename rather than a second copy of the package version, which a
+release would silently move.
 
 `npm install` rather than `pnpm` on purpose: it installs the tarball and the two
 peer dependencies (`effect`, `zod`) into a plain `node_modules`, with no

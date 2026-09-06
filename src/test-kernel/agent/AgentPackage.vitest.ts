@@ -41,6 +41,11 @@ const mocks = vi.hoisted(() => ({
   initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
   initProcessWorkspaceRoots: vi.fn(),
+  /** The process's session owner, as `installProcessRuntime` installs it
+   *  and `disposeProcessRuntime` takes it away: what says whether the
+   *  package must compose the process. */
+  installRuntime: vi.fn(),
+  ownerInstalled: false,
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
   /** Every session the owner built for the package, with what it was
@@ -148,23 +153,14 @@ vi.mock('@agent/runtime', async () => {
         return mocks.closeSession(root);
       }),
     runAgent: mocks.runValidatedAgent,
+    sessionOwnerInstalled: () => mocks.ownerInstalled,
   };
 });
 
 vi.mock('@controllers/session/sessionLayer', () => ({
   disposeProcessRuntime: mocks.disposeRuntime,
-  installProcessRuntime: vi.fn(),
+  installProcessRuntime: mocks.installRuntime,
 }));
-
-vi.mock('@platform/processRuntime', async () => {
-  const { Effect } = await import('effect');
-  return {
-    effectRuntime: () => ({
-      runFork: Effect.runFork,
-      runPromise: Effect.runPromise,
-    }),
-  };
-});
 
 vi.mock('@tools/agentCliSessionStores', () => ({
   registerRuntimeShutdownHandlers: (
@@ -280,8 +276,15 @@ describe('agent package run lifecycle', () => {
     mocks.activePlatform = null;
     mocks.agentCategory = 'toolUse';
     mocks.eventListener = undefined;
+    mocks.ownerInstalled = false;
     mocks.initPlatform.mockImplementation((platform: object) => {
       mocks.activePlatform = platform;
+    });
+    mocks.installRuntime.mockImplementation(() => {
+      mocks.ownerInstalled = true;
+    });
+    mocks.disposeRuntime.mockImplementation(() => {
+      mocks.ownerInstalled = false;
     });
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.loadAgents.mockResolvedValue(undefined);
@@ -417,12 +420,14 @@ describe('agent package run lifecycle', () => {
     const [runtimeOrder] = mocks.disposeRuntime.mock.invocationCallOrder;
     expect(closeOrder).toBeLessThan(runtimeOrder);
 
-    // Shutdown closed the session through its owner: a later run finds none
-    // open on the root and the owner builds it anew. Whether such a run
-    // works is out of contract (the README scopes the package state to the
-    // process); only the reset owner is observed here.
+    // Shutdown closed the session through its owner and took the owner
+    // with the runtime it ran on, so a later run composes the process again
+    // over the platform already installed: the package is not single-use
+    // per process, and the owner builds the root's session anew.
     await runAgent(INPUT).result;
     expect(mocks.sessionInits).toHaveLength(2);
+    expect(mocks.installRuntime).toHaveBeenCalledTimes(2);
+    expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
   });
 
   it('composes into an embedder own runtime: the Effect surface starts a run and lists the one session the Promise entry already opened', async () => {
@@ -449,6 +454,13 @@ describe('agent package run lifecycle', () => {
     // Effect surface resolved the session the Promise entry ran on, and the
     // package built no registry of its own.
     expect(seen.open).toBe(1);
+    expect(mocks.sessionInits).toHaveLength(1);
+    // The scope composed nothing, so leaving it ended nothing the Promise
+    // entry still uses: no close, no disposal, and the next run finds the
+    // same session rather than building a second one.
+    expect(mocks.closeSession).not.toHaveBeenCalled();
+    expect(mocks.disposeRuntime).not.toHaveBeenCalled();
+    await runAgent(INPUT).result;
     expect(mocks.sessionInits).toHaveLength(1);
   });
 

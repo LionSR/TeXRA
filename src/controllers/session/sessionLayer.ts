@@ -465,6 +465,13 @@ const aborted = (signal: AbortSignal) =>
  * work, until they actually settle; only then is it released, so no later
  * open builds a second session over a root whose stores a run still
  * writes. Nothing here touches the process lifecycle or another root.
+ *
+ * The whole close is uninterruptible, so the budget above is its one
+ * cancellation channel: its first steps (closing admissions and killing the
+ * root's executions) cannot be undone and its last (the artifact flush and
+ * the entry's release) must still run, so a caller that races or times out
+ * this effect must not be able to leave a session shut to new runs, its
+ * artifacts unflushed and its entry never released.
  */
 const closeSession = (root: string, signal?: AbortSignal) =>
   Effect.gen(function* () {
@@ -543,7 +550,7 @@ const closeSession = (root: string, signal?: AbortSignal) =>
       abandoned,
     };
     return report;
-  });
+  }).pipe(Effect.uninterruptible);
 
 /**
  * Make the one Effect runtime of this process over its identity (PRD 7.7)

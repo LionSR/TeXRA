@@ -116,6 +116,19 @@ export function initSessionOwner(sessions: SessionOwner | undefined): void {
   owner = sessions;
 }
 
+/**
+ * Whether this process holds a session owner: false before the first
+ * `installProcessRuntime` and again once `disposeProcessRuntime` has
+ * uninstalled it. This, not the platform, is what says a process is
+ * composed: `initPlatform` has no inverse and holds for the life of the
+ * process, while the owner and the runtime under it end with the
+ * composition that installed them, so a composition root asks here whether
+ * it must install its own.
+ */
+export function sessionOwnerInstalled(): boolean {
+  return owner !== undefined;
+}
+
 function sessions(): SessionOwner {
   if (!owner) {
     throw new Error(

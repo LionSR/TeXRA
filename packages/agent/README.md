@@ -55,6 +55,18 @@ Trace events are buffered from the moment the run enters its session, so an
 iteration begun right after `runAgent()` misses none of the launch events.
 Ending the iteration detaches the event source while the run itself continues,
 and a run that settles without ever being iterated discards what it buffered.
+That buffer is only the handover to the first reader, and it is bounded: a run
+whose events pass the handover window with nobody reading has no reader, so it
+logs a warning naming the run and detaches its trace. Awaiting only `result`
+therefore never retains a long run's whole trace. A reader that did attach is
+never dropped: past its first pull the buffer is that reader's, and nothing
+discards what it has yet to read.
+
+Every failure reaches the caller on `result`; `runAgent()` itself does not
+throw. A refusal before any model work is one of the tagged errors the Effect
+surface names below (`AgentNotFound`, `ToolsRefused`, and `PlatformConflict`
+for a second, different platform); a run that fails after entering its session
+rejects with exactly what the launch path threw.
 
 `view` is the folded session state every TeXRA host renders, so stream
 status, transcript rows, and pending approvals are read from it rather than
@@ -166,12 +178,23 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped, Effect.provide(Runtime.layer(nodePlatform(options))));
 ```
 
-| Service    | What it is                                                                                                                                                                                         |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Runtime`  | The composed process: the platform, its workspace roots, and whether this composition owns the process. `Runtime.layer(platform)` provides it and `Sessions`, and its scope closes what it opened. |
-| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?, signal?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                          |
-| `Session`  | `start`, `request`, `view.changes`, `events`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                       |
-| `Run`      | `executionId`, `streamId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its stream published and its trace live.                         |
+| Service    | What it is                                                                                                                                                                                                                                                                                               |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Runtime`  | The composed process: the platform, its workspace roots, and whether this composition installed the process runtime. `Runtime.layer(platform)` provides it and `Sessions`; its scope closes what this composition opened, and nothing when it composed beside a host's or an earlier run's installation. |
+| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?, signal?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through.                                                                                                                                |
+| `Session`  | `start`, `request`, `view.changes`, `events`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                             |
+| `Run`      | `executionId`, `streamId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its stream published and its trace live.                                                                                                                               |
+
+`session.view.changes` publishes the fold's levels as values: each is
+immutable, an older level stays exactly what it was for as long as it is held,
+and a branch the later level did not touch is the same object in both.
+
+A scope that composed the process ends it: leaving it closes the runtime's
+session and disposes the runtime the owner ran on, and a later program in the
+same process composes again over the platform already installed. A scope that
+found a host (or an earlier `runAgent`) already composed closes nothing, so it
+never kills runs it does not own; close a root such a scope opened of its own
+through `Sessions.close`.
 
 Failures are `Data.TaggedError`s: `PlatformConflict`, `AgentNotFound`,
 `ToolsRefused`, and `RunFailure`, whose `cause` is exactly what the launch path

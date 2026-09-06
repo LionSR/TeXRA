@@ -34,6 +34,7 @@ export {
   listSessions,
   openSession,
   openSessionEffect,
+  sessionOwnerInstalled,
 } from './sessionGraph';
 
 // RunContext: the session scope a host enters around every touch of a
