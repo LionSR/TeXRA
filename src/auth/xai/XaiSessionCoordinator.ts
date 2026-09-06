@@ -6,8 +6,6 @@
  */
 import { Effect } from 'effect';
 
-import { effectRuntime } from '@platform/processRuntime';
-
 import { providerAuthError } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
@@ -100,24 +98,18 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
 
 export class XaiSessionCoordinator extends SubscriptionOAuthCoordinator<XaiSession> {
   constructor(init: XaiSessionCoordinatorInit) {
-    // The grant programs run here at the coordinator's Promise boundary
-    // until the coordinator itself is an Effect program.
     const client = init.client ?? {
       exchangeAuthorizationCode: (params: {
         code: string;
         verifier: string;
         redirectUri: string;
       }) =>
-        effectRuntime().runPromise(
-          exchangeAuthorizationCode(params).pipe(
-            Effect.mapError((error) => providerAuthError(error, XaiAuthError)),
-          ),
+        exchangeAuthorizationCode(params).pipe(
+          Effect.mapError((error) => providerAuthError(error, XaiAuthError)),
         ),
       refreshTokens: (refreshToken: string) =>
-        effectRuntime().runPromise(
-          refreshTokens(refreshToken).pipe(
-            Effect.mapError((error) => providerAuthError(error, XaiAuthError)),
-          ),
+        refreshTokens(refreshToken).pipe(
+          Effect.mapError((error) => providerAuthError(error, XaiAuthError)),
         ),
     };
     super({

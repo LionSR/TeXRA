@@ -68,24 +68,16 @@ export interface SubscriptionAuthorizeRequest {
   redirectUri: string;
 }
 
-/**
- * Token-endpoint calls. `signal` is the calling fiber's: it aborts the request
- * when the program is interrupted (an aborted loopback login), so the fetch
- * does not run on in the background.
- */
+/** Token grants compose in the calling fiber, including request cancellation. */
 export interface SubscriptionOAuthClient {
-  exchangeAuthorizationCode(
-    params: {
-      code: string;
-      verifier: string;
-      redirectUri: string;
-    },
-    signal?: AbortSignal,
-  ): Promise<SubscriptionTokenResponse>;
+  exchangeAuthorizationCode(params: {
+    code: string;
+    verifier: string;
+    redirectUri: string;
+  }): Effect.Effect<SubscriptionTokenResponse, SubscriptionOAuthError>;
   refreshTokens(
     refreshToken: string,
-    signal?: AbortSignal,
-  ): Promise<SubscriptionTokenResponse>;
+  ): Effect.Effect<SubscriptionTokenResponse, SubscriptionOAuthError>;
 }
 
 export interface SubscriptionSessionStatus {
@@ -145,7 +137,7 @@ export interface SubscriptionOAuthCoordinatorInit<
 type MachineFailure = SubscriptionOAuthError | AuthPortError;
 
 /**
- * A client or policy throw: the provider's own error (a
+ * A policy throw: the provider's own error (a
  * {@link SubscriptionOAuthError} subclass) stays first-class so the machine
  * can read its `kind`; anything else is that call's rejection.
  */
@@ -288,17 +280,6 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     return callPort(() => this.storage.store(JSON.stringify(session)));
   }
 
-  /**
-   * Adapt one token-endpoint call. The callback receives the fiber's abort
-   * signal, so interrupting the program cancels the request instead of
-   * leaving it to finish in the background.
-   */
-  private clientCall<A>(
-    call: (signal: AbortSignal) => Promise<A>,
-  ): Effect.Effect<A, MachineFailure> {
-    return Effect.tryPromise({ try: call, catch: asMachineFailure });
-  }
-
   private buildSession(
     tokens: SubscriptionTokenResponse,
     previous?: S,
@@ -398,9 +379,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     this: SubscriptionOAuthCoordinator<S>,
     params: { code: string; verifier: string; redirectUri: string },
   ) {
-    const tokens = yield* this.clientCall((signal) =>
-      this.client.exchangeAuthorizationCode(params, signal),
-    );
+    const tokens = yield* this.client.exchangeAuthorizationCode(params);
     return yield* this.adoptTokens(tokens);
   });
 
@@ -451,9 +430,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     previous: S,
     generation: number,
   ) {
-    const tokens = yield* this.clientCall((signal) =>
-      this.client.refreshTokens(previous.refreshToken, signal),
-    ).pipe(
+    const tokens = yield* this.client.refreshTokens(previous.refreshToken).pipe(
       // A fatal rejection means the stored session is dead: clear it, unless
       // a concurrent login or sign-out already replaced it.
       Effect.tapError((error) =>
