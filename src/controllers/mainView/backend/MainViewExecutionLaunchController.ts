@@ -22,6 +22,8 @@ import {
 
 // Local imports - shared types and errors
 import type { MainViewExecuteMessage } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
+import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -31,99 +33,97 @@ export interface MainViewExecutionLaunchHost {
     unavailableNames: readonly string[],
   ): Promise<TeamAvailabilityChoice | undefined>;
   signInForRemoteAgentCatalog(): Promise<boolean>;
+  showInfoMessage(message: string): Promise<void> | void;
 }
 
-/** Host-neutral result of resolving the launch sequence. */
-type MainViewExecutionLaunchResult =
-  | {
-      status: 'prepared';
-      request: ValidatedExecutionRequest;
-      infoMessage?: string;
-    }
-  | { status: 'cancelled' }
-  | { status: 'error'; message: string; docsCommand?: string };
-
-/**
- * Fold a preparation outcome into the launch union so hosts branch once. An
- * invalid preparation is an ordinary launch error, `docsCommand` and all.
- */
-function toLaunchResult(
-  preparation: MainViewExecutionPreparationResult,
-  infoMessage?: string,
-): MainViewExecutionLaunchResult {
-  return preparation.valid
-    ? { status: 'prepared', request: preparation.request, infoMessage }
-    : {
-        status: 'error',
-        message: preparation.message,
-        docsCommand: preparation.docsCommand,
-      };
-}
-
-/**
- * Resolve an ordinary or team launch into one validated execution request.
- * Host-specific prechecks and all user-facing presentation remain with callers.
- */
+/** Resolve an ordinary or team launch and answer refusals on the request path. */
 export async function prepareMainViewExecutionLaunch(
   message: MainViewExecuteMessage,
   host: MainViewExecutionLaunchHost,
-): Promise<MainViewExecutionLaunchResult> {
+): Promise<ValidatedExecutionRequest> {
+  let preparation: MainViewExecutionPreparationResult;
+  let infoMessage: string | undefined;
   if (message.session?.launchTarget !== 'team') {
-    return toLaunchResult(prepareMainViewExecutionRequest(message));
-  }
-
-  try {
+    preparation = prepareMainViewExecutionRequest(message);
+  } else {
     const teamId = message.session.teamId;
-    if (!teamId) {
-      return { status: 'error', message: TEAM_SELECTION_REQUIRED_MESSAGE };
-    }
-
+    if (!teamId)
+      throw new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
     const resolution = await resolveTeamLaunch({
       teamId,
       ...createTeamCatalogPorts(),
       choose: (unavailableNames) =>
         host.chooseTeamAvailability(unavailableNames),
       signIn: () => host.signInForRemoteAgentCatalog(),
+    }).catch((error: unknown) => {
+      throw new Rejected({
+        reason: `Team launch failed: ${toErrorMessage(error)}`,
+      });
     });
-
     switch (resolution.status) {
       case 'cancelled':
-        return { status: 'cancelled' };
+        throw new Cancelled();
       case 'unknown-team':
-        return {
-          status: 'error',
-          message: formatUnknownTeamMessage(teamId),
-        };
+        throw new Rejected({ reason: formatUnknownTeamMessage(teamId) });
       case 'blocked':
-        return {
-          status: 'error',
-          message: formatTeamLaunchBlockedMessage(teamId, resolution.reason),
-        };
+        throw new Rejected({
+          reason: formatTeamLaunchBlockedMessage(teamId, resolution.reason),
+        });
       case 'unavailable':
-        return {
-          status: 'error',
-          message: formatTeamUnavailableMessage(
+        throw new Rejected({
+          reason: formatTeamUnavailableMessage(
             teamId,
             resolution.unavailableNames,
           ),
-        };
+        });
       case 'ready':
-        return toLaunchResult(
-          prepareMainViewTeamExecutionRequest(message, resolution.fields),
-          resolution.partial
-            ? formatPartialTeamLaunchMessage(resolution.missingNames)
-            : undefined,
+        preparation = prepareMainViewTeamExecutionRequest(
+          message,
+          resolution.fields,
         );
+        if (resolution.partial)
+          infoMessage = formatPartialTeamLaunchMessage(resolution.missingNames);
+        break;
       default:
         return assertNever(
           resolution,
           'Unhandled main-view team launch resolution',
         );
     }
-  } catch (error) {
-    return {
-      status: 'error',
-      message: `Team launch failed: ${toErrorMessage(error)}`,
-    };
   }
+  if (!preparation.valid) {
+    throw new Rejected({
+      reason: preparation.message,
+      ...(preparation.docsCommand && { docsCommand: preparation.docsCommand }),
+    });
+  }
+  if (infoMessage) void host.showInfoMessage(infoMessage);
+  return preparation.request;
+}
+
+/** Both GUI hosts launch the selections carried by the requesting surface. */
+export function prepareSurfaceLaunch(
+  { launch, instruction }: Extract<HostRequest, { kind: 'launch' }>,
+  host: MainViewExecutionLaunchHost,
+): Promise<ValidatedExecutionRequest> {
+  return prepareMainViewExecutionLaunch(
+    {
+      agent: launch.agent[launch.sessionType],
+      model: launch.model,
+      instruction,
+      agentCategory: launch.sessionType,
+      files: {
+        inputFiles: launch.inputFiles,
+        contextFiles: launch.contextFiles,
+        mediaFiles: launch.mediaFiles,
+      },
+      session: {
+        launchTarget: launch.launchTarget,
+        teamId: launch.selectedTeamId || undefined,
+        workingDirectory: launch.workingDirectory.trim() || undefined,
+      },
+      toolConfig: launch,
+    },
+    host,
+  );
 }

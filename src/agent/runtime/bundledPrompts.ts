@@ -28,6 +28,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 
 // Local imports
+import { Result } from 'effect';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { createLog } from '@logger/logUtils';
 import { createTexraNunjucksEnvironment } from '@utils/prompt';
@@ -114,13 +115,13 @@ async function readPromptYaml<T>(
 ): Promise<T> {
   const content = await AbsoluteFS.read(filePath);
   const parsed = parseYamlWith(content, schema);
-  if (parsed.isErr()) {
+  if (Result.isFailure(parsed)) {
     throw new Error(
-      `Failed to parse ${name} prompt YAML at ${filePath}: ${parsed.error.message}`,
-      { cause: parsed.error },
+      `Failed to parse ${name} prompt YAML at ${filePath}: ${parsed.failure.message}`,
+      { cause: parsed.failure },
     );
   }
-  return parsed.value;
+  return parsed.success;
 }
 
 /** Required: no inline copy exists, so an unavailable bundle fails the call. */

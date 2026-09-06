@@ -10,9 +10,12 @@
  */
 
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - core
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { effectRuntime } from '@platform/processRuntime';
 import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -143,6 +146,73 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
   return { tree, matchCount };
 }
 
+const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* ({
+  query,
+  library,
+}: ZoteroCollectionsInput) {
+  const port = getZoteroPort();
+
+  const libraries = yield* callBetterBibTeX(
+    'user.groups',
+    [true],
+    port,
+    z.array(BbtLibrarySchema),
+  );
+
+  if (libraries.length === 0) {
+    return executed(
+      'No libraries found. Is Zotero running with items in your library?',
+      'No libraries found in Zotero.',
+    );
+  }
+
+  const normalizedLibrary = library?.toLowerCase();
+  const targetLibraries = normalizedLibrary
+    ? libraries.filter((lib) => lib.name.toLowerCase() === normalizedLibrary)
+    : libraries;
+
+  if (targetLibraries.length === 0) {
+    const available = libraries.map((lib) => lib.name).join(', ');
+    return executed(
+      `Library "${library}" not found. Available libraries: ${available}`,
+      `Library "${library}" not found.`,
+    );
+  }
+
+  const outputParts: string[] = [];
+  let totalCollections = 0;
+  let librariesWithResults = 0;
+
+  for (const lib of targetLibraries) {
+    const collections = lib.collections ?? [];
+    if (collections.length === 0) continue;
+
+    const fullTree = buildTree(collections);
+
+    const displayTree = query ? filterTree(fullTree, query) : null;
+    const tree = displayTree?.tree ?? fullTree;
+    if (tree.length === 0) continue;
+
+    totalCollections += displayTree?.matchCount ?? collections.length;
+    librariesWithResults++;
+    outputParts.push(`Library: ${lib.name}`);
+    outputParts.push(...formatTree(tree));
+  }
+
+  const context = query ? ` matching "${query}"` : '';
+  if (outputParts.length === 0) {
+    return executed(
+      `No collections found${context}.`,
+      `No collections found${context}.`,
+    );
+  }
+
+  return executed(
+    outputParts.join('\n'),
+    `Found ${formatResultCount(totalCollections, 'collection')}${context} across ${formatResultCount(librariesWithResults, 'library', 'libraries')}.`,
+  );
+});
+
 export class ZoteroCollectionsTool extends defineTool({
   name: 'zotero_collections',
   parallelSafe: true,
@@ -153,70 +223,9 @@ export class ZoteroCollectionsTool extends defineTool({
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroCollectionsInputSchema,
 }) {
-  protected async execute({
-    query,
-    library,
-  }: ZoteroCollectionsInput): Promise<ToolResult> {
-    const port = getZoteroPort();
-
-    const libraries = await callBetterBibTeX(
-      'user.groups',
-      [true],
-      port,
-      z.array(BbtLibrarySchema),
-    );
-
-    if (libraries.length === 0) {
-      return executed(
-        'No libraries found. Is Zotero running with items in your library?',
-        'No libraries found in Zotero.',
-      );
-    }
-
-    const normalizedLibrary = library?.toLowerCase();
-    const targetLibraries = normalizedLibrary
-      ? libraries.filter((lib) => lib.name.toLowerCase() === normalizedLibrary)
-      : libraries;
-
-    if (targetLibraries.length === 0) {
-      const available = libraries.map((lib) => lib.name).join(', ');
-      return executed(
-        `Library "${library}" not found. Available libraries: ${available}`,
-        `Library "${library}" not found.`,
-      );
-    }
-
-    const outputParts: string[] = [];
-    let totalCollections = 0;
-    let librariesWithResults = 0;
-
-    for (const lib of targetLibraries) {
-      const collections = lib.collections ?? [];
-      if (collections.length === 0) continue;
-
-      const fullTree = buildTree(collections);
-
-      const displayTree = query ? filterTree(fullTree, query) : null;
-      const tree = displayTree?.tree ?? fullTree;
-      if (tree.length === 0) continue;
-
-      totalCollections += displayTree?.matchCount ?? collections.length;
-      librariesWithResults++;
-      outputParts.push(`Library: ${lib.name}`);
-      outputParts.push(...formatTree(tree));
-    }
-
-    const context = query ? ` matching "${query}"` : '';
-    if (outputParts.length === 0) {
-      return executed(
-        `No collections found${context}.`,
-        `No collections found${context}.`,
-      );
-    }
-
-    return executed(
-      outputParts.join('\n'),
-      `Found ${formatResultCount(totalCollections, 'collection')}${context} across ${formatResultCount(librariesWithResults, 'library', 'libraries')}.`,
-    );
+  protected execute(input: ZoteroCollectionsInput): Promise<ToolResult> {
+    return effectRuntime().runPromise(listCollections(input), {
+      signal: getCurrentToolCallContext()?.signal,
+    });
   }
 }

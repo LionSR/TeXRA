@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
 
-import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
@@ -27,7 +27,7 @@ import {
   normalizeMainViewFileExtension,
   planMainViewDroppedFileAttachments,
 } from '@controllers/mainView/MainViewDroppedFilesController';
-import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
+import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import {
   exportStreamTranscript,
@@ -38,11 +38,11 @@ import { ProgressWorkflowFileActionsController } from '@controllers/progressView
 import { ProgressWorkflowRunActionsController } from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import {
   createHostRunActions,
+  type HostRunActionPorts,
   launchPatchOf,
 } from '@controllers/session/hostRunActions';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
-import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import {
@@ -59,9 +59,12 @@ import {
   isMultipleDocumentFileType,
   type StreamTabId,
 } from '@shared/schemas';
-import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { Rejected, Unavailable } from '@shared/session/requestErrors';
+import {
+  Cancelled,
+  Rejected,
+  Unavailable,
+} from '@shared/session/requestErrors';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -144,14 +147,14 @@ export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
   const { session, snapshot, toolEditApprovals } = options;
-  const stopObservingRecording = options.draftRequests.subscribe((recording) =>
+  const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
 
   /** Validate an agent request and run it through the one launch command. */
   async function runExecutionRequest(
     request: ExecutionRequest,
-    runOptions: { preferHelperModel?: boolean } = {},
+    runOptions: Parameters<HostRunActionPorts['runExecutionRequest']>[1] = {},
   ): Promise<void> {
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
@@ -160,32 +163,13 @@ export function createExtensionHostRequests(
     }
     await runCommand('texra.execute', {
       ...validation.request,
-      ...(runOptions.preferHelperModel ? { preferHelperModel: true } : {}),
+      ...runOptions,
     });
   }
 
   const runActions = createHostRunActions({
     session,
     runExecutionRequest,
-    runUntilStarted(request, runOptions) {
-      const validation = validateExecutionRequest(request);
-      if (!validation.valid) {
-        log.error(validation.message);
-        return showError(validation.message).then(() => false);
-      }
-      // Whichever of `onRun` and the command's own settlement lands first
-      // wins: a promise ignores every resolve after the first.
-      return new Promise<boolean>((resolve) => {
-        void runCommand<boolean>('texra.execute', {
-          ...validation.request,
-          ...runOptions,
-          onRun: () => resolve(true),
-        }).then(
-          (completed) => resolve(completed === true),
-          () => resolve(false),
-        );
-      });
-    },
     loadModelOptions: () => computeModelOptionsData(),
     promptForApiKey: async (provider) => {
       await runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider);
@@ -196,14 +180,7 @@ export function createExtensionHostRequests(
     logError: (message, error) => log.error(message, { data: error }),
   });
 
-  const snapshotPort = {
-    getRunMetadata: runActions.getRunMetadata,
-    getOutputFiles: (streamId: StreamTabId) =>
-      session.snapshots.getOutputFiles(streamId),
-    getKnownWorkspaceOutputPaths: (streamId: StreamTabId) =>
-      session.snapshots.getKnownFilePaths(streamId, { workspaceOnly: true }),
-    preload: (streamId: StreamTabId) => session.snapshots.preload([streamId]),
-  };
+  const { snapshotPort } = runActions;
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: snapshotPort,
@@ -240,18 +217,7 @@ export function createExtensionHostRequests(
         });
       },
     },
-    // Programmatic send with no composer behind it (the workflow-file "user
-    // modified the suggested output" note), so `acknowledge` is a no-op:
-    // there is no draft to hand back.
-    sendFollowUp: async (streamId, text) => {
-      await submitProgressFollowUp({
-        session,
-        streamId,
-        input: { text },
-        acknowledge: () => {},
-        showInfo: showWarning,
-      });
-    },
+    sendFollowUp: runActions.sendFollowUp,
   });
 
   const workflowRunActions = new ProgressWorkflowRunActionsController({
@@ -284,7 +250,8 @@ export function createExtensionHostRequests(
   }
 
   async function exportTranscript(streamId: StreamTabId): Promise<void> {
-    const executionId = runActions.getRunMetadata(streamId).executionId;
+    const executionId =
+      runActions.snapshotPort.getRunMetadata(streamId).executionId;
     if (!executionId) {
       throw new Unavailable({
         streamId,
@@ -392,41 +359,6 @@ export function createExtensionHostRequests(
     }
   }
 
-  /** An output file's verbs on a workflow run's file list. */
-  async function fileAction(
-    request: Extract<HostRequest, { kind: 'fileAction' }>,
-  ): Promise<void> {
-    const base = request.base ?? undefined;
-    switch (request.action) {
-      case 'compareOriginal':
-        await workflowFileActions.compareOriginal(
-          request.file,
-          base,
-          request.streamId,
-        );
-        return;
-      case 'comparePrevious':
-        await workflowFileActions.comparePrevious(
-          request.file,
-          request.prev ?? undefined,
-        );
-        return;
-      case 'accept':
-        await workflowFileActions.acceptFile(
-          request.file,
-          base,
-          request.streamId,
-        );
-        return;
-      case 'merge':
-        await workflowFileActions.mergeFile(request.file, base);
-        return;
-      case 'latexdiff':
-        await workflowFileActions.latexdiffFile(request.file, base);
-        return;
-    }
-  }
-
   /** The launcher's Send: the surface's selections through the shared
    *  launch preparation, then the one launch command. */
   async function launch(
@@ -447,25 +379,8 @@ export function createExtensionHostRequests(
           'Choose one of the open workspace folders as the working directory.',
       });
     }
-    const message = buildMainViewExecuteMessage({
-      sessionType: form.sessionType,
-      agent: form.agent,
-      model: form.model,
-      instruction: request.instruction,
-      multiFiles: {
-        inputFiles: form.inputFiles,
-        contextFiles: form.contextFiles,
-        mediaFiles: form.mediaFiles,
-        outputFiles: form.outputFiles,
-      },
-      checkboxValues: form,
-      session: {
-        launchTarget: form.launchTarget,
-        teamId: form.selectedTeamId || undefined,
-        workingDirectory: requestedWorkingDirectory || undefined,
-      },
-    });
-    const prepared = await prepareMainViewExecutionLaunch(message, {
+    const prepared = await prepareSurfaceLaunch(request, {
+      showInfoMessage: showInfo,
       chooseTeamAvailability: async (unavailableNames) => {
         const prompt = teamAvailabilityPrompt(unavailableNames);
         const choice = await vscode.window.showWarningMessage(
@@ -482,26 +397,7 @@ export function createExtensionHostRequests(
           await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
         ),
     });
-    if (prepared.status === 'cancelled') {
-      throw new Rejected({ reason: 'The launch was cancelled.' });
-    }
-    if (prepared.status === 'error') {
-      // The shell has no notice of its own yet: the host shows the message,
-      // with the guide when the check names one, and the refusal keeps the
-      // composer's text.
-      const { docsCommand } = prepared;
-      const openDocs = 'Open file management guide';
-      void vscode.window
-        .showErrorMessage(prepared.message, ...(docsCommand ? [openDocs] : []))
-        .then((choice) => {
-          if (choice === openDocs) {
-            void vscode.commands.executeCommand('texra.openDoc', docsCommand);
-          }
-        });
-      throw new Rejected({ reason: prepared.message });
-    }
-    if (prepared.infoMessage) void showInfo(prepared.infoMessage);
-    await runCommand('texra.execute', prepared.request);
+    await runCommand('texra.execute', prepared);
   }
 
   function getOpenedFiles(): string[] {
@@ -648,7 +544,7 @@ export function createExtensionHostRequests(
       );
       throw new Rejected({ reason: toErrorMessage(error) });
     }
-    if (!selected) throw new Rejected({ reason: 'No files chosen.' });
+    if (!selected) throw new Cancelled();
     return { kind: 'files', paths: selected };
   }
 
@@ -795,7 +691,7 @@ export function createExtensionHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return options.draftRequests.handle(session, request, port);
+        return draftRequests.handle(request, port);
       case 'popOut':
         await options.popOutToEditor();
         return done;
@@ -866,19 +762,11 @@ export function createExtensionHostRequests(
         });
         return done;
       case 'fileAction':
-        await fileAction(request);
+        await workflowFileActions.handle(request);
         return done;
-      case 'restoreProposalConfig': {
-        const parsed = AgentConfigSchema.safeParse(request.proposal);
-        if (!parsed.success) {
-          log.warn('Invalid proposal config', { data: parsed.error.issues });
-          throw new Rejected({
-            reason: 'This proposal does not carry a restorable setup.',
-          });
-        }
-        await restoreIntoLauncher(parsed.data);
+      case 'restoreProposalConfig':
+        await restoreIntoLauncher(runActions.restoreProposal(request.proposal));
         return done;
-      }
       case 'apiKeyBanner':
         if (request.action === 'set') {
           await runCommand('texra.setApiKey', request.provider ?? undefined);
@@ -939,10 +827,7 @@ export function createExtensionHostRequests(
 
   return {
     handle,
-    closePort: (port) => options.draftRequests.cancel(session, port),
-    dispose() {
-      stopObservingRecording();
-      options.draftRequests.cancel(session);
-    },
+    closePort: draftRequests.closePort,
+    dispose: draftRequests.dispose,
   };
 }

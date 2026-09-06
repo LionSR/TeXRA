@@ -1,6 +1,7 @@
 import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
+import { Result } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { safeParseJson } from '@common/parsing/safeParseJson';
@@ -90,13 +91,13 @@ export function parseToolInput(
   }
 
   const parsed = safeParseJson(raw);
-  if (parsed.isErr()) {
+  if (Result.isFailure(parsed)) {
     logger.debug(
       `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
     );
     return raw;
   }
-  return parsed.value;
+  return parsed.success;
 }
 
 /**

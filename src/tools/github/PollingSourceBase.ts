@@ -11,7 +11,7 @@
  * 24 h detach gate) lives here once.
  */
 
-import pMap from 'p-map';
+import { Cause, Data, Effect, Exit } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
@@ -23,6 +23,7 @@ import {
   type LifecycleHost,
 } from '@platform/interfaces';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
   createBoundedIdSet,
@@ -63,6 +64,15 @@ export function createBasePollState(
     skipPollUntilMs: 0,
   };
 }
+
+/**
+ * A subclass hook (`pollOne` or `afterTick`) rejected. `cause` is whatever it
+ * raised — for `pollOne`, one of the GitHub error classes or a transport
+ * failure that {@link PollingSourceBase.handleFailure} classifies.
+ */
+class PollHookRejected extends Data.TaggedError('PollHookRejected')<{
+  readonly cause: unknown;
+}> {}
 
 interface PollingSourceConfig {
   /** Display name used in the logger and exception messages. */
@@ -399,6 +409,16 @@ export abstract class PollingSourceBase<
     }
   }
 
+  /**
+   * @adapter-until 2026-11-05 (introduced 2026-09-06). The setInterval
+   * cadence is the one timer this file keeps off Effect's clock (PRD R8):
+   * "a polling timer must never keep a host process alive on its own", and
+   * rc.112 has no unref-capable scheduler (no `unref` anywhere in
+   * node_modules/effect/dist), so a Schedule-driven fiber would pin the CLI
+   * process. Retire when Effect gains an unref-capable clock or the hosts
+   * decide at process level that a live poller may keep the process alive;
+   * the interval only drives {@link PollingSourceBase.tick}.
+   */
   private ensureTimer(): void {
     this.registerShutdownIfNeeded();
     if (this.timer) return;
@@ -446,49 +466,87 @@ export abstract class PollingSourceBase<
     this.shutdownLifecycle = undefined;
   }
 
-  private async tick(): Promise<void> {
-    // setInterval fires every pollIntervalMs regardless of prior completion;
-    // overlapping ticks would double-emit events. The guard is process-local
-    // (one timer per source) so it's race-free.
-    if (this.tickInFlight) return;
+  /**
+   * One poll round, run on the process runtime. setInterval fires every
+   * pollIntervalMs regardless of prior completion; overlapping ticks would
+   * double-emit events. The guard is process-local (one timer per source) so
+   * the synchronous check-and-set is race-free, and `ensuring` releases it
+   * however the round ends.
+   */
+  private tick(): Promise<void> {
+    if (this.tickInFlight) return Promise.resolve();
     this.tickInFlight = true;
-    try {
+    return effectRuntime().runPromise(
+      this.pollRound().pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            this.tickInFlight = false;
+          }),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Poll every subscription with at most `maxConcurrent` in flight, then run
+   * the post-poll hook. Each hook rejection is classified or logged at its
+   * own site, so no expected failure short-circuits the round. A defect in
+   * one entry (a throwing `handleFailure`) does not either: every started
+   * poll is joined through its Exit before the combined cause is re-raised,
+   * so `tick`'s in-flight guard never clears while a `pollOne` is still
+   * running and the next interval cannot start an overlapping poll.
+   */
+  private readonly pollRound = Effect.fn('PollingSourceBase.pollRound')(
+    function* (this: PollingSourceBase<K, S>) {
       const now = Date.now();
       const entries = [...this.subscriptions.entries()];
-      await pMap(entries, ([key, state]) => this.pollEntry(key, state, now), {
-        concurrency: this.config.maxConcurrent,
-        stopOnError: false,
-      });
-      await this.runAfterTick(entries, now);
+      const exits = yield* Effect.forEach(
+        entries,
+        ([key, state]) => Effect.exit(this.pollEntry(key, state, now)),
+        { concurrency: this.config.maxConcurrent },
+      );
+      const failures = exits.filter(Exit.isFailure);
+      if (failures.length > 0) {
+        yield* Effect.failCause(
+          failures
+            .map((exit) => exit.cause)
+            .reduce((left, right) => Cause.combine(left, right)),
+        );
+      }
+      yield* Effect.tryPromise({
+        try: () => this.afterTick(entries, now),
+        catch: (cause) => new PollHookRejected({ cause }),
+      }).pipe(
+        Effect.catchTag('PollHookRejected', (rejection) =>
+          Effect.sync(() => {
+            this.logger.warn('Post-poll hook failed', {
+              data: rejection.cause,
+            });
+          }),
+        ),
+      );
       if (this.subscriptions.size === 0) this.stopTimer();
-    } finally {
-      this.tickInFlight = false;
-    }
-  }
+    },
+  );
 
   /** Poll one subscription, routing any failure through handleFailure. */
-  private async pollEntry(key: K, state: S, now: number): Promise<void> {
-    if (state.skipPollUntilMs > now) return;
-    try {
-      await this.pollOne(key, state);
-      state.lastSuccessAt = Date.now();
-      state.consecutiveFailures = 0;
-    } catch (err) {
-      this.handleFailure(key, state, err);
-    }
-  }
-
-  /** Run the post-poll hook, logging but otherwise swallowing its errors. */
-  private async runAfterTick(
-    entries: ReadonlyArray<readonly [K, S]>,
-    now: number,
-  ): Promise<void> {
-    try {
-      await this.afterTick(entries, now);
-    } catch (err) {
-      this.logger.warn('Post-poll hook failed', { data: err });
-    }
-  }
+  private readonly pollEntry = Effect.fn('PollingSourceBase.pollEntry')(
+    function* (this: PollingSourceBase<K, S>, key: K, state: S, now: number) {
+      if (state.skipPollUntilMs > now) return;
+      yield* Effect.tryPromise({
+        try: () => this.pollOne(key, state),
+        catch: (cause) => new PollHookRejected({ cause }),
+      }).pipe(
+        Effect.map(() => {
+          state.lastSuccessAt = Date.now();
+          state.consecutiveFailures = 0;
+        }),
+        Effect.catchTag('PollHookRejected', (rejection) =>
+          Effect.sync(() => this.handleFailure(key, state, rejection.cause)),
+        ),
+      );
+    },
+  );
 
   protected handleFailure(key: K, state: S, err: unknown): void {
     const now = Date.now();

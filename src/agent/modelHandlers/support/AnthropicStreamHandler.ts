@@ -3,6 +3,7 @@
  * Encapsulates the streaming event handling logic for improved testability and readability.
  */
 // Third-party imports
+import { Result } from 'effect';
 import {
   logWebFetch,
   logWebSearch,
@@ -429,8 +430,8 @@ export class AnthropicStreamHandler {
     this.state.pendingServerTools.delete(toolUseId);
     if (!input) return '';
     const parsed = safeParseJson(input);
-    if (parsed.isOk())
-      return (parsed.value as Record<string, string>)[field] ?? '';
+    if (Result.isSuccess(parsed))
+      return (parsed.success as Record<string, string>)[field] ?? '';
     const match = input.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
     return match?.[1] ?? '';
   }

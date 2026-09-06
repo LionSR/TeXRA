@@ -10,6 +10,7 @@ import pDefer from 'p-defer';
 import { z } from 'zod';
 
 // Local imports - auth
+import { Result } from 'effect';
 import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';
 import {
   type SupabaseSession,
@@ -224,12 +225,12 @@ function parseCallbackBody(
   rawBody: string,
 ): z.infer<typeof CallbackBodySchema> {
   const parsed = parseJsonWith(rawBody, CallbackBodySchema);
-  if (parsed.isErr()) {
+  if (Result.isFailure(parsed)) {
     throw new RecoverableCallbackRequestError(
       'Authentication callback request was malformed.',
     );
   }
-  return parsed.value;
+  return parsed.success;
 }
 
 function writeHtml(

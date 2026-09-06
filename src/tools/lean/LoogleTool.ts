@@ -4,23 +4,18 @@
  * Uses the Loogle API at https://loogle.lean-lang.org/
  */
 
+import { Effect } from 'effect';
 import ky from 'ky';
-import { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolResult } from '@shared/schemas';
-import {
-  isTimeoutError,
-  withRequestTimeout,
-  retryTransientFetch,
-  unwrapAbortError,
-} from '@tools/timeouts';
+import { retryTransientFetch } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { ensureArray } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   formatResultCount,
   truncateWithEllipsis,
@@ -116,89 +111,62 @@ function formatHit(hit: LoogleHit, index: number): string {
 const LOOGLE_API_URL = 'https://loogle.lean-lang.org/json';
 
 /**
- * Search for Lean/Mathlib theorems and definitions using Loogle.
+ * Fetch one Loogle query, retrying transient failures (timeouts, 5xx,
+ * 429 rate limits, dropped connections) with jittered backoff. Non-429
+ * 4xx responses and non-network errors end the retry immediately.
  */
-export class LeanLoogleTool extends defineTool({
-  name: 'lean_loogle',
-  parallelSafe: true,
-  description: `Search for Lean 4 / Mathlib theorems and definitions by type signature or name.
-
-Example queries:
-- "Real.sin" - find lemmas mentioning a constant
-- "List.map" or "\"differ\"" - search by name substring
-- "_ * (_ ^ _)" - find lemmas with subexpression pattern
-- "(?a -> ?b) -> List ?a -> List ?b" - find List.map by type signature
-- "|- tsum _ = _ * tsum _" - search by main conclusion
-- "|- _ < _ → tsum _ < tsum _" - search by hypothesis pattern
-
-Supports batched queries: pass an array of strings to search multiple identifiers in one call.
-
-Returns: name, type signature, module (for imports), and documentation.
-
-Useful for finding the right lemma when you know roughly what type it should have.`,
-  schema: LeanLoogleInputSchema,
-}) {
-  /**
-   * Fetch one Loogle query, retrying transient failures (timeouts, 5xx,
-   * 429 rate limits, dropped connections) with jittered backoff. Non-429
-   * 4xx responses and non-network errors abort immediately.
-   */
-  private async fetchLoogle(query: string): Promise<LoogleResponse> {
-    // Cancellation for the owning agent run — parallel batches must be able
-    // to abort in-flight Loogle requests and their retry backoff.
-    const cancelSignal = getCurrentToolCallContext()?.signal;
-    return retryTransientFetch(
-      () =>
-        withRequestTimeout(LOOGLE_TIMEOUT_MS, cancelSignal, async (signal) => {
-          const raw = await ky
-            .get(LOOGLE_API_URL, {
-              searchParams: { q: query },
-              headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
-              timeout: false,
-              signal,
-              retry: 0,
-            })
-            .json<unknown>();
-          // Validate the body at the boundary. A malformed shape is not transient,
-          // so abort retries and let executeSingle surface it as a tool error.
-          const parsed = LoogleResponseSchema.safeParse(raw);
-          if (!parsed.success) {
-            throw new AbortError(
-              new Error(
-                `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
-              ),
-            );
-          }
-          return parsed.data;
-        }),
-      {
-        retries: LOOGLE_RETRIES,
-        minTimeout: 1000,
-        cancelSignal,
-        onFailedAttempt: ({ error, retriesLeft }) => {
+const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
+  retryTransientFetch(
+    async (signal) => {
+      const raw = await ky
+        .get(LOOGLE_API_URL, {
+          searchParams: { q: query },
+          headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
+          timeout: false,
+          signal,
+          retry: 0,
+        })
+        .json<unknown>();
+      // Validate the body at the boundary. A malformed shape is not
+      // transient, so it is not retried; searchOne surfaces it as a tool
+      // error.
+      const parsed = LoogleResponseSchema.safeParse(raw);
+      if (!parsed.success) {
+        throw new Error(
+          `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
+        );
+      }
+      return parsed.data;
+    },
+    {
+      retries: LOOGLE_RETRIES,
+      minTimeout: 1000,
+      timeoutMs: LOOGLE_TIMEOUT_MS,
+      onFailedAttempt: (error, retriesLeft) =>
+        Effect.sync(() => {
           log.debug(
-            `Loogle query "${query}" failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
+            `Loogle query "${query}" failed (${retriesLeft} retries left): ${error.message}`,
           );
-        },
-      },
-    );
-  }
+        }),
+    },
+  ),
+);
 
-  /**
-   * Execute a single Loogle query and return a per-query result.
-   * `hits` carries the raw matches for batched-query aggregation; it is
-   * intentionally kept off `ToolResult`, which only exposes the rendered text.
-   */
-  private async executeSingle(
-    query: string,
-    limit: number,
-  ): Promise<{ query: string; result: ToolResult; hits: LoogleHit[] }> {
-    // Every failure path returns zero hits; only the success path below sets them.
-    const fail = (result: ToolResult) => ({ query, hits: [], result });
+/**
+ * Run a single Loogle query into a per-query result. Every failure is a
+ * result, never a program failure, so a batch reports each query. `hits`
+ * carries the raw matches for batched-query aggregation; it is
+ * intentionally kept off `ToolResult`, which only exposes the rendered text.
+ */
+const searchOne = Effect.fn('LoogleTool.searchOne')((
+  query: string,
+  limit: number,
+) => {
+  // Every failure path returns zero hits; only the success path below sets them.
+  const fail = (result: ToolResult) => ({ query, hits: [], result });
 
-    try {
-      const data = await this.fetchLoogle(query);
-
+  return fetchLoogle(query).pipe(
+    Effect.map((data) => {
       if (isErrorResponse(data)) {
         const suggestions = data.suggestions ?? [];
         const suggestionText =
@@ -232,66 +200,99 @@ Useful for finding the right lemma when you know roughly what type it should hav
         hits,
         result: executed(formatted, formatResultCount(hits.length, 'result')),
       };
-    } catch (error) {
-      // Defensive: ensure the checks below (and the surfaced message) see the
-      // real error even if a p-retry AbortError wrapper reaches here (p-retry v8
-      // already unwraps it to .originalError, so this is normally a no-op).
-      const err = unwrapAbortError(error);
-      if (isTimeoutError(err)) {
-        return fail(
-          errorResult(
-            `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
-              `The Loogle server may be overloaded. Retry the request. ` +
-              `If it persists, try a simpler type signature or search by name instead.`,
-            { summary: 'Timeout' },
-          ),
-        );
-      }
-      return fail(
-        errorResult(`Error: ${toErrorMessage(err)}`, {
-          summary: 'Loogle search failed',
-        }),
-      );
-    }
+    }),
+    Effect.catch((error) =>
+      Effect.succeed(
+        error._tag === 'RequestTimedOut'
+          ? fail(
+              errorResult(
+                `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
+                  `The Loogle server may be overloaded. Retry the request. ` +
+                  `If it persists, try a simpler type signature or search by name instead.`,
+                { summary: 'Timeout' },
+              ),
+            )
+          : fail(
+              errorResult(`Error: ${error.message}`, {
+                summary: 'Loogle search failed',
+              }),
+            ),
+      ),
+    ),
+  );
+});
+
+const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
+  query,
+  limit,
+}: LeanLoogleInput) {
+  const queries = ensureArray(query);
+
+  // Single query: return directly (backward-compatible format)
+  if (queries.length === 1) {
+    const { result } = yield* searchOne(queries[0], limit);
+    return result;
   }
 
-  protected async execute(input: LeanLoogleInput): Promise<ToolResult> {
-    const { query, limit } = input;
-    const queries = ensureArray(query);
+  // Batched queries: run concurrently and combine results
+  const results = yield* Effect.forEach(queries, (q) => searchOne(q, limit), {
+    concurrency: 'unbounded',
+  });
 
-    // Single query: return directly (backward-compatible format)
-    if (queries.length === 1) {
-      const { result } = await this.executeSingle(queries[0], limit);
-      return result;
-    }
+  const sections = results.map(({ query: q, result }) => {
+    const resultText =
+      result.status === 'error' ? result.error : (result.output ?? '');
+    return `## Query: \`${q}\`\n\n${resultText}`;
+  });
 
-    // Batched queries: run concurrently and combine results
-    const results = await Promise.all(
-      queries.map((q) => this.executeSingle(q, limit)),
-    );
+  const totalHits = results.reduce((sum, r) => sum + r.hits.length, 0);
+  const allFailed = results.every(({ result }) => result.status === 'error');
+  let summary: string;
+  if (totalHits > 0) {
+    summary = `${formatResultCount(totalHits, 'result')} across ${queries.length} queries`;
+  } else if (allFailed) {
+    summary = `All ${queries.length} queries failed`;
+  } else {
+    summary = `No results across ${queries.length} queries`;
+  }
 
-    const sections = results.map(({ query: q, result }) => {
-      const resultText =
-        result.status === 'error' ? result.error : (result.output ?? '');
-      return `## Query: \`${q}\`\n\n${resultText}`;
+  const output = sections.join('\n\n---\n\n');
+  if (allFailed) {
+    return errorResult(output, { summary });
+  }
+
+  return executed(output, summary);
+});
+
+/**
+ * Search for Lean/Mathlib theorems and definitions using Loogle.
+ */
+export class LeanLoogleTool extends defineTool({
+  name: 'lean_loogle',
+  parallelSafe: true,
+  description: `Search for Lean 4 / Mathlib theorems and definitions by type signature or name.
+
+Example queries:
+- "Real.sin" - find lemmas mentioning a constant
+- "List.map" or "\"differ\"" - search by name substring
+- "_ * (_ ^ _)" - find lemmas with subexpression pattern
+- "(?a -> ?b) -> List ?a -> List ?b" - find List.map by type signature
+- "|- tsum _ = _ * tsum _" - search by main conclusion
+- "|- _ < _ → tsum _ < tsum _" - search by hypothesis pattern
+
+Supports batched queries: pass an array of strings to search multiple identifiers in one call.
+
+Returns: name, type signature, module (for imports), and documentation.
+
+Useful for finding the right lemma when you know roughly what type it should have.`,
+  schema: LeanLoogleInputSchema,
+}) {
+  protected execute(input: LeanLoogleInput): Promise<ToolResult> {
+    // The owning agent run's cancellation enters here as interruption —
+    // parallel batches must be able to abort in-flight Loogle requests and
+    // their retry backoff.
+    return effectRuntime().runPromise(searchLoogle(input), {
+      signal: getCurrentToolCallContext()?.signal,
     });
-
-    const totalHits = results.reduce((sum, r) => sum + r.hits.length, 0);
-    const allFailed = results.every(({ result }) => result.status === 'error');
-    let summary: string;
-    if (totalHits > 0) {
-      summary = `${formatResultCount(totalHits, 'result')} across ${queries.length} queries`;
-    } else if (allFailed) {
-      summary = `All ${queries.length} queries failed`;
-    } else {
-      summary = `No results across ${queries.length} queries`;
-    }
-
-    const output = sections.join('\n\n---\n\n');
-    if (allFailed) {
-      return errorResult(output, { summary });
-    }
-
-    return executed(output, summary);
   }
 }

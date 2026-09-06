@@ -1,4 +1,5 @@
 // Local imports - utilities
+import { Result } from 'effect';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -51,15 +52,15 @@ export function extractFrontmatter(content: string): ExtractedFrontmatter {
   }
 
   const parsed = safeParseYaml(frontmatterText);
-  if (parsed.isErr()) {
+  if (Result.isFailure(parsed)) {
     throw new SkillFrontmatterError(
-      `Invalid SKILL.md frontmatter: ${parsed.error.message}`,
-      { cause: parsed.error },
+      `Invalid SKILL.md frontmatter: ${parsed.failure.message}`,
+      { cause: parsed.failure },
     );
   }
 
   return {
-    frontmatter: parsed.value,
+    frontmatter: parsed.success,
     body,
   };
 }

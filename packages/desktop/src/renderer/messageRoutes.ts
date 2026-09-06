@@ -27,7 +27,6 @@ import {
   type DesktopShowDiffMessage,
 } from '../shared/desktopDiffMessages';
 import {
-  DesktopClosePdfMessageSchema,
   DesktopShowPdfMessageSchema,
   type DesktopShowPdfMessage,
 } from '../shared/desktopPdfMessages';
@@ -75,10 +74,7 @@ interface DesktopMessageRouteHandlers {
     clear(session: string): void;
   };
   disposeReviewTab(session: string): void;
-  pdf: {
-    open(message: DesktopShowPdfMessage): void;
-    close(session: string): void;
-  };
+  pdf: { open(message: DesktopShowPdfMessage): void };
   prompt: { open(message: DesktopShowPromptMessage): void };
   terminal: {
     write(session: string, sessionId: string, data: string): void;
@@ -145,9 +141,6 @@ export function createMessageRoutes(
     }),
     messageRoute(DesktopShowPdfMessageSchema, (message) =>
       handlers.pdf.open(message),
-    ),
-    messageRoute(DesktopClosePdfMessageSchema, (message) =>
-      handlers.pdf.close(message.session),
     ),
     messageRoute(DesktopShowPromptMessageSchema, (message) =>
       handlers.prompt.open(message),

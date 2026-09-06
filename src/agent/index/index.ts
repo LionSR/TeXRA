@@ -39,7 +39,6 @@ export {
   // Typed data options
   computeAgentOptionsData,
   // Key helpers
-  resolveAgentKey,
   getRosterAgent,
   // Source helpers
   isRemoteAgent,

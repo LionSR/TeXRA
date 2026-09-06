@@ -642,5 +642,35 @@ describe('sessionFold', () => {
     expect(after.policy).toBe(before.policy);
     expect(after.latest).toBe(before.latest);
     expect(after.queuedFollowUps).toBe(before.queuedFollowUps);
+    // A copy belongs to a write, not to an entry: a settled log row projects
+    // a row and nothing else, so the touched stream's own task groups and
+    // the session's in-flight map (which never held its key) keep theirs.
+    const logged = fold(
+      after,
+      tail({
+        aggregateId: CHILD,
+        seq: before.folded.get(CHILD)! + 2,
+        commit: 201,
+        ownerId: OWNER,
+        at: 4100,
+        type: 'transcript.entry',
+        entry: {
+          id: 'settled',
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+          text: 'Done',
+          data: { status: 'completed' },
+          seqNo: 1000,
+          timestamp: 4100,
+          level: 'info',
+        },
+      }),
+    );
+    const childLogged = stream(logged, CHILD);
+    expect(childLogged.transcript.rows).not.toBe(childAfter.transcript.rows);
+    expect(childLogged.transcript.taskGroups).toBe(
+      childAfter.transcript.taskGroups,
+    );
+    expect(logged.inflight).toBe(after.inflight);
   });
 });

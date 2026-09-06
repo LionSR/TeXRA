@@ -13,7 +13,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { childElapsedMs } from '@shared/streams/childElapsed';
 import { formatCompactDuration } from '@utils/core';
 import { focusStream, openWorkflowPopup } from './cliState';
-import { currentView, focusTreeOf, streamViewOf } from './sessionView';
+import { currentView, streamViewOf } from './sessionView';
 
 export function childElapsed(
   child: {
@@ -50,18 +50,6 @@ export function resolveChildListTarget(
     if (hasChildren(view, ancestor.id)) return ancestor.id;
   }
   return activeStreamId;
-}
-
-/** Alt+1..9: the Nth entry after the list root in the focus tree. */
-export function numericFocusTargetForActiveStream(
-  view: SessionView,
-  activeStreamId: StreamTabId | undefined,
-  zeroBasedIndex: number,
-): StreamTabId | undefined {
-  if (activeStreamId === undefined || zeroBasedIndex < 0) return undefined;
-  if (zeroBasedIndex >= 9) return undefined;
-  const tree = focusTreeOf(view, resolveChildListTarget(view, activeStreamId));
-  return tree[zeroBasedIndex + 1];
 }
 
 export function isWorkflowScriptStream(

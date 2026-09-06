@@ -73,6 +73,7 @@ export class WorkflowStreamContent extends LitElement {
             scope="inquiries"
             .stream=${stream}
             .view=${view}
+            .surface=${surface}
           ></background-tasks-panel>
         </div>
 

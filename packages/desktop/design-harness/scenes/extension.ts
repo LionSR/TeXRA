@@ -20,9 +20,13 @@ import {
   BOARD_NOW,
   CHILD,
   fanOutView,
+  GRANDCHILD,
   PROCESS,
   ROOT,
+  withInterruptedChild,
+  withoutApproval,
   withProposal,
+  withWaitingGrandchild,
 } from '@test/shared/session/fanOutScenario';
 
 // ── the host snapshot: one paper, the catalogs the composer and sheet read ──
@@ -157,6 +161,47 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   'ext-session': () => {
     const view = fanOutView();
     return sidebar(view, surface(view, { kind: 'select', streamId: CHILD }));
+  },
+  // ExtE-Tree: the drawer with the root collapsed under its rollup pill,
+  // nothing pending to force the path open (the override says collapsed).
+  'ext-tree': () => {
+    const view = withoutApproval();
+    return sidebar(
+      view,
+      surface(
+        view,
+        { kind: 'expand', streamId: ROOT, override: 'collapsed' },
+        { kind: 'select', streamId: ROOT },
+        { kind: 'drawer', open: true },
+      ),
+    );
+  },
+  // ExtE-Tree: a waiting grandchild forces the path open and badges it.
+  'ext-waiting-grandchild': () => {
+    const view = withWaitingGrandchild();
+    return sidebar(
+      view,
+      surface(
+        view,
+        { kind: 'expand', streamId: ROOT, override: 'collapsed' },
+        { kind: 'select', streamId: GRANDCHILD },
+        { kind: 'drawer', open: true },
+      ),
+    );
+  },
+  // ExtE-Tree: an interrupted child, its path forced open, Resume on the
+  // row.
+  'ext-interrupted': () => {
+    const view = withInterruptedChild();
+    return sidebar(
+      view,
+      surface(
+        view,
+        { kind: 'expand', streamId: ROOT, override: 'collapsed' },
+        { kind: 'select', streamId: CHILD },
+        { kind: 'drawer', open: true },
+      ),
+    );
   },
   // Real-ExtensionDrawer: the Sessions drawer over the same conversation.
   'ext-drawer': () => {

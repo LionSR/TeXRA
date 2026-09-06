@@ -25,7 +25,7 @@ import { html, render, type TemplateResult } from 'lit';
 
 import { desktopScenes } from './scenes/desktop';
 import { extensionScenes } from './scenes/extension';
-import { runBoard, runBoardBar } from './scenes/runBoard';
+import { RUN_BOARD_FIXTURES, runBoardScene } from './scenes/runBoard';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 // ── small pieces ────────────────────────────────────────────────────────
 const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
@@ -48,8 +48,12 @@ const extFrame = (inner: TemplateResult) =>
   </div>`;
 
 // ── scenes ──────────────────────────────────────────────────────────────
-const sceneRunBoard = () =>
-  extFrame(html`${runBoardBar(iconBtn)}${runBoard()}`);
+const runBoardScenes = Object.fromEntries(
+  Object.entries(RUN_BOARD_FIXTURES).map(([name, fold]) => [
+    name,
+    () => extFrame(runBoardScene(fold, iconBtn)),
+  ]),
+);
 
 // ── styles for the harness chrome (tokens only; components bring their own) ──
 const style = html`<style>
@@ -863,7 +867,7 @@ const style = html`<style>
 
 const scenes: Record<string, () => TemplateResult> = {
   ...extensionScenes,
-  'run-board': sceneRunBoard,
+  ...runBoardScenes,
   ...desktopScenes,
 };
 const scene =
