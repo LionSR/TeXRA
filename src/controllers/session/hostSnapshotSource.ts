@@ -61,9 +61,8 @@ export interface HostSnapshotSource {
   refreshWorkspaceRoots(): void;
   /** The one recorder per process started or stopped. */
   setRecording(recording: HostSnapshot['recording']): void;
-  /** The agent-config notice: a run loaded an agent from the custom
-   *  directory, or the user dismissed the notice. */
-  setAgentConfigBanner(banner: Banners['agentConfig']): void;
+  /** A run loaded an agent from the custom directory. */
+  showAgentConfigBanner(agentName: string): void;
   /** The user dismissed one of the dismissable banners. */
   dismissBanner(banner: 'login' | 'gettingStarted' | 'dependency'): void;
   setOnboarding(state: HostSnapshot['onboarding']): void;
@@ -211,8 +210,8 @@ export function createHostSnapshotSource(
       recording = next;
       publish();
     },
-    setAgentConfigBanner(banner) {
-      agentConfig = banner;
+    showAgentConfigBanner(agentName) {
+      agentConfig = { visible: true, agentName, customDirSet: true };
       publish();
     },
     dismissBanner(banner) {

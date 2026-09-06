@@ -9,8 +9,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { SubscriptionRef } from 'effect';
-import { AgentConfigSchema, type SessionHandle } from '@agent/runtime';
-import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
+import type { SessionHandle } from '@agent/runtime';
+import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportStreamTranscript } from '@controllers/progressView/exportTranscript';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
@@ -35,9 +35,12 @@ import {
   type FileOpResult,
   type StreamTabId,
 } from '@shared/schemas';
-import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { Rejected, Unavailable } from '@shared/session/requestErrors';
+import {
+  Cancelled,
+  Rejected,
+  Unavailable,
+} from '@shared/session/requestErrors';
 import type {
   HostOutcome,
   SurfaceActionMessage,
@@ -120,7 +123,7 @@ export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
   const { session, host, execution, logger } = options;
-  const stopObservingRecording = options.draftRequests.subscribe((recording) =>
+  const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
   const snapshots = session.snapshots;
@@ -139,22 +142,7 @@ export function createDesktopHostRequests(
 
   const runActions = createHostRunActions({
     session,
-    runExecutionRequest: (request, runOptions) =>
-      execution.runExecutionRequest(request, {
-        ...(runOptions?.preferHelperModel ? { preferHelperModel: true } : {}),
-      }),
-    runUntilStarted: async (request, runOptions) => {
-      let started = false;
-      await execution.runExecutionRequest(request, {
-        ...(runOptions.copilotRouteOverride
-          ? { copilotRouteOverride: runOptions.copilotRouteOverride }
-          : {}),
-        onRun: () => {
-          started = true;
-        },
-      });
-      return started;
-    },
+    runExecutionRequest: execution.runExecutionRequest,
     loadModelOptions: () => computeModelOptionsData(),
     // Only the "ask the user for a key" step is host-specific: on the
     // desktop that means opening the Models tab rather than a modal prompt.
@@ -174,16 +162,9 @@ export function createDesktopHostRequests(
     logError: (message, error) =>
       logger.error(message, { data: toLogData(error) }),
   });
-  const { getRunMetadata } = runActions;
+  const { getRunMetadata } = runActions.snapshotPort;
 
-  const snapshotPort = {
-    getRunMetadata,
-    getOutputFiles: (streamId: StreamTabId) =>
-      snapshots.getOutputFiles(streamId),
-    getKnownWorkspaceOutputPaths: (streamId: StreamTabId) =>
-      snapshots.getKnownFilePaths(streamId, { workspaceOnly: true }),
-    preload: (streamId: StreamTabId) => snapshots.preload([streamId]),
-  };
+  const { snapshotPort } = runActions;
 
   const listWorkspaceCandidateFiles = async (): Promise<string[]> => {
     const workspacePath = options.workspacePath;
@@ -285,18 +266,7 @@ export function createDesktopHostRequests(
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
     },
-    // Programmatic send with no composer behind it (the workflow-file
-    // "user modified the suggested output" note), so `acknowledge` is a
-    // no-op: there is no draft to hand back.
-    sendFollowUp: async (streamId, text) => {
-      await submitProgressFollowUp({
-        session,
-        streamId,
-        input: { text },
-        acknowledge: () => {},
-        showInfo: (message) => host.showInfoMessage(message),
-      });
-    },
+    sendFollowUp: runActions.sendFollowUp,
   });
 
   async function runWorkflowDiff(request: WorkflowDiffRequest): Promise<void> {
@@ -492,41 +462,6 @@ export function createDesktopHostRequests(
     }
   }
 
-  /** An output file's verbs on a workflow run's file list. */
-  async function fileAction(
-    request: Extract<HostRequest, { kind: 'fileAction' }>,
-  ): Promise<void> {
-    const base = request.base ?? undefined;
-    switch (request.action) {
-      case 'compareOriginal':
-        await workflowFileActions.compareOriginal(
-          request.file,
-          base,
-          request.streamId,
-        );
-        return;
-      case 'comparePrevious':
-        await workflowFileActions.comparePrevious(
-          request.file,
-          request.prev ?? undefined,
-        );
-        return;
-      case 'accept':
-        await workflowFileActions.acceptFile(
-          request.file,
-          base,
-          request.streamId,
-        );
-        return;
-      case 'merge':
-        await workflowFileActions.mergeFile(request.file, base);
-        return;
-      case 'latexdiff':
-        await workflowFileActions.latexdiffFile(request.file, base);
-        return;
-    }
-  }
-
   async function agentConfigBanner(
     request: Extract<HostRequest, { kind: 'agentConfigBanner' }>,
   ): Promise<void> {
@@ -600,7 +535,6 @@ export function createDesktopHostRequests(
         return done;
       }
       case 'openTaskStorage':
-        stream(request.streamId);
         await workflowFileActions.openTaskStorage(request.streamId);
         return done;
       case 'exportTranscript':
@@ -622,12 +556,10 @@ export function createDesktopHostRequests(
         await runActions.useOwnApiKey(request);
         return done;
       case 'latexdiff':
-        stream(request.streamId);
         await workflowRunActions.diffStream(request.streamId);
         return done;
       case 'pack':
       case 'clean':
-        stream(request.streamId);
         await workflowRunActions.runFileOperation(
           request.streamId,
           request.kind,
@@ -639,7 +571,7 @@ export function createDesktopHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return options.draftRequests.handle(session, request, port);
+        return draftRequests.handle(request, port);
       case 'popOut':
       case 'popBack':
         throw notOnDesktop('Pop-out to editor');
@@ -664,7 +596,7 @@ export function createDesktopHostRequests(
           throw notOnDesktop(`A picker for ${request.fileType} files`);
         }
         const paths = await options.files.pickFiles(request.fileType);
-        if (paths === null) throw new Rejected({ reason: 'No files chosen.' });
+        if (paths === null) throw new Cancelled();
         return { kind: 'files', paths };
       }
       case 'useCurrentFile':
@@ -678,30 +610,9 @@ export function createDesktopHostRequests(
             request.category,
           ),
         };
-      case 'launch': {
-        const { launch: form } = request;
-        await execution.handleExecute(
-          buildMainViewExecuteMessage({
-            sessionType: form.sessionType,
-            agent: form.agent,
-            model: form.model,
-            instruction: request.instruction,
-            multiFiles: {
-              inputFiles: form.inputFiles,
-              contextFiles: form.contextFiles,
-              mediaFiles: form.mediaFiles,
-              outputFiles: form.outputFiles,
-            },
-            checkboxValues: form,
-            session: {
-              launchTarget: form.launchTarget,
-              teamId: form.selectedTeamId || undefined,
-              workingDirectory: form.workingDirectory || undefined,
-            },
-          }),
-        );
+      case 'launch':
+        await execution.runValidated(await prepareSurfaceLaunch(request, host));
         return done;
-      }
       case 'compileInputPdf':
         throw notOnDesktop('Compiling the input PDF');
       case 'extractFigures':
@@ -714,22 +625,11 @@ export function createDesktopHostRequests(
         );
         return done;
       case 'fileAction':
-        stream(request.streamId);
-        await fileAction(request);
+        await workflowFileActions.handle(request);
         return done;
-      case 'restoreProposalConfig': {
-        const parsed = AgentConfigSchema.safeParse(request.proposal);
-        if (!parsed.success) {
-          logger.warn('Invalid proposal config', {
-            data: { errors: parsed.error.issues },
-          });
-          throw new Rejected({
-            reason: 'This proposal does not carry a restorable setup.',
-          });
-        }
-        restoreIntoLauncher(parsed.data);
+      case 'restoreProposalConfig':
+        await restoreIntoLauncher(runActions.restoreProposal(request.proposal));
         return done;
-      }
       case 'apiKeyBanner':
         if (request.action === 'set') {
           postDesktopSettingsView(
@@ -780,10 +680,7 @@ export function createDesktopHostRequests(
 
   return {
     handle,
-    closePort: (port) => options.draftRequests.cancel(session, port),
-    dispose() {
-      stopObservingRecording();
-      options.draftRequests.cancel(session);
-    },
+    closePort: draftRequests.closePort,
+    dispose: draftRequests.dispose,
   };
 }

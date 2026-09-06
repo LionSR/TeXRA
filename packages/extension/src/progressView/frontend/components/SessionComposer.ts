@@ -233,6 +233,12 @@ export class SessionComposer extends LitElement {
         gap: var(--wa-space-3xs);
         min-width: 0;
       }
+      .tools {
+        display: flex;
+        align-items: center;
+        flex: 0 0 auto;
+        gap: var(--wa-space-3xs);
+      }
       .row .spacer {
         flex: 1 1 auto;
       }
@@ -244,6 +250,12 @@ export class SessionComposer extends LitElement {
         min-width: 0;
         flex: 1 1 auto;
       }
+      .chip-trigger {
+        max-width: 100%;
+      }
+      .chip-trigger::part(label) {
+        min-width: 0;
+      }
       .chip-trigger::part(base) {
         gap: var(--wa-space-3xs);
         padding-inline: var(--wa-space-2xs);
@@ -254,6 +266,7 @@ export class SessionComposer extends LitElement {
         font-size: var(--font-size-xs);
       }
       .chip-label {
+        display: block;
         max-width: 14ch;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -269,6 +282,8 @@ export class SessionComposer extends LitElement {
       }
       .chips-collapsed {
         display: none;
+        min-width: 0;
+        flex: 1 1 auto;
       }
       @container (max-width: 440px) {
         .chips {
