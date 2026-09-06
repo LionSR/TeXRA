@@ -1,22 +1,14 @@
 import { z } from 'zod';
 
-// IPC plumbing for the in-app PDF preview overlay (audit item B,
-// trajectory #17).
-//
-// `desktopPreviewHost.openBuildDisplay` used to satisfy `BuildDisplayFn`
-// by handing the compiled PDF off to the OS default viewer via
-// `shell.openPath`. With #3801's three-pane shell + #3815's diff
-// overlay landed, we can mount an `<iframe src="file://...">` inside a
-// `wa-dialog` overlay — Electron's bundled Chromium renders PDFs
-// natively, no extra dependency required.
-//
-// This is the third overlay pattern (settings, then diff). All three now
-// share the wa-dialog shell via `createOverlayDialog` in
-// `renderer/overlayDialog.ts`; each overlay owns only its content element
-// and behavior.
+// IPC for the PDF workbench tab. `desktopPreviewHost.openBuildDisplay`
+// compiles a TeX source (or takes a PDF as it is) and posts `desktop:showPdf`
+// keyed by session; the renderer opens one `pdf` workbench tab per path
+// (`workbenchController` + `pdfPane`, an `<iframe src="file://...">` on
+// Electron's built-in Chromium viewer). The tab's close control is the
+// tab strip's, so nothing posts a close.
 //
 // `desktop:showPdf` carries:
-//   - `title`: shown in the dialog header (e.g. "paper.pdf")
+//   - `title`: the tab title (e.g. "paper.pdf")
 //   - `pdfPath`: absolute filesystem path the renderer turns into a
 //     `file://` URL. The renderer rejects payloads whose path doesn't
 //     resolve to an absolute path so a malicious main-process post
@@ -24,7 +16,6 @@ import { z } from 'zod';
 
 export const DESKTOP_PDF_COMMANDS = {
   SHOW_PDF: 'desktop:showPdf',
-  CLOSE_PDF: 'desktop:closePdf',
 } as const;
 
 export const DesktopShowPdfMessageSchema = z.object({
@@ -39,15 +30,10 @@ export const DesktopShowPdfMessageSchema = z.object({
 
 export type DesktopShowPdfMessage = z.infer<typeof DesktopShowPdfMessageSchema>;
 
-export const DesktopClosePdfMessageSchema = z.object({
-  session: z.string().min(1),
-  command: z.literal(DESKTOP_PDF_COMMANDS.CLOSE_PDF),
-});
-
 // Sanitize the PDF path before rendering it in an iframe. The renderer
 // must only accept absolute filesystem paths — anything that smells
 // like a different URL scheme (`http:`, `javascript:`, `data:`, ...)
-// is rejected to keep the overlay from being abused as a generic
+// is rejected to keep the tab from being abused as a generic
 // browsing surface. Path traversal isn't a concern here because the
 // renderer has no privileged paths it's hiding; the threat model is
 // "main process posts something other than a PDF on disk".

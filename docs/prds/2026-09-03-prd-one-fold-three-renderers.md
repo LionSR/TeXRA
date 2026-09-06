@@ -2080,7 +2080,6 @@ Shell = {
   active: SessionKey                   // which paper the view is showing
   open: SessionKey[]                   // rail order, user-arranged
   collapsed: SessionKey[]              // rail rows the user folded shut
-  search: string                       // the rail's search, across papers
 }
 ```
 
@@ -2231,13 +2230,12 @@ draft. `streamLifecycleSlice.ts:275-289` already clears stream-scoped
 frontend storage on deletion; this is that rule, restated for the records
 that replace it.
 
-`Shell` persists `active`, `open`, and `collapsed`; its `search` is not
-persisted, and neither is `Surface.search`. The two are separate because
-they scope differently: the drawer filters one session's streams and so
-belongs to that session's `Surface`, while the desktop rail searches across
-open papers and no per-session record can hold it. Both are declared rather
-than left to the components, which G3 forbids and which would reset them on
-a remount or a paper switch.
+`Shell` persists `active`, `open`, and `collapsed`. `Surface.search` is not
+persisted: the drawer filters one session's streams and so belongs to that
+session's `Surface`, declared rather than left to the component, which G3
+forbids and which would reset it on a remount or a paper switch. `Shell`
+carries no search: the desktop has no cross-paper stream filter, and the
+rail's Search opens the command palette (12.2).
 
 Deleted: the `setActiveStream` fact, `ProgressPresentationState`, the
 `StreamState.ui` block (`streamState.ts:175-184`), the pending-approval
@@ -2535,7 +2533,8 @@ a component.
 ### 12.2 Desktop: papers
 
 - **Rail** (288 px, the existing `taskShell.css` classes): brand, New task,
-  Search, then a Papers section with one collapsible row per open paper
+  Search (which opens the command palette; the rail has no stream filter of
+  its own), then a Papers section with one collapsible row per open paper
   (initials, name, and subtitle from that paper's `host` display record, a
   badge from the paper-level `SessionView.rollup`, collapsed per
   `Shell.collapsed`) and its own

@@ -4,7 +4,6 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import type { LatexdiffPackResult } from '@housekeeping/packLatexdiffvc';
 import type { IndentLatexResult } from '@latex/formatter/indentDirectory';
 
 interface LatexHousekeepingNotification {
@@ -31,30 +30,6 @@ export function getIndentTeXNotification(
       };
     case 'disabled':
     case 'formatted':
-      return undefined;
-  }
-}
-
-export function getLatexdiffPackNotifications(
-  result: LatexdiffPackResult,
-): LatexHousekeepingNotification | undefined {
-  switch (result.status) {
-    case 'no-files':
-      return {
-        severity: 'info',
-        message: 'No LaTeX diff files found to process',
-      };
-    case 'cleaned':
-      return {
-        severity: 'info',
-        message: 'LaTeXdiff files cleaned',
-      };
-    case 'packed':
-      return {
-        severity: 'info',
-        message: `Files packed into ${result.outputFolder}`,
-      };
-    case 'processed':
       return undefined;
   }
 }

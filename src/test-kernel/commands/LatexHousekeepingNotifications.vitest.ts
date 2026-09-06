@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { getIndentTeXNotification } from '@commands/latex/latexHousekeepingNotifications';
 import {
-  getIndentTeXNotification,
-  getLatexdiffPackNotifications,
-} from '@commands/latex/latexHousekeepingNotifications';
-import type { LatexdiffPackResult } from '@housekeeping/packLatexdiffvc';
+  latexdiffPackMessage,
+  type LatexdiffPackResult,
+} from '@housekeeping/packLatexdiffvc';
 import type { IndentLatexResult } from '@latex/formatter/indentDirectory';
 
 describe('latex housekeeping command notifications', () => {
@@ -43,21 +43,15 @@ describe('latex housekeeping command notifications', () => {
 
   const packCases: Array<{
     result: LatexdiffPackResult;
-    expected: { severity: string; message: string } | undefined;
+    expected: string | undefined;
   }> = [
     {
       result: { status: 'no-files', inputFile: 'paper.tex' },
-      expected: {
-        severity: 'info',
-        message: 'No LaTeX diff files found to process',
-      },
+      expected: 'No LaTeX diff files found to process',
     },
     {
       result: { status: 'cleaned', inputFile: 'paper.tex' },
-      expected: {
-        severity: 'info',
-        message: 'LaTeXdiff files cleaned',
-      },
+      expected: 'LaTeXdiff files cleaned',
     },
     {
       result: {
@@ -65,10 +59,7 @@ describe('latex housekeeping command notifications', () => {
         inputFile: 'paper.tex',
         outputFolder: 'Diffs/20260505_paper_HEAD',
       },
-      expected: {
-        severity: 'info',
-        message: 'Files packed into Diffs/20260505_paper_HEAD',
-      },
+      expected: 'Files packed into Diffs/20260505_paper_HEAD',
     },
     {
       result: { status: 'processed', inputFile: 'paper.tex' },
@@ -77,14 +68,9 @@ describe('latex housekeeping command notifications', () => {
   ];
 
   it.each(packCases)(
-    'restores the latexdiff pack notification for $result.status',
+    'restores the latexdiff pack message for $result.status',
     ({ result, expected }) => {
-      const notification = getLatexdiffPackNotifications(result);
-      if (expected === undefined) {
-        expect(notification).toBeUndefined();
-      } else {
-        expect(notification).toMatchObject(expected);
-      }
+      expect(latexdiffPackMessage(result)).toBe(expected);
     },
   );
 });
