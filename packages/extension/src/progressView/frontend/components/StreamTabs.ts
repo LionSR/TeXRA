@@ -142,7 +142,9 @@ class StreamTab extends LitElement {
       stream.identity?.kind === 'agent' && stream.description
         ? stream.label
         : undefined;
-    const showRollup = this.expandable && !this.expanded;
+    // The rollup is the row's own fact: the rail carries it with no
+    // disclosure at all (W2), and a tree row hides it while open.
+    const showRollup = stream.rollup.total > 0 && !this.expanded;
 
     return html`
       <div
@@ -402,7 +404,7 @@ export class StreamTabs extends LitElement {
       <stream-tab
         .stream=${stream}
         ?active=${stream.id === selected}
-        ?expandable=${expandable || (this.topLevelOnly && stream.rollup.total > 0)}
+        ?expandable=${expandable}
         ?expanded=${expanded}
       ></stream-tab>
       ${
@@ -514,14 +516,6 @@ export class StreamTabs extends LitElement {
       case 'toggle-children': {
         const stream = this.streamOf(streamId);
         if (!stream) return;
-        if (this.topLevelOnly) {
-          // The rail owns no tree here; the Subagents pane does. Selecting
-          // the row is the navigation.
-          this.dispatchEvent(
-            SessionUiEvents.surface({ kind: 'select', streamId }),
-          );
-          return;
-        }
         this.dispatchEvent(
           SessionUiEvents.surface({
             kind: 'expand',

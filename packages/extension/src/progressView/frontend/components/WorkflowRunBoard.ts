@@ -285,13 +285,16 @@ export class WorkflowRunBoard extends LitElement {
 
   // -- events --------------------------------------------------------------
 
+  /** Skip and retry act on one call, so the request names that call's own
+   *  child stream: `Retry failed` fires one per failed row and each row
+   *  keeps its own answer instead of N sharing the run's slot. */
   private control(rowId: string, action: 'skip' | 'retry'): void {
     const child = this.childOf(rowId);
     if (!child) return;
     this.dispatchEvent(
       SessionUiEvents.runtime({
         kind: 'workflow.control',
-        streamId: this.stream.id,
+        streamId: child.id,
         executionId: child.executionId,
         action,
       }),
@@ -531,6 +534,8 @@ export class WorkflowRunBoard extends LitElement {
       ? approvalLine(approval.payload)
       : (row.detail?.text ?? child?.latestLine ?? child?.statusLabel ?? '');
     const actions = this.renderActions(row, child, approval?.streamId);
+    const rejected =
+      child === undefined ? undefined : this.surface.rejected.get(child.id);
     return html`<div
       class=${classMap({
         row: true,
@@ -564,6 +569,13 @@ export class WorkflowRunBoard extends LitElement {
         })}
         ><bdi dir="auto">${last}</bdi></span
       >
+      ${
+        rejected === undefined
+          ? nothing
+          : html`<span class="row-rejected" role="status"
+              >${this.renderRejection(rejected)}</span
+            >`
+      }
       ${
         meta.length > 0
           ? html`<span class="row-meta">${meta.join(' · ')}</span>`
@@ -640,9 +652,9 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
-  /** The runtime's answer to the last skip, retry, or kill from this
-   *  surface, in the runtime's words; the next request on the stream clears
-   *  it (`Surface.rejected`). */
+  /** The runtime's refusal of a request this surface made, in the runtime's
+   *  words; the next request on that stream clears it (`Surface.rejected`).
+   *  Kill answers on the run's stream, skip and retry on the call's. */
   private renderRejection(error: RequestErrorWire): TemplateResult {
     switch (error._tag) {
       case 'NotOwner':
@@ -659,7 +671,9 @@ export class WorkflowRunBoard extends LitElement {
   }
 
   /** Next failed only navigates, so it stays live on a settled run that
-   *  has failures to read; the two that act follow `canControl`. */
+   *  has failures to read; the two that act follow `canControl`. The note
+   *  carries the run's own refusal, which is Kill's; a call's lands on its
+   *  row. */
   private renderControls(): TemplateResult {
     const failed = this.failedRows().length;
     const disabled = !this.canControl;

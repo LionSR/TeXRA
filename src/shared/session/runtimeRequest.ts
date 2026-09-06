@@ -137,7 +137,10 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
       enabled: z.boolean(),
     }),
   }),
-  /** A workflow-script run's grandchild `agent()` call, by the execution id
+  /** A workflow-script run's grandchild `agent()` call. `streamId` is that
+   *  call's own child stream, never the run's: the control acts on one call,
+   *  so concurrent skips and retries stay one request per target and the
+   *  runtime's refusal names the call it acted on. `executionId` is the id
    *  the child list, focus, and kill already share. */
   z.object({
     kind: z.literal('workflow.control'),

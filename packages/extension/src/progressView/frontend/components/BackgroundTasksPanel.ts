@@ -248,6 +248,16 @@ export class BackgroundTasksPanel extends LitElement {
       .filter((child): child is StreamView => child !== undefined);
   }
 
+  /** Every descendant `rollup` counts, so the card's running badge and its
+   *  since time read the same set: a direct child that finishes while a
+   *  grandchild runs leaves the badge lit and the time standing. */
+  private descendantsOf(streams: readonly StreamView[]): StreamView[] {
+    return streams.flatMap((child) => [
+      child,
+      ...this.descendantsOf(this.childrenOf(child)),
+    ]);
+  }
+
   private inquiriesOf(stream: StreamView): InquiryThreadUpdatedEvent[] {
     return (this.view?.inquiries ?? []).filter(
       (thread) => thread.parentStreamId === stream.id,
@@ -262,10 +272,13 @@ export class BackgroundTasksPanel extends LitElement {
     if (children.length === 0 && inquiries.length === 0) return nothing;
 
     const { rollup } = stream;
-    // When the fan-out began: the earliest child still running. The fold
-    // clears `runStartedAt` on a terminal status, so a settled fan-out
-    // has no start to name and the line drops.
-    const starts = children.flatMap((child) => child.runStartedAt ?? []);
+    // When the fan-out began: the earliest descendant still running, over
+    // the set `rollup.running` counts. The fold clears `runStartedAt` on a
+    // terminal status, so a settled fan-out has no start to name and the
+    // line drops.
+    const starts = this.descendantsOf(children).flatMap(
+      (descendant) => descendant.runStartedAt ?? [],
+    );
     const since = starts.length > 0 ? Math.min(...starts) : null;
     const summary =
       this.scope === 'inquiries'

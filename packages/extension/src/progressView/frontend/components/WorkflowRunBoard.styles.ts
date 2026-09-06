@@ -190,6 +190,16 @@ export const workflowRunBoardStyles = css`
     color: var(--wa-color-danger-on-quiet);
   }
 
+  .row-rejected {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-xs);
+    color: var(--wa-color-warning-on-quiet);
+  }
+
   .row-meta {
     flex: 0 0 auto;
     max-width: 40%;
