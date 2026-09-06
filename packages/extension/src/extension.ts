@@ -586,12 +586,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // scans them.
   await Promise.all([
     (async () => {
-      await bootstrapNodeAgentDirectories({
-        channel: 'extension',
-        resourcesPath: path.join(context.extensionPath, 'resources'),
-        currentVersion: context.extension.packageJSON?.version,
-        versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-      });
+      await effectRuntime().runPromise(
+        bootstrapNodeAgentDirectories({
+          channel: 'extension',
+          resourcesPath: path.join(context.extensionPath, 'resources'),
+          currentVersion: context.extension.packageJSON?.version,
+          versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+        }),
+      );
       await registerAgentDirectoryRoots(context);
       try {
         await loadAgents({ includeRemote: false });
