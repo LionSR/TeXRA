@@ -38,13 +38,15 @@ import type {
   AnthropicToolCall,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
-import { attachStreamDiagnostics } from '@common/errors/sdkError/errorMetadata';
+import {
+  attachPartialText,
+  attachStreamDiagnostics,
+} from '@common/errors/sdkError/errorMetadata';
 import {
   isUserAbort,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkError/errorPatterns';
-import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import type {
   CompactionActivityOutcome,
   FileLocation,
@@ -578,18 +580,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return response;
     } catch (streamError) {
       compactionOutcome = isUserAbort(streamError) ? 'cancelled' : 'failed';
-      return handleStreamingFailure(streamError, {
-        // Anthropic finalizes unconditionally below, including on success.
-        partialTail: () =>
-          extractPartialTextTail(stream.currentMessage, PARTIAL_TEXT_TAIL_MAX),
-        decorateError: (error, partialText) =>
-          this.decorateStreamError(
-            error,
-            partialText,
-            streamHandler.getDiagnostics(),
-            stream.request_id ?? undefined,
-          ),
-      });
+      const partialText = extractPartialTextTail(
+        stream.currentMessage,
+        PARTIAL_TEXT_TAIL_MAX,
+      );
+      const error = this.decorateStreamError(
+        streamError,
+        partialText,
+        streamHandler.getDiagnostics(),
+        stream.request_id ?? undefined,
+      );
+      attachPartialText(error, partialText);
+      throw error;
     } finally {
       streamHandler.finalize(compactionOutcome);
       signal?.removeEventListener('abort', abortStream);

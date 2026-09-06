@@ -47,12 +47,14 @@ import {
   firstBodyStringField,
   pickStringField,
 } from '@common/errors/sdkError/errorInspection';
-import { attachManualRetryOnlyError } from '@common/errors/sdkError/errorMetadata';
+import {
+  attachManualRetryOnlyError,
+  attachPartialText,
+} from '@common/errors/sdkError/errorMetadata';
 import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
-import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import { longRunningGoogleInteractionsFetch } from '@platform/defaults/longRunningModelTransport';
 import {
   type FileLocation,
@@ -1792,12 +1794,9 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         this.chainState.invalidateChain();
         return this.createResponseImpl(options);
       }
-      return handleStreamingFailure(error, {
-        // No `finalizeOnError` hook: a streaming call's own `finally` already
-        // finalized the progress streams before this outer catch ever runs.
-        partialTail: () =>
-          aggregatedText ? takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX) : '',
-      });
+      // A streaming call's own finally has already closed its progress streams.
+      attachPartialText(error, takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX));
+      throw error;
     }
   }
 
