@@ -33,7 +33,6 @@ import {
 } from '@housekeeping/packLatexdiffvc';
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   cloneRoundIndexed,
@@ -470,10 +469,23 @@ export function createDesktopHostRequests(
   }
 
   /**
+   * A refusal the user has to see. The renderer's settle path drops
+   * `Rejected` reasons (`sessionSurfaces.ts` `settleHost` early-returns), so
+   * a latexdiff refusal goes through the host's error dialog first, the way
+   * the extension's latexdiff commands report the same failures.
+   */
+  async function showRefusal(reason: string): Promise<Rejected> {
+    await host.showErrorMessage(reason);
+    return new Rejected({ reason });
+  }
+
+  /**
    * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
    * them: latexdiff-vc over the base file against a commit, and the pack
    * and clean housekeeping of what it produced. The diff opens in the PDF
-   * tab through the build display, as a run's outputs do.
+   * tab through the build display, as a run's outputs do. The math markup
+   * is left to `diffCommandExecutor`, which reads the workspace's saved
+   * `LATEXDIFF_MATH_MARKUP` for every host.
    */
   async function latexdiffAgainstCommit(
     action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
@@ -481,16 +493,15 @@ export function createDesktopHostRequests(
     commit: string,
   ): Promise<void> {
     if (!baseFile) {
-      throw new Rejected({ reason: 'Choose a base file first.' });
+      throw await showRefusal('Choose a base file first.');
     }
     const base = pathToLocation(baseFile);
     if (action === 'latexdiffvc') {
       const result = await new LaTeXdiffService(LATEXDIFF_CHANNEL).runDiffVc(
         base,
         commit,
-        DEFAULT_MATH_MARKUP,
       );
-      if (!result.success) throw new Rejected({ reason: result.message });
+      if (!result.success) throw await showRefusal(result.message);
       await host.openBuildDisplay(createExternalLocation(result.diffPath));
       return;
     }
@@ -523,9 +534,7 @@ export function createDesktopHostRequests(
         break;
     }
     if (!baseFile || !editedFile) {
-      throw new Rejected({
-        reason: 'Choose a base file and an edited file first.',
-      });
+      throw await showRefusal('Choose a base file and an edited file first.');
     }
     switch (request.action) {
       case 'compare':
