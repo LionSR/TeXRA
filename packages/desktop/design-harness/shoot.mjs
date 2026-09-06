@@ -24,7 +24,9 @@ const scenes = process.env.SCENES
       'run-board-no-failed',
       'run-board-foreign',
       'desktop-papers',
-      'desktop-switcher',
+      'desktop-one-paper',
+      'desktop-empty-paper',
+      'desktop-narrow',
       'desktop-subagents',
       'desktop-run',
     ];

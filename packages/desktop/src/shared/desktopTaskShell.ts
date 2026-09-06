@@ -95,14 +95,6 @@ const WorkbenchTabSchema = z.object({
 
 export type WorkbenchTab = z.infer<typeof WorkbenchTabSchema>;
 
-/**
- * How the rail lists the open papers: every paper as its own section with
- * its streams nested beneath it, or the active paper in focus with a
- * switcher on top and the other papers' live streams in one card.
- */
-const PAPERS_LAYOUTS = ['sections', 'focus'] as const;
-export type PapersLayout = (typeof PAPERS_LAYOUTS)[number];
-
 /** Persisted per paper in Surface.workbench. */
 export const DesktopTaskShellStateSchema = z.object({
   activeWorkbenchTabIds: z.partialRecord(
@@ -113,7 +105,6 @@ export const DesktopTaskShellStateSchema = z.object({
   sidebarCollapsed: z.boolean(),
   sidebarWidth: z.number(),
   filesExpanded: z.boolean(),
-  papersLayout: z.enum(PAPERS_LAYOUTS),
   summaryBarVisible: z.boolean(),
   workbenchWidth: z.number(),
   workbenchTabs: z.array(WorkbenchTabSchema),
@@ -136,7 +127,6 @@ export function initialDesktopTaskShellState(): DesktopTaskShellState {
     sidebarCollapsed: false,
     sidebarWidth: 288,
     filesExpanded: true,
-    papersLayout: 'sections',
     summaryBarVisible: true,
     workbenchWidth: 640,
     workbenchTabs: [],
@@ -414,15 +404,6 @@ export function toggleSidebar(
   state: DesktopTaskShellState,
 ): DesktopTaskShellState {
   return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
-}
-
-export function togglePapersLayout(
-  state: DesktopTaskShellState,
-): DesktopTaskShellState {
-  return {
-    ...state,
-    papersLayout: state.papersLayout === 'sections' ? 'focus' : 'sections',
-  };
 }
 
 export function toggleFiles(
