@@ -2550,7 +2550,7 @@ const SCENARIOS = [
     ],
     frame: 'viewport',
     expect: [
-      'strategy is checking the harness-child-strategy details',
+      'strategy is checking the aaaa0005f10e details',
       'Harness received: child follow-up on focused stream',
     ],
     unexpect: [
@@ -2571,7 +2571,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t', RIGHT, DOWN, DOWN, DOWN, '\r'],
-    expect: ['strategy is checking the harness-child-strategy details'],
+    expect: ['strategy is checking the aaaa0005f10e details'],
     unexpect: [
       '✓ ● strategy Running',
       'agent: chat · model: harness-model',
@@ -2692,7 +2692,7 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', RIGHT, DOWN, DOWN, DOWN, '\r', '/status', '\r'],
     frame: 'viewport',
-    expect: ['strategy is checking the harness-child-strategy details'],
+    expect: ['strategy is checking the aaaa0005f10e details'],
     expectPatterns: [RUNNING_STATUS_PATTERN],
     unexpect: [
       'agent: harness-agent',
@@ -2765,7 +2765,7 @@ const SCENARIOS = [
     bootExpect: 'Tab sessions',
     keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'k'],
     expect: [
-      'Harness kill requested for harness-child-strategy.',
+      'Harness kill requested for aaaa0005f10e.',
       '● strategy Stopped',
       'Enter focus',
       'Tab input',
@@ -2774,7 +2774,7 @@ const SCENARIOS = [
     unexpect: [
       'v full output',
       'k kill',
-      'Harness kill requested for harness-child-strategy.\n\nHarness kill requested for harness-child-strategy.',
+      'Harness kill requested for aaaa0005f10e.\n\nHarness kill requested for aaaa0005f10e.',
     ],
   },
   {

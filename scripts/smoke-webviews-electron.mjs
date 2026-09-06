@@ -127,7 +127,16 @@ function startRun(log, { streamId, executionId, agent, at, parentStreamId }) {
       policy: 'ask',
       bypasses: { bash: false, toolEdit: false, superYolo: false },
     },
-    ...(parentStreamId ? { parentStreamId } : {}),
+    ...(parentStreamId
+      ? {
+          parentStreamId,
+          parentStartCommit: log.events.find(
+            (event) =>
+              event.type === 'run.start' &&
+              event.aggregateId === JSON.stringify(['stream', parentStreamId]),
+          )?.commit,
+        }
+      : {}),
   });
   log.emit(streamId, at, {
     type: 'run.activate',
@@ -138,7 +147,12 @@ function startRun(log, { streamId, executionId, agent, at, parentStreamId }) {
   log.emit(streamId, at, {
     type: 'run.config',
     executionId,
-    config: { model: 'deepseekT', agent, inputFiles: ['main.tex'] },
+    config: {
+      agentCategory: 'toolUse',
+      model: 'deepseekT',
+      agent,
+      inputFiles: ['main.tex'],
+    },
   });
   log.emit(streamId, at, {
     type: 'status',

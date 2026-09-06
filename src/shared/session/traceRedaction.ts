@@ -1,7 +1,6 @@
 /** Existing transcript redaction rules, shared by publication and display. */
 import { redactSecrets } from '@logger/redaction';
 import {
-  ActiveSkillsSnapshotSchema,
   SessionEventDraftSchema,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -64,11 +63,6 @@ export function redactTraceDraft(event: SessionEventDraft): SessionEventDraft {
                 error: redactSecrets(event.call.error),
               }
             : { ...event.call, label: redactSecrets(event.call.label) },
-      };
-    case 'skills.snapshot':
-      return {
-        ...event,
-        skills: ActiveSkillsSnapshotSchema.parse(event).skills,
       };
     case 'stream.end':
       return {

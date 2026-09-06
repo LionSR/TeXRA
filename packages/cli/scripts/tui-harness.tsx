@@ -73,7 +73,10 @@ import { AgentConfigFieldsSchema } from '@shared/schemas/agentConfig';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import type { StreamLogAppendInput } from '@shared/session/traceEntries';
+import {
+  StreamLog,
+  type StreamLogAppendInput,
+} from '@shared/session/traceEntries';
 import {
   buildScenario,
   foldAll,
@@ -87,6 +90,7 @@ import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace, StreamLogStore } from '@transcript';
+import { generateExecutionId } from '@utils/core';
 import { platformSettingsStores } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -654,6 +658,7 @@ HARNESS_DISPOSERS.push(
 HARNESS_DISPOSERS.push(announceForegroundApprovals());
 
 const harnessStreams = new Set<StreamTabId>();
+const harnessLogs = new Map<StreamTabId, StreamLog>();
 
 /** Mint a stream: its `run.start` existence fact (PRD 6, item 2), then the
  *  `run.config` launch fact a real run publishes next, which names the model
@@ -675,7 +680,8 @@ function seedStream(
 ): void {
   if (harnessStreams.has(streamId)) return;
   harnessStreams.add(streamId);
-  const executionId = (options.executionId ?? nanoid(12)) as ExecutionId;
+  const executionId = (options.executionId ??
+    generateExecutionId()) as ExecutionId;
   const identity = options.identity ?? {
     kind: 'agent' as const,
     agent: streamId.split('#')[0] ?? streamId,
@@ -699,6 +705,7 @@ function seedStream(
       aggregateId: qualifyAggregateId('stream', streamId),
       executionId,
       config: AgentConfigFieldsSchema.parse({
+        agent: identity.agent,
         agentCategory: options.category ?? AgentCategory.ToolUse,
         model: HARNESS_MODEL,
       }),
@@ -738,16 +745,24 @@ function removeStream(streamId: StreamTabId): void {
   harnessStreams.delete(streamId);
 }
 
-/** Append settled rows to a stream's transcript; the store's change feed
- *  publishes them as `transcript.entry` facts the fold projects. */
+/** Publish complete fixture rows on the event plane. */
 function seedRows(
   streamId: StreamTabId,
   entries: readonly StreamLogAppendInput[],
 ): void {
   seedStream(streamId);
-  const writer = session().transcripts.acquireWriter(streamId, 'tui-harness');
-  for (const entry of entries) writer.appendSettled(entry);
-  writer.close();
+  let log = harnessLogs.get(streamId);
+  if (!log) {
+    log = new StreamLog();
+    harnessLogs.set(streamId, log);
+  }
+  publish(
+    ...entries.map((entry) => ({
+      type: 'transcript.entry' as const,
+      aggregateId: qualifyAggregateId('stream', streamId),
+      entry: log.appendSettled(entry),
+    })),
+  );
 }
 
 /** Every stream under `rootId`, the root first. */
@@ -881,10 +896,9 @@ function makeAssistantToolPreambleEntries(): StreamLogAppendInput[] {
 }
 
 function seedLiveToolOnlyTranscript(): void {
-  const store = defaultSession().transcripts;
-  const writer = store.acquireWriter(STREAM_ID, 'tui-harness');
+  const entries: StreamLogAppendInput[] = [];
   const timestamp = Date.now();
-  writer.append({
+  entries.push({
     id: 'live-tool-user',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
@@ -892,7 +906,7 @@ function seedLiveToolOnlyTranscript(): void {
     messageType: MESSAGE_TYPES.USER_MESSAGE,
     text: 'what is this repo about',
   });
-  writer.append({
+  entries.push({
     id: 'live-tool-empty-assistant',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
@@ -910,7 +924,7 @@ function seedLiveToolOnlyTranscript(): void {
   for (const [index, [toolName, input, summary]] of tools
     .slice(0, LIVE_TOOL_COUNT)
     .entries()) {
-    writer.append({
+    entries.push({
       id: `live-tool-${toolName}-${index}`,
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
@@ -926,7 +940,7 @@ function seedLiveToolOnlyTranscript(): void {
       },
     });
   }
-  writer.close();
+  seedRows(STREAM_ID, entries);
 }
 
 function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
@@ -954,8 +968,7 @@ function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
 }
 
 function seedSubagentFollowupTranscript(): void {
-  const store = defaultSession().transcripts;
-  const writer = store.acquireWriter(STREAM_ID, 'tui-harness');
+  const entries: StreamLogAppendInput[] = [];
   const timestamp = Date.now();
   const followups = [
     '<subagent-progress id="child-a" agent="strategy" type="overview" tool-calls="3" files-changed="none" />',
@@ -972,7 +985,7 @@ function seedSubagentFollowupTranscript(): void {
     ].join('\n'),
   ];
   for (const [index, text] of followups.entries()) {
-    writer.append({
+    entries.push({
       id: `harness-subagent-followup-${index}`,
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
@@ -981,7 +994,7 @@ function seedSubagentFollowupTranscript(): void {
       text: `<orchestrator-followup>${text}</orchestrator-followup>`,
     });
   }
-  writer.close();
+  seedRows(STREAM_ID, entries);
 }
 
 function makeChildEntries(
@@ -1310,6 +1323,7 @@ function seedRunningWorkflow(): void {
   });
   seedPhase(childStreamId, STREAM_PHASE.RUNNING);
   const runTrace = createRunTrace(childStreamId, session().transcripts);
+  const detachRunTrace = session().attachRunTrace(runTrace, childStreamId);
   const runStage = runTrace.trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
@@ -1349,8 +1363,8 @@ function seedRunningWorkflow(): void {
     stageId: phaseStage.id,
   });
   for (const [agentStreamId, agentExecutionId] of [
-    [firstAgentStreamId, 'harness-workflow-agent-a'],
-    [secondAgentStreamId, 'harness-workflow-agent-b'],
+    [firstAgentStreamId, 'aaaa0008f10e'],
+    [secondAgentStreamId, 'aaaa0009f10e'],
   ] as const) {
     seedStream(agentStreamId, {
       category: AgentCategory.Workflow,
@@ -1364,6 +1378,7 @@ function seedRunningWorkflow(): void {
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
     runStage.end('cancelled');
+    detachRunTrace();
     runTrace.dispose();
   });
 }
@@ -1385,7 +1400,7 @@ if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
   const nestedStartedAt = startedAt + 24_000;
   const nestedStrategyChild = {
-    executionId: 'harness-nested-local-checker',
+    executionId: 'aaaa0004f10e',
     identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
     childStreamId: 'harness-nested-local-checker-stream',
@@ -1394,7 +1409,7 @@ if (SHOW_CHILDREN) {
   };
   const childStreams = [
     {
-      executionId: 'harness-child-strategy',
+      executionId: 'aaaa0005f10e',
       identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
       childStreamId: 'harness-child-strategy-stream',
@@ -1402,7 +1417,7 @@ if (SHOW_CHILDREN) {
       startedAt,
     },
     {
-      executionId: 'harness-child-lean',
+      executionId: 'aaaa0006f10e',
       identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
       childStreamId: 'harness-child-lean-stream',
@@ -1410,7 +1425,7 @@ if (SHOW_CHILDREN) {
       startedAt: startedAt - 123_000,
     },
     {
-      executionId: 'harness-child-review',
+      executionId: 'aaaa0007f10e',
       identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
       childStreamId: 'harness-child-review-stream',
