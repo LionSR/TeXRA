@@ -4,6 +4,10 @@ Reviewed local HEAD `3958a96edd453938e023f163c1aa5b358854d89d`, 2026-09-05.
 This is a design study, not an implementation or a model-quality benchmark.
 Production code was not changed. Existing proposal files were left untouched.
 
+> **Status (2026-09-06): not planned.** The owner does not want the adaptive
+> design recommended below; this document is retained as a design study only
+> and is not scheduled for implementation.
+
 **Recommendation.** Let the model choose how to work on a document, while the
 harness owns the candidate files, execution limits, recovery, and delivery.
 Reuse the existing tool-use loop and script runner. The main missing capability
