@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.9] - 2026-09-06
+
 ### Shared (all surfaces)
 
 #### Features
