@@ -317,6 +317,20 @@ export const SCOOP_INSTALL_COMMAND =
   'Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser; irm get.scoop.sh | iex';
 
 /**
+ * The `LatexSettingsStatus` fields `DEPENDENCY_INSTALL_COMMANDS` has an entry
+ * for. Closed so a typo'd key fails at compile time instead of silently
+ * missing the lookup in `DependencyInfo.key` (`keyof LatexSettingsStatus`,
+ * a much wider interface that also carries `platform`, detected paths, and
+ * `latexWorkshopInstalled`, which installs through a VS Code command instead).
+ */
+type DependencyInstallKey =
+  | 'texDistributionInstalled'
+  | 'latexdiffInstalled'
+  | 'latexindentInstalled'
+  | 'texcountInstalled'
+  | 'imageProcessingInstalled';
+
+/**
  * Per-dependency install commands keyed by `DependencyInfo.key`.
  *
  * Each platform maps to an **ordered** list of install options, ranked by
@@ -327,7 +341,7 @@ export const SCOOP_INSTALL_COMMAND =
  * An empty array means there is no automatable install for that platform.
  */
 export const DEPENDENCY_INSTALL_COMMANDS: Record<
-  string,
+  DependencyInstallKey,
   Record<OSPlatform, readonly InstallCommand[]>
 > = {
   texDistributionInstalled: {
@@ -416,6 +430,13 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
     ],
   },
 };
+
+/** Narrows a `DependencyInfo.key` to whether `DEPENDENCY_INSTALL_COMMANDS` has
+ *  an entry for it — most `LatexSettingsStatus` keys (paths, `platform`,
+ *  `latexWorkshopInstalled`) do not. */
+export function hasInstallCommands(key: string): key is DependencyInstallKey {
+  return key in DEPENDENCY_INSTALL_COMMANDS;
+}
 
 // ============================================================
 // Utility functions

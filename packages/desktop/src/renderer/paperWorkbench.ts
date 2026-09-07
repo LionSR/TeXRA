@@ -61,8 +61,21 @@ export function createPaperWorkbench(options: {
   });
 
   let disposed = false;
-  const getState = () =>
-    surface.surface$.get().workbench as DesktopTaskShellState;
+  // `Surface.workbench` is untyped storage (`Record<string, unknown> | null`)
+  // shared with hosts that have no workbench at all; validate on every read
+  // rather than trusting a cast, but skip the reparse when the raw value is
+  // still the one `updateState` last wrote.
+  let cachedRaw: unknown = surface.surface$.get().workbench;
+  let cachedState: DesktopTaskShellState =
+    DesktopTaskShellStateSchema.parse(cachedRaw);
+  const getState = (): DesktopTaskShellState => {
+    const raw = surface.surface$.get().workbench;
+    if (raw !== cachedRaw) {
+      cachedState = DesktopTaskShellStateSchema.parse(raw);
+      cachedRaw = raw;
+    }
+    return cachedState;
+  };
   function updateState(next: DesktopTaskShellState): void {
     if (disposed) return;
     const previous = getState();
