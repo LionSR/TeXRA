@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   saveProviderApiKey: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStdout: vi.fn(),
-  state: new Map<string, unknown>(),
 }));
 
 vi.mock('@cli/runtime/providerApiKey', () => ({
@@ -21,17 +20,7 @@ vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStdout: mocks.writeTextStdout,
 }));
 
-vi.mock('@platform/platform', () => ({
-  platform: () => ({
-    globalState: {
-      get: (key: string, defaultValue?: unknown) =>
-        mocks.state.has(key) ? mocks.state.get(key) : defaultValue,
-      update: async (key: string, value: unknown) => {
-        mocks.state.set(key, value);
-      },
-    },
-  }),
-}));
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 const ONBOARDING_WAIT_OPTIONS = Object.freeze({
   timeoutMs: 15_000,
@@ -58,7 +47,6 @@ function restoreProcessStream(
 }
 
 beforeEach(() => {
-  mocks.state.clear();
   mocks.saveProviderApiKey.mockReset().mockResolvedValue(undefined);
   mocks.writeTextStderr.mockReset();
   mocks.writeTextStdout.mockReset();
@@ -93,7 +81,7 @@ describe('provider-key onboarding flow', () => {
     });
 
     const { runCliOnboarding } = await import('@cli/onboarding/runOnboarding');
-    const resultPromise = runCliOnboarding(false);
+    const resultPromise = runCliOnboarding(createFakePlatform(), false);
 
     // Ink attaches its input stream before the active Select handler has
     // necessarily committed. Wait for both input attachment and the rendered
