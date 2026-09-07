@@ -219,7 +219,25 @@ describe('canonical Google Interactions protocol', () => {
         configured.prepareTurn(request()),
       );
       expect(fetchModel).not.toHaveBeenCalled();
-      const result = await Effect.runPromise(configured.generateTurn(prepared));
+      const events = await Effect.runPromise(
+        Stream.runCollect(configured.streamTurn(prepared)),
+      );
+      expect(events[0]).toMatchObject({
+        kind: 'identified',
+        providerResponseId: 'int_1',
+        requestedOrigin: {
+          protocol: 'google-interactions',
+          requestedModel: 'gemini-test',
+        },
+        returnedModel: 'gemini-returned',
+      });
+      expect(
+        events.filter((event) => event.kind === 'identified'),
+      ).toHaveLength(1);
+      const completed = events.at(-1);
+      if (completed?.kind !== 'completed')
+        throw new Error('Missing completed result');
+      const result = completed.result;
       const initialBody = await (fetchModel.mock.calls[0][0] as Request).json();
       expect(initialBody.input).toEqual([
         {
@@ -266,7 +284,10 @@ describe('canonical Google Interactions protocol', () => {
               signature: 'sig_b',
             },
           },
-          { kind: 'text', text: 'thinking done' },
+          {
+            kind: 'message',
+            content: [{ kind: 'text', text: 'thinking done' }],
+          },
           {
             kind: 'local-call',
             providerCallId: 'call_1',
@@ -302,6 +323,10 @@ describe('canonical Google Interactions protocol', () => {
       );
       fetchModel.mockImplementationOnce(async () =>
         response([
+          {
+            event_type: 'interaction.created',
+            interaction: { id: 'int_2', status: 'in_progress' },
+          },
           {
             event_type: 'step.start',
             index: 0,
@@ -417,6 +442,8 @@ describe('canonical Google Interactions protocol', () => {
     'tool-video',
     'tool-document',
     'parallel-control',
+    'reasoning-control',
+    'service-tier-control',
   ] as const)(
     'rejects unsupported %s before provider I/O',
     async (unsupported) => {
@@ -430,6 +457,14 @@ describe('canonical Google Interactions protocol', () => {
       if (unsupported === 'parallel-control') {
         next.parallelToolCalls = false;
         expectedMessage = 'Google parallel-call control';
+      } else if (
+        unsupported === 'reasoning-control' ||
+        unsupported === 'service-tier-control'
+      ) {
+        next[
+          unsupported === 'reasoning-control' ? 'reasoning' : 'serviceTier'
+        ] = null;
+        expectedMessage = 'Google does not support Responses';
       } else if (unsupported === 'raw-audio') {
         expectedMessage = 'Raw Google audio';
         next.messages.push({
@@ -691,13 +726,14 @@ describe('canonical Google Interactions protocol', () => {
     const prepared = await Effect.runPromise(configured.prepareTurn(request()));
     await expect(
       Effect.runPromise(
-        configured
-          .streamTurn(prepared)
-          .pipe(
-            Stream.runForEach(() =>
-              Effect.sync(() => bodyController.error(new Error('Body failed'))),
-            ),
+        configured.streamTurn(prepared).pipe(
+          Stream.runForEach((event) =>
+            Effect.sync(() => {
+              if (event.kind === 'delta')
+                bodyController.error(new Error('Body failed'));
+            }),
           ),
+        ),
       ),
     ).rejects.toMatchObject({
       _tag: 'ModelError',
@@ -739,6 +775,10 @@ describe('canonical Google Interactions protocol', () => {
                   new TextEncoder().encode(
                     [
                       {
+                        event_type: 'interaction.created',
+                        interaction: { id: 'int_1', status: 'in_progress' },
+                      },
+                      {
                         event_type: 'step.start',
                         index: 0,
                         step: { type: 'model_output' },
@@ -774,15 +814,19 @@ describe('canonical Google Interactions protocol', () => {
       if (phase === 'successful-take') {
         await expect(
           Effect.runPromise(
-            configured
-              .streamTurn(prepared)
-              .pipe(Stream.take(1), Stream.runDrain),
+            configured.streamTurn(prepared).pipe(
+              Stream.filter((event) => event.kind === 'delta'),
+              Stream.take(1),
+              Stream.runDrain,
+            ),
           ),
         ).rejects.toThrow('Cancellation failed');
       } else {
         const fiber = Effect.runFork(
-          Stream.runForEach(configured.streamTurn(prepared), () =>
-            Deferred.succeed(entered, undefined),
+          Stream.runForEach(configured.streamTurn(prepared), (event) =>
+            event.kind === 'delta'
+              ? Deferred.succeed(entered, undefined)
+              : Effect.void,
           ),
         );
         await Effect.runPromise(Deferred.await(entered));

@@ -140,6 +140,7 @@ describe('agent creator orchestration', () => {
             });
             const result = yield* model.generateTurn(turn);
             return result.content
+              .flatMap((part) => (part.kind === 'message' ? part.content : []))
               .filter((part) => part.kind === 'text')
               .map((part) => part.text)
               .join('');

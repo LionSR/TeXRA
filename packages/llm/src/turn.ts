@@ -27,7 +27,7 @@ const BindingSchema = z.strictObject({
     .readonly(),
 });
 const OriginSchema = BindingSchema.extend({
-  protocol: z.enum(['openai-chat', 'google-interactions']),
+  protocol: z.enum(['openai-chat', 'google-interactions', 'openai-responses']),
   codecVersion: z.literal(1),
 });
 
@@ -81,18 +81,53 @@ export const JsonObjectSchema = z
   .pipe(z.record(z.string(), z.json().transform(freezeJson)).readonly());
 
 const OutputPartSchema = z.discriminatedUnion('kind', [
-  TextPartSchema,
-  z.strictObject({ kind: z.literal('refusal'), text: z.string() }).readonly(),
+  z
+    .strictObject({
+      kind: z.literal('message'),
+      content: z
+        .array(
+          z.discriminatedUnion('kind', [
+            TextPartSchema,
+            z
+              .strictObject({ kind: z.literal('refusal'), text: z.string() })
+              .readonly(),
+          ]),
+        )
+        .readonly(),
+      evidence: z
+        .strictObject({
+          kind: z.literal('openai-responses-message'),
+          itemId: z.string().min(1),
+          status: z.enum(['completed', 'incomplete']),
+          phase: z.enum(['commentary', 'final_answer']).nullable().optional(),
+        })
+        .readonly()
+        .optional(),
+    })
+    .readonly(),
   z
     .strictObject({
       kind: z.literal('reasoning'),
       summary: z.array(TextPartSchema).readonly(),
+      content: z.array(TextPartSchema).readonly().optional(),
       evidence: z
-        .strictObject({
-          kind: z.literal('google-interactions-thought-signature'),
-          signature: z.string().min(1),
-        })
-        .readonly()
+        .discriminatedUnion('kind', [
+          z
+            .strictObject({
+              kind: z.literal('google-interactions-thought-signature'),
+              signature: z.string().min(1),
+            })
+            .readonly(),
+          z
+            .strictObject({
+              kind: z.literal('openai-responses-reasoning'),
+              itemId: z.string().min(1),
+              // Missing, null and exact opaque bytes have distinct wire meanings.
+              encryptedContent: z.string().nullable().optional(),
+              status: z.enum(['completed', 'incomplete']).optional(),
+            })
+            .readonly(),
+        ])
         .nullable(),
     })
     .readonly(),
@@ -102,6 +137,14 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
       providerCallId: z.string().min(1).nullable(),
       name: z.string().min(1),
       arguments: JsonObjectSchema,
+      evidence: z
+        .strictObject({
+          kind: z.literal('openai-responses-function-call'),
+          itemId: z.string().min(1).optional(),
+          status: z.literal('completed').optional(),
+        })
+        .readonly()
+        .optional(),
     })
     .readonly(),
 ]);
@@ -114,18 +157,36 @@ function validateAssistantContent(
   ctx: z.RefinementCtx,
 ): void {
   const ids = new Set<string>();
+  const itemIds = new Set<string>();
   for (const [index, part] of content.entries()) {
+    const evidence = part.evidence;
     if (
-      part.kind === 'reasoning' &&
-      part.evidence !== null &&
-      origin.protocol !== 'google-interactions'
+      evidence != null &&
+      origin.protocol !==
+        (evidence.kind === 'google-interactions-thought-signature'
+          ? 'google-interactions'
+          : 'openai-responses')
     ) {
       ctx.addIssue({
         code: 'custom',
         path: ['content', index],
         message:
-          'Signed reasoning requires its original Google protocol binding.',
+          'Provider content evidence requires its original protocol binding.',
       });
+    }
+    if (
+      evidence != null &&
+      'itemId' in evidence &&
+      evidence.itemId !== undefined
+    ) {
+      if (itemIds.has(evidence.itemId)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['content', index, 'evidence', 'itemId'],
+          message: 'Provider item IDs must be distinct within one response.',
+        });
+      }
+      itemIds.add(evidence.itemId);
     }
     if (part.kind !== 'local-call' || part.providerCallId === null) continue;
     if (ids.has(part.providerCallId)) {
@@ -262,6 +323,16 @@ const ToolChoiceSchema = z.union([
   z.literal('auto'),
   z.strictObject({ name: z.string().min(1) }).readonly(),
 ]);
+const ResponsesReasoningSchema = z
+  .strictObject({
+    effort: z
+      .enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
+      .nullable(),
+    mode: z.enum(['standard', 'pro']).nullable(),
+    summary: z.enum(['auto', 'concise', 'detailed']).nullable(),
+  })
+  .readonly()
+  .nullable();
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */
 export const TurnRequestSchema = z
@@ -275,6 +346,8 @@ export const TurnRequestSchema = z
     maxOutputTokens: z.int().positive().optional(),
     store: z.boolean().optional(),
     thinkingLevel: z.enum(['low', 'medium', 'high']).optional(),
+    reasoning: ResponsesReasoningSchema.optional(),
+    serviceTier: z.literal('fast').nullable().optional(),
     continuation: ContinuationSchema.optional(),
   })
   .readonly();
@@ -292,6 +365,15 @@ const GoogleControlsSchema = z.strictObject({
   thinkingLevel: z.enum(['low', 'medium', 'high']),
   toolChoice: ToolChoiceSchema,
 });
+const ResponsesControlsSchema = z.strictObject({
+  maxOutputTokens: z.int().positive(),
+  temperature: z.number().min(0).max(2).nullable(),
+  store: z.boolean(),
+  parallelToolCalls: z.boolean(),
+  toolChoice: ToolChoiceSchema,
+  reasoning: ResponsesReasoningSchema,
+  serviceTier: z.literal('fast').nullable(),
+});
 
 /** Already-selected protocol binding and defaults, provided by the application. */
 export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
@@ -303,6 +385,25 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     protocol: z.literal('google-interactions'),
     defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
+  BindingSchema.extend({
+    protocol: z.literal('openai-responses'),
+    supportsTemperature: z.boolean(),
+    defaults: ResponsesControlsSchema.omit({ toolChoice: true }).readonly(),
+  })
+    .superRefine((configuration, ctx) => {
+      if (
+        !configuration.supportsTemperature &&
+        configuration.defaults.temperature !== null
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'temperature'],
+          message:
+            'A protocol without temperature support requires a null default.',
+        });
+      }
+    })
+    .readonly(),
 ]);
 export type ModelConfiguration = z.infer<typeof ModelConfigurationSchema>;
 export type OpenAIChatConfiguration = Extract<
@@ -312,6 +413,10 @@ export type OpenAIChatConfiguration = Extract<
 export type GoogleInteractionsConfiguration = Extract<
   ModelConfiguration,
   { protocol: 'google-interactions' }
+>;
+export type OpenAIResponsesConfiguration = Extract<
+  ModelConfiguration,
+  { protocol: 'openai-responses' }
 >;
 
 const PreparedInputSchema = OriginSchema.extend({
@@ -330,6 +435,10 @@ export const ResolvedTurnSchema = z.discriminatedUnion('protocol', [
     protocol: z.literal('google-interactions'),
     controls: GoogleControlsSchema.readonly(),
     continuation: ContinuationSchema.optional(),
+  }).readonly(),
+  PreparedInputSchema.extend({
+    protocol: z.literal('openai-responses'),
+    controls: ResponsesControlsSchema.readonly(),
   }).readonly(),
 ]);
 export type ResolvedTurn = z.infer<typeof ResolvedTurnSchema>;
@@ -360,6 +469,23 @@ export const TurnResultSchema = z
   .superRefine((result, ctx) => {
     validateAssistantContent(result.requestedOrigin, result.content, ctx);
     if (
+      result.finishReason !== 'length' &&
+      result.finishReason !== 'content-filter' &&
+      result.content.some(
+        (part) =>
+          part.evidence != null &&
+          'status' in part.evidence &&
+          part.evidence.status === 'incomplete',
+      )
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['content'],
+        message:
+          'Incomplete provider items require an incomplete turn outcome.',
+      });
+    }
+    if (
       result.continuation &&
       !sameModelOrigin(result.requestedOrigin, result.continuation.origin)
     ) {
@@ -374,6 +500,15 @@ export const TurnResultSchema = z
 export type TurnResult = z.infer<typeof TurnResultSchema>;
 
 const TurnEventSchema = z.discriminatedUnion('kind', [
+  // Foreground identity evidence is neither background acceptance nor cancellation.
+  z
+    .strictObject({
+      kind: z.literal('identified'),
+      providerResponseId: z.string().min(1),
+      requestedOrigin: ModelOriginSchema,
+      returnedModel: z.string().min(1).nullable(),
+    })
+    .readonly(),
   z
     .strictObject({
       kind: z.literal('delta'),

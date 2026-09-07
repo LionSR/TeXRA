@@ -233,18 +233,34 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
       const ids = new Set<string>();
       for (const part of message.content) {
         switch (part.kind) {
-          case 'text':
-            steps.push({
-              type: 'model_output',
-              content: [{ type: 'text', text: part.text }],
-            });
-            break;
-          case 'reasoning':
-            if (!sameModelOrigin(message.origin, origin)) {
+          case 'message': {
+            if (
+              part.evidence !== undefined ||
+              part.content.some((child) => child.kind !== 'text')
+            ) {
               return yield* new ModelError({
                 kind: 'unsupported',
                 message:
-                  'Google reasoning belongs to another model or deployment.',
+                  'Google requires ordinary text message groups without foreign item evidence.',
+              });
+            }
+            steps.push({
+              type: 'model_output',
+              content: part.content.map(({ text }) => ({ type: 'text', text })),
+            });
+            break;
+          }
+          case 'reasoning':
+            if (
+              !sameModelOrigin(message.origin, origin) ||
+              part.content !== undefined ||
+              (part.evidence !== null &&
+                part.evidence.kind !== 'google-interactions-thought-signature')
+            ) {
+              return yield* new ModelError({
+                kind: 'unsupported',
+                message:
+                  'Google reasoning requires its original binding and supported thought evidence.',
               });
             }
             steps.push({
@@ -254,11 +270,15 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
             });
             break;
           case 'local-call':
-            if (!part.providerCallId || ids.has(part.providerCallId)) {
+            if (
+              !part.providerCallId ||
+              ids.has(part.providerCallId) ||
+              part.evidence !== undefined
+            ) {
               return yield* new ModelError({
                 kind: 'unsupported',
                 message:
-                  'Google calls require distinct original IDs within each response.',
+                  'Google calls require distinct original IDs without foreign item evidence.',
               });
             }
             ids.add(part.providerCallId);
@@ -398,6 +418,16 @@ export function googleInteractionsModel(
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'Google parallel-call control is not implemented.',
+        });
+      }
+      if (
+        parsed.data.reasoning !== undefined ||
+        parsed.data.serviceTier !== undefined
+      ) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Google does not support Responses reasoning or service-tier controls.',
         });
       }
       const turn = ResolvedTurnSchema.parse({
@@ -543,6 +573,7 @@ export function googleInteractionsModel(
                   });
                 }
                 const progress: TurnEvent[] = [];
+                const hadIdentity = responseId !== undefined;
                 if (
                   event.event_type === 'interaction.created' ||
                   event.event_type === 'interaction.completed'
@@ -595,6 +626,15 @@ export function googleInteractionsModel(
                     });
                   }
                   responseId = event.interaction_id;
+                } else if (
+                  responseId === undefined &&
+                  event.event_type !== 'error'
+                ) {
+                  return yield* new ModelError({
+                    kind: 'malformed-output',
+                    message:
+                      'Google emitted content before identifying its interaction.',
+                  });
                 } else if (event.event_type === 'step.start') {
                   if (pending.has(event.index)) {
                     return yield* new ModelError({
@@ -692,6 +732,13 @@ export function googleInteractionsModel(
                     cause: event,
                   });
                 }
+                if (!hadIdentity && responseId !== undefined)
+                  progress.unshift({
+                    kind: 'identified',
+                    providerResponseId: responseId,
+                    requestedOrigin: origin,
+                    returnedModel,
+                  });
                 return progress;
               }),
             ),
@@ -766,7 +813,10 @@ export function googleInteractionsModel(
                       message: 'Google returned unsupported assistant content.',
                     });
                   }
-                  content.push({ kind: 'text', text: text.text });
+                  content.push({
+                    kind: 'message',
+                    content: [{ kind: 'text', text: text.text }],
+                  });
                 } else if (step.type === 'function_call') {
                   if (step.arguments === undefined || callIds.has(step.id)) {
                     return yield* new ModelError({

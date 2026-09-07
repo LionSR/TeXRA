@@ -142,6 +142,17 @@ describe('native OpenAI Chat protocol', () => {
     expect(headers.has('openai-organization')).toBe(false);
     expect(headers.has('openai-project')).toBe(false);
     expect(events).toEqual([
+      {
+        kind: 'identified',
+        providerResponseId: 'synthetic-response',
+        requestedOrigin: {
+          protocol: 'openai-chat',
+          codecVersion: 1,
+          requestedModel: CONFIG.requestedModel,
+          deployment: CONFIG.deployment,
+        },
+        returnedModel: 'returned-model-version',
+      },
       { kind: 'delta', part: 'text', text: 'generated: true' },
       {
         kind: 'completed',
@@ -155,7 +166,12 @@ describe('native OpenAI Chat protocol', () => {
           },
           returnedModel: 'returned-model-version',
           modelFingerprint: null,
-          content: [{ kind: 'text', text: 'generated: true' }],
+          content: [
+            {
+              kind: 'message',
+              content: [{ kind: 'text', text: 'generated: true' }],
+            },
+          ],
           finishReason: 'stop',
           usage: {
             inputTokens: 10,
@@ -252,13 +268,14 @@ describe('native OpenAI Chat protocol', () => {
     const events = await Effect.runPromise(
       Stream.runCollect(model.streamTurn(prepared)),
     );
-    expect(events).toHaveLength(2);
-    expect(events[0]).toEqual({
+    expect(events).toHaveLength(3);
+    expect(events[0]?.kind).toBe('identified');
+    expect(events[1]).toEqual({
       kind: 'delta',
       part: 'text',
       text: 'Checking.',
     });
-    const completed = events[1];
+    const completed = events[2];
     expect(completed?.kind).toBe('completed');
     if (completed?.kind !== 'completed')
       throw new Error('Missing completed result');
@@ -267,7 +284,7 @@ describe('native OpenAI Chat protocol', () => {
       finishReason: 'tool-calls',
       usage: { totalTokens: 18 },
       content: [
-        { kind: 'text', text: 'Checking.' },
+        { kind: 'message', content: [{ kind: 'text', text: 'Checking.' }] },
         {
           kind: 'local-call',
           providerCallId: 'call_0',
@@ -290,7 +307,13 @@ describe('native OpenAI Chat protocol', () => {
             {
               role: 'assistant',
               origin: result.requestedOrigin,
-              content: result.content,
+              content: [
+                {
+                  kind: 'message',
+                  content: [{ kind: 'text', text: 'Prior context.' }],
+                },
+                ...result.content,
+              ],
             },
             {
               role: 'tool',
@@ -324,6 +347,10 @@ describe('native OpenAI Chat protocol', () => {
     expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).messages).toEqual(
       [
         { role: 'user', content: 'Generate YAML.' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Prior context.' }],
+        },
         {
           role: 'assistant',
           content: [{ type: 'text', text: 'Checking.' }],
@@ -403,6 +430,10 @@ describe('native OpenAI Chat protocol', () => {
     'reasoning',
     'missing call ID',
     'text after calls',
+    'reasoning control',
+    'service-tier control',
+    'Responses message evidence',
+    'Responses call evidence',
   ] as const)('rejects unsupported %s before transport', async (scenario) => {
     const fetch = vi.fn<typeof globalThis.fetch>();
     const model = modelWith(fetch);
@@ -423,7 +454,12 @@ describe('native OpenAI Chat protocol', () => {
           arguments: {},
         },
         ...(scenario === 'text after calls'
-          ? [{ kind: 'text' as const, text: 'later text' }]
+          ? [
+              {
+                kind: 'message' as const,
+                content: [{ kind: 'text' as const, text: 'later text' }],
+              },
+            ]
           : []),
       ],
     };
@@ -448,6 +484,55 @@ describe('native OpenAI Chat protocol', () => {
     };
     if (scenario === 'user media')
       request = { messages: [{ role: 'user', content: [image] }] };
+    if (scenario === 'reasoning control')
+      request = { ...REQUEST, reasoning: null };
+    if (scenario === 'service-tier control')
+      request = { ...REQUEST, serviceTier: null };
+    if (scenario === 'Responses message evidence')
+      request = {
+        messages: [
+          ...REQUEST.messages,
+          {
+            ...content,
+            origin: { ...content.origin, protocol: 'openai-responses' },
+            content: [
+              {
+                kind: 'message',
+                content: [{ kind: 'text', text: 'Keep this phase.' }],
+                evidence: {
+                  kind: 'openai-responses-message',
+                  itemId: 'msg_1',
+                  status: 'completed',
+                  phase: 'commentary',
+                },
+              },
+            ],
+          },
+        ],
+      };
+    if (scenario === 'Responses call evidence')
+      request = {
+        ...request,
+        messages: request.messages.map((message) =>
+          message.role === 'assistant'
+            ? {
+                ...message,
+                origin: { ...message.origin, protocol: 'openai-responses' },
+                content: message.content.map((part) =>
+                  part.kind === 'local-call'
+                    ? {
+                        ...part,
+                        evidence: {
+                          kind: 'openai-responses-function-call' as const,
+                          itemId: 'fc_1',
+                        },
+                      }
+                    : part,
+                ),
+              }
+            : message,
+        ),
+      };
     if (scenario === 'reasoning')
       request = {
         messages: [

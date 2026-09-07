@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
+import { openaiFailure } from './openaiError.js';
 import {
   JsonObjectSchema,
   ModelConfigurationSchema,
@@ -128,16 +129,15 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
       messages.push({ role: 'user', content: text.join('') });
       continue;
     }
-    const content: Array<
-      | OpenAI.Chat.Completions.ChatCompletionContentPartText
-      | OpenAI.Chat.Completions.ChatCompletionContentPartRefusal
-    > = [];
+    let assistant:
+      OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam | undefined;
     for (const part of message.content) {
       if (part.kind === 'local-call') {
-        if (part.providerCallId === null) {
+        if (part.providerCallId === null || part.evidence !== undefined) {
           return yield* new ModelError({
             kind: 'unsupported',
-            message: 'Chat tool history requires original provider call IDs.',
+            message:
+              'Chat tool history requires original call IDs without foreign item evidence.',
           });
         }
         calls.push({
@@ -149,27 +149,32 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
           },
         });
       } else if (
-        (part.kind === 'text' || part.kind === 'refusal') &&
-        calls.length === 0
+        part.kind === 'message' &&
+        calls.length === 0 &&
+        part.evidence === undefined
       ) {
-        content.push(
-          part.kind === 'text'
-            ? { type: 'text', text: part.text }
-            : { type: 'refusal', refusal: part.text },
-        );
+        assistant = {
+          role: 'assistant',
+          content: part.content.map((child) =>
+            child.kind === 'text'
+              ? { type: 'text', text: child.text }
+              : { type: 'refusal', refusal: child.text },
+          ),
+        };
+        messages.push(assistant);
       } else {
         return yield* new ModelError({
           kind: 'unsupported',
           message:
-            'This Chat protocol requires text or refusal content before any local calls; reasoning and media are unsupported.',
+            'Chat requires ordinary message groups before local calls; reasoning and foreign item evidence are unsupported.',
         });
       }
     }
-    messages.push({
-      role: 'assistant',
-      content: content.length > 0 ? content : '',
-      ...(calls.length > 0 ? { tool_calls: calls } : {}),
-    });
+    if (assistant === undefined) {
+      assistant = { role: 'assistant', content: '' };
+      messages.push(assistant);
+    }
+    if (calls.length > 0) assistant.tool_calls = calls;
   }
   return messages;
 });
@@ -187,33 +192,6 @@ const chatToolChoice = Effect.fn('llm.chatToolChoice')(function* (
   }
   return { type: 'function', function: { name: choice.name } } as const;
 });
-
-function sdkFailure(cause: unknown): ModelError {
-  if (cause instanceof OpenAI.APIConnectionError) {
-    return new ModelError({
-      kind: 'transport',
-      message: cause.message,
-      cause,
-    });
-  }
-  if (cause instanceof OpenAI.APIError) {
-    return new ModelError({
-      kind:
-        cause.status === 401 || cause.status === 403
-          ? 'authentication'
-          : 'provider-rejection',
-      message: cause.message,
-      status: cause.status,
-      requestId: cause.requestID ?? undefined,
-      cause,
-    });
-  }
-  return new ModelError({
-    kind: 'transport',
-    message: 'The model transport failed.',
-    cause,
-  });
-}
 
 /** Direct OpenAI Chat protocol; credentials and HTTP transport are foreign inputs. */
 export function openaiChatModel(
@@ -255,12 +233,14 @@ export function openaiChatModel(
       if (
         parsed.data.store !== undefined ||
         parsed.data.thinkingLevel !== undefined ||
-        parsed.data.continuation !== undefined
+        parsed.data.continuation !== undefined ||
+        parsed.data.reasoning !== undefined ||
+        parsed.data.serviceTier !== undefined
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
           message:
-            'This Chat protocol does not support storage, thinking-level or continuation controls.',
+            'This Chat protocol does not support storage, reasoning, service-tier or continuation controls.',
         });
       }
       yield* chatMessages(parsed.data.messages);
@@ -349,7 +329,7 @@ export function openaiChatModel(
                 },
                 { signal },
               ),
-            catch: sdkFailure,
+            catch: openaiFailure,
           });
           let fingerprint: string | null = null;
           let finishReason: TurnResult['finishReason'] | undefined;
@@ -386,7 +366,7 @@ export function openaiChatModel(
                         message: 'The model returned malformed stream data.',
                         cause,
                       })
-                    : sdkFailure(cause),
+                    : openaiFailure(cause),
               }).pipe(
                 Effect.flatMap((next) =>
                   next.done
@@ -419,6 +399,14 @@ export function openaiChatModel(
                     message: 'The model stream changed its response identity.',
                   });
                 }
+                const events: TurnEvent[] = [];
+                if (responseId === undefined)
+                  events.push({
+                    kind: 'identified',
+                    providerResponseId: chunk.id,
+                    requestedOrigin: origin,
+                    returnedModel: chunk.model,
+                  });
                 responseId = chunk.id;
                 returnedModel = chunk.model;
                 fingerprint = chunk.system_fingerprint ?? fingerprint;
@@ -435,7 +423,7 @@ export function openaiChatModel(
                   };
                 }
                 const choice = chunk.choices[0];
-                if (!choice) return [];
+                if (!choice) return events;
                 if (finishReason !== undefined) {
                   return yield* new ModelError({
                     kind: 'malformed-output',
@@ -443,7 +431,6 @@ export function openaiChatModel(
                       'The model emitted another choice after completion.',
                   });
                 }
-                const events: TurnEvent[] = [];
                 for (const [part, text] of [
                   ['text', choice.delta.content],
                   ['refusal', choice.delta.refusal],
@@ -515,9 +502,8 @@ export function openaiChatModel(
                     'The model finish reason does not match its tool calls.',
                 });
               }
-              const completedContent: TurnResult['content'][number][] = [
-                ...content,
-              ];
+              const completedContent: TurnResult['content'][number][] =
+                content.length > 0 ? [{ kind: 'message', content }] : [];
               for (const [ordinal, [index, call]] of [...calls]
                 .toSorted(([left], [right]) => left - right)
                 .entries()) {
