@@ -238,7 +238,7 @@ positions and Google step positions identify their matching boundaries and delta
 they are not canonical-history or tool-call ordinals. Chat has no such item index:
 its index is null and phases follow the first nonempty fragment and observed
 transitions. Resumed background observation may begin with a delta or phase end,
-without an invented start. Each background source event carries its cursor once;
+without an invented start. Each sequenced background source event carries its cursor once;
 terminal-only snapshots do not reconstruct live phase intervals. Runtime still
 owns presentation cleanup on failed or interrupted execution.
 
@@ -258,10 +258,30 @@ positions or contradictory evidence fail explicitly. Unlike foreground reconcili
 observation does not reconstruct an unseen prefix from an entirely sparse terminal
 snapshot.
 
+Google Interactions also exposes submission, observation and cancellation when
+the selected route declares background support. Background preparation requires
+`store: true`. Submission sends one non-streaming create request and returns either
+an accepted interaction ID or a completed canonical result. Observation polls that
+same ID under the caller's original absolute deadline; it never submits another
+generation request. Identity and completion carry `afterSequence: null`, since
+polling supplies no provider stream cursor. No text deltas or phase intervals are
+invented from snapshots. Completed snapshots use the same normalization as
+foreground output, preserving reasoning signatures, original calls and observed
+usage. Background observation does not create a continuation anchor from an
+unavailable input history; callers retain the canonical result for replay.
+This implements the selected polling route in Google's
+[background execution API](https://ai.google.dev/gemini-api/docs/background-execution?hl=en).
+Streaming reconnection and managed-agent execution remain unsupported.
+
 Only a cancellation response with status `cancelled` confirms remote cancellation.
 A returned terminal status is an observed outcome, without any claim about whether
 it preceded the cancellation request; queued or running remains unconfirmed.
 Interrupting the local HTTP request does not confirm remote cancellation.
+
+Submission interrupted before an accepted result reaches the caller can leave
+remote work without a delivered operation receipt. Joining the local request does
+not durably admit that job. This ambiguity applies to both providers; runtime
+recovery must not infer that the provider did no work or automatically resubmit.
 
 The exported pure Responses continuation operation uses the same selected
 configuration, rematerialized admitted input and completed output. It constructs

@@ -825,6 +825,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     .readonly(),
   BindingSchema.extend({
     protocol: z.literal('google-interactions'),
+    background: z.enum(['supported', 'unsupported']),
     supportsInputTokenEstimation: z.boolean(),
     defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
@@ -1026,6 +1027,11 @@ const ResponsesPreparedSchema = PreparedInputSchema.extend({
   controls: ResponsesControlsSchema.readonly(),
   continuation: ResponsesContinuationSchema.optional(),
 });
+const GooglePreparedSchema = PreparedInputSchema.extend({
+  protocol: z.literal('google-interactions'),
+  controls: GoogleControlsSchema.readonly(),
+  continuation: GoogleContinuationSchema.optional(),
+});
 const HttpTransportSchema = z
   .strictObject({ kind: z.literal('http') })
   .readonly();
@@ -1056,11 +1062,7 @@ export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
       protocol: z.literal('openai-chat'),
       controls: OpenAIChatControlsSchema.readonly(),
     }).readonly(),
-    PreparedInputSchema.extend({
-      protocol: z.literal('google-interactions'),
-      controls: GoogleControlsSchema.readonly(),
-      continuation: GoogleContinuationSchema.optional(),
-    }).readonly(),
+    GooglePreparedSchema.readonly(),
     PreparedInputSchema.extend({
       protocol: z.literal('deepseek-chat'),
       controls: ChatReasoningControlsSchema.readonly(),
@@ -1097,10 +1099,13 @@ export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
       controls: AnthropicControlsSchema.readonly(),
     }).readonly(),
   ]),
-  ResponsesPreparedSchema.extend({
-    mode: z.literal('background'),
-    transport: HttpTransportSchema,
-  }).readonly(),
+  z.discriminatedUnion('protocol', [
+    ResponsesPreparedSchema.extend({
+      mode: z.literal('background'),
+      transport: HttpTransportSchema,
+    }).readonly(),
+    GooglePreparedSchema.extend({ mode: z.literal('background') }).readonly(),
+  ]),
 ]);
 export type ResolvedTurn = z.infer<typeof ResolvedTurnSchema>;
 
@@ -1373,7 +1378,7 @@ const TurnEventSchema = z.discriminatedUnion('kind', [
 export type TurnEvent = z.infer<typeof TurnEventSchema>;
 
 /** Enough evidence to observe accepted remote work, without a second transcript. */
-export const RemoteOperationSchema = z
+const ResponsesOperationSchema = z
   .strictObject({
     origin: OriginSchema.extend({
       protocol: z.literal('openai-responses'),
@@ -1382,6 +1387,18 @@ export const RemoteOperationSchema = z
     afterSequence: z.int().nonnegative().nullable(),
   })
   .readonly();
+export const RemoteOperationSchema = z.union([
+  ResponsesOperationSchema,
+  ResponsesOperationSchema.unwrap()
+    .extend({
+      origin: OriginSchema.extend({
+        protocol: z.literal('google-interactions'),
+      }).readonly(),
+      // Polling snapshots have no provider sequence or replay cursor.
+      afterSequence: z.null(),
+    })
+    .readonly(),
+]);
 export type RemoteOperation = z.infer<typeof RemoteOperationSchema>;
 export const BackgroundSubmissionSchema = z.discriminatedUnion('kind', [
   z
@@ -1396,12 +1413,38 @@ export const BackgroundSubmissionSchema = z.discriminatedUnion('kind', [
 export type BackgroundSubmission = z.infer<typeof BackgroundSubmissionSchema>;
 const SequenceSchema = z.strictObject({ afterSequence: z.int().nonnegative() });
 /** A delivered sequence is not a durable acknowledgement by its consumer. */
-export const BackgroundEventSchema = z.discriminatedUnion('kind', [
-  IdentifiedEventSchema.extend(SequenceSchema.shape).readonly(),
+const SequencedBackgroundEventSchema = z.discriminatedUnion('kind', [
+  IdentifiedEventSchema.extend({
+    ...SequenceSchema.shape,
+    requestedOrigin: OriginSchema.extend({
+      protocol: z.literal('openai-responses'),
+    }).readonly(),
+  }).readonly(),
   DeltaEventSchema.extend(SequenceSchema.shape).readonly(),
   PhaseEventSchema.extend(SequenceSchema.shape).readonly(),
-  HttpCompletedEventSchema.extend(SequenceSchema.shape).readonly(),
+  HttpCompletedEventSchema.extend({
+    ...SequenceSchema.shape,
+    result: HttpTurnResultSchema.refine(
+      (result) => result.requestedOrigin.protocol === 'openai-responses',
+    ),
+  }).readonly(),
   SequenceSchema.extend({ kind: z.literal('cursor') }).readonly(),
+]);
+/** Polling can report identity and completion, but cannot invent stream progress. */
+export const BackgroundEventSchema = z.union([
+  SequencedBackgroundEventSchema,
+  IdentifiedEventSchema.extend({
+    afterSequence: z.null(),
+    requestedOrigin: OriginSchema.extend({
+      protocol: z.literal('google-interactions'),
+    }).readonly(),
+  }).readonly(),
+  HttpCompletedEventSchema.extend({
+    afterSequence: z.null(),
+    result: HttpTurnResultSchema.refine(
+      (result) => result.requestedOrigin.protocol === 'google-interactions',
+    ),
+  }).readonly(),
 ]);
 export type BackgroundEvent = z.infer<typeof BackgroundEventSchema>;
 /** A cancellation response reports the state observed, not which request won a race. */
@@ -1409,7 +1452,13 @@ export const CancellationEvidenceSchema = z.discriminatedUnion('kind', [
   IdentitySchema.extend({ kind: z.literal('confirmed-cancelled') }).readonly(),
   IdentitySchema.extend({
     kind: z.literal('observed-terminal'),
-    status: z.enum(['completed', 'failed', 'incomplete']),
+    status: z.enum([
+      'completed',
+      'requires_action',
+      'failed',
+      'incomplete',
+      'budget_exceeded',
+    ]),
   }).readonly(),
   IdentitySchema.extend({
     kind: z.literal('unconfirmed'),

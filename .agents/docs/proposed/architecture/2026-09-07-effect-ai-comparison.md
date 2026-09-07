@@ -2,8 +2,8 @@
 
 Status: proposed
 
-Date: 2026-09-07. Source review of PR #11997 after rebasing onto main
-`5484f99e4e507b5a57f8f295c900c9770450fd69`. This assessment identifies remaining
+Date: 2026-09-07. Source review of PR #11997, updated after rebasing onto main
+`4d538c5e40253224f37a83f16c69d4ddad28c038`. This assessment identifies remaining
 implementation obligations and useful design choices; it does not establish
 live-provider parity or crash-recovery correctness.
 
@@ -79,8 +79,12 @@ fix removes that dependency from all four helper callers: auxiliary output no
 longer inherits document replacement rules. This does not switch generation to
 the native package.
 The editor's Grant operation is the sole application generation consumer of the
-new acquisition contract. Both old graph programs, ambient run context and
-Promise-based launch/resume paths remain active.
+new acquisition contract. Both old graph programs and ambient run context remain
+active. Main now exposes `runAgent`, `executeAgent` and resume as Effect programs,
+and child attempts and delivery also compose through Effect. Their implementations
+still enter Promise-based graph and storage operations, and `RunContext.ts` still
+uses AsyncLocalStorage. The remaining work is to remove those internal boundaries
+with their consumers, not to repeat the already completed launch conversion.
 
 The next implementation should capture route, credentials/account and allowed
 controls together, then convert the helpers with their prompt placement, context
@@ -205,7 +209,10 @@ not install unused layers or change logging behavior.
 
 ## Verified
 
-Hosted tools, selected media/upload/compaction paths and Google background
+Google background submission, polling and explicit cancellation now use the native
+contract on capability-selected routes. Foreground and background output share
+normalization, and polling has no fabricated stream cursor. Hosted tools, selected
+media/upload/compaction paths, Google streaming reconnection and managed-agent
 execution remain incomplete. Counting, continuation and background cancellation
 still need runtime consumers and accounting. The proposal also requires real
 restart and multiprocess checks, three-host and packed-SDK operation, and measured

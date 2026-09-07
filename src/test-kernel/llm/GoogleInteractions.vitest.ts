@@ -2,17 +2,25 @@
 import assert from 'node:assert/strict';
 
 // Third-party imports
+import { it as effectIt } from '@effect/vitest';
+import { RemoteOperationSchema } from '@texra-ai/llm/turn';
 import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
 import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
+import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TurnRequest, TurnResult } from '@texra-ai/llm/turn';
+import type { ModelError, TurnRequest, TurnResult } from '@texra-ai/llm/turn';
 
-function model(store = true, supportsInputTokenEstimation = true) {
+function model(
+  store = true,
+  supportsInputTokenEstimation = true,
+  background: 'supported' | 'unsupported' = 'unsupported',
+) {
   return googleInteractionsModel(
     {
       protocol: 'google-interactions',
       requestedModel: 'gemini-test',
       supportsInputTokenEstimation,
+      background,
       deployment: {
         endpoint: 'https://synthetic.invalid',
         credentialScope: 'test-account',
@@ -21,6 +29,39 @@ function model(store = true, supportsInputTokenEstimation = true) {
     },
     { apiKey: 'synthetic-key' },
   );
+}
+
+function gate() {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+
+function backgroundFixture() {
+  return Effect.gen(function* () {
+    const configured = model(true, true, 'supported');
+    const turn = yield* configured.prepareTurn({
+      ...request(),
+      mode: 'background',
+    });
+    assert(
+      turn.mode === 'background' && turn.protocol === 'google-interactions',
+    );
+    assert(configured.background);
+    const operation = RemoteOperationSchema.parse({
+      origin: {
+        protocol: turn.protocol,
+        codecVersion: turn.codecVersion,
+        requestedModel: turn.requestedModel,
+        deployment: turn.deployment,
+      },
+      providerResponseId: 'int_1',
+      afterSequence: null,
+    });
+    return { configured, turn, background: configured.background, operation };
+  });
 }
 
 function request(): TurnRequest {
@@ -218,6 +259,398 @@ describe('canonical Google Interactions protocol', () => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
+
+  effectIt.effect(
+    'submits once, polls signed tool calls, and replays their canonical results',
+    () =>
+      Effect.gen(function* () {
+        const { configured, turn, background, operation } =
+          yield* backgroundFixture();
+        fetchModel.mockImplementationOnce(async () =>
+          Response.json({
+            id: 'int_1',
+            status: 'queued',
+            model: 'gemini-returned',
+          }),
+        );
+        expect(yield* background.submit(turn)).toEqual({
+          kind: 'accepted',
+          operation,
+          returnedModel: 'gemini-returned',
+        });
+        expect(
+          yield* Effect.promise(() =>
+            (fetchModel.mock.calls[0][0] as Request).json(),
+          ),
+        ).toMatchObject({ background: true, stream: false, store: true });
+        fetchModel.mockImplementationOnce(async () =>
+          Response.json({
+            id: 'int_1',
+            status: 'in_progress',
+            model: 'gemini-returned',
+          }),
+        );
+        fetchModel.mockImplementationOnce(async () =>
+          Response.json({
+            id: 'int_1',
+            status: 'requires_action',
+            steps: [
+              {
+                type: 'thought',
+                summary: [{ type: 'text', text: 'plan' }],
+                signature: 'sig_b',
+              },
+              {
+                type: 'model_output',
+                content: [{ type: 'text', text: 'thinking done' }],
+              },
+              {
+                type: 'function_call',
+                id: 'call_1',
+                name: 'search',
+                arguments: { q: 'one' },
+              },
+              {
+                type: 'function_call',
+                id: 'call_2',
+                name: 'fetch',
+                arguments: { u: 'two' },
+              },
+            ],
+            usage: {
+              total_input_tokens: 12,
+              total_output_tokens: 8,
+              total_tokens: 20,
+              total_cached_tokens: 3,
+              total_thought_tokens: 2,
+            },
+          }),
+        );
+        const observation = yield* Stream.runCollect(
+          background.observe(operation, { deadlineAtMs: 10_000 }),
+        ).pipe(Effect.forkChild);
+        yield* TestClock.adjust('5 seconds');
+        const events = yield* Fiber.join(observation);
+        expect(
+          events.map((event) => [event.kind, event.afterSequence]),
+        ).toEqual([
+          ['identified', null],
+          ['completed', null],
+        ]);
+        const completed = events.at(-1);
+        assert(completed?.kind === 'completed');
+        expect(completed.result).toMatchObject({
+          providerResponseId: 'int_1',
+          returnedModel: 'gemini-returned',
+          finishReason: 'tool-calls',
+          usage: {
+            inputTokens: 12,
+            outputTokens: 8,
+            totalTokens: 20,
+            cachedInputTokens: 3,
+            reasoningTokens: 2,
+          },
+        });
+        expect(completed.result.continuation).toBeUndefined();
+        const replay = yield* configured.prepareTurn(
+          exchange(completed.result),
+        );
+        assert(replay.mode === 'foreground');
+        yield* configured.generateTurn(replay);
+        expect(
+          yield* Effect.promise(() =>
+            (fetchModel.mock.calls[3][0] as Request).json(),
+          ),
+        ).toMatchObject({
+          background: false,
+          stream: true,
+          input: expect.arrayContaining([
+            {
+              type: 'thought',
+              summary: [{ type: 'text', text: 'plan' }],
+              signature: 'sig_b',
+            },
+            {
+              type: 'function_call',
+              id: 'call_1',
+              name: 'search',
+              arguments: { q: 'one' },
+            },
+            {
+              type: 'function_call',
+              id: 'call_2',
+              name: 'fetch',
+              arguments: { u: 'two' },
+            },
+          ]),
+        });
+        expect(
+          fetchModel.mock.calls
+            .slice(1, 3)
+            .every(([url]) =>
+              (url as Request).url.includes('include_input=false'),
+            ),
+        ).toBe(true);
+        expect(fetchModel).toHaveBeenCalledTimes(4);
+      }),
+  );
+
+  effectIt.effect.each([
+    ['cancelled', 'confirmed-cancelled'],
+    ['completed', 'observed-terminal'],
+    ['requires_action', 'observed-terminal'],
+    ['in_progress', 'unconfirmed'],
+  ] as const)('reports cancellation state %s as %s', ([status, kind]) =>
+    Effect.gen(function* () {
+      const { background, operation } = yield* backgroundFixture();
+      fetchModel.mockImplementationOnce(async () =>
+        Response.json({ id: 'int_1', status, model: 'gemini-returned' }),
+      );
+      expect(yield* background.cancel(operation)).toMatchObject({
+        kind,
+        providerResponseId: 'int_1',
+        returnedModel: 'gemini-returned',
+        ...(status === 'cancelled' ? {} : { status }),
+      });
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+      expect((fetchModel.mock.calls[0][0] as Request).url).toContain(
+        '/int_1/cancel',
+      );
+    }),
+  );
+
+  effectIt.effect(
+    'enforces binding, storage, and the original observation deadline before requests',
+    () =>
+      Effect.gen(function* () {
+        const { configured, turn, background, operation } =
+          yield* backgroundFixture();
+        expect(model().background).toBeUndefined();
+        expect(
+          (yield* Effect.flip(
+            model(false, true, 'supported').prepareTurn({
+              ...request(),
+              mode: 'background',
+            }),
+          )).kind,
+        ).toBe('unsupported');
+        expect(
+          (yield* Effect.flip(
+            background.submit({
+              ...turn,
+              controls: { ...turn.controls, store: false },
+            }),
+          )).kind,
+        ).toBe('unsupported');
+        const other = RemoteOperationSchema.parse({
+          ...operation,
+          origin: {
+            ...operation.origin,
+            deployment: {
+              ...operation.origin.deployment,
+              credentialScope: 'other-account',
+            },
+          },
+        });
+        expect((yield* Effect.flip(background.cancel(other))).kind).toBe(
+          'unsupported',
+        );
+        expect(
+          yield* Effect.flip(
+            Stream.runDrain(background.observe(operation, { deadlineAtMs: 0 })),
+          ),
+        ).toMatchObject({ kind: 'observation-deadline', operation });
+        const invalidForeground = JSON.parse(JSON.stringify(turn));
+        expect(
+          (yield* Effect.flip(configured.generateTurn(invalidForeground))).kind,
+        ).toBe('unsupported');
+        expect(fetchModel).not.toHaveBeenCalled();
+      }),
+  );
+
+  effectIt.effect.each([
+    'malformed-terminal',
+    'mismatched-cancellation',
+    'changed-model',
+    'retrieval-failure',
+  ] as const)(
+    'retains accepted operation evidence for %s without retry',
+    (failure) =>
+      Effect.gen(function* () {
+        const { turn, background, operation } = yield* backgroundFixture();
+        if (failure === 'malformed-terminal') {
+          fetchModel.mockImplementationOnce(async () =>
+            Response.json({
+              id: 'int_1',
+              status: 'completed',
+              steps: [{ type: 'unknown' }],
+            }),
+          );
+          expect(yield* Effect.flip(background.submit(turn))).toMatchObject({
+            kind: 'malformed-output',
+            operation,
+            responseId: 'int_1',
+          });
+        } else if (failure === 'mismatched-cancellation') {
+          fetchModel.mockImplementationOnce(async () =>
+            Response.json({ id: 'different', status: 'cancelled' }),
+          );
+          expect(
+            yield* Effect.flip(background.cancel(operation)),
+          ).toMatchObject({
+            kind: 'malformed-output',
+            operation,
+            responseId: 'int_1',
+          });
+        } else {
+          if (failure === 'changed-model') {
+            fetchModel.mockImplementationOnce(async () =>
+              Response.json({
+                id: 'int_1',
+                status: 'in_progress',
+                model: 'first',
+              }),
+            );
+            fetchModel.mockImplementationOnce(async () =>
+              Response.json({
+                id: 'int_1',
+                status: 'completed',
+                model: 'other',
+                steps: [
+                  {
+                    type: 'model_output',
+                    content: [{ type: 'text', text: 'x' }],
+                  },
+                ],
+              }),
+            );
+          } else
+            fetchModel.mockImplementationOnce(async () =>
+              Response.json({ error: { message: 'denied' } }, { status: 403 }),
+            );
+          const observation = yield* Effect.flip(
+            Stream.runDrain(
+              background.observe(operation, { deadlineAtMs: 10_000 }),
+            ),
+          ).pipe(Effect.forkChild);
+          if (failure === 'changed-model') yield* TestClock.adjust('5 seconds');
+          expect(yield* Fiber.join(observation)).toMatchObject({
+            kind:
+              failure === 'changed-model'
+                ? 'malformed-output'
+                : 'authentication',
+            operation,
+            responseId: 'int_1',
+            ...(failure === 'changed-model' ? { model: 'first' } : {}),
+          });
+        }
+        expect(fetchModel).toHaveBeenCalledTimes(
+          failure === 'changed-model' ? 2 : 1,
+        );
+      }),
+  );
+
+  effectIt.effect.each([
+    'submit',
+    'observe',
+    'cancel',
+    'deadline',
+    'deadline-cleanup-failure',
+  ] as const)(
+    'aborts and joins the full background %s body without cancelling remote work',
+    (kind) =>
+      Effect.gen(function* () {
+        const { turn, background, operation } = yield* backgroundFixture();
+        const timedOut =
+          kind === 'deadline' || kind === 'deadline-cleanup-failure';
+        const entered = gate();
+        const aborted = gate();
+        const released = gate();
+        const failure = new Error('Late background body failure');
+        fetchModel.mockImplementation(async (input) => {
+          const request = input as Request;
+          return new Response(
+            new ReadableStream<Uint8Array>(
+              {
+                start(controller) {
+                  request.signal.addEventListener(
+                    'abort',
+                    () => {
+                      aborted.release();
+                      void released.promise.then(() =>
+                        controller.error(
+                          kind === 'deadline'
+                            ? new DOMException('Aborted', 'AbortError')
+                            : failure,
+                        ),
+                      );
+                    },
+                    { once: true },
+                  );
+                },
+                pull() {
+                  entered.release();
+                },
+              },
+              { highWaterMark: 0 },
+            ),
+            { headers: { 'content-type': 'application/json' } },
+          );
+        });
+        let action: Effect.Effect<unknown, ModelError>;
+        if (kind === 'submit') action = background.submit(turn);
+        else if (kind === 'cancel') action = background.cancel(operation);
+        else
+          action = Stream.runDrain(
+            background.observe(operation, {
+              deadlineAtMs: timedOut ? 1_000 : 60_000,
+            }),
+          );
+        let finished = false;
+        const fiber = yield* action.pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              finished = true;
+            }),
+          ),
+          Effect.forkChild,
+        );
+        yield* Effect.promise(() => entered.promise);
+        const interruption = timedOut
+          ? yield* TestClock.adjust(1_000).pipe(Effect.forkChild)
+          : yield* Fiber.interrupt(fiber).pipe(Effect.forkChild);
+        yield* Effect.promise(() => aborted.promise);
+        expect(finished).toBe(false);
+        released.release();
+        yield* Fiber.join(interruption);
+        const exit = yield* Fiber.await(fiber);
+        assert(exit._tag === 'Failure');
+        if (timedOut) {
+          expect(
+            exit.cause.reasons.find(Cause.isFailReason)?.error,
+          ).toMatchObject({
+            kind: 'observation-deadline',
+            operation,
+            responseId: 'int_1',
+          });
+        } else expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+        if (kind === 'deadline')
+          expect(exit.cause.reasons.filter(Cause.isDieReason)).toHaveLength(0);
+        else {
+          expect(
+            exit.cause.reasons.find(Cause.isDieReason)?.defect,
+          ).toMatchObject({
+            cause: failure,
+            ...(kind === 'submit' ? {} : { operation, responseId: 'int_1' }),
+          });
+        }
+        expect(fetchModel).toHaveBeenCalledTimes(1);
+        if (kind !== 'cancel')
+          expect((fetchModel.mock.calls[0][0] as Request).url).not.toContain(
+            '/cancel',
+          );
+      }),
+  );
 
   it.each([undefined, '', ' Exact system\n'])(
     'counts exact cold converted content with system %j without generating',
@@ -754,7 +1187,7 @@ describe('canonical Google Interactions protocol', () => {
         expectedMessage = 'Google does not support';
       } else if (unsupported === 'background-mode') {
         next.mode = 'background';
-        expectedMessage = 'Google does not support';
+        expectedMessage = 'Google background execution';
       } else if (unsupported === 'prompt-cache-key') {
         next.promptCacheKey = 'run-cache-key';
         expectedMessage = 'Google does not support';

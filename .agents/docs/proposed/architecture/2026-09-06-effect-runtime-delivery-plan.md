@@ -23,6 +23,16 @@ of places a normal product change touches. An Effect import count cannot establi
 
 ## 1. Verified starting point
 
+The census below records the original starting revision. At the integration
+branch's 2026-09-07 rebase onto `4d538c5e40253224f37a83f16c69d4ddad28c038`,
+main already supplies SQLite-backed `SessionEvents`, Effect-returning launch and
+resume operations, and Effect child attempts and delivery. The migration guard
+passes: 1,563 production files, 126 `platform()` calls, six `setServices()` calls,
+12 `new AbortController()` sites and 22 internal `Effect.run*` calls in seven files.
+The old graph programs, handler-based helpers, ambient run context and separate
+workflow checkpoints remain. The [updated comparison](2026-09-07-effect-ai-comparison.md)
+distinguishes these remaining obligations from work already delivered on main.
+
 Freshly fetched `origin/main`: `542aea6e8425ec574ffa0fa9fd4fd05a878feb03`.
 Work starts on `codex/effect-runtime-delivery-20260906` in an isolated worktree based exactly
 on that commit. The original workspace and its untracked proposals remain untouched.

@@ -9,7 +9,7 @@ import {
   openaiResponsesModel,
   openaiResponsesWebSocketModel,
 } from '@texra-ai/llm/openai-responses';
-import { ContinuationSchema } from '@texra-ai/llm/turn';
+import { ContinuationSchema, RemoteOperationSchema } from '@texra-ai/llm/turn';
 import { Cause, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -1195,7 +1195,7 @@ describe('native OpenAI Responses protocol', () => {
         system: 'policy',
       }),
     );
-    assert(turn.mode === 'background');
+    assert(turn.mode === 'background' && turn.protocol === 'openai-responses');
     const fiber = Effect.runFork(
       model.background
         .submit(turn)
@@ -1245,7 +1245,10 @@ describe('native OpenAI Responses protocol', () => {
     const resumed = await Effect.runPromise(
       Stream.runCollect(
         model.background.observe(
-          { ...accepted.operation, afterSequence: 3 },
+          RemoteOperationSchema.parse({
+            ...accepted.operation,
+            afterSequence: 3,
+          }),
           policy,
         ),
       ),
