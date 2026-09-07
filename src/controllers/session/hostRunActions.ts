@@ -15,6 +15,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { hostPort } from '@controllers/effectPort';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
@@ -199,11 +200,6 @@ export function createHostRunActions(
     return parsed.success ? parsed.data : undefined;
   };
 
-  /** A host port call. Its rejection is the host's own error and reaches the
-   *  caller with the same identity from the Promise edge. */
-  const port = <A>(call: () => A | PromiseLike<A>): Effect.Effect<A, unknown> =>
-    Effect.tryPromise({ try: async () => call(), catch: (error) => error });
-
   /** The Copilot subscription's fallback: a replacement run on the user's
    *  own key for the model Copilot served, then the pending retry is
    *  cancelled in its favor. */
@@ -216,7 +212,7 @@ export function createHostRunActions(
       const modelsChanged =
         'The available models changed while TeXRA was preparing the API key. Try again.';
       if (!request.model) {
-        yield* port(() =>
+        yield* hostPort(() =>
           ports.showInfo(
             `TeXRA did not record which Copilot model this retry used. ${chooseAnotherModel}`,
           ),
@@ -229,7 +225,7 @@ export function createHostRunActions(
         getUseOpenRouter(),
       );
       if (!fallback) {
-        yield* port(() =>
+        yield* hostPort(() =>
           ports.showInfo(
             `No model you can use with your own API key matches this Copilot model. ${chooseAnotherModel}`,
           ),
@@ -250,7 +246,7 @@ export function createHostRunActions(
         getUseOpenRouter(),
       );
       if (!currentFallback) {
-        yield* port(() => ports.showInfo(modelsChanged));
+        yield* hostPort(() => ports.showInfo(modelsChanged));
         return;
       }
       if (currentFallback.provider !== fallback.provider) {
@@ -265,14 +261,14 @@ export function createHostRunActions(
           getUseOpenRouter(),
         );
         if (!finalFallback || finalFallback.provider !== fallback.provider) {
-          yield* port(() => ports.showInfo(modelsChanged));
+          yield* hostPort(() => ports.showInfo(modelsChanged));
           return;
         }
       }
-      yield* port(() => snapshots.preload([streamId]));
+      yield* hostPort(() => snapshots.preload([streamId]));
       const { config } = snapshots.getRunMetadata(streamId);
       if (!config) {
-        yield* port(() =>
+        yield* hostPort(() =>
           ports.showInfo(
             `The settings for this run are no longer available. ${chooseAnotherModel}`,
           ),
@@ -304,7 +300,9 @@ export function createHostRunActions(
         },
       );
       if (!started) return;
-      yield* port(() => settleRetry(streamId, requestId, { action: 'cancel' }));
+      yield* hostPort(() =>
+        settleRetry(streamId, requestId, { action: 'cancel' }),
+      );
     },
   );
 

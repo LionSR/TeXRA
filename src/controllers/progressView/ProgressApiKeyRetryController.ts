@@ -2,6 +2,7 @@ import { Effect, Exit, Semaphore } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
+import { hostPort } from '@controllers/effectPort';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
@@ -37,16 +38,6 @@ interface ProgressApiKeyRetryRequest {
 
 interface ProgressApiRoutingSnapshot {
   readonly quotaRoutes: ReadonlyMap<ExhaustionReason, boolean>;
-}
-
-/** A host port call (credentials, prompts, toggles, the retry launch). Its
- *  rejection is the host's own error and reaches the caller with the same
- *  identity from the Promise edge. */
-function port<A>(call: () => A | PromiseLike<A>): Effect.Effect<A, unknown> {
-  return Effect.tryPromise({
-    try: async () => call(),
-    catch: (error) => error,
-  });
 }
 
 export interface ProgressApiKeyRetryControllerDeps {
@@ -166,7 +157,7 @@ export class ProgressApiKeyRetryController {
     //   usable direct key is enough consent to retry on it.
     if (requireChange) {
       const before = yield* this.readKeys(providersToCheck);
-      yield* port(() => this.deps.promptForApiKey(provider));
+      yield* hostPort(() => this.deps.promptForApiKey(provider));
       return yield* this.hasChangedUsableKey(providersToCheck, before);
     }
 
@@ -176,7 +167,7 @@ export class ProgressApiKeyRetryController {
     // none exists yet, and only re-check the keys after that prompt (so the
     // common already-set path reads the secret store once, not twice).
     if (yield* this.hasAnyUsableKey(providersToCheck)) return true;
-    yield* port(() => this.deps.promptForApiKey(provider));
+    yield* hostPort(() => this.deps.promptForApiKey(provider));
     return yield* this.hasAnyUsableKey(providersToCheck);
   });
 
@@ -236,11 +227,9 @@ export class ProgressApiKeyRetryController {
       yield* Effect.addFinalizer((exit) =>
         Exit.isSuccess(exit) && exit.value === true
           ? Effect.void
-          : Effect.tryPromise({
-              try: () =>
-                runtime.restoreEnabled(before.quotaRoutes.get(reason) ?? false),
-              catch: (error) => error,
-            }).pipe(
+          : hostPort(() =>
+              runtime.restoreEnabled(before.quotaRoutes.get(reason) ?? false),
+            ).pipe(
               Effect.tapError((error) =>
                 Effect.sync(() => {
                   log.warn(
@@ -251,10 +240,10 @@ export class ProgressApiKeyRetryController {
               Effect.orDie,
             ),
       );
-      yield* port(() => runtime.setEnabled(false));
+      yield* hostPort(() => runtime.setEnabled(false));
     }
 
-    return yield* port(action);
+    return yield* hostPort(action);
   });
 
   // OAuth subscriptions pin the fallback key provider (ChatGPT → openai,
@@ -337,7 +326,7 @@ export class ProgressApiKeyRetryController {
     return Effect.map(
       Effect.forEach(
         providers,
-        (provider) => port(() => this.deps.hasUsableKey(provider)),
+        (provider) => hostPort(() => this.deps.hasUsableKey(provider)),
         { concurrency: 'unbounded' },
       ),
       (checks) => checks.some(Boolean),
@@ -364,7 +353,7 @@ export class ProgressApiKeyRetryController {
         providers,
         (provider) =>
           Effect.map(
-            port(() => this.deps.readKey(provider)),
+            hostPort(() => this.deps.readKey(provider)),
             (key) => [provider, key] as const,
           ),
         { concurrency: 'unbounded' },
