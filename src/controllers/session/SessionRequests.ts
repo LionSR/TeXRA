@@ -14,7 +14,7 @@
  * event writers never establish present ownership. A collaborator that
  * rejects is neither: the arms below reach one through `Effect.promise`, so
  * its rejection is a handler defect, and `SessionBridge` logs the cause
- * under the request id and answers `Internal` — the sender's latch clears
+ * under the request id and answers `Internal`; the sender's latch clears
  * either way. A refusal this handler decides is a `RequestError`; a
  * collaborator breaking is not one to word. In process (the TUI,
  * headless) the Effect's own result is
