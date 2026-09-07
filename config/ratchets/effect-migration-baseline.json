@@ -148,7 +148,7 @@
       "src/tools/lean/direct/directLspAdapter.ts": 3
     },
     "catch:effect-importer": {
-      "packages/cli/src/chat/chatSessionController.ts": 7,
+      "packages/cli/src/chat/chatSessionController.ts": 1,
       "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,

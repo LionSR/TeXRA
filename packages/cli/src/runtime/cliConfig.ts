@@ -319,6 +319,12 @@ export function parseCliConfigValues(
  * problem (surfaced as a single warning) from a successfully parsed object.
  * Shared by {@link loadWorkspaceCliConfig} and {@link loadUserApprovalPolicy},
  * which otherwise duplicate this read-catch-parse-validate sequence.
+ *
+ * This function IS the filesystem boundary adapter, so the raw catch on the
+ * `readFile` call stays (migration PRD R7: the catch remains inside the
+ * adapter): both callers resolve config before the process Effect runtime is
+ * installed (`buildCliContext` precedes `installCliProcessRuntime`), so no
+ * typed recovery could run here.
  */
 type JsonConfigFileResult =
   | { readonly status: 'missing' }
