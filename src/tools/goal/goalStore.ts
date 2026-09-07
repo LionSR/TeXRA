@@ -14,7 +14,6 @@ import {
   aggregateTarget,
   GoalSchema,
   isGoalInFlight,
-  type ExecutionId,
   type Goal,
   type GoalState,
   type GoalStatus,
@@ -327,25 +326,5 @@ export const GoalStore = Object.freeze({
       }),
     ]);
     return toRemove;
-  },
-
-  /**
-   * Drop goals whose stream id belongs to one of the deleted executions.
-   * GoalStore owns this suffix convention because it already owns the
-   * stream index; callers should pass execution ids only.
-   */
-  async forgetByExecutionIds(
-    executionIds: readonly ExecutionId[],
-    session?: SessionHandle,
-  ): Promise<void> {
-    if (executionIds.length === 0) return;
-    // Stream ids include the execution id as a final `#${executionId}` suffix.
-    // ExecutionIdSchema permits only hex/dash characters, so `#` is a safe
-    // delimiter rather than a character that can appear inside the id itself.
-    const suffixes = unique(executionIds.map((id) => `#${id}`));
-    const streamIds = readIndex().filter((streamId) =>
-      suffixes.some((suffix) => streamId.endsWith(suffix)),
-    );
-    await GoalStore.forgetMany(streamIds, session);
   },
 });
