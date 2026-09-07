@@ -43,6 +43,7 @@ import {
   setPreferXaiSubscription,
 } from '@model/xai/xaiPreference';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { HttpClient } from 'effect/unstable/http';
 
 const log = createLog('subscriptionProviders');
 
@@ -114,7 +115,7 @@ export interface SubscriptionProvider {
    */
   signIn(
     options: SubscriptionSignInOptions,
-  ): Effect.Effect<SubscriptionAccount, unknown>;
+  ): Effect.Effect<SubscriptionAccount, unknown, HttpClient.HttpClient>;
   signOut(): Promise<void>;
   getStatus(): Promise<SubscriptionAccount>;
   isPreferSubscription(): boolean;
@@ -142,11 +143,11 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly loginWithDeviceCode: (options: {
     coordinator: Coordinator;
     onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
-  }) => Effect.Effect<Session, unknown>;
+  }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
   readonly loginWithLoopback: (options: {
     coordinator: Coordinator;
     openBrowser: (url: string) => void | Promise<void>;
-  }) => Effect.Effect<Session, unknown>;
+  }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
   readonly accountLabel: (
     account:
       | { readonly email?: string | null; readonly accountId?: string | null }

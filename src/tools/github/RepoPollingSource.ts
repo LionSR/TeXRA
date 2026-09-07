@@ -55,6 +55,7 @@ import {
   DEFAULT_POLLING_BACKOFF_CONFIG,
   dedupeComments,
   type DedupedResource,
+  type PollEventListener,
   type PollHookRejected,
   PollingSourceBase,
   pollRequest,
@@ -171,8 +172,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
 
   subscribe(
     input: RepoSubscribeInput,
-    onEvent: (text: string) => void,
-  ): Disposable {
+    onEvent: PollEventListener,
+  ): Effect.Effect<Disposable> {
     const key = repoKeyToString(input);
     return this.register(key, () => createInitialState(input), onEvent);
   }
@@ -271,9 +272,9 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
             state.subscribedAt,
           );
           if (transition === 'opened') {
-            this.emit(state, formatRepoPROpened(state.slug, pr));
+            yield* this.emit(state, formatRepoPROpened(state.slug, pr));
           } else if (transition === 'closed') {
-            this.emit(
+            yield* this.emit(
               state,
               formatRepoPRClosed(state.slug, pr.number, next === 'merged'),
             );
@@ -286,26 +287,32 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       // the bot filter applied centrally. The per-resource number-parsing gates
       // stay in the emit closures. The seed phase for these resources lives
       // inline in the first-tick block above.
-      this.consumeCommentList(
+      yield* this.consumeCommentList(
         issueRes,
         () => {},
         state.issueComments,
         (c) => {
           const number = parseTargetNumberFromIssueUrl(c);
-          if (number === undefined) return;
-          this.emit(state, formatRepoIssueComment(state.slug, number, c));
+          if (number === undefined) return Effect.void;
+          return this.emit(
+            state,
+            formatRepoIssueComment(state.slug, number, c),
+          );
         },
         () => state.initialized,
       );
 
-      this.consumeCommentList(
+      yield* this.consumeCommentList(
         reviewRes,
         () => {},
         state.reviewComments,
         (c) => {
           const prNumber = parsePRNumberFromReviewCommentUrl(c.html_url);
-          if (prNumber === undefined) return;
-          this.emit(state, formatRepoReviewComment(state.slug, prNumber, c));
+          if (prNumber === undefined) return Effect.void;
+          return this.emit(
+            state,
+            formatRepoReviewComment(state.slug, prNumber, c),
+          );
         },
         () => state.initialized,
       );
@@ -407,7 +414,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     }
 
     if (newlyDirty.length >= MERGE_CONFLICT_COALESCE_THRESHOLD) {
-      this.emit(
+      yield* this.emit(
         state,
         formatRepoMergeConflictSummary(
           state.slug,
@@ -416,7 +423,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       );
     } else {
       for (const { number, prev } of newlyDirty) {
-        this.emit(
+        yield* this.emit(
           state,
           formatRepoMergeConflictDetected(state.slug, number, prev),
         );

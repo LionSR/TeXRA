@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 
-import { Effect, Layer, ManagedRuntime } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
@@ -19,6 +19,7 @@ import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -82,7 +83,7 @@ describe('desktop agent directory bootstrap', () => {
     try {
       effectRuntime();
     } catch {
-      initProcessRuntime(ManagedRuntime.make(Layer.empty));
+      initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
     }
     const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
     const [globalStateStore, workspaceStateStore] = await Effect.runPromise(

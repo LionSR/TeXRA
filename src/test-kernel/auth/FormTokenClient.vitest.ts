@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { FetchHttpClient } from 'effect/unstable/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
@@ -42,14 +43,20 @@ describe('form token endpoint (declarative)', () => {
         code: 'code-1',
         verifier: 'verifier-1',
         redirectUri: 'http://127.0.0.1/callback',
-      }),
+      }).pipe(
+        Effect.provide(FetchHttpClient.layer),
+        Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+      ),
     );
 
     expect(tokens.access_token).toBe('access');
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('https://example.test/token');
+    expect(String(url)).toBe('https://example.test/token');
     expect(init?.method).toBe('POST');
+    expect(new Headers(init?.headers).get('content-type')).toBe(
+      'application/x-www-form-urlencoded',
+    );
     const body = new URLSearchParams(String(init?.body));
     expect(body.get('grant_type')).toBe('authorization_code');
     expect(body.get('client_id')).toBe('client-1');
@@ -65,7 +72,10 @@ describe('form token endpoint (declarative)', () => {
     });
 
     const tokens = await Effect.runPromise(
-      refreshOAuthTokens(ENDPOINT, 'old-refresh'),
+      refreshOAuthTokens(ENDPOINT, 'old-refresh').pipe(
+        Effect.provide(FetchHttpClient.layer),
+        Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+      ),
     );
     expect(tokens.access_token).toBe('new-access');
     const body = new URLSearchParams(String(fetchMock.mock.calls[0]![1]?.body));
@@ -80,7 +90,12 @@ describe('form token endpoint (declarative)', () => {
     );
 
     await expect(
-      Effect.runPromise(refreshOAuthTokens(ENDPOINT, 'bad')),
+      Effect.runPromise(
+        refreshOAuthTokens(ENDPOINT, 'bad').pipe(
+          Effect.provide(FetchHttpClient.layer),
+          Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+        ),
+      ),
     ).rejects.toMatchObject({
       _tag: 'OAuthHttpError',
       message: 'Token refresh failed (HTTP 401): nope',
@@ -111,7 +126,10 @@ describe('postOAuth', () => {
           body: '',
           timeoutMs: 20,
           networkErrorMessage: 'Network error contacting token',
-        }),
+        }).pipe(
+          Effect.provide(FetchHttpClient.layer),
+          Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+        ),
       ),
     ).rejects.toMatchObject({
       _tag: 'OAuthNetworkError',
