@@ -667,6 +667,16 @@ export default tseslint.config(
     },
   },
 
+  // CLI scripts run in a fresh lint process so their program does not coexist
+  // with the workspace and host programs. Select it directly rather than
+  // creating every earlier project while searching for the script's owner.
+  {
+    files: ['packages/cli/scripts/**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: { project: ['./packages/cli/tsconfig.scripts.json'] },
+    },
+  },
+
   // The native model package owns a standalone TypeScript program and lint process.
   {
     files: ['packages/llm/src/**/*.ts'],
