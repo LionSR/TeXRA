@@ -32,7 +32,7 @@
  * session is justified only as the ownership container.
  */
 
-import { Effect, SubscriptionRef, type Stream } from 'effect';
+import { Cause, Effect, Exit, SubscriptionRef, type Stream } from 'effect';
 import pDefer, { type DeferredPromise } from 'p-defer';
 
 import type {
@@ -199,7 +199,9 @@ export class SessionHandle {
    */
   private readonly statusPorts = new Set<(event: StatusEvent) => void>();
   private disposed = false;
-  private readonly publications = new Set<Promise<readonly SessionEvent[]>>();
+  private readonly publications = new Set<
+    Promise<Exit.Exit<readonly SessionEvent[]>>
+  >();
   /** This session's execution-keyed trace flushers. */
   readonly flushers: Map<string, RunTraceFlushEntry>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
@@ -574,32 +576,32 @@ export class SessionHandle {
    */
   publish(events: readonly SessionEventDraft[]): void {
     if (this.disposed || events.length === 0) return;
-    const publication = effectRuntime().runPromise(
+    let publication!: Promise<Exit.Exit<readonly SessionEvent[]>>;
+    publication = effectRuntime().runPromise(
       this.graph.publish(events).pipe(
         Effect.tapDefect((cause) =>
           Effect.sync(() => {
             logger.error('Session publication failed', { data: cause });
           }).pipe(Effect.ignoreCause),
         ),
+        Effect.exit,
+        Effect.ensuring(
+          Effect.sync(() => {
+            this.publications.delete(publication);
+          }),
+        ),
       ),
     );
     this.publications.add(publication);
-    void publication
-      .catch(() => {
-        // Observed by `settlePublications` via `allSettled` on this promise.
-      })
-      .finally(() => {
-        this.publications.delete(publication);
-      });
   }
 
-  /** Await in-flight publications. Failures belong to those promises, not a
+  /** Await in-flight publications. Failures belong to those Exits, not a
    *  session-wide leftover array a later settler would drain. */
   async settlePublications(): Promise<void> {
-    const results = await Promise.allSettled([...this.publications]);
+    const exits = await Promise.all([...this.publications]);
     throwAggregated(
-      results.flatMap((result) =>
-        result.status === 'rejected' ? [result.reason] : [],
+      exits.flatMap((exit) =>
+        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
       ),
       'Session publication failed',
     );
