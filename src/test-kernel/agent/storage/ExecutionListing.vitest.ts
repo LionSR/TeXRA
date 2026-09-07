@@ -7,7 +7,6 @@ import {
   isUserVisibleExecution,
   listExecutions,
 } from '@agent/storage';
-import { listExecutionStreamReferences } from '@agent/storage/executionListing';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -86,40 +85,6 @@ describe('execution listing normalization', () => {
     expect(await listExecutions()).toEqual([
       expect.objectContaining({ id, kind: 'run', checkpointPresent: false }),
     ]);
-  });
-
-  it('lists only readable execution metadata with an explicit stream reference', async () => {
-    const referenced = 'f9892001' as ExecutionId;
-    const withoutStream = 'f9892002' as ExecutionId;
-    const malformed = 'f9892003' as ExecutionId;
-    await getExecutionStore(referenced).writeMeta({
-      timestamp: '2026-08-08T00:00:00.000Z',
-      streamId: 'referenced-stream',
-    });
-    await getExecutionStore(withoutStream).writeMeta({
-      timestamp: '2026-08-08T00:00:00.000Z',
-    });
-    await getExecutionStore(malformed).write('meta', { timestamp: 42 });
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-
-    try {
-      const listing = await listExecutionStreamReferences();
-
-      expect(listing.references).toEqual([
-        { executionId: referenced, streamId: 'referenced-stream' },
-      ]);
-      // The unreadable row is reported with its cause, never dropped.
-      expect([...listing.unreadable.keys()]).toEqual([malformed]);
-      expect(warn).toHaveBeenCalledWith(
-        'ExecutionListing',
-        expect.stringContaining(
-          `Execution ${malformed} has unreadable storage`,
-        ),
-        expect.anything(),
-      );
-    } finally {
-      warn.mockRestore();
-    }
   });
 
   it('sees metadata replaced by another host after an earlier listing', async () => {

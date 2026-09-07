@@ -6,7 +6,7 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn(async () => {}));
+const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
 const formatRetryRequestMessageMock = vi.hoisted(() => vi.fn());
 let detachHostInteractions = (): void => {};
 
@@ -166,6 +166,7 @@ const credentialExhaustedRetry: RetryPermission = {
 };
 
 beforeEach(async () => {
+  handleExternalInquiryActionMock.mockReturnValue(Effect.succeed(true));
   const { initPlatform: init } = await import('@platform/platform');
   const { createFakePlatform } = await import('@test/support/FakePlatform');
   init(createFakePlatform());
@@ -180,7 +181,9 @@ beforeEach(async () => {
 afterEach(() => {
   detachHostInteractions();
   detachHostInteractions = () => {};
-  handleExternalInquiryActionMock.mockClear();
+  handleExternalInquiryActionMock
+    .mockReset()
+    .mockReturnValue(Effect.succeed(true));
   formatRetryRequestMessageMock.mockReset();
   vi.restoreAllMocks();
 });
@@ -217,12 +220,15 @@ describe('human input approval policy', () => {
   it('denies external inquiry under never', () => {
     const ctx = context({ approvalPolicy: 'never' });
     expect(denyExternalInquiryIfNoHumanInput('ei_test', 1, ctx)).toBe(true);
-    expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
-      action: 'drop',
-      threadId: 'ei_test',
-      turnIndex: 1,
-      reason: texraApprovalDenialMessage('deny-policy'),
-    });
+    expect(handleExternalInquiryActionMock).toHaveBeenCalledWith(
+      {
+        action: 'drop',
+        threadId: 'ei_test',
+        turnIndex: 1,
+        reason: texraApprovalDenialMessage('deny-policy'),
+      },
+      { session: defaultSession() },
+    );
   });
 
   it.effect(
@@ -366,12 +372,15 @@ describe('approval prompt hooks', () => {
       );
 
       expect(tracker.events).toEqual([]);
-      expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
-        action: 'drop',
-        threadId: 'ei_aabbccdd0011',
-        turnIndex: 1,
-        cause: expect.stringContaining('non-TUI CLI runs'),
-      });
+      expect(handleExternalInquiryActionMock).toHaveBeenCalledWith(
+        {
+          action: 'drop',
+          threadId: 'ei_aabbccdd0011',
+          turnIndex: 1,
+          cause: expect.stringContaining('non-TUI CLI runs'),
+        },
+        { session: defaultSession() },
+      );
     }),
   );
 });

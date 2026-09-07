@@ -142,63 +142,6 @@ function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
 // Public API
 // ============================================================================
 
-interface ExecutionStreamReference {
-  readonly executionId: ExecutionId;
-  readonly streamId: StreamTabId;
-}
-
-export interface ExecutionStreamReferenceListing {
-  readonly references: ExecutionStreamReference[];
-  /**
-   * Executions whose checkpoint `stat` or metadata read failed. They are not
-   * discarded: a checkpointed run whose storage cannot be read is unknown
-   * state, and the caller attributes it to a stream through its own
-   * execution-id channel rather than letting the row vanish into `ready`.
-   */
-  readonly unreadable: ReadonlyMap<ExecutionId, string>;
-}
-
-/**
- * The one walk of the executions directory that reads the authored
- * execution→stream edge (`ExecutionMeta.streamId`, stamped at registration).
- * Callers resolve a stream's execution from the resident snapshot record
- * first (a live run updates it synchronously) and fall back to this scan for
- * non-resident streams; the retired sidecar-FK and summary-mirror read
- * ladders are gone.
- *
- * This deliberately does not infer ownership for metadata without `streamId`,
- * or for malformed metadata. Those rows are retained: the sweep's only safe
- * deletion authority is the registered execution→stream edge itself. An
- * execution whose storage cannot be read is reported in `unreadable` with
- * the cause instead of being dropped.
- */
-export async function listExecutionStreamReferences(): Promise<ExecutionStreamReferenceListing> {
-  const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
-  const executionDirs = listExecutionDirs(entries);
-  const unreadable = new Map<ExecutionId, string>();
-  const results = await pMap(
-    executionDirs,
-    async (executionId): Promise<ExecutionStreamReference | null> => {
-      const store = getExecutionStore(executionId);
-      try {
-        const meta = await store.readMetaStrict();
-        if (!meta?.streamId) return null;
-        return { executionId, streamId: meta.streamId };
-      } catch (error) {
-        const cause = toErrorMessage(error);
-        unreadable.set(executionId, cause);
-        log.warn(
-          `Execution ${executionId} has unreadable storage while listing stream references: ${cause}`,
-          { data: error },
-        );
-        return null;
-      }
-    },
-    { concurrency: EXECUTION_STORAGE_CONCURRENCY },
-  );
-  return { references: results.filter(filterNotNull), unreadable };
-}
-
 /**
  * List all executions by scanning the executions/ directory.
  *

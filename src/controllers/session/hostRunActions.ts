@@ -87,7 +87,7 @@ export interface HostRunActions {
     getKnownWorkspaceOutputPaths(streamId: StreamTabId): Set<string>;
   };
   restoreProposal(proposal: unknown): AgentConfig;
-  sendFollowUp(streamId: StreamTabId, text: string): Promise<void>;
+  sendFollowUp(streamId: StreamTabId, text: string): Effect.Effect<void>;
 }
 
 export function createHostRunActions(
@@ -331,15 +331,15 @@ export function createHostRunActions(
       }
       return parsed.data;
     },
-    async sendFollowUp(streamId, text) {
-      await submitProgressFollowUp({
+    sendFollowUp(streamId, text) {
+      return submitProgressFollowUp({
         session,
         streamId,
         input: { text },
         // Programmatic file feedback has no composer to acknowledge.
         acknowledge: () => {},
         showInfo: ports.showWarning,
-      });
+      }).pipe(Effect.asVoid);
     },
     /**
      * Resume the run behind a stream: a workflow relaunches through the

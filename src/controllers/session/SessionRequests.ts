@@ -276,19 +276,16 @@ function handle(
         }
       });
     case 'followUp.send':
-      return Effect.promise(() =>
-        submitFollowUp(
-          req.streamId,
-          {
-            text: req.text,
-            ...(req.displayText == null
-              ? {}
-              : { displayText: req.displayText }),
-            ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
-          },
-          { session },
-        ),
+      return submitFollowUp(
+        req.streamId,
+        {
+          text: req.text,
+          ...(req.displayText == null ? {} : { displayText: req.displayText }),
+          ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
+        },
+        { session },
       ).pipe(
+        Effect.orDie,
         Effect.flatMap((result) =>
           result.status === 'failed'
             ? Effect.fail(
@@ -381,27 +378,26 @@ function handle(
       );
     case 'externalInquiry.submit':
     case 'externalInquiry.drop':
-      return Effect.promise(() =>
-        handleExternalInquiryAction(
-          req.kind === 'externalInquiry.submit'
-            ? {
-                action: 'submit',
-                threadId: req.threadId,
-                turnIndex: req.turnIndex,
-                answer: req.answer,
-                ...(req.sessionLinks == null
-                  ? {}
-                  : { sessionLinks: req.sessionLinks }),
-              }
-            : {
-                action: 'drop',
-                threadId: req.threadId,
-                turnIndex: req.turnIndex,
-                ...(req.feedback == null ? {} : { feedback: req.feedback }),
-              },
-          { session },
-        ),
+      return handleExternalInquiryAction(
+        req.kind === 'externalInquiry.submit'
+          ? {
+              action: 'submit',
+              threadId: req.threadId,
+              turnIndex: req.turnIndex,
+              answer: req.answer,
+              ...(req.sessionLinks == null
+                ? {}
+                : { sessionLinks: req.sessionLinks }),
+            }
+          : {
+              action: 'drop',
+              threadId: req.threadId,
+              turnIndex: req.turnIndex,
+              ...(req.feedback == null ? {} : { feedback: req.feedback }),
+            },
+        { session },
       ).pipe(
+        Effect.orDie,
         Effect.flatMap((accepted) =>
           accepted
             ? Effect.succeed(done)

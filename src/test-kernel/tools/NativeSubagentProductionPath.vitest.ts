@@ -621,16 +621,18 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     // admission path: no additional parent message, no additional wake.
     const report = await store.readReport();
     for (let replay = 0; replay < 100; replay++) {
-      await deliverChildRunFollowUp({
-        targetStreamId: PARENT_STREAM_ID,
-        followUp: {
-          text: report!,
-          origin: 'subagent_result',
-          // Derived from the persisted turn token exactly as production does.
-          deliveryId: `${completed!.token}:delivery`,
-        },
-        session,
-      });
+      await Effect.runPromise(
+        deliverChildRunFollowUp({
+          targetStreamId: PARENT_STREAM_ID,
+          followUp: {
+            text: report!,
+            origin: 'subagent_result',
+            // Derived from the persisted turn token exactly as production does.
+            deliveryId: `${completed!.token}:delivery`,
+          },
+          session,
+        }),
+      );
     }
     await session.settlePublications();
     const afterReplay = JSON.stringify(
@@ -645,15 +647,17 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     expect(completedResumes).toEqual([PARENT_STREAM_ID]);
 
     // A distinct delivery identity with identical text is a distinct turn.
-    await deliverChildRunFollowUp({
-      targetStreamId: PARENT_STREAM_ID,
-      followUp: {
-        text: report!,
-        origin: 'subagent_result',
-        deliveryId: `${completed!.token}:delivery:other`,
-      },
-      session,
-    });
+    await Effect.runPromise(
+      deliverChildRunFollowUp({
+        targetStreamId: PARENT_STREAM_ID,
+        followUp: {
+          text: report!,
+          origin: 'subagent_result',
+          deliveryId: `${completed!.token}:delivery:other`,
+        },
+        session,
+      }),
+    );
     await waitForCompletedResumes(2);
     await session.settlePublications();
     const afterDistinct = JSON.stringify(

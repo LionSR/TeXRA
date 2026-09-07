@@ -8,9 +8,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-const submitFollowUpMock = vi.hoisted(() =>
-  vi.fn(async () => ({ status: 'sent' as const })),
-);
+const submitFollowUpMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: submitFollowUpMock,
@@ -162,7 +160,9 @@ class RegistryTestSource {
 describe('GitHub subscription app signals and follow-ups', () => {
   beforeEach(() => {
     submitFollowUpMock.mockReset();
-    submitFollowUpMock.mockResolvedValue({ status: 'sent' as const });
+    submitFollowUpMock.mockReturnValue(
+      Effect.succeed({ status: 'sent' as const }),
+    );
   });
 
   it('publishes githubSubscriptionsChanged through app signals', async () => {
@@ -335,7 +335,9 @@ describe('GitHub subscription app signals and follow-ups', () => {
     };
     const registry = createTestRegistry(source, { logger });
     const unhandledRejection = vi.fn();
-    submitFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
+    submitFollowUpMock.mockReturnValueOnce(
+      Effect.fail(new Error('delivery failed')),
+    );
 
     try {
       process.once('unhandledRejection', unhandledRejection);

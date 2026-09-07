@@ -174,16 +174,23 @@ describe('sendFollowUp host-path session routing', () => {
       // A host-path caller (outside any run ALS, like the desktop IPC handler)
       // that passes its process session sees the live child and queues.
       await expect(
-        submitFollowUp(parentStream, 'continue', {
-          session: processSession,
-          resumePort: { tryResumeStream: async () => false },
-        }),
+        Effect.runPromise(
+          submitFollowUp(parentStream, 'continue', {
+            session: processSession,
+            resumePort: { tryResumeStream: async () => false },
+          }),
+        ),
       ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
-      // Without the session it falls back to the default session, which does
-      // not track this run — this is the dropped-follow-up regression the
-      // session parameter prevents on desktop.
-      await expect(submitFollowUp(parentStream, 'continue')).resolves.toEqual({
+      // The default session does not own this run; selecting the actual
+      // session is required for desktop follow-up delivery.
+      await expect(
+        Effect.runPromise(
+          submitFollowUp(parentStream, 'continue', {
+            session: defaultSession(),
+          }),
+        ),
+      ).resolves.toEqual({
         status: 'failed',
         reason: 'not_resumable',
       });

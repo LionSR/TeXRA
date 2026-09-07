@@ -214,7 +214,8 @@ export function createExtensionHostRequests(
         });
       },
     },
-    sendFollowUp: runActions.sendFollowUp,
+    sendFollowUp: (streamId, text) =>
+      effectRuntime().runPromise(runActions.sendFollowUp(streamId, text)),
   });
 
   const workflowRunActions = new ProgressWorkflowRunActionsController({

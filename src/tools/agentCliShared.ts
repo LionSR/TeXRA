@@ -169,11 +169,9 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       labels,
     );
 
-    const result = yield* agentCliCall(() =>
-      submitFollowUp(stored.childStreamId, prompt, {
-        session: params.session,
-      }),
-    );
+    const result = yield* submitFollowUp(stored.childStreamId, prompt, {
+      session: params.session,
+    });
     if (result.status === 'failed') {
       return yield* Effect.fail(
         new ToolError(

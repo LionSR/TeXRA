@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   buildClaudeAgentEnv: vi.fn(),
   findClaudeBinaryPath: vi.fn(),
-  submitFollowUp: vi.fn(async () => ({ status: 'sent' as const })),
+  submitFollowUp: vi.fn(),
 }));
 
 vi.mock('@tools/approval/bashApproval', () => ({
@@ -160,6 +160,7 @@ function captureStrategy(): { strategy?: ChildRunStrategy<unknown> } {
 
 describe('claude_agent tool launch and resume fallback', () => {
   beforeEach(() => {
+    mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
     mocks.startChildRunLoop.mockReset();
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.buildClaudeAgentEnv.mockReset();
