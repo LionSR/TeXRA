@@ -652,6 +652,71 @@ describe('Sessions owner', () => {
       }),
   );
 
+  // #12017's ownership fence must not reach the fold: the snapshot store is
+  // an in-memory reading of the shared table, and its synchronous accessors
+  // are the runtime's answer for any stream, including one another process
+  // owns.
+  it.live(
+    "folds another process's committed facts without firing local side effects",
+    () =>
+      Effect.gen(function* () {
+        const session = open('/workspace/owner/foreign-fold');
+        const onResult = vi.fn();
+        const detachResult = session.onResult(onResult);
+        const foreign = 'stream:foreign' as StreamTabId;
+        const aggregateId = qualifyAggregateId('stream', foreign);
+        const foreignExecution = 'cd34ef' as ExecutionId;
+        try {
+          yield* session.receiveCommittedEvent({
+            type: 'run.start',
+            aggregateId,
+            executionId: foreignExecution,
+            identity: { kind: 'agent', agent: 'chat' },
+            userFollowUpSupport: 'unsupported',
+            category: AgentCategory.ToolUse,
+            isRemote: false,
+            ownerId: OTHER,
+            at: 0,
+            seq: 1,
+            commit: 1,
+          });
+          yield* session.receiveCommittedEvent({
+            type: 'updateStreamDescription',
+            aggregateId,
+            description: 'a run in another process',
+            ownerId: OTHER,
+            at: 0,
+            seq: 2,
+            commit: 2,
+          });
+          yield* session.receiveCommittedEvent({
+            type: 'result',
+            aggregateId,
+            outcome: 'completed',
+            executionId: foreignExecution,
+            agentName: 'chat',
+            category: AgentCategory.ToolUse,
+            isSubagent: false,
+            ownerId: OTHER,
+            at: 0,
+            seq: 3,
+            commit: 3,
+          });
+          expect(session.snapshots.hasProvenance(foreign)).toBe(true);
+          expect(session.snapshots.getRunMetadata(foreign)).toMatchObject({
+            executionId: foreignExecution,
+            description: 'a run in another process',
+          });
+          // Host presentation of a terminal result stays with the process
+          // that authored it.
+          expect(onResult).not.toHaveBeenCalled();
+        } finally {
+          detachResult();
+          session.dispose();
+        }
+      }),
+  );
+
   it.effect(
     'close reports settled once the run ended, and releases the session',
     () =>
