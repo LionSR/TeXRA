@@ -4,7 +4,6 @@ import { Deferred, Effect } from 'effect';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
-import { effectRuntime } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
@@ -69,15 +68,9 @@ export class HostDraftRequests {
     return () => this.listeners.delete(listener);
   }
 
-  handle(
-    session: SessionHandle,
-    request: DraftRequest,
-    port: string,
-  ): Promise<HostOutcome> {
-    return effectRuntime().runPromise(this.draft(session, request, port));
-  }
-
-  private readonly draft = Effect.fn('HostDraftRequests.handle')(function* (
+  /** Answer one draft request of `session`, arriving on `port`. The host
+   *  that took the request runs this where it stands. */
+  readonly handle = Effect.fn('HostDraftRequests.handle')(function* (
     this: HostDraftRequests,
     session: SessionHandle,
     request: DraftRequest,

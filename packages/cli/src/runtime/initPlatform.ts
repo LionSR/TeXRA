@@ -385,7 +385,9 @@ export async function initCliPlatform(
       // The default session is installed later by whichever entry point opens
       // transcripts, so its shutdown lookup remains lazy.
       flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
-      afterFlushArtifacts: [() => UsageLogService.dispose()],
+      afterFlushArtifacts: [
+        () => effectRuntime().runPromise(UsageLogService.dispose()),
+      ],
       afterExecutionSettlement: [
         () => teardownDefaultSession(),
         () => flushNdjsonStdout(),
@@ -398,7 +400,9 @@ export async function initCliPlatform(
     // dispose() flushes any queued entries; it
     // runs on normal exit (bin/texra.ts finally) and on signals, both of
     // which call lifecycle.runShutdown().
-    UsageLogService.initialize({}, context.version, 'cli');
+    await effectRuntime().runPromise(
+      UsageLogService.initialize({}, context.version, 'cli'),
+    );
   }
 
   if (!supabaseAuthInitialized) {

@@ -53,6 +53,7 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { effectRuntime } from '@platform/processRuntime';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
@@ -646,7 +647,7 @@ export function createExtensionHostRequests(
         await runActions.runCompileFixer(request.streamId);
         return done;
       case 'useOwnApiKey':
-        await runActions.useOwnApiKey(request);
+        await effectRuntime().runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff':
         await workflowRunActions.diffStream(request.streamId);
@@ -664,7 +665,7 @@ export function createExtensionHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return draftRequests.handle(request, port);
+        return effectRuntime().runPromise(draftRequests.handle(request, port));
       case 'popOut':
         await options.popOutToEditor();
         return done;

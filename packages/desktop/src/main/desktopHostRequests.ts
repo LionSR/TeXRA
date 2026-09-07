@@ -39,6 +39,7 @@ import {
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   cloneRoundIndexed,
   type ExecutionId,
@@ -595,7 +596,7 @@ export function createDesktopHostRequests(
         await runActions.runCompileFixer(request.streamId);
         return done;
       case 'useOwnApiKey':
-        await runActions.useOwnApiKey(request);
+        await effectRuntime().runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff':
         await workflowRunActions.diffStream(request.streamId);
@@ -613,7 +614,7 @@ export function createDesktopHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return draftRequests.handle(request, port);
+        return effectRuntime().runPromise(draftRequests.handle(request, port));
       case 'popOut':
       case 'popBack':
         throw notOnDesktop('Pop-out to editor');
