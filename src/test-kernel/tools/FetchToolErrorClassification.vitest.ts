@@ -13,19 +13,12 @@ const MESSAGES = {
   fallback: (message: string) => `Failed: ${message}`,
 } as const;
 
-/**
- * The failure `withRequestTimeout` raises for a request that threw `cause`.
- * The request takes `signal` because `withRequestTimeout` requires it: a
- * zero-parameter request gets no AbortSignal from `Effect.tryPromise` and
- * dies as a defect.
- */
+/** The failure `withRequestTimeout` raises for a request that failed with `cause`. */
 const failed = (cause: unknown) =>
-  Effect.flip(withRequestTimeout(1000, (_signal) => Promise.reject(cause)));
+  Effect.flip(withRequestTimeout(1000, Effect.fail(cause)));
 
 /** The failure `withRequestTimeout` raises when the deadline passes first. */
-const timedOut = Effect.flip(
-  withRequestTimeout(0, (_signal) => new Promise<never>(() => {})),
-);
+const timedOut = Effect.flip(withRequestTimeout(0, Effect.never));
 
 /**
  * Regression coverage for the retry/final-label predicate consolidation

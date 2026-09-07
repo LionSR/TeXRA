@@ -82,7 +82,7 @@ describe('rateLimitedApiCall cancellation', () => {
 /**
  * `callZoteroConnector` runs its non-idempotent `saveItems`/`saveSnapshot`
  * write under `Effect.uninterruptible` so cancelling a run cannot tear it
- * mid-request and lose the outcome. That rests on one non-obvious property of
+ * mid-request. That rests on one non-obvious property of
  * the effect runtime: the region defers the *caller's* interrupt but not the
  * deadline, because `timeoutOrElse` races through `raceAllFirst`, which forks
  * both racers interruptible regardless of the enclosing region. An effect
@@ -96,12 +96,16 @@ describe('withRequestTimeout under Effect.uninterruptible', () => {
       const fiber = yield* Effect.forkChild(
         Effect.flip(
           Effect.uninterruptible(
-            withRequestTimeout(1000, (signal) => {
-              signal.addEventListener('abort', () => {
-                aborted = true;
-              });
-              return new Promise<never>(() => {});
-            }),
+            withRequestTimeout(
+              1000,
+              Effect.gen(function* () {
+                const signal = yield* Effect.abortSignal;
+                signal.addEventListener('abort', () => {
+                  aborted = true;
+                });
+                return yield* Effect.never;
+              }),
+            ),
           ),
         ),
       );
@@ -115,47 +119,43 @@ describe('withRequestTimeout under Effect.uninterruptible', () => {
 
   it.effect('lets an interrupted request settle instead of tearing it', () =>
     Effect.gen(function* () {
-      let aborted = false;
+      let abortedBeforeSettlement = false;
       let settled = false;
       let finish: () => void = () => {};
       const fiber = yield* Effect.forkChild(
         Effect.uninterruptible(
-          withRequestTimeout(1000, (signal) => {
-            signal.addEventListener('abort', () => {
-              aborted = true;
-            });
-            return new Promise<string>((resolve) => {
-              finish = () => {
-                settled = true;
-                resolve('written');
-              };
-            });
-          }),
+          withRequestTimeout(
+            1000,
+            Effect.gen(function* () {
+              const signal = yield* Effect.abortSignal;
+              signal.addEventListener('abort', () => {
+                if (!settled) abortedBeforeSettlement = true;
+              });
+              return yield* Effect.promise(
+                () =>
+                  new Promise<string>((resolve) => {
+                    finish = () => {
+                      settled = true;
+                      resolve('written');
+                    };
+                  }),
+              );
+            }),
+          ),
         ),
       );
       yield* started;
       const interrupting = yield* Effect.forkChild(Fiber.interrupt(fiber));
       yield* started;
       // The interrupt is deferred: the write is untouched and still in flight.
-      expect(aborted).toBe(false);
+      expect(abortedBeforeSettlement).toBe(false);
       expect(settled).toBe(false);
       finish();
       yield* Fiber.join(interrupting);
       // The write ran to completion, and only then did the interrupt land.
       expect(settled).toBe(true);
-      expect(aborted).toBe(false);
+      expect(abortedBeforeSettlement).toBe(false);
       expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
-    }),
-  );
-});
-
-describe('withRequestTimeout misuse', () => {
-  it.effect('dies on a request that declares no AbortSignal parameter', () =>
-    Effect.gen(function* () {
-      const exit = yield* Effect.exit(
-        withRequestTimeout(1000, () => Promise.resolve('unabortable')),
-      );
-      expect(Exit.hasDies(exit)).toBe(true);
     }),
   );
 });

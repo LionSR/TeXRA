@@ -9,14 +9,14 @@
  *
  * A deadline is `Effect.timeoutOrElse`, the retry is an exponential
  * `Schedule` with the [1, 2) jitter window the tools were tuned to
- * ({@link transientBackoff}), and cancellation is fiber interruption:
- * `Effect.tryPromise` hands the attempt's own `AbortSignal` to the request,
- * so an interrupted run aborts the in-flight fetch instead of waiting out the
- * deadline or the next backoff. The caller's signal enters once, as the
- * `{ signal }` of the tool's run edge.
+ * ({@link transientBackoff}), and cancellation is fiber interruption. Each
+ * attempt owns a scope for the entire request, including the response body.
+ * The request can acquire `Effect.abortSignal` there for its foreign HTTP
+ * calls. The caller's signal enters once, as the `{ signal }` of the tool's
+ * run edge.
  */
 
-import { Data, Duration, Effect, Random, Schedule } from 'effect';
+import { Data, Duration, Effect, Random, Schedule, Scope } from 'effect';
 import isNetworkError from 'is-network-error';
 import { HTTPError, TimeoutError } from 'ky';
 
@@ -84,42 +84,19 @@ function isTransientRequestError(error: RequestError): boolean {
 /**
  * One request under a deadline of `timeoutMs` that spans the whole of
  * `request` — connection and body read — where a client's own `timeout`
- * option (e.g. ky's) only clears once headers arrive. The signal handed to
- * `request` aborts when the attempt is interrupted, by the deadline or by
- * the caller. Fails with {@link RequestTimedOut} on the deadline and with
- * {@link RequestFailed} carrying the request's own error otherwise.
- *
- * `request` must declare its `signal` parameter and hand it to the client;
- * one that does not gets no signal at all and dies as a defect rather than
- * quietly outliving its own cancellation.
+ * option (e.g. ky's) only clears once headers arrive. The attempt's scope
+ * stays open through the body read, so a signal acquired with
+ * `Effect.abortSignal` aborts when the whole attempt ends. Fails with
+ * {@link RequestTimedOut} on the deadline and with {@link RequestFailed}
+ * carrying the request's expected error otherwise. Defects and interruption
+ * are not converted into request failures.
  */
 export const withRequestTimeout = Effect.fn('timeouts.withRequestTimeout')(
-  function* <T>(
-    timeoutMs: number,
-    request: (signal: AbortSignal) => Promise<T>,
-  ) {
-    // `Effect.tryPromise` creates the AbortSignal only when its callback
-    // declares the parameter (`f.length !== 0`, effect's `tryPromise`). A
-    // request written `() => ky.get(url)` therefore gets no signal, and
-    // neither the deadline below nor the caller's interruption reaches the
-    // in-flight request: it is abandoned to settle unobserved while this
-    // program reports a timeout — a cancellation that silently does nothing.
-    // TypeScript cannot catch it (a zero-parameter function is assignable to
-    // a one-parameter type), so the misuse is a defect raised here.
-    if (request.length === 0) {
-      yield* Effect.die(
-        new Error(
-          'withRequestTimeout was given a request that declares no AbortSignal parameter, ' +
-            'so neither the deadline nor the caller can abort it. Take the signal and hand ' +
-            'it to the client: (signal) => ky.get(url, { signal }).',
-        ),
-      );
-    }
-    return yield* Effect.tryPromise({
-      try: request,
-      catch: (cause) =>
-        new RequestFailed({ message: toErrorMessage(cause), cause }),
-    }).pipe(
+  <T, E, R>(timeoutMs: number, request: Effect.Effect<T, E, R | Scope.Scope>) =>
+    Effect.scoped(request).pipe(
+      Effect.mapError(
+        (cause) => new RequestFailed({ message: toErrorMessage(cause), cause }),
+      ),
       Effect.timeoutOrElse({
         duration: Duration.millis(timeoutMs),
         orElse: () =>
@@ -130,8 +107,7 @@ export const withRequestTimeout = Effect.fn('timeouts.withRequestTimeout')(
             }),
           ),
       }),
-    );
-  },
+    ),
 );
 
 interface RetryTransientFetchOptions {
@@ -172,20 +148,20 @@ function transientBackoff(minTimeout: number) {
 }
 
 /**
- * Run `fetchOnce` under a per-attempt deadline, retrying only transient
+ * Run `request` under a per-attempt deadline, retrying only transient
  * failures (timeout, network error, 429, 5xx) with exponential backoff and
  * full jitter — the pattern every network-boundary tool (web fetch/search,
  * Loogle) repeats. Any other failure — a non-transient HTTP status, a
- * response-shape or size-limit check `fetchOnce` throws itself — ends the
+ * response-shape or size-limit failure reported by `request` — ends the
  * retry immediately and is the program's failure. Interruption stops both
  * the active attempt and the backoff sleep.
  */
 export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')(
-  <T>(
-    fetchOnce: (signal: AbortSignal) => Promise<T>,
+  <T, E, R>(
+    request: Effect.Effect<T, E, R>,
     options: RetryTransientFetchOptions,
   ) =>
-    withRequestTimeout(options.timeoutMs, fetchOnce).pipe(
+    withRequestTimeout(options.timeoutMs, request).pipe(
       Effect.tapError((error) =>
         Effect.gen(function* () {
           if (!options.onFailedAttempt || !isTransientRequestError(error)) {
