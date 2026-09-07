@@ -392,23 +392,64 @@ failure quietly leaving the channel that was built to describe it. The
 default should be `Effect.tryPromise`; `Effect.promise` should appear only
 with a stated reason, as `loopbackLogin.ts:86` does.
 
-### 5.2 Five wraps exist only to cross an `AsyncLocalStorage` scope
+### 5.2 The `AsyncLocalStorage` layer, and why it is last rather than first
 
 `runInSession` (`src/agent/runtime/RunContext.ts:170`, over the
 `AsyncLocalStorage` at line 79) and `runWithWorkspaceRoots`
 (`src/platform/workspaceRoots.ts:98`, over the store at line 41) both take
 `() => T | Promise<T>` and run it inside an ambient scope. Five sites wrap a
 promise for no reason other than to cross one of those scopes —
-`sessionLayer.ts:508`, `:542`, `SessionEvents.ts:329`,
-`desktopPapers.ts:224`, `:433`.
-
-Ambient context propagated through the async call stack is exactly what
+`sessionLayer.ts:508`, `:542`, `SessionEvents.ts:329`, `desktopPapers.ts:224`,
+`:433`. Ambient context propagated through the async call stack is what
 Effect's `Context`/`FiberRef` provides natively, and `sessionLayer` already
-carries `Sessions` and `ProcessIdentity` as layers. These five do not
-disappear by converting a callee — they disappear when the `AsyncLocalStorage`
-does. That is an architectural decision with reach well beyond this audit
-(`TraceEmitter` and `AgentTrace` use the same mechanism), so it is raised
-here and not scheduled.
+carries `Sessions` and `ProcessIdentity` as layers, so the replacement looks
+obvious.
+
+It was scoped directly, and it is not available as its own step. Four
+findings, in the order that settles it:
+
+**The entries are not the work; the readers are.** Scope _entry_ is a small,
+tractable surface — 3 `runWithWorkspaceRoots` call sites (one of them internal
+to `withRunContext`) and 25 `runInSession` sites. Scope _reading_ is not:
+`workspaceRoots()` has 44 call sites, `tryUseRunContext()` 55, and
+`currentSession()` 52 (which resolves through `tryUseRunContext`). A
+`FiberRef` or a `Context` service is readable only from inside an Effect, so
+every one of those readers must already be an Effect program before the
+mechanism underneath them can change. Converting the 28 entries while ~150
+readers still read ambiently would not remove the layer; it would break it.
+
+**The hardest readers cannot be converted in place.**
+`StorageFS.getBasePath()` and `WorkspaceFS.getBasePath()` are _synchronous
+static_ overrides, called from `RelativeFS.resolvePath()` through
+`BaseFS.preparePath()` — synchronous the whole way, inside Promise-returning
+statics. A `FiberRef` cannot serve a synchronous static. Those readers stop
+being synchronous only when the filesystem stack itself becomes Effect-typed,
+which is W1. **The ordering is therefore forced: W1 before W6.** W6 is the
+last layer to go, not the first — it is currently the only mechanism by which
+Promise-typed core code is session-scoped at all.
+
+**The two scopes cannot be collapsed into one either.** `withRunContext`
+enters `runContextScope` and, when the context carries a session, also enters
+`rootsScope` with `session.roots`, so the second scope's contents are
+derivable from the first wherever a run is active. Having `workspaceRoots()`
+read the run context instead would invert the layering: `workspaceRoots` lives
+in `src/platform/` and `RunContext` in `src/agent/runtime/`, and platform
+importing agent is an edge the `architecture-edges` ratchet and
+`dependencyDirection.vitest.ts` both hold shut. The redundancy is real and it
+is load-bearing in the correct direction.
+
+**The 25 `runInSession` entries do not collapse to fewer.** Sixteen are in
+`packages/desktop/src/main/`, and they are not one dispatch point: each scopes
+a _different_ paper's session across heterogeneous operations — binding
+disposal (`index.ts:829`, `:841`, `:1385`), catalog refresh over every binding
+at once (`:858`), a validated run launch (`:1205`), workspace message handling
+(`:1376`). A host holding one session per open paper has to name the session
+at each of them. Three of the disposal calls are textually identical, which is
+a three-caller helper at best and below this repository's extraction bar.
+
+So W6 stays raised and unscheduled, but no longer for want of analysis: it is
+blocked on W1, and the reach beyond this audit is confirmed (`TraceEmitter`
+and `AgentTrace` hold a third `AsyncLocalStorage` for stage scope).
 
 ## 6. What this note deliberately does not propose
 
@@ -437,7 +478,7 @@ here and not scheduled.
 | W3  | State the reason where totality is deliberate                    | 9 (C1 + C2a) | **Done** (§9)                            |
 | W4  | Use the tool's own wrapper where the file already has one        | 2 (F2)       | **Done** (§9)                            |
 | W5  | Remaining B2 singletons, each with the lane owning its subsystem | 10           | Open; folded into existing lanes         |
-| W6  | The `AsyncLocalStorage` question                                 | 5 (§5.2)     | Needs an owner ruling first              |
+| W6  | The `AsyncLocalStorage` layer                                    | 5 (§5.2)     | **Blocked on W1** — scoped, see §5.2     |
 | W7  | `effect/unstable/*` adoption for the foreign edges               | 28 (A1)      | Needs an owner ruling first (§2.5)       |
 
 **W1 is bigger than the first draft of this note claimed.** `BaseFS` exposes 21
