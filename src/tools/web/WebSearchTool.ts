@@ -75,24 +75,21 @@ const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
   (query: string) =>
     retryTransientFetch(
       Effect.gen(function* () {
-        const signal = yield* Effect.abortSignal;
-        const response = yield* Effect.tryPromise({
-          try: () =>
-            ky.get('https://api.duckduckgo.com/', {
-              searchParams: {
-                q: query,
-                format: 'json',
-                no_redirect: 1,
-                no_html: 1,
-              },
-              timeout: false,
-              signal,
-              retry: 0,
-            }),
-          catch: (cause) => cause,
-        });
         const raw = yield* Effect.tryPromise({
-          try: () => response.json(),
+          try: (signal) =>
+            ky
+              .get('https://api.duckduckgo.com/', {
+                searchParams: {
+                  q: query,
+                  format: 'json',
+                  no_redirect: 1,
+                  no_html: 1,
+                },
+                timeout: false,
+                signal,
+                retry: 0,
+              })
+              .json<unknown>(),
           catch: (cause) => cause,
         });
         // Validate the body at the boundary. A malformed shape is not

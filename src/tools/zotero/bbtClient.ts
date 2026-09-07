@@ -311,15 +311,15 @@ function connectorRequestFailure(
  * The request is **uninterruptible**: `saveItems`/`saveSnapshot` write to the
  * user's library, so aborting one mid-flight would leave Zotero having
  * possibly stored the item with no way to tell whether it landed. Cancelling
- * the run instead lets this one write settle deterministically.
+ * the run instead lets this one write finish under its existing deadline.
  *
  * The interrupt is deferred, not absorbed. When the region ends it is
  * delivered as the continuation of the write's completion, and the
  * `Effect.catch` below recovers `Fail` reasons only (`findError` matches
  * `_tag === 'Fail'`), so this item's `ConnectorResult` is discarded and
  * `addItems`' `Effect.forEach` stops before the next item. The guarantee is
- * that Zotero's state is knowable afterwards — not that the result is
- * reported.
+ * that cancellation alone does not abandon this write — not that its
+ * remote outcome is durably known or its result is reported.
  *
  * The deadline is separate and unaffected by the region: `Effect.timeoutOrElse`
  * races the request in a fiber that `raceAllFirst` forks interruptible
@@ -356,7 +356,9 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
           return { status: 'success' } satisfies ConnectorResult;
         }
         // Try to extract a machine-readable error message from the response
-        // body; it is read under the same deadline as the headers.
+        // body; it is read under the same deadline as the headers. Keep this
+        // body-only recovery separate so request failures retain their own
+        // reachability/timeout classification.
         const data = yield* Effect.tryPromise({
           try: () => response.json<{ error?: string }>(),
           catch: (cause) => cause,
