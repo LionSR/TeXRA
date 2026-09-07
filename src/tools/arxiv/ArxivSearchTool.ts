@@ -87,20 +87,27 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
   for (const cat of input.categories ?? []) {
     const trimmed = cat.trim();
     if (!trimmed) continue;
-    try {
-      // catQuery expects a strict Category union ("cs.AI", "math.CO", ...).
-      // User input is unconstrained string — cast to the expected type
-      // and rely on the library's runtime validation (caught below).
-      categoryFilters.push(catQuery(trimmed as Category));
-    } catch (error) {
+    // catQuery expects a strict Category union ("cs.AI", "math.CO", ...).
+    // User input is unconstrained string — cast to the expected type
+    // and rely on the library's runtime validation (recovered below).
+    const filter = yield* Effect.try({
+      try: () => catQuery(trimmed as Category),
+      catch: (error) => error,
+    }).pipe(
       // Skip invalid categories — log so a silently-dropped filter is
       // traceable rather than mysteriously absent from the query.
-      warn(
-        'arxiv.search',
-        `Ignoring invalid arxiv category filter "${trimmed}"`,
-        { data: error },
-      );
-    }
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          warn(
+            'arxiv.search',
+            `Ignoring invalid arxiv category filter "${trimmed}"`,
+            { data: error },
+          );
+          return null;
+        }),
+      ),
+    );
+    if (filter != null) categoryFilters.push(filter);
   }
 
   if (categoryFilters.length > 0) {

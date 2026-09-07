@@ -180,15 +180,13 @@ export class WebFetchTool extends defineTool({
 
       let markdown: string;
       if (isMarkupContent) {
-        try {
-          markdown = this.turndown.turndown(rawBody);
-        } catch (error) {
-          return yield* Effect.fail(
+        markdown = yield* Effect.try({
+          try: () => this.turndown.turndown(rawBody),
+          catch: (error) =>
             new ToolError(
               `Failed to convert HTML to Markdown: ${toErrorMessage(error)}`,
             ),
-          );
-        }
+        });
       } else {
         markdown = rawBody;
       }
