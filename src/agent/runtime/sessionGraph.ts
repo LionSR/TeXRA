@@ -25,6 +25,7 @@ import {
 } from '@platform/workspaceRoots';
 import type {
   CommitOrdinal,
+  ExecutionId,
   LocalRuntimeState,
   SessionCloseReport,
   SessionEvent,
@@ -45,6 +46,22 @@ export interface SessionGraph {
    *  below), so nothing holding a session can append past its bookkeeping. */
   readonly events: Omit<SessionEventsShape, 'publish'>;
   readonly publish: SessionEventsShape['publish'];
+  readonly publishRegistration: SessionEventsShape['publish'];
+  /** Private execution metadata reads never enter display transport. */
+  readonly acquireExecutionClaims: (
+    executionId: ExecutionId,
+    streamId: StreamTabId,
+  ) => Effect.Effect<Effect.Effect<void>>;
+  readonly releaseExecutionClaims: (
+    executionId: ExecutionId,
+  ) => Effect.Effect<void>;
+  readonly executionRecords: (
+    id: ExecutionId,
+  ) => Effect.Effect<readonly SessionEvent[]>;
+  readonly executionChildren: (
+    id: ExecutionId,
+  ) => Effect.Effect<readonly SessionEvent[]>;
+  readonly recordListing: () => Effect.Effect<readonly SessionEvent[]>;
   /** Transient text shares the existing session-input source, never the event table. */
   readonly publishText: (
     streamId: StreamTabId,

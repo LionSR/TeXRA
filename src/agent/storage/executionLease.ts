@@ -733,22 +733,6 @@ export async function releaseOwnedExecutionLease(
   );
 }
 
-/** Release during rollback without allowing cleanup failure to mask the cause. */
-export async function releaseOwnedExecutionLeaseAfterFailure(
-  executionId: ExecutionId,
-  primaryError: unknown,
-): Promise<unknown> {
-  try {
-    await releaseOwnedExecutionLease(executionId);
-    return primaryError;
-  } catch (releaseError) {
-    return new AggregateError(
-      [primaryError, releaseError],
-      `Execution ${executionId} failed and its lease could not be released`,
-    );
-  }
-}
-
 async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   const root = ownership.storageRoot;
   const { executionId } = ownership;

@@ -11,6 +11,8 @@ import '@test/support/agentCatalogMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
+import { Effect } from 'effect';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { runWorkflowAgent } from '@cli/commands/workflow';
 import { formatResumeCommand } from '@cli/chat/tui/state/resumeHint';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -38,21 +40,20 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@agent/storage', async (importOriginal) => {
-  const { createFakeKv } = await import('@test/support/FakeExecutionKVStore');
+  const { createFakeExecutionRecords } =
+    await import('@test/support/FakeExecutionKVStore');
   return {
     ...(await importOriginal<typeof import('@agent/storage')>()),
-    getExecutionStore: vi.fn((executionId: ExecutionId) =>
-      createFakeKv(executionId, { writeResultMeta: mocks.writeResultMeta }),
+    getExecutionRecords: vi.fn(() =>
+      createFakeExecutionRecords({
+        writeResultMeta: (meta) =>
+          Effect.tryPromise(() => mocks.writeResultMeta(meta)),
+      }),
     ),
-    deriveResumability: mocks.deriveResumability,
-    finalizeRun: mocks.finalizeRun,
-    // Routed over the same writeResultMeta fake, so failure injection keeps
-    // flowing through mocks.writeResultMeta.
-    persistChildRunResultMeta: vi.fn(
-      async (_executionId: ExecutionId, meta: unknown) => {
-        await mocks.writeResultMeta(meta);
-      },
-    ),
+    deriveResumability: (...args: unknown[]) =>
+      Effect.tryPromise(() => mocks.deriveResumability(...args)),
+    finalizeRun: (...args: unknown[]) =>
+      Effect.tryPromise(() => mocks.finalizeRun(...args)),
   };
 });
 
@@ -80,12 +81,33 @@ vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
 }));
 
+vi.mock('@cli/runtime/transcriptSession', () => ({
+  initializeCliTranscriptSession: vi.fn(async () => ({})),
+}));
+
 vi.mock('@cli/runtime/runExecution', () => ({
-  executeCliConfig: mocks.executeCliConfig,
+  executeCliConfig: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.executeCliConfig(...args),
+      catch: ensureError,
+    }),
 }));
 
 vi.mock('@cli/runtime/workflowInputs', () => ({
-  withExpandedRunInputs: mocks.withExpandedRunInputs,
+  withExpandedRunInputs: (
+    ...args: Parameters<
+      typeof import('@cli/runtime/workflowInputs').withExpandedRunInputs
+    >
+  ) =>
+    Effect.tryPromise({
+      try: () =>
+        mocks.withExpandedRunInputs(
+          ...args.slice(0, 4),
+          (inputs: Parameters<(typeof args)[4]>[0]) =>
+            Effect.runPromise(args[4](inputs)),
+        ),
+      catch: ensureError,
+    }),
   hasMixedStdinWorkflowInputSpecs: vi.fn((inputFiles: readonly string[]) => {
     const specs = new Set(
       inputFiles.map((spec) => spec.trim()).filter(Boolean),
@@ -130,13 +152,15 @@ async function runWorkflow(
   context: CliContext = createRunCommandCliContext(),
 ): Promise<number> {
   const { runWorkflowAgent: run } = await import('@cli/commands/workflow');
-  return run(context, {
-    agent: 'polish',
-    inputFiles: ['paper.tex'],
-    contextFiles: [],
-    instruction: '',
-    ...init,
-  });
+  return Effect.runPromise(
+    run(context, {
+      agent: 'polish',
+      inputFiles: ['paper.tex'],
+      contextFiles: [],
+      instruction: '',
+      ...init,
+    }),
+  );
 }
 
 function runOutputSummary(absolutePath: string, originalPath: string) {
@@ -185,10 +209,11 @@ function mockWorkflowExecution(
     },
   ) => {
     if (result.ok) {
-      const outputOutcome = await options.openWorkflowOutput?.(
-        result.result,
-        () => true,
-      );
+      const outputOutcome = options.openWorkflowOutput
+        ? await Effect.runPromise(
+            options.openWorkflowOutput(result.result, () => true),
+          )
+        : undefined;
       if (outputOutcome !== undefined) {
         return {
           ...result,
@@ -216,10 +241,10 @@ function mockCancellationDuringOutputFinalization(
         readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
       },
     ) => {
-      await options.openWorkflowOutput?.(
-        provisional.result,
-        tryCommitPublication,
-      );
+      if (options.openWorkflowOutput)
+        await Effect.runPromise(
+          options.openWorkflowOutput(provisional.result, tryCommitPublication),
+        );
       return {
         ...provisional,
         result: {
@@ -290,6 +315,9 @@ function expectNoModelOrInputWork(): void {
 describe('CLI workflow run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    cliInitPlatformMock.initLocalCliPlatform.mockResolvedValue(undefined);
+    cliInitPlatformMock.initCliPlatform.mockResolvedValue(undefined);
+    mocks.writeResultMeta.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue(durableFinalizationResult());
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'polish',
@@ -1076,7 +1104,10 @@ describe('CLI workflow run command', () => {
     mocks.executeCliConfig.mockImplementationOnce(
       async (_config, _context, options) => {
         if (!execution.ok) return execution;
-        await options.openWorkflowOutput?.(execution.result, () => true);
+        if (options.openWorkflowOutput)
+          await Effect.runPromise(
+            options.openWorkflowOutput(execution.result, () => true),
+          );
         options.onInterruptedExecutionFinalized?.('exec-signal');
         return execution;
       },
@@ -1088,7 +1119,11 @@ describe('CLI workflow run command', () => {
       'persisted-workspace',
     );
     const context = createRunCommandCliContext({ cwd: resumeInvocation });
-    const { executeCliWorkflowConfig } = await import('@cli/commands/workflow');
+    const { executeCliWorkflowConfig: nativeExecute } =
+      await import('@cli/commands/workflow');
+    const executeCliWorkflowConfig = (
+      ...args: Parameters<typeof nativeExecute>
+    ) => Effect.runPromise(nativeExecute(...args));
 
     const exitCode = await executeCliWorkflowConfig(
       {
@@ -1120,7 +1155,11 @@ describe('CLI workflow run command', () => {
     const cwdSpy = vi.spyOn(process, 'cwd').mockImplementation(() => {
       throw new Error('launch directory was deleted');
     });
-    const { executeCliWorkflowConfig } = await import('@cli/commands/workflow');
+    const { executeCliWorkflowConfig: nativeExecute } =
+      await import('@cli/commands/workflow');
+    const executeCliWorkflowConfig = (
+      ...args: Parameters<typeof nativeExecute>
+    ) => Effect.runPromise(nativeExecute(...args));
 
     const result = executeCliWorkflowConfig(
       {

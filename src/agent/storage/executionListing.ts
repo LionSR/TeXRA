@@ -1,39 +1,35 @@
-/**
- * Directory-scanning execution listing.
- *
- * Derives the list of executions by scanning the `executions/` directory
- * and reading per-execution KV data (meta.json, config.json).
- */
+/** Execution history derived from committed session events. */
 
-import pMap from 'p-map';
+import { Effect } from 'effect';
+
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   isAgentRunRecord,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import { isFileNotFoundError } from '@common/errors';
-import type {
-  LatexAgentRunEntry,
-  LatexExecutionDiscoveryPort,
-} from '@latex/latexdiff/executionDiscovery';
+import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDiscovery';
 import { createLog } from '@logger/logUtils';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import type {
-  ExecutionId,
-  RunIdentity,
-  RunOutcome,
-  StreamTabId,
+import {
+  aggregateTarget,
+  type AggregateId,
+  type SessionEvent,
+  type ExecutionId,
+  type RunIdentity,
+  type RunOutcome,
+  type StreamTabId,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
-import { StorageFS } from '@utils/files/storageFS';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isDirectory } from '@utils/files/fsEntryType';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { getExecutionStore } from './ExecutionKVStore';
+import {
+  getExecutionRecords,
+  executionMetaFromEvents,
+  executionRunRecordFromEvents,
+} from './ExecutionKVStore';
 import { checkpointExists } from './resumability';
 const log = createLog('ExecutionListing');
-const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
 const EXECUTION_STORAGE_CONCURRENCY = 32;
 
 // ============================================================================
@@ -114,62 +110,49 @@ export function isUserVisibleExecution(
   return isAgentRunEntry(entry) && entry.parentExecutionId === undefined;
 }
 
-/**
- * Read a storage directory, returning an empty array if it doesn't exist.
- * Other I/O errors propagate.
- */
-async function readDirOrEmpty(path: string): Promise<[string, number][]> {
-  try {
-    return await StorageFS.readDir(path);
-  } catch (error) {
-    if (isFileNotFoundError(error)) return [];
-    throw error;
+/** Group one committed listing prefix without scanning other runs during each fold. */
+function groupExecutionRows(
+  rows: readonly SessionEvent[],
+): Map<ExecutionId, SessionEvent[]> {
+  const executions = new Map<ExecutionId, SessionEvent[]>();
+  const streamExecutions = new Map<AggregateId, ExecutionId>();
+  for (const row of rows) {
+    // Creation precedes its stream and execution rows in the committed prefix.
+    if (row.type === 'run.start') {
+      streamExecutions.set(row.aggregateId, row.executionId);
+      executions.set(row.executionId, []);
+    }
+    const target = aggregateTarget(row.aggregateId);
+    const id =
+      target.kind === 'execution'
+        ? target.id
+        : streamExecutions.get(row.aggregateId);
+    if (id !== undefined) executions.get(id)?.push(row);
   }
+  return executions;
 }
 
-/**
- * Select execution-id directories (hex UUID-like) from a scanned listing.
- */
-function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
-  return entries
-    .filter(
-      ([name, type]) => isDirectory(type) && EXECUTION_ID_PATTERN.test(name),
-    )
-    .map(([name]) => name as ExecutionId);
-}
-
-// ============================================================================
-// Public API
-// ============================================================================
-
-/**
- * List all executions by scanning the executions/ directory.
- *
- * The storage root is shared by independent CLI, desktop, and extension
- * processes, so every call scans current disk state. A process-local cache
- * cannot observe another host's writes or metadata updates reliably.
- */
-export async function listExecutions(): Promise<ExecutionListingEntry[]> {
-  const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
-  const executionDirs = listExecutionDirs(entries);
-
-  // Read meta + config, and stat the checkpoint, with bounded concurrency.
-  // Large histories should not enqueue one storage read burst per execution
-  // all at once.
-  const results = await pMap(
-    executionDirs,
-    async (id): Promise<ExecutionListingEntry | null> => {
-      try {
-        const store = getExecutionStore(id);
-        // The checkpoint probe answers "no" and warns when the `stat` itself
-        // fails: a row whose meta and record are readable still belongs in
-        // history, and the open path re-reads the file anyway.
-        const [meta, record, checkpointPresent] = await Promise.all([
-          store.readMeta(),
-          store.readRunRecord(),
-          checkpointExists(id),
-        ]);
-
+/** Read current execution identities and metadata from one committed listing. */
+export const listExecutions = Effect.fn('listExecutions')(function* (
+  session: SessionHandle,
+): Effect.fn.Return<ExecutionListingEntry[], Error> {
+  const executions = groupExecutionRows(yield* session.readRecordListing());
+  const results = yield* Effect.forEach(
+    executions,
+    ([id, rows]) =>
+      Effect.gen(function* (): Effect.fn.Return<
+        ExecutionListingEntry | null,
+        Error
+      > {
+        const [meta, record] = yield* Effect.try({
+          try: () =>
+            [
+              executionMetaFromEvents(rows, id),
+              executionRunRecordFromEvents(rows, id),
+            ] as const,
+          catch: ensureError,
+        });
+        const checkpointPresent = yield* checkpointExists(id, session);
         if (!meta) return null;
 
         const base: ExecutionListingBase = {
@@ -193,11 +176,16 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           return { ...base, kind: 'run', identity, record: agentRecord };
         }
         return { ...base, kind: 'run', identity, record };
-      } catch (error) {
-        log.warn(`Skipping corrupt execution ${id}: ${toErrorMessage(error)}`);
-        return null;
-      }
-    },
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            log.warn(
+              `Skipping corrupt execution ${id}: ${toErrorMessage(error)}`,
+            );
+            return null;
+          }),
+        ),
+      ),
     { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
 
@@ -205,26 +193,31 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     results.filter(filterNotNull),
     (item) => item.timestamp,
   );
-}
+});
 
 /**
  * Adapter from the agent storage surface to the latex-owned execution
  * discovery port. Hosts inject this into latexdiff orchestration.
  */
-export function createLatexExecutionDiscovery(): LatexExecutionDiscoveryPort {
+export function createLatexExecutionDiscovery(
+  session: SessionHandle,
+): LatexExecutionDiscoveryPort {
   return {
-    async listAgentRuns(): Promise<readonly LatexAgentRunEntry[]> {
-      const executions = await listExecutions();
-      return executions.filter(isAgentRunEntry).map((entry) => ({
-        id: entry.id,
-        timestamp: entry.timestamp,
-        agent: entry.record.agent,
-        model: entry.record.model,
-        inputFiles: entry.record.inputFiles,
-      }));
-    },
-    async readStreamId(executionId) {
-      return (await getExecutionStore(executionId).readMeta())?.streamId;
-    },
+    listAgentRuns: () =>
+      listExecutions(session).pipe(
+        Effect.map((executions) =>
+          executions.filter(isAgentRunEntry).map((entry) => ({
+            id: entry.id,
+            timestamp: entry.timestamp,
+            agent: entry.record.agent,
+            model: entry.record.model,
+            inputFiles: entry.record.inputFiles,
+          })),
+        ),
+      ),
+    readStreamId: (executionId) =>
+      getExecutionRecords(session, executionId)
+        .readMeta()
+        .pipe(Effect.map((meta) => meta?.streamId)),
   };
 }

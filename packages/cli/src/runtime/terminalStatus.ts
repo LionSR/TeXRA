@@ -1,11 +1,12 @@
-import type { runAgent } from '@agent/runtime';
-import { getExecutionStore } from '@agent/storage';
+import { Effect } from 'effect';
+
+import { getExecutionRecords } from '@agent/storage';
+import type { SessionHandle, runAgent } from '@agent/runtime';
 import { RUN_OUTCOME, type RunOutcome, STREAM_PHASE } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
-import type { Effect } from 'effect';
 
 export type ExecuteAgentResult = Effect.Success<ReturnType<typeof runAgent>>;
 
@@ -58,24 +59,30 @@ export function runOutcomeExitCode(outcome: TurnOutcome): CliExitCode {
 
 /** Read the terminal outcome together with the durability fact needed before
  *  advertising persisted-execution recovery. */
-export async function readCliRunOutcomeState(
-  result: ExecuteAgentResult,
-  reportReadFailure?: (error: Error) => void,
-): Promise<{ outcome: RunOutcome; outcomePersisted: boolean }> {
-  try {
-    const meta = await getExecutionStore(result.executionId).readMeta();
-    const persistedOutcome = meta?.outcome;
-    return {
-      outcome: persistedOutcome ?? result.outcome,
-      outcomePersisted: persistedOutcome !== undefined,
-    };
-  } catch (error) {
-    reportReadFailure?.(
-      new Error(
-        `Could not verify the persisted outcome for execution ${result.executionId}; using the current run outcome: ${toErrorMessage(error)}`,
-        { cause: error },
-      ),
-    );
-    return { outcome: result.outcome, outcomePersisted: false };
-  }
-}
+export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
+  function* (
+    session: SessionHandle,
+    result: ExecuteAgentResult,
+    reportReadFailure?: (error: Error) => void,
+  ): Effect.fn.Return<{ outcome: RunOutcome; outcomePersisted: boolean }> {
+    return yield* getExecutionRecords(session, result.executionId)
+      .readMeta()
+      .pipe(
+        Effect.map((meta) => ({
+          outcome: meta?.outcome ?? result.outcome,
+          outcomePersisted: meta?.outcome !== undefined,
+        })),
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            reportReadFailure?.(
+              new Error(
+                `Could not verify the persisted outcome for execution ${result.executionId}; using the current run outcome: ${toErrorMessage(error)}`,
+                { cause: error },
+              ),
+            );
+            return { outcome: result.outcome, outcomePersisted: false };
+          }),
+        ),
+      );
+  },
+);

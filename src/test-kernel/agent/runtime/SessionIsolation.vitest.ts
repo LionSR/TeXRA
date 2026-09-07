@@ -52,16 +52,21 @@ vi.mock('@agent/storage', () => ({
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
-  const { workspaceRoots } = await import('@platform/workspaceRoots');
   return {
     ...actual,
-    finalizeRun: vi.fn(async (input: { executionId: string }) => {
-      storageMocks.settledUnder.set(
-        input.executionId,
-        workspaceRoots().storage,
-      );
-      return { ok: true, outcome: 'cancelled' };
-    }),
+    finalizeRun: vi.fn(
+      (
+        session: ReturnType<typeof createTestSession>,
+        input: { executionId: string },
+      ) =>
+        Effect.sync(() => {
+          storageMocks.settledUnder.set(
+            input.executionId,
+            session.roots.storage,
+          );
+          return { ok: true, outcome: 'cancelled' };
+        }),
+    ),
   };
 });
 
@@ -192,7 +197,7 @@ describe('session isolation', () => {
     }
   });
 
-  it('a handle interrupt target lands in the run session only', () => {
+  it('a handle interrupt target lands in the run session only', async () => {
     const sessionB = createTestSession();
     const executionId = 'exec:iso-interrupt' as ExecutionId;
     const streamId = 'stream:iso-interrupt' as StreamTabId;
@@ -206,7 +211,9 @@ describe('session isolation', () => {
       handle.attachInterruptHandler({ interrupt });
       sessionB.executions.track(handle);
 
-      expect(sessionB.executions.kill(executionId)).toBe(true);
+      const stop = sessionB.executions.kill(executionId);
+      expect(stop.accepted).toBe(true);
+      await Effect.runPromise(stop.settlement);
       expect(interrupt).toHaveBeenCalledOnce();
       expect(
         defaultSession().executions.getHandle(executionId),
@@ -230,19 +237,21 @@ describe('session isolation', () => {
     });
 
     try {
-      await runFlowWithLifecycle(ctx, async () => {
-        // Mid-run: the handle is registered in session B's registry only.
-        expect(sessionB.executions.getHandle(executionId)).toBeDefined();
-        expect(
-          defaultSession().executions.getHandle(executionId),
-        ).toBeUndefined();
-        return {
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-        };
-      });
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          // Mid-run: the handle is registered in session B's registry only.
+          expect(sessionB.executions.getHandle(executionId)).toBeDefined();
+          expect(
+            defaultSession().executions.getHandle(executionId),
+          ).toBeUndefined();
+          return {
+            category: 'toolUse',
+            outcome: RUN_OUTCOME.COMPLETED,
+            executionId,
+            streamId,
+          };
+        }),
+      );
 
       // After completion the run session untracked it; default never saw it.
       expect(sessionB.executions.getHandle(executionId)).toBeUndefined();

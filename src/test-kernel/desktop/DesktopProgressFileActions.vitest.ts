@@ -3,6 +3,8 @@ import { Effect } from 'effect';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { SessionHandle } from '@agent/runtime';
+
 import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { OutputFileInfo } from '@shared/schemas';
@@ -138,7 +140,7 @@ async function loadFileActions(options: {
     {
       startExecution: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(async () => []),
-      snapshots: { read: vi.fn() },
+      session: { snapshots: { read: vi.fn() } } as unknown as SessionHandle,
     },
   );
 

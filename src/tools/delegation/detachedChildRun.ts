@@ -1,3 +1,5 @@
+import { Cause, Effect, Exit, Fiber } from 'effect';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 /**
  * Shared detached-child launch choreography for delegation launch sites.
  *
@@ -12,7 +14,6 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { registerExecution } from '@agent/storage/executionLifecycle';
@@ -48,24 +49,30 @@ import type { ChildStream } from './childStream';
  * keeps the two in step: while each launch site derived its own, the
  * invariant could only be stated as a comment asking the copies to agree.
  */
-export async function registerChildExecution(input: {
-  readonly executionId: ExecutionId;
-  /** Canonical config, already parsed by the launch site. */
-  readonly config: AgentConfig;
-  readonly agentName: string;
-  readonly userFollowUpSupport: UserFollowUpSupport;
-  readonly parentExecutionId?: ExecutionId;
-}): Promise<{ readonly childStreamId: StreamTabId }> {
-  const { executionId, config } = input;
-  const childStreamId = getStreamTabId(config.agent, { executionId });
-  await registerExecution(executionId, config, input.agentName, {
-    streamId: childStreamId,
-    identity: { kind: 'agent', agent: config.agent },
-    userFollowUpSupport: input.userFollowUpSupport,
-    parentExecutionId: input.parentExecutionId,
-  });
-  return { childStreamId };
-}
+export const registerChildExecution = Effect.fn('registerChildExecution')(
+  function* (
+    session: SessionHandle,
+    input: {
+      readonly executionId: ExecutionId;
+      /** Canonical config, already parsed by the launch site. */
+      readonly config: AgentConfig;
+      readonly agentName: string;
+      readonly userFollowUpSupport: UserFollowUpSupport;
+      readonly parentExecutionId?: ExecutionId;
+    },
+  ): Effect.fn.Return<{ readonly childStreamId: StreamTabId }, Error> {
+    const { executionId, config } = input;
+    const childStreamId = getStreamTabId(config.agent, { executionId });
+    yield* registerExecution(session, executionId, config, input.agentName, {
+      streamId: childStreamId,
+      identity: { kind: 'agent', agent: config.agent },
+      userFollowUpSupport: input.userFollowUpSupport,
+      parentExecutionId: input.parentExecutionId,
+      background: true,
+    });
+    return { childStreamId };
+  },
+);
 
 /** The strategy wiring a launch site supplies inside the guard. */
 interface DetachedChildRunLaunch<TTurn> {
@@ -129,6 +136,7 @@ export function startDetachedChildRunLoop<TTurn>(
   Error
 > {
   return runWithOwnedExecutionLeaseLaunchGuard(
+    input.session,
     input.executionId,
     Effect.gen(function* () {
       let childStream: ChildStream | undefined;
@@ -180,7 +188,7 @@ export function startDetachedChildRunLoop<TTurn>(
             );
           }
         }
-        return yield* Effect.fail(ensureError(error));
+        return yield* Effect.failCause(setup.cause);
       }
       const { launch, completion } = setup.value;
       if (launch.onLoopFailed) {

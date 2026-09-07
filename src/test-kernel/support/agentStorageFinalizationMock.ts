@@ -1,5 +1,6 @@
 // Third-party imports
 import { vi } from 'vitest';
+import { Effect } from 'effect';
 
 // Local imports
 import { durableFinalizationResult } from './agentStorageFixtures';
@@ -40,5 +41,6 @@ agentStorageFinalizationMock.finalizeRun.mockImplementation(async () =>
 );
 
 vi.mock('@agent/storage', () => ({
-  finalizeRun: agentStorageFinalizationMock.finalizeRun,
+  finalizeRun: (...args: unknown[]) =>
+    Effect.tryPromise(() => agentStorageFinalizationMock.finalizeRun(...args)),
 }));

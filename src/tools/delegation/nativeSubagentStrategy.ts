@@ -28,7 +28,7 @@
 
 import { Cause, Effect, Exit } from 'effect';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import {
   isWaitingFlowResult,
   type AgentFlowResult,
@@ -357,31 +357,28 @@ export function createNativeSubagentStrategy(
               ),
             );
           }
-          const resume = yield* Effect.tryPromise({
-            try: async () =>
-              runInSession(params.session, async () => {
-                const config = await getExecutionStore(
-                  params.executionId,
-                ).readConfig();
-                if (!config) {
-                  throw new Error(
-                    `Native subagent ${params.executionId} has no persisted config to resume.`,
-                  );
-                }
-                const saved = await retrieveSessionResumeData(
-                  streamId,
-                  params.executionId,
-                  config,
-                );
-                if (!saved || saved.type !== 'toolUse') {
-                  throw new Error(
-                    `Native subagent ${params.executionId} has no resumable tool-use snapshot.`,
-                  );
-                }
-                return saved;
-              }),
-            catch: ensureError,
-          });
+          const config = yield* getExecutionRecords(
+            params.session,
+            params.executionId,
+          ).readConfig();
+          if (!config)
+            return yield* Effect.fail(
+              new Error(
+                `Native subagent ${params.executionId} has no persisted config to resume.`,
+              ),
+            );
+          const resume = yield* retrieveSessionResumeData(
+            streamId,
+            params.executionId,
+            config,
+            params.session,
+          );
+          if (!resume || resume.type !== 'toolUse')
+            return yield* Effect.fail(
+              new Error(
+                `Native subagent ${params.executionId} has no resumable tool-use snapshot.`,
+              ),
+            );
 
           // childRunLoop already consumed this batch from the stream queue. A
           // queued-resume wrapper would append it to ToolUseSessionLifecycle,

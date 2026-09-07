@@ -1,311 +1,223 @@
-/* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getExecutionRecords, getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { runInSession } from '@agent/runtime/RunContext';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
-  RUN_OUTCOME,
-  USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
-
-const mocks = vi.hoisted(() => ({
-  getExecutionStore: vi.fn(),
-  delete: vi.fn(),
-  readMeta: vi.fn(),
-  readResultMeta: vi.fn(),
-  writeRunRecord: vi.fn(),
-  writeMeta: vi.fn(),
-  writeResultMeta: vi.fn(),
-}));
-
-vi.mock('@agent/storage/ExecutionKVStore', () => ({
-  getExecutionStore: mocks.getExecutionStore,
-}));
-
-import {
   finalizeRun,
+  acquireResumedExecutionOwnership,
   registerExecution,
 } from '@agent/storage/executionLifecycle';
 import { inspectExecutionLease } from '@agent/storage/executionLease';
+import { effectRuntime } from '@platform/processRuntime';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
+setupPlatform({ workspacePath: '/workspace/root' });
 const baseConfig = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'deepseekT',
   instruction: 'Check the proof.',
   agentCategory: 'toolUse',
 });
+const executionId = 'abc123';
+const options = {
+  streamId: 'stream:abc123',
+  identity: { kind: 'agent', agent: 'chat' },
+  userFollowUpSupport: 'nativeInteractive',
+} as const;
+let session: ReturnType<typeof createTestSession>;
+const run = <A, E>(effect: Effect.Effect<A, E>) =>
+  effectRuntime().runPromise(effect);
+const register = (workingDirectory?: string) =>
+  run(
+    registerExecution(
+      session,
+      executionId,
+      {
+        ...baseConfig,
+        ...(workingDirectory === undefined ? {} : { workingDirectory }),
+      },
+      'chat',
+      options,
+    ),
+  );
 
-function resultMeta(outcome: string, response: string) {
-  return {
-    producer: 'subagent',
-    agentName: 'reviewer',
-    wallTimeMs: 20,
-    result: {
-      category: 'toolUse',
-      outcome,
-      response,
-      files: [],
-      cost: 0.1,
+beforeEach(() => {
+  vi.restoreAllMocks();
+  session = createTestSession();
+});
+
+describe('execution registration and finalization', () => {
+  it.each([undefined, '/workspace/paper '])(
+    'pins the execution working directory for %s',
+    async (workingDirectory) => {
+      await register(workingDirectory);
+      expect(
+        await run(getExecutionRecords(session, executionId).readConfig()),
+      ).toMatchObject({
+        workingDirectory: workingDirectory ?? '/workspace/root',
+      });
+      expect(
+        await run(getExecutionRecords(session, executionId).readMeta()),
+      ).toMatchObject({
+        streamId: options.streamId,
+        identity: options.identity,
+        userFollowUpSupport: 'nativeInteractive',
+      });
+      expect(await getExecutionStore(executionId).listKeys()).toEqual([]);
     },
-  };
-}
+  );
 
-function executionMeta(overrides: Record<string, unknown> = {}) {
-  return {
-    schemaVersion: 1,
-    timestamp: '2026-07-10T00:00:00.000Z',
-    ...overrides,
-  };
-}
-
-function registrationArgs(
-  executionId: ExecutionId,
-): Parameters<typeof registerExecution>[3] {
-  return {
-    streamId: `chat@deepseekT#${executionId}` as StreamTabId,
-    identity: { kind: 'agent', agent: 'chat' },
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-  };
-}
-
-describe('execution lifecycle', () => {
-  setupPlatform({ workspacePath: '/workspace/root' });
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getExecutionStore.mockReturnValue({
-      delete: mocks.delete,
-      readMeta: mocks.readMeta,
-      readResultMeta: mocks.readResultMeta,
-      writeRunRecord: mocks.writeRunRecord,
-      writeMeta: mocks.writeMeta,
-      writeResultMeta: mocks.writeResultMeta,
-    });
-    mocks.readMeta.mockResolvedValue(null);
-    mocks.readResultMeta.mockResolvedValue(null);
-    mocks.delete.mockResolvedValue(undefined);
-    mocks.writeRunRecord.mockResolvedValue(undefined);
-    mocks.writeMeta.mockResolvedValue(undefined);
-    mocks.writeResultMeta.mockResolvedValue(undefined);
-  });
-
-  it('pins the active workspace path when a config has no working directory', async () => {
-    const executionId = 'abc123' as ExecutionId;
-    await registerExecution(
-      executionId,
-      baseConfig,
-      'chat',
-      registrationArgs(executionId),
+  it('rolls back file ownership when the registration transaction fails', async () => {
+    const failure = new Error('database write failed');
+    vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
+      Effect.die(failure),
     );
-
-    expect(mocks.writeRunRecord).toHaveBeenCalledWith({
-      ...baseConfig,
-      workingDirectory: '/workspace/root',
-    });
-    expect(mocks.writeMeta).toHaveBeenCalledWith({
-      schemaVersion: 1,
-      timestamp: expect.any(String),
-      streamId: 'chat@deepseekT#abc123',
-      parentExecutionId: undefined,
-      identity: { kind: 'agent', agent: 'chat' },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    });
-    await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.COMPLETED,
-      flowRecord: 'preserve',
-    });
+    await expect(register()).rejects.toBe(failure);
+    expect(
+      await runInSession(session, () => inspectExecutionLease(executionId)),
+    ).toEqual({ status: 'free' });
+    expect(
+      await run(getExecutionRecords(session, executionId).readMeta()),
+    ).toBeNull();
   });
 
-  it('preserves an explicit working directory verbatim', async () => {
-    const executionId = 'workspace-whitespace' as ExecutionId;
-    const workingDirectory = '/workspace/paper ';
+  it.each([false, true])(
+    'preserves preexisting file ownership %s when database admission fails',
+    async (alreadyOwned) => {
+      await register();
+      if (!alreadyOwned) await run(session.releaseExecutionLease(executionId));
+      const failure = new Error('database admission rejected');
+      vi.spyOn(session, 'acquireExecutionClaims').mockReturnValueOnce(
+        Effect.fail(failure),
+      );
+      await expect(
+        run(
+          acquireResumedExecutionOwnership(
+            session,
+            executionId,
+            options.streamId,
+          ),
+        ),
+      ).rejects.toBe(failure);
+      const lease = await runInSession(session, () =>
+        inspectExecutionLease(executionId),
+      );
+      expect(lease.status).toBe(alreadyOwned ? 'owned' : 'free');
+    },
+  );
 
-    await registerExecution(
-      executionId,
-      { ...baseConfig, workingDirectory },
-      'chat',
-      registrationArgs(executionId),
+  it('releases reacquired database claims when repeated registration fails', async () => {
+    await register();
+    await run(session.releaseExecutionLease(executionId));
+    const failure = new Error('registration rejected');
+    vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
+      Effect.die(failure),
     );
-
-    expect(mocks.writeRunRecord).toHaveBeenCalledWith({
-      ...baseConfig,
-      workingDirectory,
-    });
+    await expect(register()).rejects.toBe(failure);
+    await expect(
+      run(getExecutionRecords(session, executionId).writeReport('unowned')),
+    ).rejects.toThrow();
+    await run(session.acquireExecutionClaims(executionId, options.streamId));
+    await run(getExecutionRecords(session, executionId).writeReport('owned'));
+    expect(
+      await run(getExecutionRecords(session, executionId).readReport()),
+    ).toBe('owned');
   });
+
+  it('keeps the existing local run claimed when a new birth collides with its stream', async () => {
+    await register();
+    await expect(
+      run(registerExecution(session, 'bcd234', baseConfig, 'chat', options)),
+    ).rejects.toThrow();
+    await run(
+      getExecutionRecords(session, executionId).writeReport('still owned'),
+    );
+    expect(
+      await run(getExecutionRecords(session, executionId).readReport()),
+    ).toBe('still owned');
+  });
+
+  it('releases fresh birth claims when the committed publication consumer fails', async () => {
+    vi.spyOn(session, 'receiveCommittedEvent').mockReturnValue(
+      Effect.die(new Error('consumer failed')),
+    );
+    await expect(register()).rejects.toThrow();
+    expect(
+      await run(getExecutionRecords(session, executionId).readMeta()),
+    ).not.toBeNull();
+    await expect(
+      run(getExecutionRecords(session, executionId).writeReport('unowned')),
+    ).rejects.toThrow();
+    expect(
+      await runInSession(session, () => inspectExecutionLease(executionId)),
+    ).toEqual({ status: 'free' });
+  });
+
+  it.each(['preserve', 'delete'] as const)(
+    'retains the existing requested checkpoint disposition %s',
+    async (flowRecord) => {
+      await register();
+      const store = getExecutionStore(executionId);
+      await runInSession(session, () =>
+        store.write(flowKey(executionId), { checkpoint: 'existing format' }),
+      );
+      expect(
+        await run(
+          finalizeRun(session, {
+            executionId,
+            outcome: 'completed',
+            flowRecord,
+          }),
+        ),
+      ).toEqual({ ok: true, outcome: 'completed' });
+      expect(
+        await runInSession(session, () => store.exists(flowKey(executionId))),
+      ).toBe(flowRecord === 'preserve');
+    },
+  );
 
   it.each([
-    {
-      name: 'fresh registration fails',
-      fail: () =>
-        mocks.writeRunRecord.mockRejectedValueOnce(
-          new Error('config write failed'),
-        ),
-      error: 'config write failed',
-    },
-    {
-      name: 'registration preparation throws',
-      fail: () =>
-        mocks.getExecutionStore.mockImplementationOnce(() => {
-          throw new Error('store construction failed');
+    { statusFails: true, deletionFails: false },
+    { statusFails: true, deletionFails: true },
+    { statusFails: false, deletionFails: true },
+  ])(
+    'preserves independent finalization failures $statusFails/$deletionFails',
+    async ({ statusFails, deletionFails }) => {
+      await register();
+      const statusFailure = new Error('status write failed');
+      const deletionFailure = new Error('checkpoint delete failed');
+      if (statusFails)
+        vi.spyOn(session, 'updateRecordFacts').mockReturnValueOnce(
+          Effect.die(statusFailure),
+        );
+      const deletion = vi.spyOn(getExecutionStore(executionId), 'delete');
+      if (deletionFails) deletion.mockRejectedValueOnce(deletionFailure);
+      const result = await run(
+        finalizeRun(session, {
+          executionId,
+          outcome: 'failed',
+          flowRecord: 'delete',
         }),
-      error: 'store construction failed',
+      );
+      expect(result).toMatchObject({
+        ok: false,
+        outcomePersisted: !statusFails,
+      });
+      expect(deletion).toHaveBeenCalledWith(flowKey(executionId));
+      const singleFailure = statusFails ? statusFailure : deletionFailure;
+      if (!result.ok)
+        expect(result.error).toEqual(
+          statusFails && deletionFails
+            ? new AggregateError(
+                [statusFailure, deletionFailure],
+                `Terminal status and flow deletion failed for ${executionId}`,
+              )
+            : singleFailure,
+        );
     },
-  ])('rolls back lease ownership when $name', async ({ fail, error }) => {
-    const executionId = 'abc124' as ExecutionId;
-    fail();
-
-    await expect(
-      registerExecution(
-        executionId,
-        baseConfig,
-        'chat',
-        registrationArgs(executionId),
-      ),
-    ).rejects.toThrow(error);
-
-    await expect(inspectExecutionLease(executionId)).resolves.toEqual({
-      status: 'free',
-    });
-  });
-
-  it('does not relabel a turn-owned result while persisting terminal metadata', async () => {
-    const executionId = 'abc123' as ExecutionId;
-    mocks.readMeta.mockResolvedValue(executionMeta({ outcome: 'completed' }));
-    mocks.readResultMeta.mockResolvedValue(
-      resultMeta('completed', 'Interim result.'),
-    );
-
-    await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      flowRecord: 'preserve',
-    });
-
-    expect(mocks.writeMeta).toHaveBeenCalledWith({
-      schemaVersion: 1,
-      timestamp: '2026-07-10T00:00:00.000Z',
-      outcome: 'cancelled',
-    });
-    expect(mocks.readResultMeta).not.toHaveBeenCalled();
-    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
-  });
-
-  it('reports a failure when terminal metadata cannot be written', async () => {
-    mocks.readMeta.mockResolvedValue(executionMeta({ outcome: 'completed' }));
-    mocks.readResultMeta.mockResolvedValue(
-      resultMeta('completed', 'Finished.'),
-    );
-    const error = new Error('disk full');
-    mocks.writeMeta.mockRejectedValueOnce(error);
-
-    const executionId = 'failed-terminal-write' as ExecutionId;
-    const result = await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      flowRecord: 'preserve',
-    });
-
-    expect(result).toEqual({
-      ok: false,
-      error,
-      outcomePersisted: false,
-    });
-    expect(mocks.readResultMeta).not.toHaveBeenCalled();
-    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
-  });
-
-  it('finalizes durably while preserving the flow record', async () => {
-    const executionId = 'preserved-flow' as ExecutionId;
-    mocks.readMeta.mockResolvedValue(executionMeta());
-
-    const result = await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      flowRecord: 'preserve',
-    });
-
-    expect(result).toEqual({ ok: true, outcome: RUN_OUTCOME.CANCELLED });
-    expect(mocks.delete).not.toHaveBeenCalled();
-  });
-
-  it('finalizes durably after deleting the flow record', async () => {
-    const executionId = 'deleted-flow' as ExecutionId;
-    mocks.readMeta.mockResolvedValue(executionMeta());
-
-    const result = await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.COMPLETED,
-      flowRecord: 'delete',
-    });
-
-    expect(result).toEqual({ ok: true, outcome: RUN_OUTCOME.COMPLETED });
-    expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
-  });
-
-  it('deletes the flow record when failed terminal metadata cannot persist', async () => {
-    const executionId = 'metadata-failed-flow' as ExecutionId;
-    const error = new Error('metadata disk full');
-    mocks.readMeta.mockRejectedValueOnce(error);
-
-    const result = await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.FAILED,
-      flowRecord: 'delete',
-    });
-
-    expect(result).toEqual({
-      ok: false,
-      error,
-      outcomePersisted: false,
-    });
-    expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
-  });
-
-  it('reports when terminal metadata and fail-closed flow deletion both fail', async () => {
-    const executionId = 'metadata-and-flow-failed' as ExecutionId;
-    mocks.readMeta.mockRejectedValueOnce(new Error('metadata disk full'));
-    mocks.delete.mockRejectedValueOnce(new Error('flow delete failed'));
-
-    const result = await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.FAILED,
-      flowRecord: 'delete',
-    });
-
-    expect(result).toMatchObject({
-      ok: false,
-      outcomePersisted: false,
-      error: expect.any(AggregateError),
-    });
-    expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
-  });
-
-  it('reports durable terminal metadata when flow deletion fails', async () => {
-    const executionId = 'flow-delete-failed' as ExecutionId;
-    const error = new Error('flow delete failed');
-    mocks.readMeta.mockResolvedValue(executionMeta());
-    mocks.delete.mockRejectedValueOnce(error);
-
-    const result = await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.FAILED,
-      flowRecord: 'delete',
-    });
-
-    expect(result).toEqual({
-      ok: false,
-      error,
-      outcomePersisted: true,
-    });
-    expect(mocks.writeMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outcome: RUN_OUTCOME.FAILED,
-      }),
-    );
-    expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
-  });
+  );
 });

@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
+import { z } from 'zod';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
@@ -53,6 +55,8 @@ import {
 import { testModelCell } from './modelCellTestUtils';
 import { reflectionFlowShared } from './progressTestUtils';
 import { roundModelHandler } from './toolUseRoundTestUtils';
+
+let retrievalSession: SessionHandle;
 
 const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
@@ -131,13 +135,16 @@ async function retrieveToolUseResume(
   streamId: StreamTabId,
   executionId: ExecutionId,
   config: AgentConfig = CONFIG,
-  options?: Parameters<typeof retrieveSessionResumeData>[3],
+  options?: Parameters<typeof retrieveSessionResumeData>[4],
 ): Promise<ToolUseResumeData> {
-  const resume = await retrieveSessionResumeData(
-    streamId,
-    executionId,
-    config,
-    options,
+  const resume = await Effect.runPromise(
+    retrieveSessionResumeData(
+      streamId,
+      executionId,
+      config,
+      retrievalSession,
+      options,
+    ),
   );
   expect(resume?.type).toBe('toolUse');
   if (resume?.type !== 'toolUse') {
@@ -422,6 +429,9 @@ function abortOnFirstFlowStepWrite(
 
 describe('retrieveSessionResumeData', () => {
   setupPlatform({ workspacePath: '/workspace' });
+  beforeEach(() => {
+    retrievalSession = createProcessSession();
+  });
 
   it('rejects malformed fields at the shared-state boundary', () => {
     expect(
@@ -521,7 +531,14 @@ describe('retrieveSessionResumeData', () => {
     );
 
     await expect(
-      retrieveSessionResumeData(streamId, executionId, WORKFLOW_CONFIG),
+      Effect.runPromise(
+        retrieveSessionResumeData(
+          streamId,
+          executionId,
+          WORKFLOW_CONFIG,
+          retrievalSession,
+        ),
+      ),
     ).resolves.toMatchObject({ type: 'workflow', executionId });
   });
 
@@ -536,7 +553,14 @@ describe('retrieveSessionResumeData', () => {
     });
 
     await expect(
-      retrieveSessionResumeData(streamId, executionId, WORKFLOW_CONFIG),
+      Effect.runPromise(
+        retrieveSessionResumeData(
+          streamId,
+          executionId,
+          WORKFLOW_CONFIG,
+          retrievalSession,
+        ),
+      ),
     ).resolves.toBeNull();
   });
 
@@ -667,7 +691,14 @@ describe('retrieveSessionResumeData', () => {
     await writeFlowRecord(executionId, shared);
 
     await expect(
-      retrieveSessionResumeData(streamId, executionId, GOOGLE_CONFIG),
+      Effect.runPromise(
+        retrieveSessionResumeData(
+          streamId,
+          executionId,
+          GOOGLE_CONFIG,
+          retrievalSession,
+        ),
+      ),
     ).rejects.toThrow(
       `Failed to retrieve tool-use resume data for stream: ${streamId}`,
     );
@@ -693,7 +724,14 @@ describe('retrieveSessionResumeData', () => {
 
     try {
       await expect(
-        retrieveSessionResumeData(streamId, executionId, CONFIG),
+        Effect.runPromise(
+          retrieveSessionResumeData(
+            streamId,
+            executionId,
+            CONFIG,
+            retrievalSession,
+          ),
+        ),
       ).rejects.toThrow(
         `Failed to retrieve tool-use resume data for stream: ${streamId}`,
       );
@@ -705,11 +743,15 @@ describe('retrieveSessionResumeData', () => {
   it('throws when tool-use metadata is invalid even if the flow record is valid', async () => {
     const executionId = 'abc130' as ExecutionId;
     const streamId = 'chat@gpt54#abc130' as StreamTabId;
-    const store = getExecutionStore(executionId);
-    await store.write('meta', {
-      schemaVersion: 999,
-      timestamp: '2026-07-05T00:00:00.000Z',
-    });
+    const readMetadata = vi
+      .spyOn(retrievalSession, 'readExecutionRecords')
+      .mockReturnValue(
+        Effect.die(
+          new z.ZodError([
+            { code: 'custom', path: [], message: 'corrupt metadata' },
+          ]),
+        ),
+      );
     await writeFlowRecord(executionId, {
       messages: [],
       shouldSkipCycle: false,
@@ -717,15 +759,26 @@ describe('retrieveSessionResumeData', () => {
     });
 
     await expect(
-      retrieveSessionResumeData(streamId, executionId, CONFIG),
+      Effect.runPromise(
+        retrieveSessionResumeData(
+          streamId,
+          executionId,
+          CONFIG,
+          retrievalSession,
+        ),
+      ),
     ).rejects.toThrow(
       `Failed to retrieve tool-use resume data for stream: ${streamId}`,
     );
+    readMetadata.mockRestore();
   });
 });
 
 describe('runToolUseFlow consumes the resume boundary instead of re-parsing', () => {
   setupPlatform({ workspacePath: '/workspace' });
+  beforeEach(() => {
+    retrievalSession = createProcessSession();
+  });
 
   it('rejects a persisted record on a fresh launch', async () => {
     const executionId = 'abc-flow-fresh-collision' as ExecutionId;

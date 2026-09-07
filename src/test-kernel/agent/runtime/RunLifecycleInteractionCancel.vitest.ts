@@ -1,8 +1,10 @@
+import { Cause, Effect, Exit, Fiber } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
 
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import {
@@ -14,6 +16,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
@@ -23,7 +26,8 @@ const storageMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  finalizeRun: storageMocks.finalizeRun,
+  finalizeRun: (...args: unknown[]) =>
+    Effect.promise(() => storageMocks.finalizeRun(...args)),
 }));
 
 const plan: Plan = { objective: 'Finish the run.' };
@@ -98,11 +102,48 @@ describe('run lifecycle host-interaction cancel', () => {
       streamId,
     );
 
-    await runFlowWithLifecycle(ctx, async () =>
-      toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+    await Effect.runPromise(
+      runFlowWithLifecycle(ctx, async () =>
+        toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      ),
     );
 
     await expectRunEndedRejection(pending);
+    session.dispose();
+  });
+
+  it('settles and untracks the run after native interruption joins the active flow', async () => {
+    const { session, ctx, executionId, streamId } = lifecycleCase();
+    const started = createDeferred<AgentExecutionHandle>();
+    const aborted = createDeferred();
+    const released = createDeferred();
+    const stopped = createDeferred();
+    const fiber = Effect.runFork(
+      runFlowWithLifecycle(ctx, async (handle) => {
+        started.resolve(handle);
+        ctx.runScope.signal.addEventListener('abort', () => aborted.resolve(), {
+          once: true,
+        });
+        await aborted.promise;
+        await released.promise;
+        stopped.resolve();
+        return toolUseRun(executionId, streamId, RUN_OUTCOME.CANCELLED);
+      }),
+    );
+    const handle = await started.promise;
+    const interrupted = Effect.runPromise(Fiber.interrupt(fiber));
+    await aborted.promise;
+    expect(ctx.disposeTrace).not.toHaveBeenCalled();
+    released.resolve();
+    await interrupted;
+    const exit = await Effect.runPromise(Fiber.await(fiber));
+    expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(true);
+    await stopped.promise;
+    expect(session.executions.getHandle(executionId)).toBeUndefined();
+    await expect(handle.result).resolves.toMatchObject({
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    expect(ctx.disposeTrace).toHaveBeenCalledOnce();
     session.dispose();
   });
 
@@ -111,9 +152,11 @@ describe('run lifecycle host-interaction cancel', () => {
     const pending = requestApproval(session, 'approval:failed-run', streamId);
 
     await expect(
-      runFlowWithLifecycle(ctx, async () => {
-        throw new Error('flow exploded');
-      }),
+      Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          throw new Error('flow exploded');
+        }),
+      ),
     ).rejects.toThrow('flow exploded');
 
     await expectRunEndedRejection(pending);
@@ -124,8 +167,10 @@ describe('run lifecycle host-interaction cancel', () => {
     const { session, ctx, executionId, streamId } = lifecycleCase();
     const pending = requestApproval(session, 'approval:waiting-run', streamId);
 
-    const result = await runFlowWithLifecycle(ctx, async () =>
-      toolUseRun(executionId, streamId, STREAM_PHASE.WAITING),
+    const result = await Effect.runPromise(
+      runFlowWithLifecycle(ctx, async () =>
+        toolUseRun(executionId, streamId, STREAM_PHASE.WAITING),
+      ),
     );
 
     expect(result.outcome).toBe(STREAM_PHASE.WAITING);
@@ -146,8 +191,10 @@ describe('run lifecycle host-interaction cancel', () => {
       settled = true;
     });
 
-    await runFlowWithLifecycle(ctx, async () =>
-      toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+    await Effect.runPromise(
+      runFlowWithLifecycle(ctx, async () =>
+        toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      ),
     );
     await Promise.resolve();
 
@@ -166,13 +213,15 @@ describe('run lifecycle host-interaction cancel', () => {
       });
 
     try {
-      await runFlowWithLifecycle(ctx, async () => {
-        try {
-          return toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED);
-        } finally {
-          order.push('flow-teardown');
-        }
-      });
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          try {
+            return toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED);
+          } finally {
+            order.push('flow-teardown');
+          }
+        }),
+      );
 
       expect(order).toEqual(['flow-teardown', 'cancel']);
       expect(cancelSpy).toHaveBeenCalledExactlyOnceWith({
@@ -193,11 +242,13 @@ describe('run lifecycle host-interaction cancel', () => {
       streamId,
     );
 
-    const result = await runFlowWithLifecycle(ctx, async () => {
-      // What `flowContext.interrupt` does while the flow is still live.
-      session.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-      return toolUseRun(executionId, streamId, RUN_OUTCOME.CANCELLED);
-    });
+    const result = await Effect.runPromise(
+      runFlowWithLifecycle(ctx, async () => {
+        // What `flowContext.interrupt` does while the flow is still live.
+        session.interactions.cancel({ streamId, cause: 'Run interrupted.' });
+        return toolUseRun(executionId, streamId, RUN_OUTCOME.CANCELLED);
+      }),
+    );
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     // The interrupt-time cancel wins; the lifecycle's second cancel matches no
@@ -219,8 +270,10 @@ describe('run lifecycle host-interaction cancel', () => {
 
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () =>
-          toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () =>
+            toolUseRun(executionId, streamId, RUN_OUTCOME.COMPLETED),
+          ),
         ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       expect(session.status.get(streamId)).toBe(STREAM_PHASE.COMPLETED);

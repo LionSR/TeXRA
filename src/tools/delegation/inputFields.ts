@@ -8,6 +8,7 @@ import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -30,6 +31,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import {
+  ensureError,
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
@@ -52,9 +54,9 @@ export const memoriesField = z
   )
   .superRefine((memories, ctx) => {
     for (const [i, memory] of memories.entries()) {
-      try {
-        displayToStoragePath(memory);
-      } catch (e) {
+      const parsed = Result.try(() => displayToStoragePath(memory));
+      if (Result.isFailure(parsed)) {
+        const e = parsed.failure;
         ctx.addIssue({
           code: 'custom',
           path: [i],
@@ -144,14 +146,15 @@ export function withToolUseSubagentHandoffInstruction(
 }
 
 function ensureWorkingDirectoryExists(dir: string): void {
-  try {
-    if (AbsoluteFS.statSync(dir).isDirectory()) return;
-  } catch (e) {
+  const stat = Result.try(() => AbsoluteFS.statSync(dir));
+  if (Result.isFailure(stat)) {
+    const e = stat.failure;
     throw new Error(
       `working_directory must be an existing directory: ${toErrorMessage(e)}`,
       { cause: e },
     );
   }
+  if (stat.success.isDirectory()) return;
   throw new Error(`working_directory must be a directory: ${dir}`);
 }
 
@@ -172,21 +175,16 @@ export const workingDirectoryField = z
       ctx.addIssue({ code: 'custom', message });
       return z.NEVER;
     };
-    let trimmed: string | undefined;
-    try {
-      trimmed = parseWorkingDirectory(value);
-    } catch (e) {
-      return fail(toErrorMessage(e));
-    }
+    const parsed = Result.try(() => parseWorkingDirectory(value));
+    if (Result.isFailure(parsed)) return fail(toErrorMessage(parsed.failure));
+    const trimmed = parsed.success;
     if (!trimmed) return trimmed;
     if (!isWorktreeSupportEnabled()) {
       return fail(WORKTREE_DISABLED_MESSAGE);
     }
-    try {
-      ensureWorkingDirectoryExists(trimmed);
-    } catch (e) {
-      return fail(toErrorMessage(e));
-    }
+    const existing = Result.try(() => ensureWorkingDirectoryExists(trimmed));
+    if (Result.isFailure(existing))
+      return fail(toErrorMessage(existing.failure));
     return trimmed;
   });
 
@@ -242,88 +240,107 @@ export async function assertWorkflowFilesExist(
 }
 
 /** Resolve workflow file dependencies within their owning session. */
-export async function resolveInvocationFileList(
-  session: SessionHandle,
-  parentExecutionId: ExecutionId,
-  label: string,
-  files: readonly string[],
-): Promise<{ file: string; absolutePath: string }[]> {
-  try {
-    return await runInSession(session, async () => {
-      const storageRoot = await realpath(StorageFS.fullPath(''));
-      const references = await Promise.all(
-        files.map(async (file) => {
-          const absolutePath = WorkspaceFS.toAbsolute(file);
-          const canonicalPath = await realpath(absolutePath);
-          const relative = path.relative(storageRoot, canonicalPath);
-          const storagePath =
-            !path.isAbsolute(relative) && relative.split(path.sep)[0] !== '..'
-              ? StorageFS.fullPath(relative)
-              : undefined;
-          if (
-            storagePath !== undefined &&
-            runStorageLocationFromAnyAbsolutePath(storagePath) === undefined
-          ) {
-            throw new Error(
-              `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
+  function* (
+    session: SessionHandle,
+    parentExecutionId: ExecutionId,
+    label: string,
+    files: readonly string[],
+  ): Effect.fn.Return<{ file: string; absolutePath: string }[], Error> {
+    return yield* Effect.gen(function* () {
+      const references = yield* Effect.tryPromise({
+        try: () =>
+          runInSession(session, async () => {
+            const storageRoot = await realpath(StorageFS.fullPath(''));
+            const references = await Promise.all(
+              files.map(async (file) => {
+                const absolutePath = WorkspaceFS.toAbsolute(file);
+                const canonicalPath = await realpath(absolutePath);
+                const relative = path.relative(storageRoot, canonicalPath);
+                const storagePath =
+                  !path.isAbsolute(relative) &&
+                  relative.split(path.sep)[0] !== '..'
+                    ? StorageFS.fullPath(relative)
+                    : undefined;
+                if (
+                  storagePath !== undefined &&
+                  runStorageLocationFromAnyAbsolutePath(storagePath) ===
+                    undefined
+                ) {
+                  throw new Error(
+                    `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+                  );
+                }
+                // Explicit run paths still pass the resolver's symlink rejection,
+                // even when a workspace mirror points outside storage.
+                const runStoragePath =
+                  runStorageLocationFromAnyAbsolutePath(absolutePath) !==
+                  undefined
+                    ? absolutePath
+                    : storagePath;
+                return {
+                  file,
+                  absolutePath: canonicalPath,
+                  runStoragePath,
+                };
+              }),
             );
-          }
-          // Explicit run paths still pass the resolver's symlink rejection,
-          // even when a workspace mirror points outside storage.
-          const runStoragePath =
-            runStorageLocationFromAnyAbsolutePath(absolutePath) !== undefined
-              ? absolutePath
-              : storagePath;
-          return {
-            file,
-            absolutePath: canonicalPath,
-            runStoragePath,
-          };
-        }),
-      );
-      await assertWorkflowFilesExist([
-        {
-          label,
-          files: references
-            .filter((reference) => reference.runStoragePath === undefined)
-            .map((reference) => reference.absolutePath),
-        },
-      ]);
-      return await Promise.all(
-        references.map(async ({ file, absolutePath, runStoragePath }) => {
-          if (runStoragePath !== undefined) {
-            const output = await resolveChildRunOutput(
-              parentExecutionId,
-              runStoragePath,
-            );
-            if (!output) {
-              throw new Error(
-                `${runStoragePath}; pass a matching workflow file option whose files still exist.`,
+            await assertWorkflowFilesExist([
+              {
+                label,
+                files: references
+                  .filter((reference) => reference.runStoragePath === undefined)
+                  .map((reference) => reference.absolutePath),
+              },
+            ]);
+            return references;
+          }),
+        catch: ensureError,
+      });
+      return yield* Effect.forEach(
+        references,
+        ({ file, absolutePath, runStoragePath }) =>
+          Effect.gen(function* () {
+            if (runStoragePath !== undefined) {
+              const output = yield* resolveChildRunOutput(
+                parentExecutionId,
+                runStoragePath,
+                session,
               );
+              if (!output)
+                return yield* Effect.fail(
+                  new Error(
+                    `${runStoragePath}; pass a matching workflow file option whose files still exist.`,
+                  ),
+                );
             }
-          }
-          // Workspace names remain the caller's prompt and output identity.
-          return {
-            file: runStoragePath === undefined ? file : absolutePath,
-            absolutePath,
-          };
-        }),
+            return {
+              file: runStoragePath === undefined ? file : absolutePath,
+              absolutePath,
+            };
+          }),
+        { concurrency: 'unbounded' },
       );
-    });
-  } catch (error) {
-    throw new WorkflowRunAbortError(
-      formatError(`Workflow ${label} files could not be resolved`, error),
-      { cause: error },
+    }).pipe(
+      Effect.mapError(
+        (error) =>
+          new WorkflowRunAbortError(
+            formatError(`Workflow ${label} files could not be resolved`, error),
+            { cause: error },
+          ),
+      ),
     );
-  }
-}
+  },
+);
 
 /** Hash the bytes behind every file option used by one workflow agent call. */
-export async function fingerprintWorkflowAgentDependencies(
+export const fingerprintWorkflowAgentDependencies = Effect.fn(
+  'fingerprintWorkflowAgentDependencies',
+)(function* (
   session: SessionHandle,
   parentExecutionId: ExecutionId,
   options: WorkflowAgentCallOptions,
-): Promise<string> {
+): Effect.fn.Return<string, Error> {
   const groups = [
     { kind: 'input', label: 'Input file', files: options.inputFiles ?? [] },
     {
@@ -334,26 +351,30 @@ export async function fingerprintWorkflowAgentDependencies(
     { kind: 'media', label: 'Media file', files: options.mediaFiles ?? [] },
   ] as const;
   if (groups.every((group) => group.files.length === 0)) {
-    throw new WorkflowRunAbortError(
-      'Cannot fingerprint a workflow agent call without file dependencies.',
+    return yield* Effect.fail(
+      new WorkflowRunAbortError(
+        'Cannot fingerprint a workflow agent call without file dependencies.',
+      ),
     );
   }
 
   const hash = createHash('sha256');
   for (const { kind, label, files } of groups) {
-    const resolved = await resolveInvocationFileList(
+    const resolved = yield* resolveInvocationFileList(
       session,
       parentExecutionId,
       label,
       files,
     );
     for (const [index, { absolutePath }] of resolved.entries()) {
-      const bytes = await runInSession(session, () =>
-        AbsoluteFS.readBytes(absolutePath),
-      );
+      const bytes = yield* Effect.tryPromise({
+        try: () =>
+          runInSession(session, () => AbsoluteFS.readBytes(absolutePath)),
+        catch: ensureError,
+      });
       hash.update(`${kind}\0${index}\0${bytes.length}\0`);
       hash.update(bytes);
     }
   }
   return hash.digest('hex');
-}
+});

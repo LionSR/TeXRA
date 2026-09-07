@@ -1,4 +1,4 @@
-import { Stream } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
 import type { AgentEvent, AgentTrace } from '@agent/trace';
@@ -28,7 +28,7 @@ import type {
   ActiveChildInfo,
   ExecutionId,
   ProgressPermissionKind,
-  SessionEvent,
+  DisplaySessionEvent,
   StreamTabId,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -68,33 +68,43 @@ export interface RecordingHostDecisions {
 type SessionEventReader = Pick<SessionHandle, 'events' | 'now'>;
 
 /**
- * The session's log above `fromCommit`, read synchronously: the memory log
- * completes at once, and `now()` bounds the read so the tail never blocks.
+ * Read the committed prefix using its drain coordinate, including private rows
+ * that advance the cursor without appearing on the display plane.
  */
-function readSessionEvents(
+async function readSessionEvents(
   session: SessionEventReader,
   fromCommit = 0,
-): SessionEvent[] {
-  const count = session.now() - fromCommit;
-  if (count <= 0) return [];
-  return effectRuntime().runSync(
-    Stream.runCollect(Stream.take(session.events.all(fromCommit), count)),
+): Promise<DisplaySessionEvent[]> {
+  const through = session.now();
+  if (through <= fromCommit) return [];
+  return effectRuntime().runPromise(
+    Effect.gen(function* () {
+      const drained = yield* SubscriptionRef.make(fromCommit);
+      return yield* session.events.all(fromCommit, drained).pipe(
+        Stream.interruptWhen(
+          SubscriptionRef.changes(drained).pipe(
+            Stream.filter((cursor) => cursor >= through),
+            Stream.runHead,
+          ),
+        ),
+        Stream.runCollect,
+      );
+    }),
   );
 }
 
 /**
- * Everything the session publishes from this call on, as a synchronous view
- * over its log: `events` reads the log at access time, so an assertion right
- * after a publish sees it. `aggregateId` narrows to one stream's facts.
+ * Read public events committed since this call. Each read captures its own
+ * finite upper bound; `aggregateId` narrows to one stream's facts.
  */
 export function recordSessionEvents(
   session: SessionEventReader,
   filter: { readonly aggregateId?: string } = {},
-): { readonly events: SessionEvent[] } {
+): { readonly read: () => Promise<DisplaySessionEvent[]> } {
   const start = session.now();
   return {
-    get events() {
-      const events = readSessionEvents(session, start);
+    async read() {
+      const events = await readSessionEvents(session, start);
       return filter.aggregateId === undefined
         ? events
         : events.filter((event) => event.aggregateId === filter.aggregateId);

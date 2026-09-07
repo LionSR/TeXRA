@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 import {
@@ -5,16 +6,13 @@ import {
   flowKey,
   type FlowRecord,
 } from '@agent/node/persistedFlow';
+import { runInSession } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
-import {
-  ExecutionMetaCoreSchema,
-  type ExecutionId,
-  type ExecutionMeta,
-  type RunOutcome,
-} from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { type ExecutionId, type RunOutcome } from '@shared/schemas';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { getExecutionStore } from './ExecutionKVStore';
+import { getExecutionRecords, getExecutionStore } from './ExecutionKVStore';
 
 const log = createLog('Resumability');
 
@@ -75,51 +73,37 @@ export type ResumabilityDecision =
  * (`@agent/runtime/runClassification`) combines this decision with the
  * execution lease.
  */
-export async function deriveResumability(
+export const deriveResumability = Effect.fn('deriveResumability')(function* (
   executionId: ExecutionId,
-): Promise<ResumabilityDecision> {
-  const store = getExecutionStore(executionId);
-  let rawMeta: unknown;
-  try {
-    rawMeta = await store.read('meta');
-  } catch (error) {
+  session: SessionHandle,
+): Effect.fn.Return<ResumabilityDecision> {
+  const metaResult = yield* getExecutionRecords(session, executionId)
+    .readMeta()
+    .pipe(Effect.result);
+  if (metaResult._tag === 'Failure') {
+    const error = metaResult.failure;
+    const malformed = error instanceof z.ZodError;
     log.debug(
-      `Failed to read execution metadata for ${executionId}: ${toErrorMessage(
-        error,
-      )}`,
+      `Failed to read execution metadata for ${executionId}: ${toErrorMessage(error)}`,
     );
     return {
       kind: 'unreadable',
-      fault: 'metadata-unreadable',
-      cause: `execution metadata could not be read (${toErrorMessage(error)})`,
+      fault: malformed ? 'metadata-malformed' : 'metadata-unreadable',
+      cause: malformed
+        ? 'execution metadata is malformed'
+        : `execution metadata could not be read (${toErrorMessage(error)})`,
     };
   }
-
-  let meta: ExecutionMeta | null = null;
-  if (rawMeta != null) {
-    const metaResult = ExecutionMetaCoreSchema.safeParse(rawMeta);
-    if (!metaResult.success) {
-      log.debug(
-        `Invalid execution metadata for ${executionId}: ${toErrorMessage(
-          metaResult.error,
-        )}`,
-        { data: metaResult.error },
-      );
-      return {
-        kind: 'unreadable',
-        fault: 'metadata-malformed',
-        cause: 'execution metadata is malformed',
-      };
-    }
-    meta = metaResult.data;
-  }
-
-  const metaFields = { outcome: meta?.outcome };
-
-  let rawFlowRecord: unknown;
-  try {
-    rawFlowRecord = await store.read(flowKey(executionId));
-  } catch (error) {
+  const metaFields = { outcome: metaResult.success?.outcome };
+  const checkpoint = yield* Effect.tryPromise({
+    try: () =>
+      runInSession(session, () =>
+        getExecutionStore(executionId).read(flowKey(executionId)),
+      ),
+    catch: ensureError,
+  }).pipe(Effect.result);
+  if (checkpoint._tag === 'Failure') {
+    const error = checkpoint.failure;
     log.debug(
       `Failed to read flow record for ${executionId}: ${toErrorMessage(error)}`,
     );
@@ -129,23 +113,17 @@ export async function deriveResumability(
       cause: `checkpoint could not be read (${toErrorMessage(error)})`,
     };
   }
-
-  if (rawFlowRecord === undefined) {
-    return { kind: 'none', ...metaFields };
-  }
-
-  const flowResult = ResumableFlowRecordSchema.safeParse(rawFlowRecord);
+  if (checkpoint.success === undefined) return { kind: 'none', ...metaFields };
+  const flowResult = ResumableFlowRecordSchema.safeParse(checkpoint.success);
   if (!flowResult.success) {
-    // A present-but-malformed checkpoint is corruption, not an absent run.
     return {
       kind: 'unreadable',
       fault: 'checkpoint-malformed',
       cause: 'checkpoint is malformed',
     };
   }
-
   return { kind: 'checkpoint', flowRecord: flowResult.data, ...metaFields };
-}
+});
 
 /**
  * Whether a run's checkpoint file is on disk — one `stat`, never a parse.
@@ -155,18 +133,25 @@ export async function deriveResumability(
  * meta and record rather than dropping the run out of history, and the open
  * path re-reads the file and refuses there if it disagrees.
  */
-export async function checkpointExists(
+export const checkpointExists = Effect.fn('checkpointExists')(function* (
   executionId: ExecutionId,
-): Promise<boolean> {
-  try {
-    return await getExecutionStore(executionId).exists(flowKey(executionId));
-  } catch (error) {
-    log.warn(
-      `Could not stat the checkpoint of ${executionId}: ${toErrorMessage(
-        error,
-      )}`,
-      { data: error },
-    );
-    return false;
-  }
-}
+  session: SessionHandle,
+): Effect.fn.Return<boolean> {
+  return yield* Effect.tryPromise({
+    try: () =>
+      runInSession(session, () =>
+        getExecutionStore(executionId).exists(flowKey(executionId)),
+      ),
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        log.warn(
+          `Could not stat the checkpoint of ${executionId}: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+        return false;
+      }),
+    ),
+  );
+});

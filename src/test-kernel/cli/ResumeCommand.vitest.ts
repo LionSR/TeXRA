@@ -1,4 +1,7 @@
+import '@test/support/sessionGraphTestSetup';
 import * as path from 'node:path';
+
+import { Effect } from 'effect';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,15 +10,20 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { flowKey, PersistedFlowStateError } from '@agent/node/persistedFlow';
-import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import {
+  getExecutionRecords,
+  getExecutionStore,
+} from '@agent/storage/ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
   releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { aggregateId } from '@shared/schemas';
 import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
@@ -47,7 +55,11 @@ vi.mock('@cli/runtime/agents', () => ({
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
-  retrieveSessionResumeData: mocks.retrieveSessionResumeData,
+  retrieveSessionResumeData: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.retrieveSessionResumeData(...args),
+      catch: (error) => error,
+    }),
 }));
 
 vi.mock('@cli/runtime/transcriptSession', () => ({
@@ -55,7 +67,11 @@ vi.mock('@cli/runtime/transcriptSession', () => ({
 }));
 
 vi.mock('@cli/commands/workflow', () => ({
-  executeCliWorkflowConfig: mocks.executeCliWorkflowConfig,
+  executeCliWorkflowConfig: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.executeCliWorkflowConfig(...args),
+      catch: (error) => error,
+    }),
 }));
 
 vi.mock('@cli/runtime/workflowOutput', async (importOriginal) => ({
@@ -68,8 +84,8 @@ vi.mock('@cli/chat/tui/runChatTui', () => ({
   runChat: mocks.runChat,
 }));
 
-const EXECUTION_ID = 'exec-1' as ExecutionId;
-const STREAM_ID = 'planner#exec-1';
+const EXECUTION_ID = 'eec001' as ExecutionId;
+const STREAM_ID = 'planner#eec001';
 
 const TOOL_USE_CONFIG = AgentConfigSchema.parse({
   agent: 'planner',
@@ -89,27 +105,33 @@ const STAMPED_META = {
   identity: { kind: 'agent', agent: 'planner' },
 } as unknown as ExecutionMeta;
 
-// FK-first: a row without a registration-stamped stream id has no persisted
-// stream to continue.
-const META_WITHOUT_STREAM_ID = {
-  timestamp: '2026-07-31T00:00:00.000Z',
-  identity: { kind: 'agent', agent: 'planner' },
-} as unknown as ExecutionMeta;
-
 /** Reset and seed the real (fake-platform-backed) execution store. */
 async function seedExecution(seed: {
   readonly config?: AgentConfig | null;
   readonly meta?: ExecutionMeta;
   readonly checkpoint?: boolean;
 }): Promise<void> {
+  const session = createProcessSession();
+  mocks.initializeCliTranscriptSession.mockResolvedValue(session);
   const store = getExecutionStore(EXECUTION_ID);
-  await Promise.all([
-    store.delete('config'),
-    store.delete('meta'),
-    store.delete(flowKey(EXECUTION_ID)),
-  ]);
-  if (seed.config) await store.writeRunRecord(seed.config);
-  if (seed.meta) await store.writeMeta(seed.meta);
+  await store.delete(flowKey(EXECUTION_ID));
+  await Effect.runPromise(
+    session.commit([
+      {
+        type: 'run.start',
+        aggregateId: aggregateId('stream', STREAM_ID),
+        executionId: EXECUTION_ID,
+        identity: { kind: 'agent', agent: seed.config?.agent ?? 'planner' },
+        category: seed.config?.agentCategory ?? AgentCategory.ToolUse,
+        userFollowUpSupport: 'unsupported',
+        isRemote: false,
+      },
+    ]),
+  );
+  if (seed.config)
+    await Effect.runPromise(
+      getExecutionRecords(session, EXECUTION_ID).writeRunRecord(seed.config),
+    );
   if (seed.checkpoint !== false) {
     await store.write(flowKey(EXECUTION_ID), {
       shared: {},
@@ -148,21 +170,6 @@ describe('runResumeExecution', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
-    mocks.initializeCliTranscriptSession.mockResolvedValue({
-      interactions: {},
-      executions: { isActiveOrResuming: () => false },
-      // `resumeRun` drops any stale read-only hold when it opens the run
-      // for write, and records one when the lease refuses it.
-      status: {
-        clearHold: () => undefined,
-        markUnavailableOrLog: () => undefined,
-      },
-      snapshots: {
-        getRunMetadata: () => ({ executionId: EXECUTION_ID }),
-        getParentStreamId: () => undefined,
-        preload: async () => undefined,
-      },
-    });
     await seedExecution({ config: TOOL_USE_CONFIG, meta: STAMPED_META });
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'correct',
@@ -310,7 +317,6 @@ describe('runResumeExecution', () => {
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'Agent not found: correct.',
     );
-    expect(mocks.initializeCliTranscriptSession).not.toHaveBeenCalled();
     expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
   });
 
@@ -356,20 +362,6 @@ describe('runResumeExecution', () => {
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Execution not found: ${EXECUTION_ID}`,
-    );
-    expect(mocks.runChat).not.toHaveBeenCalled();
-  });
-
-  it('names stream stamping when a row has no stream id', async () => {
-    await seedExecution({
-      config: TOOL_USE_CONFIG,
-      meta: META_WITHOUT_STREAM_ID,
-    });
-
-    await expect(run(cliContext())).resolves.toBe(2);
-
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Execution ${EXECUTION_ID} predates transcript stream stamping and cannot be continued. Start a new agent task instead.`,
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });

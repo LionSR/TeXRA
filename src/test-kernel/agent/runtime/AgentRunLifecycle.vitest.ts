@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -56,12 +57,16 @@ const storageMocks = vi.hoisted(() => ({
   // Echoes the requested outcome, as the real finalizer does whenever there
   // is no existing outcome to retain.
   finalizeRun: vi.fn(
-    async (input: {
-      outcome: RunOutcome;
-    }): Promise<FinalizeExecutionResult> => ({
-      ok: true,
-      outcome: input.outcome,
-    }),
+    (
+      _session: unknown,
+      input: {
+        outcome: RunOutcome;
+      },
+    ): Effect.Effect<FinalizeExecutionResult> =>
+      Effect.succeed({
+        ok: true,
+        outcome: input.outcome,
+      }),
   ),
 }));
 
@@ -185,11 +190,13 @@ function takeWaitingHandle(executionId: ExecutionId): AgentExecutionHandle {
 /** Gate the next finalizeRun call on an explicit release. */
 function parkNextFinalize(): { started: () => boolean; release: () => void } {
   let releasePersist: (() => void) | undefined;
-  storageMocks.finalizeRun.mockImplementationOnce(
-    (input) =>
-      new Promise((resolve) => {
-        releasePersist = () => resolve({ ok: true, outcome: input.outcome });
-      }),
+  storageMocks.finalizeRun.mockImplementationOnce((_session, input) =>
+    Effect.promise(
+      () =>
+        new Promise((resolve) => {
+          releasePersist = () => resolve({ ok: true, outcome: input.outcome });
+        }),
+    ),
   );
   return {
     started: () => releasePersist !== undefined,
@@ -230,16 +237,18 @@ describe('runFlowWithLifecycle', () => {
     let terminalResult: AgentRunHandle['result'] | undefined;
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () =>
-          workflowResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        {
-          onRun: (handle) => {
-            expect(handle.category).toBe('workflow');
-            terminalResult = handle.result;
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () =>
+            workflowResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+          {
+            onRun: async (handle) => {
+              expect(handle.category).toBe('workflow');
+              terminalResult = handle.result;
+            },
           },
-        },
+        ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
@@ -260,10 +269,13 @@ describe('runFlowWithLifecycle', () => {
     const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        { onRunEnd: stopSessionsForRun },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () =>
+            toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+          { onRunEnd: stopSessionsForRun },
+        ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
@@ -281,12 +293,14 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       await expect(
-        runFlowWithLifecycle(
-          ctx,
-          async () => {
-            throw new Error('flow exploded');
-          },
-          { onRunEnd: stopSessionsForRun },
+        Effect.runPromise(
+          runFlowWithLifecycle(
+            ctx,
+            async () => {
+              throw new Error('flow exploded');
+            },
+            { onRunEnd: stopSessionsForRun },
+          ),
         ),
       ).rejects.toThrow('flow exploded');
 
@@ -303,10 +317,12 @@ describe('runFlowWithLifecycle', () => {
     const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => waitingResult(executionId, streamId),
-        { onRunEnd: stopSessionsForRun },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => waitingResult(executionId, streamId),
+          { onRunEnd: stopSessionsForRun },
+        ),
       );
 
       // WAITING is a suspension, not a terminal run end: the server must
@@ -327,10 +343,13 @@ describe('runFlowWithLifecycle', () => {
     const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        { isSubagent: true, onRunEnd: stopSessionsForRun },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () =>
+            toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+          { isSubagent: true, onRunEnd: stopSessionsForRun },
+        ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
@@ -367,8 +386,10 @@ describe('runFlowWithLifecycle', () => {
       );
 
       try {
-        await runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        await Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () =>
+            toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+          ),
         );
 
         expect(
@@ -389,8 +410,10 @@ describe('runFlowWithLifecycle', () => {
     const updateOnboarding = vi.spyOn(fake.globalState, 'update');
 
     try {
-      await runFlowWithLifecycle(ctx, async () =>
-        toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () =>
+          toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        ),
       );
 
       expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
@@ -416,8 +439,10 @@ describe('runFlowWithLifecycle', () => {
       // The lifecycle owns the whole transition (RUNNING on entry, terminal
       // on exit) against the run session's one status machine.
       expect(streamStatus).toBe(ctx.runScope.session.status);
-      await runFlowWithLifecycle(ctx, async () =>
-        toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () =>
+          toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        ),
       );
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
@@ -443,14 +468,16 @@ describe('runFlowWithLifecycle', () => {
     ctx.disposeTrace = detachTrace;
 
     try {
-      await runFlowWithLifecycle(ctx, async () =>
-        toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () =>
+          toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        ),
       );
 
-      const runConfigIndex = recorded.events.findIndex(
+      const runConfigIndex = (await recorded.read()).findIndex(
         (event) => event.type === 'run.config',
       );
-      const runningIndex = recorded.events.findIndex(
+      const runningIndex = (await recorded.read()).findIndex(
         (event) =>
           event.type === 'status' &&
           event.aggregateId === qualifyAggregateId('stream', streamId) &&
@@ -476,10 +503,12 @@ describe('runFlowWithLifecycle', () => {
         phase: STREAM_PHASE.FAILED,
       });
 
-      await runFlowWithLifecycle(ctx, async () => {
-        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-        return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
-      });
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+          return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
+        }),
+      );
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
@@ -498,11 +527,13 @@ describe('runFlowWithLifecycle', () => {
         substate: STREAM_SUBSTATE.RESUMING,
       });
 
-      await runFlowWithLifecycle(ctx, async () => {
-        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-        expect(streamStatus.getSubstate(streamId)).toBeUndefined();
-        return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
-      });
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+          expect(streamStatus.getSubstate(streamId)).toBeUndefined();
+          return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
+        }),
+      );
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
@@ -521,12 +552,14 @@ describe('runFlowWithLifecycle', () => {
         phase: STREAM_PHASE.RUNNING,
       });
 
-      await runFlowWithLifecycle(ctx, async () => {
-        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-        expect(streamStatus.getSubstate(streamId)).toBeUndefined();
-        expect(eventsOfType(recorded.events, 'status')).toEqual([]);
-        return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
-      });
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+          expect(streamStatus.getSubstate(streamId)).toBeUndefined();
+          expect(eventsOfType(await recorded.read(), 'status')).toEqual([]);
+          return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
+        }),
+      );
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
@@ -544,12 +577,14 @@ describe('runFlowWithLifecycle', () => {
     const onError = vi.fn();
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => {
-          throw new DOMException('Request aborted', 'AbortError');
-        },
-        { isSubagent: true, onError },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            throw new DOMException('Request aborted', 'AbortError');
+          },
+          { isSubagent: true, onError },
+        ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
@@ -571,12 +606,14 @@ describe('runFlowWithLifecycle', () => {
     });
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => {
-          throw new Error('subagent failed');
-        },
-        { isSubagent: true, onError },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            throw new Error('subagent failed');
+          },
+          { isSubagent: true, onError },
+        ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
@@ -599,16 +636,18 @@ describe('runFlowWithLifecycle', () => {
     await acquireResumedExecutionLease(executionId);
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => {
-          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-          expect(
-            streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait'),
-          ).toBe(true);
-          return waitingResult(executionId, streamId);
-        },
-        { isSubagent: true, onError },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+            expect(
+              streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait'),
+            ).toBe(true);
+            return waitingResult(executionId, streamId);
+          },
+          { isSubagent: true, onError },
+        ),
       );
 
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
@@ -638,14 +677,21 @@ describe('runFlowWithLifecycle', () => {
     const parked = parkNextFinalize();
 
     try {
-      const running = runFlowWithLifecycle(
-        ctx,
-        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        { isSubagent: true },
+      const running = Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () =>
+            toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+          { isSubagent: true },
+        ),
       );
       await vi.waitFor(() => expect(parked.started()).toBe(true));
 
-      expect(defaultSession().executions.kill(executionId)).toBe(false);
+      const stop = defaultSession().executions.kill(executionId);
+
+      expect(stop.accepted).toBe(false);
+
+      await Effect.runPromise(stop.settlement);
 
       parked.release();
       const result = await running;
@@ -671,17 +717,20 @@ describe('runFlowWithLifecycle', () => {
     let rosterEmissionsBeforeOnRun = -1;
 
     try {
-      await runFlowWithLifecycle(
-        ctx,
-        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        {
-          isSubagent: true,
-          parentStreamId,
-          workflowPhase: 'Reduce',
-          onRun: () => {
-            rosterEmissionsBeforeOnRun = rosters.rosters.length;
+      await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () =>
+            toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+          {
+            isSubagent: true,
+            parentStreamId,
+            workflowPhase: 'Reduce',
+            onRun: async () => {
+              rosterEmissionsBeforeOnRun = rosters.rosters.length;
+            },
           },
-        },
+        ),
       );
 
       const [firstRoster] = rosters.rosters;
@@ -704,22 +753,26 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-early-stop',
     );
 
-    const result = await runFlowWithLifecycle(
-      ctx,
-      async () => {
-        expect(defaultSession().status.get(streamId)).toBe(
-          STREAM_PHASE.CANCELLED,
-        );
-        // linkAbortSignals has separate pre-aborted replay coverage; this
-        // lifecycle test proves the signal already carries the early stop.
-        expect(ctx.runScope.signal.aborted).toBe(true);
-        return toolUseResult(executionId, streamId, RUN_OUTCOME.CANCELLED);
-      },
-      {
-        onRun: () => {
-          expect(defaultSession().executions.kill(executionId)).toBe(true);
+    const result = await Effect.runPromise(
+      runFlowWithLifecycle(
+        ctx,
+        async () => {
+          expect(defaultSession().status.get(streamId)).toBe(
+            STREAM_PHASE.CANCELLED,
+          );
+          // linkAbortSignals has separate pre-aborted replay coverage; this
+          // lifecycle test proves the signal already carries the early stop.
+          expect(ctx.runScope.signal.aborted).toBe(true);
+          return toolUseResult(executionId, streamId, RUN_OUTCOME.CANCELLED);
         },
-      },
+        {
+          onRun: async () => {
+            const stop = defaultSession().executions.kill(executionId);
+            expect(stop.accepted).toBe(true);
+            await Effect.runPromise(stop.settlement);
+          },
+        },
+      ),
     );
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
@@ -741,23 +794,28 @@ describe('runFlowWithLifecycle', () => {
         phase: STREAM_PHASE.COMPLETED,
       });
 
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async (handle) => {
-          expect(ctx.runScope.signal.aborted).toBe(true);
-          throw new DOMException('Request aborted', 'AbortError');
-        },
-        {
-          onRun: (handle) => {
-            terminalResult = handle.result;
-            expect(defaultSession().executions.kill(executionId)).toBe(true);
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async (handle) => {
+            expect(ctx.runScope.signal.aborted).toBe(true);
+            throw new DOMException('Request aborted', 'AbortError');
           },
-        },
+          {
+            onRun: async (handle) => {
+              terminalResult = handle.result;
+              const stop = defaultSession().executions.kill(executionId);
+              expect(stop.accepted).toBe(true);
+              await Effect.runPromise(stop.settlement);
+            },
+          },
+        ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        defaultSession(),
         expect.objectContaining({
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'preserve',
@@ -785,22 +843,28 @@ describe('runFlowWithLifecycle', () => {
     });
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => {
-          throw new DOMException('Request aborted', 'AbortError');
-        },
-        {
-          onRun: () => {
-            expect(defaultSession().executions.kill(executionId)).toBe(true);
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            throw new DOMException('Request aborted', 'AbortError');
           },
-        },
+          {
+            onRun: async () => {
+              const stop = defaultSession().executions.kill(executionId);
+              expect(stop.accepted).toBe(true);
+              await Effect.runPromise(stop.settlement);
+            },
+          },
+        ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       await ctx.runScope.session.settlePublications();
       expect(
-        eventsOfType(recorded.events, 'status').map((event) => event.phase),
+        eventsOfType(await recorded.read(), 'status').map(
+          (event) => event.phase,
+        ),
       ).toEqual([STREAM_PHASE.CANCELLED]);
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
@@ -816,16 +880,21 @@ describe('runFlowWithLifecycle', () => {
     );
 
     try {
-      const result = await runFlowWithLifecycle(ctx, async () => {
-        expect(defaultSession().executions.kill(executionId)).toBe(true);
-        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-        return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
-      });
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          const stop = defaultSession().executions.kill(executionId);
+          expect(stop.accepted).toBe(true);
+          await Effect.runPromise(stop.settlement);
+          expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+          return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
+        }),
+      );
 
       // The caller receives the same verdict persistence carries: the stop
       // won on the stream, so the flow's COMPLETED report is relabeled.
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith(
+        defaultSession(),
         expect.objectContaining({
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'preserve',
@@ -846,18 +915,23 @@ describe('runFlowWithLifecycle', () => {
     const onError = vi.fn();
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => {
-          expect(defaultSession().executions.kill(executionId)).toBe(true);
-          throw new Error('child exited with code 143');
-        },
-        { isSubagent: true, onError },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => {
+            const stop = defaultSession().executions.kill(executionId);
+            expect(stop.accepted).toBe(true);
+            await Effect.runPromise(stop.settlement);
+            throw new Error('child exited with code 143');
+          },
+          { isSubagent: true, onError },
+        ),
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        defaultSession(),
         expect.objectContaining({
           outcome: RUN_OUTCOME.CANCELLED,
         }),
@@ -883,10 +957,12 @@ describe('runFlowWithLifecycle', () => {
     );
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => waitingResult(executionId, streamId),
-        { isSubagent: true },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => waitingResult(executionId, streamId),
+          { isSubagent: true },
+        ),
       );
 
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
@@ -906,7 +982,9 @@ describe('runFlowWithLifecycle', () => {
       // runToolUseFlow.ts). With no interrupt target left, `executions.kill()`
       // falls back to the teardown the WAITING branch parked and tears the
       // execution down.
-      expect(defaultSession().executions.kill(executionId)).toBe(true);
+      const stop = defaultSession().executions.kill(executionId);
+      expect(stop.accepted).toBe(true);
+      await Effect.runPromise(stop.settlement);
       await waitingHandle.result;
 
       // The bypassed runFlowWithLifecycle can't emit the terminal result, so
@@ -929,18 +1007,21 @@ describe('runFlowWithLifecycle', () => {
       );
       expect(followUpsTerminalize).toHaveBeenCalledWith(streamId);
       await vi.waitFor(() =>
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
-          executionId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          // Killing a WAITING subagent leaves the checkpoint that makes it
-          // resumable (#11315).
-          flowRecord: 'preserve',
-        }),
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+          defaultSession(),
+          {
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            // Killing a WAITING subagent leaves the checkpoint that makes it
+            // resumable (#11315).
+            flowRecord: 'preserve',
+          },
+        ),
       );
       // The detached trace cannot publish this close. The suspended owner
       // must append it to the same session event stream before releasing.
       await ctx.runScope.session.settlePublications();
-      expect(eventsOfType(recorded.events, 'stage.end')).toContainEqual(
+      expect(eventsOfType(await recorded.read(), 'stage.end')).toContainEqual(
         expect.objectContaining({
           id: parentStageId,
           status: RUN_OUTCOME.CANCELLED,
@@ -964,15 +1045,21 @@ describe('runFlowWithLifecycle', () => {
     );
 
     try {
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => waitingResult(executionId, streamId),
-        { onRunEnd: stopSessionsForRun },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(
+          ctx,
+          async () => waitingResult(executionId, streamId),
+          { onRunEnd: stopSessionsForRun },
+        ),
       );
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
       const waitingHandle = takeWaitingHandle(executionId);
 
-      expect(defaultSession().executions.kill(executionId)).toBe(true);
+      const stop = defaultSession().executions.kill(executionId);
+
+      expect(stop.accepted).toBe(true);
+
+      await Effect.runPromise(stop.settlement);
       await waitingHandle.result;
 
       expect(stopSessionsForRun).toHaveBeenCalledWith(executionId);
@@ -1005,17 +1092,24 @@ describe('runFlowWithLifecycle', () => {
       const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
       try {
-        const result = await runFlowWithLifecycle(ctx, async () =>
-          toolUseResult(executionId, streamId, expected.outcome),
+        const result = await Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () =>
+            toolUseResult(executionId, streamId, expected.outcome),
+          ),
         );
 
         expect(result.outcome).toBe(expected.outcome);
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
-          executionId,
-          outcome: expected.outcome,
-          flowRecord:
-            expected.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve',
-        });
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+          defaultSession(),
+          {
+            executionId,
+            outcome: expected.outcome,
+            flowRecord:
+              expected.outcome === RUN_OUTCOME.COMPLETED
+                ? 'delete'
+                : 'preserve',
+          },
+        );
         expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
         expect(streamStatus.get(streamId)).toBe(expected.stream);
       } finally {
@@ -1038,14 +1132,15 @@ describe('runFlowWithLifecycle', () => {
         streamId,
         RUN_OUTCOME.FAILED,
       );
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => carriedResult,
-        { isSubagent: true, onError },
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => carriedResult, {
+          isSubagent: true,
+          onError,
+        }),
       );
 
       expect(result).toEqual(carriedResult);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
         executionId,
         outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
@@ -1075,12 +1170,14 @@ describe('runFlowWithLifecycle', () => {
     const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
     try {
-      const result = await runFlowWithLifecycle(ctx, async () => {
-        throw new DOMException('Request aborted', 'AbortError');
-      });
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          throw new DOMException('Request aborted', 'AbortError');
+        }),
+      );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
         executionId,
         outcome: RUN_OUTCOME.CANCELLED,
         flowRecord: 'preserve',
@@ -1100,12 +1197,14 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => {
-          throw new Error('model exploded');
-        }),
+        Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () => {
+            throw new Error('model exploded');
+          }),
+        ),
       ).rejects.toThrow('model exploded');
 
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
         executionId,
         outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
@@ -1124,12 +1223,14 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => {
-          expect(
-            streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait'),
-          ).toBe(true);
-          throw new Error('wait node failed');
-        }),
+        Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () => {
+            expect(
+              streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait'),
+            ).toBe(true);
+            throw new Error('wait node failed');
+          }),
+        ),
       ).rejects.toThrow('wait node failed');
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
@@ -1157,13 +1258,11 @@ describe('runFlowWithLifecycle', () => {
         phase: STREAM_PHASE.RUNNING,
       });
 
-      const result = await runFlowWithLifecycle(
-        ctx,
-        async () => carriedResult,
-        {
+      const result = await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => carriedResult, {
           isSubagent: true,
           onError,
-        },
+        }),
       );
 
       expect(result).toEqual(carriedResult);
@@ -1186,23 +1285,25 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => ({
-          category: 'toolUse' as const,
-          outcome: RUN_OUTCOME.FAILED,
-          executionId,
-          streamId,
-          response: 'partial answer',
-          error: {
-            message: 'provider exploded',
-            userRetryable: true,
-            statusCode: 503,
-          },
-        })),
+        Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () => ({
+            category: 'toolUse' as const,
+            outcome: RUN_OUTCOME.FAILED,
+            executionId,
+            streamId,
+            response: 'partial answer',
+            error: {
+              message: 'provider exploded',
+              userRetryable: true,
+              statusCode: 503,
+            },
+          })),
+        ),
       ).rejects.toThrow('provider exploded');
 
       // A carried failure is exactly as loud as a thrown one: same terminal
       // status, same stage outcome, same classified error on the result event.
-      expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(defaultSession(), {
         executionId,
         outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
@@ -1235,20 +1336,22 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => ({
-          category: 'toolUse' as const,
-          outcome: RUN_OUTCOME.FAILED,
-          executionId,
-          streamId,
-          response: '',
-          // The retry-state flatten drops the Error and its Symbol marker;
-          // the canonical classification keeps the kind reachable here.
-          error: {
-            message: 'Missing OpenRouter API key.',
-            userRetryable: false,
-            classification: { kind: 'missing-api-key' as const },
-          },
-        })),
+        Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () => ({
+            category: 'toolUse' as const,
+            outcome: RUN_OUTCOME.FAILED,
+            executionId,
+            streamId,
+            response: '',
+            // The retry-state flatten drops the Error and its Symbol marker;
+            // the canonical classification keeps the kind reachable here.
+            error: {
+              message: 'Missing OpenRouter API key.',
+              userRetryable: false,
+              classification: { kind: 'missing-api-key' as const },
+            },
+          })),
+        ),
       ).rejects.toThrow('Missing OpenRouter API key.');
 
       expect(emit).toHaveBeenCalledWith(
@@ -1311,6 +1414,7 @@ describe('finalizeRunTerminal', () => {
         phase: STREAM_PHASE.RUNNING,
       });
       const params = {
+        session: defaultSession(),
         handle,
         executions: { untrack },
         streamStatus,
@@ -1320,8 +1424,8 @@ describe('finalizeRunTerminal', () => {
         persistence: { kind: 'finalize', flowRecord: 'delete' },
       } as const;
 
-      const first = finalizeRunTerminal(params);
-      const second = finalizeRunTerminal(params);
+      const first = Effect.runPromise(finalizeRunTerminal(params));
+      const second = Effect.runPromise(finalizeRunTerminal(params));
 
       // The loser no-ops without waiting on (or duplicating) the persist.
       await expect(second).resolves.toBeUndefined();
@@ -1373,16 +1477,19 @@ describe('finalizeRunTerminal', () => {
       seedStreamStatusForTest(streamStatus, streamId, {
         phase: STREAM_PHASE.RUNNING,
       });
-      const finalization = finalizeRunTerminal({
-        handle,
-        executions: { untrack },
-        streamStatus,
-        outcome: RUN_OUTCOME.COMPLETED,
-        isSubagent: false,
-        trace: noopTrace,
-        persistence: { kind: 'skip' },
-        flushArtifacts,
-      });
+      const finalization = Effect.runPromise(
+        finalizeRunTerminal({
+          session: defaultSession(),
+          handle,
+          executions: { untrack },
+          streamStatus,
+          outcome: RUN_OUTCOME.COMPLETED,
+          isSubagent: false,
+          trace: noopTrace,
+          persistence: { kind: 'skip' },
+          flushArtifacts,
+        }),
+      );
 
       await vi.waitFor(() => expect(flushArtifacts).toHaveBeenCalledOnce());
       expect(resultSettled).toBe(false);
@@ -1403,26 +1510,31 @@ describe('finalizeRunTerminal', () => {
     const { executionId, streamId, streamStatus, handle, untrack } =
       finalizeFixture('finalize-metadata-failure');
     const durabilityError = new Error('metadata disk write failed');
-    storageMocks.finalizeRun.mockResolvedValueOnce({
-      ok: false,
-      outcomePersisted: false,
-      error: durabilityError,
-    });
+    storageMocks.finalizeRun.mockReturnValueOnce(
+      Effect.succeed({
+        ok: false,
+        outcomePersisted: false,
+        error: durabilityError,
+      }),
+    );
 
     try {
       seedStreamStatusForTest(streamStatus, streamId, {
         phase: STREAM_PHASE.RUNNING,
       });
 
-      const event = await finalizeRunTerminal({
-        handle,
-        executions: { untrack },
-        streamStatus,
-        outcome: RUN_OUTCOME.FAILED,
-        isSubagent: false,
-        trace: noopTrace,
-        persistence: { kind: 'finalize', flowRecord: 'preserve' },
-      });
+      const event = await Effect.runPromise(
+        finalizeRunTerminal({
+          session: defaultSession(),
+          handle,
+          executions: { untrack },
+          streamStatus,
+          outcome: RUN_OUTCOME.FAILED,
+          isSubagent: false,
+          trace: noopTrace,
+          persistence: { kind: 'finalize', flowRecord: 'preserve' },
+        }),
+      );
 
       expect(event).toMatchObject({
         event: {
@@ -1464,17 +1576,20 @@ describe('finalizeRunTerminal', () => {
         phase: STREAM_PHASE.CANCELLED,
       });
 
-      const finalized = await finalizeRunTerminal({
-        handle,
-        executions: { untrack },
-        streamStatus,
-        outcome: RUN_OUTCOME.FAILED,
-        error: { kind: 'unexpected', message: 'exited with code 143' },
-        isSubagent: false,
-        stage,
-        trace: noopTrace,
-        persistence: { kind: 'finalize', flowRecord: 'delete' },
-      });
+      const finalized = await Effect.runPromise(
+        finalizeRunTerminal({
+          session: defaultSession(),
+          handle,
+          executions: { untrack },
+          streamStatus,
+          outcome: RUN_OUTCOME.FAILED,
+          error: { kind: 'unexpected', message: 'exited with code 143' },
+          isSubagent: false,
+          stage,
+          trace: noopTrace,
+          persistence: { kind: 'finalize', flowRecord: 'delete' },
+        }),
+      );
 
       expect(finalized?.event).toMatchObject({
         type: 'result',
@@ -1488,6 +1603,7 @@ describe('finalizeRunTerminal', () => {
       await expect(handle.result).resolves.toBe(finalized?.event);
       expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        defaultSession(),
         expect.objectContaining({
           outcome: RUN_OUTCOME.CANCELLED,
         }),
@@ -1513,15 +1629,18 @@ describe('finalizeRunTerminal', () => {
         phase: STREAM_PHASE.FAILED,
       });
 
-      const finalized = await finalizeRunTerminal({
-        handle,
-        executions: { untrack },
-        streamStatus,
-        outcome: RUN_OUTCOME.CANCELLED,
-        isSubagent: false,
-        trace: noopTrace,
-        persistence: { kind: 'skip' },
-      });
+      const finalized = await Effect.runPromise(
+        finalizeRunTerminal({
+          session: defaultSession(),
+          handle,
+          executions: { untrack },
+          streamStatus,
+          outcome: RUN_OUTCOME.CANCELLED,
+          isSubagent: false,
+          trace: noopTrace,
+          persistence: { kind: 'skip' },
+        }),
+      );
 
       expect(finalized?.event).toMatchObject({
         type: 'result',

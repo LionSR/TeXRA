@@ -1,10 +1,14 @@
+import { Effect } from 'effect';
+import type { ExecutionKVStore } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { ensureError } from '@utils/errors/errorMessage';
 /**
  * Turn attribution for the executions tool's single latest-value slots.
  */
 
 // Local imports
-import type { ExecutionKVStore } from '@agent/storage';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
 
 import {
   resolveExecutionLiveness,
@@ -47,19 +51,26 @@ function turnFate(token: string, liveness: ExecutionLiveness): string {
  * interrupted. Returns null when the slots reflect the latest accepted turn
  * (or the execution has no turn identity at all).
  */
-export async function turnAttributionNote(
+export const turnAttributionNote = Effect.fn('turnAttributionNote')(function* (
   store: ExecutionKVStore,
-): Promise<string | null> {
-  const turnState = await store.readTurnState();
+  session: SessionHandle,
+) {
+  const turnState = yield* Effect.tryPromise({
+    try: () => runInSession(session, () => store.readTurnState()),
+    catch: ensureError,
+  });
   const active = turnState?.activeTurn;
   const completed = turnState?.lastCompletedTurn?.token;
   if (!active || active.token === completed) {
     return null;
   }
-  const liveness = await resolveExecutionLiveness(store.getExecutionId());
+  const liveness = yield* resolveExecutionLiveness(
+    store.getExecutionId(),
+    session,
+  );
   const fate = turnFate(active.token, liveness);
   const showing = completed
     ? `showing the latest completed turn (${completed}).`
     : 'no turn has completed yet.';
   return `[Note: ${fate}; ${showing}]`;
-}
+});

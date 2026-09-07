@@ -6,6 +6,7 @@ import { extractAgentSuffix } from '@latex/mergeFileUtils';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -205,7 +206,7 @@ export async function acceptEditedFileReplace(
  * beside `baseLocation`. Shared by every "accept edited content" path so the
  * diff-naming convention (see {@link generateDiffFileName}) is computed once.
  */
-export function diffFileLocation(
+function diffFileLocation(
   baseLocation: FileLocation,
   editedPath: string,
 ): FileLocation {
@@ -244,6 +245,35 @@ export async function cleanupStaleDiffFile(
   const diffLocation = diffFileLocation(baseLocation, editedPath);
   if (diffLocation.absolutePath === targetLocation.absolutePath) return;
   await deleteFile(diffLocation);
+}
+
+/** Remove stale diff companions after accepting workspace outputs, keeping successful paths. */
+export async function cleanupAcceptedWorkspaceDiffFiles(
+  entries: readonly { outputPath: string; originalPath: string }[],
+): Promise<string[]> {
+  const results = await Promise.all(
+    entries.map(async ({ outputPath, originalPath }) => {
+      const original = WorkspaceFS.locatePath(originalPath);
+      if (original.kind === 'external') return [];
+      const removed: string[] = [];
+      await cleanupStaleDiffFile(
+        original,
+        outputPath,
+        original,
+        async (location) => {
+          if (location.kind === 'external') return;
+          try {
+            await WorkspaceFS.delete(location.relativePath);
+            removed.push(location.relativePath);
+          } catch {
+            // A missing or locked diff companion does not undo an accepted file.
+          }
+        },
+      );
+      return removed;
+    }),
+  );
+  return results.flat();
 }
 
 export function getAcceptedFileTarget(

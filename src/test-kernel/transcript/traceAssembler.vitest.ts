@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import { registerExecution } from '@agent/storage/executionLifecycle';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
 import {
@@ -38,25 +38,24 @@ import {
 } from '@transcript';
 
 const tempDirs = useTempDirs();
-let transcripts: StreamLogStore;
-beforeEach(() => {
-  transcripts = StreamLogStore.ephemeral('trace export fixture');
-});
+let session: ReturnType<typeof createTestSession>;
 
 /** Populate the transcript input consumed by the export. */
 async function appendLogEntry(
   streamId: StreamTabId,
   text: string,
 ): Promise<void> {
-  const store = transcripts;
-  appendTranscriptEntry(store, streamId, {
-    id: 'entry-1',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    level: LOG_LEVELS.INFO,
-    timestamp: 100,
-    messageType: MESSAGE_TYPES.DEFAULT,
-    text,
-  });
+  await Effect.runPromise(
+    session.commit([
+      {
+        type: 'log',
+        aggregateId: aggregateId('stream', streamId),
+        level: LOG_LEVELS.INFO,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        message: text,
+      },
+    ]),
+  );
 }
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -76,9 +75,24 @@ async function writeExecution(
   meta: { outcome?: RunOutcome; streamId?: StreamTabId } = {},
   executionConfig: AgentConfig = config(),
 ): Promise<void> {
-  const store = getExecutionStore(executionId);
-  await store.writeRunRecord(executionConfig);
-  await store.writeMeta({ timestamp: '2026-07-05T00:00:00.000Z', ...meta });
+  const streamId =
+    meta.streamId ?? getStreamTabId(executionConfig.agent, { executionId });
+  publishTestRunStart(session, streamId, executionId);
+  await session.settlePublications();
+  await Effect.runPromise(
+    getExecutionRecords(session, executionId).writeRunRecord(executionConfig),
+  );
+  if (meta.outcome)
+    await Effect.runPromise(
+      session.commit([
+        {
+          type: 'status',
+          aggregateId: aggregateId('stream', streamId),
+          phase: meta.outcome,
+          cause: 'lifecycle',
+        },
+      ]),
+    );
 }
 
 type AssembleTraceResult = Effect.Success<ReturnType<typeof assembleTrace>>;
@@ -95,6 +109,10 @@ function unwrapOkTrace(result: AssembleTraceResult) {
 describe('assembleTrace', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-', tempDirs));
 
+  beforeEach(() => {
+    session = createTestSession({ roots: processWorkspaceRoots() });
+  });
+
   afterEach(async () => {
     vi.restoreAllMocks();
   });
@@ -105,10 +123,12 @@ describe('assembleTrace', () => {
     // Registered under a stream the config would NOT derive: proves the read
     // comes from execution metadata, not from agent/model reconstruction.
     const registeredId = `chat@earlierModel#${executionId}` as StreamTabId;
-    await registerExecution(executionId, executionConfig, 'review', {
-      streamId: registeredId,
-      identity: { kind: 'agent', agent: 'review' },
-    });
+    await Effect.runPromise(
+      registerExecution(session, executionId, executionConfig, 'review', {
+        streamId: registeredId,
+        identity: { kind: 'agent', agent: 'review' },
+      }),
+    );
     await releaseOwnedExecutionLease(executionId);
     await appendLogEntry(registeredId, 'registered row');
 
@@ -118,13 +138,7 @@ describe('assembleTrace', () => {
     );
 
     const trace = unwrapOkTrace(
-      await Effect.runPromise(
-        assembleTrace(executionId, {
-          roots: processWorkspaceRoots(),
-          snapshots: createTestSession().snapshots,
-          transcripts,
-        }),
-      ),
+      await Effect.runPromise(assembleTrace(executionId, session)),
     );
 
     expect(trace.streamId).toBe(registeredId);
@@ -142,8 +156,6 @@ describe('assembleTrace', () => {
       executionConfig,
     );
     await appendLogEntry(streamId, 'hello');
-    const session = createTestSession();
-    publishTestRunStart(session, streamId, executionId);
     const todos = [
       {
         content: 'Check the argument',
@@ -161,13 +173,7 @@ describe('assembleTrace', () => {
     await settleSessionEvents();
 
     const trace = unwrapOkTrace(
-      await Effect.runPromise(
-        assembleTrace(executionId, {
-          roots: processWorkspaceRoots(),
-          snapshots: session.snapshots,
-          transcripts,
-        }),
-      ),
+      await Effect.runPromise(assembleTrace(executionId, session)),
     );
 
     expect(trace.streamId).toBe(streamId);
@@ -177,7 +183,6 @@ describe('assembleTrace', () => {
     });
     expect(trace.entries).toHaveLength(1);
     expect(trace.entries[0]).toMatchObject({
-      id: 'entry-1',
       text: 'hello',
     });
     expect(trace.meta?.outcome).toBe('completed');
@@ -187,44 +192,19 @@ describe('assembleTrace', () => {
 
   it('returns config_missing when no config was ever written', async () => {
     const result = await Effect.runPromise(
-      assembleTrace('exec-no-config' as ExecutionId, {
-        roots: processWorkspaceRoots(),
-        snapshots: createTestSession().snapshots,
-        transcripts,
-      }),
+      assembleTrace('exec-no-config' as ExecutionId, session),
     );
     expect(result).toEqual({ status: 'config_missing' });
   });
 
-  it('returns streamLogs_missing when metadata carries no stamped stream id', async () => {
-    const executionId = 'exec-no-logs' as ExecutionId;
-    await getExecutionStore(executionId).writeRunRecord(config());
-
-    const result = await Effect.runPromise(
-      assembleTrace(executionId, {
-        roots: processWorkspaceRoots(),
-        snapshots: createTestSession().snapshots,
-        transcripts,
-      }),
-    );
-
-    expect(result).toEqual({ status: 'streamLogs_missing' });
-  });
-
-  it('returns streamLogs_missing when the stamped stream has no persisted log', async () => {
-    const executionId = 'exec-empty-stream' as ExecutionId;
+  it('exports a registered stream with an empty transcript', async () => {
+    const executionId = 'eec000001' as ExecutionId;
     const streamId = getStreamTabId('orchestrator', { executionId });
     await writeExecution(executionId, { streamId });
 
-    const result = await Effect.runPromise(
-      assembleTrace(executionId, {
-        roots: processWorkspaceRoots(),
-        snapshots: createTestSession().snapshots,
-        transcripts,
-      }),
-    );
+    const result = await Effect.runPromise(assembleTrace(executionId, session));
 
-    expect(result).toEqual({ status: 'streamLogs_missing' });
+    expect(unwrapOkTrace(result).entries).toEqual([]);
   });
 
   it('resolves a tool-format child stream through its stamped metadata, not name derivation', async () => {
@@ -232,7 +212,7 @@ describe('assembleTrace', () => {
     // @tools/delegation/childStream.createChildStream) share getStreamTabId's
     // format but carry a tool-specific prefix, disjoint from any agent name —
     // the stamped meta.streamId is the only mapping that reaches them.
-    const executionId = 'exec-child-1' as ExecutionId;
+    const executionId = 'eec000002' as ExecutionId;
     const executionConfig = config({
       agent: 'orchestrator',
       model: 'deepseekT',
@@ -250,13 +230,7 @@ describe('assembleTrace', () => {
     await appendLogEntry(actualChildStreamId, 'child stream output');
 
     const trace = unwrapOkTrace(
-      await Effect.runPromise(
-        assembleTrace(executionId, {
-          roots: processWorkspaceRoots(),
-          snapshots: createTestSession().snapshots,
-          transcripts,
-        }),
-      ),
+      await Effect.runPromise(assembleTrace(executionId, session)),
     );
 
     expect(trace.streamId).toBe(actualChildStreamId);

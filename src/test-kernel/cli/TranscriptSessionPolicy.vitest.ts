@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
@@ -31,8 +32,11 @@ describe('CLI transcript session policy', () => {
     vi.doMock('@cli/runtime/cliPresentationHost', () => ({
       createCliRuntimeHost,
     }));
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { executeCliRequest: nativeExecute } =
+      await import('@cli/runtime/runExecution');
 
+    const executeCliRequest = (...args: Parameters<typeof nativeExecute>) =>
+      Effect.runPromise(nativeExecute(...args));
     await expect(
       executeCliRequest(
         { config: {}, executionId: 'exec-open-failure' } as never,

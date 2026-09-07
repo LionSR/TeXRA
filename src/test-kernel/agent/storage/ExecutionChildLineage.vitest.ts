@@ -1,40 +1,56 @@
-import { describe, expect, it } from 'vitest';
-
-import { getExecutionStore } from '@agent/storage';
+import { Effect } from 'effect';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { hasPersistedParent } from '@agent/storage/executionLifecycle';
-import type { ExecutionId } from '@shared/schemas';
+import { aggregateId } from '@shared/schemas';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
-async function writeParentLink(
-  executionId: ExecutionId,
-  parentExecutionId?: ExecutionId,
-): Promise<void> {
-  await getExecutionStore(executionId).writeMeta({
-    timestamp: new Date(0).toISOString(),
-    ...(parentExecutionId ? { parentExecutionId } : {}),
-  });
-}
+setupPlatform({ workspacePath: '/workspace' });
+let session: ReturnType<typeof createTestSession>;
+beforeEach(() => {
+  session = createTestSession();
+});
 
 describe('hasPersistedParent', () => {
-  setupPlatform({ workspacePath: '/workspace' });
-
-  it('returns false for an execution without a parent', async () => {
-    const id = 'aaa001' as ExecutionId;
-    await writeParentLink(id);
-
-    expect(await hasPersistedParent(id)).toBe(false);
+  it('returns false for roots and absent executions', async () => {
+    publishTestRunStart(session, 'root', 'aaa001');
+    await session.settlePublications();
+    expect(await Effect.runPromise(hasPersistedParent('aaa001', session))).toBe(
+      false,
+    );
+    expect(await Effect.runPromise(hasPersistedParent('aaa002', session))).toBe(
+      false,
+    );
   });
-
-  it('returns false when its own metadata is unavailable', async () => {
-    const id = 'aaa002' as ExecutionId;
-
-    expect(await hasPersistedParent(id)).toBe(false);
-  });
-
-  it('returns true from the direct parent link without reading the parent', async () => {
-    const child = 'aaa010' as ExecutionId;
-    await writeParentLink(child, 'aaa0ff' as ExecutionId);
-
-    expect(await hasPersistedParent(child)).toBe(true);
+  it('retains parent identity in the child creation even when reads exclude parent history', async () => {
+    publishTestRunStart(session, 'parent', 'aaa0ff');
+    await session.settlePublications();
+    const rows = await Effect.runPromise(
+      session.commit([
+        {
+          type: 'run.start',
+          aggregateId: aggregateId('stream', 'child'),
+          executionId: 'aaa010',
+          parentStreamId: 'parent',
+          category: 'toolUse',
+          isRemote: false,
+          userFollowUpSupport: 'unsupported',
+        },
+      ]),
+    );
+    expect(rows[0]).toMatchObject({
+      parentExecutionId: 'aaa0ff',
+      parentStartCommit: 1,
+    });
+    const ownRows = await Effect.runPromise(
+      session.readExecutionRecords('aaa010'),
+    );
+    expect(ownRows).toHaveLength(1);
+    expect(await Effect.runPromise(hasPersistedParent('aaa010', session))).toBe(
+      true,
+    );
   });
 });

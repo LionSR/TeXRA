@@ -77,7 +77,7 @@ interface ChatExportControllerDeps {
    * the template lives under the extension's `resources/` tree.
    */
   readonly latexPreamble: string;
-  readonly session: Pick<SessionHandle, 'roots' | 'snapshots' | 'transcripts'>;
+  readonly session: SessionHandle;
 }
 
 export class ChatExportController {
@@ -230,6 +230,7 @@ export class ChatExportController {
   ): Promise<ChatExportResult> {
     const storagePath = `executions/${historyId}/${filename}`;
     return runWithWorkspaceRoots(this.deps.session.roots, async () => {
+      await StorageFS.ensureDir(`executions/${historyId}`);
       await StorageFS.write(storagePath, content);
       return { storagePath, absolutePath: StorageFS.fullPath(storagePath) };
     });

@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   cancelInteractions: vi.fn(),
   workspaceGet: vi.fn(),
   globalGet: vi.fn(),
-  getExecutionStore: vi.fn(),
+  getExecutionRecords: vi.fn(),
   setCliHelperModel: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   presentationHostClose: vi.fn(),
@@ -40,7 +40,21 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  getExecutionStore: mocks.getExecutionStore,
+  getExecutionRecords: (...args: unknown[]) => {
+    const records = mocks.getExecutionRecords(...args);
+    return {
+      readMeta: () =>
+        Effect.tryPromise({
+          try: () => records.readMeta(),
+          catch: ensureError,
+        }),
+      readConfig: () =>
+        Effect.tryPromise({
+          try: () => records.readConfig(),
+          catch: ensureError,
+        }),
+    };
+  },
   ExecutionLeaseActiveError: class ExecutionLeaseActiveError extends Error {},
 }));
 
@@ -160,7 +174,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { StreamSnapshotStore } from '@transcript';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -307,7 +320,7 @@ function installResumeExecutionStore(
   config: AgentConfig = makeResumeConfig(),
   streamId: StreamTabId | undefined = 'stream-resume' as StreamTabId,
 ): void {
-  mocks.getExecutionStore.mockReturnValue({
+  mocks.getExecutionRecords.mockReturnValue({
     readConfig: async () => config,
     readMeta: async () => (streamId ? { streamId } : null),
   });
@@ -375,9 +388,9 @@ function installOwnerSession(): {
   Object.defineProperty(owner, 'requests', {
     value: {
       request: (req: RuntimeRequest) =>
-        Effect.sync((): Outcome => {
+        Effect.gen(function* (): Effect.fn.Return<Outcome> {
           if (req.kind === 'stream.stop') {
-            session.executions.stopAgentStream(req.streamId, {
+            yield* session.executions.stopAgentStream(req.streamId, {
               detachActiveChildren: req.detachActiveChildren ?? undefined,
             });
           }
@@ -466,7 +479,7 @@ async function retainInterruptedFollowUp(
   mocks.resumeRun
     .mockReset()
     .mockImplementation(defaultResumeRun)
-    .mockResolvedValueOnce({ failed: 'not_resumable' });
+    .mockReturnValueOnce(Effect.succeed({ failed: 'not_resumable' }));
   const admission = ctrl.admitInterruptedFollowUp({ text });
   expect(admission.kind).toBe('accepted');
   if (admission.kind !== 'accepted') return;
@@ -492,25 +505,25 @@ async function expectInterruptedRetry(
 
 describe('CLI terminal outcome resolution', () => {
   beforeEach(() => {
-    mocks.getExecutionStore.mockReset();
+    mocks.getExecutionRecords.mockReset();
   });
 
   it('prefers the persisted post-shutdown outcome', async () => {
-    mocks.getExecutionStore.mockReturnValue(
-      createFakeKv(undefined, {
-        readMeta: vi.fn().mockResolvedValue({
-          outcome: RUN_OUTCOME.CANCELLED,
-        }),
+    mocks.getExecutionRecords.mockReturnValue({
+      readMeta: vi.fn().mockResolvedValue({
+        outcome: RUN_OUTCOME.CANCELLED,
       }),
-    );
+    });
 
     await expect(
-      readCliRunOutcomeState({
-        category: 'toolUse',
-        executionId: 'shutdown-race',
-        outcome: RUN_OUTCOME.COMPLETED,
-        streamId: 'shutdown-race',
-      } as Parameters<typeof readCliRunOutcomeState>[0]),
+      Effect.runPromise(
+        readCliRunOutcomeState(mocks.defaultSession(), {
+          category: 'toolUse',
+          executionId: 'shutdown-race',
+          outcome: RUN_OUTCOME.COMPLETED,
+          streamId: 'shutdown-race',
+        } as Parameters<typeof readCliRunOutcomeState>[1]),
+      ),
     ).resolves.toEqual({
       outcome: RUN_OUTCOME.CANCELLED,
       outcomePersisted: true,
@@ -519,21 +532,22 @@ describe('CLI terminal outcome resolution', () => {
 
   it('reports an outcome read failure and retains the completed run', async () => {
     const reportReadFailure = vi.fn();
-    mocks.getExecutionStore.mockReturnValue(
-      createFakeKv(undefined, {
-        readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
-      }),
-    );
+    mocks.getExecutionRecords.mockReturnValue({
+      readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
+    });
 
     await expect(
-      readCliRunOutcomeState(
-        {
-          category: 'toolUse',
-          executionId: 'broken-storage',
-          outcome: RUN_OUTCOME.COMPLETED,
-          streamId: 'broken-storage',
-        } as Parameters<typeof readCliRunOutcomeState>[0],
-        reportReadFailure,
+      Effect.runPromise(
+        readCliRunOutcomeState(
+          mocks.defaultSession(),
+          {
+            category: 'toolUse',
+            executionId: 'broken-storage',
+            outcome: RUN_OUTCOME.COMPLETED,
+            streamId: 'broken-storage',
+          } as Parameters<typeof readCliRunOutcomeState>[1],
+          reportReadFailure,
+        ),
       ),
     ).resolves.toEqual({
       outcome: RUN_OUTCOME.COMPLETED,
@@ -1190,7 +1204,7 @@ describe('createChatSessionController', () => {
 
   it('reserves the root-run slot before resume() awaits the resolution', async () => {
     const configRead = pDefer<null>();
-    mocks.getExecutionStore.mockReturnValue({
+    mocks.getExecutionRecords.mockReturnValue({
       readConfig: () => configRead.promise,
       readMeta: async () => null,
     });
@@ -1354,7 +1368,7 @@ describe('createChatSessionController', () => {
     // (A) holds the slot end to end, so B must bail out rather than claim it
     // and start work that A would clobber on waking.
     const configRead = pDefer<null>();
-    mocks.getExecutionStore.mockReturnValue({
+    mocks.getExecutionRecords.mockReturnValue({
       readConfig: () => configRead.promise,
       readMeta: async () => null,
     });
@@ -1967,7 +1981,7 @@ describe('createChatSessionController', () => {
     // lost.
     mocks.resumeRun
       .mockReset()
-      .mockResolvedValueOnce({ failed: 'not_resumable' });
+      .mockReturnValueOnce(Effect.succeed({ failed: 'not_resumable' }));
 
     await ctrl.resume('aaaaaa' as ExecutionId);
 

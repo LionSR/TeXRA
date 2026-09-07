@@ -77,6 +77,7 @@ import {
   type SessionEvent,
   type SessionEventDraft,
   type StreamTabId,
+  type StreamPhase,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import { interruptedWorkflowCall } from '@shared/schemas';
@@ -285,6 +286,7 @@ export class SessionHandle {
       publish: (events) => this.publish(events),
       approvals,
       publishResult: (event, streamId) => this.publishRunEvent(streamId, event),
+      finalizeExecution: (input) => finalizeRun(this, input),
       releaseRootExecutionLease: (executionId) =>
         this.releaseExecutionLease(executionId),
     });
@@ -392,33 +394,72 @@ export class SessionHandle {
    * drain's error is the one the caller sees, and the release's is logged.
    * This is the one exit choreography every run driver calls.
    */
-  async releaseExecutionLease(
+  releaseExecutionLease(
     executionId: ExecutionId,
-    afterArtifactsDrained?: () => void | Promise<void>,
-  ): Promise<void> {
-    let drainError: unknown;
-    try {
-      await validateOwnedExecutionLease(executionId);
-      await this.flushArtifacts();
-      await afterArtifactsDrained?.();
-      await this.settlePublications();
-    } catch (error) {
-      drainError = error;
-      logger.warn(
-        `Execution ${executionId}: final artifacts did not all persist; releasing its lease anyway`,
-        { data: error },
+    afterArtifactsDrained: Effect.Effect<void, Error> = Effect.void,
+  ): Effect.Effect<void, Error> {
+    return Effect.gen({ self: this }, function* () {
+      const drained = yield* Effect.exit(
+        Effect.gen({ self: this }, function* () {
+          yield* Effect.tryPromise({
+            try: () =>
+              runInSession(this, async () => {
+                await validateOwnedExecutionLease(executionId);
+                await this.flushArtifacts();
+              }),
+            catch: ensureError,
+          });
+          yield* afterArtifactsDrained;
+        }),
       );
-    }
-    try {
-      await releaseOwnedExecutionLease(executionId);
-    } catch (releaseError) {
-      if (drainError === undefined) throw releaseError;
-      logger.warn(
-        `Execution ${executionId}: its lease could not be released after its final artifacts failed`,
-        { data: releaseError },
+      // A rejected artifact flush cannot let claim release overtake facts that
+      // were already queued by the same owner.
+      const published = yield* Effect.exit(
+        Effect.tryPromise({
+          try: () => this.settlePublications(),
+          catch: ensureError,
+        }),
       );
-    }
-    if (drainError !== undefined) throw drainError;
+      const claimRelease = yield* Effect.exit(
+        this.graph.releaseExecutionClaims(executionId),
+      );
+      const fileRelease = yield* Effect.exit(
+        Effect.tryPromise({
+          try: () =>
+            runInSession(this, () => releaseOwnedExecutionLease(executionId)),
+          catch: ensureError,
+        }),
+      );
+      const failures = [drained, published, claimRelease, fileRelease].flatMap(
+        (exit) => (Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : []),
+      );
+      const primary = failures.shift();
+      for (const error of failures)
+        logger.warn(`Execution ${executionId}: lease release also failed`, {
+          data: error,
+        });
+      if (primary !== undefined)
+        return yield* Effect.fail(ensureError(primary));
+    });
+  }
+
+  /** Admit both existing execution claims before resume reads or mutations. */
+  acquireExecutionClaims(
+    executionId: ExecutionId,
+    streamId: StreamTabId,
+  ): Effect.Effect<Effect.Effect<void, Error>, Error> {
+    return this.graph.acquireExecutionClaims(executionId, streamId).pipe(
+      Effect.map((release) =>
+        release.pipe(
+          Effect.catchCause((cause) =>
+            Effect.fail(ensureError(Cause.squash(cause))),
+          ),
+        ),
+      ),
+      Effect.catchCause((cause) =>
+        Effect.fail(ensureError(Cause.squash(cause))),
+      ),
+    );
   }
 
   /** Drain registered artifact writers and all pending event publications. */
@@ -554,27 +595,30 @@ export class SessionHandle {
     if (this.disposed) return;
     this.schedulePublication(
       Effect.suspend(() => {
-        const closure: SessionEventDraft[] = [];
-        if (
-          event.phase === STREAM_PHASE.WAITING ||
-          isTerminalOutcomePhase(event.phase)
-        ) {
-          for (const entry of this.transcripts
-            .get(event.streamId)
-            ?.getRange(0) ?? []) {
-            if (!isRunningStreamingTextEntry(entry)) continue;
-            closure.push({
-              type: 'stream.end',
-              aggregateId: qualifyAggregateId('stream', event.streamId),
-              id: entry.id,
-              finalText:
-                this.graph.readText(event.streamId, entry.id) ?? entry.text,
-            });
-          }
-        }
+        const closure = this.statusClosureFacts(event.streamId, event.phase);
         return this.graph.publish([...closure, statusDraft(event)]);
       }),
     );
+  }
+
+  /** Final text facts committed immediately before a status closes its entries. */
+  statusClosureFacts(
+    streamId: StreamTabId,
+    phase: StreamPhase,
+  ): SessionEventDraft[] {
+    const closure: SessionEventDraft[] = [];
+    if (phase === STREAM_PHASE.WAITING || isTerminalOutcomePhase(phase)) {
+      for (const entry of this.transcripts.get(streamId)?.getRange(0) ?? []) {
+        if (!isRunningStreamingTextEntry(entry)) continue;
+        closure.push({
+          type: 'stream.end',
+          aggregateId: qualifyAggregateId('stream', streamId),
+          id: entry.id,
+          finalText: this.graph.readText(streamId, entry.id) ?? entry.text,
+        });
+      }
+    }
+    return closure;
   }
 
   /**
@@ -586,6 +630,57 @@ export class SessionHandle {
   publish(events: readonly SessionEventDraft[]): void {
     if (this.disposed || events.length === 0) return;
     this.schedulePublication(this.graph.publish(events));
+  }
+
+  /** Native metadata publication shares the existing ordered publisher. */
+  commit(
+    events: readonly SessionEventDraft[],
+  ): Effect.Effect<readonly SessionEvent[]> {
+    return this.publicationGate.withPermit(this.graph.publish(events));
+  }
+
+  /** Registration owns birth claims as soon as append commits, before its tail drains. */
+  commitRegistration(
+    events: readonly SessionEventDraft[],
+  ): Effect.Effect<readonly SessionEvent[]> {
+    return this.publicationGate.withPermit(
+      this.graph.publishRegistration(events),
+    );
+  }
+
+  /** Read and append under the same local publisher permit. C5 excludes foreign writers. */
+  updateRecordFacts<A>(
+    executionId: ExecutionId,
+    update: (rows: readonly SessionEvent[]) => {
+      readonly events: readonly SessionEventDraft[];
+      readonly value: A;
+    },
+  ): Effect.Effect<A> {
+    const graph = this.graph;
+    return this.publicationGate.withPermit(
+      Effect.gen(function* () {
+        const updateResult = update(yield* graph.executionRecords(executionId));
+        yield* graph.publish(updateResult.events);
+        return updateResult.value;
+      }),
+    );
+  }
+
+  /** Internal typed metadata accessors read the database, never the display fold. */
+  readExecutionRecords(
+    executionId: ExecutionId,
+  ): Effect.Effect<readonly SessionEvent[]> {
+    return this.graph.executionRecords(executionId);
+  }
+
+  readExecutionChildren(
+    executionId: ExecutionId,
+  ): Effect.Effect<readonly SessionEvent[]> {
+    return this.graph.executionChildren(executionId);
+  }
+
+  readRecordListing(): Effect.Effect<readonly SessionEvent[]> {
+    return this.graph.recordListing();
   }
 
   private schedulePublication(program: Effect.Effect<unknown>): void {
@@ -790,68 +885,64 @@ export const settleLiveSessionExecutions = Effect.fn(
             : yield* session.transcripts.readEntries(streamId);
         }),
       );
-      yield* Effect.tryPromise({
-        try: () =>
-          runInSession(session, () =>
-            session.releaseExecutionLease(executionId, async () => {
-              const finalization = await finalizeRun({
-                executionId,
-                outcome: RUN_OUTCOME.CANCELLED,
-                flowRecord: 'preserve',
-                keepExistingOutcome: true,
+      yield* session.releaseExecutionLease(
+        executionId,
+        Effect.gen(function* () {
+          const finalization = yield* finalizeRun(session, {
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            flowRecord: 'preserve',
+            keepExistingOutcome: true,
+          });
+          if (!finalization.ok) {
+            throw new Error(
+              `Failed to persist the CANCELLED outcome for execution ${executionId}`,
+              { cause: finalization.error },
+            );
+          }
+          if (signal.aborted) {
+            logger.warn(
+              `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open`,
+            );
+            return;
+          }
+          if (streamId === undefined) {
+            logger.warn(
+              `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
+            );
+            return;
+          }
+          // A failed read must still pass through the owner's release
+          // choreography after recording the terminal outcome.
+          if (Exit.isFailure(transcript)) throw Cause.squash(transcript.cause);
+          // These are ordinary canonical facts. The lease owner settles their
+          // publication before unlinking the claim, so replay sees the same
+          // closure as the resident transcript.
+          for (const entry of transcript.value) {
+            if (isRunningGroupEntry(entry)) {
+              session.publishRunEvent(streamId, {
+                type: 'stage.end',
+                id: entry.id,
+                status: finalization.outcome,
               });
-              if (!finalization.ok) {
-                throw new Error(
-                  `Failed to persist the CANCELLED outcome for execution ${executionId}`,
-                  { cause: finalization.error },
-                );
-              }
-              if (signal.aborted) {
-                logger.warn(
-                  `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open`,
-                );
-                return;
-              }
-              if (streamId === undefined) {
-                logger.warn(
-                  `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
-                );
-                return;
-              }
-              // A failed read must still pass through the owner's release
-              // choreography after recording the terminal outcome.
-              if (Exit.isFailure(transcript))
-                throw Cause.squash(transcript.cause);
-              // These are ordinary canonical facts. The lease owner settles their
-              // publication before unlinking the claim, so replay sees the same
-              // closure as the resident transcript.
-              for (const entry of transcript.value) {
-                if (isRunningGroupEntry(entry)) {
-                  session.publishRunEvent(streamId, {
-                    type: 'stage.end',
-                    id: entry.id,
-                    status: finalization.outcome,
-                  });
-                } else if (isRunningStreamingTextEntry(entry)) {
-                  session.publishRunEvent(streamId, {
-                    type: 'stream.end',
-                    id: entry.id,
-                  });
-                } else {
-                  const call = nonterminalWorkflowCall(entry);
-                  if (call)
-                    session.publishRunEvent(streamId, {
-                      type: 'workflow.call',
-                      logId: entry.id,
-                      stageId: entry.groupId,
-                      call: interruptedWorkflowCall(call),
-                    });
-                }
-              }
-            }),
-          ),
-        catch: ensureError,
-      });
+            } else if (isRunningStreamingTextEntry(entry)) {
+              session.publishRunEvent(streamId, {
+                type: 'stream.end',
+                id: entry.id,
+              });
+            } else {
+              const call = nonterminalWorkflowCall(entry);
+              if (call)
+                session.publishRunEvent(streamId, {
+                  type: 'workflow.call',
+                  logId: entry.id,
+                  stageId: entry.groupId,
+                  call: interruptedWorkflowCall(call),
+                });
+            }
+          }
+        }),
+      );
     });
     yield* settlement.pipe(
       Effect.scoped,

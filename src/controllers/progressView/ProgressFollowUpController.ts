@@ -70,13 +70,13 @@ export class ProgressFollowUpController {
 
   async planCompileFixerForStream(
     streamId: StreamTabId,
+    runConfig: AgentConfig | undefined,
   ): Promise<ProgressFollowUpPlan> {
     const modelOptions = await this.deps.loadModelOptions();
     const compileFailures = Object.values(
       this.deps.state.getCompileFailures(streamId),
     ).flat();
-    const { config: runConfig, executionId } =
-      this.deps.state.getRunMetadata(streamId);
+    const { executionId } = this.deps.state.getRunMetadata(streamId);
 
     return this.planCompileFixer({
       streamId,

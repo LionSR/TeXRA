@@ -2,13 +2,12 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { Deferred, Effect, Fiber, Layer, ManagedRuntime } from 'effect';
+import { it } from '@effect/vitest';
+import { beforeEach, describe, expect } from 'vitest';
 
-import {
-  createStdinWorkflowInputMaterializer,
-  expandRunInputs,
-  withExpandedRunInputs,
-} from '@cli/runtime/workflowInputs';
+import { withExpandedRunInputs } from '@cli/runtime/workflowInputs';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -30,66 +29,110 @@ describe('CLI workflow input lifecycle', () => {
     return host.platform;
   }
 
-  it('removes materialized stdin input on platform shutdown', async () => {
-    const fakePlatform = await installFakePlatform();
+  it.live('removes materialized stdin input on platform shutdown', () =>
+    Effect.gen(function* () {
+      const fakePlatform = yield* Effect.promise(installFakePlatform);
+      const runtime = ManagedRuntime.make(Layer.empty);
+      fakePlatform.lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+        runtime.dispose(),
+      );
+      const materialized = yield* Deferred.make<string>();
+      const running = runtime.runFork(
+        withExpandedRunInputs(
+          ['-'],
+          [],
+          root,
+          { readStdinText: async () => 'body from stdin' },
+          ({ inputFiles }) =>
+            Effect.gen(function* () {
+              yield* Deferred.succeed(
+                materialized,
+                path.resolve(root, inputFiles[0]),
+              );
+              yield* Effect.never;
+            }),
+        ),
+      );
+      const inputPath = yield* Deferred.await(materialized);
+      expect(yield* Effect.promise(() => fs.readFile(inputPath, 'utf8'))).toBe(
+        'body from stdin',
+      );
+      yield* Effect.promise(() => fakePlatform.lifecycle.runShutdown());
+      expect(yield* Fiber.await(running)).toMatchObject({ _tag: 'Failure' });
+      yield* Effect.promise(async () => {
+        await expect(fs.stat(inputPath)).rejects.toThrow();
+      });
+    }),
+  );
 
-    const stdinInputFile = createStdinWorkflowInputMaterializer({
-      tempDir: root,
-      readStdinText: async () => 'body from stdin',
-    });
+  it.live(
+    'does not wait for unfinished stdin reads during platform shutdown',
+    () =>
+      Effect.gen(function* () {
+        const fakePlatform = yield* Effect.promise(installFakePlatform);
+        const runtime = ManagedRuntime.make(Layer.empty);
+        fakePlatform.lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
+          runtime.dispose(),
+        );
+        const reading = yield* Deferred.make<void>();
+        const running = runtime.runFork(
+          withExpandedRunInputs(
+            ['-'],
+            [],
+            root,
+            {
+              readStdinText: () => {
+                Deferred.doneUnsafe(reading, Effect.void);
+                return new Promise<string>(() => undefined);
+              },
+            },
+            () => Effect.void,
+          ),
+        );
+        yield* Deferred.await(reading);
+        const result = yield* Effect.promise(() =>
+          Promise.race([
+            fakePlatform.lifecycle.runShutdown().then(() => 'shutdown'),
+            sleep(100).then(() => 'timeout'),
+          ]),
+        );
+        expect(result).toBe('shutdown');
+        expect(yield* Fiber.await(running)).toMatchObject({ _tag: 'Failure' });
+        const entries = yield* Effect.promise(() => fs.readdir(root));
+        expect(
+          entries.filter((entry) => entry.startsWith('texra-stdin-')),
+        ).toEqual([]);
+      }),
+  );
 
-    const { inputFiles: expanded } = await expandRunInputs(['-'], [], root, {
-      stdinInputFile,
-    });
-
-    const inputPath = path.resolve(root, expanded[0]);
-    await expect(fs.readFile(inputPath, 'utf8')).resolves.toBe(
-      'body from stdin',
-    );
-
-    await fakePlatform.lifecycle.runShutdown();
-    await expect(fs.stat(inputPath)).rejects.toThrow();
-  });
-
-  it('does not wait for unfinished stdin reads during platform shutdown', async () => {
-    const fakePlatform = await installFakePlatform();
-
-    const stdinInputFile = createStdinWorkflowInputMaterializer({
-      tempDir: root,
-      readStdinText: async () => new Promise<string>(() => undefined),
-    });
-
-    void stdinInputFile().catch(() => undefined);
-    const result = await Promise.race([
-      fakePlatform.lifecycle.runShutdown().then(() => 'shutdown'),
-      sleep(100).then(() => 'timeout'),
-    ]);
-
-    expect(result).toBe('shutdown');
-  });
-
-  it('removes materialized stdin input when the headless run callback fails', async () => {
-    await installFakePlatform();
-    let materializedPath = '';
-
-    await expect(
-      withExpandedRunInputs(
-        ['-'],
-        [],
-        root,
-        { readStdinText: async () => 'body from stdin' },
-        async ({ inputFiles }) => {
-          const inputPath = inputFiles.at(0);
-          if (!inputPath) throw new Error('missing materialized input');
-          materializedPath = path.resolve(root, inputPath);
-          await expect(fs.readFile(materializedPath, 'utf8')).resolves.toBe(
-            'body from stdin',
-          );
-          throw new Error('run failed');
-        },
-      ),
-    ).rejects.toThrow('run failed');
-
-    await expect(fs.stat(materializedPath)).rejects.toThrow();
-  });
+  it.live(
+    'removes materialized stdin input when the headless run callback fails',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(installFakePlatform);
+        let materializedPath = '';
+        const failure = yield* Effect.flip(
+          withExpandedRunInputs(
+            ['-'],
+            [],
+            root,
+            { readStdinText: async () => 'body from stdin' },
+            ({ inputFiles }) =>
+              Effect.gen(function* () {
+                materializedPath = path.resolve(root, inputFiles[0]);
+                expect(
+                  yield* Effect.promise(() =>
+                    fs.readFile(materializedPath, 'utf8'),
+                  ),
+                ).toBe('body from stdin');
+                return yield* Effect.fail(new Error('run failed'));
+              }),
+          ),
+        );
+        expect(failure.message).toBe('run failed');
+        yield* Effect.promise(async () => {
+          await expect(fs.stat(materializedPath)).rejects.toThrow();
+        });
+      }),
+  );
 });

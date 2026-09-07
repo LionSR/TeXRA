@@ -17,18 +17,14 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { assertNever, isObject } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /** Read completed tasks from the session's committed stream fold. */
 export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
   function* (
     executionId: ExecutionId,
-    session: Pick<SessionHandle, 'roots' | 'snapshots'>,
+    session: SessionHandle,
   ): Effect.fn.Return<readonly TodoItem[], Error> {
-    const resolution = yield* Effect.tryPromise({
-      try: () => resolveStreamForExecution(executionId, session.roots),
-      catch: ensureError,
-    });
+    const resolution = yield* resolveStreamForExecution(executionId, session);
     if (!resolution) return [];
     const snapshot = yield* session.snapshots.read(resolution.streamId);
     return snapshot.todos;
@@ -291,12 +287,9 @@ export const readCompletedRunConversation = Effect.fn(
   'readCompletedRunConversation',
 )(function* (
   executionId: ExecutionId,
-  session: Pick<SessionHandle, 'roots' | 'transcripts'>,
+  session: SessionHandle,
 ): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
-  const resolution = yield* Effect.tryPromise({
-    try: () => resolveStreamForExecution(executionId, session.roots),
-    catch: ensureError,
-  });
+  const resolution = yield* resolveStreamForExecution(executionId, session);
   if (!resolution) return { conversation: null, source: 'none' };
   const { streamId } = resolution;
   const conversation = streamLogEntriesToConversation(

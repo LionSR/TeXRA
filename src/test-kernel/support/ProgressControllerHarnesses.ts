@@ -111,7 +111,6 @@ export function createOutputFile(
 }
 
 export interface ProgressWorkflowRunActionsHarnessOptions {
-  runConfigs?: Map<StreamTabId, AgentConfig>;
   executionIds?: Map<StreamTabId, string>;
   outputs?: Map<StreamTabId, RoundIndexed<OutputFileInfo>>;
   knownWorkspaceOutputs?: Map<StreamTabId, Set<string>>;
@@ -143,7 +142,6 @@ export function createProgressWorkflowRunActionsHarness(
         getRunMetadata: (stream) => {
           metadataReads.push(stream);
           return {
-            config: options.runConfigs?.get(stream),
             executionId: options.executionIds?.get(stream),
           };
         },

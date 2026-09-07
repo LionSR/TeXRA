@@ -10,12 +10,16 @@
  */
 
 // Third-party imports
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { z } from 'zod';
+import { Effect } from 'effect';
 
 // Local imports
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { appSignals } from '@eventBus/AppSignals';
-import { diffFileLocation } from '@latex/acceptedFileTarget';
+import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
+import { effectRuntime } from '@platform/processRuntime';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
 import {
   ExecutionIdSchema,
@@ -31,7 +35,7 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { filterNotNull, filterNotNullish } from '@utils/core';
+import { filterNotNullish } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -126,18 +130,40 @@ Parameters map directly to subagent-result delivery attributes:
   original     ← <file original="...">`,
   schema: AcceptRunFilesInputSchema,
 }) {
-  protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
-    const { execution_id: executionId, files, strip_criticize } = input;
+  protected execute(input: AcceptRunFilesInput): Promise<ToolResult> {
+    const session = currentSession();
+    const prepareFiles = AsyncLocalStorage.bind(() => this.acceptFiles(input));
+    const findRunDirectory = AsyncLocalStorage.bind(() =>
+      findExistingRunStoragePath(input.execution_id),
+    );
+    return effectRuntime().runPromise(
+      Effect.gen(function* () {
+        const directory = yield* Effect.tryPromise({
+          try: findRunDirectory,
+          catch: (error) => error,
+        });
+        if (
+          directory === undefined &&
+          (yield* getExecutionRecords(
+            session,
+            input.execution_id,
+          ).readMeta()) === null
+        )
+          return yield* Effect.fail(
+            new ToolError(
+              `Run not found: ${input.execution_id}. Use /executions to list available executions.`,
+            ),
+          );
+        return yield* Effect.tryPromise({
+          try: prepareFiles,
+          catch: (error) => error,
+        });
+      }).pipe(Effect.catch((error) => Effect.die(error))),
+    );
+  }
 
-    // Verify execution exists — run dir may not exist in workspace storage mode
-    if (
-      (await findExistingRunStoragePath(executionId)) === undefined &&
-      !(await getExecutionStore(executionId).exists('meta'))
-    ) {
-      throw new ToolError(
-        `Run not found: ${executionId}. Use /executions to list available executions.`,
-      );
-    }
+  private async acceptFiles(input: AcceptRunFilesInput): Promise<ToolResult> {
+    const { execution_id: executionId, files, strip_criticize } = input;
 
     // Phase 1: Validate all source paths and read content before any approvals
     const prepared = await Promise.all(
@@ -332,7 +358,7 @@ Parameters map directly to subagent-result delivery attributes:
     }
 
     // Phase 3: Clean up diff files from workspace for accepted files
-    const cleaned = await this.cleanupDiffFiles(acceptedEntries);
+    const cleaned = await cleanupAcceptedWorkspaceDiffFiles(acceptedEntries);
     for (const f of cleaned) {
       results.push(`cleaned: ${f}`);
     }
@@ -396,43 +422,5 @@ Parameters map directly to subagent-result delivery attributes:
       `File not found in run storage or workspace: ${runPath}. ` +
         `Use executions tool with path /executions/${executionId}/files to list available files.`,
     );
-  }
-
-  /**
-   * Remove diff files from the workspace that correspond to accepted output
-   * files, using the same diff-naming convention as the manual "Accept" flow
-   * (see {@link diffFileLocation}) so both paths stay in sync.
-   */
-  private async cleanupDiffFiles(
-    entries: { outputPath: string; originalPath: string }[],
-  ): Promise<string[]> {
-    const results = await Promise.all(
-      entries.map(async ({ outputPath, originalPath }) => {
-        const originalLocation = WorkspaceFS.locatePath(originalPath);
-        if (originalLocation.kind === 'external') return null;
-
-        // diffFileLocation's return type is the full FileLocation union
-        // (siblingLocation isn't generic over the input's kind), so this
-        // narrows for relativePath access below even though, given a
-        // 'workspace' input, it can only ever resolve to 'workspace'.
-        const loc = diffFileLocation(originalLocation, outputPath);
-        if (loc.kind === 'external') return null;
-
-        // Never delete the file we just accepted into — possible when
-        // originalPath's own name already matches the generated diff-name
-        // pattern for outputPath (see cleanupStaleDiffFile's docstring).
-        if (loc.absolutePath === originalLocation.absolutePath) return null;
-
-        try {
-          await WorkspaceFS.delete(loc.relativePath);
-          return loc.relativePath;
-        } catch {
-          // Non-fatal: file may not exist or may be locked
-          return null;
-        }
-      }),
-    );
-
-    return results.filter(filterNotNull);
   }
 }

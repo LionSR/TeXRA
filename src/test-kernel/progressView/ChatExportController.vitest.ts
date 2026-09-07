@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -13,6 +13,7 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
+  aggregateId,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -20,7 +21,10 @@ import {
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
@@ -33,7 +37,7 @@ const TEMPLATE =
   '</head><body></body></html>';
 
 const tempDirs = useTempDirs();
-let transcripts: StreamLogStore;
+let session: ReturnType<typeof createTestSession>;
 
 async function installStoragePlatform(): Promise<void> {
   const tempDir = await makeTempDir('texra-html-export-', tempDirs);
@@ -83,15 +87,17 @@ async function persistTranscriptEntry(
   agent: string,
 ): Promise<StreamTabId> {
   const streamId = getStreamTabId(agent, { executionId });
-  const store = transcripts;
-  appendTranscriptEntry(store, streamId, {
-    id: 'entry-1',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    level: LOG_LEVELS.INFO,
-    timestamp: 100,
-    messageType: MESSAGE_TYPES.USER_MESSAGE,
-    text: 'hello',
-  });
+  await Effect.runPromise(
+    session.commit([
+      {
+        type: 'log',
+        aggregateId: aggregateId('stream', streamId),
+        level: LOG_LEVELS.INFO,
+        messageType: MESSAGE_TYPES.USER_MESSAGE,
+        message: 'hello',
+      },
+    ]),
+  );
 
   return streamId;
 }
@@ -101,14 +107,10 @@ describe('ChatExportController.exportAsHtml', () => {
 
   beforeEach(async () => {
     await installStoragePlatform();
-    transcripts = StreamLogStore.ephemeral('chat export fixture');
+    session = createTestSession({ roots: processWorkspaceRoots() });
     controller = new ChatExportController({
       latexPreamble: '',
-      session: {
-        roots: processWorkspaceRoots(),
-        snapshots: createTestSession().snapshots,
-        transcripts,
-      },
+      session,
     });
   });
 
@@ -124,15 +126,18 @@ describe('ChatExportController.exportAsHtml', () => {
 
   it('writes a self-contained HTML file with the trace embedded, when everything is present', async () => {
     const templatePath = await writeTemplate();
-    const executionId = 'exec-full' as ExecutionId;
+    const executionId = 'eec001' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-    await getExecutionStore(executionId).writeRunRecord(executionConfig);
+    publishTestRunStart(
+      session,
+      getStreamTabId(executionConfig.agent, { executionId }),
+      executionId,
+    );
+    await session.settlePublications();
+    await Effect.runPromise(
+      getExecutionRecords(session, executionId).writeRunRecord(executionConfig),
+    );
     const streamId = await persistTranscriptEntry(executionId, 'review');
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-05T00:00:00.000Z',
-      outcome: 'completed',
-      streamId,
-    });
 
     const outcome = await Effect.runPromise(
       controller.exportAsHtml(executionId, templatePath),
@@ -141,28 +146,30 @@ describe('ChatExportController.exportAsHtml', () => {
     expect(outcome.status).toBe('ok');
     if (outcome.status !== 'ok') return;
     expect(outcome.result.storagePath).toMatch(
-      /^executions\/exec-full\/texra-chat-.*\.html$/,
+      /^executions\/eec001\/texra-chat-.*\.html$/,
     );
 
-    const written = await nodeFilesystem.readFile(
-      StorageFS.fullPath(outcome.result.storagePath),
-    );
+    const written = await nodeFilesystem.readFile(outcome.result.absolutePath);
     const html = new TextDecoder().decode(written);
     expect(html).toContain('<script>window.__TEXRA_TRACE__');
-    expect(html).toContain('"id":"entry-1"');
+    expect(html).toContain('"text":"hello"');
     expect(html).toContain(
       '<script type="module" crossorigin src="./index.js">',
     );
   });
 
   it('throws when the standalone template bundle is missing', async () => {
-    const executionId = 'exec-missing-template' as ExecutionId;
-    await getExecutionStore(executionId).writeRunRecord(config());
+    const executionId = 'eec002' as ExecutionId;
+    publishTestRunStart(
+      session,
+      getStreamTabId(config().agent, { executionId }),
+      executionId,
+    );
+    await session.settlePublications();
+    await Effect.runPromise(
+      getExecutionRecords(session, executionId).writeRunRecord(config()),
+    );
     const streamId = await persistTranscriptEntry(executionId, 'orchestrator');
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-05T00:00:00.000Z',
-      streamId,
-    });
 
     await expect(
       Effect.runPromise(
@@ -177,14 +184,10 @@ describe('ChatExportController.buildExportInput', () => {
 
   beforeEach(async () => {
     await installStoragePlatform();
-    transcripts = StreamLogStore.ephemeral('chat export fixture');
+    session = createTestSession({ roots: processWorkspaceRoots() });
     controller = new ChatExportController({
       latexPreamble: '',
-      session: {
-        roots: processWorkspaceRoots(),
-        snapshots: createTestSession().snapshots,
-        transcripts,
-      },
+      session,
     });
   });
 
@@ -197,13 +200,17 @@ describe('ChatExportController.buildExportInput', () => {
   });
 
   it('returns ok when config and transcript are stored', async () => {
-    const executionId = 'exec-full' as ExecutionId;
-    await getExecutionStore(executionId).writeRunRecord(config());
+    const executionId = 'eec001' as ExecutionId;
+    publishTestRunStart(
+      session,
+      getStreamTabId(config().agent, { executionId }),
+      executionId,
+    );
+    await session.settlePublications();
+    await Effect.runPromise(
+      getExecutionRecords(session, executionId).writeRunRecord(config()),
+    );
     const streamId = await persistTranscriptEntry(executionId, 'orchestrator');
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-05T00:00:00.000Z',
-      streamId,
-    });
 
     await expect(
       Effect.runPromise(controller.buildExportInput(executionId)),
@@ -213,8 +220,16 @@ describe('ChatExportController.buildExportInput', () => {
   });
 
   it('reports conversation_missing when a config is stored but no transcript exists', async () => {
-    const executionId = 'exec-no-chat' as ExecutionId;
-    await getExecutionStore(executionId).writeRunRecord(config());
+    const executionId = 'eec003' as ExecutionId;
+    publishTestRunStart(
+      session,
+      getStreamTabId(config().agent, { executionId }),
+      executionId,
+    );
+    await session.settlePublications();
+    await Effect.runPromise(
+      getExecutionRecords(session, executionId).writeRunRecord(config()),
+    );
 
     await expect(
       Effect.runPromise(controller.buildExportInput(executionId)),

@@ -6,7 +6,6 @@ import {
   acceptEditedFileReplace,
   cleanupStaleDiffFile,
   commitAcceptedFile,
-  diffFileLocation,
   type AcceptEditedFileReplacePorts,
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
@@ -40,26 +39,6 @@ function recordingDelete(): {
     },
   };
 }
-
-describe('diffFileLocation', () => {
-  it('computes the stale _diff sibling for a base/edited pair', () => {
-    const base = createWorkspaceLocation(
-      absolutePath('ws', 'chapters', 'paper.tex'),
-      'chapters/paper.tex',
-    );
-
-    const loc = diffFileLocation(
-      base,
-      absolutePath('ws', 'chapters', 'paper_correct.tex'),
-    );
-
-    expect(loc).toMatchObject({
-      kind: 'workspace',
-      absolutePath: absolutePath('ws', 'chapters', 'paper_correct_diff.tex'),
-      relativePath: 'chapters/paper_correct_diff.tex',
-    });
-  });
-});
 
 describe('cleanupStaleDiffFile', () => {
   it('deletes the derived diff location when it differs from the target', async () => {

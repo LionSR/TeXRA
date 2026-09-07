@@ -17,26 +17,20 @@
  * (`readCompletedRunConversation`): the canonical transcript fold owns completed-run
  * display/export per #7246 Decision 1.
  *
- * `store.readConfig()` already validates against `AgentConfigSchema`
- * internally and falls back to `null` on a schema mismatch (see the private
- * `readValidated` helper on `StorageFSKVStore` in `ExecutionKVStore.ts`), so
- * `config` here is never a raw, unvalidated value — no redundant re-parse
- * (and no risk of it throwing on a corrupt record) is needed.
  */
 
 import { Effect } from 'effect';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@agent/export/schemas';
-import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
+import { redactDisplayValue } from '@logger/redaction';
 import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
 } from '@transcript';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * Facts read from the execution store, plus the assembled
@@ -77,25 +71,13 @@ function hasConversationMessages(
 
 export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   id: ExecutionId,
-  session: Pick<SessionHandle, 'roots' | 'transcripts'>,
+  session: SessionHandle,
 ): Effect.fn.Return<ChatExportLoadResult, Error> {
   const [config, conversationResult, meta] = yield* Effect.all(
     [
-      Effect.tryPromise({
-        try: () =>
-          runWithWorkspaceRoots(session.roots, () =>
-            getExecutionStore(id).readConfig(),
-          ),
-        catch: ensureError,
-      }),
+      getExecutionRecords(session, id).readConfig(),
       readCompletedRunConversation(id, session),
-      Effect.tryPromise({
-        try: () =>
-          runWithWorkspaceRoots(session.roots, () =>
-            getExecutionStore(id).readMeta(),
-          ),
-        catch: ensureError,
-      }),
+      getExecutionRecords(session, id).readMeta(),
     ],
     { concurrency: 3 },
   );
@@ -120,7 +102,7 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
     config,
     conversation,
     hasTranscriptEvidence,
-    exportInput: {
+    exportInput: redactDisplayValue({
       timestamp: meta?.timestamp ?? new Date().toISOString(),
       description: meta?.description,
       config: {
@@ -133,6 +115,6 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
         outputFiles: config.outputFiles,
       },
       messages: conversation,
-    },
+    }),
   };
 });

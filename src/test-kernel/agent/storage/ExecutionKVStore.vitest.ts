@@ -1,407 +1,171 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  type MockInstance,
-} from 'vitest';
+import { Effect, Stream, SubscriptionRef } from 'effect';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import {
-  clearStoreCache,
+  getExecutionRecords,
   getExecutionStore,
   isReservedKvKeyName,
-  type ResultMeta,
 } from '@agent/storage';
-import { clearTerminalExecutionState } from '@agent/storage/executionLifecycle';
-import * as logger from '@logger/logUtils';
 import {
-  EXECUTION_META_SCHEMA_VERSION,
-  RUN_OUTCOME,
-  type ExecutionId,
-  type RunOutcome,
-  type WorkflowExecutionSnapshot,
+  clearTerminalExecutionState,
+  finalizeRun,
+  readExecutionChildren,
+} from '@agent/storage/executionLifecycle';
+import { effectRuntime } from '@platform/processRuntime';
+import {
+  aggregateId,
+  AgentConfigFieldsSchema,
+  type SessionEventDraft,
 } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
+const executionId = 'abcdef';
+const streamId = 'stream:abcdef';
+let session: ReturnType<typeof createTestSession>;
+const run = <A, E>(effect: Effect.Effect<A, E>) =>
+  effectRuntime().runPromise(effect);
 
-beforeEach(() => {
-  clearStoreCache();
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-const META_TIMESTAMP = '2026-07-04T00:00:00.000Z';
-
-function mockWarn(): MockInstance<typeof logger.warn> {
-  return vi.spyOn(logger, 'warn').mockImplementation(() => {});
-}
-
-function expectParseWarning(
-  warnSpy: MockInstance<typeof logger.warn>,
-  id: ExecutionId,
-  fileName: string,
-): void {
-  expect(warnSpy).toHaveBeenCalledWith(
-    'ExecutionKVStore',
-    expect.stringContaining(`Failed to parse execution ${id} ${fileName}`),
-    { data: expect.any(Error) },
-  );
-}
-
-function validWorkflowSnapshot(): WorkflowExecutionSnapshot {
-  return {
-    lifecycle: 'completed',
-    stages: [],
-    calls: [],
-    timestamps: {
-      createdAt: META_TIMESTAMP,
-      updatedAt: META_TIMESTAMP,
-      completedAt: META_TIMESTAMP,
-    },
-  };
-}
-
-/** The shared subagent result-meta envelope the projection tests permute. */
-function interimResultMeta(
-  response: string,
-  outcome: RunOutcome = RUN_OUTCOME.COMPLETED,
-): Extract<ResultMeta, { producer: 'subagent' }> {
-  return {
-    producer: 'subagent',
-    agentName: 'reviewer',
-    wallTimeMs: 20,
-    result: {
-      category: 'toolUse',
-      outcome,
-      response,
-      files: [],
-      cost: 0.1,
-    },
-  };
-}
-
-// Single owner of the reserved single-value-key and `child-` prefix vocabulary.
-describe('isReservedKvKeyName', () => {
-  it.each(['meta', 'config', 'report', 'workspace-files', 'result-meta'])(
-    'recognizes the reserved single-value key %s',
-    (key) => {
-      expect(isReservedKvKeyName(key)).toBe(true);
-    },
-  );
-
-  it('recognizes any child- prefixed key', () => {
-    expect(isReservedKvKeyName('child-abc123')).toBe(true);
-  });
-
-  it('rejects keys outside the reserved vocabulary', () => {
-    expect(isReservedKvKeyName('flow_abc123')).toBe(false);
-    expect(isReservedKvKeyName('childish')).toBe(false);
-    expect(isReservedKvKeyName('report-draft')).toBe(false);
-  });
-});
-
-describe('ExecutionKVStore meta read shims', () => {
-  it.each(Object.values(RUN_OUTCOME) as RunOutcome[])(
-    'preserves canonical outcome %s',
-    async (outcome) => {
-      const id = `canonical-${outcome}` as ExecutionId;
-      await getExecutionStore(id).write('meta', {
-        timestamp: META_TIMESTAMP,
-        outcome,
-      });
-
-      await expect(getExecutionStore(id).readMeta()).resolves.toMatchObject({
-        schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-        outcome,
-      });
-    },
-  );
-
-  it('writes the current schema version for execution meta', async () => {
-    const id = 'versioned-meta' as ExecutionId;
-
-    await getExecutionStore(id).writeMeta({
-      timestamp: META_TIMESTAMP,
-    });
-
-    await expect(getExecutionStore(id).read('meta')).resolves.toMatchObject({
-      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      timestamp: META_TIMESTAMP,
-    });
-  });
-
-  it('ignores obsolete delegation depth in persisted metadata', async () => {
-    const id = 'legacy-delegation-depth' as ExecutionId;
-    await getExecutionStore(id).write('meta', {
-      timestamp: META_TIMESTAMP,
-      parentExecutionId: 'abcdef',
-      delegationDepth: 3,
-    });
-
-    await expect(getExecutionStore(id).readMeta()).resolves.toEqual({
-      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      timestamp: META_TIMESTAMP,
-      parentExecutionId: 'abcdef',
-    });
-  });
-
-  it('supersedes an interim result outcome with the durable cancelled outcome', async () => {
-    const id = 'terminal-outcome-supersedes-interim' as ExecutionId;
-    const interim = interimResultMeta('Interim result.');
-    await getExecutionStore(id).write('result-meta', interim);
-    await getExecutionStore(id).write('meta', {
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
-
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
-      ...interim,
-      result: { ...interim.result, outcome: RUN_OUTCOME.CANCELLED },
-    });
-    // Read-time projection only: the turn-owned record is never rewritten, so
-    // a later turn's own write still lands on an untouched envelope.
-    await expect(getExecutionStore(id).read('result-meta')).resolves.toEqual(
-      interim,
-    );
-  });
-
-  it('normalizes legacy failed result metadata at the persisted reader', async () => {
-    const id = 'legacy-failed-result-meta' as ExecutionId;
-    await getExecutionStore(id).write('result-meta', {
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 20,
-      result: {
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.FAILED,
-        response: '',
-        files: [],
-        cost: 0.1,
-        error: {
-          message: 'legacy exhausted credential',
-          userRetryable: true,
-          exhaustionReason: 'upstream-credit',
-        },
-      },
-    });
-
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
+beforeEach(async () => {
+  session = createTestSession();
+  await run(
+    session.commit([
       {
-        result: {
-          error: { classification: { kind: 'upstream-credit' } },
-        },
+        type: 'run.start',
+        aggregateId: aggregateId('stream', streamId),
+        executionId,
+        identity: { kind: 'agent', agent: 'worker' },
+        userFollowUpSupport: 'unsupported',
+        isRemote: false,
+        category: 'toolUse',
+        background: false,
       },
-    );
-  });
-
-  it('keeps a producer failure signal when the execution completed', async () => {
-    const id = 'terminal-outcome-keeps-failure' as ExecutionId;
-    await getExecutionStore(id).write(
-      'result-meta',
-      interimResultMeta('The subagent reported an error.', RUN_OUTCOME.FAILED),
-    );
-    await getExecutionStore(id).write('meta', {
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.COMPLETED,
-    });
-
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
-      { result: { outcome: RUN_OUTCOME.FAILED } },
-    );
-  });
-
-  it('keeps the record outcome while the execution has no terminal outcome', async () => {
-    const id = 'terminal-outcome-absent' as ExecutionId;
-    await getExecutionStore(id).write(
-      'result-meta',
-      interimResultMeta('Waiting for the next turn.'),
-    );
-    await getExecutionStore(id).write('meta', {
-      timestamp: META_TIMESTAMP,
-    });
-
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
-      { result: { outcome: RUN_OUTCOME.COMPLETED } },
-    );
-  });
-
-  // The resume boundary is what keeps the projection honest: a stopped run
-  // with a preserved flow record is resumable (`deriveResumability`), and the
-  // resumed turns write their own envelopes. Without the boundary clear, the
-  // interrupted predecessor's outcome would relabel every one of them.
-  it('serves the resumed turn outcome once the resume boundary clears the terminal facts', async () => {
-    const id = 'terminal-outcome-resume-boundary' as ExecutionId;
-    const interim = interimResultMeta('Interim result before the stop.');
-    await getExecutionStore(id).write('result-meta', interim);
-    await getExecutionStore(id).write('meta', {
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-      streamId: 'assistant#resume-boundary',
-    });
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
-      { result: { outcome: RUN_OUTCOME.CANCELLED } },
-    );
-
-    await expect(clearTerminalExecutionState(id)).resolves.toEqual({
-      previousOutcome: RUN_OUTCOME.CANCELLED,
-      streamId: 'assistant#resume-boundary',
-    });
-    await getExecutionStore(id).writeResultMeta(
-      interimResultMeta('Interim result from the resumed turn.'),
-    );
-
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
-      { result: { outcome: RUN_OUTCOME.COMPLETED } },
-    );
-    await expect(getExecutionStore(id).readMeta()).resolves.toEqual({
-      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      timestamp: META_TIMESTAMP,
-      streamId: 'assistant#resume-boundary',
-    });
-  });
-
-  it('leaves an execution with no persisted metadata untouched at the resume boundary', async () => {
-    const id = 'terminal-outcome-resume-no-meta' as ExecutionId;
-
-    await expect(clearTerminalExecutionState(id)).resolves.toEqual({
-      previousOutcome: undefined,
-      streamId: undefined,
-    });
-
-    await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
-  });
-
-  it('drops only malformed workflow observability from ordinary metadata reads', async () => {
-    const id = 'bad-workflow-meta' as ExecutionId;
-    const warnSpy = mockWarn();
-    const store = getExecutionStore(id);
-    await store.write('meta', {
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-      identity: { kind: 'process', tool: 'bash' },
-      description: 'Readable core metadata',
-      workflow: { lifecycle: 'active' },
-    });
-
-    const expectedCore = {
-      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      timestamp: META_TIMESTAMP,
-      outcome: RUN_OUTCOME.CANCELLED,
-      identity: { kind: 'process', tool: 'bash' },
-      description: 'Readable core metadata',
-    };
-    // Ordinary reads keep core metadata available for listing/finalization.
-    await expect(store.readMeta()).resolves.toEqual(expectedCore);
-    // Strict recovery must fail closed so a present corrupt snapshot is never
-    // treated as "no prior workflow state."
-    await expect(store.readMetaStrict()).rejects.toThrow();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(
-        `Failed to parse execution ${id} meta.json workflow`,
-      ),
-      { data: expect.any(Error) },
-    );
-  });
-
-  it('round-trips valid workflow metadata and rejects malformed writes', async () => {
-    const id = 'strict-workflow-meta' as ExecutionId;
-    const store = getExecutionStore(id);
-    const workflow = validWorkflowSnapshot();
-
-    await store.writeMeta({
-      timestamp: META_TIMESTAMP,
-      workflow,
-    });
-    await expect(store.readMeta()).resolves.toMatchObject({ workflow });
-
-    const malformed = structuredClone(workflow);
-    malformed.currentStageId = '';
-    await expect(
-      store.writeMeta({
-        timestamp: META_TIMESTAMP,
-        workflow: malformed,
-      }),
-    ).rejects.toThrow();
-  });
-
-  it('warns on malformed execution meta, dropping it for readers and failing strict repair callers', async () => {
-    const id = 'bad-meta' as ExecutionId;
-    const warnSpy = mockWarn();
-
-    await getExecutionStore(id).write('meta', { timestamp: 123 });
-
-    await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
-    await expect(getExecutionStore(id).readMetaStrict()).rejects.toThrow();
-    expectParseWarning(warnSpy, id, 'meta.json');
-  });
-
-  it('rejects persisted null metadata for durable repair callers', async () => {
-    const id = 'null-meta-strict' as ExecutionId;
-    mockWarn();
-
-    await getExecutionStore(id).write('meta', null);
-
-    await expect(getExecutionStore(id).readMetaStrict()).rejects.toThrow();
-  });
+    ]),
+  );
 });
 
-describe('ExecutionKVStore loud typed reads', () => {
-  it('warns when config is malformed instead of silently returning null', async () => {
-    const id = 'bad-config' as ExecutionId;
-    const warnSpy = mockWarn();
-
-    await getExecutionStore(id).write('config', { outputFiles: 'not-a-list' });
-
-    await expect(getExecutionStore(id).readConfig()).resolves.toBeNull();
-    expectParseWarning(warnSpy, id, 'config.json');
+describe('canonical execution records', () => {
+  it('preserves private values while display readers drain past their commits', async () => {
+    const records = getExecutionRecords(session, executionId);
+    const config = AgentConfigFieldsSchema.parse({
+      agent: 'worker',
+      agentCategory: 'toolUse',
+      instruction: 'private instruction',
+    });
+    await run(records.writeRunRecord(config));
+    await run(records.writeReport('private report'));
+    expect(await run(records.readConfig())).toEqual(config);
+    expect(await run(records.readReport())).toBe('private report');
+    const visible = await run(Stream.runCollect(session.events.listing()));
+    expect(visible.map((event) => event.type)).toEqual(['run.start']);
+    expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(session.now());
   });
 
-  it('warns when workspace files are malformed instead of silently defaulting to []', async () => {
-    const id = 'bad-wsfiles' as ExecutionId;
-    const warnSpy = mockWarn();
+  it('resets a prior report explicitly without replacing another metadata value', async () => {
+    const records = getExecutionRecords(session, executionId);
+    await run(records.writeReport('old report'));
+    await run(records.writeWorkspaceFiles([' a.tex ', 'a.tex', 'b.tex']));
+    await run(records.clearReport());
+    expect(await run(records.readReport())).toBeNull();
+    expect(await run(records.readWorkspaceFiles())).toEqual(['a.tex', 'b.tex']);
+  });
 
-    await getExecutionStore(id).write('workspace-files', [42]);
-
-    await expect(getExecutionStore(id).readWorkspaceFiles()).resolves.toEqual(
-      [],
+  it('derives terminal outcome from status and clears it at the resume boundary', async () => {
+    const records = getExecutionRecords(session, executionId);
+    await run(
+      records.writeResultMeta({
+        producer: 'subagent',
+        agentName: 'worker',
+        wallTimeMs: 1,
+        result: {
+          category: 'toolUse',
+          outcome: 'completed',
+          response: 'answer',
+          files: [],
+          cost: 0,
+        },
+      }),
     );
-    expectParseWarning(warnSpy, id, 'workspace-files.json');
+    expect(
+      await run(
+        finalizeRun(session, {
+          executionId,
+          outcome: 'cancelled',
+          flowRecord: 'preserve',
+        }),
+      ),
+    ).toEqual({ ok: true, outcome: 'cancelled' });
+    expect(await run(records.readResultMeta())).toMatchObject({
+      result: { outcome: 'cancelled' },
+    });
+    await run(clearTerminalExecutionState(executionId, session));
+    expect(await run(records.readMeta())).not.toHaveProperty(
+      'outcome',
+      'cancelled',
+    );
+    expect(await run(records.readResultMeta())).toMatchObject({
+      result: { outcome: 'completed' },
+    });
   });
 
-  it('warns and omits a malformed child record', async () => {
-    const id = 'bad-child-record' as ExecutionId;
-    const childId = 'valid-child' as ExecutionId;
-    const store = getExecutionStore(id);
-    const warnSpy = mockWarn();
-
-    await store.writeChild(childId, {
-      agent: 'reviewer',
-      timestamp: '2026-07-20T00:00:00.000Z',
+  it('preserves malformed-record failures instead of reading a legacy file or a default', async () => {
+    const malformed = new z.ZodError([]);
+    const reader = Object.create(session) as typeof session;
+    reader.readExecutionRecords = () => Effect.die(malformed);
+    await getExecutionStore(executionId).write('meta', {
+      timestamp: 'old file',
     });
-    await store.write('child-malformed', {
-      agent: 42,
-      timestamp: '2026-07-20T00:00:00.000Z',
-    });
+    const result = await run(
+      getExecutionRecords(reader, executionId).readMeta().pipe(Effect.result),
+    );
+    expect(result).toMatchObject({ _tag: 'Failure', failure: malformed });
+  });
 
-    await expect(store.readChildren()).resolves.toEqual([
+  it('joins child labels through the declared creation edge', async () => {
+    const childId = '123abc';
+    await run(
+      session.commit([
+        {
+          type: 'run.start',
+          aggregateId: aggregateId('stream', 'stream:child'),
+          executionId: childId,
+          category: 'toolUse',
+          background: true,
+          userFollowUpSupport: 'unsupported',
+          isRemote: false,
+          parentStreamId: streamId,
+        },
+        {
+          type: 'execution.launchLabel',
+          aggregateId: aggregateId('execution', childId),
+          label: 'approved child label',
+        },
+      ] satisfies SessionEventDraft[]),
+    );
+    expect(await run(readExecutionChildren(session, executionId))).toEqual([
       {
         id: childId,
-        agent: 'reviewer',
-        timestamp: '2026-07-20T00:00:00.000Z',
+        agent: 'approved child label',
+        timestamp: expect.any(String),
       },
     ]);
-    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
-      'ExecutionKVStore',
-      expect.stringContaining(
-        `Failed to parse execution ${id} child-malformed.json`,
-      ),
-      { data: expect.any(Error) },
-    );
+  });
+});
+
+describe('remaining generic execution keys', () => {
+  it('reserves only the current turn-state record', () => {
+    expect(isReservedKvKeyName('turn-state')).toBe(true);
+    for (const key of [
+      'meta',
+      'config',
+      'report',
+      'workspace-files',
+      'result-meta',
+      'child-abcdef',
+      'flow_abcdef',
+    ])
+      expect(isReservedKvKeyName(key)).toBe(false);
   });
 });

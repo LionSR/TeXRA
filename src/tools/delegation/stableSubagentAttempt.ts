@@ -1,8 +1,11 @@
 // Third-party imports
+import { Effect, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports - agent storage
-import { getExecutionStore, type ResultMeta } from '@agent/storage';
+import { getExecutionStore, getExecutionRecords } from '@agent/storage';
+import { runInSession } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import {
   ExecutionLeaseLostError,
@@ -15,6 +18,7 @@ import {
   RUN_OUTCOME,
   type ExecutionId,
 } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
 
 // Version stays 1 across the `committed` phase addition by decision (#10663):
@@ -171,39 +175,56 @@ function stableAttemptExecutionId(
   return deriveExecutionId({ attempt, logicalExecutionId });
 }
 
-async function inspectStableAttempt(
+function stableStorageOperation<A>(
+  session: SessionHandle,
+  operation: () => Promise<A>,
+): Effect.Effect<A, Error> {
+  return Effect.tryPromise({
+    try: () => runInSession(session, operation),
+    catch: ensureError,
+  });
+}
+
+const inspectStableAttempt = Effect.fn('inspectStableAttempt')(function* (
   options: StableSubagentCallIdentity,
   executionId: ExecutionId,
-): Promise<StableAttemptInspection> {
-  const store = getExecutionStore(executionId);
-  let persisted: [string[], StableSubagentAttempt | null, ResultMeta | null];
-  try {
-    persisted = await Promise.all([
-      store.listKeys(),
-      readStableSubagentAttempt(store),
-      store.readResultMeta(),
-    ]);
-  } catch (error) {
-    throw new SubagentReconciliationError(
-      `Failed to inspect persisted subagent ${executionId}.`,
-      { cause: error },
-    );
-  }
-  const [keys, attempt, resultMeta] = persisted;
-  if (keys.length === 0) return { kind: 'absent' };
+  session: SessionHandle,
+): Effect.fn.Return<StableAttemptInspection, Error> {
+  const store = runInSession(session, () => getExecutionStore(executionId));
+  const persisted = yield* Effect.all([
+    stableStorageOperation(session, () => store.listKeys()),
+    stableStorageOperation(session, () => readStableSubagentAttempt(store)),
+    getExecutionRecords(session, executionId).readResultMeta(),
+    getExecutionRecords(session, executionId).readMeta(),
+  ]).pipe(
+    Effect.mapError(
+      (cause) =>
+        new SubagentReconciliationError(
+          `Failed to inspect persisted subagent ${executionId}.`,
+          { cause },
+        ),
+    ),
+  );
+  const [keys, attempt, resultMeta, meta] = persisted;
+  if (keys.length === 0 && meta === null && resultMeta === null)
+    return { kind: 'absent' };
   if (
     !attempt ||
     attempt.logicalExecutionId !== options.executionId ||
     attempt.parentExecutionId !== options.parentExecutionId
   ) {
-    throw new SubagentReconciliationError(
-      `Persisted subagent ${executionId} does not belong to this stable workflow call; refusing to reuse or repeat it.`,
+    return yield* Effect.fail(
+      new SubagentReconciliationError(
+        `Persisted subagent ${executionId} does not belong to this stable workflow call; refusing to reuse or repeat it.`,
+      ),
     );
   }
   if (!resultMeta) {
     if (attempt.phase === 'committed') {
-      throw new SubagentReconciliationError(
-        `Committed subagent ${executionId} is missing its result manifest; refusing to repeat it.`,
+      return yield* Effect.fail(
+        new SubagentReconciliationError(
+          `Committed subagent ${executionId} is missing its result manifest; refusing to repeat it.`,
+        ),
       );
     }
     if (attempt.phase !== 'launched') return { kind: 'advance' };
@@ -215,55 +236,67 @@ async function inspectStableAttempt(
     // failed and the parent's failure-time retryable write was refused as
     // lease-lost); repair the marker here, under the inactive-lease fence
     // so a live child's still-held lease keeps refusing the write.
-    let settledEvidence: boolean;
-    try {
-      const [turnState, meta] = await Promise.all([
-        store.readTurnState(),
-        store.readMeta(),
-      ]);
-      settledEvidence =
-        turnState?.lastCompletedTurn !== undefined ||
-        meta?.outcome === RUN_OUTCOME.COMPLETED;
-    } catch (error) {
-      throw new SubagentReconciliationError(
-        `Failed to inspect persisted subagent ${executionId}.`,
-        { cause: error },
-      );
-    }
+    const [turnState, meta] = yield* Effect.all([
+      stableStorageOperation(session, () => store.readTurnState()),
+      getExecutionRecords(session, executionId).readMeta(),
+    ]).pipe(
+      Effect.mapError(
+        (cause) =>
+          new SubagentReconciliationError(
+            `Failed to inspect persisted subagent ${executionId}.`,
+            { cause },
+          ),
+      ),
+    );
+    const settledEvidence =
+      turnState?.lastCompletedTurn !== undefined ||
+      meta?.outcome === RUN_OUTCOME.COMPLETED;
     if (!settledEvidence) {
-      const repair = await runWithInactiveExecutionLease(executionId, () =>
-        writeStableSubagentAttempt(store, {
-          ...attempt,
-          phase: 'retryable',
-        }),
-      ).catch((error: unknown) => {
-        throw new SubagentReconciliationError(
-          `Failed to repair the unsettled launched subagent ${executionId}.`,
-          { cause: error },
-        );
-      });
+      const repair = yield* stableStorageOperation(session, () =>
+        runWithInactiveExecutionLease(executionId, () =>
+          writeStableSubagentAttempt(store, { ...attempt, phase: 'retryable' }),
+        ),
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new SubagentReconciliationError(
+              `Failed to repair the unsettled launched subagent ${executionId}.`,
+              { cause },
+            ),
+        ),
+      );
       if (repair.status === 'performed') return { kind: 'advance' };
-      throw new SubagentReconciliationError(
-        `Subagent ${executionId} is still running under a live lease; refusing to repeat it.`,
+      return yield* Effect.fail(
+        new SubagentReconciliationError(
+          `Subagent ${executionId} is still running under a live lease; refusing to repeat it.`,
+        ),
       );
     }
-    throw new SubagentReconciliationError(
-      `Cannot reconcile incomplete persisted subagent ${executionId}; refusing to repeat it.`,
+    return yield* Effect.fail(
+      new SubagentReconciliationError(
+        `Cannot reconcile incomplete persisted subagent ${executionId}; refusing to repeat it.`,
+      ),
     );
   }
   if (attempt.phase === 'reserved') {
-    throw new SubagentReconciliationError(
-      `Persisted subagent ${executionId} has a result without a launch marker; refusing to reuse it.`,
+    return yield* Effect.fail(
+      new SubagentReconciliationError(
+        `Persisted subagent ${executionId} has a result without a launch marker; refusing to reuse it.`,
+      ),
     );
   }
   if (resultMeta.producer !== 'subagent') {
-    throw new SubagentReconciliationError(
-      `Persisted subagent ${executionId} does not match this workflow call; refusing to reuse or repeat it.`,
+    return yield* Effect.fail(
+      new SubagentReconciliationError(
+        `Persisted subagent ${executionId} does not match this workflow call; refusing to reuse or repeat it.`,
+      ),
     );
   }
   if (resultMeta.parentExecutionId !== options.parentExecutionId) {
-    throw new SubagentReconciliationError(
-      `Persisted subagent ${executionId} has different parent lineage; refusing to reuse or repeat it.`,
+    return yield* Effect.fail(
+      new SubagentReconciliationError(
+        `Persisted subagent ${executionId} has different parent lineage; refusing to reuse or repeat it.`,
+      ),
     );
   }
   if (attempt.phase === 'retryable') return { kind: 'advance' };
@@ -275,215 +308,251 @@ async function inspectStableAttempt(
     // attestation: a later lease claim may already have removed an
     // abandoned lease from a failed drain. This ambiguity deliberately stays
     // irreconcilable rather than risking repeated side-effectful work.
-    throw new SubagentReconciliationError(
-      `Cannot attest durable completion for persisted subagent ${executionId}; refusing to recover its result.`,
+    return yield* Effect.fail(
+      new SubagentReconciliationError(
+        `Cannot attest durable completion for persisted subagent ${executionId}; refusing to recover its result.`,
+      ),
     );
   }
-  options.signal?.throwIfAborted();
+  yield* Effect.try({
+    try: () => options.signal?.throwIfAborted(),
+    catch: ensureError,
+  });
   return {
     kind: 'recovered',
     result: { executionId, result: resultMeta.result },
   };
-}
+});
 
-export async function throwRetryableDurabilityError(
+export const throwRetryableDurabilityError = Effect.fn(
+  'throwRetryableDurabilityError',
+)(function* (
   executionId: ExecutionId,
   stableAttempt: StableSubagentAttempt | undefined,
   error: SubagentDurabilityError,
-): Promise<never> {
-  if (!stableAttempt) throw error;
+  session: SessionHandle,
+): Effect.fn.Return<never, Error> {
+  if (!stableAttempt) return yield* Effect.fail(error);
   const marker = { ...stableAttempt, phase: 'retryable' as const };
-  try {
-    await writeStableSubagentAttempt(getExecutionStore(executionId), marker);
-  } catch (cause) {
-    // A child whose artifact drain failed abandons its lease with the record
-    // retained, so this parent-side write is refused as lease-lost until the
-    // stale horizon. The refusal is not a recovery failure: reconciliation
-    // repairs an unsettled launched attempt on the next resume (see
-    // inspectStableAttempt), so surface the original durability error alone.
+  const written = yield* stableStorageOperation(session, () =>
+    writeStableSubagentAttempt(getExecutionStore(executionId), marker),
+  ).pipe(Effect.result);
+  if (Result.isFailure(written)) {
+    const cause = written.failure;
     if (cause instanceof ExecutionLeaseLostError) {
-      const repair = await runWithInactiveExecutionLease(executionId, () =>
-        writeStableSubagentAttempt(getExecutionStore(executionId), marker),
-      ).catch((repairError: unknown) => {
-        log.warn('Retryable-marker repair write failed', {
-          data: { executionId, error: repairError },
-        });
-        return undefined;
-      });
-      if (repair?.status !== 'performed') {
+      const repair = yield* stableStorageOperation(session, () =>
+        runWithInactiveExecutionLease(executionId, () =>
+          writeStableSubagentAttempt(getExecutionStore(executionId), marker),
+        ),
+      ).pipe(
+        Effect.catch((repairError) =>
+          Effect.sync(() => {
+            log.warn('Retryable-marker repair write failed', {
+              data: { executionId, error: repairError },
+            });
+            return undefined;
+          }),
+        ),
+      );
+      if (repair?.status !== 'performed')
         log.warn(
           'Deferred retryable marker to resume-time reconciliation: the child lease is still held',
           { data: { executionId } },
         );
-      }
-      throw error;
+      return yield* Effect.fail(error);
     }
-    throw new SubagentDurabilityError(
-      `${error.message} Failed to mark the stable attempt as retryable.`,
-      {
-        cause: new AggregateError(
-          [error, cause],
-          `Subagent ${executionId} durability recovery also failed.`,
-        ),
-      },
+    return yield* Effect.fail(
+      new SubagentDurabilityError(
+        `${error.message} Failed to mark the stable attempt as retryable.`,
+        {
+          cause: new AggregateError(
+            [error, cause],
+            `Subagent ${executionId} durability recovery also failed.`,
+          ),
+        },
+      ),
     );
   }
-  throw error;
-}
+  return yield* Effect.fail(error);
+});
 
 /** Reserve the next physical attempt or recover an attested completed result. */
-export async function reserveStableAttempt(
-  options: StableSubagentCallIdentity,
-): Promise<
-  | {
-      readonly kind: 'recovered';
-      readonly result: StableSubagentResult;
-    }
-  | {
-      readonly kind: 'reserved';
-      readonly executionId: ExecutionId;
-      readonly attempt: StableSubagentAttempt;
-    }
-> {
-  options.signal?.throwIfAborted();
-  // The parent sequence enumerates every reserved child ID. Individual child
-  // markers own launch state, so a deleted early directory cannot become a
-  // reusable hole or hide a later completed result.
-  const parentStore = getExecutionStore(options.parentExecutionId);
-  let sequence: StableSubagentSequence | null;
-  try {
-    sequence = await readStableSubagentSequence(
-      parentStore,
-      options.executionId,
+export const reserveStableAttempt = Effect.fn('reserveStableAttempt')(
+  function* (
+    options: StableSubagentCallIdentity,
+    session: SessionHandle,
+  ): Effect.fn.Return<
+    | { readonly kind: 'recovered'; readonly result: StableSubagentResult }
+    | {
+        readonly kind: 'reserved';
+        readonly executionId: ExecutionId;
+        readonly attempt: StableSubagentAttempt;
+      },
+    Error
+  > {
+    yield* Effect.try({
+      try: () => options.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    const parentStore = runInSession(session, () =>
+      getExecutionStore(options.parentExecutionId),
     );
-  } catch (cause) {
-    throw new SubagentReconciliationError(
-      `Failed to inspect the attempt sequence for subagent ${options.executionId}.`,
-      { cause },
+    const sequence = yield* stableStorageOperation(session, () =>
+      readStableSubagentSequence(parentStore, options.executionId),
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new SubagentReconciliationError(
+            `Failed to inspect the attempt sequence for subagent ${options.executionId}.`,
+            { cause },
+          ),
+      ),
     );
-  }
-  if (
-    sequence &&
-    (sequence.logicalExecutionId !== options.executionId ||
-      sequence.parentExecutionId !== options.parentExecutionId)
-  ) {
-    throw new SubagentReconciliationError(
-      `Persisted attempt sequence for subagent ${options.executionId} has different ownership.`,
-    );
-  }
-  let nextAttempt = sequence?.nextAttempt ?? 0;
-  if (nextAttempt > MAX_STABLE_ATTEMPTS) {
-    throw new SubagentReconciliationError(
-      `Subagent ${options.executionId} has an invalid durable-attempt count.`,
-    );
-  }
-
-  let unresolved: SubagentReconciliationError | undefined;
-  for (let attempt = 0; attempt < nextAttempt; attempt += 1) {
-    const candidate = stableAttemptExecutionId(options.executionId, attempt);
-    try {
-      const inspection = await inspectStableAttempt(options, candidate);
+    if (
+      sequence &&
+      (sequence.logicalExecutionId !== options.executionId ||
+        sequence.parentExecutionId !== options.parentExecutionId)
+    )
+      return yield* Effect.fail(
+        new SubagentReconciliationError(
+          `Persisted attempt sequence for subagent ${options.executionId} has different ownership.`,
+        ),
+      );
+    let nextAttempt = sequence?.nextAttempt ?? 0;
+    if (nextAttempt > MAX_STABLE_ATTEMPTS)
+      return yield* Effect.fail(
+        new SubagentReconciliationError(
+          `Subagent ${options.executionId} has an invalid durable-attempt count.`,
+        ),
+      );
+    let unresolved: SubagentReconciliationError | undefined;
+    for (let attempt = 0; attempt < nextAttempt; attempt += 1) {
+      const candidate = stableAttemptExecutionId(options.executionId, attempt);
+      const inspected = yield* inspectStableAttempt(
+        options,
+        candidate,
+        session,
+      ).pipe(Effect.result);
+      if (Result.isFailure(inspected)) {
+        if (!(inspected.failure instanceof SubagentReconciliationError))
+          return yield* Effect.fail(inspected.failure);
+        unresolved ??= inspected.failure;
+        continue;
+      }
+      const inspection = inspected.success;
       if (inspection.kind === 'recovered') return inspection;
-      if (inspection.kind === 'absent') {
+      if (inspection.kind === 'absent')
         unresolved ??= new SubagentReconciliationError(
           `Recorded subagent attempt ${candidate} is missing; refusing to repeat it.`,
         );
-      }
-    } catch (error) {
-      if (!(error instanceof SubagentReconciliationError)) throw error;
-      unresolved ??= error;
     }
-  }
-  if (unresolved) throw unresolved;
-
-  let executionId: ExecutionId;
-  let candidateInspection: StableAttemptInspection;
-  while (true) {
-    if (nextAttempt >= MAX_STABLE_ATTEMPTS) {
-      throw new SubagentReconciliationError(
-        `Subagent ${options.executionId} exceeded the ${MAX_STABLE_ATTEMPTS} durable-attempt limit.`,
+    if (unresolved) return yield* Effect.fail(unresolved);
+    let executionId: ExecutionId;
+    let candidateInspection: StableAttemptInspection;
+    while (true) {
+      if (nextAttempt >= MAX_STABLE_ATTEMPTS)
+        return yield* Effect.fail(
+          new SubagentReconciliationError(
+            `Subagent ${options.executionId} exceeded the ${MAX_STABLE_ATTEMPTS} durable-attempt limit.`,
+          ),
+        );
+      executionId = stableAttemptExecutionId(options.executionId, nextAttempt);
+      candidateInspection = yield* inspectStableAttempt(
+        options,
+        executionId,
+        session,
+      );
+      if (candidateInspection.kind === 'recovered') return candidateInspection;
+      if (candidateInspection.kind !== 'advance') break;
+      nextAttempt += 1;
+      yield* stableStorageOperation(session, () =>
+        writeStableSubagentSequence(
+          parentStore,
+          options.executionId,
+          options.parentExecutionId,
+          nextAttempt,
+        ),
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new SubagentDurabilityError(
+              `Failed to advance the attempt sequence for subagent ${options.executionId}.`,
+              { cause },
+            ),
+        ),
       );
     }
-    executionId = stableAttemptExecutionId(options.executionId, nextAttempt);
-    candidateInspection = await inspectStableAttempt(options, executionId);
-    if (candidateInspection.kind === 'recovered') {
-      return candidateInspection;
-    }
-    if (candidateInspection.kind !== 'advance') break;
-    nextAttempt += 1;
-    try {
-      await writeStableSubagentSequence(
+    const attempt = reservedStableSubagentAttempt(
+      options.executionId,
+      options.parentExecutionId,
+    );
+    if (candidateInspection.kind === 'absent')
+      yield* stableStorageOperation(session, () =>
+        writeStableSubagentAttempt(getExecutionStore(executionId), attempt),
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new SubagentDurabilityError(
+              `Failed to reserve stable subagent ${executionId}.`,
+              { cause },
+            ),
+        ),
+      );
+    yield* stableStorageOperation(session, () =>
+      writeStableSubagentSequence(
         parentStore,
         options.executionId,
         options.parentExecutionId,
-        nextAttempt,
-      );
-    } catch (cause) {
-      throw new SubagentDurabilityError(
-        `Failed to advance the attempt sequence for subagent ${options.executionId}.`,
-        { cause },
-      );
-    }
-  }
-  const attempt = reservedStableSubagentAttempt(
-    options.executionId,
-    options.parentExecutionId,
-  );
-  if (candidateInspection.kind === 'absent') {
-    try {
-      await writeStableSubagentAttempt(getExecutionStore(executionId), attempt);
-    } catch (cause) {
-      throw new SubagentDurabilityError(
-        `Failed to reserve stable subagent ${executionId}.`,
-        { cause },
-      );
-    }
-  }
-  try {
-    await writeStableSubagentSequence(
-      parentStore,
-      options.executionId,
-      options.parentExecutionId,
-      nextAttempt + 1,
+        nextAttempt + 1,
+      ),
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new SubagentDurabilityError(
+            `Failed to publish stable subagent ${executionId}.`,
+            { cause },
+          ),
+      ),
     );
-  } catch (cause) {
-    throw new SubagentDurabilityError(
-      `Failed to publish stable subagent ${executionId}.`,
-      { cause },
-    );
-  }
-  return { kind: 'reserved', executionId, attempt };
-}
+    return { kind: 'reserved', executionId, attempt };
+  },
+);
 
 /** Attest durable completion after the child has drained its final artifacts. */
-export async function commitStableSubagentAttempt(
+export const commitStableSubagentAttempt = Effect.fn(
+  'commitStableSubagentAttempt',
+)(function* (
   store: ExecutionKVStore,
   executionId: ExecutionId,
   stableAttempt: StableSubagentAttempt,
-): Promise<void> {
-  let persisted: ResultMeta | null;
-  try {
-    persisted = await store.readResultMeta();
-  } catch (cause) {
-    throw new SubagentCommitError(
-      `Failed to verify durable completion for subagent ${executionId}.`,
-      { cause },
+  session: SessionHandle,
+): Effect.fn.Return<void, Error> {
+  const persisted = yield* getExecutionRecords(session, executionId)
+    .readResultMeta()
+    .pipe(
+      Effect.mapError(
+        (cause) =>
+          new SubagentCommitError(
+            `Failed to verify durable completion for subagent ${executionId}.`,
+            { cause },
+          ),
+      ),
     );
-  }
-  if (!persisted || persisted.producer !== 'subagent') {
-    throw new SubagentCommitError(
-      `Failed to persist result for subagent ${executionId}.`,
+  if (!persisted || persisted.producer !== 'subagent')
+    return yield* Effect.fail(
+      new SubagentCommitError(
+        `Failed to persist result for subagent ${executionId}.`,
+      ),
     );
-  }
-  try {
-    await writeStableSubagentAttempt(store, {
-      ...stableAttempt,
-      phase: 'committed',
-    });
-  } catch (cause) {
-    throw new SubagentCommitError(
-      `Failed to commit durable completion for subagent ${executionId}.`,
-      { cause },
-    );
-  }
-}
+  yield* stableStorageOperation(session, () =>
+    writeStableSubagentAttempt(store, { ...stableAttempt, phase: 'committed' }),
+  ).pipe(
+    Effect.mapError(
+      (cause) =>
+        new SubagentCommitError(
+          `Failed to commit durable completion for subagent ${executionId}.`,
+          { cause },
+        ),
+    ),
+  );
+});

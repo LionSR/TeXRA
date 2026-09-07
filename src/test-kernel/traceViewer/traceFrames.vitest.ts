@@ -1,13 +1,12 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionRecords } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -22,18 +21,17 @@ import {
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
 import { emptySessionView } from '@shared/session/sessionView';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import {
-  appendTranscriptEntry,
-  updateTranscriptEntry,
-} from '@test/support/storeTestDrivers';
 import type { TraceDocument } from '@transcript';
-import { assembleTrace, StreamLogStore } from '@transcript';
+import { assembleTrace } from '@transcript';
 // Relative import: `packages/trace-viewer` is a separate workspace package
 // with no path alias into the root vitest config, but this suite exercises
 // the real replay pipeline (`@progressView/frontend`'s dispatcher + slices),
@@ -178,34 +176,29 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     const executionId = 'abc124' as ExecutionId;
     const config = parseConfig(AgentCategory.Workflow);
     const streamId = getStreamTabId(config.agent, { executionId });
-    const executionStore = getExecutionStore(executionId);
-    await executionStore.writeRunRecord(config);
-    await executionStore.writeMeta({
-      timestamp: '2026-07-06T00:00:00.000Z',
-      streamId,
-    });
-    const store = StreamLogStore.ephemeral('legacy trace import fixture');
-    appendTranscriptEntry(store, streamId, {
-      id: 'terminal-stage',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'Legacy run',
-      data: { status: 'running' },
-    });
-    updateTranscriptEntry(store, streamId, 'terminal-stage', {
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      data: { status: 'error', endTime: 200 },
-    });
-
-    const result = await Effect.runPromise(
-      assembleTrace(executionId, {
-        roots: processWorkspaceRoots(),
-        snapshots: createTestSession().snapshots,
-        transcripts: store,
-      }),
+    const session = createTestSession();
+    publishTestRunStart(session, streamId, executionId);
+    await session.settlePublications();
+    await Effect.runPromise(
+      getExecutionRecords(session, executionId).writeRunRecord(config),
     );
+    session.publish([
+      {
+        type: 'stage.start',
+        aggregateId: qualifyAggregateId('stream', streamId),
+        id: 'terminal-stage',
+        label: 'Legacy run',
+      },
+      {
+        type: 'stage.end',
+        aggregateId: qualifyAggregateId('stream', streamId),
+        id: 'terminal-stage',
+        status: 'failed',
+      },
+    ]);
+    await session.settlePublications();
+    const result = await Effect.runPromise(assembleTrace(executionId, session));
+    session.dispose();
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
     expect(result.trace.meta?.outcome).toBeUndefined();

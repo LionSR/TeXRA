@@ -5,9 +5,9 @@ import {
   resolveStreamForExecution,
 } from '@agent/storage/executionLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { redactDisplayValue } from '@logger/redaction';
 
 import type { ExecutionId } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import type { TraceDocument } from './traceDocumentSchema';
 
@@ -22,16 +22,15 @@ export type AssembleTraceResult =
  */
 export const assembleTrace = Effect.fn('assembleTrace')(function* (
   executionId: ExecutionId,
-  session: Pick<SessionHandle, 'roots' | 'snapshots' | 'transcripts'>,
+  session: SessionHandle,
 ): Effect.fn.Return<AssembleTraceResult, Error> {
-  const [resolution, config] = yield* Effect.tryPromise({
-    try: () =>
-      Promise.all([
-        resolveStreamForExecution(executionId, session.roots),
-        readExecutionRunRecord(executionId, session.roots),
-      ]),
-    catch: ensureError,
-  });
+  const [resolution, config] = yield* Effect.all(
+    [
+      resolveStreamForExecution(executionId, session),
+      readExecutionRunRecord(executionId, session),
+    ],
+    { concurrency: 2 },
+  );
   if (!config) return { status: 'config_missing' };
   if (!resolution) return { status: 'streamLogs_missing' };
   const { streamId, meta } = resolution;
@@ -46,6 +45,13 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
   );
   return {
     status: 'ok',
-    trace: { executionId, streamId, config, meta, entries, snapshot },
+    trace: redactDisplayValue({
+      executionId,
+      streamId,
+      config,
+      meta,
+      entries,
+      snapshot,
+    }),
   };
 });

@@ -258,6 +258,8 @@ event
   INDEX (aggregate_id, type, seq)                   -- latest-of-type per stream
   INDEX (aggregate_id, "commit")                    -- bounded cross-aggregate resume reads
   INDEX (type, "commit")                            -- listing tier across streams
+  INDEX (json_extract(data, '$.parentStartCommit')) WHERE type = 'run.start.1'
+                                                    -- authored child edges by parent incarnation
 
 event_sequence
   aggregate_id  TEXT PRIMARY KEY                    -- kind-qualified AggregateId (C2)
@@ -355,7 +357,11 @@ physically until retention. `run.start` is `seq` 1 and creates the open row
 in the same transaction. A child's declared parent edge pairs the logical
 `parentStreamId` with `parentStartCommit`, the parent's `run.start` commit.
 The commit distinguishes parent incarnations even if a logical id is reused
-after physical retention. C9 defines the effective parent used for routing.
+after physical retention. The database also stamps the parent's execution id
+from that same creation row; callers cannot author it independently. This
+immutable coordinate preserves the existing child metadata's parent execution
+identity after the parent is explicitly deleted, without retaining the parent
+row or changing deletion policy. C9 defines the effective parent used for routing.
 
 A workflow journal lives on
 `aggregateId('workflow-checkpoint', checkpointId)`, independently of any
@@ -408,6 +414,17 @@ Redaction has three owners and they are not interchangeable.
   but every display/export projection applies this same redaction boundary.
   Transport framers forward display values, never raw execution payloads.
   **Display truncation and bounding are also the fold's**.
+
+Current execution metadata is private at the event-schema boundary. Its raw
+configuration, report, result, workflow, workspace-file, description, and
+launch-label rows are excluded from the public display-event union. Typed
+execution accessors read the private database projection; renderers receive
+only the existing redacted display facts. Database `all` remains exhaustive,
+while the public session/NDJSON projection includes every public row and
+excludes private execution payloads. Filtering a private-only batch must still
+advance the captured committed cursor and complete the publication drain.
+This separation is required by C3 independently of the unresolved D4 runtime
+rows; it makes no decision about their retention or scrubbing.
 
 One residue to name plainly. Until the view-state PRD collapses the fold
 (events straight to `TranscriptRow`), message text is durable twice: in the
@@ -509,12 +526,13 @@ channel and never advance a durable cursor; they are not batch members.
 The write remains in the publish path, never in a subscriber, and no
 publisher waits for a remote renderer.
 
-**C7. Read path.** Five read queries, bounded reads, and one wake level:
+**C7. Read path.** Indexed read families, bounded reads, and one wake level:
 
 - `all(fromCommit, throughCommit?)`: events with `"commit" > fromCommit` in
   commit order. The optional inclusive upper bound makes one finite read;
-  without it, this supplies the table tail and the frozen NDJSON projection,
-  which needs every row including transcript rows of unsubscribed streams.
+  without it, this supplies the database table tail. The frozen NDJSON
+  projection needs every public row, including transcript rows of unsubscribed
+  streams, with the private execution payloads excluded as required by C3.
 - `listing()`: the cold listing hydrate of C8, one indexed query: the
   latest-of-type row per aggregate over `(aggregate_id, type, seq)` for the
   listing fact types, plus the outstanding-approval set, **returned in
@@ -542,6 +560,19 @@ parentId, startCommit }`. For streams, `startCommit` is obtained from the
   is explicitly unclaimed. The finite input read below reads this state and
   the bounded event prefix in one transaction. Only the listed or opened
   aggregates are checked; no transcript bodies are read.
+- Private execution-record reads select the latest named metadata rows for
+  one qualified execution and its owning stream's creation and lifecycle
+  facts in one captured database prefix.
+  They use the aggregate/type indexes and the execution's ownership edge;
+  they read neither transcript bodies nor unrelated execution metadata.
+  Child-record reads select direct authored children by `parentStartCommit`,
+  using the partial creation-row index in C1, and include only the creation,
+  launch-label, and removal facts needed for that relation. The logical child
+  edge is not the sequence table's ownership/deletion edge: repurposing
+  `event_sequence.parent_id` would change which records deletion owns.
+  These are private query specializations, not a second store or public
+  transport interface. Global history listing retains the session-wide
+  indexed listing query.
 - `PRAGMA data_version`: changes when another connection commits. It is
   connection-local and does not move for the connection's own commits, so it
   is a wake trigger only, never a level in the `commit` number space.

@@ -1,5 +1,6 @@
 import '@test/support/sessionGraphTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
@@ -69,8 +70,16 @@ vi.mock('@agent/runtime/runAgent', async () => {
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  deriveResumability: mocks.deriveResumability,
-  finalizeRun: mocks.finalizeRun,
+  deriveResumability: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.deriveResumability(...args),
+      catch: (error) => error,
+    }),
+  finalizeRun: (_session: unknown, input: unknown) =>
+    Effect.tryPromise({
+      try: () => mocks.finalizeRun(input),
+      catch: (error) => error,
+    }),
 }));
 
 vi.mock('@cli/runtime/cliPresentationHost', () => ({
@@ -84,7 +93,8 @@ vi.mock('@cli/runtime/approvalAdapter', async (importOriginal) => ({
 
 vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/terminalStatus')>()),
-  readCliRunOutcomeState: mocks.readCliRunOutcomeState,
+  readCliRunOutcomeState: (...args: unknown[]) =>
+    Effect.tryPromise(() => mocks.readCliRunOutcomeState(...args)),
 }));
 
 vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
@@ -148,10 +158,19 @@ function toolUseConfig() {
 /** Tools the CLI runtime hides by default during agent execution. */
 const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = getDefaultUnavailableToolNames('cli');
 
-function loadRunExecution(): Promise<
-  typeof import('@cli/runtime/runExecution')
-> {
-  return import('@cli/runtime/runExecution');
+async function loadRunExecution() {
+  const runtime = await import('@cli/runtime/runExecution');
+  return {
+    ...runtime,
+    executeCliRequest: (
+      ...args: Parameters<typeof runtime.executeCliRequest>
+    ) => Effect.runPromise(runtime.executeCliRequest(...args)),
+    executeCliConfig: (...args: Parameters<typeof runtime.executeCliConfig>) =>
+      Effect.runPromise(runtime.executeCliConfig(...args)),
+    executeCliToolUseConfig: (
+      ...args: Parameters<typeof runtime.executeCliToolUseConfig>
+    ) => Effect.runPromise(runtime.executeCliToolUseConfig(...args)),
+  };
 }
 
 type LeaseOptions = {
@@ -248,7 +267,10 @@ async function stubRunExecutionDeps(): Promise<void> {
   const { SessionHandle } = await import('@agent/runtime/SessionHandle');
   vi.spyOn(SessionHandle.prototype, 'releaseExecutionLease').mockImplementation(
     function (this: unknown, executionId) {
-      return mocks.releaseExecutionLeaseAfterArtifacts(this, executionId);
+      return Effect.tryPromise({
+        try: () => mocks.releaseExecutionLeaseAfterArtifacts(this, executionId),
+        catch: (error) => error as Error,
+      });
     },
   );
   mocks.finalizeRun.mockResolvedValue({ ok: true });
@@ -482,6 +504,7 @@ describe('executeCliRequest', () => {
     const readError = new Error('metadata read failed');
     mocks.readCliRunOutcomeState.mockImplementationOnce(
       async (
+        _session: unknown,
         result: { readonly outcome: string },
         reportReadFailure: (error: Error) => void,
       ) => {
@@ -552,7 +575,10 @@ describe('executeCliRequest', () => {
     // workspaceState.update) is genuinely unexpected — it must keep
     // propagating so bin/texra.ts's crash handler reports it, instead of
     // being swallowed into a bare non-zero exit with no stderr.
-    mocks.runAgent.mockRejectedValueOnce(new Error('disk full'));
+    const runtime = await import('@agent/runtime');
+    vi.spyOn(runtime, 'runAgent').mockReturnValueOnce(
+      Effect.die(new Error('disk full')),
+    );
 
     await expect(executeCliRequest(request, cliContext())).rejects.toThrow(
       'disk full',
@@ -754,7 +780,10 @@ describe('executeCliRequest', () => {
     await shutdown;
     await run;
 
-    expect(mocks.deriveResumability).toHaveBeenCalledExactlyOnceWith('exec-1');
+    expect(mocks.deriveResumability).toHaveBeenCalledExactlyOnceWith(
+      'exec-1',
+      expect.anything(),
+    );
     expect(onInterruptedExecutionFinalized).not.toHaveBeenCalled();
   });
 
@@ -813,7 +842,10 @@ describe('executeCliRequest', () => {
   it('preserves a terminal outcome when shutdown cannot interrupt the finished run', async () => {
     const { platform, executeCliRequest } = await installFakePlatform();
     const { defaultSession } = await import('@agent/runtime/SessionHandle');
-    vi.spyOn(defaultSession().executions, 'kill').mockReturnValue(false);
+    vi.spyOn(defaultSession().executions, 'kill').mockReturnValue({
+      accepted: false,
+      settlement: Effect.void,
+    });
     let leaseOptions: LeaseOptions | undefined;
     const hangingRun = stubHangingRun((options) => {
       leaseOptions = options;
@@ -840,9 +872,10 @@ describe('executeCliRequest', () => {
     });
     let publicationCommitted: boolean | undefined;
     const run = executeCliRequest(baseRequest(), cliContext(), {
-      openWorkflowOutput: async (_result, tryCommitPublication) => {
-        publicationCommitted = tryCommitPublication();
-      },
+      openWorkflowOutput: (_result, tryCommitPublication) =>
+        Effect.sync(() => {
+          publicationCommitted = tryCommitPublication();
+        }),
     });
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
 
@@ -878,9 +911,10 @@ describe('executeCliRequest', () => {
     });
     let publicationCommitted: boolean | undefined;
     const run = executeCliRequest(baseRequest(), cliContext(), {
-      openWorkflowOutput: async (_result, tryCommitPublication) => {
-        publicationCommitted = tryCommitPublication();
-      },
+      openWorkflowOutput: (_result, tryCommitPublication) =>
+        Effect.sync(() => {
+          publicationCommitted = tryCommitPublication();
+        }),
     });
     await vi.waitFor(() => expect(leaseOptions).toBeDefined());
     leaseOptions?.onExecutionLeaseAcquired?.('exec-1' as ExecutionId);
@@ -938,10 +972,10 @@ describe('executeCliRequest', () => {
     );
 
     const run = executeCliRequest(baseRequest(), cliContext(), {
-      openWorkflowOutput: async (_result, tryCommitPublication) => {
-        publicationCommitted = tryCommitPublication();
-        throw outputFailure;
-      },
+      openWorkflowOutput: (_result, tryCommitPublication) =>
+        Effect.sync(() => {
+          publicationCommitted = tryCommitPublication();
+        }).pipe(Effect.andThen(Effect.fail(outputFailure))),
     });
 
     await vi.waitFor(() => expect(outputResolutionFailed).toBe(true));

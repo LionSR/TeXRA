@@ -1,3 +1,6 @@
+import { Effect } from 'effect';
+import type { ChildRecord, ExecutionListingEntry } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 /**
  * The one display model for the /executions surface: the listing lines, the
  * /executions/{id} summary line sets, and the predicates both answer their
@@ -7,7 +10,6 @@
  * ownership facts a missing in-process handle cannot supply.
  */
 
-import type { ChildRecord, ExecutionListingEntry } from '@agent/storage';
 import {
   isAgentRunRecord,
   type RunRecord,
@@ -150,14 +152,17 @@ export function formatStatusInfo(info: ExecutionStatusInfo): string {
  * A run nothing alive owns and nothing terminalized reads `unknown`, never a
  * terminal outcome invented from the absence of a handle in this process.
  */
-export async function getExecutionStatusInfo(
-  executionId: ExecutionId,
-  knownMeta?: KnownExecutionMeta,
-): Promise<ExecutionStatusInfo> {
-  return statusInfoFromLiveness(
-    await resolveExecutionLiveness(executionId, knownMeta),
-  );
-}
+export const getExecutionStatusInfo = Effect.fn('getExecutionStatusInfo')(
+  function* (
+    executionId: ExecutionId,
+    session: SessionHandle,
+    knownMeta?: KnownExecutionMeta,
+  ) {
+    return statusInfoFromLiveness(
+      yield* resolveExecutionLiveness(executionId, session, knownMeta),
+    );
+  },
+);
 
 /**
  * The same reading for a caller that already resolved the liveness and needs
@@ -186,13 +191,14 @@ export function statusInfoFromLiveness(
 }
 
 /** Format a listing entry as a single summary line. */
-export async function formatListingLine(
+export const formatListingLine = Effect.fn('formatListingLine')(function* (
   entry: ExecutionListingEntry,
-): Promise<string> {
+  session: SessionHandle,
+) {
   const ts = formatTimestamp(entry.timestamp);
   // The row was built from this execution's metadata, outcome included, so the
   // status reading reuses it instead of reading the same file again.
-  const info = await getExecutionStatusInfo(entry.id, {
+  const info = yield* getExecutionStatusInfo(entry.id, session, {
     outcome: entry.outcome,
   });
   const { agent, model, category } = listingDisplay(entry);
@@ -203,7 +209,7 @@ export async function formatListingLine(
     : '';
   const descSuffix = entry.description ? `: ${entry.description}` : '';
   return `${entry.id}  ${ts}  ${agent}${categoryTag}${modelTag}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
-}
+});
 
 /** Format todo items as a checklist. */
 export function formatTodoSection(todos: readonly TodoItem[]): string[] {
@@ -249,15 +255,20 @@ export function shouldSuppressAutoDeliveredSubagentReport(
 }
 
 /** Format a single child execution as a summary line. */
-export async function formatChildLine(
+export const formatChildLine = Effect.fn('formatChildLine')(function* (
   child: ChildRecord,
   childMeta: ExecutionMeta | null | undefined,
-): Promise<string> {
-  const info = await getExecutionStatusInfo(child.id, childMeta ?? null);
+  session: SessionHandle,
+) {
+  const info = yield* getExecutionStatusInfo(
+    child.id,
+    session,
+    childMeta ?? null,
+  );
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `: ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
-}
+});
 
 /** Build the summary lines for a still-running execution (in-memory handle). */
 export function buildRunningSummaryLines(

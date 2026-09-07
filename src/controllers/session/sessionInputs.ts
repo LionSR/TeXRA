@@ -8,6 +8,7 @@ import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
 import {
   referencedAggregates,
+  isDisplaySessionEvent,
   type AggregateId,
   type ExistenceReconciliation,
   type FoldInput,
@@ -36,7 +37,9 @@ export const sessionInputsLayer = Layer.effect(
               fromCommit === 0
                 ? yield* log.currentCommit.pipe(Effect.orDie)
                 : fromCommit;
-            const listing = yield* log.readListing().pipe(Effect.orDie);
+            const listing = (yield* log
+              .readListing()
+              .pipe(Effect.orDie)).filter(isDisplaySessionEvent);
             let checked = new Set<AggregateId>(aggregates.map(({ id }) => id));
             for (const event of listing)
               for (const id of referencedAggregates(event)) checked.add(id);
@@ -50,7 +53,7 @@ export const sessionInputsLayer = Layer.effect(
               const rows = yield* log
                 .readAggregate(aggregate.id, aggregate.fromSeq)
                 .pipe(Effect.orDie);
-              for (const event of rows) {
+              for (const event of rows.filter(isDisplaySessionEvent)) {
                 replay.push({ _tag: 'event', read: 'aggregate', event });
               }
             }
@@ -139,11 +142,13 @@ export const sessionInputsLayer = Layer.effect(
                       { _tag: 'drained', cursor, existence },
                     );
                     const batch: FoldInput[] = [
-                      ...rows.map((event): FoldInput => ({
-                        _tag: 'event',
-                        read: 'all',
-                        event,
-                      })),
+                      ...rows
+                        .filter(isDisplaySessionEvent)
+                        .map((event): FoldInput => ({
+                          _tag: 'event',
+                          read: 'all',
+                          event,
+                        })),
                       ...inputs,
                     ];
                     return [{ cursor, text: nextText }, [batch]] as const;

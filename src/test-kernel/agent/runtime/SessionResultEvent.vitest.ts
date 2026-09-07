@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -93,7 +94,9 @@ describe('terminal result event', () => {
   it('emits exactly one completed result on a successful run', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
-      await runFlowWithLifecycle(ctx, async () => completedRun(ctx));
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
+      );
       expectSingleResult(results, ctx, {
         outcome: 'completed',
         category: 'toolUse',
@@ -116,7 +119,9 @@ describe('terminal result event', () => {
 
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
+        Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
+        ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
 
       expectSingleResult(results, ctx, { outcome: 'completed' });
@@ -129,11 +134,13 @@ describe('terminal result event', () => {
     const { logger, ctx, streamStatus } = setupResultCase();
     let handle: AgentRunHandle | undefined;
     try {
-      await runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
-        onRun: (h) => {
-          handle = h;
-        },
-      });
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+          onRun: (h) => {
+            handle = h;
+          },
+        }),
+      );
       expect(handle).toBeDefined();
       // The handle carries the run's trace channel for run-scoped subscribers.
       expect(handle?.trace).toBe(logger);
@@ -165,7 +172,9 @@ describe('terminal result event', () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => completedRun(ctx), { onRun }),
+        Effect.runPromise(
+          runFlowWithLifecycle(ctx, async () => completedRun(ctx), { onRun }),
+        ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       await Promise.resolve();
 
@@ -179,12 +188,14 @@ describe('terminal result event', () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
-        runFlowWithLifecycle(ctx, explodedRun, {
-          isSubagent: true,
-          onError: () => {
-            throw new Error('delivery hook boom');
-          },
-        }),
+        Effect.runPromise(
+          runFlowWithLifecycle(ctx, explodedRun, {
+            isSubagent: true,
+            onError: () => {
+              throw new Error('delivery hook boom');
+            },
+          }),
+        ),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.FAILED });
 
       expectSingleResult(results, ctx, { outcome: 'failed' });
@@ -200,9 +211,9 @@ describe('terminal result event', () => {
     });
 
     try {
-      await expect(runFlowWithLifecycle(ctx, explodedRun)).rejects.toThrow(
-        'model exploded',
-      );
+      await expect(
+        Effect.runPromise(runFlowWithLifecycle(ctx, explodedRun)),
+      ).rejects.toThrow('model exploded');
 
       expectSingleResult(results, ctx, { outcome: 'failed' });
     } finally {
@@ -215,16 +226,18 @@ describe('terminal result event', () => {
     let handle: AgentRunHandle | undefined;
     try {
       await expect(
-        runFlowWithLifecycle(
-          ctx,
-          async () => {
-            throw new Error('boom');
-          },
-          {
-            onRun: (h) => {
-              handle = h;
+        Effect.runPromise(
+          runFlowWithLifecycle(
+            ctx,
+            async () => {
+              throw new Error('boom');
             },
-          },
+            {
+              onRun: (h) => {
+                handle = h;
+              },
+            },
+          ),
         ),
       ).rejects.toThrow('boom');
       await expect(handle?.result).resolves.toMatchObject({
@@ -239,12 +252,14 @@ describe('terminal result event', () => {
   it('maps a returned cancellation to a cancelled result (sibling of failed)', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
-      await runFlowWithLifecycle(ctx, async () => ({
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.CANCELLED,
-        executionId: ctx.runScope.executionId,
-        streamId: ctx.runScope.streamId,
-      }));
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => ({
+          category: 'toolUse',
+          outcome: RUN_OUTCOME.CANCELLED,
+          executionId: ctx.runScope.executionId,
+          streamId: ctx.runScope.streamId,
+        })),
+      );
       expectSingleResult(results, ctx, { outcome: 'cancelled' });
     } finally {
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
@@ -254,9 +269,11 @@ describe('terminal result event', () => {
   it('emits a cancelled result with kind=abort on a thrown abort', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
-      await runFlowWithLifecycle(ctx, async () => {
-        throw new DOMException('Request aborted', 'AbortError');
-      });
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => {
+          throw new DOMException('Request aborted', 'AbortError');
+        }),
+      );
       expectSingleResult(results, ctx, { outcome: 'cancelled' });
       expect(results[0].error?.kind).toBe('abort');
     } finally {
@@ -269,9 +286,9 @@ describe('terminal result event', () => {
     // Record one round of usage so the failed result still carries totals.
     await ctx.usageMonitor.recordUsage(AgentRunStateSnapshotSchema.parse({}));
     try {
-      await expect(runFlowWithLifecycle(ctx, explodedRun)).rejects.toThrow(
-        'model exploded',
-      );
+      await expect(
+        Effect.runPromise(runFlowWithLifecycle(ctx, explodedRun)),
+      ).rejects.toThrow('model exploded');
       expectSingleResult(results, ctx, { outcome: 'failed' });
       expect(results[0].error?.kind).toBeDefined();
       expect(results[0].usage).toBeDefined();
@@ -295,9 +312,11 @@ describe('terminal result event', () => {
     );
     session.onResult(onResult);
     try {
-      await runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
-        isSubagent: true,
-      });
+      await Effect.runPromise(
+        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+          isSubagent: true,
+        }),
+      );
       await session.settlePublications();
       expect(onResult).toHaveBeenCalledOnce();
       expect(onResult.mock.calls[0][0]).toMatchObject({

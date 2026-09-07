@@ -1,11 +1,12 @@
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 /**
  * The agent-run listing slice latexdiff discovery needs. Agent owns the
  * implementation and hosts inject it; latex owns the narrow contract so
  * `outputDiscovery.ts` never reaches into `@agent/storage` itself.
  */
-export interface LatexAgentRunEntry {
+interface LatexAgentRunEntry {
   readonly id: ExecutionId;
   readonly timestamp: string;
   readonly agent: string;
@@ -14,6 +15,8 @@ export interface LatexAgentRunEntry {
 }
 
 export interface LatexExecutionDiscoveryPort {
-  listAgentRuns(): Promise<readonly LatexAgentRunEntry[]>;
-  readStreamId(executionId: ExecutionId): Promise<StreamTabId | undefined>;
+  listAgentRuns(): Effect.Effect<readonly LatexAgentRunEntry[], Error>;
+  readStreamId(
+    executionId: ExecutionId,
+  ): Effect.Effect<StreamTabId | undefined, Error>;
 }

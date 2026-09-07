@@ -74,16 +74,15 @@ function paperRoots() {
 /** The facts a session published from this call on: a stub's array, or a
  *  real session's plane read back. */
 function captureFacts(session: SessionHandle): {
-  readonly facts: unknown[];
+  readonly read: () => Promise<unknown[]>;
   detach: () => void;
 } {
   const stub = session as Partial<ReturnType<typeof sessionStub>>;
-  if (stub.published) return { facts: stub.published, detach: () => {} };
+  if (stub.published)
+    return { read: async () => stub.published!, detach: () => {} };
   const recorded = recordSessionEvents(session);
   return {
-    get facts() {
-      return recorded.events;
-    },
+    read: () => recorded.read(),
     detach: () => {},
   };
 }
@@ -178,7 +177,7 @@ describe('external inquiry continuation session routing', () => {
       await session.settlePublications();
 
       await session.settlePublications();
-      expect(explicit.facts).toMatchObject([
+      expect(await explicit.read()).toMatchObject([
         {
           type: 'inquiryThreadUpdated',
           aggregateId: qualifyAggregateId('inquiry', THREAD),
@@ -191,7 +190,7 @@ describe('external inquiry continuation session routing', () => {
           resumeOutcome: 'sent',
         },
       ]);
-      expect(fallback.facts).toEqual([]);
+      expect(await fallback.read()).toEqual([]);
     } finally {
       explicit.detach();
       fallback.detach();
@@ -201,7 +200,7 @@ describe('external inquiry continuation session routing', () => {
 
   it('does not emit an inquiry thread update when no summary is returned', async () => {
     const session = createTestSession();
-    const { facts, detach } = captureFacts(session);
+    const { read, detach } = captureFacts(session);
     getThreadSummaryMock.mockResolvedValueOnce(null);
 
     try {
@@ -213,7 +212,7 @@ describe('external inquiry continuation session routing', () => {
         ),
       );
 
-      expect(facts).toEqual([]);
+      expect(await read()).toEqual([]);
     } finally {
       detach();
       session.dispose();
