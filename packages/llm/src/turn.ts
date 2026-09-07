@@ -5,6 +5,21 @@ import { z } from 'zod';
 const TextPartSchema = z
   .strictObject({ kind: z.literal('text'), text: z.string() })
   .readonly();
+const MediaFieldsSchema = z.strictObject({
+  mimeType: z.string().min(1),
+  // Encoding validity is distinct from a provider accepting the captured bytes.
+  base64: z.base64(),
+});
+const InputPartSchema = z.discriminatedUnion('kind', [
+  TextPartSchema,
+  MediaFieldsSchema.extend({
+    kind: z.literal('image'),
+    detail: z.enum(['low', 'medium', 'high', 'ultra-high']).optional(),
+  }).readonly(),
+  MediaFieldsSchema.extend({
+    kind: z.enum(['audio', 'video', 'document']),
+  }).readonly(),
+]);
 const BindingSchema = z.strictObject({
   requestedModel: z.string().min(1),
   deployment: z
@@ -139,7 +154,7 @@ const MessageSchema = z.discriminatedUnion('role', [
   z
     .strictObject({
       role: z.literal('user'),
-      content: z.array(TextPartSchema).min(1).readonly(),
+      content: z.array(InputPartSchema).min(1).readonly(),
     })
     .readonly(),
   AssistantMessageSchema,
@@ -152,7 +167,7 @@ const MessageSchema = z.discriminatedUnion('role', [
             .strictObject({
               callOrdinal: z.int().nonnegative(),
               status: z.enum(['success', 'error']),
-              content: z.array(TextPartSchema).readonly(),
+              content: z.array(InputPartSchema).readonly(),
             })
             .readonly(),
         )
@@ -243,12 +258,19 @@ export const ContinuationSchema = z
   .readonly();
 export type Continuation = z.infer<typeof ContinuationSchema>;
 
+const ToolChoiceSchema = z.union([
+  z.literal('auto'),
+  z.strictObject({ name: z.string().min(1) }).readonly(),
+]);
+
 /** Materialized input; no SDK value, credential, file path or storage reference. */
 export const TurnRequestSchema = z
   .strictObject({
     system: z.string().optional(),
     messages: PreparedHistorySchema,
     tools: ToolDefinitionsSchema.optional(),
+    parallelToolCalls: z.boolean().optional(),
+    toolChoice: ToolChoiceSchema.optional(),
     temperature: z.number().min(0).max(2).optional(),
     maxOutputTokens: z.int().positive().optional(),
     store: z.boolean().optional(),
@@ -258,29 +280,28 @@ export const TurnRequestSchema = z
   .readonly();
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 
-const OpenAIControlsSchema = z
-  .strictObject({
-    temperature: z.number().min(0).max(2),
-    maxOutputTokens: z.int().positive(),
-  })
-  .readonly();
-const GoogleControlsSchema = z
-  .strictObject({
-    maxOutputTokens: z.int().positive(),
-    store: z.boolean(),
-    thinkingLevel: z.enum(['low', 'medium', 'high']),
-  })
-  .readonly();
+const OpenAIControlsSchema = z.strictObject({
+  temperature: z.number().min(0).max(2),
+  maxOutputTokens: z.int().positive(),
+  parallelToolCalls: z.boolean(),
+  toolChoice: ToolChoiceSchema,
+});
+const GoogleControlsSchema = z.strictObject({
+  maxOutputTokens: z.int().positive(),
+  store: z.boolean(),
+  thinkingLevel: z.enum(['low', 'medium', 'high']),
+  toolChoice: ToolChoiceSchema,
+});
 
 /** Already-selected protocol binding and defaults, provided by the application. */
 export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
   BindingSchema.extend({
     protocol: z.literal('openai-chat'),
-    defaults: OpenAIControlsSchema,
+    defaults: OpenAIControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
   BindingSchema.extend({
     protocol: z.literal('google-interactions'),
-    defaults: GoogleControlsSchema,
+    defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
 ]);
 export type ModelConfiguration = z.infer<typeof ModelConfigurationSchema>;
@@ -303,11 +324,11 @@ const PreparedInputSchema = OriginSchema.extend({
 export const ResolvedTurnSchema = z.discriminatedUnion('protocol', [
   PreparedInputSchema.extend({
     protocol: z.literal('openai-chat'),
-    controls: OpenAIControlsSchema,
+    controls: OpenAIControlsSchema.readonly(),
   }).readonly(),
   PreparedInputSchema.extend({
     protocol: z.literal('google-interactions'),
-    controls: GoogleControlsSchema,
+    controls: GoogleControlsSchema.readonly(),
     continuation: ContinuationSchema.optional(),
   }).readonly(),
 ]);

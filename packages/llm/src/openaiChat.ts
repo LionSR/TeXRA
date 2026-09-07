@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
+  JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
   ModelOriginSchema,
@@ -15,6 +16,7 @@ import {
   type OpenAIChatConfiguration,
   type ResolvedTurn,
   type TurnEvent,
+  type TurnRequest,
   type TurnResult,
 } from './turn.js';
 
@@ -52,12 +54,138 @@ const ChunkSchema = z.strictObject({
           role: z.literal('assistant').optional(),
           content: z.string().nullish(),
           refusal: z.string().nullish(),
+          tool_calls: z
+            .array(
+              z.strictObject({
+                index: z.int().nonnegative(),
+                id: z.string().min(1).nullish(),
+                type: z.literal('function').nullish(),
+                function: z
+                  .strictObject({
+                    name: z.string().min(1).nullish(),
+                    arguments: z.string().optional(),
+                  })
+                  .optional(),
+              }),
+            )
+            .nullish(),
         }),
-        finish_reason: z.enum(['stop', 'length', 'content_filter']).nullable(),
+        finish_reason: z
+          .enum(['stop', 'length', 'content_filter', 'tool_calls'])
+          .nullable(),
         logprobs: z.null().optional(),
       }),
     )
     .max(1),
+});
+
+// Used by preparation as well as execution: unsupported history fails before I/O.
+const chatMessages = Effect.fn('llm.chatMessages')(function* (
+  history: ResolvedTurn['messages'],
+) {
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+  let calls: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall[] =
+    [];
+  for (const message of history) {
+    if (message.role === 'tool') {
+      for (const result of message.results) {
+        const text: string[] = [];
+        for (const part of result.content) {
+          if (part.kind !== 'text') {
+            return yield* new ModelError({
+              kind: 'unsupported',
+              message: 'This Chat protocol requires text-only tool results.',
+            });
+          }
+          text.push(part.text);
+        }
+        // The canonical grammar already guarantees adjacent, complete ordinals.
+        const call = calls[result.callOrdinal];
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          // Chat has no is_error field; status alone selects its visible marker.
+          content:
+            result.status === 'error'
+              ? `Error: ${text.join('')}`
+              : text.join(''),
+        });
+      }
+      continue;
+    }
+    calls = [];
+    if (message.role === 'user') {
+      const text: string[] = [];
+      for (const part of message.content) {
+        if (part.kind !== 'text') {
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: 'This Chat protocol requires text-only user input.',
+          });
+        }
+        text.push(part.text);
+      }
+      messages.push({ role: 'user', content: text.join('') });
+      continue;
+    }
+    const content: Array<
+      | OpenAI.Chat.Completions.ChatCompletionContentPartText
+      | OpenAI.Chat.Completions.ChatCompletionContentPartRefusal
+    > = [];
+    for (const part of message.content) {
+      if (part.kind === 'local-call') {
+        if (part.providerCallId === null) {
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: 'Chat tool history requires original provider call IDs.',
+          });
+        }
+        calls.push({
+          type: 'function',
+          id: part.providerCallId,
+          function: {
+            name: part.name,
+            arguments: JSON.stringify(part.arguments),
+          },
+        });
+      } else if (
+        (part.kind === 'text' || part.kind === 'refusal') &&
+        calls.length === 0
+      ) {
+        content.push(
+          part.kind === 'text'
+            ? { type: 'text', text: part.text }
+            : { type: 'refusal', refusal: part.text },
+        );
+      } else {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'This Chat protocol requires text or refusal content before any local calls; reasoning and media are unsupported.',
+        });
+      }
+    }
+    messages.push({
+      role: 'assistant',
+      content: content.length > 0 ? content : '',
+      ...(calls.length > 0 ? { tool_calls: calls } : {}),
+    });
+  }
+  return messages;
+});
+
+const chatToolChoice = Effect.fn('llm.chatToolChoice')(function* (
+  choice: NonNullable<TurnRequest['toolChoice']>,
+  tools: ResolvedTurn['tools'],
+) {
+  if (choice === 'auto') return choice;
+  if (!tools.some((tool) => tool.name === choice.name)) {
+    return yield* new ModelError({
+      kind: 'invalid-request',
+      message: 'The required tool must be present in the supplied definitions.',
+    });
+  }
+  return { type: 'function', function: { name: choice.name } } as const;
 });
 
 function sdkFailure(cause: unknown): ModelError {
@@ -127,30 +255,31 @@ export function openaiChatModel(
       if (
         parsed.data.store !== undefined ||
         parsed.data.thinkingLevel !== undefined ||
-        parsed.data.continuation !== undefined ||
-        (parsed.data.tools?.length ?? 0) !== 0 ||
-        parsed.data.messages.some(
-          (message) =>
-            message.role === 'tool' ||
-            message.content.some((part) => part.kind !== 'text'),
-        )
+        parsed.data.continuation !== undefined
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
           message:
-            'This Chat protocol currently supports text-only requests without tools or continuation.',
+            'This Chat protocol does not support storage, thinking-level or continuation controls.',
         });
       }
+      yield* chatMessages(parsed.data.messages);
+      const tools = parsed.data.tools ?? [];
+      const toolChoice = parsed.data.toolChoice ?? 'auto';
+      yield* chatToolChoice(toolChoice, tools);
       return ResolvedTurnSchema.parse({
         ...origin,
         mode: 'foreground',
         system: parsed.data.system,
         messages: parsed.data.messages,
-        tools: [],
+        tools,
         controls: {
           temperature: parsed.data.temperature ?? config.defaults.temperature,
           maxOutputTokens:
             parsed.data.maxOutputTokens ?? config.defaults.maxOutputTokens,
+          parallelToolCalls:
+            parsed.data.parallelToolCalls ?? config.defaults.parallelToolCalls,
+          toolChoice,
         },
       });
     },
@@ -187,35 +316,11 @@ export function openaiChatModel(
                 'The prepared invocation belongs to another model or deployment.',
             });
           }
-          if (turn.tools.length !== 0) {
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message: 'This Chat protocol does not yet lower tools.',
-            });
-          }
-          const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
-            [];
-          for (const message of turn.messages) {
-            if (message.role === 'tool') {
-              return yield* new ModelError({
-                kind: 'unsupported',
-                message:
-                  'This Chat protocol does not yet lower tool exchanges.',
-              });
-            }
-            const text: string[] = [];
-            for (const part of message.content) {
-              if (part.kind !== 'text') {
-                return yield* new ModelError({
-                  kind: 'unsupported',
-                  message:
-                    'This Chat protocol does not yet lower non-text assistant content.',
-                });
-              }
-              text.push(part.text);
-            }
-            messages.push({ role: message.role, content: text.join('') });
-          }
+          const messages = yield* chatMessages(turn.messages);
+          const toolChoice = yield* chatToolChoice(
+            turn.controls.toolChoice,
+            turn.tools,
+          );
           if (turn.system !== undefined) {
             messages.unshift({ role: 'system', content: turn.system });
           }
@@ -226,6 +331,16 @@ export function openaiChatModel(
                 {
                   model: turn.requestedModel,
                   messages,
+                  ...(turn.tools.length > 0
+                    ? {
+                        tools: turn.tools.map((tool) => ({
+                          type: 'function' as const,
+                          function: { ...tool, strict: false },
+                        })),
+                        tool_choice: toolChoice,
+                        parallel_tool_calls: turn.controls.parallelToolCalls,
+                      }
+                    : {}),
                   temperature: turn.controls.temperature,
                   max_completion_tokens: turn.controls.maxOutputTokens,
                   n: 1,
@@ -240,6 +355,15 @@ export function openaiChatModel(
           let finishReason: TurnResult['finishReason'] | undefined;
           let usage: TurnResult['usage'] = null;
           const content: Array<{ kind: 'text' | 'refusal'; text: string }> = [];
+          const calls = new Map<
+            number,
+            {
+              id?: string;
+              name?: string;
+              type?: 'function';
+              arguments: string;
+            }
+          >();
 
           const iterator = yield* Effect.acquireRelease(
             Effect.sync(() => source[Symbol.asyncIterator]()),
@@ -330,11 +454,39 @@ export function openaiChatModel(
                   else content.push({ kind: part, text });
                   events.push({ kind: 'delta', part, text });
                 }
+                for (const delta of choice.delta.tool_calls ?? []) {
+                  const call = calls.get(delta.index) ?? { arguments: '' };
+                  if (
+                    (delta.id != null &&
+                      call.id !== undefined &&
+                      delta.id !== call.id) ||
+                    (delta.function?.name != null &&
+                      call.name !== undefined &&
+                      delta.function.name !== call.name)
+                  ) {
+                    return yield* new ModelError({
+                      kind: 'malformed-output',
+                      message:
+                        'The model changed a streamed tool call identity.',
+                    });
+                  }
+                  call.id = delta.id ?? call.id;
+                  call.name = delta.function?.name ?? call.name;
+                  call.type = delta.type ?? call.type;
+                  call.arguments += delta.function?.arguments ?? '';
+                  calls.set(delta.index, call);
+                }
                 if (choice.finish_reason !== null) {
-                  finishReason =
-                    choice.finish_reason === 'content_filter'
-                      ? 'content-filter'
-                      : choice.finish_reason;
+                  switch (choice.finish_reason) {
+                    case 'content_filter':
+                      finishReason = 'content-filter';
+                      break;
+                    case 'tool_calls':
+                      finishReason = 'tool-calls';
+                      break;
+                    default:
+                      finishReason = choice.finish_reason;
+                  }
                 }
                 return events;
               }),
@@ -356,16 +508,65 @@ export function openaiChatModel(
                     'The model stream ended without a completed response.',
                 });
               }
-              const result = TurnResultSchema.parse({
+              if ((finishReason === 'tool-calls') !== calls.size > 0) {
+                return yield* new ModelError({
+                  kind: 'malformed-output',
+                  message:
+                    'The model finish reason does not match its tool calls.',
+                });
+              }
+              const completedContent: TurnResult['content'][number][] = [
+                ...content,
+              ];
+              for (const [ordinal, [index, call]] of [...calls]
+                .toSorted(([left], [right]) => left - right)
+                .entries()) {
+                if (
+                  index !== ordinal ||
+                  call.id === undefined ||
+                  call.name === undefined ||
+                  call.type === undefined
+                ) {
+                  return yield* new ModelError({
+                    kind: 'malformed-output',
+                    message:
+                      'The model returned incomplete tool call identities.',
+                  });
+                }
+                const args = yield* Effect.try({
+                  try: () => JsonObjectSchema.parse(JSON.parse(call.arguments)),
+                  catch: (cause) =>
+                    new ModelError({
+                      kind: 'malformed-output',
+                      message:
+                        'The model returned invalid tool call arguments.',
+                      cause,
+                    }),
+                });
+                completedContent.push({
+                  kind: 'local-call',
+                  providerCallId: call.id,
+                  name: call.name,
+                  arguments: args,
+                });
+              }
+              const parsedResult = TurnResultSchema.safeParse({
                 providerResponseId: responseId,
                 requestedOrigin: origin,
                 returnedModel,
                 modelFingerprint: fingerprint,
-                content,
+                content: completedContent,
                 finishReason,
                 usage,
               });
-              return { kind: 'completed', result } as const;
+              if (!parsedResult.success) {
+                return yield* new ModelError({
+                  kind: 'malformed-output',
+                  message: 'The model returned inconsistent completed content.',
+                  cause: parsedResult.error,
+                });
+              }
+              return { kind: 'completed', result: parsedResult.data } as const;
             }),
           );
           return Stream.concat(progress, completion);

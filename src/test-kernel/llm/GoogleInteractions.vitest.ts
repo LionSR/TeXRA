@@ -22,7 +22,29 @@ function model(store = true) {
 function request(): TurnRequest {
   return {
     system: 'Use both tools.',
-    messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { kind: 'text', text: 'go' },
+          { kind: 'text', text: 'Image: figures/panel.png' },
+          {
+            kind: 'image',
+            mimeType: 'image/png',
+            base64: 'AA==',
+            detail: 'high',
+          },
+          { kind: 'text', text: 'Audio: sound.mp3' },
+          { kind: 'audio', mimeType: 'audio/mp3', base64: 'TQ==' },
+          { kind: 'text', text: 'Video: clip.mp4' },
+          { kind: 'video', mimeType: 'video/mp4', base64: 'Vg==' },
+          { kind: 'text', text: 'Document: paper.pdf' },
+          { kind: 'document', mimeType: 'application/pdf', base64: 'UA==' },
+          { kind: 'text', text: 'Document: empty.csv' },
+          { kind: 'document', mimeType: 'text/csv', base64: '' },
+        ],
+      },
+    ],
     tools: [
       {
         name: 'search',
@@ -153,7 +175,15 @@ function exchange(result: TurnResult): TurnRequest {
           {
             callOrdinal: 0,
             status: 'success',
-            content: [{ kind: 'text', text: 'a' }],
+            content: [
+              { kind: 'text', text: 'a' },
+              {
+                kind: 'image',
+                mimeType: 'image/png',
+                base64: 'AQ==',
+                detail: 'ultra-high',
+              },
+            ],
           },
           {
             callOrdinal: 1,
@@ -181,7 +211,7 @@ describe('canonical Google Interactions protocol', () => {
   });
 
   it.each([true, false])(
-    'preserves a signed two-call exchange with store=%s',
+    'preserves materialized media in a signed two-call exchange with store=%s',
     async (store) => {
       vi.stubEnv('GOOGLE_GENAI_USE_ENTERPRISE', 'true');
       const configured = model(store);
@@ -190,6 +220,35 @@ describe('canonical Google Interactions protocol', () => {
       );
       expect(fetchModel).not.toHaveBeenCalled();
       const result = await Effect.runPromise(configured.generateTurn(prepared));
+      const initialBody = await (fetchModel.mock.calls[0][0] as Request).json();
+      expect(initialBody.input).toEqual([
+        {
+          type: 'user_input',
+          content: [
+            { type: 'text', text: 'go' },
+            { type: 'text', text: 'Image: figures/panel.png' },
+            {
+              type: 'image',
+              mime_type: 'image/png',
+              data: 'AA==',
+              resolution: 'high',
+            },
+            { type: 'text', text: 'Audio: sound.mp3' },
+            { type: 'audio', mime_type: 'audio/mp3', data: 'TQ==' },
+            { type: 'text', text: 'Video: clip.mp4' },
+            {
+              type: 'video',
+              mime_type: 'video/mp4',
+              data: 'Vg==',
+              processing: 'static',
+            },
+            { type: 'text', text: 'Document: paper.pdf' },
+            { type: 'document', mime_type: 'application/pdf', data: 'UA==' },
+            { type: 'text', text: 'Document: empty.csv' },
+            { type: 'document', mime_type: 'text/csv', data: '' },
+          ],
+        },
+      ]);
       expect(result).toMatchObject({
         providerResponseId: 'int_1',
         returnedModel: 'gemini-returned',
@@ -293,7 +352,15 @@ describe('canonical Google Interactions protocol', () => {
           type: 'function_result',
           call_id: 'call_1',
           name: 'search',
-          result: [{ type: 'text', text: 'a' }],
+          result: [
+            { type: 'text', text: 'a' },
+            {
+              type: 'image',
+              mime_type: 'image/png',
+              data: 'AQ==',
+              resolution: 'ultra_high',
+            },
+          ],
         },
         {
           type: 'function_result',
@@ -302,7 +369,11 @@ describe('canonical Google Interactions protocol', () => {
           result: [{ type: 'text', text: 'b' }],
         },
       ]);
-      if (!store) expect(body.input[1].signature).toBe('sig_b');
+      if (!store) {
+        expect(body.input[0]).toEqual(initialBody.input[0]);
+        expect(body.input[1].signature).toBe('sig_b');
+      }
+      expect(fetchModel).toHaveBeenCalledTimes(2);
     },
   );
 
@@ -312,6 +383,10 @@ describe('canonical Google Interactions protocol', () => {
     'cursor',
     'missing-result',
     'origin',
+    'media-bytes',
+    'media-mime',
+    'media-detail',
+    'media-label',
   ] as const)('rejects a changed %s before provider I/O', async (changed) => {
     const configured = model();
     const prepared = await Effect.runPromise(configured.prepareTurn(request()));
@@ -324,9 +399,108 @@ describe('canonical Google Interactions protocol', () => {
     if (changed === 'missing-result') next.messages[2].results.pop();
     if (changed === 'origin')
       next.continuation.origin.deployment.credentialScope = 'other-account';
+    if (changed === 'media-bytes') next.messages[0].content[2].base64 = 'AQ==';
+    if (changed === 'media-mime')
+      next.messages[0].content[2].mimeType = 'image/jpeg';
+    if (changed === 'media-detail') next.messages[0].content[2].detail = 'low';
+    if (changed === 'media-label')
+      next.messages[0].content[1].text = 'Other figure';
     await expect(
       Effect.runPromise(configured.prepareTurn(next)),
     ).rejects.toMatchObject({ _tag: 'ModelError' });
+    expect(fetchModel).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    'raw-audio',
+    'tool-audio',
+    'tool-video',
+    'tool-document',
+    'parallel-control',
+  ] as const)(
+    'rejects unsupported %s before provider I/O',
+    async (unsupported) => {
+      const configured = model();
+      const prepared = await Effect.runPromise(
+        configured.prepareTurn(request()),
+      );
+      const result = await Effect.runPromise(configured.generateTurn(prepared));
+      const next = JSON.parse(JSON.stringify(exchange(result)));
+      let expectedMessage = 'Google tool results';
+      if (unsupported === 'parallel-control') {
+        next.parallelToolCalls = false;
+        expectedMessage = 'Google parallel-call control';
+      } else if (unsupported === 'raw-audio') {
+        expectedMessage = 'Raw Google audio';
+        next.messages.push({
+          role: 'user',
+          content: [
+            {
+              kind: 'audio',
+              mimeType: 'audio/L16 ; rate=24000',
+              base64: 'AA==',
+            },
+          ],
+        });
+      } else {
+        const parts = {
+          'tool-audio': {
+            kind: 'audio',
+            mimeType: 'audio/mp3',
+            base64: 'AA==',
+          },
+          'tool-video': {
+            kind: 'video',
+            mimeType: 'video/mp4',
+            base64: 'AA==',
+          },
+          'tool-document': {
+            kind: 'document',
+            mimeType: 'application/pdf',
+            base64: 'AA==',
+          },
+        };
+        next.messages[2].results[0].content.push(parts[unsupported]);
+      }
+      await expect(
+        Effect.runPromise(configured.prepareTurn(next)),
+      ).rejects.toMatchObject({
+        _tag: 'ModelError',
+        kind: 'unsupported',
+        message: expect.stringContaining(expectedMessage),
+      });
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('preserves a named tool choice and validates its definition before I/O', async () => {
+    const configured = model();
+    const input: TurnRequest = { ...request(), toolChoice: { name: 'search' } };
+    await expect(
+      Effect.runPromise(
+        configured.prepareTurn({ ...input, toolChoice: { name: 'absent' } }),
+      ),
+    ).rejects.toMatchObject({ _tag: 'ModelError', kind: 'invalid-request' });
+    const prepared = await Effect.runPromise(configured.prepareTurn(input));
+    const restored = JSON.parse(JSON.stringify(prepared));
+    restored.controls.toolChoice.name = 'absent';
+    await expect(
+      Effect.runPromise(configured.generateTurn(restored)),
+    ).rejects.toMatchObject({ _tag: 'ModelError', kind: 'invalid-request' });
+    expect(fetchModel).not.toHaveBeenCalled();
+    const events = signedEvents();
+    events.splice(12, 3);
+    fetchModel.mockImplementation(async () => response(events));
+    const result = await Effect.runPromise(
+      configured.generateTurn(JSON.parse(JSON.stringify(prepared))),
+    );
+    expect(
+      result.content.filter((part) => part.kind === 'local-call'),
+    ).toMatchObject([{ name: 'search', providerCallId: 'call_1' }]);
+    const body = await (fetchModel.mock.calls[0][0] as Request).json();
+    expect(body.generation_config.tool_choice).toEqual({
+      allowed_tools: { mode: 'any', tools: ['search'] },
+    });
     expect(fetchModel).toHaveBeenCalledTimes(1);
   });
 

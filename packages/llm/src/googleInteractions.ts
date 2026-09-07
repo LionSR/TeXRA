@@ -131,6 +131,57 @@ function prefixFingerprint(
   return createHash('sha256').update(encoded, 'utf8').digest('hex');
 }
 
+const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
+  part: Extract<
+    ResolvedTurn['messages'][number],
+    { role: 'user' }
+  >['content'][number],
+) {
+  if (part.kind === 'text') {
+    return { type: 'text', text: part.text } satisfies Interactions.TextContent;
+  }
+  const mimeType = part.mimeType.split(';', 1)[0].trim().toLowerCase();
+  if (part.kind !== 'document' && !mimeType.startsWith(`${part.kind}/`)) {
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message: 'Google media kind disagrees with its MIME type.',
+    });
+  }
+  const data = { data: part.base64, mime_type: part.mimeType };
+  switch (part.kind) {
+    case 'image': {
+      const resolution =
+        part.detail === 'ultra-high' ? 'ultra_high' : part.detail;
+      return {
+        type: 'image',
+        ...data,
+        ...(resolution === undefined ? {} : { resolution }),
+      } satisfies Interactions.ImageContent;
+    }
+    case 'audio':
+      if (['audio/l16', 'audio/alaw', 'audio/mulaw'].includes(mimeType)) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Raw Google audio requires channel and sample-rate metadata outside the implemented input vocabulary.',
+        });
+      }
+      return { type: 'audio', ...data } satisfies Interactions.AudioContent;
+    case 'video':
+      return {
+        type: 'video',
+        ...data,
+        // Agentic processing requires additional signed hosted-result content.
+        processing: 'static',
+      } satisfies Interactions.VideoContent;
+    case 'document':
+      return {
+        type: 'document',
+        ...data,
+      } satisfies Interactions.DocumentContent;
+  }
+});
+
 const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
   messages: ResolvedTurn['messages'],
   origin: ModelOrigin,
@@ -142,7 +193,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
     if (message.role === 'user') {
       steps.push({
         type: 'user_input',
-        content: message.content.map(({ text }) => ({ type: 'text', text })),
+        content: yield* Effect.forEach(message.content, lowerInputPart),
       });
     } else if (message.role === 'tool') {
       for (const result of message.results) {
@@ -154,12 +205,26 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
               'A Google tool result requires its original provider call ID.',
           });
         }
+        const content: Array<
+          Interactions.TextContent | Interactions.ImageContent
+        > = [];
+        for (const input of result.content) {
+          const part = yield* lowerInputPart(input);
+          if (part.type !== 'text' && part.type !== 'image') {
+            return yield* new ModelError({
+              kind: 'unsupported',
+              message:
+                'Google tool results support only text and image content.',
+            });
+          }
+          content.push(part);
+        }
         steps.push({
           type: 'function_result',
           call_id: call.providerCallId,
           name: call.name,
           ...(result.status === 'error' ? { is_error: true } : {}),
-          result: result.content.map(({ text }) => ({ type: 'text', text })),
+          result: content,
         });
       }
       calls = [];
@@ -254,6 +319,16 @@ const invocationInput = Effect.fn('llm.google.invocationInput')(function* (
         'The prepared invocation belongs to another model or deployment.',
     });
   }
+  const toolChoice = turn.controls.toolChoice;
+  if (
+    toolChoice !== 'auto' &&
+    !turn.tools.some((tool) => tool.name === toolChoice.name)
+  ) {
+    return yield* new ModelError({
+      kind: 'invalid-request',
+      message: 'The selected Google tool is not defined in this invocation.',
+    });
+  }
   const steps = yield* lowerMessages(turn.messages, origin);
   if (!turn.continuation) return steps;
   const continuation = turn.continuation;
@@ -319,6 +394,12 @@ export function googleInteractionsModel(
           message: 'Google Interactions does not support temperature.',
         });
       }
+      if (parsed.data.parallelToolCalls !== undefined) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message: 'Google parallel-call control is not implemented.',
+        });
+      }
       const turn = ResolvedTurnSchema.parse({
         ...origin,
         mode: 'foreground',
@@ -327,6 +408,7 @@ export function googleInteractionsModel(
         tools: parsed.data.tools ?? [],
         continuation: parsed.data.continuation,
         controls: {
+          toolChoice: parsed.data.toolChoice ?? 'auto',
           maxOutputTokens:
             parsed.data.maxOutputTokens ?? config.defaults.maxOutputTokens,
           store: parsed.data.store ?? config.defaults.store,
@@ -392,7 +474,15 @@ export function googleInteractionsModel(
                     max_output_tokens: turn.controls.maxOutputTokens,
                     thinking_level: turn.controls.thinkingLevel,
                     thinking_summaries: 'auto',
-                    tool_choice: 'auto',
+                    tool_choice:
+                      turn.controls.toolChoice === 'auto'
+                        ? 'auto'
+                        : {
+                            allowed_tools: {
+                              mode: 'any',
+                              tools: [turn.controls.toolChoice.name],
+                            },
+                          },
                   },
                   ...(turn.continuation
                     ? {

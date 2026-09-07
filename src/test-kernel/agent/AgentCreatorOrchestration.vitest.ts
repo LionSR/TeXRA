@@ -109,7 +109,11 @@ describe('agent creator orchestration', () => {
           endpoint: 'https://synthetic.invalid/v1',
           credentialScope: 'synthetic-agent-creator',
         },
-        defaults: { temperature: 0, maxOutputTokens: 4096 },
+        defaults: {
+          temperature: 0,
+          maxOutputTokens: 4096,
+          parallelToolCalls: true,
+        },
       },
       { apiKey: 'synthetic', fetch: fetchModel },
     );

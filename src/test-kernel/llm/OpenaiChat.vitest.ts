@@ -11,7 +11,7 @@ const CONFIG = {
     endpoint: 'https://synthetic.invalid/v1',
     credentialScope: 'synthetic-account',
   },
-  defaults: { temperature: 0, maxOutputTokens: 100 },
+  defaults: { temperature: 0, maxOutputTokens: 100, parallelToolCalls: true },
 };
 const REQUEST: TurnRequest = {
   messages: [
@@ -47,6 +47,37 @@ function response(body: string): Response {
   return new Response(body, {
     headers: { 'content-type': 'text/event-stream' },
   });
+}
+
+function toolChunk(
+  toolCalls: object[],
+  finishReason: string | null = null,
+): object {
+  return chunk({
+    choices: [
+      {
+        index: 0,
+        delta: { tool_calls: toolCalls },
+        finish_reason: finishReason,
+      },
+    ],
+  });
+}
+
+const TOOLS = ['search', 'fetch'].map((name) => ({
+  name,
+  description: `Synthetic ${name}`,
+  parameters: { type: 'object', properties: { query: { type: 'string' } } },
+}));
+
+function call(index: number, overrides: Record<string, unknown> = {}): object {
+  return {
+    index,
+    id: `call_${index}`,
+    type: 'function',
+    function: { name: TOOLS[index]?.name ?? 'search', arguments: '{}' },
+    ...overrides,
+  };
 }
 
 function modelWith(fetch: typeof globalThis.fetch): Model {
@@ -161,6 +192,357 @@ describe('native OpenAI Chat protocol', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('collects indexed calls once and lowers ordered results without losing error status', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response(
+          sse(
+            chunk({
+              choices: [
+                {
+                  index: 0,
+                  delta: { content: 'Checking.' },
+                  finish_reason: null,
+                },
+              ],
+            }),
+            toolChunk([
+              call(1, { function: { name: 'fetch', arguments: '{"query":' } }),
+              call(0, { function: { name: 'search', arguments: '{"query":' } }),
+            ]),
+            toolChunk([
+              {
+                index: 0,
+                id: 'call_0',
+                function: { name: 'search', arguments: '"first"}' },
+              },
+              {
+                index: 1,
+                id: null,
+                type: null,
+                function: { name: null, arguments: '"second"}' },
+              },
+            ]),
+            chunk({
+              choices: [
+                {
+                  index: 0,
+                  delta: { tool_calls: null },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            }),
+            chunk({
+              choices: [],
+              usage: {
+                prompt_tokens: 10,
+                completion_tokens: 8,
+                total_tokens: 18,
+              },
+            }),
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(response(sse(chunk())));
+    const model = modelWith(fetch);
+    const prepared = await Effect.runPromise(
+      model.prepareTurn({ ...REQUEST, tools: TOOLS }),
+    );
+    const events = await Effect.runPromise(
+      Stream.runCollect(model.streamTurn(prepared)),
+    );
+    expect(events).toHaveLength(2);
+    expect(events[0]).toEqual({
+      kind: 'delta',
+      part: 'text',
+      text: 'Checking.',
+    });
+    const completed = events[1];
+    expect(completed?.kind).toBe('completed');
+    if (completed?.kind !== 'completed')
+      throw new Error('Missing completed result');
+    const result = completed.result;
+    expect(result).toMatchObject({
+      finishReason: 'tool-calls',
+      usage: { totalTokens: 18 },
+      content: [
+        { kind: 'text', text: 'Checking.' },
+        {
+          kind: 'local-call',
+          providerCallId: 'call_0',
+          name: 'search',
+          arguments: { query: 'first' },
+        },
+        {
+          kind: 'local-call',
+          providerCallId: 'call_1',
+          name: 'fetch',
+          arguments: { query: 'second' },
+        },
+      ],
+    });
+    await Effect.runPromise(
+      model
+        .prepareTurn({
+          messages: [
+            ...REQUEST.messages,
+            {
+              role: 'assistant',
+              origin: result.requestedOrigin,
+              content: result.content,
+            },
+            {
+              role: 'tool',
+              results: [
+                {
+                  callOrdinal: 0,
+                  status: 'success',
+                  content: [{ kind: 'text', text: 'same text' }],
+                },
+                {
+                  callOrdinal: 1,
+                  status: 'error',
+                  content: [{ kind: 'text', text: 'same text' }],
+                },
+              ],
+            },
+          ],
+          tools: TOOLS,
+        })
+        .pipe(Effect.flatMap(model.generateTurn)),
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
+      tools: TOOLS.map((tool) => ({
+        type: 'function',
+        function: { ...tool, strict: false },
+      })),
+      tool_choice: 'auto',
+      parallel_tool_calls: true,
+    });
+    expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).messages).toEqual(
+      [
+        { role: 'user', content: 'Generate YAML.' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Checking.' }],
+          tool_calls: [
+            {
+              id: 'call_0',
+              type: 'function',
+              function: { name: 'search', arguments: '{"query":"first"}' },
+            },
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'fetch', arguments: '{"query":"second"}' },
+            },
+          ],
+        },
+        { role: 'tool', tool_call_id: 'call_0', content: 'same text' },
+        { role: 'tool', tool_call_id: 'call_1', content: 'Error: same text' },
+      ],
+    );
+  });
+
+  it('freezes configured parallelism and the required tool before sending', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () =>
+        response(sse(toolChunk([call(0)], 'tool_calls'))),
+      );
+    const config = structuredClone(CONFIG);
+    config.defaults.parallelToolCalls = false;
+    const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+    const choice = { name: 'search' };
+    const turn = await Effect.runPromise(
+      model.prepareTurn({ ...REQUEST, tools: TOOLS, toolChoice: choice }),
+    );
+    config.defaults.parallelToolCalls = true;
+    choice.name = 'fetch';
+    await Effect.runPromise(model.generateTurn(turn));
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
+      parallel_tool_calls: false,
+      tool_choice: { type: 'function', function: { name: 'search' } },
+    });
+    await Effect.runPromise(
+      model
+        .prepareTurn({ ...REQUEST, tools: TOOLS, parallelToolCalls: true })
+        .pipe(Effect.flatMap(model.generateTurn)),
+    );
+    expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toMatchObject({
+      parallel_tool_calls: true,
+      tool_choice: 'auto',
+    });
+    const failure = await Effect.runPromise(
+      Effect.flip(
+        model.prepareTurn({
+          ...REQUEST,
+          tools: TOOLS,
+          toolChoice: { name: 'absent' },
+        }),
+      ),
+    );
+    expect(failure.kind).toBe('invalid-request');
+    const forged = await Effect.runPromise(
+      Effect.flip(
+        model.generateTurn({
+          ...turn,
+          tools: [],
+        }),
+      ),
+    );
+    expect(forged.kind).toBe('invalid-request');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    'user media',
+    'tool media',
+    'reasoning',
+    'missing call ID',
+    'text after calls',
+  ] as const)('rejects unsupported %s before transport', async (scenario) => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    const model = modelWith(fetch);
+    const image = { kind: 'image', mimeType: 'image/png', base64: '' } as const;
+    const content: TurnRequest['messages'][number] = {
+      role: 'assistant',
+      origin: {
+        protocol: 'openai-chat',
+        codecVersion: 1,
+        requestedModel: CONFIG.requestedModel,
+        deployment: CONFIG.deployment,
+      },
+      content: [
+        {
+          kind: 'local-call',
+          providerCallId: scenario === 'missing call ID' ? null : 'call_0',
+          name: 'search',
+          arguments: {},
+        },
+        ...(scenario === 'text after calls'
+          ? [{ kind: 'text' as const, text: 'later text' }]
+          : []),
+      ],
+    };
+    let request: TurnRequest = {
+      messages: [
+        ...REQUEST.messages,
+        content,
+        {
+          role: 'tool',
+          results: [
+            {
+              callOrdinal: 0,
+              status: 'success',
+              content:
+                scenario === 'tool media'
+                  ? [image]
+                  : [{ kind: 'text', text: 'done' }],
+            },
+          ],
+        },
+      ],
+    };
+    if (scenario === 'user media')
+      request = { messages: [{ role: 'user', content: [image] }] };
+    if (scenario === 'reasoning')
+      request = {
+        messages: [
+          ...REQUEST.messages,
+          {
+            ...content,
+            content: [
+              {
+                kind: 'reasoning',
+                summary: [{ kind: 'text', text: 'reason' }],
+                evidence: null,
+              },
+            ],
+          },
+        ],
+      };
+    const failure = await Effect.runPromise(
+      Effect.flip(model.prepareTurn(request)),
+    );
+    expect(failure.kind).toBe('unsupported');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { name: 'changed call ID', deltas: [call(0), { index: 0, id: 'changed' }] },
+    {
+      name: 'changed call name',
+      deltas: [call(0), { index: 0, function: { name: 'fetch' } }],
+    },
+    { name: 'missing call ID', deltas: [call(0, { id: undefined })] },
+    { name: 'missing call type', deltas: [call(0, { type: undefined })] },
+    {
+      name: 'missing call name',
+      deltas: [call(0, { function: { arguments: '{}' } })],
+    },
+    {
+      name: 'duplicate call IDs',
+      deltas: [call(0), call(1, { id: 'call_0' })],
+    },
+    { name: 'missing index', deltas: [call(1)] },
+    {
+      name: 'malformed JSON',
+      deltas: [call(0, { function: { name: 'search', arguments: '{' } })],
+    },
+    {
+      name: 'non-object JSON',
+      deltas: [call(0, { function: { name: 'search', arguments: '[]' } })],
+    },
+    {
+      name: 'unsupported JSON key',
+      deltas: [
+        call(0, {
+          function: { name: 'search', arguments: '{"__proto__":{}}' },
+        }),
+      ],
+    },
+    { name: 'stop with calls', deltas: [call(0)], finish: 'stop' },
+    { name: 'truncated calls', deltas: [call(0)], finish: 'length' },
+  ])(
+    'never completes malformed tool output: $name',
+    async ({ deltas, finish }) => {
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValue(
+          response(
+            sse(
+              ...deltas.map((delta) => toolChunk([delta])),
+              toolChunk([], finish ?? 'tool_calls'),
+            ),
+          ),
+        );
+      const model = modelWith(fetch);
+      const completed = vi.fn();
+      const failure = await Effect.runPromise(
+        Effect.flip(
+          model.prepareTurn({ ...REQUEST, tools: TOOLS }).pipe(
+            Effect.flatMap((turn) =>
+              Stream.runForEach(model.streamTurn(turn), (event) =>
+                Effect.sync(() => {
+                  if (event.kind === 'completed') completed();
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(failure).toMatchObject({
+        kind: 'malformed-output',
+        responseId: 'synthetic-response',
+      });
+      expect(completed).not.toHaveBeenCalled();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it.each([
     {
       name: 'connection',
@@ -208,7 +590,7 @@ describe('native OpenAI Chat protocol', () => {
   it.each([
     { name: 'unfinished response', tail: '' },
     {
-      name: 'unsupported tool call',
+      name: 'tool completion without calls',
       tail: sse(
         chunk({
           choices: [
@@ -242,12 +624,13 @@ describe('native OpenAI Chat protocol', () => {
     });
   });
 
-  it.each(['headers', 'body'] as const)(
+  it.each(['headers', 'body', 'tool arguments'] as const)(
     'interrupts a pending %s read and joins cleanup',
     async (phase) => {
       let requestSignal: AbortSignal | null | undefined;
       const cancel = vi.fn();
       const onDelta = vi.fn();
+      const onCompleted = vi.fn();
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
           controller.enqueue(
@@ -255,6 +638,12 @@ describe('native OpenAI Chat protocol', () => {
               `data: ${JSON.stringify(chunk({ choices: [{ index: 0, delta: { content: 'partial' }, finish_reason: null }] }))}\n\n`,
             ),
           );
+          if (phase === 'tool arguments')
+            controller.enqueue(
+              new TextEncoder().encode(
+                `data: ${JSON.stringify(toolChunk([call(0, { function: { name: 'search', arguments: '{' } })]))}\n\n`,
+              ),
+            );
         },
         cancel,
       });
@@ -262,7 +651,7 @@ describe('native OpenAI Chat protocol', () => {
         .fn<typeof globalThis.fetch>()
         .mockImplementation((_input, init) => {
           requestSignal = init?.signal;
-          if (phase === 'body')
+          if (phase !== 'headers')
             return Promise.resolve(
               new Response(body, {
                 headers: { 'content-type': 'text/event-stream' },
@@ -282,18 +671,20 @@ describe('native OpenAI Chat protocol', () => {
         Stream.runForEach(model.streamTurn(prepared), (event) =>
           Effect.sync(() => {
             if (event.kind === 'delta') onDelta();
+            if (event.kind === 'completed') onCompleted();
           }),
         ),
       );
       await vi.waitFor(() => {
         expect(requestSignal).toBeDefined();
-        if (phase === 'body') expect(onDelta).toHaveBeenCalledTimes(1);
+        if (phase !== 'headers') expect(onDelta).toHaveBeenCalledTimes(1);
       });
 
       await Effect.runPromise(Fiber.interrupt(fiber));
 
       expect(requestSignal?.aborted).toBe(true);
-      if (phase === 'body') expect(cancel).toHaveBeenCalledTimes(1);
+      if (phase !== 'headers') expect(cancel).toHaveBeenCalledTimes(1);
+      expect(onCompleted).not.toHaveBeenCalled();
       expect(fetch).toHaveBeenCalledTimes(1);
     },
   );
