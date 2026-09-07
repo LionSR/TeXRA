@@ -202,15 +202,18 @@ export function truncateSummary(text: string, maxLength: number): string {
 }
 
 /**
- * The shared width for a one-line "here's roughly what this was" label —
- * a bash command, an agent prompt, a queued follow-up — shown alongside a
- * tool-run or approval summary. Not a hard protocol limit, just the width
- * every such label in the codebase already converged on.
+ * The shared width for a "here's roughly what this was" preview — a bash
+ * command, an agent prompt, a queued follow-up — shown alongside a tool-run
+ * or approval summary. Not a hard protocol limit, just the width every such
+ * preview in the codebase already converged on.
  */
 const PREVIEW_MAX_LENGTH = 60;
 
 /**
- * Truncate `text` to a fixed one-line preview label.
+ * Truncate `text` to a fixed preview width. Unlike {@link truncateSummary},
+ * this does not collapse whitespace first, so a multi-line `text` (an agent
+ * prompt, say) keeps its embedded newlines up to the budget — every call
+ * site here already passes text that is one line in practice.
  */
 export function previewLabel(text: string): string {
   return truncateWithEllipsis(text, PREVIEW_MAX_LENGTH);
