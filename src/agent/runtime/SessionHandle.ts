@@ -608,15 +608,17 @@ export class SessionHandle {
 
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
-    // File writers, host notifications and runtime waiters belong only to
-    // the process that authored the fact.
-    const { self } = SubscriptionRef.getUnsafe(this.graph.local);
-    if (event.ownerId == null || !self.includes(event.ownerId)) {
-      return Effect.void;
-    }
+    // The fold is this process's reading of the shared table, so every
+    // committed row enters it whoever authored it: the store's synchronous
+    // accessors would otherwise answer a cross-process run's questions from a
+    // fold that never saw its rows. The ownership fence below is on the local
+    // side effects only — file writers, host notifications and runtime waiters
+    // belong to the process that authored the fact.
     return this.applySnapshotEvent(event).pipe(
       Effect.andThen(
         Effect.sync(() => {
+          const { self } = SubscriptionRef.getUnsafe(this.graph.local);
+          if (event.ownerId == null || !self.includes(event.ownerId)) return;
           if (event.type === 'result') {
             for (const listener of [...this.resultListeners]) {
               try {
