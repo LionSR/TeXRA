@@ -106,7 +106,7 @@ Until then the A1 wraps stay, and they are correct.
 | --------------------------------------------------------------- | ------------- | ---------------------------------------------------- |
 | **A1** Foreign runtime or library edge                          | 28            | Permanent and correct                                |
 | **A2** Host-port edge (Promise-typed port)                      | 13            | Correct while the port is Promise-typed              |
-| **B1** Named generic wrapper (one per subsystem)                | 13            | Correct shape; each marks a Promise surface below it |
+| **B1** Named generic wrapper (one per subsystem)                | 13 → 9        | 9 are real policy; 4 were duplicates, collapsed (§9) |
 | **B2** Repo-owned promise API, re-wrapped at call sites         | 26            | **Debt** — the conversion targets                    |
 | **B3** Ambient-context (`AsyncLocalStorage`) crossing           | 2 (+3 in C2b) | **Structural** — see §5.2                            |
 | **C1** `Effect.promise` with a verified totality claim          | 4             | Correct; reasons now stated                          |
@@ -173,15 +173,35 @@ and when the port's own contract becomes Effect-typed; none is debt today.
 | `packages/desktop/src/main/index.ts:1607`                      | `Effect.tryPromise` | papers.open (Electron)                        | —             |
 | `packages/cli/src/runtime/approval/approvalPrompts.ts:133`     | `Effect.tryPromise` | approvalPrompt / askCliQuestion (host UI)     | —             |
 
-### B1 — Named generic wrappers (13)
+### B1 — Named generic wrappers (13, now 9)
 
-The `hostPort` shape: one named helper per subsystem, applying one catch
-policy, reused by every call site in that subsystem.
-`src/controllers/effectPort.ts:19` is the reference version, and its
-doc comment already states why the catch is identity and why no signal is
-passed. These are the right shape — but each one exists _because_ a
-Promise-typed surface sits below it, so a wrapper's disappearance is the
-signal that a subsystem finished converting.
+One named helper per subsystem, applying one catch policy, reused by every
+call site in that subsystem. These are the right shape — but each exists
+_because_ a Promise-typed surface sits below it, so a wrapper's disappearance
+is the signal that a subsystem finished converting.
+
+**Nine of the thirteen are distinct; four were duplicates.** Each of the nine
+maps its rejection to a domain error the subsystem owns — `executionsRead` to
+`ExecutionsReadFailed`, `agentCliCall` to `AgentCliCallFailed`, `callPort` to
+`AuthPortError`, and so on — so they are policy, not indirection. But five
+carried the _identity_ catch and were textually the same helper under five
+names: `hostPort` (`src/controllers/effectPort.ts`), `port`
+(`githubSubscriptionTool.ts`), `tryPromise` (`initPlatform.ts`), `tryHost`
+(`VscodeIntegration.ts`), and `step` (`modelAccessSelection.ts`). Collapsed to
+one in this pass (§9).
+
+Two facts made that collapse safe and were checked rather than assumed.
+`Effect.tryPromise` catches a synchronous throw from `try` itself — its
+implementation wraps the `f(signal)` call in its own `try`/`catch`
+(`effect/dist/internal/effect.js:756`) — so the variants that passed `try`
+directly and the ones that wrapped it in `async` differ only in whether the
+callback may return a plain `A`. `hostPort`'s `() => A | PromiseLike<A>`
+signature is the more general of the two and subsumes all five.
+
+Inlining the nine that remain would be the wrong move in the other direction:
+`executionsRead` has 36 call sites, `hostPort` 18 (before this pass), and
+`agentCliCall` 10, so inlining would copy each catch policy into every one of
+them.
 
 | Site                                                            | Combinator          | Wrapper over                         | Interruptible |
 | --------------------------------------------------------------- | ------------------- | ------------------------------------ | ------------- |
@@ -480,6 +500,7 @@ and `AgentTrace` hold a third `AsyncLocalStorage` for stage scope).
 | W5  | Remaining B2 singletons, each with the lane owning its subsystem | 10           | Open; folded into existing lanes         |
 | W6  | The `AsyncLocalStorage` layer                                    | 5 (§5.2)     | **Blocked on W1** — scoped, see §5.2     |
 | W7  | `effect/unstable/*` adoption for the foreign edges               | 28 (A1)      | Needs an owner ruling first (§2.5)       |
+| W8  | Collapse the duplicate identity-catch wrappers                   | 4 (B1)       | **Done** (§9)                            |
 
 **W1 is bigger than the first draft of this note claimed.** `BaseFS` exposes 21
 static async methods, and `StorageFS`/`GlobalStorageFS` alone are called from
@@ -524,6 +545,26 @@ Both now use `executionsRead`, the wrapper the file declares as "the one wrap
 of this tool's Promise collaborators" and already uses at 30+ sites. The
 failure was reaching `execute`'s `Effect.die(error.cause)` either way; it now
 does so through the typed channel rather than around it.
+
+**Collapsed (W8) — four duplicate wrappers deleted:**
+
+The identity-catch host-port wrapper existed five times under five names.
+`src/controllers/effectPort.ts` moved to `src/common/hostPort.ts` and the
+other four were deleted in favour of it:
+
+| Deleted                            | Was called | Now        |
+| ---------------------------------- | ---------- | ---------- |
+| `githubSubscriptionTool.ts` `port` | 6 sites    | `hostPort` |
+| `VscodeIntegration.ts` `tryHost`   | 7 sites    | `hostPort` |
+| `initPlatform.ts` `tryPromise`     | 4 sites    | `hostPort` |
+| `modelAccessSelection.ts` `step`   | 5 sites    | `hostPort` |
+
+`common` rather than `controllers` because the subsystem-edge baseline records
+**no inbound edge to `controllers` at all** — `src/tools` importing it would
+have created a new directed pair and failed the ratchet — while
+`tools → common`, `controllers → common`, and the hosts' own `@common` imports
+all already exist. The helper depends on nothing but `effect`, so `controllers`
+was never its right home.
 
 **Documented (W3) — no behavior change:**
 

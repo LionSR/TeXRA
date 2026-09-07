@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { Effect, Result } from 'effect';
+import { hostPort } from '@common/hostPort';
 
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -193,27 +194,19 @@ function getDiagnostics(filePath: string): LeanDiagnostic[] {
   return [];
 }
 
-/**
- * One VS Code command or window call as an Effect. The host's `Thenable` is
- * the foreign-runtime edge, so its rejection is the typed failure the port
- * methods recover from; a synchronous throw inside `run` fails the same way.
- */
-const tryHost = <A>(run: () => PromiseLike<A>): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: run, catch: (error) => error });
-
 function executeFileCommand(
   command: LeanFileCommand,
   filePath: string,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
-    yield* tryHost(async () => {
+    yield* hostPort(async () => {
       const document = await vscode.workspace.openTextDocument(
         vscode.Uri.file(WorkspaceFS.toAbsolute(filePath)),
       );
       await vscode.window.showTextDocument(document, { preserveFocus: true });
     });
     if (!(yield* getClientProvider())) return false;
-    yield* tryHost(() =>
+    yield* hostPort(() =>
       vscode.commands.executeCommand(FILE_COMMAND_VSCODE_IDS[command]),
     );
     return true;
@@ -229,7 +222,7 @@ function getClientProvider(): Effect.Effect<
   LeanClientProvider | null,
   unknown
 > {
-  return tryHost(async () => {
+  return hostPort(async () => {
     const lean4Ext =
       vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
     if (!lean4Ext) {
@@ -277,7 +270,7 @@ function sendPositionRequest<T>(
     }
 
     const opened = yield* Effect.result(
-      tryHost(async () => {
+      hostPort(async () => {
         const document = await vscode.workspace.openTextDocument(uri);
         await vscode.window.showTextDocument(document, { preserveFocus: true });
       }),
@@ -393,7 +386,7 @@ function getHoverInfo(
 function fetchDiagnosticsForFile(
   file: string,
 ): Effect.Effect<FetchDiagnosticsResult, unknown> {
-  return tryHost(async (): Promise<FetchDiagnosticsResult> => {
+  return hostPort(async (): Promise<FetchDiagnosticsResult> => {
     const absolutePath = WorkspaceFS.toAbsolute(file);
     const diagnosticsWait = waitForDiagnosticsChange(
       vscode.Uri.file(absolutePath),
@@ -426,7 +419,7 @@ function navigateToFirstError(
     (d) => d.severity === vscode.DiagnosticSeverity.Error,
   );
   if (!firstError) return Effect.void;
-  return tryHost(async () => {
+  return hostPort(async () => {
     await openFileInEditor(filePath, {
       line: firstError.range.start.line + 1,
     });
@@ -449,7 +442,7 @@ function executeProjectCommand(
         );
       }
     }
-    yield* tryHost(async () => {
+    yield* hostPort(async () => {
       await vscode.commands.executeCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
     });
   });
