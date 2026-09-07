@@ -73,8 +73,11 @@ requirements apply to workflow scripts; their separate journal is still present.
 
 ### Connect the canonical contract to actual model callers
 
-`ModelFactory.ts` still selects the old handlers. `helperModel.ts` still needs a
-session to construct its handler/client, and all four helper callers use it.
+`ModelFactory.ts` still selects the old handlers. At the reviewed revision,
+`helperModel.ts` also needed a session to construct its handler/client. A subsequent
+fix removes that dependency from all four helper callers: auxiliary output no
+longer inherits document replacement rules. This does not switch generation to
+the native package.
 The editor's Grant operation is the sole application generation consumer of the
 new acquisition contract. Both old graph programs, ambient run context and
 Promise-based launch/resume paths remain active.
@@ -140,6 +143,66 @@ presentation consumer. Partial arguments must remain observations, never
 executable calls. Neither these events nor a larger recovery-state union should
 be added merely because the reference implementation has them.
 
+## Standard Effect platform services
+
+The shared `JsonStore` now uses `FileSystem.FileSystem` for reads, directory
+creation and permission changes, and `Path.Path` for native path resolution.
+`NodeFileSystem.layer` and `NodePath.layer` provide those services at the store's
+existing Node boundary; `@effect/platform-node` is pinned to 4.0.0-rc.112.
+The direct Node filesystem Promise wrappers are removed. Atomic writes,
+cross-process locks, UTF-8 decoding and underlying Node error identities remain
+part of the store's existing contract. No new execution boundary or public
+service is introduced. The existing store tests exercise real files, concurrent
+writers, lock failure and bundled execution.
+
+Prefer Effect's existing `FileSystem`, `Path` and terminal services for ordinary
+platform operations as their consumers become Effect programs. TeXRA already
+uses Effect HTTP and has an Effect diagnostic logger, while the wider filesystem port and
+its Node implementation remain custom. Standard services can reduce that duplicated
+surface; wrapping them behind the complete old Promise interface would retain
+both systems and introduce another execution boundary.
+
+Provide only the required layers at each host's existing composition root, pinned
+to the same release as `effect`. The reference
+[`NodeServices.layer`](https://github.com/Effect-TS/effect/blob/2600f62f4532026928454dcea8d1c48557b3f942/packages/platform/node/src/NodeServices.ts)
+combines filesystem, path, terminal, stdio, crypto and child-process services.
+A desktop or extension consumer that needs only files need not acquire the entire
+bundle. `Path.layer` is POSIX; the
+[Node path layer](https://github.com/Effect-TS/effect/blob/2600f62f4532026928454dcea8d1c48557b3f942/packages/platform/node-shared/src/NodePath.ts)
+uses the host platform's conventions. Preserve workspace URI semantics where
+VS Code supplies the filesystem, and retain the separately justified atomic
+publication, symlink and overwrite behavior in TeXRA's current filesystem code.
+
+[`NodeRuntime.runMain`](https://github.com/Effect-TS/effect/blob/2600f62f4532026928454dcea8d1c48557b3f942/packages/platform/node-shared/src/NodeRuntime.ts)
+handles process signals and may exit the process. It belongs only at an entry that
+owns process termination. TeXRA's extension, Electron application and embeddable
+SDK must retain their existing lifetime owners while supplying standard services
+to their managed runtime.
+
+The direct Lean server still requires its current process provider: its pool must
+retain a closing server until the child's pipes have closed. The reference Node
+spawner's exit signal is completed on the process `exit` event. Substituting the
+standard process layer failed six of the 25 existing Lean integration tests,
+including delayed-close and process-exhaustion recovery cases. That substitution
+is not included; adopting file and path services does not require it.
+
+`Logger.toFile` is a candidate for ordinary diagnostic file output, not execution
+history or durable acknowledgements. At the exact pinned revision, its
+[implementation](https://github.com/Effect-TS/effect/blob/2600f62f4532026928454dcea8d1c48557b3f942/packages/effect/src/Logger.ts#L1027-L1035)
+opens the file in append mode, batches for one second when `batchWindow` is absent,
+and ignores later write failures. This differs from documentation describing
+unbatched default writes and observable write errors. Opening can fail, and scope
+closure flushes the batch, but that does not establish durable storage.
+
+TeXRA's `src/logger/effectDiagnostics.ts` already routes Effect logs through the
+shared host logger and its secret redaction. Desktop file logging additionally
+captures ordinary console and renderer messages, rotates files, and serves a log
+viewer. Replacing only the Effect logger would not replace these consumers.
+Any adoption must preserve redaction, capture coverage, rotation and shutdown
+flushing, with an explicit policy for diagnostic write failures. These are useful
+standard components to adopt where they remove existing code; this report does
+not install unused layers or change logging behavior.
+
 ## Verified
 
 Hosted tools, selected media/upload/compaction paths and Google background
@@ -158,5 +221,7 @@ checkouts were not built, and no live provider or external side effect was run.
 The rebased TeXRA source passed formatting, full type checking, extension build,
 lint and the repository guards. Vitest passed 9,351 tests with six skipped across
 766 passing files and one skipped file, using Node 22.23.2 and four workers
-(429.06 seconds). These results apply to the pinned TeXRA source above; this report
-adds documentation only.
+(429.06 seconds). These results apply to the pinned TeXRA source above. Subsequent helper and
+platform changes have their own validation in the PR description. The helper
+regression was run against the old implementation and failed because document
+replacement changed the generated YAML; it passes with neutral helper output.
