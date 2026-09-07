@@ -603,49 +603,52 @@ export function createChatSessionController(
     session.markRunPending(claimedRunPromise);
     void effectRuntime()
       .runPromise(
-        Effect.try(() => AgentConfigSchema.parse(config)).pipe(
-          Effect.flatMap((registeredConfig) =>
-            runAgent(
-              { kind: 'fresh', config: registeredConfig, executionId },
-              {
-                session: runtimeSession,
-                enforceCategory: true,
-                approvalPromptsUnavailable: approvalsUnavailable,
-                onApprovalPolicyDenial: () =>
-                  warnApprovalDenied(sessionContext, 'Tool or edit approval'),
-                runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
-                onStreamResolved: (resolvedStreamId) => {
-                  // Each chat round mints a fresh root StreamTabId (new
-                  // executionId), so bash/tool-edit/super-YOLO bypass, which is
-                  // keyed per stream, would otherwise reset every round even
-                  // though the user is continuing the same conversation. Link the
-                  // new round's stream to the previous one so bypass resolution
-                  // (see `registerStreamParent`) falls through to whatever the
-                  // prior round had, unless this round sets its own explicit value.
-                  const previousRootStreamId = rootStreamId.get();
-                  if (
-                    previousRootStreamId &&
-                    previousRootStreamId !== resolvedStreamId
-                  ) {
-                    runtimeSession.approvals.registerStreamParent(
-                      resolvedStreamId,
-                      previousRootStreamId,
-                    );
-                  }
-                  session.streamId = resolvedStreamId;
-                  rootStreamId.set(resolvedStreamId);
-                  moveLocalTranscriptToStream(resolvedStreamId);
-                  focusStream(resolvedStreamId);
-                  if (session.stopRequested) interruptActiveRun();
+        recoverRun(
+          Effect.try(() => AgentConfigSchema.parse(config)).pipe(
+            Effect.flatMap((registeredConfig) =>
+              runAgent(
+                { kind: 'fresh', config: registeredConfig, executionId },
+                {
+                  session: runtimeSession,
+                  enforceCategory: true,
+                  approvalPromptsUnavailable: approvalsUnavailable,
+                  onApprovalPolicyDenial: () =>
+                    warnApprovalDenied(sessionContext, 'Tool or edit approval'),
+                  runtimeUnavailableTools:
+                    getDefaultUnavailableToolNames('cli'),
+                  onStreamResolved: (resolvedStreamId) => {
+                    // Each chat round mints a fresh root StreamTabId (new
+                    // executionId), so bash/tool-edit/super-YOLO bypass, which is
+                    // keyed per stream, would otherwise reset every round even
+                    // though the user is continuing the same conversation. Link the
+                    // new round's stream to the previous one so bypass resolution
+                    // (see `registerStreamParent`) falls through to whatever the
+                    // prior round had, unless this round sets its own explicit value.
+                    const previousRootStreamId = rootStreamId.get();
+                    if (
+                      previousRootStreamId &&
+                      previousRootStreamId !== resolvedStreamId
+                    ) {
+                      runtimeSession.approvals.registerStreamParent(
+                        resolvedStreamId,
+                        previousRootStreamId,
+                      );
+                    }
+                    session.streamId = resolvedStreamId;
+                    rootStreamId.set(resolvedStreamId);
+                    moveLocalTranscriptToStream(resolvedStreamId);
+                    focusStream(resolvedStreamId);
+                    if (session.stopRequested) interruptActiveRun();
+                  },
                 },
-              },
+              ),
             ),
+            Effect.map((result) => {
+              session.runExitCode = runOutcomeExitCode(result.outcome);
+              notify('agentFinished');
+            }),
           ),
-          Effect.map((result) => {
-            session.runExitCode = runOutcomeExitCode(result.outcome);
-            notify('agentFinished');
-          }),
-          Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
+          reportRunFailure,
         ),
       )
       .finally(finalize)
