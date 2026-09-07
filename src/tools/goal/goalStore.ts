@@ -27,10 +27,9 @@ const INDEX_KEY = 'goals:index';
 // Stream index growth is user-driven (one entry per stream that ever had
 // a Goal). `forget()` removes entries; callers that delete a stream
 // without calling `forget()` leave dangling entries until next manual cleanup.
-// Single logical resource (the index), so KeyedMutex is used with one
-// constant key rather than a bare Mutex — the sanctioned per-key
-// serialization idiom (AGENTS.md "Serialize async work"), consistent with
-// every other module-level lock in the codebase.
+// Single logical resource (the index), so KeyedMutex (utils/core/keyedMutex.ts)
+// is used with one constant key rather than a bare Mutex — the same
+// primitive most other module-level locks in the codebase already use.
 const indexMutex = new KeyedMutex<'index'>();
 
 /** One goal mutation as observed on a session's event plane. */
