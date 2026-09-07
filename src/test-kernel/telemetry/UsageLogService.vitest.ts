@@ -10,6 +10,7 @@ import {
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as logger from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -20,6 +21,18 @@ import {
 } from '@test/support/FakePlatform';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+
+// The service surface is Effect-typed; the suite settles it on the process
+// runtime the fake host installs.
+function runInitialize(
+  config: Parameters<typeof UsageLogService.initialize>[0],
+) {
+  return effectRuntime().runPromise(UsageLogService.initialize(config));
+}
+
+function runDispose() {
+  return effectRuntime().runPromise(UsageLogService.dispose());
+}
 
 function usageEntry(model: string) {
   return {
@@ -73,9 +86,9 @@ function stubBatchFetch(
 }
 
 describe('UsageLogService', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    UsageLogService.initialize({
+    await runInitialize({
       batchSize: 1,
       flushIntervalMs: 60_000,
       enabled: true,
@@ -83,7 +96,7 @@ describe('UsageLogService', () => {
   });
 
   afterEach(async () => {
-    await UsageLogService.dispose();
+    await runDispose();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -130,7 +143,7 @@ describe('UsageLogService', () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     UsageLogService.log(usageEntry('second'));
-    const disposal = UsageLogService.dispose();
+    const disposal = runDispose();
 
     releaseFirstFetch();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -155,7 +168,7 @@ describe('UsageLogService', () => {
   // had already taken from the queue.
   it('waits for a timer-driven flush during disposal instead of aborting it', async () => {
     stubAccessToken();
-    UsageLogService.initialize({
+    await runInitialize({
       batchSize: 100,
       flushIntervalMs: 20,
       enabled: true,
@@ -170,7 +183,7 @@ describe('UsageLogService', () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const request = fetchMock.mock.calls[0]?.[0] as Request;
 
-    const disposal = UsageLogService.dispose();
+    const disposal = runDispose();
     let disposed = false;
     void disposal.then(() => {
       disposed = true;
@@ -190,19 +203,23 @@ describe('UsageLogService', () => {
   // that reaches initialize() and exits without dispose() still exits on an
   // empty loop, so the ticker's timer is unref'd while the request a flush
   // sends holds the loop on its own.
-  it('schedules the ticker on a timer that does not hold the event loop', () => {
+  it('schedules the ticker on a timer that does not hold the event loop', async () => {
     vi.useRealTimers();
     const timers = vi.spyOn(globalThis, 'setTimeout');
-    UsageLogService.initialize({
+    await runInitialize({
       batchSize: 100,
       flushIntervalMs: 12_345,
       enabled: true,
     });
 
-    const tick = timers.mock.calls.findIndex(([, delay]) => delay === 12_345);
-    expect(tick).toBeGreaterThanOrEqual(0);
-    const handle = timers.mock.results[tick]?.value as NodeJS.Timeout;
-    expect(handle.hasRef()).toBe(false);
+    // The flusher loop's first sleep is scheduled on its own fiber, just
+    // after the initialize run settles.
+    await vi.waitFor(() => {
+      const tick = timers.mock.calls.findIndex(([, delay]) => delay === 12_345);
+      expect(tick).toBeGreaterThanOrEqual(0);
+      const handle = timers.mock.results[tick]?.value as NodeJS.Timeout;
+      expect(handle.hasRef()).toBe(false);
+    });
   });
 
   it('warns after five seconds without bounding disposal', async () => {
@@ -217,7 +234,7 @@ describe('UsageLogService', () => {
     UsageLogService.log(usageEntry('slow'));
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    const disposal = UsageLogService.dispose();
+    const disposal = runDispose();
     let disposed = false;
     void disposal.then(() => {
       disposed = true;
@@ -408,7 +425,7 @@ describe('UsageLogService', () => {
     // queued under the old value rather than letting the next flush ship them.
     it('discards entries queued before the setting was turned off', async () => {
       stubAccessToken();
-      UsageLogService.initialize({ batchSize: 100, flushIntervalMs: 60_000 });
+      await runInitialize({ batchSize: 100, flushIntervalMs: 60_000 });
 
       const { batches, fetchMock } = stubBatchFetch();
 
@@ -481,7 +498,7 @@ describe('UsageLogService', () => {
 
     it('drops optional entries from a batch but keeps the accounted ones', async () => {
       stubAccessToken();
-      UsageLogService.initialize({ batchSize: 100, flushIntervalMs: 60_000 });
+      await runInitialize({ batchSize: 100, flushIntervalMs: 60_000 });
 
       const { batches, fetchMock } = stubBatchFetch();
 

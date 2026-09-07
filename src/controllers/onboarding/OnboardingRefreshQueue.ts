@@ -1,7 +1,5 @@
 import { Effect, Semaphore } from 'effect';
 
-import { effectRuntime } from '@platform/processRuntime';
-
 /** Serialize funnel refreshes and collapse an in-flight burst to one rerun. */
 export class OnboardingRefreshQueue {
   /** One permit: a refresh holds it while it runs; callers that arrive
@@ -24,8 +22,12 @@ export class OnboardingRefreshQueue {
     }
   });
 
-  run(): Promise<void> {
-    this.rerunRequested = true;
-    return effectRuntime().runPromise(this.lane.withPermit(this.drain()));
+  /** Ask for a refresh. The host edge runs the returned effect; a rejection
+   *  is the refresh's own error. */
+  run(): Effect.Effect<void, unknown> {
+    return Effect.suspend(() => {
+      this.rerunRequested = true;
+      return this.lane.withPermit(this.drain());
+    });
   }
 }

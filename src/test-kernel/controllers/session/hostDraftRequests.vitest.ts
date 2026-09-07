@@ -5,6 +5,8 @@ import { expect, it, vi } from 'vitest';
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
+import { effectRuntime } from '@platform/processRuntime';
+import type { HostOutcome } from '@shared/session/sessionFrames';
 
 const audio = vi.hoisted(() => ({
   startRecording: vi.fn(),
@@ -28,12 +30,18 @@ it('returns transcription to Start when another paper stops the process recorder
     text: 'A conserved quantity.',
   });
   const requests = new HostDraftRequests();
+  // The request surface is Effect-typed; the test settles it on the process
+  // runtime the fake host installs, as the host edge does.
+  const handle = (
+    ...args: Parameters<HostDraftRequests['handle']>
+  ): Promise<HostOutcome> =>
+    effectRuntime().runPromise(requests.handle(...args));
   const first = { roots: { storage: '/papers/first' } } as SessionHandle;
   const second = { roots: { storage: '/papers/second' } } as SessionHandle;
   const snapshot = vi.fn();
   const unsubscribe = requests.subscribe(snapshot);
 
-  const started = requests.handle(
+  const started = handle(
     first,
     {
       kind: 'record',
@@ -42,7 +50,7 @@ it('returns transcription to Start when another paper stops the process recorder
     'origin',
   );
   await expect(
-    requests.handle(
+    handle(
       second,
       {
         kind: 'record',
@@ -57,11 +65,7 @@ it('returns transcription to Start when another paper stops the process recorder
   });
 
   await expect(
-    requests.handle(
-      second,
-      { kind: 'record', action: { kind: 'stop' } },
-      'other',
-    ),
+    handle(second, { kind: 'record', action: { kind: 'stop' } }, 'other'),
   ).resolves.toEqual({ kind: 'done' });
   expect(audio.stopRecordingAndTranscribe).not.toHaveBeenCalled();
   startup.resolve({ success: true });
@@ -75,7 +79,7 @@ it('returns transcription to Start when another paper stops the process recorder
 
   const nextStartup = pDefer<{ success: boolean }>();
   audio.startRecording.mockReturnValueOnce(nextStartup.promise);
-  const nextTake = requests.handle(
+  const nextTake = handle(
     first,
     {
       kind: 'record',

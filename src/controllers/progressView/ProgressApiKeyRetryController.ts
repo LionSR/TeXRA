@@ -1,4 +1,4 @@
-import { Effect, Exit, Semaphore } from 'effect';
+import { Cause, Effect, Exit, Option, Semaphore } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
@@ -10,7 +10,6 @@ import {
   quotaFallbackRuntimes,
   type QuotaFallbackRuntime,
 } from '@model/quotaFallbackRoutes';
-import { effectRuntime } from '@platform/processRuntime';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
 import {
   isKimiCodeExclusiveModel,
@@ -48,6 +47,47 @@ function port<A>(call: () => A | PromiseLike<A>): Effect.Effect<A, unknown> {
     try: async () => call(),
     catch: (error) => error,
   });
+}
+
+/**
+ * Settles one of the controller's programs as an `Exit`, for the
+ * Promise-facing facade below. Installed like the process roots: exactly once
+ * per process, by the host entry, as
+ * `(program) => effectRuntime().runPromiseExit(program)` — which keeps the
+ * `Effect.run*` call itself in boundary code (PRD R1).
+ */
+type ProgressApiKeyRetryEdge = <A, E>(
+  program: Effect.Effect<A, E>,
+) => Promise<Exit.Exit<A, E>>;
+
+let progressApiKeyRetryEdge: ProgressApiKeyRetryEdge | null = null;
+
+/** Install the process-wide run edge for the retry controller's programs. */
+export function installProgressApiKeyRetryEdge(
+  edge: ProgressApiKeyRetryEdge,
+): void {
+  progressApiKeyRetryEdge = edge;
+}
+
+/**
+ * Run one retry program on the installed edge and settle it as a Promise.
+ * An expected failure (a port's own rejection, carried through the identity
+ * catch) is re-thrown unchanged, so the caller's `instanceof` and message
+ * checks still hold; defects and interruption propagate as they are.
+ */
+async function runProgressApiKeyRetryProgram<A>(
+  program: Effect.Effect<A, unknown>,
+): Promise<A> {
+  if (!progressApiKeyRetryEdge) {
+    throw new Error(
+      'Progress API-key retry edge not installed: the host entry installs it beside the process runtime.',
+    );
+  }
+  const exit = await progressApiKeyRetryEdge(program);
+  if (Exit.isSuccess(exit)) return exit.value;
+  const failure = Cause.findErrorOption(exit.cause);
+  if (Option.isSome(failure)) throw failure.value;
+  throw Cause.squash(exit.cause);
 }
 
 export interface ProgressApiKeyRetryControllerDeps {
@@ -115,11 +155,12 @@ export class ProgressApiKeyRetryController {
     return this.deps.quotaFallbackRuntimes ?? quotaFallbackRuntimes;
   }
 
-  useOwnApiKey(request: ProgressApiKeyRetryRequest): Promise<void> {
-    return effectRuntime().runPromise(this.switchToOwnApiKey(request));
-  }
-
-  private readonly switchToOwnApiKey = Effect.fn(
+  /**
+   * Switch a quota-exhausted retry to the user's own key: prompt for a usable
+   * key when the exhaustion requires it, commit the routing switches, and
+   * launch the retry. The Effect surface of the former `useOwnApiKey`.
+   */
+  readonly switchToOwnApiKey = Effect.fn(
     'ProgressApiKeyRetryController.useOwnApiKey',
   )(function* (
     this: ProgressApiKeyRetryController,
@@ -227,13 +268,11 @@ export class ProgressApiKeyRetryController {
     return yield* port(action);
   });
 
-  ensureOwnApiKey(
-    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
-  ): Promise<boolean> {
-    return effectRuntime().runPromise(this.ensureOwnApiKeyReady(request));
-  }
-
-  private readonly ensureOwnApiKeyReady = Effect.fn(
+  /**
+   * Whether a usable own key is on file for `request` after prompting when
+   * one is needed. The Effect surface of the former `ensureOwnApiKey`.
+   */
+  readonly ensureOwnApiKeyReady = Effect.fn(
     'ProgressApiKeyRetryController.ensureOwnApiKey',
   )(function* (
     this: ProgressApiKeyRetryController,
@@ -316,16 +355,41 @@ export class ProgressApiKeyRetryController {
     );
   }
 
-  /** Apply Copilot fallback routing only for the duration of a launch attempt. */
+  /** Apply Copilot fallback routing only for the duration of a launch attempt.
+   *  The Effect surface of the former `runCopilotFallbackWithRouting`. */
+  copilotFallbackWithRouting(
+    request: ProgressApiKeyRetryRequest,
+    start: (copilotRouteOverride: CopilotRouteOverride) => Promise<boolean>,
+  ): Effect.Effect<boolean, unknown> {
+    // The user chose "use own API key" for this retry. The direct-route
+    // override travels only with the replacement launch; the standing
+    // preference remains visible to concurrent and future runs.
+    return this.commitOwnApiKeyRouting(request, () => start('direct'));
+  }
+
+  // --- Promise facade -------------------------------------------------------
+  // The one consumer of these Promise methods is `createHostRunActions`
+  // (src/controllers/session/hostRunActions.ts), owned by lane D (host
+  // composition root and session graph) in the Effect-migration debt-lane
+  // register. Each facade method settles the Effect surface above through
+  // the host-installed edge and deletes as that lane converts its caller.
+
+  useOwnApiKey(request: ProgressApiKeyRetryRequest): Promise<void> {
+    return runProgressApiKeyRetryProgram(this.switchToOwnApiKey(request));
+  }
+
+  ensureOwnApiKey(
+    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+  ): Promise<boolean> {
+    return runProgressApiKeyRetryProgram(this.ensureOwnApiKeyReady(request));
+  }
+
   runCopilotFallbackWithRouting(
     request: ProgressApiKeyRetryRequest,
     start: (copilotRouteOverride: CopilotRouteOverride) => Promise<boolean>,
   ): Promise<boolean> {
-    // The user chose "use own API key" for this retry. The direct-route
-    // override travels only with the replacement launch; the standing
-    // preference remains visible to concurrent and future runs.
-    return effectRuntime().runPromise(
-      this.commitOwnApiKeyRouting(request, () => start('direct')),
+    return runProgressApiKeyRetryProgram(
+      this.copilotFallbackWithRouting(request, start),
     );
   }
 

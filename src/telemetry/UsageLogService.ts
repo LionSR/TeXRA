@@ -1,13 +1,20 @@
 import { randomUUID } from 'node:crypto';
 
-import { Clock, Data, Duration, Effect, Fiber, Semaphore } from 'effect';
+import {
+  Clock,
+  Data,
+  Deferred,
+  Duration,
+  Effect,
+  Fiber,
+  Semaphore,
+} from 'effect';
 import ky from 'ky';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { createLog } from '@logger/logUtils';
 import type { ConfigProvider } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import type { UsageRoute } from '@shared/schemas';
 import {
@@ -216,6 +223,18 @@ class UsageLogServiceImpl {
    *  and interrupted by `dispose`. It only schedules: each flush runs on a
    *  fiber of its own, so interrupting the ticker never touches a send. */
   private flushTimer: Fiber.Fiber<never> | null = null;
+  /** The batch-size trigger's fiber, forked and interrupted beside the
+   *  ticker. It parks on `wakeFlush` between triggers. */
+  private flushTrigger: Fiber.Fiber<never> | null = null;
+  /** Set when the queue reaches the batch size before the trigger fiber has
+   *  parked (entries logged ahead of `initialize`): honoured at once when it
+   *  starts. */
+  private flushRequested = false;
+  /** The wait the trigger fiber is parked on, if any; `log` completes it
+   *  when the batch fills. Completion resumes the fiber synchronously, so the
+   *  flush starts in `log`'s own call stack, as it did when `log` forked it
+   *  directly. */
+  private wakeFlush: Deferred.Deferred<void> | null = null;
   /** One permit: batches leave in order, and disposal joins an active drain. */
   private readonly flushLane = Semaphore.makeUnsafe(1);
   /** Coalesce triggers before they wait for the lane; failed sends wait for
@@ -227,15 +246,18 @@ class UsageLogServiceImpl {
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
 
-  initialize(
+  /** Configure the service and start its flusher loop. The host edge runs
+   *  the returned effect once, at startup. */
+  readonly initialize = Effect.fn('UsageLogService.initialize')(function* (
+    this: UsageLogServiceImpl,
     config?: Partial<UsageLogConfig>,
     extensionVersion?: string,
     editorType?: string,
-  ): void {
+  ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.extensionVersion = extensionVersion;
     this.editorType = editorType;
-    this.startFlushTimer();
+    yield* this.startFlusher();
 
     if (isTelemetryDisabledByEnv()) {
       log.info(
@@ -246,7 +268,7 @@ class UsageLogServiceImpl {
     log.debug(
       `UsageLogService initialized (batchSize=${this.config.batchSize}, flushIntervalMs=${this.config.flushIntervalMs}, enabled=${this.config.enabled})`,
     );
-  }
+  });
 
   log(
     entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>,
@@ -275,7 +297,12 @@ class UsageLogServiceImpl {
     log.debug(`Queued usage entry (queue size: ${this.queue.length})`);
 
     if (this.queue.length >= this.config.batchSize) {
-      effectRuntime().runFork(this.backgroundFlush());
+      // Wake the trigger fiber now rather than at the next interval. Both
+      // writes are synchronous, so `log` stays a fire-and-forget enqueue for
+      // its callers (the agent runtime's UsageMonitor among them).
+      this.flushRequested = true;
+      const wake = this.wakeFlush;
+      if (wake) Deferred.doneUnsafe(wake, Effect.void);
     }
   }
 
@@ -474,37 +501,90 @@ class UsageLogServiceImpl {
     },
   );
 
-  private startFlushTimer(): void {
-    const runtime = effectRuntime();
-    if (this.flushTimer) runtime.runFork(Fiber.interrupt(this.flushTimer));
-    // The ticker lives until dispose() interrupts it, and it must not keep a
-    // short-lived host (the CLI) alive on its own: an active run keeps the
-    // loop running so the tick still fires, but at exit dispose() flushes and
-    // interrupts it rather than the ticker pinning the process. Its sleep
-    // therefore runs on `unrefSleepClock`; a host that never disposes exits
-    // on an empty loop as before, with whatever the queue holds unsent.
-    //
-    // Detached on purpose: a flush belongs to the lane, not to the tick that
-    // scheduled it. `sendNextBatch` takes the batch before the request goes
-    // out, and an interrupt landing there would abort the request without
-    // failing it, so nothing would requeue what was taken. Running the flush
-    // on its own fiber keeps a dispose (or re-initialize) that lands mid-send
-    // from reaching it: dispose waits behind the send on the lane instead.
-    // The flush ends with its drain and is observed by nothing else.
+  private readonly startFlusher = Effect.fn('UsageLogService.startFlusher')(
+    function* (this: UsageLogServiceImpl) {
+      if (this.flushTimer) {
+        yield* Fiber.interrupt(this.flushTimer);
+        this.flushTimer = null;
+      }
+      if (this.flushTrigger) {
+        yield* Fiber.interrupt(this.flushTrigger);
+        this.flushTrigger = null;
+      }
+      // The ticker lives until dispose() interrupts it, and it must not keep
+      // a short-lived host (the CLI) alive on its own: an active run keeps
+      // the loop running so the tick still fires, but at exit dispose()
+      // flushes and interrupts it rather than the ticker pinning the
+      // process. Its sleep therefore runs on `unrefSleepClock`; a host that
+      // never disposes exits on an empty loop as before, with whatever the
+      // queue holds unsent.
+      //
+      // Detached on purpose: both fibers belong to the service, not to the
+      // `initialize` run that forked them. And each flush they schedule is
+      // detached in turn: a flush belongs to the lane, not to the tick or
+      // trigger that scheduled it. `sendNextBatch` takes the batch before
+      // the request goes out, and an interrupt landing there would abort the
+      // request without failing it, so nothing would requeue what was taken.
+      // Running the flush on its own fiber keeps a dispose (or re-initialize)
+      // that lands mid-send from reaching it: dispose waits behind the send
+      // on the lane instead.
+      //
+      // Started immediately so both fibers are parked (the ticker's first
+      // timer registered) before `initialize` settles, as they were when the
+      // ticker was forked straight off the runtime.
+      this.flushTimer = yield* Effect.forkDetach(this.tickerLoop(), {
+        startImmediately: true,
+      });
+      this.flushTrigger = yield* Effect.forkDetach(this.triggerLoop(), {
+        startImmediately: true,
+      });
+    },
+  );
+
+  /** Sleep to the next interval, then schedule a flush, forever. */
+  private tickerLoop(): Effect.Effect<never> {
     const tick = Clock.clockWith((clock) =>
       Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
         Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
       ),
     );
-    this.flushTimer = runtime.runFork(
-      Effect.forever(
-        tick.pipe(Effect.andThen(Effect.forkDetach(this.backgroundFlush()))),
-      ),
+    return Effect.forever(
+      tick.pipe(Effect.andThen(Effect.forkDetach(this.backgroundFlush()))),
     );
   }
 
-  dispose(): Promise<void> {
-    return effectRuntime().runPromise(this.shutdown());
+  /** Wait for the batch-size trigger, then schedule a flush, forever. The
+   *  wake resumes this fiber inside `log`'s call, and the flush fiber starts
+   *  immediately, so a batch-full `log` begins its drain in its own call
+   *  stack — what the direct `runFork` it replaces did. */
+  private triggerLoop(): Effect.Effect<never> {
+    return Effect.forever(
+      Effect.suspend(() => {
+        if (this.flushRequested) {
+          this.flushRequested = false;
+          return this.startFlushNow();
+        }
+        const wake = Deferred.makeUnsafe<void>();
+        this.wakeFlush = wake;
+        return Effect.andThen(Deferred.await(wake), this.startFlushNow());
+      }),
+    );
+  }
+
+  private startFlushNow(): Effect.Effect<Fiber.Fiber<void>> {
+    return Effect.suspend(() => {
+      this.wakeFlush = null;
+      this.flushRequested = false;
+      return Effect.forkDetach(this.backgroundFlush(), {
+        startImmediately: true,
+      });
+    });
+  }
+
+  /** Stop the flusher and drain what remains. The host edge runs the
+   *  returned effect from its shutdown path. */
+  dispose(): Effect.Effect<void> {
+    return this.shutdown();
   }
 
   private readonly shutdown = Effect.fn('UsageLogService.dispose')(function* (
@@ -514,6 +594,12 @@ class UsageLogServiceImpl {
       yield* Fiber.interrupt(this.flushTimer);
       this.flushTimer = null;
     }
+    if (this.flushTrigger) {
+      yield* Fiber.interrupt(this.flushTrigger);
+      this.flushTrigger = null;
+    }
+    this.wakeFlush = null;
+    this.flushRequested = false;
     this.config.enabled = false;
 
     // An in-flight background flush is waited for without

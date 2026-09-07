@@ -34,6 +34,7 @@ import {
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   type TranscriptExportOpenKind,
 } from '@controllers/progressView/exportTranscript';
+import { installProgressApiKeyRetryEdge } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { ProgressWorkflowRunActionsController } from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import {
@@ -53,6 +54,7 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { effectRuntime } from '@platform/processRuntime';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
@@ -143,6 +145,12 @@ export function createExtensionHostRequests(
   options: ExtensionHostRequestsOptions,
 ): ExtensionHostRequests {
   const { session, snapshot, toolEditApprovals } = options;
+  // The retry controller's programs settle through this edge (PRD R1): the
+  // run stays in boundary code while its lane-D consumer keeps a Promise
+  // surface.
+  installProgressApiKeyRetryEdge((program) =>
+    effectRuntime().runPromiseExit(program),
+  );
   const draftRequests = options.draftRequests.attach(session, (recording) =>
     options.snapshot.setRecording(recording),
   );
@@ -664,7 +672,7 @@ export function createExtensionHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return draftRequests.handle(request, port);
+        return effectRuntime().runPromise(draftRequests.handle(request, port));
       case 'popOut':
         await options.popOutToEditor();
         return done;
