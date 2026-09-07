@@ -576,8 +576,7 @@ export class SessionHandle {
    */
   publish(events: readonly SessionEventDraft[]): void {
     if (this.disposed || events.length === 0) return;
-    let publication!: Promise<Exit.Exit<readonly SessionEvent[]>>;
-    publication = effectRuntime().runPromise(
+    const publication = effectRuntime().runPromise(
       this.graph.publish(events).pipe(
         Effect.tapDefect((cause) =>
           Effect.sync(() => {
@@ -585,14 +584,12 @@ export class SessionHandle {
           }).pipe(Effect.ignoreCause),
         ),
         Effect.exit,
-        Effect.ensuring(
-          Effect.sync(() => {
-            this.publications.delete(publication);
-          }),
-        ),
       ),
     );
     this.publications.add(publication);
+    void publication.finally(() => {
+      this.publications.delete(publication);
+    });
   }
 
   /** Await in-flight publications. Failures belong to those Exits, not a
