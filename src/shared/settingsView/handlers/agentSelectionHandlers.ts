@@ -20,15 +20,13 @@ import type {
 } from '@shared/schemas';
 
 export interface AgentSelectionPorts {
-  loadAgents(): Promise<void>;
   buildSelectionItems(): ByCategory<AgentSelectionItem[]>;
   getCustomAgentScanIssues(): readonly AgentScanIssue[];
 }
 
-export async function buildAgentSelectionMessage(
+export function buildAgentSelectionMessage(
   ports: AgentSelectionPorts,
-): Promise<UpdateAgentSelectionMessage> {
-  await ports.loadAgents();
+): UpdateAgentSelectionMessage {
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
     agents: ports.buildSelectionItems(),
