@@ -20,12 +20,6 @@
       "name": "slashPaletteWindow"
     },
     {
-      "file": "packages/cli/src/chat/tui/commands/SlashPalette.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "SlashPaletteWindow"
-    },
-    {
       "file": "packages/cli/src/chat/tui/commands/slashRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -66,12 +60,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "createCliConfigFormProps"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/CliConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CreateCliConfigFormPropsInput"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
@@ -596,12 +584,6 @@
       "name": "resolveBrowserLaunch"
     },
     {
-      "file": "packages/cli/src/runtime/browser.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "BrowserLaunchCommand"
-    },
-    {
       "file": "packages/cli/src/runtime/chatDefaults.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -740,12 +722,6 @@
       "name": "resetCliUpdateNotifyLatchForTests"
     },
     {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "InstallMethod"
-    },
-    {
       "file": "packages/cli/src/runtime/workflowInputs.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -762,12 +738,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "workflowInputGlobOptions"
-    },
-    {
-      "file": "packages/cli/src/runtime/workflowInputs.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StdinWorkflowInputMaterializer"
     },
     {
       "file": "packages/cli/src/runtime/workflowOutput.ts",
@@ -1122,12 +1092,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "resetCodexCoordinator"
-    },
-    {
-      "file": "src/auth/codex/codexDeviceLogin.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "DeviceCodeMissing"
     },
     {
       "file": "src/auth/codex/index.ts",

@@ -2,7 +2,7 @@ import { execa } from 'execa';
 
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
-export interface BrowserLaunchCommand {
+interface BrowserLaunchCommand {
   readonly command: string;
   readonly args: string[];
 }
