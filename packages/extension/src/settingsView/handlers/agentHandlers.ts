@@ -110,9 +110,9 @@ export class AgentHandlers {
   // ── Agent selection data ──
 
   async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
+    await effectRuntime().runPromise(loadAgents());
     await webview.postMessage(
-      await buildAgentSelectionMessage({
-        loadAgents: () => effectRuntime().runPromise(loadAgents()),
+      buildAgentSelectionMessage({
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
         getCustomAgentScanIssues,
       }),
