@@ -22,7 +22,7 @@ import * as path from 'node:path';
 
 import which from 'which';
 
-import { platform } from '@platform/platform';
+import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
 
@@ -117,8 +117,7 @@ async function resolveBinary(
   // Highest priority when present — packaged apps cannot execute binaries
   // from inside app.asar.
   {
-    const resourcesPath =
-      platform().hostEnvironment.packagedElectronResourcesPath();
+    const resourcesPath = nodeHostEnvironment.packagedElectronResourcesPath();
     if (resourcesPath != null) {
       for (const pkg of config.platformPackages) {
         const platformPkgDir = path.join(

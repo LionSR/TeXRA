@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, it } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -51,25 +51,12 @@ const PLATFORM_PACKAGES: Record<
 
 describe('findCodexBinaryPath', () => {
   let tempDir: string | undefined;
-  // Strategy 1 reads this through platform().hostEnvironment; each test
-  // that wants to impersonate a packaged Electron app sets it directly
-  // instead of mutating the real `process` global.
-  let packagedResourcesPath: string | undefined;
 
   // pathExists() probes the real filesystem through platform().fs.
-  setupPlatform(
-    {},
-    {
-      fs: nodeFilesystem,
-      hostEnvironment: {
-        hostInfo: nodeHostEnvironment.hostInfo,
-        packagedElectronResourcesPath: () => packagedResourcesPath,
-      },
-    },
-  );
+  setupPlatform({}, { fs: nodeFilesystem });
 
   afterEach(() => {
-    packagedResourcesPath = undefined;
+    vi.restoreAllMocks();
     if (tempDir != null) {
       fs.rmSync(tempDir, { recursive: true, force: true });
       tempDir = undefined;
@@ -99,8 +86,11 @@ describe('findCodexBinaryPath', () => {
     fs.writeFileSync(binaryPath, '');
 
     // Impersonate a packaged Electron app: the resolver's highest-priority
-    // probe reads this through platform().hostEnvironment.
-    packagedResourcesPath = tempDir;
+    // probe reads this through nodeHostEnvironment.
+    vi.spyOn(
+      nodeHostEnvironment,
+      'packagedElectronResourcesPath',
+    ).mockReturnValue(tempDir);
     assert.equal(await findCodexBinaryPath(), binaryPath);
   });
 });

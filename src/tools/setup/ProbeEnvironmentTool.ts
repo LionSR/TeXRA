@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
-import { platform as platformServices } from '@platform/platform';
+import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { type ToolResult } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { executed } from '@tools/core/result';
@@ -53,7 +53,7 @@ export class ProbeEnvironmentTool extends defineTool({
     const homedir = safeHomedir() ?? '<unresolved>';
     const extendedPath = extendEnvPath();
     const pm = detectPackageManager();
-    const hostInfo = platformServices().hostEnvironment.hostInfo();
+    const hostInfo = nodeHostEnvironment.hostInfo();
     const [
       core,
       optionalTools,
