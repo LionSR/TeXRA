@@ -890,6 +890,8 @@ describe('StreamLogStore load', () => {
       },
     });
 
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
     const store = await StreamLogStore.open();
 
     expect(storage.fullLogReads()).toBe(1);
@@ -897,6 +899,12 @@ describe('StreamLogStore load', () => {
     expect(store.getTimestampRange('alpha')).toEqual({ first: 200, last: 250 });
     expect(writtenSummary(storage.writes, 'alpha')).toEqual(
       settledSummary(200, 250),
+    );
+    // The derived-tier discard is loud, not silent: a stale-shaped cache is
+    // ignored with a warning rather than migrated in place (#9434).
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining('Ignoring a stale-shaped summary cache entry'),
     );
   });
 
@@ -1868,125 +1876,5 @@ describe('StreamLogStore save throttle', () => {
       expect.objectContaining({ id: 'alpha-1' }),
     ]);
     expect(store.get('alpha')).toBeUndefined();
-  });
-});
-
-describe('StreamLogStore summary metadata mirror', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  const META = {
-    identity: { kind: 'agent' as const, agent: 'polish' },
-    executionId: 'a77e77',
-    parentStreamId: 'parent-stream',
-    description: 'Polish the draft',
-    model: 'deepseekproT',
-  };
-
-  it('round-trips recorded summary metadata through the persisted cache', async () => {
-    const storage = mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: { alpha: summary(200, 200) },
-    });
-    const store = await StreamLogStore.open();
-
-    store.recordSummaryMeta('alpha', META);
-    expect(store.getSummaryMeta('alpha')).toEqual(META);
-    await waitForCondition(
-      () => writtenSummary(storage.writes, 'alpha') !== undefined,
-    );
-    const persisted = writtenSummary(storage.writes, 'alpha') as Record<
-      string,
-      unknown
-    >;
-    expect(persisted).toMatchObject({ firstTimestamp: 200, meta: META });
-
-    // A fresh open serves the widened fields from the persisted cache alone.
-    vi.restoreAllMocks();
-    mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: { alpha: persisted },
-    });
-    const reopened = await StreamLogStore.open();
-    expect(reopened.getSummaryMeta('alpha')).toEqual(META);
-  });
-
-  it('does not persist dirty log fields through a metadata-only write', async () => {
-    const storage = mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: { alpha: summary(200, 200) },
-    });
-    const store = await StreamLogStore.open();
-
-    await store.ensureLoaded('alpha');
-    appendTranscriptEntry(store, 'alpha', logEntry('alpha', 2, 300));
-    store.recordSummaryMeta('alpha', META);
-    await delay(0);
-
-    expect(writtenSummary(storage.writes, 'alpha')).toBeUndefined();
-
-    await store.flush();
-    expect(writtenSummary(storage.writes, 'alpha')).toMatchObject({
-      lastTimestamp: 300,
-      meta: META,
-    });
-  });
-
-  it('discards a stale-shaped summary cache loudly and rebuilds from the log', async () => {
-    const storage = mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: {
-        alpha: { ...summary(200, 200), meta: 'not-an-object' },
-      },
-    });
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-
-    const store = await StreamLogStore.open();
-
-    // Rebuilt (full log read), never migrated in place.
-    expect(storage.fullLogReads()).toBe(1);
-    expect(store.keys()).toEqual(['alpha']);
-    expect(store.getTimestampRange('alpha').first).toBe(200);
-    expect(store.getSummaryMeta('alpha')).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'StreamLogStore',
-      expect.stringContaining('stale-shaped summary cache'),
-    );
-  });
-
-  it('discards a summary whose execution id violates the canonical schema', async () => {
-    const storage = mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: {
-        alpha: {
-          ...summary(200, 200),
-          meta: { ...META, executionId: 'not-an-id' },
-        },
-      },
-    });
-    vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-
-    const store = await StreamLogStore.open();
-
-    expect(storage.fullLogReads()).toBe(1);
-    expect(store.getSummaryMeta('alpha')).toBeUndefined();
-  });
-
-  it('registers an unknown stream at metadata projection', async () => {
-    mockStorage({ logs: {}, summaries: {} });
-    const store = await StreamLogStore.open();
-
-    // Run facts can legitimately project before the stream's first append;
-    // recording metadata registers the stream so the metadata is immediately
-    // readable, and a later ensureStream is a no-op.
-    store.recordSummaryMeta('gamma', META);
-    expect(store.has('gamma')).toBe(true);
-    expect(store.getSummaryMeta('gamma')).toEqual(META);
-
-    store.ensureStream('gamma');
-    expect(store.keys()).toEqual(['gamma']);
-    expect(store.getSummaryMeta('gamma')).toEqual(META);
-    await store.flush();
   });
 });

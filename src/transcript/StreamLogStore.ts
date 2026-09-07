@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
 import pMap from 'p-map';
 import PQueue from 'p-queue';
 
@@ -41,7 +40,6 @@ import {
   type ParsedPersistedEntries,
   type StreamLogSummary,
   type StreamSummaryCacheHost,
-  type StreamSummaryMeta,
 } from './StreamSummaryCacheStore';
 
 const SAVE_MAX_WAIT_MS = 300;
@@ -437,47 +435,6 @@ export class StreamLogStore {
    */
   hasUnfinishedOutput(streamId: StreamTabId): boolean {
     return hasSomethingRunning(this.summaries.get(streamId));
-  }
-
-  /**
-   * The snapshot-owned display metadata mirrored into this stream's summary,
-   * or `undefined` for a stream whose summary predates the mirror (legacy
-   * rows backfill lazily on their next sidecar hydration).
-   */
-  getSummaryMeta(streamId: StreamTabId): StreamSummaryMeta | undefined {
-    return this.summaries.get(streamId)?.meta;
-  }
-
-  /**
-   * Record the snapshot store's current metadata for a stream in its
-   * always-resident summary (memory now, summary cache asynchronously).
-   * Whole-object replacement — the publisher owns field lifecycles — and a
-   * deep-equal no-op gate, so the startup hydration sweep republishing
-   * unchanged metadata for every stream costs no writes. Run facts may
-   * legitimately project before the stream's first append, so an unknown
-   * stream is registered here: `ensureStream` no-ops for known streams, and
-   * run facts only project for streams whose run genuinely started, so
-   * registering at projection cannot mint a phantom tab.
-   */
-  recordSummaryMeta(streamId: StreamTabId, meta: StreamSummaryMeta): void {
-    // Writability is asserted before `ensureStream`, so a read-only open can
-    // never reach the registration below.
-    this.assertWritableStore('record stream summary metadata');
-    this.ensureStream(streamId);
-    const summary = this.summaries.get(streamId);
-    if (summary === undefined || isDeepStrictEqual(summary.meta, meta)) return;
-    summary.meta = meta;
-    // Share the transcript queue so flush() drains this write. Re-read at
-    // execution time, and let a dirty transcript's own write carry the
-    // metadata: persisting its newer log-derived summary fields before the
-    // authoritative log would make a crash-time cache look more durable
-    // than it is.
-    void this.writeQueue.add(async () => {
-      if (this.dirtyIds.has(streamId)) return;
-      const current = this.summaries.get(streamId);
-      if (current)
-        await this.summaryCache.maintainSummaryCache(streamId, { ...current });
-    });
   }
 
   ensureStream(streamId: StreamTabId): void {
@@ -1149,14 +1106,10 @@ export class StreamLogStore {
       return;
     }
 
-    // Carry the snapshot-owned `meta` block forward: `toSummary` only knows
-    // log-derived fields, and persisting it bare would strip the metadata
-    // mirror `recordSummaryMeta` last wrote for this stream.
-    const meta = this.summaries.get(streamId)?.meta;
-    await this.summaryCache.maintainSummaryCache(streamId, {
-      ...toSummary(logInstance),
-      ...(meta !== undefined && { meta }),
-    });
+    await this.summaryCache.maintainSummaryCache(
+      streamId,
+      toSummary(logInstance),
+    );
     if (this.shouldSkipWrite(streamId)) {
       await this.logsKv.delete(streamId);
       await this.summaryCache.deleteSummaryCache(streamId);

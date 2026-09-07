@@ -42,7 +42,9 @@ import {
   STREAM_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   type ActiveChildInfo,
+  type RunIdentity,
   type StreamTabId,
+  type UserFollowUpSupport,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
@@ -57,7 +59,6 @@ import {
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import type { StreamSummaryMeta } from '@transcript/StreamSummaryCacheStore';
 import {
   bindTestSessionView,
   makeStreamView,
@@ -158,9 +159,16 @@ function setRunning(...streamIds: StreamTabId[]): void {
     });
   }
 }
+/** The identity-derived display fields these suites seed on a stream. */
+interface SeedStreamMeta {
+  readonly identity?: RunIdentity;
+  readonly userFollowUpSupport?: UserFollowUpSupport;
+  readonly agentCategory?: AgentCategory;
+}
+
 /** Summary metadata as the fold states it: an absent identity or support
  *  level is the fold's null and unsupported, never the fixture's default. */
-function seedStreamMeta(streamId: StreamTabId, meta: StreamSummaryMeta): void {
+function seedStreamMeta(streamId: StreamTabId, meta: SeedStreamMeta): void {
   seedStream(streamId, {
     identity: meta.identity ?? null,
     followUpSupport:

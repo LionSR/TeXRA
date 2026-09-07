@@ -22,15 +22,7 @@ import { z } from 'zod';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
-import {
-  AgentCategorySchema,
-  ExecutionIdSchema,
-  RunIdentitySchema,
-  TokenUsageStatsSchema,
-  UserFollowUpSupportSchema,
-  type StreamLogEntry,
-  type StreamTabId,
-} from '@shared/schemas';
+import { type StreamLogEntry, type StreamTabId } from '@shared/schemas';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
@@ -46,34 +38,6 @@ const log = createLog('StreamLogStore');
 
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
 
-/**
- * Snapshot-owned display metadata mirrored into the always-resident summary,
- * so sidebars and all-streams metadata paths never read the per-stream
- * sidecar files (#9947, PRD 2026-08-11). `StreamSnapshotStore` is the
- * authority and publishes a whole replacement object on every metadata
- * mutation and on every sidecar hydration (which lazily backfills legacy
- * summaries written before this field existed). Bounded scalars only:
- * `command` carries a process run's command line, never an agent run's
- * full instruction text.
- */
-const StreamSummaryMetaSchema = z.object({
-  identity: RunIdentitySchema.optional(),
-  executionId: ExecutionIdSchema.optional(),
-  parentStreamId: z.string().min(1).optional(),
-  userFollowUpSupport: UserFollowUpSupportSchema.optional(),
-  agentCategory: AgentCategorySchema.optional(),
-  description: z.string().optional(),
-  model: z.string().optional(),
-  workingDirectory: z.string().optional(),
-  command: z.string().optional(),
-  /**
-   * The stream's summed run usage, mirrored so a released sidecar record still
-   * answers the roster's token column. Re-published on every usage write.
-   */
-  cumulativeUsage: TokenUsageStatsSchema.optional(),
-});
-export type StreamSummaryMeta = z.infer<typeof StreamSummaryMetaSchema>;
-
 // No per-field `.catch()`: this schema covers the crash-recovery flags
 // (`hasRunningGroup`, `hasRunningStreamingText`, `hasNonterminalWorkflowCall`)
 // that `hasSomethingRunning()` gates orphan recovery on. A `.catch()` here
@@ -81,29 +45,22 @@ export type StreamSummaryMeta = z.infer<typeof StreamSummaryMetaSchema>;
 // instead of failing the whole `safeParse`, which routes through the
 // "ignore cache, rebuild from stream log" fallback in `readSummary` — the
 // derived-tier discard+rebuild contract (#9434): a stale-shaped summary is
-// discarded and rebuilt from the authoritative stream log (its `meta` block
-// is rebuilt lazily by the snapshot store's next publish), never migrated.
+// discarded and rebuilt from the authoritative stream log, never migrated.
 const StreamLogSummarySchema = z.object({
   firstTimestamp: z.number().finite().optional(),
   lastTimestamp: z.number().finite().optional(),
   hasRunningGroup: z.boolean().optional(),
   hasRunningStreamingText: z.boolean().optional(),
   hasNonterminalWorkflowCall: z.boolean().optional(),
-  meta: StreamSummaryMetaSchema.optional(),
 });
 export type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
 /**
  * The one schema-validated read path for the persisted `StreamLogSummary`
- * shape — every reader of the summary cache (this store's `readSummary` and
- * the standalone `clearPersistedSummaryParentStream` patch in
- * `StreamLogStore`) goes through this instead of trusting a raw
- * `KVStore.read()` cast. Does not apply the loader's own
- * registration-evidence gate (see `readSummary`): a metadata-only summary
- * persisted before a stream's first append (see `recordSummaryMeta`) has no
- * timestamps but is still a valid, live entry, so only the loader — which
- * has a log-rebuild fallback for a timestamp-less entry — additionally
- * filters on that.
+ * shape — `readSummary` goes through this instead of trusting a raw
+ * `KVStore.read()` cast. Shape validation only: the loader's
+ * registration-evidence gate on a timestamp-less entry stays in
+ * `readSummary`, which owns the log-rebuild fallback that gate needs.
  */
 function parseSummaryShape(value: unknown): StreamLogSummary | undefined {
   // A missing cache file (KVStore's quiet-missing `undefined`) is an
@@ -112,10 +69,8 @@ function parseSummaryShape(value: unknown): StreamLogSummary | undefined {
   const result = StreamLogSummarySchema.safeParse(value);
   if (!result.success) {
     // Derived tier (#9434): ignore the stale-shaped cache loudly instead of
-    // migrating it in place. Worded for both callers — the loader then
-    // rebuilds from the authoritative stream log, while the standalone
-    // parent-edge patch below just skips its write — neither "discards"
-    // anything from storage on this path.
+    // migrating it in place. `readSummary` then rebuilds from the
+    // authoritative stream log, so nothing is discarded from storage here.
     log.warn(
       `Ignoring a stale-shaped summary cache entry: ${result.error.issues
         .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
