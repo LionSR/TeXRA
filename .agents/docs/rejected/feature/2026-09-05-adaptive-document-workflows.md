@@ -33,16 +33,16 @@ continuation behavior, and recovery all differ.
 | Local tools        | Reflection resolves tool declarations, but its response graph has no local tool-dispatch node. Tool-use has an invocation/dispatch loop.                   | Advertising tools is not evidence that reflection can perform an ordinary local read/edit/review loop. Provider-managed tools are a separate capability.                           |
 | Product guidance   | The checked-in remote orchestrator prompt repeatedly prefers workflows and asserts that their reflection produces more rigorous results.                   | Some rigidity is prompt policy. A new capability alone would leave these choices biased toward the old schedule. This audit did not verify the currently deployed remote prompt.   |
 
-Sources: [round loop construction](../../src/agent/implementations/flows/reflection/runReflectionFlow.ts),
-[round scheduling and outcome](../../src/agent/implementations/flows/reflection/RoundPersistedFlow.ts),
-[prompt selection](../../src/agent/prompt/PromptBuilder.ts#L141),
-[scanner](../../src/agent/index/agentYamlScanner.ts),
-[polish](../../packages/extension/resources/agents/polish.yaml#L36),
-[delegation inputs](../../src/tools/delegation/inputFields.ts#L52),
-[script call options](../../src/agent/workflowScript/types.ts#L147),
-[reflection response graph](../../src/agent/implementations/flows/reflection/ResponseCycleFlow.ts#L554),
-[tool-use graph](../../src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts#L75),
-[orchestrator source](../../prompts/agents/remote/tool_use/orchestrator.yaml#L64).
+Sources: [round loop construction](../../../../src/agent/implementations/flows/reflection/runReflectionFlow.ts),
+[round scheduling and outcome](../../../../src/agent/implementations/flows/reflection/RoundPersistedFlow.ts),
+[prompt selection](../../../../src/agent/prompt/PromptBuilder.ts#L141),
+[scanner](../../../../src/agent/index/agentYamlScanner.ts),
+[polish](../../../../packages/extension/resources/agents/polish.yaml#L36),
+[delegation inputs](../../../../src/tools/delegation/inputFields.ts#L52),
+[script call options](../../../../src/agent/workflowScript/types.ts#L147),
+[reflection response graph](../../../../src/agent/implementations/flows/reflection/ResponseCycleFlow.ts#L554),
+[tool-use graph](../../../../src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts#L75),
+[orchestrator source](../../../../prompts/agents/remote/tool_use/orchestrator.yaml#L64).
 
 There is no source-backed reason here to assert that a mandatory second pass
 improves rigor. That is a prompt claim requiring evaluation. The reverse claim,
@@ -84,13 +84,13 @@ conversational follow-up to an existing child is provided by `delegate_agent`.
 These are different useful execution patterns, not reasons to add another
 scheduler.
 
-Sources: [tool description](../../src/tools/delegation/WorkflowScriptTool.ts#L203),
-[identity](../../src/agent/workflowScript/runWorkflowScript.ts#L44),
-[fingerprinting gate](../../src/agent/workflowScript/runWorkflowScript.ts#L504),
-[file hashing](../../src/tools/delegation/workflowScriptAgentRunner.ts#L90),
-[structured input restriction](../../src/agent/workflowScript/types.ts#L185),
-[phase progression](../../src/agent/workflowScript/workflowExecutionState.ts#L105),
-[conversational delegation](../../src/tools/delegation/DelegationTools.ts#L215).
+Sources: [tool description](../../../../src/tools/delegation/WorkflowScriptTool.ts#L203),
+[identity](../../../../src/agent/workflowScript/runWorkflowScript.ts#L44),
+[fingerprinting gate](../../../../src/agent/workflowScript/runWorkflowScript.ts#L504),
+[file hashing](../../../../src/tools/delegation/workflowScriptAgentRunner.ts#L90),
+[structured input restriction](../../../../src/agent/workflowScript/types.ts#L185),
+[phase progression](../../../../src/agent/workflowScript/workflowExecutionState.ts#L105),
+[conversational delegation](../../../../src/tools/delegation/DelegationTools.ts#L215).
 
 **The document contract is the important part to preserve**
 
@@ -115,13 +115,13 @@ Support-file links can point back into the workspace. That handling must remain
 correct for targeted edits and any enabled shell operations. Run storage is not
 a general shell sandbox, and the current compile environment is not hermetic.
 
-Sources: [snapshot preparation](../../src/utils/files/taskRunStorage.ts#L54),
-[round dependency links](../../src/utils/files/taskRunStorage.ts#L251),
-[output write behavior](../../src/agent/implementations/flows/reflection/output/XmlOutputManager.ts#L42),
-[acceptance](../../src/tools/AcceptRunFilesTool.ts#L142),
-[path policy](../../src/tools/pathResolution.ts#L63),
-[edit flow](../../src/tools/fileEditFlow.ts),
-[fixer instructions](../../packages/extension/resources/tool_use_agents/latexFixer.yaml#L20).
+Sources: [snapshot preparation](../../../../src/utils/files/taskRunStorage.ts#L54),
+[round dependency links](../../../../src/utils/files/taskRunStorage.ts#L251),
+[output write behavior](../../../../src/agent/implementations/flows/reflection/output/XmlOutputManager.ts#L42),
+[acceptance](../../../../src/tools/AcceptRunFilesTool.ts#L142),
+[path policy](../../../../src/tools/pathResolution.ts#L63),
+[edit flow](../../../../src/tools/fileEditFlow.ts),
+[fixer instructions](../../../../packages/extension/resources/tool_use_agents/latexFixer.yaml#L20).
 
 **Completion needs to refer to a candidate, not to a round number**
 
@@ -145,10 +145,10 @@ earlier candidate is also explicit. Do not silently use the newest file as a
 proxy for the best or accepted file. A candidate selection is still distinct
 from writing it into the user's workspace.
 
-Sources: [output flattening](../../src/shared/schemas/output.ts#L303),
-[final single-output selection](../../src/shared/schemas/output.ts#L237),
-[next-round inputs](../../src/agent/implementations/flows/reflection/helpers.ts#L19),
-[CLI publication](../../packages/cli/src/runtime/workflowOutput.ts#L255).
+Sources: [output flattening](../../../../src/shared/schemas/output.ts#L303),
+[final single-output selection](../../../../src/shared/schemas/output.ts#L237),
+[next-round inputs](../../../../src/agent/implementations/flows/reflection/helpers.ts#L19),
+[CLI publication](../../../../packages/cli/src/runtime/workflowOutput.ts#L255).
 
 **Existing validation is useful but weaker than a task-success proof**
 
@@ -174,12 +174,12 @@ An adaptive controller must distinguish “the program ran,” “the required
 artifacts/checks are present,” and “the user's requested change is satisfactory.”
 Only the first two are substantially amenable to mechanical enforcement here.
 
-Sources: [output processing](../../src/agent/implementations/flows/reflection/nodes/OutputNode.ts),
-[expected outputs](../../src/agent/implementations/flows/reflection/output/outputValidation.ts#L30),
-[compile policy and execution](../../src/agent/implementations/flows/reflection/output/compileCheck.ts#L115),
-[durable rejection predicate](../../src/agent/runtime/persistedCompileRejection.ts#L23),
-[structured submission](../../src/tools/structuredOutput.ts#L174),
-[script error handling](../../src/agent/workflowScript/runWorkflowScript.ts#L823).
+Sources: [output processing](../../../../src/agent/implementations/flows/reflection/nodes/OutputNode.ts),
+[expected outputs](../../../../src/agent/implementations/flows/reflection/output/outputValidation.ts#L30),
+[compile policy and execution](../../../../src/agent/implementations/flows/reflection/output/compileCheck.ts#L115),
+[durable rejection predicate](../../../../src/agent/runtime/persistedCompileRejection.ts#L23),
+[structured submission](../../../../src/tools/structuredOutput.ts#L174),
+[script error handling](../../../../src/agent/workflowScript/runWorkflowScript.ts#L823).
 
 **Proposed responsibility split**
 
@@ -225,12 +225,12 @@ journal provide useful boundaries. Store a selected candidate and completion
 decision through existing execution persistence/ownership, not a new journal
 or second status store.
 
-Sources: [script backstops](../../src/agent/workflowScript/runWorkflowScript.ts#L65),
-[concurrency budget](../../src/agent/runtime/childRunBudget.ts#L1),
-[reflection continuation limits](../../src/agent/modelHandlers/ModelHandler.ts#L959),
-[tool-use persisted graph](../../src/agent/implementations/flows/tooluse/runToolUseFlow.ts#L492),
-[cycle snapshot](../../src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts#L198),
-[waiting/one-shot behavior](../../src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts#L37).
+Sources: [script backstops](../../../../src/agent/workflowScript/runWorkflowScript.ts#L65),
+[concurrency budget](../../../../src/agent/runtime/childRunBudget.ts#L1),
+[reflection continuation limits](../../../../src/agent/modelHandlers/ModelHandler.ts#L959),
+[tool-use persisted graph](../../../../src/agent/implementations/flows/tooluse/runToolUseFlow.ts#L492),
+[cycle snapshot](../../../../src/agent/implementations/flows/tooluse/nodes/ToolUseCycleNode.ts#L198),
+[waiting/one-shot behavior](../../../../src/agent/implementations/flows/tooluse/nodes/ToolUseWaitNode.ts#L37).
 
 **Alternatives and sequencing**
 
@@ -279,8 +279,8 @@ tokens. Record failed and limit-stopped attempts. Tool-use mode currently uses
 assuming that changing the agent category leaves generation conditions identical.
 No quality, cost, or speed advantage has yet been measured.
 
-Source: [mode-dependent output allowance](../../src/agent/modelHandlers/ModelHandler.ts#L369)
-and [its factor](../../src/agent/modelHandlers/contextManagementConstants.ts#L8).
+Source: [mode-dependent output allowance](../../../../src/agent/modelHandlers/ModelHandler.ts#L369)
+and [its factor](../../../../src/agent/modelHandlers/contextManagementConstants.ts#L8).
 
 **Validation performed for this study**
 

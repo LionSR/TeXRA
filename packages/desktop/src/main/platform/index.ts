@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 
 import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
-import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
@@ -15,7 +14,13 @@ import {
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
+import type {
+  AgentDirectoriesPort,
+  AgentResumePort,
+  LifecycleHost,
+  StateStore,
+} from '@platform/interfaces';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -56,6 +61,15 @@ export interface ElectronPlatformInitResult {
    */
   globalConfigStore: ConfigStore;
   lifecycle: LifecycleHost;
+  /**
+   * The process-wide services the composition root builds and `initPlatform`
+   * publishes. Returned so the window and the IPC surfaces below it are
+   * *handed* their stores instead of each re-reading the ambient
+   * `platform()` singleton: one owner, one place to substitute in a test.
+   */
+  globalState: StateStore;
+  secrets: PlatformSecrets;
+  agentDirectories: AgentDirectoriesPort;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
    * production, see `resolveDesktopDataRoot()`). Threaded out so crash
@@ -128,13 +142,14 @@ export async function initializeElectronPlatform(
       get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
     },
   });
+  const secrets = new ElectronSecrets(secretsStore, {
+    showWarningMessage: showDesktopWarningDialog,
+  });
   initPlatform(
     createNodePlatform({
       globalState: globalStateStore,
       storage,
-      secrets: new ElectronSecrets(secretsStore, {
-        showWarningMessage: showDesktopWarningDialog,
-      }),
+      secrets,
       lifecycle,
       agentResume,
       agentDirectories,
@@ -176,7 +191,7 @@ export async function initializeElectronPlatform(
   // Copilot route preferences are swept on every startup. Runs here so it is
   // upstream of the settings view's first model-list paint.
   await effectRuntime().runPromise(
-    hostPort(() => refreshModelListAndLog(globalStateStore)).pipe(
+    refreshModelListAndLog(globalStateStore).pipe(
       Effect.tap(({ messages }) =>
         Effect.sync(() => {
           for (const message of messages) console.info(`[desktop] ${message}`);
@@ -222,6 +237,9 @@ export async function initializeElectronPlatform(
     processRoots,
     globalConfigStore: configStores.global,
     lifecycle,
+    globalState: globalStateStore,
+    secrets,
+    agentDirectories,
     dataRoot,
     resourcesPath,
   };

@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import {
@@ -21,18 +23,6 @@ interface EnabledModelReconciliation {
 interface CopilotRouteReconciliation {
   models: string[];
   cleared: string[];
-}
-
-interface ModelListRefreshResult {
-  skipped: boolean;
-  previousVersion: number | undefined;
-  currentVersion: number;
-  added: string[];
-  removed: string[];
-  /** True when the persisted enabled list was rewritten only to change order. */
-  reordered: boolean;
-  /** Copilot route preferences cleared because their base model is retired or deprecated. */
-  routePreferencesCleared: string[];
 }
 
 /**
@@ -122,28 +112,33 @@ function sameModelList(
  * are swept unconditionally so stale retired/deprecated routes are cleared
  * even when MODEL_LIST_VERSION is already current.
  *
- * File-local: {@link refreshModelListAndLog} is the public entry point.
- * `ModelListRefresh.vitest.ts` exercises this reconciliation logic through
- * that wrapper.
+ * Hosts log the returned messages in their existing startup order. Once
+ * reconciliation starts, interruption waits for its uncancellable state
+ * writes to settle; there is no bound on that wait.
  */
-async function refreshModelListStateIfNeeded(
-  state: ModelListState,
-): Promise<ModelListRefreshResult> {
-  const previousVersion = state.get<number>(GlobalStateKey.MODEL_LIST_VERSION);
+export const refreshModelListAndLog = Effect.fn(
+  'modelListRefresh.refreshModelListAndLog',
+)(function* (state: ModelListState) {
+  const [previousVersion, currentModels, currentRoutePreferences] =
+    yield* Effect.try({
+      try: () =>
+        [
+          state.get<number>(GlobalStateKey.MODEL_LIST_VERSION),
+          state.get<string[]>(GlobalStateKey.ENABLED_MODELS),
+          state.get<string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS),
+        ] as const,
+      catch: (error) => error,
+    });
   const versionChanged = previousVersion !== MODEL_LIST_VERSION;
-  const currentModels = state.get<string[]>(GlobalStateKey.ENABLED_MODELS);
-  const currentRoutePreferences = state.get<string[]>(
-    GlobalStateKey.COPILOT_ROUTE_MODELS,
-  );
   let added: string[] = [];
   let removed: string[] = [];
   let reordered = false;
   let routePreferencesCleared: string[] = [];
   if (currentModels) {
-    const reconciliation = reconcileEnabledModels(
-      currentModels,
-      versionChanged,
-    );
+    const reconciliation = yield* Effect.try({
+      try: () => reconcileEnabledModels(currentModels, versionChanged),
+      catch: (error) => error,
+    });
     added = reconciliation.added;
     removed = reconciliation.removed;
     reordered =
@@ -151,58 +146,42 @@ async function refreshModelListStateIfNeeded(
       removed.length === 0 &&
       !sameModelList(currentModels, reconciliation.models);
     if (added.length > 0 || removed.length > 0 || reordered) {
-      await state.update(GlobalStateKey.ENABLED_MODELS, reconciliation.models);
+      yield* Effect.tryPromise({
+        try: async () =>
+          state.update(GlobalStateKey.ENABLED_MODELS, reconciliation.models),
+        catch: (error) => error,
+      });
     }
   }
 
   if (versionChanged) {
-    await state.update(GlobalStateKey.MODEL_LIST_VERSION, MODEL_LIST_VERSION);
+    yield* Effect.tryPromise({
+      try: async () =>
+        state.update(GlobalStateKey.MODEL_LIST_VERSION, MODEL_LIST_VERSION),
+      catch: (error) => error,
+    });
   }
   // Sweep route preferences last so a rejected write here cannot prevent the
   // pre-existing enabled-list/version reconciliation above. A transient write
   // failure retries on the next startup, where the earlier writes are already
   // idempotent.
   if (currentRoutePreferences) {
-    const reconciliation = reconcileCopilotRoutePreferences(
-      currentRoutePreferences,
-    );
+    const reconciliation = yield* Effect.try({
+      try: () => reconcileCopilotRoutePreferences(currentRoutePreferences),
+      catch: (error) => error,
+    });
     routePreferencesCleared = reconciliation.cleared;
     if (routePreferencesCleared.length > 0) {
-      await state.update(
-        GlobalStateKey.COPILOT_ROUTE_MODELS,
-        reconciliation.models,
-      );
+      yield* Effect.tryPromise({
+        try: async () =>
+          state.update(
+            GlobalStateKey.COPILOT_ROUTE_MODELS,
+            reconciliation.models,
+          ),
+        catch: (error) => error,
+      });
     }
   }
-  return {
-    skipped:
-      !versionChanged &&
-      added.length === 0 &&
-      removed.length === 0 &&
-      !reordered &&
-      routePreferencesCleared.length === 0,
-    previousVersion,
-    currentVersion: MODEL_LIST_VERSION,
-    added,
-    removed,
-    reordered,
-    routePreferencesCleared,
-  };
-}
-
-/**
- * Runs {@link refreshModelListStateIfNeeded}. Every host (extension, desktop, CLI)
- * calls this at startup with the same added/removed/reordered/route-
- * preference handling; only the resulting `messages` (logged by the caller,
- * so a host can interleave its own follow-up lines, e.g. the extension's
- * version-change message, in whatever order it already logs) stay at the
- * call site.
- */
-export async function refreshModelListAndLog(
-  state: ModelListState,
-): Promise<ModelListRefreshResult & { messages: readonly string[] }> {
-  const result = await refreshModelListStateIfNeeded(state);
-  const { added, removed, reordered, routePreferencesCleared } = result;
   const changed = added.length > 0 || removed.length > 0 || reordered;
   const messages: string[] = [];
   if (changed) {
@@ -215,5 +194,15 @@ export async function refreshModelListAndLog(
       `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
     );
   }
-  return { ...result, messages };
-}
+  return {
+    skipped:
+      !versionChanged && !changed && routePreferencesCleared.length === 0,
+    previousVersion,
+    currentVersion: MODEL_LIST_VERSION,
+    added,
+    removed,
+    reordered,
+    routePreferencesCleared,
+    messages,
+  };
+}, Effect.uninterruptible);

@@ -15,7 +15,7 @@ Source inspected at `2d986504584cde8b607393b3dbdfec85ce095ee6`, which includes
 the studies merged in [#11947](https://github.com/LionSR/TeXRA/pull/11947).
 References below describe code at that revision. Earlier external research
 remains pinned by the studies'
-[source manifest](evidence/2026-09-06-agent-architecture/source-pins.json); this
+[source manifest](../../evidence/2026-09-06-agent-architecture/source-pins.json); this
 draft makes no fresh upstream-head claim.
 
 ## 1. Preserve the programs and their domain contracts
@@ -24,10 +24,10 @@ The reflection pipeline remains context preparation, TeX counting, media
 extraction, response cycle, and output, in that order. Its response
 preparation/invocation/processing/continuation/finalization structure and its
 outer round policy remain explicit. They are visible in
-[runReflectionFlow](../../src/agent/implementations/flows/reflection/runReflectionFlow.ts#L288),
-[ResponseCycleFlow](../../src/agent/implementations/flows/reflection/ResponseCycleFlow.ts#L554),
+[runReflectionFlow](../../../../src/agent/implementations/flows/reflection/runReflectionFlow.ts#L288),
+[ResponseCycleFlow](../../../../src/agent/implementations/flows/reflection/ResponseCycleFlow.ts#L554),
 and
-[RoundPersistedFlow](../../src/agent/implementations/flows/reflection/RoundPersistedFlow.ts#L128).
+[RoundPersistedFlow](../../../../src/agent/implementations/flows/reflection/RoundPersistedFlow.ts#L128).
 
 Port those operations to Effect composition while preserving configured rounds,
 template selection, continuation coordinates, output handling, compile feedback
@@ -37,9 +37,9 @@ Recovering a later stage must not restart earlier external work merely because
 the program was reconstructed.
 
 The
-[tool-use loop](../../src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts#L31)
+[tool-use loop](../../../../src/agent/implementations/flows/tooluse/ToolUseRoundFlow.ts#L31)
 remains its own orchestration program. Its
-[dispatcher](../../src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts#L146)
+[dispatcher](../../../../src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts#L146)
 retains barrier ordering, bounded safe-call concurrency, duplicate handling,
 interruption and result pairing. Reflection need not run through that loop to
 use the same LLM package.
@@ -120,7 +120,7 @@ the recorded route is unavailable, report that or admit a replacement.
 - A model switch affects newly admitted work. An older in-flight response or
   client acquisition cannot overwrite the new selection or append itself to a
   different history. Preserve the retirement/rebind protections currently owned
-  by [ModelCell](../../src/agent/runtime/ModelCell.ts#L82).
+  by [ModelCell](../../../../src/agent/runtime/ModelCell.ts#L82).
 - Provider lowering uses the recorded codec/version policy and resolved
   controls. If the decoder/executor no longer supports that version, report an
   incompatibility or admit an explicit replacement. Do not silently reinterpret
@@ -131,15 +131,15 @@ the recorded route is unavailable, report that or admit a replacement.
   reasoning controls are resolved before admission. An opaque HTTP request blob
   is not the public package contract.
 
-Current [ModelHandler](../../src/agent/modelHandlers/ModelHandler.ts#L365)
+Current [ModelHandler](../../../../src/agent/modelHandlers/ModelHandler.ts#L365)
 applies a mode-dependent output allowance, while
-[Interactions](../../src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts#L1543)
+[Interactions](../../../../src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts#L1543)
 resolves limits and full versus incremental input. These are concrete decisions
 that must acquire the above ordering.
 
 ### Uploads are external work
 
-[Attachment upload](../../src/agent/modelHandlers/utils/toolAttachmentUtils.ts#L103)
+[Attachment upload](../../../../src/agent/modelHandlers/utils/toolAttachmentUtils.ts#L103)
 performs provider I/O. It cannot be hidden in pure preparation. For a protocol
 requiring uploaded assets, capture the canonical bytes first, execute the upload
 as an explicit provider operation, and retain its receipt and binding before
@@ -204,7 +204,7 @@ the record must not reset its deadline.
 
 The runtime chooses and persists the deadline policy at admission. This
 explicitly tightens the current
-[BackgroundRunLifecycle](../../src/agent/modelHandlers/support/BackgroundRunLifecycle.ts#L226),
+[BackgroundRunLifecycle](../../../../src/agent/modelHandlers/support/BackgroundRunLifecycle.ts#L226),
 which establishes its absolute deadline when it remembers a pending ID. The new
 policy must account for submission time rather than silently granting a fresh
 polling budget after restart.
@@ -214,13 +214,13 @@ provider cancelled the operation. An explicit extension of the observation
 budget is its own runtime decision. Likewise, a missing/expired remote job can
 justify a new attempt only through runtime retry policy. The package does not
 turn retrieval failure into another create call. Today's
-[tryResume](../../src/agent/modelHandlers/support/BackgroundRunLifecycle.ts#L303)
+[tryResume](../../../../src/agent/modelHandlers/support/BackgroundRunLifecycle.ts#L303)
 can signal a restart; preserve the provider classification while moving the
 restart decision to its explicit owner.
 
 An Interactions `requires_action` response can finish the model invocation and
 supply tool calls even though the broader provider conversation awaits results;
-[the current lifecycle](../../src/agent/modelHandlers/support/BackgroundRunLifecycle.ts#L74)
+[the current lifecycle](../../../../src/agent/modelHandlers/support/BackgroundRunLifecycle.ts#L74)
 already distinguishes this serviceable status. The package returns that
 completed turn. Runtime tool handling supplies the next exchange through the
 same admission boundary.
@@ -271,9 +271,9 @@ forever.
 A provider's covered-step count is not necessarily the number of canonical
 messages. Preserve the provider-owned encoding cursor with the continuation; do
 not derive it by slicing the generic message list.
-[ServerChainState](../../src/agent/modelHandlers/support/ServerChainState.ts#L1)
+[ServerChainState](../../../../src/agent/modelHandlers/support/ServerChainState.ts#L1)
 stores an anchor and covered count today, and
-[Interactions](../../src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts#L1599)
+[Interactions](../../../../src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts#L1599)
 selects newly appended client-input steps rather than resending model-generated
 calls.
 
@@ -302,7 +302,7 @@ reloading must not re-extract calls and synthesize different IDs.
 Persist the dispatch classification and approval decision with the runtime call
 record, separately from the package's canonical call. Recovery checks both that
 record and current execution policy before retrying an unsettled call. Today's
-[`parallelSafe`](../../src/agent/core/tools/ToolTypes.ts#L22) declaration
+[`parallelSafe`](../../../../src/agent/core/tools/ToolTypes.ts#L22) declaration
 governs concurrency and duplicate partitioning; it does not by itself authorize
 replay after a restart or a tool implementation change.
 
@@ -326,9 +326,9 @@ state.
 
 Final logical state changes can be staged for settlement. Required intermediate
 state must have an explicit durable transition before it is exposed.
-[TodoTool](../../src/tools/todo/TodoTool.ts#L41) updates the todo state and
+[TodoTool](../../../../src/tools/todo/TodoTool.ts#L41) updates the todo state and
 returns `OK`; restoring only that message loses the list.
-[PlanTool](../../src/tools/plan/PlanTool.ts#L135) publishes a new plan before
+[PlanTool](../../../../src/tools/plan/PlanTool.ts#L135) publishes a new plan before
 waiting for approval. For that path, commit a `plan-proposed` tool transition
 with its state operations and approval correlation before waiting. Resume
 reattaches to the same pending approval; it does not propose the plan again or
@@ -369,7 +369,7 @@ call has a settled disposition. Uncertain barrier outcomes cannot be silently
 converted into successful results to unblock that batch.
 
 Preserve the current
-[duplicate partition rules](../../src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts#L121).
+[duplicate partition rules](../../../../src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts#L121).
 A duplicate settlement refers to its primary and does not repeat the primary's
 state effects. If the primary is committed and a duplicate is not, materialize
 the duplicate result from committed evidence without rerunning the primary tool.
@@ -385,9 +385,9 @@ dispatcher.
 The runtime joins the committed assistant response and settlements into a
 canonical exchange. The provider module lowers the whole exchange, including
 signed reasoning and required grouping, as one protocol operation. Preserve
-[Interactions' whole-group requirement](../../src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts#L735)
+[Interactions' whole-group requirement](../../../../src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts#L735)
 and
-[approval feedback inside tool results](../../src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts#L608).
+[approval feedback inside tool results](../../../../src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts#L608).
 The runtime has no `if Google`/`if Anthropic` branches for those encodings.
 
 Persist canonical assistant/result values and references once. The new package

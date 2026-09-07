@@ -49,7 +49,7 @@ extra coordinate rather than a second framework.
 ### 0.1 Current implementation contract: runtime and LLM package
 
 Refreshed from `origin/main` at `542aea6e8425ec574ffa0fa9fd4fd05a878feb03`.
-The [agent architecture study](../../archived/architecture/2026-09-06-agent-architecture-study.md) and
+The [agent architecture study](../../proposed/architecture/2026-09-06-agent-architecture-study.md) and
 [review](./2026-09-06-agent-architecture-review.md) add a necessary dependency:
 settle the canonical LLM turn/continuation contract with the runtime before
 implementing its durable message rows. This section is the common contract;

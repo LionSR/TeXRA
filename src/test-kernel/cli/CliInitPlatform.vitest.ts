@@ -108,6 +108,7 @@ vi.mock('@logger/logUtils', () => ({
   debug: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
+  isDebugModeEnabled: vi.fn(() => false),
   setOutputChannelFactory: vi.fn(),
   warn: vi.fn(),
 }));

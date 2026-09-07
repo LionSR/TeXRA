@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
@@ -15,6 +16,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -84,7 +86,9 @@ describe('trace-viewer TraceDataSchema', () => {
     });
     await store.flush();
 
-    const result = await assembleTrace(executionId);
+    const result = await Effect.runPromise(
+      assembleTrace(executionId, createTestSession().snapshots),
+    );
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
 

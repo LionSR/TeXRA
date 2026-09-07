@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
@@ -31,7 +32,9 @@ async function captureOptions(): Promise<ResumeRunOptions> {
 
 describe('tryResumeFromResumeData', () => {
   beforeEach(() => {
-    mocks.resumeStreamWithRefusalNotice.mockReset().mockResolvedValue(true);
+    mocks.resumeStreamWithRefusalNotice
+      .mockReset()
+      .mockReturnValue(Effect.succeed(true));
   });
 
   it('reports cancellation once the stream transcript is gone', async () => {

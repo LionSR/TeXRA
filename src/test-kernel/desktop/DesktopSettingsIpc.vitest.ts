@@ -15,6 +15,7 @@ import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   FakeScopedConfigProvider,
+  FakeSecrets,
   FakeStateStore,
 } from '@test/support/FakePlatform';
 import {
@@ -78,6 +79,7 @@ const liveSettingsIpcs: ReturnType<
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const {
     globalState = new FakeStateStore(),
+    secrets = new FakeSecrets(),
     workspaceState = new FakeStateStore(),
     config = new FakeScopedConfigProvider(),
     ui,
@@ -119,6 +121,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
           }),
       }),
     globalState,
+    secrets,
     ui: createStubDesktopSettingsUiHost(ui),
     session,
     postToRenderer,

@@ -648,7 +648,10 @@ describe('sessionFold', () => {
   });
 
   it('re-roots the children of a tombstoned stream, keeps the tombstone final, and closes the listing at the marker', () => {
-    const removed = scenario.log.emit(ROOT, 3000, { type: 'stream.removed' });
+    const removed = scenario.log.emit(ROOT, 3000, {
+      type: 'stream.removed',
+      executionIds: [],
+    });
     const view = foldAll([tail(removed)], foldAll(scenario.events));
     expect(view.streams.has(ROOT)).toBe(false);
     expect(view.policy.has(ROOT)).toBe(false);

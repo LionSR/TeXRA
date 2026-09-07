@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
@@ -9,6 +10,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
+  aggregateId,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -17,15 +19,17 @@ import {
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
+import { settleSessionEvents } from '@test/agent/progressTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  appendTranscriptEntry,
-  snapshotFacts,
-} from '@test/support/storeTestDrivers';
+import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import {
   assembleTrace,
   StreamLogStore,
@@ -73,7 +77,7 @@ async function writeExecution(
   await store.writeMeta({ timestamp: '2026-07-05T00:00:00.000Z', ...meta });
 }
 
-type AssembleTraceResult = Awaited<ReturnType<typeof assembleTrace>>;
+type AssembleTraceResult = Effect.Success<ReturnType<typeof assembleTrace>>;
 
 /** Assert the ok branch and hand back the trace, narrowing for the caller. */
 function unwrapOkTrace(result: AssembleTraceResult) {
@@ -109,14 +113,18 @@ describe('assembleTrace', () => {
       'listPersistedStreams',
     );
 
-    const trace = unwrapOkTrace(await assembleTrace(executionId));
+    const trace = unwrapOkTrace(
+      await Effect.runPromise(
+        assembleTrace(executionId, createTestSession().snapshots),
+      ),
+    );
 
     expect(trace.streamId).toBe(registeredId);
     expect(scan).not.toHaveBeenCalled();
   });
 
   it('assembles a full trace document from the streamId stamped on execution metadata', async () => {
-    const executionId = 'exec-happy-path' as ExecutionId;
+    const executionId = 'aa11bb22cc33' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
     const streamId = getStreamTabId('review', { executionId });
 
@@ -126,8 +134,27 @@ describe('assembleTrace', () => {
       executionConfig,
     );
     await appendLogEntry(streamId, 'hello');
+    const session = createTestSession();
+    publishTestRunStart(session, streamId, executionId);
+    const todos = [
+      {
+        content: 'Check the argument',
+        activeForm: 'Checking the argument',
+        status: 'pending' as const,
+      },
+    ];
+    session.publish([
+      {
+        type: 'updateTodos',
+        aggregateId: aggregateId('stream', streamId),
+        todos,
+      },
+    ]);
+    await settleSessionEvents();
 
-    const trace = unwrapOkTrace(await assembleTrace(executionId));
+    const trace = unwrapOkTrace(
+      await Effect.runPromise(assembleTrace(executionId, session.snapshots)),
+    );
 
     expect(trace.streamId).toBe(streamId);
     expect(trace.config).toMatchObject({
@@ -141,10 +168,16 @@ describe('assembleTrace', () => {
     });
     expect(trace.meta?.outcome).toBe('completed');
     expect(trace.snapshot.streamId).toBe(streamId);
+    expect(trace.snapshot.todos).toEqual(todos);
   });
 
   it('returns config_missing when no config was ever written', async () => {
-    const result = await assembleTrace('exec-no-config' as ExecutionId);
+    const result = await Effect.runPromise(
+      assembleTrace(
+        'exec-no-config' as ExecutionId,
+        createTestSession().snapshots,
+      ),
+    );
     expect(result).toEqual({ status: 'config_missing' });
   });
 
@@ -152,7 +185,9 @@ describe('assembleTrace', () => {
     const executionId = 'exec-no-logs' as ExecutionId;
     await getExecutionStore(executionId).writeRunRecord(config());
 
-    const result = await assembleTrace(executionId);
+    const result = await Effect.runPromise(
+      assembleTrace(executionId, createTestSession().snapshots),
+    );
 
     expect(result).toEqual({ status: 'streamLogs_missing' });
   });
@@ -162,30 +197,11 @@ describe('assembleTrace', () => {
     const streamId = getStreamTabId('orchestrator', { executionId });
     await writeExecution(executionId, { streamId });
 
-    const result = await assembleTrace(executionId);
+    const result = await Effect.runPromise(
+      assembleTrace(executionId, createTestSession().snapshots),
+    );
 
     expect(result).toEqual({ status: 'streamLogs_missing' });
-  });
-
-  it('never resolves a stream from sidecar candidates when metadata has no stamp', async () => {
-    const executionId = 'aaa444aaa444' as ExecutionId;
-    const executionConfig = config();
-    await writeExecution(executionId, {}, executionConfig);
-
-    // Sidecar candidates that the deleted legacy resolver would have found —
-    // and a stream whose name embeds the execution id: neither may resolve.
-    const first = `orchestrator@old#${executionId}` as StreamTabId;
-    const second = `orchestrator@new#${executionId}` as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(first, executionConfig, executionId);
-    snapshotFacts(snapshots).setRunConfig(second, executionConfig, executionId);
-    await snapshots.flush();
-    await appendLogEntry(first, 'first candidate must not be selected');
-    await appendLogEntry(second, 'second candidate must not be selected');
-
-    await expect(assembleTrace(executionId)).resolves.toEqual({
-      status: 'streamLogs_missing',
-    });
   });
 
   it('resolves a tool-format child stream through its stamped metadata, not name derivation', async () => {
@@ -210,7 +226,11 @@ describe('assembleTrace', () => {
 
     await appendLogEntry(actualChildStreamId, 'child stream output');
 
-    const trace = unwrapOkTrace(await assembleTrace(executionId));
+    const trace = unwrapOkTrace(
+      await Effect.runPromise(
+        assembleTrace(executionId, createTestSession().snapshots),
+      ),
+    );
 
     expect(trace.streamId).toBe(actualChildStreamId);
     expect(trace.entries).toHaveLength(1);

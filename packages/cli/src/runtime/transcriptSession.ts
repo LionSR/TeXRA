@@ -4,7 +4,6 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { StreamLogStore } from '@transcript';
 
@@ -27,9 +26,8 @@ function persistentSession(session: SessionHandle): SessionHandle {
   return session;
 }
 
-/** Open the CLI's persistent session and schedule its leftover-stream sweep. */
+/** Open the CLI's persistent session. Its owner runs indexed cleanup. */
 export async function initializeCliTranscriptSession(
-  sweep: { readonly delayMs?: number } = { delayMs: 0 },
   openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
 ): Promise<SessionHandle> {
   const existing = tryDefaultSession();
@@ -41,8 +39,5 @@ export async function initializeCliTranscriptSession(
       responseTextProcessing,
     }),
   );
-  // The TUI delays this read until after its first paint. Headless callers
-  // schedule it immediately because they may finish before that delay ends.
-  scheduleLeftoverStreamSweep(session, sweep);
   return session;
 }

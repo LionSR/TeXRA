@@ -47,6 +47,9 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import {
+  AggregateIdSchema,
+  ExecutionIdSchema,
+  OwnerIdSchema,
   SessionEventDraftSchema,
   SessionEventSchema,
   ownerIdentity,
@@ -63,12 +66,16 @@ import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {
   AggregateStateSchema,
+  DeletionModeSchema,
+  type DeletionMode,
   type AggregateState,
   Database,
   DatabaseOpenFailed,
+  DatabaseClaimRefused,
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
 
 /** The database file of a session root, beside the stores it replaces. */
@@ -275,11 +282,20 @@ export const databaseLayer = (
         SELECT child.aggregate_id FROM event_sequence child
         JOIN dependents parent ON child.parent_id = parent.aggregate_id
       )`;
+      const dependentIds = db.prepare(`${dependents}
+        SELECT aggregate_id FROM dependents ORDER BY aggregate_id`);
       const unownedDependent = db.prepare(`${dependents}
         SELECT aggregate_id FROM event_sequence
         WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
           AND closed = 0 AND owner_id IS NOT ?
         LIMIT 1
+      `);
+      const deletionExecutions = db.prepare(`${dependents}
+        SELECT json_extract(aggregate_id, '$[1]') AS executionId
+        FROM event_sequence
+        WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
+          AND json_extract(aggregate_id, '$[0]') = 'execution'
+        ORDER BY executionId
       `);
       const closeDependents = db.prepare(`${dependents}
         UPDATE event_sequence SET closed = 1
@@ -380,16 +396,247 @@ export const databaseLayer = (
         );
       const transact = <A>(body: () => A) =>
         transaction('write', body, writeFailed);
+      const createExecution = db.prepare(`INSERT INTO event_sequence
+        (aggregate_id, seq, owner_id, parent_id) VALUES (?, 0, ?, ?)`);
       const claim = db.prepare(`UPDATE event_sequence SET owner_id = ?
         WHERE aggregate_id = ? AND owner_id IS ? AND closed = 0`);
       const release = db.prepare(`UPDATE event_sequence SET owner_id = NULL
         WHERE aggregate_id IN (SELECT value FROM json_each(?)) AND owner_id = ?`);
+      const latestInquiry = db.prepare(`SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.aggregate_id = ? AND e.type = 'inquiryThreadUpdated.1'
+        ORDER BY e.seq DESC LIMIT 1`);
+      const reparentInquiry =
+        db.prepare(`UPDATE event_sequence SET parent_id = ?
+        WHERE aggregate_id = ? AND owner_id = ? AND closed = 0`);
+      const cleanupLanes = new Map<AggregateId, PerKeyLane>();
+      const closedTombstone = db.prepare(`SELECT ${EVENT_COLUMNS},
+        s.owner_id AS claimOwner FROM event e
+        JOIN event_sequence s ON s.aggregate_id = e.aggregate_id
+        WHERE e.aggregate_id = ? AND e."commit" = ?
+          AND e.seq = s.seq AND s.closed = 1 AND e.type = 'stream.removed.1'`);
+      const claimCleanup = db.prepare(`UPDATE event_sequence SET owner_id = ?
+        WHERE aggregate_id = ? AND owner_id IS ? AND closed = 1
+          AND EXISTS (SELECT 1 FROM event e
+            WHERE e.aggregate_id = event_sequence.aggregate_id
+              AND e.seq = event_sequence.seq AND e."commit" = ?
+              AND e.type = 'stream.removed.1')`);
+      const collectClosed = db.prepare(`DELETE FROM event_sequence
+        WHERE aggregate_id = ? AND owner_id = ? AND closed = 1
+          AND EXISTS (SELECT 1 FROM event e
+            WHERE e.aggregate_id = event_sequence.aggregate_id
+              AND e.seq = event_sequence.seq AND e."commit" = ?
+              AND e.type = 'stream.removed.1')`);
+      const openDependent = db.prepare(`${dependents}
+        SELECT aggregate_id FROM event_sequence
+        WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
+          AND closed = 0 LIMIT 1`);
       const readState = (
         ids: readonly AggregateId[],
       ): readonly AggregateState[] =>
         state
           .all(JSON.stringify(ids))
           .map((row) => AggregateStateSchema.parse(row));
+      const readDependents = (id: AggregateId) =>
+        readState(
+          dependentIds
+            .all(id)
+            .map((row) => AggregateIdSchema.parse(row.aggregate_id)),
+        );
+      const proveReclaimable = (
+        observed: readonly AggregateState[],
+        mode?: DeletionMode,
+      ) =>
+        Effect.gen(function* () {
+          const owners = new Set(
+            observed.flatMap((row) =>
+              row.ownerId === null || row.ownerId === identity.ownerId
+                ? []
+                : [row.ownerId],
+            ),
+          );
+          for (const owner of owners) {
+            const verdict = yield* Effect.tryPromise({
+              try: () => proveOwnerLiveness(ownerIdentity(owner)),
+              catch: writeFailed,
+            });
+            if (
+              verdict !== 'dead' &&
+              !(mode === 'single' && verdict === 'unprovable')
+            ) {
+              return yield* Effect.fail(
+                writeFailed(
+                  new DatabaseClaimRefused({ ownerId: owner, verdict }),
+                ),
+              );
+            }
+          }
+        });
+      const appendPrepared = (
+        prepared: readonly ReturnType<typeof prepareEventDraft>[],
+        at: number,
+      ): readonly SessionEvent[] =>
+        prepared.map(({ draft, payload }): SessionEvent => {
+          if (draft.type === 'inquiryThreadUpdated') {
+            // Inquiry writes borrow their claim for this transaction only.
+            claim.run(identity.ownerId, draft.aggregateId, null);
+            const previousRow = latestInquiry.get(draft.aggregateId);
+            const previous = previousRow ? decodeEvent(previousRow) : undefined;
+            if (previous && previous.type !== 'inquiryThreadUpdated') {
+              throw new Error(`Invalid inquiry history: ${draft.aggregateId}`);
+            }
+            const reopened =
+              previous?.status === 'answered' && draft.status === 'open';
+            if (
+              previous &&
+              previous.parentStreamId !== draft.parentStreamId &&
+              !reopened
+            ) {
+              throw new Error(
+                `Only an answered inquiry can change parents: ${draft.aggregateId}`,
+              );
+            }
+            if (
+              previous?.status === 'open' &&
+              draft.status === 'open' &&
+              previous.turnCount !== draft.turnCount
+            ) {
+              throw new Error(
+                `An open inquiry cannot start another turn: ${draft.aggregateId}`,
+              );
+            }
+            if (previous?.status === 'dropped' && draft.status !== 'dropped') {
+              throw new Error(
+                `A dropped inquiry cannot reopen: ${draft.aggregateId}`,
+              );
+            }
+            if ((!previous || reopened) && draft.parentStreamId !== null) {
+              const parent = readState([
+                qualifyAggregateId('stream', draft.parentStreamId),
+              ])[0];
+              if (
+                !parent ||
+                parent.closed ||
+                parent.ownerId !== identity.ownerId
+              ) {
+                throw new Error(
+                  `Inquiry opening requires an owned open parent: ${draft.parentStreamId}`,
+                );
+              }
+            }
+          }
+          const seq = nextSeq.get(draft.aggregateId, identity.ownerId)?.seq;
+          if (typeof seq !== 'number') {
+            throw new Error(
+              `Aggregate is closed or not owned: ${draft.aggregateId}`,
+            );
+          }
+          const target = aggregateTarget(draft.aggregateId);
+          if (
+            target.kind === 'stream' &&
+            (seq === 1) !== (draft.type === 'run.start')
+          ) {
+            throw new Error(
+              `A stream must begin with exactly one run.start: ${draft.aggregateId}`,
+            );
+          }
+          if (
+            (draft.type === 'run.start' || draft.type === 'stream.removed') &&
+            target.kind !== 'stream'
+          ) {
+            throw new Error(
+              `Stream lifecycle event has a non-stream target: ${draft.aggregateId}`,
+            );
+          }
+          if (draft.type === 'run.start') {
+            // The execution belongs to this stream from creation onward.
+            // Its first own event will advance seq from zero to one.
+            // An existing execution cannot be assigned to a second run.
+            createExecution.run(
+              qualifyAggregateId('execution', draft.executionId),
+              identity.ownerId,
+              draft.aggregateId,
+            );
+          }
+          // Capture the declared parent in this same transaction. A
+          // reused logical id must not redirect the child to a new run.
+          let parentStartCommit: number | undefined;
+          if (draft.type === 'run.start' && draft.parentStreamId != null) {
+            const parent = readState([
+              qualifyAggregateId('stream', draft.parentStreamId),
+            ])[0];
+            if (!parent || parent.closed || parent.startCommit === null) {
+              throw new Error(
+                `Child creation requires an open parent: ${draft.parentStreamId}`,
+              );
+            }
+            parentStartCommit = parent.startCommit;
+          }
+          // A tombstone names only execution directories owned by this
+          // lifecycle. Derive the targets under the same write permit
+          // and transaction as closure; no caller chooses cleanup paths.
+          const committedDraft =
+            draft.type === 'stream.removed'
+              ? {
+                  ...draft,
+                  executionIds: deletionExecutions
+                    .all(draft.aggregateId)
+                    .map((row) => ExecutionIdSchema.parse(row.executionId)),
+                }
+              : draft;
+          const committedPayload =
+            draft.type === 'stream.removed'
+              ? payloadOf(committedDraft)
+              : payload;
+          const commit = insertEvent.get(
+            draft.aggregateId,
+            seq,
+            `${draft.type}.1`,
+            identity.ownerId,
+            at,
+            parentStartCommit ?? null,
+            committedPayload,
+            committedPayload,
+            parentStartCommit ?? null,
+          )?.commit;
+          if (typeof commit !== 'number') {
+            throw new Error(
+              `No commit assigned for aggregate ${draft.aggregateId}`,
+            );
+          }
+          if (draft.type === 'inquiryThreadUpdated') {
+            reparentInquiry.run(
+              draft.parentStreamId === null
+                ? null
+                : qualifyAggregateId('stream', draft.parentStreamId),
+              draft.aggregateId,
+              identity.ownerId,
+            );
+            release.run(JSON.stringify([draft.aggregateId]), identity.ownerId);
+          }
+          if (draft.type === 'stream.removed') {
+            // C5/C9: admission must hold every open dependent claim.
+            // This check shares the write transaction with the tombstone
+            // and recursive closure, so no claimant can change between them.
+            const unowned = unownedDependent.get(
+              draft.aggregateId,
+              identity.ownerId,
+            );
+            if (unowned) {
+              throw new Error(
+                `Deletion requires the dependent claim: ${unowned.aggregate_id}`,
+              );
+            }
+            closeDependents.run(draft.aggregateId);
+          }
+          return {
+            ...committedDraft,
+            ...(parentStartCommit === undefined ? {} : { parentStartCommit }),
+            seq,
+            commit,
+            ownerId: identity.ownerId,
+            at,
+          };
+        });
       return {
         observedCommit,
         level,
@@ -459,22 +706,7 @@ export const databaseLayer = (
                 writeFailed(new Error('A claim target is missing or closed.')),
               );
             }
-            const owners = new Set(
-              observed.flatMap((row) =>
-                row.ownerId === null ? [] : [row.ownerId],
-              ),
-            );
-            for (const owner of owners) {
-              const verdict = yield* Effect.tryPromise({
-                try: () => proveOwnerLiveness(ownerIdentity(owner)),
-                catch: writeFailed,
-              });
-              if (verdict !== 'dead') {
-                return yield* Effect.fail(
-                  writeFailed(new Error(`Claim owner is ${verdict}: ${owner}`)),
-                );
-              }
-            }
+            yield* proveReclaimable(observed);
             yield* transact(() => {
               for (const row of observed) {
                 if (
@@ -488,6 +720,153 @@ export const databaseLayer = (
               }
             });
           }),
+        removeStream: (id, mode, expectedStartCommit) =>
+          Effect.gen(function* () {
+            const deletionMode = yield* Effect.try({
+              try: () => DeletionModeSchema.parse(mode),
+              catch: writeFailed,
+            });
+            const observed = yield* transaction(
+              'read',
+              () => readDependents(id),
+              readFailed,
+            );
+            if (observed.length === 0 || observed.some((row) => row.closed)) {
+              return yield* Effect.fail(
+                writeFailed(
+                  new Error(`Deletion target is missing or closed: ${id}`),
+                ),
+              );
+            }
+            if (
+              observed.find((row) => row.aggregateId === id)?.startCommit !==
+              expectedStartCommit
+            ) {
+              return yield* Effect.fail(
+                writeFailed(
+                  new Error(`Deletion target changed since admission: ${id}`),
+                ),
+              );
+            }
+            yield* proveReclaimable(observed, deletionMode);
+            const at = yield* Clock.currentTimeMillis;
+            const removal = yield* Effect.try({
+              try: () =>
+                prepareEventDraft({ type: 'stream.removed', aggregateId: id }),
+              catch: writeFailed,
+            });
+            return yield* transact(() => {
+              const current = readDependents(id);
+              const observedById = new Map(
+                observed.map((row) => [row.aggregateId, row]),
+              );
+              if (
+                current.length !== observed.length ||
+                !current.every((row) => {
+                  const before = observedById.get(row.aggregateId);
+                  return (
+                    before !== undefined &&
+                    !row.closed &&
+                    before.startCommit === row.startCommit &&
+                    before.parentId === row.parentId
+                  );
+                })
+              ) {
+                throw new Error(
+                  `Deletion dependents changed before acquisition: ${id}`,
+                );
+              }
+              for (const row of observed) {
+                if (
+                  claim.run(identity.ownerId, row.aggregateId, row.ownerId)
+                    .changes !== 1
+                ) {
+                  throw new Error(
+                    `Deletion claim changed before acquisition: ${row.aggregateId}`,
+                  );
+                }
+              }
+              return appendPrepared([removal], at);
+            });
+          }),
+        collectDeletion: (id, tombstoneCommit, cleanup) =>
+          Effect.gen(function* () {
+            const observed = yield* query(() => {
+              const row = closedTombstone.get(id, tombstoneCommit);
+              if (!row)
+                throw new Error(`Deletion record is no longer current: ${id}`);
+              const tombstone = decodeEvent(row);
+              if (tombstone.type !== 'stream.removed') {
+                throw new Error(`Expected a deletion record: ${id}`);
+              }
+              return {
+                tombstone,
+                owner: OwnerIdSchema.nullable().parse(row.claimOwner),
+              };
+            });
+            const owner = observed.owner;
+            if (owner !== null && owner !== identity.ownerId) {
+              const verdict = yield* Effect.tryPromise({
+                try: () => proveOwnerLiveness(ownerIdentity(owner)),
+                catch: writeFailed,
+              });
+              if (verdict !== 'dead') {
+                return yield* Effect.fail(
+                  writeFailed(
+                    new Error(`Cleanup owner is ${verdict}: ${observed.owner}`),
+                  ),
+                );
+              }
+            }
+            yield* Effect.acquireUseRelease(
+              transact(() => {
+                if (
+                  claimCleanup.run(
+                    identity.ownerId,
+                    id,
+                    observed.owner,
+                    tombstoneCommit,
+                  ).changes !== 1
+                ) {
+                  throw new Error(
+                    `Deletion claim changed before cleanup: ${id}`,
+                  );
+                }
+              }),
+              () =>
+                Effect.gen(function* () {
+                  // Filesystem promises cannot be undone by fiber interruption.
+                  // Keep the local claim lane until that work has actually settled.
+                  yield* cleanup(observed.tombstone.executionIds).pipe(
+                    Effect.uninterruptible,
+                  );
+                  yield* transact(() => {
+                    if (openDependent.get(id)) {
+                      throw new Error(`Deletion has an open dependent: ${id}`);
+                    }
+                    if (
+                      collectClosed.run(id, identity.ownerId, tombstoneCommit)
+                        .changes !== 1
+                    ) {
+                      throw new Error(
+                        `Deletion claim or tombstone changed during cleanup: ${id}`,
+                      );
+                    }
+                  });
+                }),
+              (_, exit) =>
+                Exit.isFailure(exit)
+                  ? transact(() => {
+                      claimCleanup.run(
+                        null,
+                        id,
+                        identity.ownerId,
+                        tombstoneCommit,
+                      );
+                    })
+                  : Effect.void,
+            );
+          }).pipe(withPerKeyLane(cleanupLanes, id)),
         releaseClaims: (ids) =>
           ids.length === 0
             ? Effect.void
@@ -499,109 +878,20 @@ export const databaseLayer = (
             if (input.length === 0) return [];
             // Validate and serialize before BEGIN IMMEDIATE. The batch shares one clock.
             const prepared = yield* Effect.try({
-              try: () =>
-                input.map((inputDraft) => {
-                  const draft = redactTraceDraft(
-                    SessionEventDraftSchema.parse(inputDraft),
-                  );
-                  return { draft, payload: payloadOf(draft) };
-                }),
+              try: () => input.map(prepareEventDraft),
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            return yield* transact(() =>
-              prepared.map(({ draft, payload }): SessionEvent => {
-                const seq = nextSeq.get(
-                  draft.aggregateId,
-                  identity.ownerId,
-                )?.seq;
-                if (typeof seq !== 'number') {
-                  throw new Error(
-                    `Aggregate is closed or not owned: ${draft.aggregateId}`,
-                  );
-                }
-                const target = aggregateTarget(draft.aggregateId);
-                if (
-                  target.kind === 'stream' &&
-                  (seq === 1) !== (draft.type === 'run.start')
-                ) {
-                  throw new Error(
-                    `A stream must begin with exactly one run.start: ${draft.aggregateId}`,
-                  );
-                }
-                if (
-                  (draft.type === 'run.start' ||
-                    draft.type === 'stream.removed') &&
-                  target.kind !== 'stream'
-                ) {
-                  throw new Error(
-                    `Stream lifecycle event has a non-stream target: ${draft.aggregateId}`,
-                  );
-                }
-                // Capture the declared parent in this same transaction. A
-                // reused logical id must not redirect the child to a new run.
-                let parentStartCommit: number | undefined;
-                if (
-                  draft.type === 'run.start' &&
-                  draft.parentStreamId != null
-                ) {
-                  const parent = readState([
-                    qualifyAggregateId('stream', draft.parentStreamId),
-                  ])[0];
-                  if (!parent || parent.closed || parent.startCommit === null) {
-                    throw new Error(
-                      `Child creation requires an open parent: ${draft.parentStreamId}`,
-                    );
-                  }
-                  parentStartCommit = parent.startCommit;
-                }
-                const commit = insertEvent.get(
-                  draft.aggregateId,
-                  seq,
-                  `${draft.type}.1`,
-                  identity.ownerId,
-                  at,
-                  parentStartCommit ?? null,
-                  payload,
-                  payload,
-                  parentStartCommit ?? null,
-                )?.commit;
-                if (typeof commit !== 'number') {
-                  throw new Error(
-                    `No commit assigned for aggregate ${draft.aggregateId}`,
-                  );
-                }
-                if (draft.type === 'stream.removed') {
-                  // C5/C9: admission must hold every open dependent claim.
-                  // This check shares the write transaction with the tombstone
-                  // and recursive closure, so no claimant can change between them.
-                  const unowned = unownedDependent.get(
-                    draft.aggregateId,
-                    identity.ownerId,
-                  );
-                  if (unowned) {
-                    throw new Error(
-                      `Deletion requires the dependent claim: ${unowned.aggregate_id}`,
-                    );
-                  }
-                  closeDependents.run(draft.aggregateId);
-                }
-                return {
-                  ...draft,
-                  ...(parentStartCommit === undefined
-                    ? {}
-                    : { parentStartCommit }),
-                  seq,
-                  commit,
-                  ownerId: identity.ownerId,
-                  at,
-                };
-              }),
-            );
+            return yield* transact(() => appendPrepared(prepared, at));
           }),
       };
     }),
   );
+
+function prepareEventDraft(input: SessionEventDraft) {
+  const draft = redactTraceDraft(SessionEventDraftSchema.parse(input));
+  return { draft, payload: payloadOf(draft) };
+}
 
 /**
  * Serialize the validated draft before opening the transaction. Draft parsing

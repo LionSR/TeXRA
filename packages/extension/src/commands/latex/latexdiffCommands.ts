@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { defaultSession } from '@agent/runtime';
 import { createLatexExecutionDiscovery } from '@agent/storage';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import {
@@ -41,7 +42,9 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
@@ -420,15 +423,19 @@ async function handleRunLatexdiff(
             increment: 0,
             message: 'Preparing LaTeX diffs...',
           });
-          return runLatexdiffForExecution({
-            ...config,
-            outputsByRound,
-            mathMarkup,
-            generateBetweenRoundDiffs,
-            executionDiscovery: createLatexExecutionDiscovery(),
-            latexdiff: { channel: CHANNEL, service: latexdiffService },
-            progress,
-          });
+          return effectRuntime().runPromise(
+            runLatexdiffForExecution({
+              snapshots: defaultSession().snapshots,
+              filesystem: nodeFilesystem,
+              ...config,
+              outputsByRound,
+              mathMarkup,
+              generateBetweenRoundDiffs,
+              executionDiscovery: createLatexExecutionDiscovery(),
+              latexdiff: { channel: CHANNEL, service: latexdiffService },
+              progress,
+            }),
+          );
         },
       );
 

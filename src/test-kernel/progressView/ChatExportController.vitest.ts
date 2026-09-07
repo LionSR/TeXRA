@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import { Effect } from 'effect';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -18,6 +19,7 @@ import {
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
@@ -93,14 +95,22 @@ async function persistTranscriptEntry(
 }
 
 describe('ChatExportController.exportAsHtml', () => {
-  const controller = new ChatExportController({ latexPreamble: '' });
+  let controller: ChatExportController;
 
-  beforeEach(installStoragePlatform);
+  beforeEach(async () => {
+    await installStoragePlatform();
+    controller = new ChatExportController({
+      latexPreamble: '',
+      snapshots: createTestSession().snapshots,
+    });
+  });
 
   it('returns config_missing when nothing is stored', async () => {
     const templatePath = await writeTemplate();
 
-    const outcome = await controller.exportAsHtml('missing', templatePath);
+    const outcome = await Effect.runPromise(
+      controller.exportAsHtml('missing', templatePath),
+    );
 
     expect(outcome).toEqual({ status: 'config_missing' });
   });
@@ -117,7 +127,9 @@ describe('ChatExportController.exportAsHtml', () => {
       streamId,
     });
 
-    const outcome = await controller.exportAsHtml(executionId, templatePath);
+    const outcome = await Effect.runPromise(
+      controller.exportAsHtml(executionId, templatePath),
+    );
 
     expect(outcome.status).toBe('ok');
     if (outcome.status !== 'ok') return;
@@ -146,15 +158,23 @@ describe('ChatExportController.exportAsHtml', () => {
     });
 
     await expect(
-      controller.exportAsHtml(executionId, '/nonexistent/index.html'),
+      Effect.runPromise(
+        controller.exportAsHtml(executionId, '/nonexistent/index.html'),
+      ),
     ).rejects.toThrow(/Trace-viewer standalone bundle missing/);
   });
 });
 
 describe('ChatExportController.buildExportInput', () => {
-  const controller = new ChatExportController({ latexPreamble: '' });
+  let controller: ChatExportController;
 
-  beforeEach(installStoragePlatform);
+  beforeEach(async () => {
+    await installStoragePlatform();
+    controller = new ChatExportController({
+      latexPreamble: '',
+      snapshots: createTestSession().snapshots,
+    });
+  });
 
   it('reports config_missing when nothing is stored', async () => {
     await expect(controller.buildExportInput('missing')).resolves.toEqual({

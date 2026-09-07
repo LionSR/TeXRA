@@ -19,7 +19,6 @@ export {
   getExecutionStore,
   clearStoreCache,
   isReservedKvKeyName,
-  readExecutionMetaCore,
 } from './ExecutionKVStore';
 export {
   buildCliWorkflowResultMeta,
@@ -41,8 +40,6 @@ export {
   type ExecutionListingEntry,
   createLatexExecutionDiscovery,
   listExecutions,
-  deleteExecution,
-  deleteAllExecutions,
   isUserVisibleExecution,
 } from './executionListing';
 export {
@@ -58,4 +55,3 @@ export {
 } from './executionLease';
 export { persistChildRunResultMeta } from './childRunPersistence';
 export { resolveChildRunOutput } from './childRunOutput';
-export { SessionStores } from './SessionStores';
