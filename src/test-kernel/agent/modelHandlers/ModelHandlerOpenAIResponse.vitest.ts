@@ -1469,6 +1469,26 @@ describe('ModelHandlerOpenAIResponse.normalizeUsage', () => {
     assert.equal(normalized.cachedInputTokens, 10);
   });
 
+  // #11878: Astra bills the whole request at 2x input / 1.5x output past 272K
+  // prompt tokens, and the handler priced every request at the flat catalog
+  // rates, underreporting long-context cost by up to 2x.
+  it('applies the GPT-6 Astra long-context tier past 272K prompt tokens', () => {
+    const handler = createHandler({ ...MODEL_CONFIGS.gpt6 });
+    const usageOf = (inputTokens: number): ResponseUsage =>
+      ({
+        input_tokens: inputTokens,
+        output_tokens: 1_000,
+        total_tokens: inputTokens + 1_000,
+        input_tokens_details: { cached_tokens: 0 },
+        output_tokens_details: { reasoning_tokens: 0 },
+      }) as ResponseUsage;
+
+    // 300K x $20/1M + 1K x $75/1M
+    assert.equal(handler.normalizeUsage(usageOf(300_000), 0).cost, 6.075);
+    // Below the threshold the catalog rates still apply: 100K x $10/1M + 1K x $50/1M
+    assert.equal(handler.normalizeUsage(usageOf(100_000), 0).cost, 1.05);
+  });
+
   it('defaults cacheCreationTokens to undefined when cache_write_tokens is absent', () => {
     const handler = createHandler();
     const usage: ResponseUsage = {

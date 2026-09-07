@@ -105,6 +105,7 @@ import {
   uploadToolAttachments,
   type UploadedOpenAIResponseAttachment,
 } from './openAIResponseFileUploads';
+import type { StandardPricingConfig } from '../support/priceUtils';
 import type { AssistantTextAppendOptions } from '../ModelHandler';
 import type { BackgroundRunLifecycle } from '../support/BackgroundRunLifecycle';
 
@@ -165,6 +166,37 @@ type OpenAIResponseBaseParams = Omit<
 > & { input: ResponseInputItem[] };
 
 type ServerToolContentBlock = ResponseFunctionWebSearch | ResponseReasoningItem;
+
+/**
+ * GPT-6 Astra's long-context billing, which llm-zoo does not carry: once a
+ * request's prompt reaches 272K input tokens OpenAI bills the whole request at
+ * 2x input (cached input included) and 1.5x output. The 1.35.0 catalog entry
+ * says so in its own comment (the registry has no tier field), so the
+ * threshold and the two multipliers live here. Astra is the only OpenAI model
+ * with a published tier today; when OpenAI documents another, it needs a
+ * sibling entry here, since nothing in the catalog distinguishes a tiered
+ * model from a flat one (a 1M context window does not: GPT-5.6 has one and
+ * bills flat).
+ *
+ * Two drift traps this shape avoids. The rates are multiplied off the
+ * catalog's base prices instead of restated, so a published price change moves
+ * both tiers together rather than leaving a stale literal billing the wrong
+ * number. And the match is on the registry name, TeXRA's stable model
+ * identity, not on the `fullName` wire id, which a date pin would rename out
+ * from under a string comparison and silently drop 272K+ prompts back to flat
+ * rates.
+ *
+ * Astra's documented cached-input rate doubles along with the input rate
+ * ($1.00 to $2.00 against $10 to $20), so the catalog's cacheDiscountFactor of
+ * 0.1 holds on both sides of the threshold and the cache rebate follows the
+ * tier switch inside `computeStandardPrice` on its own.
+ */
+const ASTRA_MODEL_NAME = 'gpt6';
+const ASTRA_LONG_CONTEXT = {
+  thresholdTokens: 272_000,
+  inputMultiplier: 2,
+  outputMultiplier: 1.5,
+} as const;
 
 /**
  * store:false (stateless) content blocks: every reasoning item that carries a
@@ -1950,6 +1982,25 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     return this.config.provider === ModelProvider.OPENAI
       ? 'openai-response'
       : (this.config.provider as NormalizedUsage['provider']);
+  }
+
+  /**
+   * Catalog rates plus GPT-6 Astra's long-context tier (see
+   * {@link ASTRA_LONG_CONTEXT}). Subscription routes never reach this: they
+   * report a zero-cost provider capability profile that `normalizeUsage`
+   * prefers, because that usage is billed by plan rather than per token.
+   */
+  protected override standardPricingConfig(): StandardPricingConfig {
+    const base = super.standardPricingConfig();
+    if (this.config.name !== ASTRA_MODEL_NAME) return base;
+    return {
+      ...base,
+      longContextTier: {
+        thresholdTokens: ASTRA_LONG_CONTEXT.thresholdTokens,
+        inputPrice: base.inputPrice * ASTRA_LONG_CONTEXT.inputMultiplier,
+        outputPrice: base.outputPrice * ASTRA_LONG_CONTEXT.outputMultiplier,
+      },
+    };
   }
 
   /** Normalizes OpenAI Responses API usage data into a unified format. */
