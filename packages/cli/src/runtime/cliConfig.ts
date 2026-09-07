@@ -49,6 +49,11 @@ interface LoadedCliConfig {
   readonly warnings: readonly string[];
 }
 
+interface UserApprovalPolicy {
+  readonly value?: TexraApprovalPolicy;
+  readonly warnings: readonly string[];
+}
+
 export function isCliSupportedModelId(model: string): boolean {
   const config = MODEL_CONFIGS[model];
   return config != null && config.provider !== ModelProvider.COPILOT;
@@ -320,11 +325,9 @@ export function parseCliConfigValues(
  * Shared by {@link loadWorkspaceCliConfig} and {@link loadUserApprovalPolicy},
  * which otherwise duplicate this read-catch-parse-validate sequence.
  *
- * This function IS the filesystem boundary adapter, so the raw catch on the
- * `readFile` call stays (migration PRD R7: the catch remains inside the
- * adapter): both callers resolve config before the process Effect runtime is
- * installed (`buildCliContext` precedes `installCliProcessRuntime`), so no
- * typed recovery could run here.
+ * This function IS the filesystem boundary adapter: the `readFile` rejection
+ * is folded into the three-way result here rather than thrown on (migration
+ * PRD R7).
  */
 type JsonConfigFileResult =
   | { readonly status: 'missing' }
@@ -367,25 +370,25 @@ function readJsonConfigFile(
 }
 
 /**
- * The one bare run edge for the config readers below. `buildCliContext`
- * resolves the CLI config BEFORE `initCliPlatform` (and with it
- * `installCliProcessRuntime`), so no process runtime exists to borrow; the
- * programs are service-free. Pinned in `BARE_EFFECT_RUN_SITES`.
+ * The workspace `.texra/config.json` layer, as a program: its one caller that
+ * runs before the process runtime exists (`buildCliContext`) settles it on a
+ * bare run, and every caller after that (`resolveChatDefaults`,
+ * `readCliAgentRoster`) settles it on `effectRuntime()` like any other
+ * program. The reader itself is service-free and says nothing about which.
  */
-const runConfigProgram = <A>(program: Effect.Effect<A>): Promise<A> =>
-  Effect.runPromise(program);
-
-export async function loadWorkspaceCliConfig(
+export function loadWorkspaceCliConfig(
   cwd: string,
-): Promise<LoadedCliConfig> {
-  const filePath = workspaceTexraConfigPath(cwd);
-  const result = await runConfigProgram(readJsonConfigFile(filePath));
-  if (result.status === 'missing') return { values: {}, warnings: [] };
-  if (result.status === 'warning') {
-    return { path: filePath, values: {}, warnings: [result.warning] };
-  }
-  const { values, warnings } = parseCliConfigValues(result.parsed, filePath);
-  return { path: filePath, values, warnings };
+): Effect.Effect<LoadedCliConfig> {
+  return Effect.gen(function* () {
+    const filePath = workspaceTexraConfigPath(cwd);
+    const result = yield* readJsonConfigFile(filePath);
+    if (result.status === 'missing') return { values: {}, warnings: [] };
+    if (result.status === 'warning') {
+      return { path: filePath, values: {}, warnings: [result.warning] };
+    }
+    const { values, warnings } = parseCliConfigValues(result.parsed, filePath);
+    return { path: filePath, values, warnings };
+  });
 }
 
 /**
@@ -404,26 +407,45 @@ export async function loadWorkspaceCliConfig(
  * and unknown keys are not reported: the file is shared by all three hosts and
  * holds rows the CLI does not honor.
  */
-export async function loadUserApprovalPolicy(
+function loadUserApprovalPolicy(
   storageRoot: string = DEFAULT_NODE_STORAGE_ROOT,
-): Promise<{
-  readonly value?: TexraApprovalPolicy;
-  readonly warnings: readonly string[];
-}> {
-  const filePath = path.join(
-    resolveGlobalStoragePath(storageRoot),
-    TEXRA_CONFIG_FILE_NAME,
-  );
-  const result = await runConfigProgram(readJsonConfigFile(filePath));
-  if (result.status === 'missing') return { warnings: [] };
-  if (result.status === 'warning') return { warnings: [result.warning] };
+): Effect.Effect<UserApprovalPolicy> {
+  return Effect.gen(function* () {
+    const filePath = path.join(
+      resolveGlobalStoragePath(storageRoot),
+      TEXRA_CONFIG_FILE_NAME,
+    );
+    const result = yield* readJsonConfigFile(filePath);
+    if (result.status === 'missing') return { warnings: [] };
+    if (result.status === 'warning') return { warnings: [result.warning] };
 
-  const { values, warnings } = parseCliConfigValues(result.parsed, filePath, {
-    reportUnknownKeys: false,
-    topLevelFields: new Set(['approvalPolicy']),
-    sections: new Set(),
+    const { values, warnings } = parseCliConfigValues(result.parsed, filePath, {
+      reportUnknownKeys: false,
+      topLevelFields: new Set(['approvalPolicy']),
+      sections: new Set(),
+    });
+    return { value: values.approvalPolicy, warnings };
   });
-  return { value: values.approvalPolicy, warnings };
+}
+
+/**
+ * The one bare run edge in this file, and the one caller that needs it:
+ * `buildCliContext` resolves both config layers BEFORE `initCliPlatform` (and
+ * with it `installCliProcessRuntime`), so there is no process runtime to
+ * borrow yet; the two readers are service-free. Pinned in
+ * `BARE_EFFECT_RUN_SITES`. Every other caller of these readers runs after the
+ * platform is up and settles them on `effectRuntime()`.
+ */
+export function loadCliStartupConfig(
+  cwd: string,
+  storageRoot?: string,
+): Promise<readonly [LoadedCliConfig, UserApprovalPolicy]> {
+  return Effect.runPromise(
+    Effect.all(
+      [loadWorkspaceCliConfig(cwd), loadUserApprovalPolicy(storageRoot)],
+      { concurrency: 'unbounded' },
+    ),
+  );
 }
 
 /**

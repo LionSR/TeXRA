@@ -1129,6 +1129,21 @@ describe('createChatSessionController', () => {
     expect(resultPresenters).toHaveLength(0);
   });
 
+  it('reports a fresh-run defect and settles its claimed run slot', async () => {
+    mocks.runAgent.mockReturnValueOnce(Effect.die(new Error('launch defect')));
+    const session = makeSession();
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    ctrl.startRootRun(makeRunRequest('Check launch failure.'));
+
+    await expect(session.runPromise).resolves.toBeUndefined();
+    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+      'launch defect',
+    );
+    expect(session.runCompleted).toBe(true);
+    expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
+  });
+
   it('cannot miss the final survivor untracking at host-listener registration', async () => {
     const presentationHost = {
       emit: vi.fn(),

@@ -212,10 +212,7 @@ export const resolveChatDefaults = Effect.fn(function* (
     // context so startup does not depend on platform initialization.
     [workspace, user, history] = yield* Effect.all(
       [
-        Effect.tryPromise({
-          try: () => loadWorkspaceCliConfig(init.cwd),
-          catch: ensureError,
-        }).pipe(
+        loadWorkspaceCliConfig(init.cwd).pipe(
           Effect.map((loaded) => defaultsFromConfigValues(loaded.values)),
         ),
         loadUserDefaults(init.quiet ?? false),

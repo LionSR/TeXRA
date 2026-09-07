@@ -83,6 +83,10 @@ const ERROR_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Sign
 
 /** One bind attempt; resolves undefined when the port is unavailable. */
 function listenAttempt(port: number): Effect.Effect<http.Server | undefined> {
+  // Non-rejecting: the executor below resolves on `listening` or on `error`
+  // and calls no reject, and `listen` reports a bind failure through that
+  // `error` listener rather than throwing (every caller passes a fixed,
+  // in-range registered port).
   return Effect.promise(
     () =>
       new Promise((resolve) => {
