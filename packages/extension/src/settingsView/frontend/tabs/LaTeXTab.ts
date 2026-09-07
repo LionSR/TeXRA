@@ -72,6 +72,7 @@ import {
   TEXCOUNT_INSTALL_GUIDE,
   IMAGE_PROCESSING_INSTALL_GUIDE,
   DEPENDENCY_INSTALL_COMMANDS,
+  hasInstallCommands,
   HOMEBREW_INSTALL_COMMAND,
   SCOOP_INSTALL_COMMAND,
   type InstallCommand,
@@ -283,8 +284,8 @@ export class LaTeXTab extends LitElement {
    */
   private getInstallCommand(dep: DependencyInfo): InstallCommand | null {
     const platform = this.settings.platform;
+    if (!hasInstallCommands(dep.key)) return null;
     const commands = DEPENDENCY_INSTALL_COMMANDS[dep.key];
-    if (!commands) return null;
     const options = commands[platform];
     if (!options?.length) return null;
     const pm = this.settings.packageManager;
