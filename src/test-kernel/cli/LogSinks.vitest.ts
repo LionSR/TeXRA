@@ -114,6 +114,22 @@ describe('NdjsonStdoutSink', () => {
     expect(lines).toEqual([]);
     expect(stdout.write).not.toHaveBeenCalled();
   });
+
+  it('resolves flush when a write throws instead of waiting for drain', async () => {
+    const stdout = {
+      usable: true,
+      write: vi.fn((): boolean => {
+        throw new Error('write failed');
+      }),
+      once: vi.fn(),
+      off: vi.fn(),
+    };
+    const sink = new NdjsonStdoutSink(stdout);
+
+    sink.writeRecord({ kind: 'version', version: '1.0.0' });
+    await expect(sink.flush()).resolves.toBeUndefined();
+    expect(stdout.once).not.toHaveBeenCalled();
+  });
 });
 
 describe('CLI questions', () => {

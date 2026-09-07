@@ -10,11 +10,13 @@
  * unused one is otherwise stopped after thirty minutes. Servers are also torn
  * down on platform shutdown.
  *
- * This file is the Promise edge: the pool is built once into the adapter's
- * scope, every method is one run of the pool's Effect, and `dispose()` closes
- * the scope, which ends the pool and every server. Closing that scope
- * interrupts whatever is still in flight, and interruption is not a failure
- * the pool can fold into its total results, so the fold happens here.
+ * The pool's operations are already Effect programs, so each port method is
+ * the pool's program plus the interruption fold documented below; the one run
+ * of a tool-facing program sits in the calling tool's `execute()`. The runs
+ * left in this file are the construction of the pool into the adapter's scope
+ * and its disposal, which belong to the platform-lifetime seam (lane D:
+ * platform ports become Effect-typed), and the run-end hook's Promise seam,
+ * which converts with its only caller there.
  */
 
 import { Cause, Context, Duration, Effect, Exit, Layer, Scope } from 'effect';
@@ -28,11 +30,7 @@ import { effectRuntime } from '@platform/processRuntime';
 import { nodeChildProcessSpawnerLayer } from '@platform/defaults/nodeChildProcessSpawner';
 import type { ExecutionId } from '@shared/schemas';
 
-import {
-  LeanAdapterStopped,
-  LeanServerPool,
-  resolveWorkspaceRoot,
-} from './leanServerPool';
+import { LeanAdapterStopped, LeanServerPool } from './leanServerPool';
 import {
   setLeanLanguageServices,
   type LeanLanguageServices,
@@ -88,7 +86,7 @@ export function createDirectLspLeanAdapter(
   const scope = Scope.makeUnsafe();
   // Building the pool acquires no resource of its own (the map is empty
   // until first use), so the build is synchronous and the run boundary here
-  // is the constructor's; every operation below is one `runPromise`.
+  // is the constructor's.
   const pool = effectRuntime().runSync(
     Layer.build(
       LeanServerPool.layer({
@@ -104,12 +102,12 @@ export function createDirectLspLeanAdapter(
     ),
   );
 
-  // The run is captured here, before the fiber starts, because the ambient
-  // run context is a property of the calling turn, not of the scheduler the
-  // fiber resumes on.
+  // The run id is captured when the method is called, before any fiber
+  // starts, because the ambient run context is a property of the calling
+  // turn, not of the scheduler the fiber resumes on.
   return {
     fetchDiagnosticsForFile: (file) =>
-      run(pool.fetchDiagnosticsForFile(file, currentRunId()), () => ({
+      foldStopped(pool.fetchDiagnosticsForFile(file, currentRunId()), () => ({
         ok: false,
         kind: 'toolchain_unavailable',
         message: STOPPED_MESSAGE,
@@ -122,18 +120,24 @@ export function createDirectLspLeanAdapter(
     // on.
 
     executeFileCommand: (command, filePath) =>
-      run(
+      foldStopped(
         pool.executeFileCommand(command, filePath, currentRunId()),
         () => false,
       ),
 
     executeProjectCommand: (command) =>
-      run(pool.executeProjectCommand(command, currentRunId()), () => {
-        throw new LeanAdapterStopped();
-      }),
+      pool
+        .executeProjectCommand(command, currentRunId())
+        .pipe(
+          Effect.catchCause((cause) =>
+            Cause.hasInterrupts(cause)
+              ? Effect.fail(new LeanAdapterStopped())
+              : Effect.failCause(cause),
+          ),
+        ),
 
     getGoalState: (filePath, line, column) =>
-      run(
+      foldStopped(
         pool.positionRequest<PlainGoal>(
           filePath,
           line,
@@ -145,7 +149,7 @@ export function createDirectLspLeanAdapter(
       ),
 
     getTermGoal: (filePath, line, column) =>
-      run(
+      foldStopped(
         pool.positionRequest<PlainTermGoal>(
           filePath,
           line,
@@ -157,7 +161,7 @@ export function createDirectLspLeanAdapter(
       ),
 
     getHoverInfo: (filePath, line, column) =>
-      run(
+      foldStopped(
         pool.positionRequest<LspHover>(
           filePath,
           line,
@@ -168,8 +172,16 @@ export function createDirectLspLeanAdapter(
         stoppedLspResult<LspHover>,
       ),
 
+    // Promise seam of the run-end hook (see the interface): one run, folding
+    // an interrupted stop into a no-op exactly as the tool-facing folds do.
     stopSessionsForRun: (runId) =>
-      run(pool.stopSessionsForRun(runId), () => undefined),
+      effectRuntime()
+        .runPromiseExit(pool.stopSessionsForRun(runId))
+        .then((exit) => {
+          if (Exit.isSuccess(exit)) return;
+          if (Cause.hasInterrupts(exit.cause)) return;
+          throw Cause.squash(exit.cause);
+        }),
 
     dispose: () => effectRuntime().runPromise(Scope.close(scope, Exit.void)),
   };
@@ -184,36 +196,28 @@ const stoppedLspResult = <T>(): LspResult<T> => ({
 });
 
 /**
- * Run one pool operation to its `Exit`. A success and a typed failure keep
- * exactly what `runPromise` gives them (the failure is squashed and thrown, as
- * it is there). An interrupted exit is the only new outcome: `dispose()`
- * closes the pool's scope, which interrupts an in-flight build and, with it,
- * the fiber awaiting it. Interruption is not catchable inside the pool, so it
- * is folded here into the value that same call gets after `dispose()` has
- * returned, keeping {@link LeanAdapterStopped} the one shape a stopped adapter
- * reports and the total methods total.
+ * Fold an interrupted pool operation into the value that same call gets
+ * after `dispose()` has returned. `dispose()` closes the pool's scope, which
+ * interrupts an in-flight build and, with it, the fiber awaiting it;
+ * interruption is not a failure the pool can fold into its total results, so
+ * the fold happens at this port edge, keeping {@link LeanAdapterStopped} the
+ * one shape a stopped adapter reports. This is the same fold the old Promise
+ * edge applied at `runPromiseExit`, so a tool-call interruption is folded
+ * exactly as it was there.
  */
-function run<A, E>(
+const foldStopped = <A, E>(
   operation: Effect.Effect<A, E>,
   whenStopped: () => A,
-): Promise<A> {
-  return effectRuntime()
-    .runPromiseExit(operation)
-    .then((exit) => {
-      if (Exit.isSuccess(exit)) return exit.value;
-      if (Cause.hasInterrupts(exit.cause)) return whenStopped();
-      throw Cause.squash(exit.cause);
-    });
-}
+): Effect.Effect<A, E> =>
+  operation.pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterrupts(cause)
+        ? Effect.succeed(whenStopped())
+        : Effect.failCause(cause),
+    ),
+  );
 
 /** The agent run the current tool call executes for, when it runs inside one. */
 function currentRunId(): ExecutionId | undefined {
   return getRunContextExecutionId(tryUseRunContext());
-}
-
-/** Walk up from `filePath` looking for a Lake project root. */
-export function defaultResolveWorkspaceRoot(
-  filePath: string,
-): Promise<string | null> {
-  return effectRuntime().runPromise(resolveWorkspaceRoot(filePath));
 }

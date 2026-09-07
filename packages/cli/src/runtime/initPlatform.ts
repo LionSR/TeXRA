@@ -10,6 +10,7 @@ import {
 import { createPlatformAgentDirectories } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
+import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { setOutputChannelFactory } from '@logger/logUtils';
@@ -106,25 +107,27 @@ const cliPlatformLog: SupabaseSessionLog = {
  * take over SIGINT/SIGTERM exclusively once mounted and must perform the
  * same sequence the platform's own (now handed-off) handlers would have. One
  * definition means the two paths can't drift.
+ *
+ * Runs on the default runtime rather than `effectRuntime()`: the lifecycle
+ * shutdown below disposes the process runtime (`disposeProcessRuntime`)
+ * before the flushes run, and a teardown path must not depend on the thing
+ * it is tearing down.
  */
 export async function runCliPlatformShutdownSequence(
   lifecycle: LifecycleHost | undefined,
 ): Promise<void> {
-  try {
-    await lifecycle?.runShutdown();
-  } catch {
-    // Signal shutdown is best effort; output still gets one final flush.
-  }
-  try {
-    await flushTextStderr();
-  } catch {
-    // A closed stderr pipe must not prevent signal-based termination.
-  }
-  try {
-    await flushNdjsonStdout();
-  } catch {
-    // A closed stdout pipe must not prevent signal-based termination.
-  }
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      // Signal shutdown is best effort; output still gets one final flush.
+      yield* Effect.ignoreCause(
+        hostPort(() => lifecycle?.runShutdown() ?? Promise.resolve()),
+      );
+      // A closed stderr pipe must not prevent signal-based termination.
+      yield* Effect.ignoreCause(hostPort(flushTextStderr));
+      // A closed stdout pipe must not prevent signal-based termination.
+      yield* Effect.ignoreCause(hostPort(flushNdjsonStdout));
+    }),
+  );
 }
 
 export function installCliShutdownSignalHandlers(
@@ -330,18 +333,25 @@ export async function initCliPlatform(
     // defaults, as the extension and desktop hosts do at startup. The list
     // lives in shared `~/.texra` state. Preferred defaults reconcile when
     // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
-    try {
-      const { messages } = await refreshModelListAndLog(
-        stateStores.globalState,
-      );
-      for (const message of messages) logAt('info', 'cli.models', message);
-    } catch (error) {
-      logAt(
-        'error',
-        'cli.models',
-        `Failed to refresh model list: ${toErrorMessage(error)}`,
-      );
-    }
+    await effectRuntime().runPromise(
+      hostPort(() => refreshModelListAndLog(stateStores.globalState)).pipe(
+        Effect.tap(({ messages }) =>
+          Effect.sync(() => {
+            for (const message of messages)
+              logAt('info', 'cli.models', message);
+          }),
+        ),
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            logAt(
+              'error',
+              'cli.models',
+              `Failed to refresh model list: ${toErrorMessage(error)}`,
+            );
+          }),
+        ),
+      ),
+    );
 
     // Seed first-install defaults (e.g. disabled tools) before anything
     // writes CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION (the bundled-agent sync
@@ -371,9 +381,12 @@ export async function initCliPlatform(
       // The default session is installed later by whichever entry point opens
       // transcripts, so its shutdown lookup remains lazy.
       flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
-      afterFlushArtifacts: [() => UsageLogService.dispose()],
+      afterFlushArtifacts: [
+        () => effectRuntime().runPromise(UsageLogService.dispose()),
+      ],
       afterExecutionSettlement: [
         () => teardownDefaultSession(),
+        () => flushNdjsonStdout(),
         () => disposeProcessRuntime(),
       ],
     });
@@ -383,7 +396,14 @@ export async function initCliPlatform(
     // dispose() flushes any queued entries; it
     // runs on normal exit (bin/texra.ts finally) and on signals, both of
     // which call lifecycle.runShutdown().
-    UsageLogService.initialize({}, context.version, 'cli');
+    await effectRuntime().runPromise(
+      UsageLogService.initialize(
+        effectRuntime().scope,
+        {},
+        context.version,
+        'cli',
+      ),
+    );
   }
 
   if (!supabaseAuthInitialized) {

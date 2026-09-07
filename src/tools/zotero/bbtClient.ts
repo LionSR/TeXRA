@@ -203,15 +203,20 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
   ) {
     const url = zoteroUrl(port, '/better-bibtex/json-rpc');
 
-    const raw = yield* withRequestTimeout(timeout, (signal) =>
-      ky
-        .post(url, {
-          json: { jsonrpc: '2.0', method, params, id: 1 },
-          timeout: false,
-          signal,
-          retry: 0,
-        })
-        .json<unknown>(),
+    const raw = yield* withRequestTimeout(
+      timeout,
+      Effect.tryPromise({
+        try: (signal) =>
+          ky
+            .post(url, {
+              json: { jsonrpc: '2.0', method, params, id: 1 },
+              timeout: false,
+              signal,
+              retry: 0,
+            })
+            .json<unknown>(),
+        catch: (cause) => cause,
+      }),
     ).pipe(Effect.mapError((error) => bbtRequestError(error, port, timeout)));
 
     const responseSchema = z.object({
@@ -258,11 +263,16 @@ export type ConnectorResult =
  */
 export const checkZoteroRunning = Effect.fn('bbtClient.checkZoteroRunning')(
   (port: number) =>
-    withRequestTimeout(ZOTERO_PING_TIMEOUT_MS, (signal) =>
-      ky.get(zoteroUrl(port, '/connector/ping'), {
-        timeout: false,
-        signal,
-        retry: 0,
+    withRequestTimeout(
+      ZOTERO_PING_TIMEOUT_MS,
+      Effect.tryPromise({
+        try: (signal) =>
+          ky.get(zoteroUrl(port, '/connector/ping'), {
+            timeout: false,
+            signal,
+            retry: 0,
+          }),
+        catch: (cause) => cause,
       }),
     ).pipe(
       Effect.mapError(() => zoteroUnreachableError(port)),
@@ -294,42 +304,77 @@ function connectorRequestFailure(
 }
 
 /**
- * Call a Zotero Connector endpoint. Never fails: every outcome, the
- * transport's included, is a `ConnectorResult` the tool reports per item.
+ * Call a Zotero Connector endpoint. Never *fails*: every outcome the typed
+ * channel can carry, the transport's included, is a `ConnectorResult` the
+ * tool reports per item. It can still exit interrupted — see below.
+ *
+ * The request is **uninterruptible**: `saveItems`/`saveSnapshot` write to the
+ * user's library, so aborting one mid-flight would leave Zotero having
+ * possibly stored the item with no way to tell whether it landed. Cancelling
+ * the run instead lets this one write finish under its existing deadline.
+ *
+ * The interrupt is deferred, not absorbed. When the region ends it is
+ * delivered as the continuation of the write's completion, and the
+ * `Effect.catch` below recovers `Fail` reasons only (`findError` matches
+ * `_tag === 'Fail'`), so this item's `ConnectorResult` is discarded and
+ * `addItems`' `Effect.forEach` stops before the next item. The guarantee is
+ * that cancellation alone does not abandon this write — not that its
+ * remote outcome is durably known or its result is reported.
+ *
+ * The deadline is separate and unaffected by the region: `Effect.timeoutOrElse`
+ * races the request in a fiber that `raceAllFirst` forks interruptible
+ * regardless of the enclosing region (`forkUnsafe(..., uninterruptible: false)`
+ * in effect rc.112), so `ZOTERO_CONNECTOR_TIMEOUT_MS` still bounds a wedged
+ * Zotero. That cuts both ways: a *timeout* still aborts the write mid-flight,
+ * so the torn write this guards against remains possible on the deadline path.
+ * That is the deliberate trade — an unbounded write against a wedged Zotero is
+ * the worse failure.
  */
 export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
   (endpoint: string, body: object, port: number) =>
     withRequestTimeout(
       ZOTERO_CONNECTOR_TIMEOUT_MS,
-      async (signal): Promise<ConnectorResult> => {
-        const response = await ky.post(
-          zoteroUrl(port, `/connector/${endpoint}`),
-          {
-            json: body,
-            timeout: false,
-            signal,
-            retry: 0,
-            throwHttpErrors: false,
-          },
-        );
+      Effect.gen(function* () {
+        // The request scope keeps this signal live through the body read,
+        // after the header request has already settled.
+        const signal = yield* Effect.abortSignal;
+        const response = yield* Effect.tryPromise({
+          try: () =>
+            ky.post(zoteroUrl(port, `/connector/${endpoint}`), {
+              json: body,
+              timeout: false,
+              signal,
+              retry: 0,
+              throwHttpErrors: false,
+            }),
+          catch: (cause) => cause,
+        });
         if (
           response.status === StatusCodes.OK ||
           response.status === StatusCodes.CREATED
         ) {
-          return { status: 'success' };
+          return { status: 'success' } satisfies ConnectorResult;
         }
         // Try to extract a machine-readable error message from the response
-        // body; it is read under the same deadline as the headers.
-        let errorMessage = `Unexpected response status: ${response.status}`;
-        try {
-          const data = (await response.json()) as { error?: string };
-          if (data?.error) errorMessage = String(data.error);
-        } catch {
+        // body; it is read under the same deadline as the headers. Keep this
+        // body-only recovery separate so request failures retain their own
+        // reachability/timeout classification.
+        const data = yield* Effect.tryPromise({
+          try: () => response.json<{ error?: string }>(),
+          catch: (cause) => cause,
+        }).pipe(
           // Body is not JSON or is empty; use the generic status message.
-        }
-        return { status: 'error', message: errorMessage };
-      },
+          Effect.catch(() => Effect.succeed(undefined)),
+        );
+        return {
+          status: 'error',
+          message: data?.error
+            ? String(data.error)
+            : `Unexpected response status: ${response.status}`,
+        } satisfies ConnectorResult;
+      }),
     ).pipe(
+      Effect.uninterruptible,
       Effect.catch((error) =>
         Effect.succeed(connectorRequestFailure(error, port)),
       ),

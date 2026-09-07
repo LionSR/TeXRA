@@ -295,7 +295,7 @@ jobs:
         # per shard against ~10 on Linux (billed at 2x) and setting the
         # wall-clock for the entire workflow. The inventory of genuine Windows
         # defects the matrix did surface is in
-        # docs/proposals/2026-07-29-open-source-readiness.md §4.6; run CI
+        # .agents/docs/archived/process/2026-07-29-open-source-readiness.md §4.6; run CI
         # manually from the Actions tab to re-check Windows before a release or
         # after touching path handling.
         os: ${{ fromJson(github.event_name == 'workflow_dispatch' && '["ubuntu-latest", "windows-latest"]' || '["ubuntu-latest"]') }}

@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { getVisibleAgents } from '@agent/index';
+import { getVisibleAgents, refresh } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
 import {
@@ -40,6 +40,7 @@ import {
 import {
   loadCliMultiAgentRunPlan,
   loadCliMultiAgentPresetPlanSet,
+  planCurrentMultiAgentRun,
   writeMissingPresetAgents,
 } from '../runtime/multiAgentRunPlan';
 import {
@@ -144,7 +145,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // "login required" models — same opt-out behavior as `texra chat`.
     return CliExitCode.Success;
   }
-  // State 1 continuation (docs/prds/2026-06-11-agent-native-onboarding.md): on a true
+  // State 1 continuation (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): on a true
   // first run the picker hands straight to a chat session owned by the setup
   // agent instead of the launcher. Existing users (firstRunDone backfilled or
   // earned) and users who pinned an agent via env land on the launcher as
@@ -243,41 +244,46 @@ async function runOrchestration(context: CliContext): Promise<number> {
               { reloadRemoteAgents: false },
             )
           ).plan;
-        const preflight = await preflightTeamAvailability({
-          initial: initialPlan,
-          unresolvedNames: teamTexraHostedMissingNames,
-          texraHostedNames: teamHostedNamesForPreflight(initialPlan.preset, [
-            ...initialPlan.missingAgents.workflow,
-            ...initialPlan.missingAgents.toolUse,
-          ]),
-          remoteCatalogRefreshAttempted:
-            presetPlanSet.remoteCatalogRefreshAttempted,
-          canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
-          choose: async (names) => {
-            writeTextStderr(
-              `Team ${action.preset} has unavailable TeXRA-hosted members: ${names.join(', ')}.`,
-            );
-            const answer = (
-              await askCliQuestion(
-                `Choose: [s] ${RESEARCHER_ACCESS_AUTH.signInLabel}, [c] Continue with available members, [q] Cancel: `,
+        const preflight = await effectRuntime().runPromise(
+          preflightTeamAvailability({
+            initial: initialPlan,
+            unresolvedNames: teamTexraHostedMissingNames,
+            texraHostedNames: teamHostedNamesForPreflight(initialPlan.preset, [
+              ...initialPlan.missingAgents.workflow,
+              ...initialPlan.missingAgents.toolUse,
+            ]),
+            remoteCatalogRefreshAttempted:
+              presetPlanSet.remoteCatalogRefreshAttempted,
+            canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
+            choose: async (names) => {
+              writeTextStderr(
+                `Team ${action.preset} has unavailable TeXRA-hosted members: ${names.join(', ')}.`,
+              );
+              const answer = (
+                await askCliQuestion(
+                  `Choose: [s] ${RESEARCHER_ACCESS_AUTH.signInLabel}, [c] Continue with available members, [q] Cancel: `,
+                )
               )
-            )
-              .trim()
-              .toLowerCase();
-            if (answer === 's' || answer === 'sign-in') return 'sign-in';
-            if (answer === 'c' || answer === 'continue') return 'continue';
-            return 'cancel';
-          },
-          signIn: async () => {
-            const code = await runLoginCommand(context, loginInitFromArgs({}));
-            return (
-              code === CliExitCode.Success &&
-              (await SupabaseClient.isAuthenticated())
-            );
-          },
-          refresh: async () =>
-            (await loadCliMultiAgentRunPlan({ preset: action.preset })).plan,
-        });
+                .trim()
+                .toLowerCase();
+              if (answer === 's' || answer === 'sign-in') return 'sign-in';
+              if (answer === 'c' || answer === 'continue') return 'continue';
+              return 'cancel';
+            },
+            signIn: async () => {
+              const code = await runLoginCommand(
+                context,
+                loginInitFromArgs({}),
+              );
+              return (
+                code === CliExitCode.Success &&
+                (await SupabaseClient.isAuthenticated())
+              );
+            },
+            refreshRemote: () => refresh({ includeRemote: true }),
+            replan: () => planCurrentMultiAgentRun({ preset: action.preset }),
+          }),
+        );
         if (
           preflight.status === 'choice-required' ||
           preflight.status === 'cancelled'

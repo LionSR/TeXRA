@@ -7,8 +7,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { effectRuntime } from '@platform/processRuntime';
 import { findExternalToolDef } from '@tools/externalToolDefs';
-import { defaultResolveWorkspaceRoot } from '@tools/lean/direct/directLspAdapter';
+import { resolveWorkspaceRoot } from '@tools/lean/direct/leanServerPool';
 import {
   listLeanServers,
   registerLeanServer,
@@ -54,11 +55,14 @@ describe('extractHoverText', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DefaultResolveWorkspaceRoot
+// ResolveWorkspaceRoot
 // ---------------------------------------------------------------------------
 
-describe('defaultResolveWorkspaceRoot', () => {
+describe('resolveWorkspaceRoot', () => {
   let scratch: string;
+
+  const resolve = (filePath: string): Promise<string | null> =>
+    effectRuntime().runPromise(resolveWorkspaceRoot(filePath));
 
   beforeEach(() => {
     scratch = mkdtempSync(path.join(tmpdir(), 'texra-lean-root-'));
@@ -71,9 +75,7 @@ describe('defaultResolveWorkspaceRoot', () => {
   it('finds lakefile.lean in the same directory', async () => {
     await writeFile(path.join(scratch, 'lakefile.lean'), '');
     await writeFile(path.join(scratch, 'Foo.lean'), '');
-    const root = await defaultResolveWorkspaceRoot(
-      path.join(scratch, 'Foo.lean'),
-    );
+    const root = await resolve(path.join(scratch, 'Foo.lean'));
     expect(root).toBe(scratch);
   });
 
@@ -82,7 +84,7 @@ describe('defaultResolveWorkspaceRoot', () => {
     const sub = path.join(scratch, 'a', 'b');
     await mkdir(sub, { recursive: true });
     await writeFile(path.join(sub, 'Foo.lean'), '');
-    const root = await defaultResolveWorkspaceRoot(path.join(sub, 'Foo.lean'));
+    const root = await resolve(path.join(sub, 'Foo.lean'));
     expect(root).toBe(scratch);
   });
 
@@ -90,7 +92,7 @@ describe('defaultResolveWorkspaceRoot', () => {
     const sub = path.join(scratch, 'no-lake');
     await mkdir(sub, { recursive: true });
     await writeFile(path.join(sub, 'Foo.lean'), '');
-    const root = await defaultResolveWorkspaceRoot(path.join(sub, 'Foo.lean'));
+    const root = await resolve(path.join(sub, 'Foo.lean'));
     expect(root).toBeNull();
   });
 });

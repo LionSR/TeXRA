@@ -127,21 +127,13 @@ export interface StatusBarDisplayInput {
   readonly status: StreamPhase | undefined;
   /** The fold's label for `status` (G4, one table); undefined with no stream. */
   readonly statusLabel: string | undefined;
-  /** Milliseconds since the running turn began. When set and `status` is
-   *  `running`, the bar shows a live `Ns` segment so a long token-less
-   *  "thinking" turn still reads as alive. Omitted in tests/headless. */
-  readonly elapsedMs?: number;
-  /** Current 1 Hz spin-cycle character (see `ui/LoadingIndicator`'s
-   *  `loadingFrameAt`) shown ahead of the status label while a turn is
-   *  active, so "running" reads as alive rather than a static word. Omitted
-   *  in tests/headless, same as `elapsedMs`. */
-  readonly runningFrame?: string;
+  /** Liveness of the running turn — omitted entirely in tests/headless runs,
+   *  same as each of its fields individually. */
+  readonly turn?: StatusBarTurnInput;
   readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
   /** The stream's policy snapshot bypasses; absent before `approval.policy` folds. */
   readonly bypass?: BypassState;
-  readonly thinkingActive?: boolean;
-  readonly compactingActive?: boolean;
   readonly queuedFollowUpMessages: readonly string[];
   /** Latest usage snapshot — read for `usageRoute` (which subscription quota
    *  to show), never for context occupancy: that is `contextState`. */
@@ -181,6 +173,20 @@ export interface StatusBarDisplayInput {
   /** Availability/labels for the normal chat shortcuts row, shown when
    *  neither `foreground` nor `childList` owns input. */
   readonly shortcuts: StatusBarShortcutsInput;
+}
+
+/** Liveness of the currently running turn, shown in the status bar's left
+ *  segments so a long token-less "thinking" turn still reads as alive. */
+interface StatusBarTurnInput {
+  /** Milliseconds since the running turn began. When set and `status` is
+   *  `running`, the bar shows a live `Ns` segment. */
+  readonly elapsedMs?: number;
+  /** Current 1 Hz spin-cycle character (see `ui/LoadingIndicator`'s
+   *  `loadingFrameAt`) shown ahead of the status label while a turn is
+   *  active, so "running" reads as alive rather than a static word. */
+  readonly runningFrame?: string;
+  readonly thinkingActive?: boolean;
+  readonly compactingActive?: boolean;
 }
 
 interface StatusBarForegroundInput {
@@ -634,7 +640,7 @@ function fitStatusBarLeftSegments(
 
 // Bindings use the shared KeyHints vocabulary (`key action` joined with
 // KEY_HINT_SEPARATOR) so the status bar and modal footers read as one system
-// (docs/prds/cli-tui-ink/2026-05-14-10-architecture.md § Intuitiveness conventions).
+// (.agents/docs/archived/feature/2026-05-14-cli-tui-ink/2026-05-14-10-architecture.md § Intuitiveness conventions).
 function statusBarBindingRow(
   bindings: readonly (string | false | undefined)[],
 ): string {
@@ -962,12 +968,13 @@ export function buildStatusBarDisplay(
   const left: StatusBarSegment[] = [
     { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
   ];
+  const turn = input.turn;
 
   // No stream yet: a child row has no status column, the root keeps its slot.
   const statusLabel = input.statusLabel ?? (input.isChildStream ? '' : '-');
   const spinPrefix =
-    isActivePhase(input.status) && input.runningFrame
-      ? `${input.runningFrame} `
+    isActivePhase(input.status) && turn?.runningFrame
+      ? `${turn.runningFrame} `
       : '';
 
   // A notice must not hide the only indication that an active run is still
@@ -976,16 +983,16 @@ export function buildStatusBarDisplay(
   if (input.transientNotice) {
     if (isActivePhase(input.status)) {
       const elapsed =
-        input.elapsedMs === undefined
+        turn?.elapsedMs === undefined
           ? ''
-          : ` ${formatCompactDuration(input.elapsedMs)}`;
+          : ` ${formatCompactDuration(turn.elapsedMs)}`;
       transientLivenessIndex = left.length;
       left.push({
         text: `${spinPrefix}${statusLabel}${elapsed}`,
         compactText:
-          input.elapsedMs === undefined
+          turn?.elapsedMs === undefined
             ? 'run'
-            : `run ${formatCompactDuration(input.elapsedMs)}`,
+            : `run ${formatCompactDuration(turn.elapsedMs)}`,
         color: 'dim',
       });
     }
@@ -994,9 +1001,9 @@ export function buildStatusBarDisplay(
       text: `${spinPrefix}${statusLabel}`,
       color: 'dim',
     });
-    if (isActivePhase(input.status) && input.elapsedMs !== undefined) {
+    if (isActivePhase(input.status) && turn?.elapsedMs !== undefined) {
       left.push({
-        text: formatCompactDuration(input.elapsedMs),
+        text: formatCompactDuration(turn.elapsedMs),
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
       });
@@ -1005,13 +1012,13 @@ export function buildStatusBarDisplay(
   // Routine activity, not caution: these sit onscreen for whole turns, and
   // painting them yellow trains the eye to ignore the color that also
   // announces auto-approval bypasses and quota exhaustion.
-  if (input.compactingActive === true && isActivePhase(input.status)) {
+  if (turn?.compactingActive === true && isActivePhase(input.status)) {
     left.push({
       text: 'compacting...',
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.compacting,
     });
-  } else if (input.thinkingActive === true && isActivePhase(input.status)) {
+  } else if (turn?.thinkingActive === true && isActivePhase(input.status)) {
     left.push({
       text: 'thinking...',
       color: 'dim',

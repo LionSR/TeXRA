@@ -4,6 +4,8 @@
  */
 
 // Third-party imports
+import { Layer } from 'effect';
+import { FetchHttpClient } from 'effect/unstable/http';
 import { vi, type Mock } from 'vitest';
 
 /**
@@ -26,3 +28,12 @@ export function stubJsonFetch(payload: unknown): Mock<typeof fetch> {
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
+
+/** Use each test's current fetch stub even when the client layer is shared. */
+export const testHttpClientLayer = FetchHttpClient.layer.pipe(
+  Layer.provide(
+    Layer.succeed(FetchHttpClient.Fetch)((input, init) =>
+      globalThis.fetch(input, init),
+    ),
+  ),
+);

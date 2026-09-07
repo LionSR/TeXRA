@@ -3,7 +3,7 @@
 The server side of TeXRA's relay ("Included model access"), removed from the
 active tree in 2026-08. Full removal record, architecture documentation, and
 step-by-step rebuild recipe:
-`docs/proposals/2026-08-18-relay-removal-and-recovery.md`.
+`.agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md`.
 
 Lifted verbatim from pre-removal commit
 `e9dbd7fd9b28153a5cc908a27c9096f4590f03a7` (the client side lives only there —

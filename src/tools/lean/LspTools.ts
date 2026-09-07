@@ -1,5 +1,7 @@
+import { Cause, Effect, Exit } from 'effect';
 import { z } from 'zod';
 
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
@@ -131,6 +133,20 @@ If you expected errors:
 2. Make sure the file is saved
 3. Try \`lean_file\` with command "restart" to refresh the Lean server`;
 
+/**
+ * The one run of a Lean tool's program settles here (R1: the tool execute()
+ * contract is the Promise boundary). A failure — the port's typed failure, a
+ * host rejection, or an unwired-services defect — becomes the same `ToolError`
+ * the old try/catch produced, with the squashed cause as `cause`.
+ */
+function foldToolExit(
+  exit: Exit.Exit<ToolResult, unknown>,
+  onFailure: (cause: unknown) => ToolError,
+): ToolResult {
+  if (Exit.isFailure(exit)) throw onFailure(Cause.squash(exit.cause));
+  return exit.value;
+}
+
 export class LeanDiagnosticsTool extends defineTool({
   name: 'lean_diagnostics',
   description: `Get diagnostic messages (errors, warnings, info) for a Lean 4 file.
@@ -152,10 +168,20 @@ Tips:
 }) {
   protected async execute(input: LeanDiagnosticsInput): Promise<ToolResult> {
     const { command, file } = input;
+    return foldToolExit(
+      await effectRuntime().runPromiseExit(this.diagnose(file, command)),
+      (cause) =>
+        new ToolError(
+          `Error: ${toErrorMessage(cause)}\n\n${LEAN_TOOLCHAIN_HELP}`,
+          { cause, summary: 'Failed to get diagnostics' },
+        ),
+    );
+  }
 
-    try {
+  private readonly diagnose = Effect.fn('LeanDiagnosticsTool.execute')(
+    function* (file: string, command: 'list' | 'count') {
       const services = getLeanLanguageServices();
-      const result = await services.fetchDiagnosticsForFile(file);
+      const result = yield* services.fetchDiagnosticsForFile(file);
       if (!result.ok) {
         // The adapter distinguishes a genuinely missing file from a broken or
         // absent Lean toolchain — only the former is a "could not open file";
@@ -177,7 +203,7 @@ Tips:
       // Host capability: VS Code moves the editor cursor to the first error;
       // CLI/desktop adapters omit it and this is a no-op rather than a pretend
       // navigation. The tool result below still carries the diagnostic list.
-      await services.navigateToFirstError?.(file, diagnostics);
+      yield* services.navigateToFirstError?.(file, diagnostics) ?? Effect.void;
 
       const counts = countBySeverity(diagnostics);
       const countsStr = formatCounts(counts);
@@ -194,7 +220,7 @@ Tips:
           summary: countsStr,
           output: `${file}: ${countsStr}`,
           diagnostics: baseDiagnostics,
-        };
+        } as ToolResult;
       }
 
       return {
@@ -202,14 +228,9 @@ Tips:
         summary: countsStr,
         output: formatGroupedSections(diagnostics),
         diagnostics: { ...baseDiagnostics, details: diagnostics },
-      };
-    } catch (error) {
-      throw new ToolError(
-        `Error: ${toErrorMessage(error)}\n\n${LEAN_TOOLCHAIN_HELP}`,
-        { cause: error, summary: 'Failed to get diagnostics' },
-      );
-    }
-  }
+      } as ToolResult;
+    },
+  );
 }
 
 export class LeanFileTool extends defineTool({
@@ -225,25 +246,28 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   protected async execute(input: LeanFileInput): Promise<ToolResult> {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
-
-    try {
-      const success = await getLeanLanguageServices().executeFileCommand(
-        command,
-        file,
-      );
-      if (!success) {
-        return errorResult(
-          `Could not execute "${command}" on ${file}. ${LEAN_TOOLCHAIN_HELP}`,
-          { summary: 'Command failed' },
-        );
-      }
-      return executed(`Executed "${command}" on ${file}`, description);
-    } catch (error) {
-      throw new ToolError(`Error: ${toErrorMessage(error)}`, {
-        cause: error,
-        summary: 'Command failed',
-      });
-    }
+    return foldToolExit(
+      await effectRuntime().runPromiseExit(
+        Effect.gen(function* () {
+          const success = yield* getLeanLanguageServices().executeFileCommand(
+            command,
+            file,
+          );
+          if (!success) {
+            return errorResult(
+              `Could not execute "${command}" on ${file}. ${LEAN_TOOLCHAIN_HELP}`,
+              { summary: 'Command failed' },
+            );
+          }
+          return executed(`Executed "${command}" on ${file}`, description);
+        }),
+      ),
+      (cause) =>
+        new ToolError(`Error: ${toErrorMessage(cause)}`, {
+          cause,
+          summary: 'Command failed',
+        }),
+    );
   }
 }
 
@@ -259,27 +283,30 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   protected async execute(input: LeanProjectInput): Promise<ToolResult> {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
+    return foldToolExit(
+      await effectRuntime().runPromiseExit(
+        Effect.gen(function* () {
+          yield* getLeanLanguageServices().executeProjectCommand(command);
 
-    try {
-      await getLeanLanguageServices().executeProjectCommand(command);
+          if (command === 'build') {
+            return executed(
+              `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
+              description,
+            );
+          }
 
-      if (command === 'build') {
-        return executed(
-          `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
-          description,
-        );
-      }
-
-      return executed(`Executed "${command}" successfully`, description);
-    } catch (error) {
-      throw new ToolError(
-        `Error executing "${command}": ${toErrorMessage(error)}`,
-        {
-          cause: error,
-          summary: 'Command failed',
-        },
-      );
-    }
+          return executed(`Executed "${command}" successfully`, description);
+        }),
+      ),
+      (cause) =>
+        new ToolError(
+          `Error executing "${command}": ${toErrorMessage(cause)}`,
+          {
+            cause,
+            summary: 'Command failed',
+          },
+        ),
+    );
   }
 }
 
@@ -308,129 +335,141 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     const col0 = column - 1;
     const location = `${file}:${line}:${column}`;
 
-    try {
-      switch (type) {
-        // Each dispatch is awaited inside the try so a rejected language-server
-        // request lands in the catch below and carries a summary, matching the
-        // sibling Lean tools.
-        case 'goal':
-          return await this.executeGoal(file, line0, col0, location);
-        case 'term_goal':
-          return await this.executeTermGoal(file, line0, col0, location);
-        case 'hover':
-          return await this.executeHover(file, line0, col0, location);
+    // Each dispatch composes one program, run once below: a failed
+    // language-server request settles as this run's Exit and becomes the
+    // ToolError carrying the summary that names which inspection failed.
+    let program: Effect.Effect<ToolResult, unknown>;
+    switch (type) {
+      case 'goal':
+        program = this.executeGoal(file, line0, col0, location);
+        break;
+      case 'term_goal':
+        program = this.executeTermGoal(file, line0, col0, location);
+        break;
+      case 'hover':
+        program = this.executeHover(file, line0, col0, location);
+        break;
+    }
+
+    return foldToolExit(
+      await effectRuntime().runPromiseExit(program),
+      (cause) =>
+        new ToolError(`Error: ${toErrorMessage(cause)}`, {
+          cause,
+          summary: `Failed to get ${type}`,
+        }),
+    );
+  }
+
+  private executeGoal(
+    file: string,
+    line: number,
+    column: number,
+    location: string,
+  ): Effect.Effect<ToolResult, unknown> {
+    return Effect.gen(function* () {
+      const { data, error } = yield* getLeanLanguageServices().getGoalState(
+        file,
+        line,
+        column,
+      );
+
+      if (!data) {
+        return noPositionData(
+          'Could not get goal state',
+          location,
+          'No goal state',
+          error,
+        );
       }
-    } catch (error) {
-      throw new ToolError(`Error: ${toErrorMessage(error)}`, {
-        cause: error,
-        summary: `Failed to get ${type}`,
-      });
-    }
-  }
 
-  private async executeGoal(
-    file: string,
-    line: number,
-    column: number,
-    location: string,
-  ): Promise<ToolResult> {
-    const { data, error } = await getLeanLanguageServices().getGoalState(
-      file,
-      line,
-      column,
-    );
+      if (data.goals.length === 0) {
+        return executed(
+          'No goals at this position. The proof may be complete here.',
+          'No goals',
+        );
+      }
 
-    if (!data) {
-      return this.noPositionData(
-        'Could not get goal state',
-        location,
-        'No goal state',
-        error,
-      );
-    }
-
-    if (data.goals.length === 0) {
       return executed(
-        'No goals at this position. The proof may be complete here.',
-        'No goals',
+        data.rendered,
+        formatResultCount(data.goals.length, 'goal'),
       );
-    }
-
-    return executed(
-      data.rendered,
-      formatResultCount(data.goals.length, 'goal'),
-    );
+    });
   }
 
-  private async executeTermGoal(
+  private executeTermGoal(
     file: string,
     line: number,
     column: number,
     location: string,
-  ): Promise<ToolResult> {
-    const { data, error } = await getLeanLanguageServices().getTermGoal(
-      file,
-      line,
-      column,
-    );
-
-    if (!data) {
-      return this.noPositionData(
-        'No expected type',
-        location,
-        'No term goal',
-        error,
+  ): Effect.Effect<ToolResult, unknown> {
+    return Effect.gen(function* () {
+      const { data, error } = yield* getLeanLanguageServices().getTermGoal(
+        file,
+        line,
+        column,
       );
-    }
 
-    return executed(data.goal, 'Term goal');
+      if (!data) {
+        return noPositionData(
+          'No expected type',
+          location,
+          'No term goal',
+          error,
+        );
+      }
+
+      return executed(data.goal, 'Term goal');
+    });
   }
 
-  private async executeHover(
+  private executeHover(
     file: string,
     line: number,
     column: number,
     location: string,
-  ): Promise<ToolResult> {
-    const { data, error } = await getLeanLanguageServices().getHoverInfo(
-      file,
-      line,
-      column,
-    );
-
-    if (!data) {
-      return this.noPositionData(
-        'No information',
-        location,
-        'No hover info',
-        error,
+  ): Effect.Effect<ToolResult, unknown> {
+    return Effect.gen(function* () {
+      const { data, error } = yield* getLeanLanguageServices().getHoverInfo(
+        file,
+        line,
+        column,
       );
-    }
 
-    const text = extractHoverText(data.contents);
-    if (!text) {
-      return errorResult(`Empty hover response at ${location}`, {
-        summary: 'No hover info',
-      });
-    }
+      if (!data) {
+        return noPositionData(
+          'No information',
+          location,
+          'No hover info',
+          error,
+        );
+      }
 
-    return executed(text, 'Hover info');
+      const text = extractHoverText(data.contents);
+      if (!text) {
+        return errorResult(`Empty hover response at ${location}`, {
+          summary: 'No hover info',
+        });
+      }
+
+      return executed(text, 'Hover info');
+    });
   }
+}
 
-  /**
-   * Shared "language server returned nothing" error for the three inspect
-   * dispatches. The optional LSP error string is surfaced inline so the
-   * agent sees the underlying cause.
-   */
-  private noPositionData(
-    message: string,
-    location: string,
-    summary: string,
-    error?: string,
-  ): ToolResult {
-    return errorResult(
-      `${message} at ${location}${error ? `\nError: ${error}` : ''}`,
-      { summary },
-    );
-  }
+/**
+ * Shared "language server returned nothing" error for the three inspect
+ * dispatches. The optional LSP error string is surfaced inline so the
+ * agent sees the underlying cause.
+ */
+function noPositionData(
+  message: string,
+  location: string,
+  summary: string,
+  error?: string,
+): ToolResult {
+  return errorResult(
+    `${message} at ${location}${error ? `\nError: ${error}` : ''}`,
+    { summary },
+  );
 }

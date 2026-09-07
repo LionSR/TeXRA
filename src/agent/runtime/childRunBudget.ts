@@ -2,7 +2,7 @@
  * One child-run concurrency budget per session: the cap on concurrently live
  * native child model conversations. Design and rulings (what is budgeted,
  * what inherits, why the child-run loop is the single acquisition boundary):
- * `docs/proposals/2026-08-15-child-run-concurrency-budget.md`.
+ * `.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`.
  *
  * Root runs, agent-CLI children, and in-band children (which run while their
  * parent is blocked awaiting them, so physical concurrency is unchanged)

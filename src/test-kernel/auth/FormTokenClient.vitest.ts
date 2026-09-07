@@ -1,7 +1,11 @@
+// Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FetchHttpClient } from 'effect/unstable/http';
+import { afterEach, describe, expect, vi } from 'vitest';
 import { z } from 'zod';
 
+// Local imports
 import {
   exchangeAuthorizationCode,
   refreshOAuthTokens,
@@ -30,64 +34,81 @@ describe('form token endpoint (declarative)', () => {
     vi.restoreAllMocks();
   });
 
-  it('exchanges an authorization code via form body', async () => {
-    const fetchMock = stubJsonFetch({
-      access_token: 'access',
-      refresh_token: 'refresh',
-      expires_in: 3600,
-    });
+  it.effect('exchanges an authorization code via form body', () =>
+    Effect.gen(function* () {
+      const fetchMock = stubJsonFetch({
+        access_token: 'access',
+        refresh_token: 'refresh',
+        expires_in: 3600,
+      });
 
-    const tokens = await Effect.runPromise(
-      exchangeAuthorizationCode(ENDPOINT, {
+      const tokens = yield* exchangeAuthorizationCode(ENDPOINT, {
         code: 'code-1',
         verifier: 'verifier-1',
         redirectUri: 'http://127.0.0.1/callback',
-      }),
-    );
+      }).pipe(
+        Effect.provide(FetchHttpClient.layer),
+        Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+      );
 
-    expect(tokens.access_token).toBe('access');
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('https://example.test/token');
-    expect(init?.method).toBe('POST');
-    const body = new URLSearchParams(String(init?.body));
-    expect(body.get('grant_type')).toBe('authorization_code');
-    expect(body.get('client_id')).toBe('client-1');
-    expect(body.get('code')).toBe('code-1');
-    expect(body.get('code_verifier')).toBe('verifier-1');
-    expect(body.get('redirect_uri')).toBe('http://127.0.0.1/callback');
-  });
+      expect(tokens.access_token).toBe('access');
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [url, init] = fetchMock.mock.calls[0]!;
+      expect(String(url)).toBe('https://example.test/token');
+      expect(init?.method).toBe('POST');
+      expect(new Headers(init?.headers).get('content-type')).toBe(
+        'application/x-www-form-urlencoded',
+      );
+      const body = new URLSearchParams(String(init?.body));
+      expect(body.get('grant_type')).toBe('authorization_code');
+      expect(body.get('client_id')).toBe('client-1');
+      expect(body.get('code')).toBe('code-1');
+      expect(body.get('code_verifier')).toBe('verifier-1');
+      expect(body.get('redirect_uri')).toBe('http://127.0.0.1/callback');
+    }),
+  );
 
-  it('refreshes with the refresh_token grant', async () => {
-    const fetchMock = stubJsonFetch({
-      access_token: 'new-access',
-      expires_in: 1800,
-    });
+  it.effect('refreshes with the refresh_token grant', () =>
+    Effect.gen(function* () {
+      const fetchMock = stubJsonFetch({
+        access_token: 'new-access',
+        expires_in: 1800,
+      });
 
-    const tokens = await Effect.runPromise(
-      refreshOAuthTokens(ENDPOINT, 'old-refresh'),
-    );
-    expect(tokens.access_token).toBe('new-access');
-    const body = new URLSearchParams(String(fetchMock.mock.calls[0]![1]?.body));
-    expect(body.get('grant_type')).toBe('refresh_token');
-    expect(body.get('refresh_token')).toBe('old-refresh');
-  });
+      const tokens = yield* refreshOAuthTokens(ENDPOINT, 'old-refresh').pipe(
+        Effect.provide(FetchHttpClient.layer),
+        Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+      );
+      expect(tokens.access_token).toBe('new-access');
+      const body = new URLSearchParams(
+        String(fetchMock.mock.calls[0]![1]?.body),
+      );
+      expect(body.get('grant_type')).toBe('refresh_token');
+      expect(body.get('refresh_token')).toBe('old-refresh');
+    }),
+  );
 
-  it('maps 401 token errors to fatal', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('nope', { status: 401 })),
-    );
+  it.effect('maps 401 token errors to fatal', () =>
+    Effect.gen(function* () {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('nope', { status: 401 })),
+      );
 
-    await expect(
-      Effect.runPromise(refreshOAuthTokens(ENDPOINT, 'bad')),
-    ).rejects.toMatchObject({
-      _tag: 'OAuthHttpError',
-      message: 'Token refresh failed (HTTP 401): nope',
-      kind: 'fatal',
-      status: 401,
-    });
-  });
+      const error = yield* Effect.flip(
+        refreshOAuthTokens(ENDPOINT, 'bad').pipe(
+          Effect.provide(FetchHttpClient.layer),
+          Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+        ),
+      );
+      expect(error).toMatchObject({
+        _tag: 'OAuthHttpError',
+        message: 'Token refresh failed (HTTP 401): nope',
+        kind: 'fatal',
+        status: 401,
+      });
+    }),
+  );
 });
 
 describe('postOAuth', () => {
@@ -95,31 +116,37 @@ describe('postOAuth', () => {
     vi.unstubAllGlobals();
   });
 
-  it('times out a response whose body stalls after the headers', async () => {
-    // The stream never closes, so only a deadline over the body read can end
-    // the request; the fetch signal must be aborted so the stream is released.
-    const fetchMock = vi.fn<typeof fetch>(
-      async () => new Response(new ReadableStream(), { status: 200 }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+  // Live clock: the 20ms `Effect.timeoutOrElse` deadline must really elapse so
+  // the stalled body read loses the race and the fetch signal is aborted.
+  it.live('times out a response whose body stalls after the headers', () =>
+    Effect.gen(function* () {
+      // The stream never closes, so only a deadline over the body read can end
+      // the request; the fetch signal must be aborted so the stream is released.
+      const fetchMock = vi.fn<typeof fetch>(
+        async () => new Response(new ReadableStream(), { status: 200 }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
 
-    await expect(
-      Effect.runPromise(
+      const error = yield* Effect.flip(
         postOAuth({
           url: 'https://example.test/token',
           headers: {},
           body: '',
           timeoutMs: 20,
           networkErrorMessage: 'Network error contacting token',
-        }),
-      ),
-    ).rejects.toMatchObject({
-      _tag: 'OAuthNetworkError',
-      message:
-        'Network error contacting token: The operation was aborted due to timeout',
-    });
-    expect(fetchMock.mock.calls[0]![1]?.signal?.aborted).toBe(true);
-  });
+        }).pipe(
+          Effect.provide(FetchHttpClient.layer),
+          Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch),
+        ),
+      );
+      expect(error).toMatchObject({
+        _tag: 'OAuthNetworkError',
+        message:
+          'Network error contacting token: The operation was aborted due to timeout',
+      });
+      expect(fetchMock.mock.calls[0]![1]?.signal?.aborted).toBe(true);
+    }),
+  );
 });
 
 describe('oauthTokenErrorKind', () => {

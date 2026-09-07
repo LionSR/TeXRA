@@ -32,7 +32,9 @@ import { Effect, Stream, SubscriptionRef, type Context } from 'effect';
 
 import {
   aggregateId as qualifyAggregateId,
+  listingTypeOf,
   type CommitOrdinal,
+  type ExistenceReconciliation,
   type FoldInput,
   type LocalRuntimeState,
   type TextChunk,
@@ -67,12 +69,8 @@ export interface FramerSource {
 }
 
 type FrameItem =
-  | FoldEvent
-  | TextChunk
-  | { readonly _tag: 'local'; readonly local: LocalRuntimeState }
-  | { readonly _tag: 'host'; readonly host: HostSnapshot }
-  | { readonly _tag: 'replay.complete' }
-  | { readonly _tag: 'drained'; readonly cursor: CommitOrdinal };
+  | Exclude<FoldInput, { _tag: 'subscriptions' }>
+  | { readonly _tag: 'host'; readonly host: HostSnapshot };
 
 /** One frame from the items of one window: chunks merged per row where
  *  adjacent, the last local and host snapshots, the marker, and the drained
@@ -89,17 +87,14 @@ function cutFrame(
   let local: LocalRuntimeState | null = null;
   let host: HostSnapshot | null = null;
   let replayComplete = false;
+  let existence: ExistenceReconciliation | null = null;
   let drained = drainedBefore;
   for (const item of items) {
     switch (item._tag) {
       case 'event': {
         const { event } = item;
         if (item.read === 'all') {
-          drained = Math.max(drained, event.commit);
-          if (
-            event.type === 'transcript.entry' &&
-            !named.has(event.aggregateId)
-          ) {
+          if (listingTypeOf(event) === null && !named.has(event.aggregateId)) {
             continue;
           }
         }
@@ -126,9 +121,11 @@ function cutFrame(
         break;
       case 'replay.complete':
         replayComplete = true;
+        existence = item.existence;
         break;
       case 'drained':
-        drained = Math.max(drained, item.cursor);
+        drained = item.cursor;
+        existence = item.existence;
         break;
     }
   }
@@ -142,6 +139,7 @@ function cutFrame(
     local,
     host,
     replayComplete,
+    existence,
   };
 }
 
@@ -190,14 +188,30 @@ export function frameSubscription(
         Stream.mapAccum(
           () => tailFrom,
           (drained, items: readonly FrameItem[]) => {
-            const frame = cutFrame(
-              source.key,
-              subscribe,
-              named,
-              drained,
-              items,
-            );
-            return [frame.cursor, [frame]] as const;
+            const groups: FrameItem[][] = [];
+            let pending: FrameItem[] = [];
+            for (const item of items) {
+              pending.push(item);
+              if (item._tag === 'drained' || item._tag === 'replay.complete') {
+                groups.push(pending);
+                pending = [];
+              }
+            }
+            if (pending.length > 0) groups.push(pending);
+            const frames: EventsFrame[] = [];
+            let cursor = drained;
+            for (const group of groups) {
+              const frame = cutFrame(
+                source.key,
+                subscribe,
+                named,
+                cursor,
+                group,
+              );
+              cursor = frame.cursor;
+              frames.push(frame);
+            }
+            return [cursor, frames] as const;
           },
         ),
       );

@@ -53,6 +53,7 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { effectRuntime } from '@platform/processRuntime';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
@@ -358,24 +359,28 @@ export function createExtensionHostRequests(
           'Choose one of the open workspace folders as the working directory.',
       });
     }
-    const prepared = await prepareSurfaceLaunch(request, {
-      showInfoMessage: showInfo,
-      chooseTeamAvailability: async (unavailableNames) => {
-        const prompt = teamAvailabilityPrompt(unavailableNames);
-        const choice = await vscode.window.showWarningMessage(
-          prompt.message,
-          ...prompt.actions.map((action) => action.label),
-        );
-        return (
-          prompt.actions.find((action) => action.label === choice)?.choice ??
-          'cancel'
-        );
-      },
-      signInForRemoteAgentCatalog: async () =>
-        Boolean(
-          await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
-        ),
-    });
+    const prepared = await effectRuntime().runPromise(
+      prepareSurfaceLaunch(request, {
+        showInfoMessage: showInfo,
+        chooseTeamAvailability: async (unavailableNames) => {
+          const prompt = teamAvailabilityPrompt(unavailableNames);
+          const choice = await vscode.window.showWarningMessage(
+            prompt.message,
+            ...prompt.actions.map((action) => action.label),
+          );
+          return (
+            prompt.actions.find((action) => action.label === choice)?.choice ??
+            'cancel'
+          );
+        },
+        signInForRemoteAgentCatalog: async () =>
+          Boolean(
+            await vscode.commands.executeCommand<boolean>(
+              AUTH_COMMANDS.SIGN_IN,
+            ),
+          ),
+      }),
+    );
     await runCommand('texra.execute', prepared);
   }
 
@@ -487,7 +492,7 @@ export function createExtensionHostRequests(
           );
         }
         if (await WorkspaceFS.exists(parsed.sourcePath)) {
-          await snapshot.refreshFiles();
+          await effectRuntime().runPromise(snapshot.refreshFiles);
           return { kind: 'files', paths: [parsed.sourcePath] };
         }
         void showInfo(
@@ -560,8 +565,8 @@ export function createExtensionHostRequests(
   async function refreshAfterCredentialChange(): Promise<void> {
     await Promise.all([
       vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
-      snapshot.refreshCatalogs(),
-      snapshot.refreshAuth(),
+      effectRuntime().runPromise(snapshot.refreshCatalogs),
+      effectRuntime().runPromise(snapshot.refreshAuth),
       options.refreshOnboardingFunnel(),
     ]);
   }
@@ -646,7 +651,7 @@ export function createExtensionHostRequests(
         await runActions.runCompileFixer(request.streamId);
         return done;
       case 'useOwnApiKey':
-        await runActions.useOwnApiKey(request);
+        await effectRuntime().runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff':
         await workflowRunActions.diffStream(request.streamId);
@@ -664,7 +669,7 @@ export function createExtensionHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return draftRequests.handle(request, port);
+        return effectRuntime().runPromise(draftRequests.handle(request, port));
       case 'popOut':
         await options.popOutToEditor();
         return done;
@@ -675,10 +680,10 @@ export function createExtensionHostRequests(
         await runCommand('texra.showDashboard');
         return done;
       case 'refreshCommits':
-        await snapshot.refreshCommits();
+        await effectRuntime().runPromise(snapshot.refreshCommits);
         return done;
       case 'refreshFiles':
-        await snapshot.refreshFiles();
+        await effectRuntime().runPromise(snapshot.refreshFiles);
         return done;
       case 'openSettings':
         switch (request.section) {
@@ -760,7 +765,7 @@ export function createExtensionHostRequests(
         return done;
       case 'recheckDependencies':
         await checkCoreDependencies(true);
-        await snapshot.refreshHostBanners();
+        await effectRuntime().runPromise(snapshot.refreshHostBanners);
         return done;
       case 'openInstallGuide': {
         const docsCommand = getToolDocsCommand(request.tool);

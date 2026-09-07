@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetAgentCatalogAuthRefreshScopeForTests } from '@frontend/auth/agentCatalogRefreshScope';
@@ -33,8 +34,8 @@ vi.mock('vscode', async () => {
 
 const registry = vi.hoisted(() => ({
   catalog: { workflow: [], toolUse: [] } as AgentCatalog,
-  loadAgents: vi.fn(async () => undefined),
-  refreshAgents: vi.fn(async (_options?: { includeRemote?: boolean }) => {}),
+  loadAgents: vi.fn(() => Effect.void),
+  refreshAgents: vi.fn(() => Effect.void),
 }));
 
 vi.mock('@agent/index', async () => ({
@@ -139,7 +140,7 @@ const REMOTE_TEAM_STATE = {
 describe('extension settings AgentHandlers', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    registry.refreshAgents.mockImplementation(async () => {});
+    registry.refreshAgents.mockImplementation(() => Effect.void);
     isAuthenticated.mockResolvedValue(false);
     resetAgentCatalogAuthRefreshScopeForTests();
   });
@@ -199,18 +200,20 @@ describe('extension settings AgentHandlers', () => {
   it('signs in before one forced remote refresh and commits the team once', async () => {
     const workspaceState = new FakeStateStore(REMOTE_TEAM_STATE);
     const order: string[] = [];
-    registry.refreshAgents.mockImplementation(async () => {
-      order.push('refresh');
-      registry.catalog.toolUse = [
-        {
-          source: 'remote',
-          name: 'orchestrator',
-          path: '/remote/orchestrator.yaml',
-          category: 'toolUse',
-          tools: ['delegate_agent'],
-        },
-      ];
-    });
+    registry.refreshAgents.mockImplementation(() =>
+      Effect.sync(() => {
+        order.push('refresh');
+        registry.catalog.toolUse = [
+          {
+            source: 'remote',
+            name: 'orchestrator',
+            path: '/remote/orchestrator.yaml',
+            category: 'toolUse',
+            tools: ['delegate_agent'],
+          },
+        ];
+      }),
+    );
     host.executeCommand.mockImplementation(async () => {
       order.push('sign-in');
       return true;

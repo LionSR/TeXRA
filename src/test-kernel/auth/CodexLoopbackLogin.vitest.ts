@@ -1,6 +1,10 @@
+// Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { FetchHttpClient } from 'effect/unstable/http';
+import { describe, expect, vi } from 'vitest';
 
+// Local imports
 import { loginWithLoopback } from '@auth/codex';
 import { CODEX_CALLBACK_PATH } from '@auth/codex/codexConstants';
 import type { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
@@ -38,122 +42,153 @@ function runLogin(
   options: Parameters<typeof loginWithLoopback>[0],
   signal?: AbortSignal,
 ): Promise<CodexSession> {
-  return Effect.runPromise(loginWithLoopback(options), { signal });
+  return Effect.runPromise(
+    loginWithLoopback(options).pipe(Effect.provide(FetchHttpClient.layer)),
+    { signal },
+  );
 }
 
+/** Capture the rejection of a login the host already started. */
+const rejection = (completion: Promise<CodexSession>) =>
+  Effect.flip(
+    Effect.tryPromise({
+      try: () => completion,
+      catch: (error) => error as Error,
+    }),
+  );
+
 describe('Codex loopback login', () => {
-  it('closes the callback wait when its host cancels', async () => {
-    const controller = new AbortController();
-    const completion = runLogin(
-      {
-        coordinator: coordinatorStub(),
-        openBrowser: () => controller.abort(),
-      },
-      controller.signal,
-    );
+  it.live('closes the callback wait when its host cancels', () =>
+    Effect.gen(function* () {
+      const controller = new AbortController();
+      const completion = runLogin(
+        {
+          coordinator: coordinatorStub(),
+          openBrowser: () => controller.abort(),
+        },
+        controller.signal,
+      );
 
-    await expect(completion).rejects.toThrow(/interrupted/);
-  });
+      const error = yield* rejection(completion);
+      expect(error.message).toMatch(/interrupted/);
+    }),
+  );
 
-  it('settles cancellation while the browser launcher remains pending', async () => {
-    const controller = new AbortController();
-    let finishBrowserLaunch!: () => void;
-    const completion = runLogin(
-      {
-        coordinator: coordinatorStub(),
-        openBrowser: () =>
-          new Promise<void>((resolve) => {
-            finishBrowserLaunch = resolve;
-          }),
-      },
-      controller.signal,
-    );
-    const rejection = expect(completion).rejects.toThrow(/interrupted/);
+  it.live(
+    'settles cancellation while the browser launcher remains pending',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AbortController();
+        let finishBrowserLaunch!: () => void;
+        const completion = runLogin(
+          {
+            coordinator: coordinatorStub(),
+            openBrowser: () =>
+              new Promise<void>((resolve) => {
+                finishBrowserLaunch = resolve;
+              }),
+          },
+          controller.signal,
+        );
 
-    controller.abort();
+        controller.abort();
 
-    await rejection;
-    finishBrowserLaunch();
-  });
+        const error = yield* rejection(completion);
+        expect(error.message).toMatch(/interrupted/);
+        finishBrowserLaunch();
+      }),
+  );
 
-  it('does not exchange a code when cancellation follows its callback', async () => {
-    const controller = new AbortController();
-    let request!: SubscriptionAuthorizeRequest;
-    const loginWithCode = vi.fn();
-    const completion = runLogin(
-      {
-        coordinator: coordinatorStub({
+  it.live(
+    'does not exchange a code when cancellation follows its callback',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AbortController();
+        let request!: SubscriptionAuthorizeRequest;
+        const loginWithCode = vi.fn();
+        const completion = runLogin(
+          {
+            coordinator: coordinatorStub({
+              buildAuthorizeRequest: (
+                port: number,
+              ): SubscriptionAuthorizeRequest => {
+                request = loopbackRequest(port);
+                return request;
+              },
+              loginWithCode,
+            }),
+            openBrowser: async () => {
+              const callback = new URL(request.redirectUri);
+              callback.searchParams.set('state', request.state);
+              callback.searchParams.set('code', 'authorization-code');
+              await fetch(callback);
+              controller.abort();
+            },
+          },
+          controller.signal,
+        );
+
+        const error = yield* rejection(completion);
+        expect(error.message).toMatch(/interrupted/);
+        expect(loginWithCode).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.live(
+    'ignores stale callback errors and accepts a later valid callback',
+    () =>
+      Effect.gen(function* () {
+        const state = 'expected-state';
+        const verifier = 'verifier';
+        const expectedSession = testSession();
+        let request!: SubscriptionAuthorizeRequest;
+        const loginWithCode = vi.fn(() => Effect.succeed(expectedSession));
+        const coordinator = coordinatorStub({
           buildAuthorizeRequest: (
             port: number,
           ): SubscriptionAuthorizeRequest => {
-            request = loopbackRequest(port);
+            const redirectUri = `http://localhost:${port}${CODEX_CALLBACK_PATH}`;
+            const url = new URL('https://auth.example.test/oauth/authorize');
+            url.searchParams.set('redirect_uri', redirectUri);
+            url.searchParams.set('state', state);
+            request = {
+              url: url.toString(),
+              verifier,
+              state,
+              redirectUri,
+            };
             return request;
           },
           loginWithCode,
-        }),
-        openBrowser: async () => {
-          const callback = new URL(request.redirectUri);
-          callback.searchParams.set('state', request.state);
-          callback.searchParams.set('code', 'authorization-code');
-          await fetch(callback);
-          controller.abort();
-        },
-      },
-      controller.signal,
-    );
+        });
 
-    await expect(completion).rejects.toThrow(/interrupted/);
-    expect(loginWithCode).not.toHaveBeenCalled();
-  });
+        const completion = runLogin({
+          coordinator,
+          openBrowser: async () => {
+            const callback = new URL(request.redirectUri);
+            callback.hostname = '127.0.0.1';
 
-  it('ignores stale callback errors and accepts a later valid callback', async () => {
-    const state = 'expected-state';
-    const verifier = 'verifier';
-    const expectedSession = testSession();
-    let request!: SubscriptionAuthorizeRequest;
-    const loginWithCode = vi.fn(() => Effect.succeed(expectedSession));
-    const coordinator = coordinatorStub({
-      buildAuthorizeRequest: (port: number): SubscriptionAuthorizeRequest => {
-        const redirectUri = `http://localhost:${port}${CODEX_CALLBACK_PATH}`;
-        const url = new URL('https://auth.example.test/oauth/authorize');
-        url.searchParams.set('redirect_uri', redirectUri);
-        url.searchParams.set('state', state);
-        request = {
-          url: url.toString(),
-          verifier,
-          state,
-          redirectUri,
-        };
-        return request;
-      },
-      loginWithCode,
-    });
+            callback.search = new URLSearchParams({
+              state: 'stale-state',
+              code: 'stale-code',
+            }).toString();
+            expect((await fetch(callback)).status).toBe(400);
 
-    const session = await runLogin({
-      coordinator,
-      openBrowser: async () => {
-        const callback = new URL(request.redirectUri);
-        callback.hostname = '127.0.0.1';
+            callback.search = new URLSearchParams({
+              state,
+              code: 'valid-code',
+            }).toString();
+            expect((await fetch(callback)).status).toBe(200);
+          },
+        });
 
-        callback.search = new URLSearchParams({
-          state: 'stale-state',
-          code: 'stale-code',
-        }).toString();
-        expect((await fetch(callback)).status).toBe(400);
-
-        callback.search = new URLSearchParams({
-          state,
+        const session = yield* Effect.promise(() => completion);
+        expect(session).toEqual(expectedSession);
+        expect(loginWithCode).toHaveBeenCalledWith({
           code: 'valid-code',
-        }).toString();
-        expect((await fetch(callback)).status).toBe(200);
-      },
-    });
-
-    expect(session).toEqual(expectedSession);
-    expect(loginWithCode).toHaveBeenCalledWith({
-      code: 'valid-code',
-      verifier,
-      redirectUri: request.redirectUri,
-    });
-  });
+          verifier,
+          redirectUri: request.redirectUri,
+        });
+      }),
+  );
 });

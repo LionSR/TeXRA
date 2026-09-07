@@ -388,6 +388,9 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
         Effect.scoped(
           lease(root, runId).pipe(
             Effect.andThen(
+              // `runLakeCommand` reports a non-zero exit in its result and
+              // runs execa with `reject: false`, so it settles rather than
+              // rejecting — including when `lake` is missing.
               Effect.promise(() =>
                 runLakeCommand({
                   workspaceRoot: root,

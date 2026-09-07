@@ -1,5 +1,6 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
+import { Data, Effect } from 'effect';
 import { DEFAULT_WORKFLOW_AGENT } from '@agent/core/definition/AgentConfig';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { createLog } from '@logger/logUtils';
@@ -24,6 +25,8 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { scanDirectory } from './agentYamlScanner';
 import {
   clearInlineAgentDefinitions,
@@ -35,6 +38,14 @@ import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
 import type { AgentEntry, ResolvedAgent } from './agentEntry';
 
 const log = createLog('agentRegistry');
+
+/** Resolving an agent directory failed (I/O or a rejected configured path). */
+export class AgentCatalogLoadError extends Data.TaggedError(
+  'AgentCatalogLoadError',
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 /**
  * Source priority for lookups (higher priority first). `inline` must be listed,
@@ -76,13 +87,14 @@ let catalog: { readonly includesRemote: boolean } | undefined;
 let customScanIssues: readonly AgentScanIssue[] = Object.freeze([]);
 
 /**
- * The load producing the next catalog. Every load chains on it, so the registry
- * has one serialization point instead of a promise plus a queue. Nothing on the
- * load path may await a load of its own: that await would wait on the chain it
- * is running inside. Fire-and-forget re-entry (the sign-out invalidation) is
- * fine — it queues behind the running load.
+ * Loads are serialized on one per-key lane: every load enters it, so the
+ * registry has one serialization point instead of a promise plus a queue.
+ * A fiber that arrives while a load runs waits for it, then re-checks what
+ * that load published — nothing on the load path may take the lane from
+ * inside a load of its own.
  */
-let inFlight: Promise<void> | undefined;
+const catalogLoadLanes = new Map<string, PerKeyLane>();
+const onCatalogLoadLane = withPerKeyLane(catalogLoadLanes, 'agentCatalogLoad');
 
 /**
  * Advanced by {@link refresh} only. A load carries the epoch it was requested
@@ -102,33 +114,39 @@ export interface LoadAgentsOptions {
 
 /**
  * Load all agents into cache. Call once at activation.
- * Concurrent calls join the in-flight load and re-check what it published, so
- * only one scan runs.
+ * Concurrent calls join the in-flight load through the lane and re-check what
+ * it published, so only one scan runs.
  */
-export async function loadAgents(
+export function loadAgents(
   options: LoadAgentsOptions = {},
-): Promise<void> {
+): Effect.Effect<void, AgentCatalogLoadError> {
   const includeRemote = options.includeRemote ?? true;
-  if (inFlight) await inFlight;
-  if (catalog && (!includeRemote || catalog.includesRemote)) return;
-  await startLoad(includeRemote, epoch);
+  return onCatalogLoadLane(
+    Effect.suspend(() =>
+      catalog && (!includeRemote || catalog.includesRemote)
+        ? Effect.void
+        : queueLoad(includeRemote, epoch),
+    ),
+  );
 }
 
-/** Rebuild the cache after every older load has settled. */
-function startLoad(includeRemote: boolean, loadEpoch: number): Promise<void> {
-  const previous = inFlight?.catch(() => undefined) ?? Promise.resolve();
-  const load: Promise<void> = previous
-    .then(async () => {
-      if (loadEpoch !== epoch) return;
-      if (await doLoad(includeRemote, loadEpoch)) {
-        catalog = { includesRemote: includeRemote };
-      }
-    })
-    .finally(() => {
-      if (inFlight === load) inFlight = undefined;
-    });
-  inFlight = load;
-  return load;
+/**
+ * Run one load, superseding checks included. The caller holds the lane, so a
+ * stale-epoch load skips without publishing and a failed load fails only its
+ * own caller — the lane hands the next entrant off regardless.
+ */
+function queueLoad(
+  includeRemote: boolean,
+  loadEpoch: number,
+): Effect.Effect<void, AgentCatalogLoadError> {
+  return Effect.suspend(() => {
+    if (loadEpoch !== epoch) return Effect.void;
+    return doLoad(includeRemote, loadEpoch).pipe(
+      Effect.map((loaded) => {
+        if (loaded) catalog = { includesRemote: includeRemote };
+      }),
+    );
+  });
 }
 
 /**
@@ -158,52 +176,73 @@ export function clearInlineAgents(): void {
   }
 }
 
-async function doLoad(
+function doLoad(
   includeRemote: boolean,
   loadEpoch: number,
-): Promise<boolean> {
-  const startTime = Date.now();
+): Effect.Effect<boolean, AgentCatalogLoadError> {
+  return Effect.gen(function* () {
+    const startTime = Date.now();
 
-  // Load from all sources in parallel
-  const dirs = platform().agentDirectories;
-  const [customDir, builtInDir, toolUseDir] = await Promise.all([
-    dirs.custom(),
-    dirs.builtIn(),
-    dirs.builtInToolUse(),
-  ]);
+    // Load from all sources in parallel
+    const dirs = platform().agentDirectories;
+    const resolveDir = (
+      read: () => Promise<string>,
+    ): Effect.Effect<string, AgentCatalogLoadError> =>
+      Effect.tryPromise({
+        try: read,
+        catch: (cause) =>
+          new AgentCatalogLoadError({
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      });
+    const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
+      [
+        resolveDir(() => dirs.custom()),
+        resolveDir(() => dirs.builtIn()),
+        resolveDir(() => dirs.builtInToolUse()),
+      ],
+      { concurrency: 'unbounded' },
+    );
 
-  const [customScan, builtInScan, toolUseScan, remoteEntries] =
-    await Promise.all([
-      scanDirectory(customDir, 'custom'),
-      scanDirectory(builtInDir, 'builtInWorkflow'),
-      scanDirectory(toolUseDir, 'builtInToolUse'),
-      includeRemote ? loadRemoteAgents() : Promise.resolve([]),
-    ]);
-  // builtInScan.issues and toolUseScan.issues are intentionally unused:
-  // only custom-agent scan failures are a product surface.
+    const [customScan, builtInScan, toolUseScan, remoteEntries] =
+      yield* Effect.all(
+        [
+          scanDirectory(customDir, 'custom'),
+          scanDirectory(builtInDir, 'builtInWorkflow'),
+          scanDirectory(toolUseDir, 'builtInToolUse'),
+          includeRemote
+            ? loadRemoteAgents()
+            : Effect.succeed([] as AgentEntry[]),
+        ],
+        { concurrency: 'unbounded' },
+      );
+    // builtInScan.issues and toolUseScan.issues are intentionally unused:
+    // only custom-agent scan failures are a product surface.
 
-  // Register all entries. Inline definitions were normalized at registration
-  // and live outside the directory scan, so they are re-merged on every load —
-  // a catalog refresh rebuilds the cache from scratch and would otherwise drop
-  // them.
-  const allEntries = [
-    ...inlineAgentEntries(),
-    ...customScan.entries,
-    ...builtInScan.entries,
-    ...toolUseScan.entries,
-    ...remoteEntries,
-  ];
+    // Register all entries. Inline definitions were normalized at registration
+    // and live outside the directory scan, so they are re-merged on every load —
+    // a catalog refresh rebuilds the cache from scratch and would otherwise drop
+    // them.
+    const allEntries = [
+      ...inlineAgentEntries(),
+      ...customScan.entries,
+      ...builtInScan.entries,
+      ...toolUseScan.entries,
+      ...remoteEntries,
+    ];
 
-  if (loadEpoch !== epoch) return false;
+    if (loadEpoch !== epoch) return false;
 
-  cache.clear();
-  customScanIssues = Object.freeze(customScan.issues);
-  for (const entry of allEntries) {
-    cache.set(agentKeyOf(entry), entry);
-  }
+    cache.clear();
+    customScanIssues = Object.freeze(customScan.issues);
+    for (const entry of allEntries) {
+      cache.set(agentKeyOf(entry), entry);
+    }
 
-  log.info(`Loaded ${cache.size} agents in ${Date.now() - startTime}ms`);
-  return true;
+    log.info(`Loaded ${cache.size} agents in ${Date.now() - startTime}ms`);
+    return true;
+  });
 }
 
 /**
@@ -320,10 +359,19 @@ export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
 /**
  * Force a new load after every older one has settled, superseding any load
  * still queued from before. The cache keeps serving the catalog it already
- * published until the new one lands, including when the refresh fails.
+ * published until the new one lands, including when the refresh fails. The
+ * epoch advances only once the refresh actually starts, so constructing a
+ * refresh without running it is inert.
  */
-export function refresh(options: LoadAgentsOptions = {}): Promise<void> {
-  return startLoad(options.includeRemote ?? true, ++epoch);
+export function refresh(
+  options: LoadAgentsOptions = {},
+): Effect.Effect<void, AgentCatalogLoadError> {
+  return Effect.suspend(() => {
+    const loadEpoch = ++epoch;
+    return onCatalogLoadLane(
+      queueLoad(options.includeRemote ?? true, loadEpoch),
+    );
+  });
 }
 
 function removeRemoteEntries(): void {
@@ -336,16 +384,22 @@ function removeRemoteEntries(): void {
 }
 
 /** Remove remote definitions immediately, then rebuild the local catalog. */
-export function invalidateRemoteAgentsAfterSignOut(): Promise<void> {
-  removeRemoteEntries();
-  return refresh({ includeRemote: false }).catch((error: unknown) => {
-    // An older in-flight remote load may have settled before the rebuild.
-    // Preserve the signed-out invariant even when local directory I/O fails.
+export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<void> {
+  return Effect.suspend(() => {
     removeRemoteEntries();
-    log.warn(
-      `Local agent catalog rebuild failed after sign-out: ${String(error)}`,
-    );
-  });
+    return refresh({ includeRemote: false });
+  }).pipe(
+    Effect.catch((error: AgentCatalogLoadError) =>
+      Effect.sync(() => {
+        // An older in-flight remote load may have settled before the rebuild.
+        // Preserve the signed-out invariant even when local directory I/O fails.
+        removeRemoteEntries();
+        log.warn(
+          `Local agent catalog rebuild failed after sign-out: ${error.message}`,
+        );
+      }),
+    ),
+  );
 }
 
 // =============================================================================
@@ -583,15 +637,16 @@ function sortAgentEntries(
  * Compute typed agent options data for Lit-native rendering.
  * Ensures cache is loaded first.
  */
-export async function computeAgentOptionsData(): Promise<AgentOptionsDataPayload> {
-  await loadAgents();
-
-  return {
+export function computeAgentOptionsData(): Effect.Effect<
+  AgentOptionsDataPayload,
+  AgentCatalogLoadError
+> {
+  return Effect.map(loadAgents(), () => ({
     workflow: entriesToOptionData(
       sortAgentEntries(getVisibleAgents('workflow'), [DEFAULT_WORKFLOW_AGENT]),
     ),
     toolUse: entriesToOptionData(
       sortAgentEntries(getVisibleAgents('toolUse'), PREFERRED_TOOL_USE_AGENTS),
     ),
-  };
+  }));
 }

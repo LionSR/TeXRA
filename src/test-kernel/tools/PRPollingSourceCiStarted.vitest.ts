@@ -1,6 +1,7 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports - tools
 import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
@@ -28,7 +29,12 @@ function createState(
   events: string[],
   overrides: Partial<PRSubscriptionState> = {},
 ): PRSubscriptionState {
-  const listener = (text: string) => events.push(text);
+  const listener = (text: string): Effect.Effect<void> => {
+    // Record on the emit turn (PollEventListener's synchronous phase); there
+    // is no deferred delivery to run.
+    events.push(text);
+    return Effect.void;
+  };
   return createPRSubscriptionState({
     listeners: new Set([listener]),
     currentShaState: createPRCurrentShaState(SHA),
@@ -80,10 +86,10 @@ function checkRunsResponse(runs: GhCheckRun[]): {
   };
 }
 
-async function createHarness(): Promise<{
+const createHarness: Effect.Effect<{
   ghGet: Mock;
   source: CiStartedSource;
-}> {
+}> = Effect.promise(async () => {
   vi.resetModules();
   const ghGet = vi.fn();
   mockGitHubClient(ghGet);
@@ -92,7 +98,7 @@ async function createHarness(): Promise<{
     ghGet,
     source: new PRPollingSource() as unknown as CiStartedSource,
   };
-}
+});
 
 function queuePollResponses(
   ghGet: Mock,
@@ -113,60 +119,68 @@ describe('PRPollingSource CI-started events', () => {
     vi.resetModules();
   });
 
-  it('seeds existing check runs without replaying a CI-started event', async () => {
-    const { ghGet, source } = await createHarness();
-    const events: string[] = [];
-    const state = createState(events, {
-      initialized: false,
-      currentShaState: undefined,
-    });
+  it.effect(
+    'seeds existing check runs without replaying a CI-started event',
+    () =>
+      Effect.gen(function* () {
+        const { ghGet, source } = yield* createHarness;
+        const events: string[] = [];
+        const state = createState(events, {
+          initialized: false,
+          currentShaState: undefined,
+        });
 
-    queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
+        queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
 
-    await Effect.runPromise(source.pollOne('owner/repo/pulls/7', state));
+        yield* source.pollOne('owner/repo/pulls/7', state);
 
-    expect(events).toEqual([]);
-    expect(state.currentShaState?.sha).toBe(SHA);
-    expect(state.currentShaState?.ciStarted).toBe(true);
-  });
+        expect(events).toEqual([]);
+        expect(state.currentShaState?.sha).toBe(SHA);
+        expect(state.currentShaState?.ciStarted).toBe(true);
+      }),
+  );
 
-  it('emits a CI-started event once when check runs first appear', async () => {
-    const { ghGet, source } = await createHarness();
-    const events: string[] = [];
-    const state = createState(events);
-    const runs = [checkRun(1, 'lint'), checkRun(2, 'test')];
+  it.effect('emits a CI-started event once when check runs first appear', () =>
+    Effect.gen(function* () {
+      const { ghGet, source } = yield* createHarness;
+      const events: string[] = [];
+      const state = createState(events);
+      const runs = [checkRun(1, 'lint'), checkRun(2, 'test')];
 
-    queuePollResponses(ghGet, SHA, runs);
+      queuePollResponses(ghGet, SHA, runs);
 
-    await Effect.runPromise(source.pollOne('owner/repo/pulls/7', state));
+      yield* source.pollOne('owner/repo/pulls/7', state);
 
-    expect(events).toHaveLength(1);
-    expect(events[0]).toContain('CI triggered');
-    expect(events[0]).toContain('distinct check names');
-    expect(events[0]).not.toContain('workflow');
-    expect(state.currentShaState?.ciStarted).toBe(true);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toContain('CI triggered');
+      expect(events[0]).toContain('distinct check names');
+      expect(events[0]).not.toContain('workflow');
+      expect(state.currentShaState?.ciStarted).toBe(true);
 
-    queuePollResponses(ghGet, SHA, runs);
+      queuePollResponses(ghGet, SHA, runs);
 
-    await Effect.runPromise(source.pollOne('owner/repo/pulls/7', state));
+      yield* source.pollOne('owner/repo/pulls/7', state);
 
-    expect(events).toHaveLength(1);
-  });
+      expect(events).toHaveLength(1);
+    }),
+  );
 
-  it('resets CI-started state on a new head SHA', async () => {
-    const { ghGet, source } = await createHarness();
-    const events: string[] = [];
-    const state = createState(events, {
-      currentShaState: createPRCurrentShaState(OLD_SHA, { ciStarted: true }),
-    });
+  it.effect('resets CI-started state on a new head SHA', () =>
+    Effect.gen(function* () {
+      const { ghGet, source } = yield* createHarness;
+      const events: string[] = [];
+      const state = createState(events, {
+        currentShaState: createPRCurrentShaState(OLD_SHA, { ciStarted: true }),
+      });
 
-    queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
+      queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
 
-    await Effect.runPromise(source.pollOne('owner/repo/pulls/7', state));
+      yield* source.pollOne('owner/repo/pulls/7', state);
 
-    expect(events).toHaveLength(1);
-    expect(events[0]).toContain('(head abcdef1)');
-    expect(state.currentShaState?.sha).toBe(SHA);
-    expect(state.currentShaState?.ciStarted).toBe(true);
-  });
+      expect(events).toHaveLength(1);
+      expect(events[0]).toContain('(head abcdef1)');
+      expect(state.currentShaState?.sha).toBe(SHA);
+      expect(state.currentShaState?.ciStarted).toBe(true);
+    }),
+  );
 });

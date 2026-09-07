@@ -9,7 +9,9 @@
  * banners only it can answer (a VS Code host knows its API-key status and
  * its missing tools; the desktop keeps both in Settings).
  */
+import { Cause, Effect, Exit } from 'effect';
 import { computeAgentOptionsData } from '@agent/index';
+import { hostPort } from '@common/hostPort';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import {
@@ -39,24 +41,24 @@ export interface HostSnapshotSourceOptions {
    *  never shown. */
   apiKeyBanner?: () => Promise<Banners['apiKey']>;
   dependencyBanner?: () => Promise<Banners['dependency']>;
+  /** Write directly to the bridge's host snapshot, which its streams replay. */
+  publish(snapshot: HostSnapshot): void;
   onError(error: unknown): void;
 }
 
 export interface HostSnapshotSource {
-  /** The snapshot as last assembled; null until the first `refresh`. */
-  current(): HostSnapshot | null;
   /** Reassemble every catalog and publish the result. */
-  refresh(): Promise<void>;
+  readonly refresh: Effect.Effect<void>;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
-  refreshCatalogs(): Promise<void>;
+  readonly refreshCatalogs: Effect.Effect<void>;
   /** The paper's files changed on disk, or the surface asked for a relist. */
-  refreshFiles(): Promise<void>;
-  refreshCommits(): Promise<void>;
+  readonly refreshFiles: Effect.Effect<void>;
+  readonly refreshCommits: Effect.Effect<void>;
   /** The sign-in state changed. */
-  refreshAuth(): Promise<void>;
+  readonly refreshAuth: Effect.Effect<void>;
   /** The host's own banners changed (a key stored, a tool installed). */
-  refreshHostBanners(): Promise<void>;
+  readonly refreshHostBanners: Effect.Effect<void>;
   /** The workspace folders changed. */
   refreshWorkspaceRoots(): void;
   /** The one recorder per process started or stopped. */
@@ -67,16 +69,12 @@ export interface HostSnapshotSource {
   /** The user dismissed one of the dismissable banners. */
   dismissBanner(banner: 'login' | 'gettingStarted' | 'dependency'): void;
   setOnboarding(state: HostSnapshot['onboarding']): void;
-  /** Fires with every published snapshot. */
-  onChange(listener: (snapshot: HostSnapshot) => void): () => void;
 }
 
 /** The paper's display record and the catalogs, assembled per session. */
 export function createHostSnapshotSource(
   options: HostSnapshotSourceOptions,
 ): HostSnapshotSource {
-  const listeners = new Set<(snapshot: HostSnapshot) => void>();
-  let snapshot: HostSnapshot | null = null;
   let catalogs: Pick<
     HostSnapshot,
     'agentOptions' | 'modelOptions' | 'teamOptions'
@@ -106,7 +104,7 @@ export function createHostSnapshotSource(
   const dismissed = new Set<'gettingStarted' | 'dependency'>();
 
   function publish(): void {
-    snapshot = {
+    options.publish({
       paper: options.paper,
       ...catalogs,
       workspaceRoots: options.workspaceRoots?.() ?? [],
@@ -131,69 +129,79 @@ export function createHostSnapshotSource(
           ),
       },
       onboarding,
-    };
-    for (const listener of [...listeners]) listener(snapshot);
+    });
   }
 
-  async function loadAgents(): Promise<void> {
-    catalogs = { ...catalogs, agentOptions: await computeAgentOptionsData() };
-  }
+  const loadAgents = Effect.gen(function* () {
+    catalogs = { ...catalogs, agentOptions: yield* computeAgentOptionsData() };
+  });
 
-  async function loadTeams(): Promise<void> {
+  const loadTeams = Effect.gen(function* () {
     catalogs = {
       ...catalogs,
-      teamOptions: await loadTeamOptions(createTeamCatalogPorts()),
+      teamOptions: yield* loadTeamOptions(createTeamCatalogPorts()),
     };
-  }
+  });
 
-  async function loadModels(): Promise<void> {
+  const loadModels = Effect.gen(function* () {
     catalogs = {
       ...catalogs,
-      modelOptions: await computeModelOptionsData(
-        getEnabledModels(options.globalState),
+      modelOptions: yield* hostPort(() =>
+        computeModelOptionsData(getEnabledModels(options.globalState)),
       ),
     };
-  }
+  });
 
-  async function loadFiles(): Promise<void> {
-    fileOptions = await options.fileOptions();
+  const loadFiles = Effect.gen(function* () {
+    fileOptions = yield* hostPort(() => options.fileOptions());
     hasInputFiles = fileOptions.baseFile.length > 0;
-  }
+  });
 
-  async function loadCommits(): Promise<void> {
-    commits = await options.readRecentCommits();
-  }
+  const loadCommits = Effect.gen(function* () {
+    commits = yield* hostPort(() => options.readRecentCommits());
+  });
 
-  async function loadAuth(): Promise<void> {
-    authenticated = await options.isAuthenticated();
-  }
+  const loadAuth = Effect.gen(function* () {
+    authenticated = yield* hostPort(() => options.isAuthenticated());
+  });
 
-  async function loadHostBanners(): Promise<void> {
-    const [key, tools] = await Promise.all([
-      options.apiKeyBanner?.(),
-      options.dependencyBanner?.(),
-    ]);
+  const loadHostBanners = Effect.gen(function* () {
+    const [key, tools] = yield* Effect.all(
+      [
+        options.apiKeyBanner
+          ? hostPort(() => options.apiKeyBanner!())
+          : Effect.succeed(undefined),
+        options.dependencyBanner
+          ? hostPort(() => options.dependencyBanner!())
+          : Effect.succeed(undefined),
+      ],
+      { concurrency: 'unbounded' },
+    );
     if (key) apiKey = key;
     if (tools) dependency = tools;
-  }
+  });
 
   /** Each producer settles on its own: one that fails is reported and keeps
    *  its last value, and the snapshot still publishes what the others read,
    *  so a single unavailable source never leaves the shell blank. */
-  const guarded =
-    (...loads: (() => Promise<void>)[]) =>
-    async (): Promise<void> => {
-      const settled = await Promise.allSettled(loads.map((load) => load()));
-      for (const result of settled) {
-        if (result.status === 'rejected') options.onError(result.reason);
+  const guarded = (
+    ...loads: Effect.Effect<void, unknown>[]
+  ): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const settled = yield* Effect.forEach(
+        loads,
+        (load) => Effect.exit(load),
+        { concurrency: 'unbounded' },
+      );
+      for (const exit of settled) {
+        if (Exit.isFailure(exit)) options.onError(Cause.squash(exit.cause));
       }
       publish();
-    };
+    });
 
   const catalogLoads = [loadAgents, loadTeams, loadModels];
 
   return {
-    current: () => snapshot,
     refresh: guarded(
       ...catalogLoads,
       loadFiles,
@@ -234,12 +242,6 @@ export function createHostSnapshotSource(
       if (state === onboarding) return;
       onboarding = state;
       publish();
-    },
-    onChange(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
     },
   };
 }

@@ -5,13 +5,16 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ResultEvent } from '@agent/trace';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { INSTRUCTION_ACTION } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 
 function result(over: Partial<ResultEvent>): ResultEvent {
   return {
     type: 'result',
     outcome: 'failed',
-    executionId: 'exec',
+    executionId: 'a00101',
     streamId: 'stream',
     agentName: 'assistant',
     category: 'toolUse',
@@ -24,7 +27,9 @@ function result(over: Partial<ResultEvent>): ResultEvent {
  * Publish one terminal result through the same seam every host wires and
  * return the presentation events it produced.
  */
-function toastsFor(event: ResultEvent): { event: string; payload: unknown }[] {
+async function toastsFor(
+  event: ResultEvent,
+): Promise<{ event: string; payload: unknown }[]> {
   const session = createTestSession();
   const emitted: { event: string; payload: unknown }[] = [];
   const emit = vi.fn((name: string, payload: unknown) => {
@@ -33,8 +38,13 @@ function toastsFor(event: ResultEvent): { event: string; payload: unknown }[] {
   });
   const detachHost = session.interactions.use({ emit, cancel: vi.fn() });
   const detachToast = attachTerminalResultToast(session, session.interactions);
+  const committed = new Promise<void>((resolve) =>
+    session.onResult(() => resolve()),
+  );
   try {
+    publishTestRunStart(session, event.streamId, event.executionId);
     session.publishRunEvent(event.streamId, event);
+    await committed;
   } finally {
     detachToast();
     detachHost();
@@ -44,9 +54,9 @@ function toastsFor(event: ResultEvent): { event: string; payload: unknown }[] {
 }
 
 describe('terminal result presentation', () => {
-  it('maps missing-api-key to an actionable instruction', () => {
+  it('maps missing-api-key to an actionable instruction', async () => {
     expect(
-      toastsFor(result({ error: { kind: 'missing-api-key' } })),
+      await toastsFor(result({ error: { kind: 'missing-api-key' } })),
     ).toMatchObject([
       {
         event: 'requestShowInstruction',
@@ -61,9 +71,9 @@ describe('terminal result presentation', () => {
     ]);
   });
 
-  it('maps disk-full and unexpected to error toasts carrying the message', () => {
+  it('maps disk-full and unexpected to error toasts carrying the message', async () => {
     expect(
-      toastsFor(
+      await toastsFor(
         result({ error: { kind: 'disk-full', message: 'No space left' } }),
       ),
     ).toEqual([
@@ -71,13 +81,15 @@ describe('terminal result presentation', () => {
     ]);
 
     expect(
-      toastsFor(result({ error: { kind: 'unexpected', message: 'Boom' } })),
+      await toastsFor(
+        result({ error: { kind: 'unexpected', message: 'Boom' } }),
+      ),
     ).toEqual([{ event: 'requestShowError', payload: { message: 'Boom' } }]);
   });
 
-  it('maps context-window to an error toast, defaulting to remediation copy', () => {
+  it('maps context-window to an error toast, defaulting to remediation copy', async () => {
     expect(
-      toastsFor(
+      await toastsFor(
         result({
           error: { kind: 'context-window', message: 'Conversation too long.' },
         }),
@@ -89,7 +101,7 @@ describe('terminal result presentation', () => {
       },
     ]);
 
-    const [defaulted] = toastsFor(
+    const [defaulted] = await toastsFor(
       result({ error: { kind: 'context-window' } }),
     );
     const message = (defaulted?.payload as { message?: string } | undefined)
@@ -98,13 +110,17 @@ describe('terminal result presentation', () => {
     expect(message).toContain('reduce attached files');
   });
 
-  it('shows no toast for subagent runs, aborts, or success', () => {
+  it('shows no toast for subagent runs, aborts, or success', async () => {
     expect(
-      toastsFor(result({ isSubagent: true, error: { kind: 'unexpected' } })),
+      await toastsFor(
+        result({ isSubagent: true, error: { kind: 'unexpected' } }),
+      ),
     ).toEqual([]);
     expect(
-      toastsFor(result({ outcome: 'cancelled', error: { kind: 'abort' } })),
+      await toastsFor(
+        result({ outcome: 'cancelled', error: { kind: 'abort' } }),
+      ),
     ).toEqual([]);
-    expect(toastsFor(result({ outcome: 'completed' }))).toEqual([]);
+    expect(await toastsFor(result({ outcome: 'completed' }))).toEqual([]);
   });
 });

@@ -23,13 +23,9 @@ import {
 const docsDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TIMESTAMP_PREFIX = /^\d{4}-\d{2}-\d{2}-/;
 const TRAILING_DATE_SUFFIX = /-20\d{2}(?:-\d{2}(?:-\d{2})?)?\.md$/;
-const TIMESTAMPED_DIRS = [
-  'architecture',
-  'design',
-  'dev/audits',
-  'prds',
-  'proposals',
-];
+// The former prds/ and proposals/ trees moved to the repo-root .agents/docs/
+// note tree, which is outside docs/ and therefore outside this gate's scope.
+const TIMESTAMPED_DIRS = ['architecture', 'design', 'dev/audits'];
 const INTERNAL_DOC_MARKER = /(?:^|[-_])(audit|prd|proposal)(?:[-_.]|$)/i;
 
 // Build/system entries that are never publishable content and need no
@@ -131,7 +127,7 @@ const invalidInternalDocs = [
 if (invalidInternalDocs.length > 0) {
   const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
   console.error(
-    `${ghError}Architecture, design, audit, PRD, and proposal Markdown files require a YYYY-MM-DD- prefix:`,
+    `${ghError}Architecture, design, and audit Markdown files require a YYYY-MM-DD- prefix:`,
   );
   for (const file of invalidInternalDocs) {
     console.error(`${ghError}  docs/${relative(docsDir, file)}`);

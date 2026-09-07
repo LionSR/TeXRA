@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { vscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
@@ -8,7 +9,7 @@ describe('vscodeLeanLanguageServices', () => {
     const original = vscodeLeanLanguageServices.getGoalState;
     expect(() => {
       Object.assign(vscodeLeanLanguageServices, {
-        getGoalState: async () => undefined,
+        getGoalState: () => Effect.succeed({ data: null }),
       });
     }).toThrow(TypeError);
     expect(vscodeLeanLanguageServices.getGoalState).toBe(original);

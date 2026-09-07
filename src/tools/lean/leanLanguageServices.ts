@@ -12,6 +12,7 @@
  */
 
 import type { ExecutionId } from '@shared/schemas';
+import type { Effect } from 'effect';
 
 import type {
   LeanFileCommand,
@@ -24,27 +25,39 @@ import type {
   PlainTermGoal,
 } from './leanTypes';
 
+/**
+ * The Effect-typed port (Effect 4 runtime PRD, R1): adapters compose their
+ * host or LSP primitives into these programs, and the one run of each program
+ * sits in the calling tool's `execute()` — the tool execute() contract is an
+ * R1 boundary kind, so no runtime leaks into this seam. The adapters' failure
+ * channels are disjoint (VS Code bridge rejects with plain host errors, the
+ * direct pool fails with its tagged errors) and every consumer folds a failure
+ * into a `ToolError`, so the port declares `unknown` rather than a union no
+ * caller switches on.
+ */
 export interface LeanLanguageServices {
   executeFileCommand(
     command: LeanFileCommand,
     filePath: string,
-  ): Promise<boolean>;
+  ): Effect.Effect<boolean>;
   getGoalState(
     filePath: string,
     line: number,
     column: number,
-  ): Promise<LspResult<PlainGoal>>;
+  ): Effect.Effect<LspResult<PlainGoal>>;
   getTermGoal(
     filePath: string,
     line: number,
     column: number,
-  ): Promise<LspResult<PlainTermGoal>>;
+  ): Effect.Effect<LspResult<PlainTermGoal>>;
   getHoverInfo(
     filePath: string,
     line: number,
     column: number,
-  ): Promise<LspResult<LspHover>>;
-  fetchDiagnosticsForFile(file: string): Promise<FetchDiagnosticsResult>;
+  ): Effect.Effect<LspResult<LspHover>>;
+  fetchDiagnosticsForFile(
+    file: string,
+  ): Effect.Effect<FetchDiagnosticsResult, unknown>;
   /**
    * Move the host editor cursor to the first error in `diagnostics`, when the
    * host has an editor to move (VS Code). A host capability, not a query:
@@ -55,8 +68,10 @@ export interface LeanLanguageServices {
   navigateToFirstError?(
     filePath: string,
     diagnostics: LeanDiagnostic[],
-  ): Promise<void>;
-  executeProjectCommand(command: LeanProjectCommand): Promise<void>;
+  ): Effect.Effect<void, unknown>;
+  executeProjectCommand(
+    command: LeanProjectCommand,
+  ): Effect.Effect<void, unknown>;
   /**
    * Stop the per-worktree servers attributed to an agent run that ended.
    * A host capability like {@link navigateToFirstError}: the direct
@@ -65,6 +80,10 @@ export interface LeanLanguageServices {
    * omits it because the Lean 4 extension owns that server's lifetime.
    * Servers still leased by an in-flight request (e.g. a shared worktree's
    * other run) are marked for disposal when their final lease ends.
+   *
+   * Stays Promise-typed until runtime lane D converts its only caller, the
+   * `onRunEnd` hook of the agent run lifecycle (`executeAgent.ts`) — running
+   * an Effect there today would put a below-boundary run in a lane-D file.
    */
   stopSessionsForRun?(runId: ExecutionId): Promise<void>;
 }

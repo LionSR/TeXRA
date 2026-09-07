@@ -1,5 +1,5 @@
 {
   "imports": {
-    "standardwebhooks": "npm:standardwebhooks@1.0.0"
+    "standardwebhooks": "npm:standardwebhooks@1.1.1"
   }
 }

@@ -326,7 +326,7 @@ export interface ChildRunLoopParams<TTurn> {
    * (`childRunBudgetFor`). Set by the detached native/workflow launch path;
    * agent-CLI callers omit it — their children are external processes on the
    * user's own subscription, outside both the cost contract and the budget
-   * (see `docs/proposals/2026-08-15-child-run-concurrency-budget.md`).
+   * (see `.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`).
    */
   readonly budgeted?: boolean;
   /**
@@ -896,7 +896,7 @@ export function startChildRunLoop<TTurn>(
   let pendingDelivery: PendingChildDelivery | undefined;
   // One slot per live turn: acquired here — the single boundary that drives
   // every detached native child turn — and nowhere above or below (design:
-  // docs/proposals/2026-08-15-child-run-concurrency-budget.md).
+  // .agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md).
   const budget = params.budgeted ? childRunBudgetFor(runSession) : undefined;
   const gateTurn = (
     base: (signal: AbortSignal) => Promise<TTurn>,

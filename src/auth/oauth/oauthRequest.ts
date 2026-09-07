@@ -4,13 +4,16 @@
  *
  * One request is one fiber: headers and body are read under one
  * `Effect.timeoutOrElse`, and fiber interruption reaches `fetch` and the body
- * stream through the `AbortSignal` that `Effect.tryPromise` hands the request.
+ * stream through the request scope owned by `HttpClient.withScope`.
  * Expected transport failures are yieldable tagged errors carrying the
  * user-facing message; the flows above pass them up unchanged and the hosts
  * render `message` at their run edge.
  */
+// Third-party imports
 import { Data, Duration, Effect } from 'effect';
+import { HttpBody, HttpClient, HttpClientRequest } from 'effect/unstable/http';
 
+// Local imports
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { z } from 'zod';
@@ -77,28 +80,30 @@ interface OAuthPostOptions {
 export const postOAuth = Effect.fn('oauthRequest.postOAuth')(function* (
   options: OAuthPostOptions,
 ) {
-  return yield* Effect.tryPromise({
-    // The body is read on the same signal so the deadline and interruption
-    // bound a server that sends headers and then stalls.
-    try: async (signal): Promise<OAuthResponse> => {
-      const response = await fetch(options.url, {
-        method: 'POST',
-        headers: options.headers,
-        body: options.body,
-        signal,
-      });
-      return {
-        status: response.status,
-        ok: response.ok,
-        text: await response.text(),
-      };
-    },
-    catch: (cause) =>
-      new OAuthNetworkError({
+  const client = yield* HttpClient.HttpClient;
+  return yield* Effect.gen(function* () {
+    const response = yield* HttpClient.withScope(client).execute(
+      HttpClientRequest.post(options.url, {
+        body: HttpBody.raw(options.body),
+      }).pipe(HttpClientRequest.setHeaders(options.headers)),
+    );
+    const text = yield* response.text;
+    return {
+      status: response.status,
+      ok: response.status >= 200 && response.status < 300,
+      text,
+    } satisfies OAuthResponse;
+  }).pipe(
+    Effect.scoped,
+    Effect.mapError((error) => {
+      // Keep the underlying transport error only: HTTP error wrappers also
+      // retain the request body, which contains OAuth credentials.
+      const cause = error.reason.cause;
+      return new OAuthNetworkError({
         message: `${options.networkErrorMessage}: ${toErrorMessage(cause)}`,
         cause,
-      }),
-  }).pipe(
+      });
+    }),
     Effect.timeoutOrElse({
       duration: Duration.millis(options.timeoutMs),
       orElse: () =>

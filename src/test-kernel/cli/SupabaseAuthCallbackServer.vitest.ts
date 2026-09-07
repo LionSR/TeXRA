@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 import { type SupabaseSessionCoordinator } from '@auth/SupabaseSession';
 import {
@@ -14,7 +15,7 @@ function stubCoordinator(
 ): SupabaseSessionCoordinator {
   return {
     createSessionFromCallback: vi.fn(),
-    storeSession: vi.fn(),
+    storeSession: vi.fn(() => Effect.void),
     ...overrides,
   } as unknown as SupabaseSessionCoordinator;
 }
@@ -63,11 +64,13 @@ describe('CLI Supabase authentication callback server', () => {
 
   it('does not store a callback that finishes after cancellation', async () => {
     let finishCallback!: (result: unknown) => void;
-    const createSessionFromCallback = vi.fn(
-      () =>
-        new Promise((resolve) => {
-          finishCallback = resolve;
-        }),
+    const createSessionFromCallback = vi.fn(() =>
+      Effect.promise(
+        () =>
+          new Promise((resolve) => {
+            finishCallback = resolve;
+          }),
+      ),
     );
     const storeSession = vi.fn();
     const coordinator = stubCoordinator({
@@ -101,16 +104,18 @@ describe('CLI Supabase authentication callback server', () => {
   it('finishes a callback whose storage commit began before cancellation', async () => {
     let finishStorage!: () => void;
     const session = { account: { label: 'person@example.edu' } };
-    const storeSession = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finishStorage = resolve;
-        }),
+    const storeSession = vi.fn(() =>
+      Effect.promise(
+        () =>
+          new Promise<void>((resolve) => {
+            finishStorage = resolve;
+          }),
+      ),
     );
     const coordinator = stubCoordinator({
       createSessionFromCallback: vi
         .fn()
-        .mockResolvedValue({ success: true, session }),
+        .mockReturnValue(Effect.succeed({ success: true, session })),
       storeSession,
     });
     const server = await startLoopbackCallbackServer(coordinator);

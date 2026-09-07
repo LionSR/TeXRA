@@ -1,5 +1,4 @@
-import { Mutex } from 'async-mutex';
-import { Effect, Fiber, Stream } from 'effect';
+import { Stream } from 'effect';
 
 import {
   getRunContextSession,
@@ -9,7 +8,6 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { effectRuntime } from '@platform/processRuntime';
 import { tryWorkspaceRoots, workspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
@@ -22,20 +20,22 @@ import {
   type GoalStatus,
   type StreamTabId,
 } from '@shared/schemas';
-import { filterNotNull, unique, hexId12 } from '@utils/core';
+import { filterNotNull, unique, hexId12, KeyedMutex } from '@utils/core';
 
 const STREAM_KEY_PREFIX = 'goals:byStream:';
 const INDEX_KEY = 'goals:index';
 // Stream index growth is user-driven (one entry per stream that ever had
 // a Goal). `forget()` removes entries; callers that delete a stream
 // without calling `forget()` leave dangling entries until next manual cleanup.
-const indexMutex = new Mutex();
+// Single logical resource (the index), so KeyedMutex (utils/core/keyedMutex.ts)
+// is used with one constant key rather than a bare Mutex — the same
+// primitive most other module-level locks in the codebase already use.
+const indexMutex = new KeyedMutex<'index'>();
 
-interface GoalStateChange {
+/** One goal mutation as observed on a session's event plane. */
+export interface GoalStateChange {
   readonly streamId: StreamTabId;
 }
-
-type GoalStateChangeListener = (change: GoalStateChange) => void;
 
 function streamKey(streamId: StreamTabId): string {
   return `${STREAM_KEY_PREFIX}${streamId}`;
@@ -127,7 +127,7 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
 async function mutateIndex(
   mutate: (index: StreamTabId[]) => StreamTabId[],
 ): Promise<void> {
-  await indexMutex.runExclusive(async () => {
+  await indexMutex.runExclusive('index', async () => {
     const state = workspaceRoots().workspaceState;
     const index = readIndex();
     const next = mutate(index);
@@ -176,26 +176,22 @@ function requireNonEmpty(value: string, label: string): string {
 }
 
 /**
- * Subscribe to goal mutations in one explicitly-owned session, from now on.
- * Goal state is session-scoped: consumers must pass the session they render,
- * rather than listening on a process-wide compatibility event.
+ * Goal mutations in one explicitly-owned session, from now on. Goal state is
+ * session-scoped: consumers must pass the session they render, rather than
+ * listening on a process-wide compatibility event. The stream is the whole
+ * surface — the subscriber's host forks it at its own R1 boundary and
+ * interrupts that fork when the view it renders closes, so this module owns
+ * no fiber and no runtime.
  */
-export function subscribeGoalStateChanges(
+export function goalStateChanges(
   session: Pick<SessionHandle, 'events' | 'now'>,
-  listener: GoalStateChangeListener,
-): () => void {
-  const fiber = effectRuntime().runFork(
-    Stream.runForEach(session.events.all(session.now()), (event) =>
-      Effect.sync(() => {
-        if (event.type === 'goalStateChanged') {
-          listener({ streamId: aggregateTarget(event.aggregateId).id });
-        }
-      }),
-    ),
+): Stream.Stream<GoalStateChange> {
+  return session.events.all(session.now()).pipe(
+    Stream.filter((event) => event.type === 'goalStateChanged'),
+    Stream.map((event) => ({
+      streamId: aggregateTarget(event.aggregateId).id,
+    })),
   );
-  return () => {
-    effectRuntime().runFork(Fiber.interrupt(fiber));
-  };
 }
 
 export const GoalStore = Object.freeze({

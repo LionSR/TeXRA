@@ -1,8 +1,10 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
+import { Effect } from 'effect';
 import { describe, it, afterEach, expect, vi } from 'vitest';
 
 // Local imports - auth
+import { AuthPortError } from '@auth/authProgram';
 import { SUPABASE_GOTRUE_STORAGE_KEY } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
@@ -22,10 +24,10 @@ function createTokenProvider(
   overrides: Partial<AuthTokenProvider> = {},
 ): AuthTokenProvider {
   return {
-    whenReady: async () => {},
-    ensureFreshToken: async () => 'access-token',
-    getStoredSessionState: async () => 'none',
-    getStoredAccountLabel: async () => null,
+    whenReady: () => Effect.void,
+    ensureFreshToken: () => Effect.succeed('access-token'),
+    getStoredSessionState: () => Effect.succeed('none'),
+    getStoredAccountLabel: () => Effect.succeed(null),
     getLastRefreshFailure: () => null,
     ...overrides,
   };
@@ -40,7 +42,7 @@ describe('SupabaseClient', () => {
   it('waits for token provider readiness', async () => {
     const readiness = createDeferred();
     const provider = createTokenProvider({
-      whenReady: () => readiness.promise,
+      whenReady: () => Effect.promise(() => readiness.promise),
     });
 
     initializeSupabase(new FakeSecrets());
@@ -62,9 +64,10 @@ describe('SupabaseClient', () => {
 
   it('reports not ready when token provider readiness fails', async () => {
     const provider = createTokenProvider({
-      whenReady: async () => {
-        throw new Error('host auth unavailable');
-      },
+      whenReady: () =>
+        Effect.fail(
+          new AuthPortError({ cause: new Error('host auth unavailable') }),
+        ),
     });
 
     initializeSupabase(new FakeSecrets());
@@ -80,9 +83,12 @@ describe('SupabaseClient', () => {
   it('warns and reports no label when the stored label read throws', async () => {
     SupabaseClient.setAuthProvider(
       createTokenProvider({
-        getStoredAccountLabel: async () => {
-          throw new Error('secret storage unavailable');
-        },
+        getStoredAccountLabel: () =>
+          Effect.fail(
+            new AuthPortError({
+              cause: new Error('secret storage unavailable'),
+            }),
+          ),
       }),
     );
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});

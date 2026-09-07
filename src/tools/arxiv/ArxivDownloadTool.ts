@@ -1,12 +1,14 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { ArxivProcessor } from '@latex/arxivProcessor';
+import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
+import { effectRuntime } from '@platform/processRuntime';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
-import { wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
@@ -54,47 +56,65 @@ const ArxivDownloadInputSchema = z.strictObject({
 
 export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;
 
+const download = Effect.fn('ArxivDownloadTool.execute')(function* (
+  input: ArxivDownloadInput,
+) {
+  const arxivId = input.id.trim();
+  const validationError = ArxivProcessor.validateId(arxivId);
+  if (validationError) {
+    return yield* Effect.fail(new ToolError(validationError));
+  }
+
+  const downloadResult = yield* ArxivProcessor.downloadSource(arxivId, {
+    autoIndent: input.autoIndent,
+    destination: input.destination,
+  }).pipe(
+    Effect.mapError(
+      (error: ArxivSourceError) =>
+        new ToolError(`Failed to download arXiv source: ${error.message}`, {
+          cause: error,
+        }),
+    ),
+  );
+
+  const relativePath = WorkspaceFS.relativePath(downloadResult.path) || '.';
+  const displayPath = toPosixPath(relativePath);
+
+  // A listing failure degrades to a note in the output, not a tool error:
+  // the download itself already succeeded.
+  const listingOutput = yield* Effect.tryPromise({
+    try: () => listExtractedEntries(downloadResult.path),
+    catch: (err) => err,
+  }).pipe(
+    Effect.catch((err) =>
+      Effect.succeed(`Failed to list directory: ${toErrorMessage(err)}`),
+    ),
+  );
+
+  const summary = downloadResult.alreadyExisted
+    ? `arXiv source already downloaded at ${displayPath}`
+    : `arXiv source downloaded to ${displayPath}`;
+  const output = [
+    summary,
+    '',
+    formatToolOutput(`Directory listing for ${displayPath}`, listingOutput),
+  ].join('\n');
+
+  return executed(output, summary);
+});
+
 export class ArxivDownloadTool extends defineTool({
   name: 'download_arxiv_source',
   description:
     'Download an arXiv paper source archive into the workspace and list the extracted files. Use "destination" to choose where files are placed: "references" (default) saves to References/{paper_id}, "root" saves directly to the workspace root. If the source was already downloaded, it skips re-downloading and indicates that the source already exists.',
   schema: ArxivDownloadInputSchema,
 }) {
-  protected async execute(input: ArxivDownloadInput): Promise<ToolResult> {
-    const arxivId = input.id.trim();
-    const validationError = ArxivProcessor.validateId(arxivId);
-    if (validationError) {
-      throw new ToolError(validationError);
-    }
-
-    const downloadResult = await wrapApiCall(
-      () =>
-        ArxivProcessor.downloadSource(arxivId, {
-          autoIndent: input.autoIndent,
-          destination: input.destination,
-        }),
-      'Failed to download arXiv source',
-    );
-
-    const relativePath = WorkspaceFS.relativePath(downloadResult.path) || '.';
-    const displayPath = toPosixPath(relativePath);
-
-    let listingOutput: string;
-    try {
-      listingOutput = await listExtractedEntries(downloadResult.path);
-    } catch (err) {
-      listingOutput = `Failed to list directory: ${toErrorMessage(err)}`;
-    }
-
-    const summary = downloadResult.alreadyExisted
-      ? `arXiv source already downloaded at ${displayPath}`
-      : `arXiv source downloaded to ${displayPath}`;
-    const output = [
-      summary,
-      '',
-      formatToolOutput(`Directory listing for ${displayPath}`, listingOutput),
-    ].join('\n');
-
-    return executed(output, summary);
+  protected execute(input: ArxivDownloadInput): Promise<ToolResult> {
+    // The owning agent run's cancellation enters here as interruption —
+    // without it, a cancelled run would wait out the download (and its
+    // retries) that only observe the internal deadline.
+    return effectRuntime().runPromise(download(input), {
+      signal: getCurrentToolCallContext()?.signal,
+    });
   }
 }

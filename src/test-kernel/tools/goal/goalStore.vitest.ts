@@ -1,5 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { Effect, Fiber, Stream } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -8,6 +9,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { StateStore } from '@platform/interfaces';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
@@ -15,10 +17,13 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
-import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
+import { GoalStore, goalStateChanges } from '@tools/goal';
 
 const STREAM_A = 'stream:forget-a' as StreamTabId;
 const STREAM_B = 'stream:forget-b' as StreamTabId;
@@ -100,15 +105,21 @@ function collectGoalChanges(session: SessionHandle): {
   detach: () => void;
 } {
   const seen: unknown[] = [];
-  const detach = subscribeGoalStateChanges(session, (change) => {
-    seen.push(change);
-  });
+  const fiber = effectRuntime().runFork(
+    Stream.runForEach(goalStateChanges(session), (change) =>
+      Effect.sync(() => {
+        seen.push(change);
+      }),
+    ),
+  );
   return {
     seen,
     clear: () => {
       seen.length = 0;
     },
-    detach,
+    detach: () => {
+      effectRuntime().runFork(Fiber.interrupt(fiber));
+    },
   };
 }
 
@@ -168,6 +179,8 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     const explicitSession = createTestSession({
       roots: paperRoots('explicit'),
     });
+    publishTestRunStart(runSession, STREAM_A);
+    publishTestRunStart(explicitSession, STREAM_A);
     const run = collectGoalChanges(runSession);
     const explicit = collectGoalChanges(explicitSession);
     const fallback = collectGoalChanges(defaultSession());
@@ -266,13 +279,15 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 });
 
-describe('subscribeGoalStateChanges', () => {
+describe('goalStateChanges', () => {
   setupPlatform();
 
   it('delivers only goal changes from the supplied session', async () => {
     // Two papers: a session's plane is its workspace root's.
     const sessionA = createTestSession({ roots: paperRoots('a') });
     const sessionB = createTestSession({ roots: paperRoots('b') });
+    publishTestRunStart(sessionA, 'same-session');
+    publishTestRunStart(sessionB, 'other-session');
     const { seen, detach } = collectGoalChanges(sessionA);
 
     try {
@@ -310,6 +325,7 @@ describe('subscribeGoalStateChanges', () => {
   it('routes start, status, and edit notifications through the current run session only', async () => {
     const runSession = createTestSession({ roots: paperRoots('run') });
     const otherSession = createTestSession({ roots: paperRoots('other') });
+    publishTestRunStart(runSession, SUBSCRIPTION_STREAM);
     const run = collectGoalChanges(runSession);
     const other = collectGoalChanges(otherSession);
     const fallback = collectGoalChanges(defaultSession());

@@ -9,6 +9,7 @@ import {
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 
 const CHANNEL = 'arXivCommands';
 const log = createLog(CHANNEL);
@@ -70,12 +71,14 @@ export async function downloadArXivSource(): Promise<void> {
           log.info('User cancelled the download');
         });
 
-        const downloadResult = await ArxivProcessor.downloadSource(arxivId, {
-          progressCallback: (message, increment) =>
-            progress.report({ message, increment }),
-          autoIndent,
-          destination,
-        });
+        const downloadResult = await effectRuntime().runPromise(
+          ArxivProcessor.downloadSource(arxivId, {
+            progressCallback: (message, increment) =>
+              progress.report({ message, increment }),
+            autoIndent,
+            destination,
+          }),
+        );
         return downloadResult.path;
       },
     );

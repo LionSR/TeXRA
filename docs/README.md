@@ -25,9 +25,10 @@ Git repository.
   the flow engine (`src/agent/node/index.ts`).
 - `dev/` contains development procedures, audits, release operations, and
   skill-authoring conventions.
-- `design/` contains dated UI and product design notes (`YYYY-MM-DD-` prefix,
-  same convention as `proposals/` and `prds/`).
-- `proposals/` and `prds/` contain dated plans and product requirements.
+- `design/` contains dated UI and product design notes (`YYYY-MM-DD-` prefix).
+- Dated PRDs, proposals, and design notes live under `.agents/docs/` as
+  `{lifecycle}/{class}/yyyy-mm-dd-topic.md`, outside this VitePress root so
+  they are not published. See `.agents/docs/README.md`.
 
 ## Hosted-service material
 

@@ -59,7 +59,8 @@ function foldTrace(trace: TraceDocument) {
       set: [{ id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 }],
     },
     ...frame.events,
-    { _tag: 'local', local: { self: [], heldBy: [], unreadable: [] } },
+    { _tag: 'local', local: { self: [], dead: [], unreadable: [] } },
+    { _tag: 'replay.complete', existence: frame.existence! },
   ]);
   return view.streams.get(trace.streamId);
 }
@@ -356,5 +357,19 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     // No terminal fact: an exported trace with no producer folds as an
     // interrupted run, never as a finished one.
     expect(foldTrace(trace)?.durableOutcome).toBeNull();
+  });
+
+  it('projects a process export instruction into the fold command', () => {
+    const streamId = 'bash@stream:process-trace' as StreamTabId;
+    const trace: TraceDocument = {
+      executionId: 'abc125' as ExecutionId,
+      streamId,
+      config: { name: 'bash', instruction: 'ls -la' },
+      meta: null,
+      entries: [],
+      snapshot: StreamSnapshotSchema.parse({ streamId }),
+    };
+
+    expect(foldTrace(trace)?.command).toBe('ls -la');
   });
 });

@@ -10,13 +10,14 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_CMD, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
+import {
+  LATEX_CONFIG_FIELD_TO_KEY,
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
-import type {
-  NonRegexReplacementCategory,
-  RegexReplacementCategory,
+import {
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
 } from '@shared/constants/replacementCategories';
 import {
   createDispatcher,
@@ -24,6 +25,7 @@ import {
 } from '@shared/utils/dispatcher';
 import {
   settingSchemaWithoutPrefault,
+  settingsViewSettingByKey,
   settingsViewSnapshotEntries,
   type SettingsViewSnapshot,
 } from './stateSettings';
@@ -623,23 +625,137 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
   settings: LatexSettingsStatusSchema,
 });
 
-/** Frontend field projection of the catalog-derived LaTeX snapshot. */
-export interface LatexConfigValues {
-  workflowAutoCompile?: boolean;
-  workflowAutoCompileTimeoutMs?: number;
-  workflowAutoOpenPdf?: boolean;
-  workflowRejectOnCompileFailure?: boolean;
-  latexdiffBetweenRounds?: boolean;
-  latexdiffTimeoutMs?: number;
-  latexdiffMathMarkup?: (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
-  latexdiffChangesOnly?: boolean;
-  latexFormatter?: (typeof LATEX_FORMATTER_VALUES)[number];
-  wrapCritiqueInAlign?: boolean;
-  enabledReplacements?: NonRegexReplacementCategory[];
-  enabledReplacementsRegex?: RegexReplacementCategory[];
-  customReplacementsRegex?: Record<string, string>;
-  customReplacements?: Record<string, string>;
+/**
+ * Whether `actual` and `expected` are the same schema kind, deeply enough to
+ * catch the failure a bare outer-constructor check misses: two `ZodArray`s
+ * wrapping *different* enums (e.g. `LATEX_CONFIG_FIELD_TO_KEY` accidentally
+ * pointing `enabledReplacements` at the regex-category key) both pass an
+ * outer check, but their `.element` enums have different option sets. Recurses
+ * through `ZodArray.element`; compares `ZodEnum.options` as sets; falls back
+ * to the outer-constructor check for every other kind (`ZodBoolean`,
+ * `ZodNumberFormat`, `ZodRecord`, …), where the catalog's own validation
+ * (bounds, value schema) is the only thing that can further distinguish rows.
+ */
+function sameCatalogSchemaKind(actual: unknown, expected: unknown): boolean {
+  if (
+    !(actual instanceof z.ZodType) ||
+    !(expected instanceof z.ZodType) ||
+    actual.constructor !== expected.constructor
+  ) {
+    return false;
+  }
+  if (actual instanceof z.ZodEnum && expected instanceof z.ZodEnum) {
+    const actualOptions = [...actual.options].sort();
+    const expectedOptions = [...expected.options].sort();
+    return (
+      actualOptions.length === expectedOptions.length &&
+      actualOptions.every((option, index) => option === expectedOptions[index])
+    );
+  }
+  if (actual instanceof z.ZodArray && expected instanceof z.ZodArray) {
+    return sameCatalogSchemaKind(actual.element, expected.element);
+  }
+  return true;
 }
+
+/**
+ * Reads `key`'s own schema out of the settings catalog (bounds, enum options,
+ * and all) rather than restating it, so `LatexConfigValuesSchema` below can
+ * never drift from the catalog's own validators the way a hand-duplicated
+ * schema could — a bound tightened on the catalog row reaches this projection
+ * for free. `expectedKind` is a throwaway schema of the same Zod subclass (and,
+ * for enums and arrays of them, the same option set) the catalog row is
+ * expected to carry; its type both drives `T`'s inference and is checked at
+ * runtime via {@link sameCatalogSchemaKind} against the schema actually found
+ * at `key`, so a catalog row that changes kind — or `LATEX_CONFIG_FIELD_TO_KEY`
+ * pointing a field at the wrong same-shaped row — fails loudly here instead of
+ * silently mistyping the projected field.
+ */
+function catalogField<T extends z.ZodTypeAny>(
+  key: string,
+  expectedKind: T,
+): z.ZodOptional<T> {
+  const entry = settingsViewSettingByKey(key);
+  if (!entry) {
+    throw new Error(`LATEX_CONFIG_FIELD_TO_KEY: no catalog entry for "${key}"`);
+  }
+  const schema = settingSchemaWithoutPrefault(entry);
+  if (!sameCatalogSchemaKind(schema, expectedKind)) {
+    throw new Error(
+      `LATEX_CONFIG_FIELD_TO_KEY: "${key}" catalog schema kind changed — expected ${expectedKind.constructor.name}, got ${(schema as z.ZodTypeAny | undefined)?.constructor?.name ?? typeof schema}`,
+    );
+  }
+  return (schema as T).optional();
+}
+
+/**
+ * Frontend field projection of the catalog-derived LaTeX snapshot. Every
+ * field is optional because `latexSlice` projects only the wire keys named in
+ * `LATEX_CONFIG_FIELD_TO_KEY`, not a fixed subset. The `satisfies` below is
+ * the field-set half of the sync this schema owns: it fails to compile if a
+ * field is added to (or removed from) `LATEX_CONFIG_FIELD_TO_KEY` without a
+ * matching line here, in either direction — excess and missing properties are
+ * both excess-property-checked against the map's own key set.
+ */
+export const LatexConfigValuesSchema = z.object({
+  workflowAutoCompile: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.workflowAutoCompile,
+    z.boolean(),
+  ),
+  workflowAutoCompileTimeoutMs: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.workflowAutoCompileTimeoutMs,
+    z.int(),
+  ),
+  workflowAutoOpenPdf: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.workflowAutoOpenPdf,
+    z.boolean(),
+  ),
+  workflowRejectOnCompileFailure: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.workflowRejectOnCompileFailure,
+    z.boolean(),
+  ),
+  latexdiffBetweenRounds: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.latexdiffBetweenRounds,
+    z.boolean(),
+  ),
+  latexdiffTimeoutMs: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.latexdiffTimeoutMs,
+    z.int(),
+  ),
+  latexdiffMathMarkup: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.latexdiffMathMarkup,
+    z.enum(LATEXDIFF_MATH_MARKUP_VALUES),
+  ),
+  latexdiffChangesOnly: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.latexdiffChangesOnly,
+    z.boolean(),
+  ),
+  latexFormatter: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.latexFormatter,
+    z.enum(LATEX_FORMATTER_VALUES),
+  ),
+  wrapCritiqueInAlign: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.wrapCritiqueInAlign,
+    z.boolean(),
+  ),
+  enabledReplacements: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.enabledReplacements,
+    z.array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES)),
+  ),
+  enabledReplacementsRegex: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.enabledReplacementsRegex,
+    z.array(z.enum(REGEX_REPLACEMENT_CATEGORIES)),
+  ),
+  customReplacementsRegex: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.customReplacementsRegex,
+    z.record(z.string(), z.string()),
+  ),
+  customReplacements: catalogField(
+    LATEX_CONFIG_FIELD_TO_KEY.customReplacements,
+    z.record(z.string(), z.string()),
+  ),
+} satisfies Record<keyof typeof LATEX_CONFIG_FIELD_TO_KEY, z.ZodTypeAny>);
+export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
 
 /** Outbound: backend → frontend current LaTeX/compile/diff config values. */
 const UpdateLatexConfigValuesMessageSchema = snapshotMessage('latex');

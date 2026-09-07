@@ -6,27 +6,8 @@ import {
   NormalizedUsageSchema,
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
-import { TokenCountSchema } from '@shared/schemas';
+import { RunUsageTotalsSchema } from '@shared/schemas';
 
-/**
- * Schema for run usage totals. Internal only.
- *
- * `totalCost` is the running sum of `NormalizedUsage.cost`, which is already
- * calculated per provider (including prompt-cache discounts or creation
- * premiums). No extra adjustments are applied here.
- */
-const RunUsageTotalsSchema = z.object({
-  firstInputTokens: TokenCountSchema.prefault(0),
-  totalInputTokens: TokenCountSchema.prefault(0),
-  totalOutputTokens: TokenCountSchema.prefault(0),
-  totalCost: z.number().nonnegative().prefault(0),
-  totalCacheReadInputTokens: TokenCountSchema.prefault(0),
-  totalCacheMissInputTokens: TokenCountSchema.prefault(0),
-  totalCacheCreationInputTokens: TokenCountSchema.prefault(0),
-  totalReasoningTokens: TokenCountSchema.prefault(0),
-  totalToolUsePromptTokens: TokenCountSchema.prefault(0),
-  totalServerToolRequests: TokenCountSchema.prefault(0),
-});
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
 /**

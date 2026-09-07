@@ -143,6 +143,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       'progressView',
     );
 
+    // Install the recipient before host requests publish the recorder's state.
+    this.bridge = new SessionBridge({
+      session,
+      handleHostRequest: (request, port) => hostRequests.handle(request, port),
+      onPortClosed: (port) => hostRequests.closePort(port),
+    });
     const roots = workspaceRoots();
     this.snapshot = createHostSnapshotSource({
       paper: paperDisplayOf(session.roots.storage, roots.workspace),
@@ -184,6 +190,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       onError: (error) => {
         this.logger.error('Host snapshot refresh failed', { data: error });
       },
+      publish: (snapshot) => this.bridge.setHost(snapshot),
     });
     const storageRoot = context.storageUri ?? context.globalStorageUri;
     // The tool-edit preview: staged copies of the original and proposed
@@ -232,19 +239,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
     });
     this.disposables.push({ dispose: () => hostRequests.dispose() });
-    this.bridge = new SessionBridge({
-      session,
-      handleHostRequest: (request, port) => hostRequests.handle(request, port),
-      onPortClosed: hostRequests.closePort,
-    });
-    // After the bridge: creating the host requests already published a
-    // snapshot (the recorder's first observation), and `initialize` refreshes
-    // the full one once the provider stands.
-    this.disposables.push({
-      dispose: this.snapshot.onChange((snapshot) =>
-        this.bridge.setHost(snapshot),
-      ),
-    });
 
     // Attached for the window's life: the runtime parks a request until a
     // host is attached, so the presentation must be there before the first
@@ -296,7 +290,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public async initialize(): Promise<void> {
-    await this.snapshot.refresh();
+    await effectRuntime().runPromise(this.snapshot.refresh);
     await this.refreshOnboardingFunnel();
     this.logger.debug('ProgressViewProvider initialized');
   }
@@ -310,7 +304,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         this.snapshot.refreshWorkspaceRoots();
-        void this.snapshot.refreshFiles();
+        void effectRuntime().runPromise(this.snapshot.refreshFiles);
       }),
     );
     // Watch exactly the categories the launcher file lists are built from
@@ -322,7 +316,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const filePattern =
       extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
     const fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
-    const refreshFiles = () => void this.snapshot.refreshFiles();
+    const refreshFiles = () =>
+      void effectRuntime().runPromise(this.snapshot.refreshFiles);
     fileWatcher.onDidCreate(refreshFiles);
     fileWatcher.onDidDelete(refreshFiles);
     this.disposables.push(
@@ -335,8 +330,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (isAgentCatalogAuthRefreshDeferred()) {
         runAfterAgentCatalogAuthRefresh(async () => {
           await Promise.all([
-            this.snapshot.refreshCatalogs(),
-            this.snapshot.refreshAuth(),
+            effectRuntime().runPromise(this.snapshot.refreshCatalogs),
+            effectRuntime().runPromise(this.snapshot.refreshAuth),
             this.refreshOnboardingFunnel(),
           ]);
         });
@@ -348,11 +343,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /** Every credential-dependent surface: catalogs, sign-in, the funnel. */
   public async refreshAfterCredentialChange(): Promise<void> {
-    await refresh();
+    await effectRuntime().runPromise(refresh());
     await Promise.all([
-      this.snapshot.refreshCatalogs(),
-      this.snapshot.refreshAuth(),
-      this.snapshot.refreshHostBanners(),
+      effectRuntime().runPromise(this.snapshot.refreshCatalogs),
+      effectRuntime().runPromise(this.snapshot.refreshAuth),
+      effectRuntime().runPromise(this.snapshot.refreshHostBanners),
       this.refreshOnboardingFunnel(),
     ]);
   }
@@ -364,8 +359,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       selectedToolUseAgent?: string;
     } = {},
   ): Promise<void> {
-    if (!options.agentCatalogAlreadyFresh) await refresh();
-    await this.snapshot.refreshCatalogs();
+    if (!options.agentCatalogAlreadyFresh) {
+      await effectRuntime().runPromise(refresh());
+    }
+    await effectRuntime().runPromise(this.snapshot.refreshCatalogs);
     if (options.selectedToolUseAgent) {
       this.surfaceAction({
         kind: 'launch',
@@ -376,7 +373,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /** The API-key banner after a key changed in Settings. */
   public refreshHostBanners(): Promise<void> {
-    return this.snapshot.refreshHostBanners();
+    return effectRuntime().runPromise(this.snapshot.refreshHostBanners);
   }
 
   /** A run loaded an agent from the custom directory. */
@@ -395,7 +392,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * auto-starts setup; the user launches it from the setup card.
    */
   public refreshOnboardingFunnel(): Promise<void> {
-    return this.onboardingFunnelRefreshQueue.run();
+    return effectRuntime().runPromise(this.onboardingFunnelRefreshQueue.run());
   }
 
   private async refreshOnboardingFunnelSerially(): Promise<void> {

@@ -1,6 +1,9 @@
-import { Effect } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+// Third-party imports
+import { it } from '@effect/vitest';
+import { Cause, Effect, Exit } from 'effect';
+import { describe, expect, vi } from 'vitest';
 
+// Local imports
 import {
   CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
@@ -21,6 +24,10 @@ const item: MemoryViewItem = {
   modifiedBy: 'researcher',
   pinned: true,
 };
+
+/** The squashed failure an exit carries, or undefined when it succeeded. */
+const failureOf = (exit: Exit.Exit<unknown, unknown>): unknown =>
+  Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
 
 describe('CLI memory formatting', () => {
   it('formats memory rows with stable user-facing fields', () => {
@@ -59,28 +66,41 @@ describe('CLI memory formatting', () => {
     expect(list).toContain('... 1 more');
   });
 
-  it.each([
+  it.effect.each([
     '/memories/project.md',
     'memories/project.md',
     'memories\\project.md',
     'project.md',
-  ])('accepts the path form %s', async (input) => {
-    await expect(
-      Effect.runPromise(loadCliMemoryDetail(input)),
-    ).resolves.toMatchObject({
-      path: '/memories/project.md',
-    });
-  });
+  ])('accepts the path form %s', (input) =>
+    Effect.gen(function* () {
+      const detail = yield* loadCliMemoryDetail(input);
+      expect(detail).toMatchObject({
+        path: '/memories/project.md',
+      });
+    }),
+  );
 
-  it('rejects absolute paths outside the memory display root', async () => {
-    await expect(
-      Effect.runPromise(loadCliMemoryDetail('/memoriesExtra')),
-    ).rejects.toThrow('Invalid memory path');
-  });
+  it.effect('rejects absolute paths outside the memory display root', () =>
+    Effect.gen(function* () {
+      const error = failureOf(
+        yield* Effect.exit(loadCliMemoryDetail('/memoriesExtra')),
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain('Invalid memory path');
+    }),
+  );
 
-  it('reports the original display path when a memory path escapes the root', async () => {
-    await expect(
-      Effect.runPromise(loadCliMemoryDetail('/memories/../outside.md')),
-    ).rejects.toThrow('Invalid memory path: /memories/../outside.md');
-  });
+  it.effect(
+    'reports the original display path when a memory path escapes the root',
+    () =>
+      Effect.gen(function* () {
+        const error = failureOf(
+          yield* Effect.exit(loadCliMemoryDetail('/memories/../outside.md')),
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toContain(
+          'Invalid memory path: /memories/../outside.md',
+        );
+      }),
+  );
 });

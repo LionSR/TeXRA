@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 
 import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
+import { hostPort } from '@common/hostPort';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
@@ -157,22 +158,39 @@ export async function initializeElectronPlatform(
   // carries an undefined host/version, so a queue shorter than one batch is
   // lost at quit — including plan accounting. `dispose()` drains it, from the
   // same BEFORE phase the other two hosts use.
-  UsageLogService.initialize({}, app.getVersion(), 'desktop');
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
+  await effectRuntime().runPromise(
+    UsageLogService.initialize(
+      effectRuntime().scope,
+      {},
+      app.getVersion(),
+      'desktop',
+    ),
+  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    effectRuntime().runPromise(UsageLogService.dispose()),
+  );
 
   // Reconcile the persisted enabled-models list against the current curated
   // defaults, as the extension and CLI hosts do at startup. Preferred defaults
   // reconcile when MODEL_LIST_VERSION changes; retired entries and stale
   // Copilot route preferences are swept on every startup. Runs here so it is
   // upstream of the settings view's first model-list paint.
-  try {
-    const { messages } = await refreshModelListAndLog(globalStateStore);
-    for (const message of messages) console.info(`[desktop] ${message}`);
-  } catch (error) {
-    console.error(
-      `[desktop] Failed to refresh model list: ${toErrorMessage(error)}`,
-    );
-  }
+  await effectRuntime().runPromise(
+    hostPort(() => refreshModelListAndLog(globalStateStore)).pipe(
+      Effect.tap(({ messages }) =>
+        Effect.sync(() => {
+          for (const message of messages) console.info(`[desktop] ${message}`);
+        }),
+      ),
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          console.error(
+            `[desktop] Failed to refresh model list: ${toErrorMessage(error)}`,
+          );
+        }),
+      ),
+    ),
+  );
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected. Mirrors the

@@ -1,7 +1,7 @@
 import { cp, readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import pMap from 'p-map';
+import { Effect } from 'effect';
 
 import {
   checkpointExists,
@@ -19,6 +19,7 @@ import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { createSessionStores } from '@controllers/session/createSessionStores';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   ExecutionIdSchema,
   HISTORY_RUN_STATUS,
@@ -162,10 +163,12 @@ export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
   // A row's resumability comes from the checkpoint `stat` the listing already
   // did; only a failed workflow row still reads its persisted state. That read
   // is bounded here so a history full of failed workflow runs cannot open one
-  // file handle burst per run. `pMap` preserves input order.
-  return pMap(entries.filter(isUserVisibleExecution), toCliHistoryEntry, {
-    concurrency: HISTORY_ENTRY_CONCURRENCY,
-  });
+  // file handle burst per run. `Effect.forEach` preserves input order.
+  return effectRuntime().runPromise(
+    Effect.forEach(entries.filter(isUserVisibleExecution), toCliHistoryEntry, {
+      concurrency: HISTORY_ENTRY_CONCURRENCY,
+    }),
+  );
 }
 
 export async function readCliHistoryDetails(
@@ -320,14 +323,22 @@ export async function readCliHistoryStandaloneTemplate(
     TRACE_VIEWER_DIR_NAME,
     'index.html',
   );
-  try {
-    return await readFile(templatePath, 'utf8');
-  } catch (error) {
-    if (isFileNotFoundError(error) || isNotADirectoryError(error)) return null;
-    throw new CliUsageError(
-      `history export: cannot read ${templatePath}: ${toErrorMessage(error)}`,
-    );
-  }
+  return effectRuntime().runPromise(
+    Effect.tryPromise({
+      try: () => readFile(templatePath, 'utf8'),
+      catch: (cause) => cause,
+    }).pipe(
+      Effect.catch((error) =>
+        isFileNotFoundError(error) || isNotADirectoryError(error)
+          ? Effect.succeed(null)
+          : Effect.fail(
+              new CliUsageError(
+                `history export: cannot read ${templatePath}: ${toErrorMessage(error)}`,
+              ),
+            ),
+      ),
+    ),
+  );
 }
 
 /**
@@ -358,22 +369,32 @@ export async function stageCliHistoryTraceViewerAssets(params: {
     params.resourcesPath,
     TRACE_VIEWER_SHARED_DIR_NAME,
   );
-  let sourceExists: boolean;
-  try {
-    sourceExists = (await stat(assetsSrc)).isDirectory();
-  } catch (error) {
-    if (!isFileNotFoundError(error) && !isNotADirectoryError(error)) {
-      throw new CliUsageError(
-        `history export: cannot read ${assetsSrc}: ${toErrorMessage(error)}`,
+  return effectRuntime().runPromise(
+    Effect.gen(function* () {
+      const sourceExists = yield* Effect.tryPromise({
+        try: async () => (await stat(assetsSrc)).isDirectory(),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.catch((error) =>
+          isFileNotFoundError(error) || isNotADirectoryError(error)
+            ? Effect.succeed(false)
+            : Effect.fail(
+                new CliUsageError(
+                  `history export: cannot read ${assetsSrc}: ${toErrorMessage(error)}`,
+                ),
+              ),
+        ),
       );
-    }
-    sourceExists = false;
-  }
-  // A plain file where the bundle should be is also "this install lacks it".
-  if (!sourceExists) return 'missing';
+      // A plain file where the bundle should be is also "this install lacks it".
+      if (!sourceExists) return 'missing' as const;
 
-  await cp(assetsSrc, params.destDir, { recursive: true });
-  return 'staged';
+      yield* Effect.tryPromise({
+        try: () => cp(assetsSrc, params.destDir, { recursive: true }),
+        catch: (cause) => cause as Error,
+      });
+      return 'staged' as const;
+    }),
+  );
 }
 
 export async function deleteCliHistory(options: {
@@ -546,18 +567,22 @@ export function formatCliHistoryDetailsText(
   return lines.join('\n');
 }
 
-async function toCliHistoryEntry(
+const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
   entry: AgentExecutionListingEntry,
-): Promise<CliHistoryEntry> {
+) {
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const resumable = await isCliRunResumable({
-    id: entry.id,
-    checkpointPresent: entry.checkpointPresent,
-    streamId: entry.streamId,
-    agentCategory: config.agentCategory,
-    outcome: entry.outcome,
+  const resumable = yield* Effect.tryPromise({
+    try: () =>
+      isCliRunResumable({
+        id: entry.id,
+        checkpointPresent: entry.checkpointPresent,
+        streamId: entry.streamId,
+        agentCategory: config.agentCategory,
+        outcome: entry.outcome,
+      }),
+    catch: (cause) => cause as Error,
   });
   return {
     id: entry.id,
@@ -575,7 +600,7 @@ async function toCliHistoryEntry(
     teamPresetId: teamPresetId(config),
     parentExecutionId: entry.parentExecutionId,
   };
-}
+});
 
 function teamPresetId(config: AgentConfig | null): string | undefined {
   return config?.cli?.multiAgentPresetId?.trim() || undefined;

@@ -13,7 +13,7 @@ import {
 } from 'electron';
 import PQueue from 'p-queue';
 
-import { SubscriptionRef } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 import { runInSession } from '@agent/runtime';
 import {
@@ -24,6 +24,7 @@ import {
   refresh,
 } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { hostPort } from '@common/hostPort';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -47,6 +48,7 @@ import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { DisposableStore } from '@platform/disposable';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   INSTRUCTION_ACTION,
   type AgentSource,
@@ -528,7 +530,7 @@ function createWindow(options: {
   const refreshDesktopAuthSurfaces = async () => {
     await Promise.all(
       [...paperBindings.values()].map((binding) =>
-        binding.snapshot.refreshAuth(),
+        effectRuntime().runPromise(binding.snapshot.refreshAuth),
       ),
     );
     await settingsIpcRef.current?.refreshAuthDependentData({
@@ -735,6 +737,13 @@ function createWindow(options: {
       workspacePath: paper.root,
       showOpenFileDialog: openFileDialog,
     });
+    // Install the recipient before host requests publish the recorder's state.
+    const bridge = new SessionBridge({
+      session: paper.session,
+      handleHostRequest: (request, portId) =>
+        hostRequests.handle(request, portId),
+      onPortClosed: (portId) => hostRequests.closePort(portId),
+    });
     const snapshot = createHostSnapshotSource({
       paper: paperDisplayOf(paper.key, paper.root),
       globalState: platform().globalState,
@@ -742,6 +751,7 @@ function createWindow(options: {
       readRecentCommits: () => recentCommitsOf(paper.root),
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
       onError: reportBackgroundError,
+      publish: (next) => bridge.setHost(next),
     });
     const funnel = onboardingIpcRef.current?.funnelState();
     if (funnel) snapshot.setOnboarding(funnel);
@@ -784,23 +794,13 @@ function createWindow(options: {
       },
       logger: console,
     });
-    // The paper's bridge and this window's port on it: the framer cuts
-    // frames from the paper's session graph, and the host snapshot rides
-    // them (PRD 8.1).
-    const bridge = new SessionBridge({
-      session: paper.session,
-      handleHostRequest: (request, portId) =>
-        hostRequests.handle(request, portId),
-      onPortClosed: hostRequests.closePort,
-    });
-    const detachSnapshot = snapshot.onChange((next) => bridge.setHost(next));
     const port = bridge.attach({
       id: `window:${window.id}`,
       send: (message) => {
         postToRendererIfAlive(message);
       },
     });
-    void snapshot.refresh();
+    void effectRuntime().runPromise(snapshot.refresh);
     return {
       paper,
       bridge,
@@ -812,7 +812,6 @@ function createWindow(options: {
       dispose() {
         workspace.disposeRendererResources();
         workspace.dispose();
-        detachSnapshot();
         bridge.dispose();
         hostRequests.dispose();
         execution.dispose();
@@ -858,7 +857,7 @@ function createWindow(options: {
     await Promise.all(
       [...paperBindings.values()].map((binding) =>
         runInSession(binding.paper.session, () =>
-          binding.snapshot.refreshCatalogs(),
+          effectRuntime().runPromise(binding.snapshot.refreshCatalogs),
         ),
       ),
     );
@@ -1182,59 +1181,82 @@ function createWindow(options: {
       // later "Run Setup" click can retry.
       kickoffSetup: async () => {
         const setupSession = activePaper().session;
-        try {
-          // The paper the user started setup in, taken before the first await:
-          // the run and its presentation belong to it even when the window
-          // moves to another paper while the model resolves and agents load.
-          const binding = activeBinding();
-          if (!binding) {
-            throw new Error('Open a folder before running setup.');
-          }
-          const { buildDesktopSetupExecuteMessage } =
-            await import('@controllers/onboarding/setupLaunch');
-          const message = await buildDesktopSetupExecuteMessage();
-          if (!message) {
-            throw new Error(
-              'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
-            );
-          }
-          // Idempotent: returns the in-flight/initialized registry so a kickoff
-          // racing the startup `loadAgents()` cannot hit "Could not find agent:
-          // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-          await loadAgents();
-          await runInSession(binding.paper.session, async () =>
-            binding.execution.runValidated(
-              await prepareMainViewExecutionLaunch(message, agentExecutionHost),
+        await effectRuntime().runPromise(
+          Effect.tryPromise({
+            try: async () => {
+              // The paper the user started setup in, taken before the first await:
+              // the run and its presentation belong to it even when the window
+              // moves to another paper while the model resolves and agents load.
+              const binding = activeBinding();
+              if (!binding) {
+                throw new Error('Open a folder before running setup.');
+              }
+              const { buildDesktopSetupExecuteMessage } =
+                await import('@controllers/onboarding/setupLaunch');
+              const message = await buildDesktopSetupExecuteMessage();
+              if (!message) {
+                throw new Error(
+                  'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
+                );
+              }
+              // Idempotent: joins the in-flight/initialized registry so a kickoff
+              // racing the startup `loadAgents()` cannot hit "Could not find agent:
+              // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
+              await effectRuntime().runPromise(loadAgents());
+              await runInSession(binding.paper.session, async () =>
+                binding.execution.runValidated(
+                  await effectRuntime().runPromise(
+                    prepareMainViewExecutionLaunch(message, agentExecutionHost),
+                  ),
+                ),
+              );
+            },
+            catch: (error) => error,
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.gen(function* () {
+                if (error instanceof Cancelled) return;
+                // Setup continues after its initiating request has completed.
+                const primaryError = primaryAgentError(error);
+                const presentation = agentErrorPresentation({
+                  kind: classifyAgentError(primaryError),
+                  message:
+                    primaryError instanceof Rejected
+                      ? primaryError.reason
+                      : toErrorMessage(primaryError),
+                });
+                if (presentation?.type === 'instruction') {
+                  yield* Effect.tryPromise({
+                    try: () =>
+                      Promise.resolve(
+                        setupSession.interactions.emit(
+                          'requestShowInstruction',
+                          presentation.payload,
+                          { replayWhenAttached: true },
+                        ),
+                      ),
+                    catch: (emitError) => emitError,
+                  });
+                } else if (presentation?.type === 'error') {
+                  yield* Effect.tryPromise({
+                    try: () =>
+                      Promise.resolve(
+                        setupSession.interactions.emit(
+                          'requestShowError',
+                          presentation.payload,
+                          {
+                            replayWhenAttached: true,
+                          },
+                        ),
+                      ),
+                    catch: (emitError) => emitError,
+                  });
+                }
+                return yield* Effect.fail(error);
+              }),
             ),
-          );
-        } catch (error) {
-          if (error instanceof Cancelled) return;
-          // Setup continues after its initiating request has completed.
-          const primaryError = primaryAgentError(error);
-          const presentation = agentErrorPresentation({
-            kind: classifyAgentError(primaryError),
-            message:
-              primaryError instanceof Rejected
-                ? primaryError.reason
-                : toErrorMessage(primaryError),
-          });
-          if (presentation?.type === 'instruction') {
-            await setupSession.interactions.emit(
-              'requestShowInstruction',
-              presentation.payload,
-              { replayWhenAttached: true },
-            );
-          } else if (presentation?.type === 'error') {
-            await setupSession.interactions.emit(
-              'requestShowError',
-              presentation.payload,
-              {
-                replayWhenAttached: true,
-              },
-            );
-          }
-          throw error;
-        }
+          ),
+        );
       },
       signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
       // The desktop shell can't host the VS Code getting-started walkthrough, so
@@ -1477,11 +1499,16 @@ function createWindow(options: {
   window.once('closed', () => {
     const continueQuit = continueQuitAfterWindowClose;
     continueQuitAfterWindowClose = undefined;
-    try {
-      windowResources.dispose();
-    } catch (error) {
-      reportBackgroundError(error);
-    }
+    effectRuntime().runSync(
+      Effect.try({
+        try: () => windowResources.dispose(),
+        catch: (error) => error,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => reportBackgroundError(error)),
+        ),
+      ),
+    );
     if (mainWindow === window) {
       mainWindow = null;
       if (process.platform === 'darwin') {
@@ -1576,11 +1603,15 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           (root) => `${root} (no such folder; forgotten)`,
         );
         for (const root of remembered.roots) {
-          try {
-            await papers.open(root);
-          } catch (error) {
-            unopenedPapers.push(`${root}: ${toErrorMessage(error)}`);
-          }
+          await effectRuntime().runPromise(
+            hostPort(() => papers.open(root)).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  unopenedPapers.push(`${root}: ${toErrorMessage(error)}`);
+                }),
+              ),
+            ),
+          );
         }
         papers.activate(papers.list().at(-1)?.root);
         // Ask the renderer to close before draining process services. A dirty

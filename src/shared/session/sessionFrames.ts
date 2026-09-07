@@ -28,6 +28,7 @@ import { z } from 'zod';
 
 import {
   CommitOrdinalSchema,
+  ExistenceReconciliationSchema,
   FoldEventSchema,
   LocalRuntimeStateSchema,
   StreamTabIdSchema,
@@ -72,6 +73,8 @@ const EventsFrameSchema = z.object({
   host: HostSnapshotSchema.nullable(),
   /** True on the frame that ends the reads this `Subscribe` started. */
   replayComplete: z.boolean(),
+  /** Only the final frame of a finite read carries its checked claims and removals. */
+  existence: ExistenceReconciliationSchema.nullable(),
 });
 export type EventsFrame = z.infer<typeof EventsFrameSchema>;
 
@@ -206,36 +209,29 @@ export class SessionFrames extends Context.Service<
             Stream.fromQueue(current.queue).pipe(
               Stream.mapAccum(
                 () => ({
-                  replay: [
+                  pending: [
                     { _tag: 'subscriptions', set: [...aggregates] },
                   ] as FoldInput[],
                   complete: false,
                 }),
                 (state, frame) => {
-                  const history = frame.events.filter(
-                    (row) => row.read !== 'all',
-                  );
-                  const tail = frame.events.filter((row) => row.read === 'all');
-                  const local: FoldInput[] = frame.local
-                    ? [{ _tag: 'local', local: frame.local }]
-                    : [];
-                  const live: FoldInput[] = [
-                    ...tail,
-                    ...frame.chunks,
-                    ...local,
-                    { _tag: 'drained', cursor: frame.cursor },
-                  ];
-                  if (state.complete) return [state, [live]] as const;
-                  state.replay.push(...history, ...local);
-                  if (!frame.replayComplete) return [state, []] as const;
-                  const batch: FoldInput[] = [
-                    ...state.replay,
-                    { _tag: 'replay.complete' },
-                    ...live,
-                  ];
+                  state.pending.push(...frame.events, ...frame.chunks);
+                  if (frame.local)
+                    state.pending.push({ _tag: 'local', local: frame.local });
+                  if (frame.existence === null) return [state, []] as const;
+                  const marker: FoldInput = frame.replayComplete
+                    ? { _tag: 'replay.complete', existence: frame.existence }
+                    : {
+                        _tag: 'drained',
+                        cursor: frame.cursor,
+                        existence: frame.existence,
+                      };
+                  state.pending.push(marker);
+                  if (!state.complete && !frame.replayComplete)
+                    return [state, []] as const;
                   return [
-                    { replay: [] as FoldInput[], complete: true },
-                    [batch],
+                    { pending: [] as FoldInput[], complete: true },
+                    [state.pending],
                   ] as const;
                 },
               ),

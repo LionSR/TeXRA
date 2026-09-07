@@ -91,7 +91,7 @@ const HOST_LAYER_IMPORT_PREFIXES = [
 ] as const;
 
 /**
- * Effect run boundary (PRD R1, docs/prds/2026-08-26-effect-4-runtime-migration.md
+ * Effect run boundary (PRD R1, .agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md
  * "Execution strategy" rule 3): production code enters Effect through the
  * host-owned runtime, `effectRuntime()` from `@platform/processRuntime`, and
  * the SDK public entry. The pre-runtime exemption this once carried (the platform
@@ -114,6 +114,18 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // has to answer for a process no run initialized and for one whose
   // shutdown already disposed that runtime.
   'packages/agent/src/index.ts': 6,
+  // The CLI platform shutdown sequence, which cannot borrow `effectRuntime()`
+  // for the same reason the SDK entry cannot: `lifecycle.runShutdown()`
+  // disposes the process runtime (`disposeProcessRuntime`) before the
+  // stderr/stdout flushes run, and a teardown path must not depend on the
+  // runtime it is tearing down.
+  'packages/cli/src/runtime/initPlatform.ts': 1,
+  // The clipboard write's interrupted-at-disposal reap, which runs only
+  // after the process runtime's `dispose()` interrupted the in-flight
+  // fiber — no process runtime is left to borrow, and the wedged-helper
+  // reap must still run so a `void`-ed TUI copy settles instead of
+  // rejecting unhandled.
+  'packages/cli/src/runtime/clipboardText.ts': 1,
 };
 
 function sourceFilesUnder(

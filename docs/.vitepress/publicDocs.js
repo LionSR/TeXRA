@@ -38,8 +38,6 @@ export const srcExclude = [
   'design/**',
   'dev/**',
   'architecture/**',
-  'prds/**',
-  'proposals/**',
   'supabase/**',
   'node_modules/**',
 ];

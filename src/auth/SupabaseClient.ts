@@ -1,4 +1,3 @@
-import { Semaphore } from 'effect';
 import {
   createClient,
   SupabaseClient as Client,
@@ -7,7 +6,7 @@ import {
 } from '@supabase/supabase-js';
 import { createLog } from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { callPort, runAuthProgram } from './authProgram';
+import { runAuthProgram } from './authProgram';
 import { SUPABASE_GOTRUE_STORAGE_KEY } from './config';
 import type { SessionSecretStore } from './oauth/sessionAccess';
 import type { AuthTokenProvider, StoredSessionState } from './TokenProvider';
@@ -98,7 +97,6 @@ export class SupabaseClient {
   private static instance: Client | null = null;
   private static config: { url: string; publicKey: string } | null = null;
   private static authProvider: AuthTokenProvider | null = null;
-  private static pkceOperations = Semaphore.makeUnsafe(1);
 
   /**
    * Error that occurred during initialization, if any.
@@ -122,19 +120,6 @@ export class SupabaseClient {
     this.authProvider = null;
     this.initError = null;
     this.readinessError = null;
-    this.pkceOperations = Semaphore.makeUnsafe(1);
-  }
-
-  /**
-   * Serialize PKCE callback exchange with OAuth initialization. Auth-js keeps
-   * each verifier in a flow-specific slot, while this single permit prevents
-   * an older exchange from racing initialization in the same extension host.
-   * The operation's own rejection reaches the caller unchanged.
-   */
-  static async runPkceOperation<T>(operation: () => Promise<T>): Promise<T> {
-    return runAuthProgram(
-      this.pkceOperations.withPermits(1)(callPort(operation)),
-    );
   }
 
   /**
@@ -152,20 +137,16 @@ export class SupabaseClient {
     return this.initError ?? this.readinessError;
   }
 
-  // `isReady`, `getAccessToken`, `getUser`, and `getStoredAccountLabel` stay
-  // Promise-native, catch clauses included: each wraps the `AuthTokenProvider`
-  // port (src/auth/TokenProvider.ts), which this subsystem's own
-  // SupabaseSessionCoordinator implements behind a Promise edge, so running
-  // them as programs here would put Effect on both sides of a Promise.
-  // `runPkceOperation` is the same seam from the other side: the host passes
-  // `SupabaseSessionCoordinator.createSessionFromCallback`, a Promise edge
-  // over a program, so that call nests Promise → Effect → Promise → Effect
-  // (execution-strategy rule 1). Retirement condition (R10): the port becomes
-  // Effect-typed, these convert with it in that PR, and the host hands the
-  // coordinator's exchange program to an Effect-typed sibling of
-  // `runPkceOperation` composed under the same permit, retiring the Promise
-  // callback with its suite. Introduced 2026-09-06 (lane w2 of the Effect 4
-  // migration). @adapter-until 2026-11-05
+  // `isReady`, `getAccessToken`, `getUser`, `getStoredSessionState`, and
+  // `getStoredAccountLabel` are this subsystem's Promise rendering for
+  // consumers in zones other lanes own: src/controllers and src/telemetry
+  // (wave-1 rebuild), src/agent (agent-index-remote lane), src/tools
+  // (Phase 5), and packages/desktop/src/main/index.ts (cutover PR #11972).
+  // Each settles the Effect-typed AuthTokenProvider port through
+  // `runAuthProgram`, whose run edge the host entry installs at the
+  // sanctioned boundary. As those lanes convert their callers, the methods
+  // here delete in favor of the port. The PKCE permit the extension host
+  // composes is `withPkcePermit` (src/auth/pkcePermit.ts).
   /**
    * Check if auth system is fully initialized and ready for use.
    */
@@ -179,7 +160,7 @@ export class SupabaseClient {
     }
 
     try {
-      await this.authProvider.whenReady();
+      await runAuthProgram(this.authProvider.whenReady());
       this.readinessError = null;
       return true;
     } catch (error) {
@@ -254,7 +235,7 @@ export class SupabaseClient {
     }
 
     try {
-      return await this.authProvider.ensureFreshToken();
+      return await runAuthProgram(this.authProvider.ensureFreshToken());
     } catch (error) {
       log.error(`Error getting access token: ${toErrorMessage(error)}`);
       return null;
@@ -291,7 +272,7 @@ export class SupabaseClient {
    */
   static async getStoredSessionState(): Promise<StoredSessionState> {
     if (!this.authProvider) return 'none';
-    return this.authProvider.getStoredSessionState();
+    return runAuthProgram(this.authProvider.getStoredSessionState());
   }
 
   /**
@@ -302,7 +283,7 @@ export class SupabaseClient {
   static async getStoredAccountLabel(): Promise<string | null> {
     if (!this.authProvider) return null;
     try {
-      return await this.authProvider.getStoredAccountLabel();
+      return await runAuthProgram(this.authProvider.getStoredAccountLabel());
     } catch (error) {
       // A failed read is otherwise indistinguishable from "no session
       // stored", and both collapse to the generic account label in the UI.

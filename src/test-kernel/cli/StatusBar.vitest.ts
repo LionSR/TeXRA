@@ -32,16 +32,17 @@ function leftTexts(display: StatusBarDisplay): string[] {
   return display.left.map((segment) => segment.text);
 }
 
-// `StatusBarDisplayInput` with every field optional and its three grouped
+// `StatusBarDisplayInput` with every field optional and its four grouped
 // members individually overridable, so a test still names one field at a time
 // without a flat mirror of the group members drifting alongside them.
 type StatusInputOverrides = Omit<
   Partial<StatusBarDisplayInput>,
-  'foreground' | 'childList' | 'shortcuts'
+  'foreground' | 'childList' | 'shortcuts' | 'turn'
 > & {
   readonly foreground?: Partial<StatusBarDisplayInput['foreground']>;
   readonly childList?: Partial<StatusBarDisplayInput['childList']>;
   readonly shortcuts?: Partial<StatusBarDisplayInput['shortcuts']>;
+  readonly turn?: Partial<StatusBarDisplayInput['turn']>;
 };
 
 // Idle single-stream baseline; each test overrides only the fields it exercises.
@@ -50,7 +51,7 @@ const NO_BYPASS = { bash: false, superYolo: false, toolEdit: false } as const;
 function statusInput(
   overrides: StatusInputOverrides = {},
 ): StatusBarDisplayInput {
-  const { foreground, childList, shortcuts, ...rest } = overrides;
+  const { foreground, childList, shortcuts, turn, ...rest } = overrides;
 
   return {
     status: STREAM_PHASE.WAITING,
@@ -67,6 +68,7 @@ function statusInput(
     approvalDepth: 0,
     modelAccess: 'personal',
     ...rest,
+    turn: { ...turn },
     foreground: { ...foreground },
     childList: { ...childList },
     shortcuts: {
@@ -555,7 +557,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        elapsedMs: 12_000,
+        turn: { elapsedMs: 12_000 },
         modelAccess: 'included',
         ctrlCAction: 'stop',
         shortcuts: { modifierLabel: 'Option' },
@@ -592,7 +594,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        elapsedMs: 12_000,
+        turn: { elapsedMs: 12_000 },
         subagents: 1,
         modelAccess: 'included',
         ctrlCAction: 'stop',
@@ -707,7 +709,10 @@ describe('CLI StatusBar display model', () => {
 
   it('prefixes the running label with the current spin frame', () => {
     const display = buildStatusBarDisplay(
-      statusInput({ status: STREAM_PHASE.RUNNING, runningFrame: '/' }),
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        turn: { runningFrame: '/' },
+      }),
     );
 
     expect(leftTexts(display)).toContain('/ Running');
@@ -715,7 +720,10 @@ describe('CLI StatusBar display model', () => {
 
   it('omits the spin prefix outside active phases', () => {
     const display = buildStatusBarDisplay(
-      statusInput({ status: STREAM_PHASE.WAITING, runningFrame: '/' }),
+      statusInput({
+        status: STREAM_PHASE.WAITING,
+        turn: { runningFrame: '/' },
+      }),
     );
 
     expect(leftTexts(display).some((text) => text.includes('/'))).toBe(false);
@@ -794,7 +802,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        elapsedMs: 88_000,
+        turn: { elapsedMs: 88_000 },
         subagents: 3,
         ctrlCAction: 'stop',
         width: 60,
@@ -811,7 +819,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        elapsedMs: 88_000,
+        turn: { elapsedMs: 88_000 },
         subagents: 3,
         ctrlCAction: 'stop',
         width: 44,
@@ -827,7 +835,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        elapsedMs: 88_000,
+        turn: { elapsedMs: 88_000 },
         subagents: 3,
         ctrlCAction: 'stop',
         width: 27,
@@ -857,7 +865,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        elapsedMs: 75_000,
+        turn: { elapsedMs: 75_000 },
         subagents: 3,
         ctrlCAction: 'stop',
         width: 34,
@@ -882,7 +890,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        elapsedMs: 75_000,
+        turn: { elapsedMs: 75_000 },
         approvalDepth: 3,
         ctrlCAction: 'stop',
         width: 30,
@@ -901,7 +909,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        elapsedMs: 75_000,
+        turn: { elapsedMs: 75_000 },
         ctrlCAction: 'stop',
         width: 16,
       }),
@@ -917,7 +925,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        elapsedMs: 75_000,
+        turn: { elapsedMs: 75_000 },
         queuedFollowUpMessages: ['Keep the proof under one page.'],
         approvalDepth: 3,
         ctrlCAction: 'stop',
@@ -1349,7 +1357,7 @@ describe('CLI StatusBar display model', () => {
   it('shows a live elapsed segment only while running', () => {
     const runningInput = statusInput({
       status: STREAM_PHASE.RUNNING,
-      elapsedMs: 110_000,
+      turn: { elapsedMs: 110_000 },
     });
     const running = buildStatusBarDisplay(runningInput);
 
@@ -1373,7 +1381,7 @@ describe('CLI StatusBar display model', () => {
 
     const justStarted = buildStatusBarDisplay({
       ...runningInput,
-      elapsedMs: -20_000,
+      turn: { ...runningInput.turn, elapsedMs: -20_000 },
     });
     expect(leftTexts(justStarted)).toEqual([
       '◆',
@@ -1384,7 +1392,7 @@ describe('CLI StatusBar display model', () => {
 
     const thinking = buildStatusBarDisplay({
       ...runningInput,
-      thinkingActive: true,
+      turn: { ...runningInput.turn, thinkingActive: true },
     });
     expect(leftTexts(thinking)).toEqual([
       '◆',
@@ -1396,8 +1404,11 @@ describe('CLI StatusBar display model', () => {
 
     const compacting = buildStatusBarDisplay({
       ...runningInput,
-      compactingActive: true,
-      thinkingActive: true,
+      turn: {
+        ...runningInput.turn,
+        compactingActive: true,
+        thinkingActive: true,
+      },
     });
     expect(leftTexts(compacting)).toEqual([
       '◆',
@@ -1410,9 +1421,11 @@ describe('CLI StatusBar display model', () => {
     // The same elapsed reading is suppressed once the turn is no longer running.
     const idle = buildStatusBarDisplay(
       statusInput({
-        compactingActive: true,
-        elapsedMs: 110_000,
-        thinkingActive: true,
+        turn: {
+          compactingActive: true,
+          elapsedMs: 110_000,
+          thinkingActive: true,
+        },
       }),
     );
 
@@ -1526,8 +1539,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        runningFrame: '/',
-        elapsedMs: 45_000,
+        turn: { runningFrame: '/', elapsedMs: 45_000 },
         transientNotice: UNKNOWN_COMMAND_NOTICE,
         width: 20,
       }),
@@ -1540,9 +1552,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        runningFrame: '/',
-        elapsedMs: 45_000,
-        thinkingActive: true,
+        turn: { runningFrame: '/', elapsedMs: 45_000, thinkingActive: true },
         transientNotice: UNKNOWN_COMMAND_NOTICE,
       }),
     );
@@ -1581,8 +1591,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         bypass,
-        runningFrame: '/',
-        elapsedMs: 45_000,
+        turn: { runningFrame: '/', elapsedMs: 45_000 },
         transientNotice: {
           kind: 'exit',
           text: 'Press Ctrl-C again to exit',

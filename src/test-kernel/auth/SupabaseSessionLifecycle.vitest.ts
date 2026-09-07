@@ -5,6 +5,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports - auth
+import { runAuthProgram } from '@auth/authProgram';
 import {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   parseStoredSupabaseSession,
@@ -316,10 +317,10 @@ describe('SupabaseSession', () => {
       const { coordinator, read, getReadCount } = createCoordinator();
       const session = makeSession();
 
-      await coordinator.storeSession(session);
+      await runAuthProgram(coordinator.storeSession(session));
 
       assert.deepEqual(read(), session);
-      assert.deepEqual(await coordinator.getSessionTokens(), {
+      assert.deepEqual(await runAuthProgram(coordinator.getSessionTokens()), {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
@@ -332,7 +333,10 @@ describe('SupabaseSession', () => {
         initialSession,
       });
 
-      assert.equal(await coordinator.ensureFreshToken(), 'access-token');
+      assert.equal(
+        await runAuthProgram(coordinator.ensureFreshToken()),
+        'access-token',
+      );
       assert.equal(getReadCount(), 1);
     });
 
@@ -354,10 +358,12 @@ describe('SupabaseSession', () => {
       } as unknown as Client;
       const { coordinator } = createCoordinator({ client });
 
-      const result = await coordinator.createSessionFromCallback({
-        path: '/auth-callback',
-        query: 'code=pkce-code',
-      });
+      const result = await runAuthProgram(
+        coordinator.createSessionFromCallback({
+          path: '/auth-callback',
+          query: 'code=pkce-code',
+        }),
+      );
 
       assert.equal(result.success, true);
       if (!result.success) return;
@@ -381,10 +387,12 @@ describe('SupabaseSession', () => {
       } as unknown as Client;
       const { coordinator } = createCoordinator({ client });
 
-      const result = await coordinator.createSessionFromCallback({
-        path: '/auth-callback',
-        query: 'code=bad-code',
-      });
+      const result = await runAuthProgram(
+        coordinator.createSessionFromCallback({
+          path: '/auth-callback',
+          query: 'code=bad-code',
+        }),
+      );
 
       assert.equal(result.success, false);
       if (result.success) return;
@@ -407,10 +415,12 @@ describe('SupabaseSession', () => {
       } as unknown as Client;
       const { coordinator } = createCoordinator({ client });
 
-      const result = await coordinator.createSessionFromCallback({
-        path: '/auth-callback',
-        query: 'code=stale-code',
-      });
+      const result = await runAuthProgram(
+        coordinator.createSessionFromCallback({
+          path: '/auth-callback',
+          query: 'code=stale-code',
+        }),
+      );
 
       assert.equal(result.success, false);
       if (result.success) return;
@@ -422,13 +432,15 @@ describe('SupabaseSession', () => {
     it('rejects retired implicit-token callbacks', async () => {
       const { coordinator } = createCoordinator();
 
-      const result = await coordinator.createSessionFromCallback({
-        path: '/auth-callback',
-        query: new URLSearchParams({
-          access_token: 'access-token',
-          refresh_token: 'refresh-token',
-        }).toString(),
-      });
+      const result = await runAuthProgram(
+        coordinator.createSessionFromCallback({
+          path: '/auth-callback',
+          query: new URLSearchParams({
+            access_token: 'access-token',
+            refresh_token: 'refresh-token',
+          }).toString(),
+        }),
+      );
 
       assert.deepEqual(result, {
         success: false,
@@ -440,7 +452,7 @@ describe('SupabaseSession', () => {
       const { coordinator, getReadCount } = createCoordinator({
         initialSession: expiredSession(),
       });
-      assert.deepEqual(await coordinator.getSessionTokens(), {
+      assert.deepEqual(await runAuthProgram(coordinator.getSessionTokens()), {
         accessToken: 'refreshed-access',
         refreshToken: 'refreshed-refresh',
       });
@@ -450,10 +462,10 @@ describe('SupabaseSession', () => {
     it('does not return tokens cleared while loading the session', async () => {
       const { coordinator, getReadCount } = createClearingStorageCoordinator({
         initialSession: makeSession(),
-        onFirstRead: (c) => c.clearSession(),
+        onFirstRead: (c) => runAuthProgram(c.clearSession()),
       });
 
-      assert.equal(await coordinator.getSessionTokens(), null);
+      assert.equal(await runAuthProgram(coordinator.getSessionTokens()), null);
       assert.equal(getReadCount(), 2);
     });
 
@@ -463,7 +475,7 @@ describe('SupabaseSession', () => {
       const { coordinator, getReadCount } = createClearingStorageCoordinator({
         initialSession: makeSession(),
         onFirstRead: (c) => {
-          void c.clearSession();
+          void runAuthProgram(c.clearSession());
         },
         onDelete: async () => {
           deleteStarted.resolve();
@@ -471,7 +483,7 @@ describe('SupabaseSession', () => {
         },
       });
 
-      const tokensPromise = coordinator.getSessionTokens();
+      const tokensPromise = runAuthProgram(coordinator.getSessionTokens());
       await deleteStarted.promise;
       allowDelete.resolve();
 
@@ -504,9 +516,9 @@ describe('SupabaseSession', () => {
         client,
       });
 
-      const tokenPromise = coordinator.ensureFreshToken();
+      const tokenPromise = runAuthProgram(coordinator.ensureFreshToken());
       await refreshStarted.promise;
-      await coordinator.clearSession();
+      await runAuthProgram(coordinator.clearSession());
       allowRefresh.resolve();
 
       assert.equal(await tokenPromise, null);
@@ -534,10 +546,10 @@ describe('SupabaseSession', () => {
         getClient: () => createClient(),
       });
 
-      const tokenPromise = coordinator.ensureFreshToken();
+      const tokenPromise = runAuthProgram(coordinator.ensureFreshToken());
       await storeStarted.promise;
       // The refresh's store is blocked mid-write; the clear queues behind it.
-      const clearPromise = coordinator.clearSession();
+      const clearPromise = runAuthProgram(coordinator.clearSession());
       await delay(0);
       allowStore.resolve();
 
@@ -561,10 +573,10 @@ describe('SupabaseSession', () => {
         client,
       });
 
-      const statePromise = coordinator.getStoredSessionState();
+      const statePromise = runAuthProgram(coordinator.getStoredSessionState());
       await refreshStarted.promise;
       const replacement = replacementSession();
-      await coordinator.storeSession(replacement);
+      await runAuthProgram(coordinator.storeSession(replacement));
       allowRefreshFailure.resolve();
 
       assert.equal(await statePromise, 'authenticated');
@@ -579,14 +591,17 @@ describe('SupabaseSession', () => {
       const { coordinator, read } = createCoordinator({ initialSession });
       const replacement = replacementSession();
 
-      await coordinator.storeSession(replacement);
+      await runAuthProgram(coordinator.storeSession(replacement));
 
       assert.equal(
-        await coordinator.clearSessionIfCurrent(initialSession),
+        await runAuthProgram(coordinator.clearSessionIfCurrent(initialSession)),
         false,
       );
       assert.deepEqual(read(), replacement);
-      assert.equal(await coordinator.clearSessionIfCurrent(replacement), true);
+      assert.equal(
+        await runAuthProgram(coordinator.clearSessionIfCurrent(replacement)),
+        true,
+      );
       assert.equal(read(), null);
     });
 
@@ -595,13 +610,13 @@ describe('SupabaseSession', () => {
         status: 401,
         failure: 'invalid',
         request: (coordinator: SupabaseSessionCoordinator) =>
-          coordinator.getSessionTokens(),
+          runAuthProgram(coordinator.getSessionTokens()),
       },
       {
         status: 503,
         failure: 'transient',
         request: (coordinator: SupabaseSessionCoordinator) =>
-          coordinator.ensureFreshToken(),
+          runAuthProgram(coordinator.ensureFreshToken()),
       },
     ])(
       'classifies refresh HTTP $status as $failure and returns no token',

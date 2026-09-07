@@ -1,10 +1,15 @@
-import { Effect, Exit } from 'effect';
-import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+// Third-party imports
+import { it } from '@effect/vitest';
+import { Effect, Exit, Fiber } from 'effect';
+import { beforeEach, describe, expect, type Mock, vi } from 'vitest';
+
+// Local imports
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 const mocks = vi.hoisted(() => {
   const authCoordinator = {
     clearSession: vi.fn(),
-    storeSession: vi.fn(async () => undefined),
+    storeSession: vi.fn(),
   };
   return {
     authCoordinator,
@@ -71,6 +76,14 @@ vi.mock('@cli/runtime/supabaseAuthDeviceCode', () => ({
 
 async function loadSupabaseAuth() {
   vi.resetModules();
+  // `vi.resetModules()` gives the module graph a fresh `@platform/processRuntime`
+  // whose runtime the shared fake-host install never reached; the module's own
+  // `initializeCliSupabaseAuth` installs the auth run edge from it.
+  const [{ initProcessRuntime }, { ManagedRuntime }] = await Promise.all([
+    import('@platform/processRuntime'),
+    import('effect'),
+  ]);
+  initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
   return import('@cli/runtime/supabaseAuth');
 }
 
@@ -122,8 +135,10 @@ function stubSuccessfulSignIns(session: {
 describe('CLI Supabase auth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.authCoordinator.clearSession.mockReturnValue(Effect.void);
+    mocks.authCoordinator.storeSession.mockReturnValue(Effect.void);
     mocks.platform.mockReturnValue({ secrets: { kind: 'platform-secrets' } });
-    mocks.invalidateRemoteAgentsAfterSignOut.mockResolvedValue(undefined);
+    mocks.invalidateRemoteAgentsAfterSignOut.mockReturnValue(Effect.void);
   });
 
   it('uses platform-owned secrets after CLI platform init', async () => {
@@ -140,64 +155,95 @@ describe('CLI Supabase auth', () => {
     );
   });
 
-  it('does not store a device session when cancellation follows polling', async () => {
-    const controller = new AbortController();
-    mocks.requestDeviceAuthorization.mockReturnValue(
-      Effect.succeed(DEVICE_AUTHORIZATION),
-    );
-    // The abort lands while the poll is settling: the fiber is interrupted
-    // at that boundary and never reaches the store step.
-    mocks.pollForDeviceSession.mockReturnValue(
-      Effect.promise(async () => {
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
-        controller.abort();
-        return { access_token: 'device-token' };
-      }),
-    );
-    const { signInCliSupabaseDeviceCode } = await loadSupabaseAuth();
-
-    const exit = await Effect.runPromiseExit(signInCliSupabaseDeviceCode(), {
-      signal: controller.signal,
-    });
-
-    expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
-    expect(mocks.authCoordinator.storeSession).not.toHaveBeenCalled();
-  });
-
-  it('forwards interactive cancellation to both TeXRA transports', async () => {
-    const controller = new AbortController();
-    const callbackServer = stubSuccessfulSignIns({ access_token: 'token' });
-    let pollInterrupted = false;
-    mocks.pollForDeviceSession.mockReturnValue(
-      Effect.never.pipe(
-        Effect.onInterrupt(() =>
-          Effect.sync(() => {
-            pollInterrupted = true;
+  it.effect(
+    'does not store a device session when cancellation follows polling',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AbortController();
+        mocks.requestDeviceAuthorization.mockReturnValue(
+          Effect.succeed(DEVICE_AUTHORIZATION),
+        );
+        // The abort lands while the poll is settling: the fiber is interrupted
+        // at that boundary and never reaches the store step.
+        mocks.pollForDeviceSession.mockReturnValue(
+          Effect.promise(async () => {
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            controller.abort();
+            return { access_token: 'device-token' };
           }),
-        ),
-      ),
-    );
-    const { signInCliSupabase, signInCliSupabaseDeviceCode } =
-      await loadSupabaseAuth();
-    await signInCliSupabase({
-      openBrowser: false,
-      signal: controller.signal,
-    });
-    const deviceSignIn = Effect.runPromise(signInCliSupabaseDeviceCode(), {
-      signal: controller.signal,
-    });
-    controller.abort();
-    await expect(deviceSignIn).rejects.toThrow(/interrupted/);
+        );
+        const { signInCliSupabaseDeviceCode } = yield* Effect.promise(() =>
+          loadSupabaseAuth(),
+        );
 
-    expect(callbackServer.waitForSession).toHaveBeenCalledWith(
-      controller.signal,
-    );
-    expect(mocks.requestDeviceAuthorization).toHaveBeenCalledOnce();
-    expect(mocks.pollForDeviceSession).toHaveBeenCalledWith(
-      DEVICE_AUTHORIZATION,
-    );
-    expect(pollInterrupted).toBe(true);
-  });
+        const fiber = yield* Effect.forkChild(
+          signInCliSupabaseDeviceCode().pipe(
+            Effect.provide(testHttpClientLayer),
+          ),
+        );
+        // The abort fires inside the settling poll; waiting on it here
+        // interrupts the sign-in fiber the way the run edge's signal wiring
+        // did, before the poll's resolution can resume it.
+        yield* Effect.promise(
+          () =>
+            new Promise<void>((resolve) =>
+              controller.signal.addEventListener('abort', () => resolve(), {
+                once: true,
+              }),
+            ),
+        );
+        yield* Fiber.interrupt(fiber);
+        const exit = yield* Fiber.await(fiber);
+
+        expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
+        expect(mocks.authCoordinator.storeSession).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect('forwards interactive cancellation to both TeXRA transports', () =>
+    Effect.gen(function* () {
+      const controller = new AbortController();
+      const callbackServer = stubSuccessfulSignIns({ access_token: 'token' });
+      let pollInterrupted = false;
+      mocks.pollForDeviceSession.mockReturnValue(
+        Effect.never.pipe(
+          Effect.onInterrupt(() =>
+            Effect.sync(() => {
+              pollInterrupted = true;
+            }),
+          ),
+        ),
+      );
+      const { signInCliSupabase, signInCliSupabaseDeviceCode } =
+        yield* Effect.promise(() => loadSupabaseAuth());
+      yield* Effect.promise(() =>
+        signInCliSupabase({
+          openBrowser: false,
+          signal: controller.signal,
+        }),
+      );
+      const fiber = yield* Effect.forkChild(
+        signInCliSupabaseDeviceCode().pipe(Effect.provide(testHttpClientLayer)),
+      );
+      // Let the sign-in fiber reach its device poll before the abort lands.
+      yield* Effect.promise(
+        () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+      );
+      controller.abort();
+      yield* Fiber.interrupt(fiber);
+      const exit = yield* Fiber.await(fiber);
+
+      expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
+      expect(callbackServer.waitForSession).toHaveBeenCalledWith(
+        controller.signal,
+      );
+      expect(mocks.requestDeviceAuthorization).toHaveBeenCalledOnce();
+      expect(mocks.pollForDeviceSession).toHaveBeenCalledWith(
+        DEVICE_AUTHORIZATION,
+      );
+      expect(pollInterrupted).toBe(true);
+    }),
+  );
 
   it('settles browser sign-in cancellation while its launcher remains pending', async () => {
     const controller = new AbortController();
@@ -272,8 +318,8 @@ describe('CLI Supabase auth', () => {
   });
 
   it('completes sign-out when the local catalog rebuild fails', async () => {
-    mocks.invalidateRemoteAgentsAfterSignOut.mockRejectedValueOnce(
-      new Error('local rebuild failed'),
+    mocks.invalidateRemoteAgentsAfterSignOut.mockReturnValueOnce(
+      Effect.fail(new Error('local rebuild failed')),
     );
     const warn = vi.fn();
     const { initializeCliSupabaseAuth, signOutCliSupabase } =

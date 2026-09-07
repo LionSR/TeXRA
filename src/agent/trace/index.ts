@@ -8,7 +8,7 @@
  * TeXRA-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain
  * functions over this interface in `helpers.ts` / `toolUseHelpers.ts`.
  *
- * See `docs/proposals/2026-05-22-agent-trace-sdk-surface.md` for the design.
+ * See `.agents/docs/archived/architecture/2026-05-22-agent-trace-sdk-surface.md` for the design.
  */
 export type {
   AgentEvent,

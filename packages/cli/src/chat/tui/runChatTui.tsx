@@ -40,6 +40,7 @@ import {
   clearTerminalScrollback,
   installTerminalRestoreOnExit,
 } from '@cli/tui/terminalCleanup';
+import { effectRuntime } from '@platform/processRuntime';
 import { DisposableStore } from '@platform/disposable';
 import { platform } from '@platform/platform';
 import {
@@ -188,7 +189,7 @@ export async function runChat(
     // the no-models resolution error, the dead-end this feature exists to fix.
     return { exitCode: CliExitCode.Success };
   }
-  // State 1 continuation (docs/prds/2026-06-11-agent-native-onboarding.md): on a true
+  // State 1 continuation (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): on a true
   // first run the post-picker session starts with the setup agent. Threaded
   // through the same override slot resolveChatDefaults already honors, and
   // only when the user didn't pin an agent (--agent, resume, or env), an
@@ -199,7 +200,7 @@ export async function runChat(
     firstRunDone: getFirstRunDone(platform().globalState),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
-  await loadAgents();
+  await effectRuntime().runPromise(loadAgents());
   const visibleToolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,

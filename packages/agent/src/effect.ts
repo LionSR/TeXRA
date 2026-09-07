@@ -6,7 +6,7 @@
  * changes, when its drain ends, which failure wins. The root entry
  * (`@texra-ai/agent`) is the Promise rendering of exactly these services
  * and holds no logic of its own; it is the boundary the Effect migration's
- * rule R1 names (`docs/prds/2026-08-26-effect-4-runtime-migration.md`,
+ * rule R1 names (`.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md`,
  * §7 R1, boundary kind 3: the published SDK). Nothing below this barrel
  * calls `Effect.runPromise`, `runSync`, or `runFork`.
  *

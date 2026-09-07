@@ -24,7 +24,7 @@
  */
 import { z } from 'zod';
 
-import { isObject } from '@utils/core';
+import { isObject, safeLookup } from '@utils/core';
 
 import { DEFAULT_AGENT_MODEL } from '../constants/providers';
 import { DELEGATION_TOOL_CATEGORY } from '../constants/delegationTools';
@@ -80,11 +80,9 @@ export function parseDelegationToolInput(
   input: unknown,
   toolName: string,
 ): AgentProposal | null {
-  // Own-property guard: toolName derives from untrusted logged input, so a
-  // value like 'constructor' must not resolve to an inherited Object member.
-  const category = Object.hasOwn(DELEGATION_TOOL_CATEGORY, toolName)
-    ? DELEGATION_TOOL_CATEGORY[toolName]
-    : undefined;
+  // toolName derives from untrusted logged input, so a value like
+  // 'constructor' must not resolve to an inherited Object member.
+  const category = safeLookup(DELEGATION_TOOL_CATEGORY, toolName);
   if (!category) return null;
 
   const spread = isObject(input) ? input : {};

@@ -15,12 +15,14 @@ import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import { AgentError } from '@common/errors';
 import type { SdkErrorKind } from '@common/errors/sdkError/sdkErrorKinds';
-import { attachSdkErrorMetadata } from '@common/errors/sdkError/errorMetadata';
+import {
+  attachPartialText,
+  attachSdkErrorMetadata,
+} from '@common/errors/sdkError/errorMetadata';
 import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
-import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { copilotRouteForModel } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
@@ -285,10 +287,9 @@ export class ModelHandlerVscodeLm extends ModelHandler<
         },
       };
     } catch (error) {
-      return handleStreamingFailure(error, {
-        finalizeOnError: () => output.finalize(),
-        partialTail: () => takeTail(text.join(''), PARTIAL_TEXT_TAIL_MAX),
-      });
+      output.finalize();
+      attachPartialText(error, takeTail(text.join(''), PARTIAL_TEXT_TAIL_MAX));
+      throw error;
     }
   }
 

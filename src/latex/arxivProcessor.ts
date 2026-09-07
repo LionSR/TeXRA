@@ -4,9 +4,8 @@ import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 
 import { parse as parseContentDisposition } from 'content-disposition';
+import { Data, Duration, Effect, Random, Schedule } from 'effect';
 import { StatusCodes } from 'http-status-codes';
-import pRetry, { AbortError } from 'p-retry';
-import pTimeout from 'p-timeout';
 import * as tar from 'tar';
 
 import { createLog } from '@logger/logUtils';
@@ -28,10 +27,67 @@ interface ExtractOptions {
   timeout?: number;
 }
 
-// AbortSignal.timeout() covers the entire request including body streaming,
-// unlike the old axios timeout which only covered header receipt. Use a
-// generous deadline so large tarballs (10s+ on a slow link) can complete.
+// The per-attempt deadline covers the entire request including body
+// streaming, unlike the old axios timeout which only covered header receipt.
+// Use a generous deadline so large tarballs (10s+ on a slow link) can
+// complete.
 const DOWNLOAD_TIMEOUT_MS = 120_000; // 2 min
+
+/** Retries after the first download attempt. */
+const DOWNLOAD_RETRIES = 2;
+
+/**
+ * A source-download failure that ends the retry loop immediately — a PDF-only
+ * submission, a 404, or another non-transient HTTP status, the failures the
+ * old p-retry `AbortError` marked permanent. `downloadSource` also fails with
+ * it for the non-download errors (invalid input, no open workspace,
+ * extraction or placement failure), which never had a retry loop to abort.
+ */
+class ArxivSourcePermanentError extends Data.TaggedError(
+  'ArxivSourcePermanentError',
+)<{ readonly message: string }> {}
+
+/**
+ * A failed download attempt worth retrying: a network-level failure, the
+ * per-attempt deadline, or a transient HTTP status (408/429/5xx, see
+ * {@link isTransientHttpStatus}). Once the retries are exhausted it is the
+ * program's failure.
+ */
+class ArxivSourceTransientError extends Data.TaggedError(
+  'ArxivSourceTransientError',
+)<{ readonly message: string; readonly cause: unknown }> {}
+
+/** The typed failures of an arXiv source download. */
+export type ArxivSourceError =
+  ArxivSourcePermanentError | ArxivSourceTransientError;
+
+/**
+ * Backoff before retry `n` (1-based): 1 s doubling, scaled by a uniform
+ * factor in [1, 2) so concurrent clients don't retry in lockstep — the window
+ * the download had under p-retry's `minTimeout: 1000, randomize: true`, the
+ * same tuning the tool fetch retry in `@tools/timeouts` uses.
+ */
+const downloadBackoff = Schedule.exponential(Duration.seconds(1)).pipe(
+  Schedule.modifyDelay(({ duration }) =>
+    Effect.map(Random.next, (random) =>
+      Duration.millis(Duration.toMillis(duration) * (1 + random)),
+    ),
+  ),
+);
+
+/**
+ * Wrap a foreign Promise edge (filesystem, tar, the formatter) as a permanent
+ * failure: only the download attempt itself is retried, so nothing else has a
+ * retry loop to abort.
+ */
+const permanent = <T>(
+  run: () => Promise<T>,
+): Effect.Effect<T, ArxivSourcePermanentError> =>
+  Effect.tryPromise({
+    try: run,
+    catch: (cause) =>
+      new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
+  });
 
 export type ArxivDownloadDestination = 'root' | 'references';
 
@@ -55,6 +111,38 @@ export function resolveArxivPaperDirectoryRelative(
   return options.destination === 'root' ? '.' : `References/${paperDirName}`;
 }
 
+/**
+ * Normalize input that may be a URL or plain ID into a valid arXiv ID.
+ * Accepts formats like:
+ * - Plain ID: 2404.12175, 2404.12175v2, cs/0501072
+ * - URLs: https://arxiv.org/abs/2404.12175, https://arxiv.org/pdf/2404.12175.pdf
+ * @returns The normalized arXiv ID, or null if extraction fails
+ */
+function normalizeArxivInput(input: string): string | null {
+  if (!input) {
+    return null;
+  }
+
+  return normaliseArxivIdentifier(input.trim());
+}
+
+/**
+ * Determine file extension from content-type header.
+ * Handles tar, gzip, and tex content types. The caller rejects a PDF content
+ * type first (no LaTeX source available), so a PDF never reaches here.
+ */
+function getExtensionFromContentType(contentType: string): string {
+  const isTar = contentType.includes('tar');
+  const isGzip = contentType.includes('gz');
+  const isTex = contentType.includes('tex') || contentType.includes('plain');
+
+  if (isTar && isGzip) return '.tar.gz';
+  if (isTar) return '.tar';
+  if (isGzip) return '.gz';
+  if (isTex) return '.tex';
+  return '';
+}
+
 class ArxivSourceProcessor {
   // NOTE: The channel string stays 'arxivProcessor' (lowercase) even
   // though the exported singleton was renamed to PascalCase in #7347. It is used
@@ -64,114 +152,116 @@ class ArxivSourceProcessor {
   private readonly channel = 'arxivProcessor';
   private readonly log = createLog(this.channel);
 
-  /** Best-effort delete that logs failures at debug level instead of throwing. */
-  private async cleanUpBestEffort(
+  /** Best-effort delete that logs failures at debug level instead of failing. */
+  private cleanUpBestEffort(
     target: string,
     description: string,
     options?: { recursive?: boolean },
-  ): Promise<void> {
-    await AbsoluteFS.delete(target, options).catch((error: unknown) => {
-      this.log.debug(`Failed to clean up ${description} ${target}`, {
-        data: error,
-      });
-    });
-  }
-
-  /**
-   * Determine file extension from content-type header.
-   * Handles tar, gzip, and tex content types.
-   * Throws if the response is a PDF (no LaTeX source available) — an
-   * `AbortError` so the download retry loop treats it as permanent.
-   */
-  private getExtensionFromContentType(contentType: string): string {
-    if (contentType.includes('pdf')) {
-      throw new AbortError(PDF_ONLY_SUBMISSION_ERROR);
-    }
-
-    const isTar = contentType.includes('tar');
-    const isGzip = contentType.includes('gz');
-    const isTex = contentType.includes('tex') || contentType.includes('plain');
-
-    if (isTar && isGzip) return '.tar.gz';
-    if (isTar) return '.tar';
-    if (isGzip) return '.gz';
-    if (isTex) return '.tex';
-    return '';
-  }
-
-  /**
-   * Normalize input that may be a URL or plain ID into a valid arXiv ID.
-   * Accepts formats like:
-   * - Plain ID: 2404.12175, 2404.12175v2, cs/0501072
-   * - URLs: https://arxiv.org/abs/2404.12175, https://arxiv.org/pdf/2404.12175.pdf
-   * @returns The normalized arXiv ID, or null if extraction fails
-   */
-  private normalizeInput(input: string): string | null {
-    if (!input) {
-      return null;
-    }
-
-    return normaliseArxivIdentifier(input.trim());
+  ): Effect.Effect<void> {
+    return Effect.tryPromise({
+      try: () => AbsoluteFS.delete(target, options),
+      catch: (error) => error,
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          this.log.debug(`Failed to clean up ${description} ${target}`, {
+            data: error,
+          });
+        }),
+      ),
+    );
   }
 
   /** @returns Error message if invalid, null if valid */
   public validateId(input: string): string | null {
     if (!input) return 'arXiv ID or URL is required';
-    return this.normalizeInput(input) ? null : INVALID_ARXIV_INPUT_ERROR;
+    return normalizeArxivInput(input) ? null : INVALID_ARXIV_INPUT_ERROR;
   }
 
   /** Sanitized directory name for a paper (e.g. `2404.12175` or `cs_0501072`). */
   public getPaperDirName(input: string): string {
-    const id = this.normalizeInput(input);
+    const id = normalizeArxivInput(input);
     return id ? id.replaceAll('/', '_') : input;
   }
 
   /**
    * Download `url` to disk, retrying transient failures — network errors,
-   * 408/429, or 5xx (see {@link isTransientHttpStatus}) — with exponential
-   * backoff. Permanent failures — other 4xx statuses or a PDF-only
-   * submission — abort the retry loop immediately.
+   * the per-attempt deadline, or 408/429/5xx (see
+   * {@link isTransientHttpStatus}) — with exponential backoff. Permanent
+   * failures — other 4xx statuses or a PDF-only submission — end the retry
+   * loop immediately. Interruption stops both the active attempt and the
+   * backoff sleep.
    */
-  public async downloadFile(
+  public downloadFile(
     url: string,
     destBasePath: string,
     timeout = 30000,
-  ): Promise<string> {
-    return pRetry(() => this.downloadFileOnce(url, destBasePath, timeout), {
-      retries: 2,
-      minTimeout: 1000,
-      // Jitter the backoff so concurrent clients don't retry in lockstep.
-      randomize: true,
-      onFailedAttempt: ({ error, retriesLeft }) => {
-        this.log.debug(
-          `Download attempt failed (${retriesLeft} retries left): ${toErrorMessage(error)}`,
-        );
-      },
-    });
+  ): Effect.Effect<string, ArxivSourceError> {
+    const log = this.log;
+    return this.downloadFileOnce(url, destBasePath).pipe(
+      Effect.timeoutOrElse({
+        duration: Duration.millis(timeout),
+        orElse: () =>
+          Effect.fail(
+            new ArxivSourceTransientError({
+              message: `Download timed out after ${timeout} ms`,
+              cause: undefined,
+            }),
+          ),
+      }),
+      Effect.tapError((error) =>
+        Effect.gen(function* () {
+          // A permanent failure ends the retry unobserved, since it never had
+          // retries left to report.
+          if (error._tag !== 'ArxivSourceTransientError') return;
+          const { attempt } = yield* Schedule.CurrentMetadata;
+          log.debug(
+            `Download attempt failed (${DOWNLOAD_RETRIES - attempt} retries left): ${error.message}`,
+          );
+        }),
+      ),
+      Effect.retry({
+        schedule: downloadBackoff,
+        times: DOWNLOAD_RETRIES,
+        while: (error) => error._tag === 'ArxivSourceTransientError',
+      }),
+    );
   }
 
-  private async downloadFileOnce(
+  private downloadFileOnce(
     url: string,
     destBasePath: string,
-    timeout: number,
-  ): Promise<string> {
+  ): Effect.Effect<string, ArxivSourceError> {
+    const log = this.log;
     let destPath = destBasePath;
-    let shouldCleanup = true;
-    try {
-      // AbortSignal.timeout covers both connection establishment and body streaming.
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(timeout),
+    return Effect.gen(function* () {
+      // The fiber's own signal aborts the in-flight fetch when the attempt is
+      // interrupted — by the per-attempt deadline in downloadFile or by the
+      // caller — covering connection establishment and body streaming.
+      const response = yield* Effect.tryPromise({
+        try: (signal) => fetch(url, { signal }),
+        catch: (cause) =>
+          new ArxivSourceTransientError({
+            message: toErrorMessage(cause),
+            cause,
+          }),
       });
 
       if (response.status === StatusCodes.NOT_FOUND) {
-        throw new AbortError('Source not available for this arXiv ID');
+        return yield* Effect.fail(
+          new ArxivSourcePermanentError({
+            message: 'Source not available for this arXiv ID',
+          }),
+        );
       }
 
       if (response.status !== StatusCodes.OK) {
         const message = `Failed to download: HTTP ${response.status}`;
-        throw isTransientHttpStatus(response.status)
-          ? new Error(message)
-          : new AbortError(message);
+        return yield* Effect.fail(
+          isTransientHttpStatus(response.status)
+            ? new ArxivSourceTransientError({ message, cause: response.status })
+            : new ArxivSourcePermanentError({ message }),
+        );
       }
 
       // Extract filename from Content-Disposition header if available.
@@ -181,20 +271,26 @@ class ArxivSourceProcessor {
       const disposition = response.headers.get('content-disposition');
       let filename: string | undefined;
       if (disposition) {
-        try {
-          filename = parseContentDisposition(disposition).parameters.filename;
-        } catch (error) {
-          // Malformed header; the content-type fallback below handles it.
-          this.log.debug(
-            'Ignoring malformed Content-Disposition header from arXiv source download',
-            {
-              data: {
-                header: disposition,
-                error: toErrorMessage(error),
-              },
-            },
-          );
-        }
+        filename = yield* Effect.try({
+          try: () => parseContentDisposition(disposition).parameters.filename,
+          catch: (error) => error,
+        }).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              // Malformed header; the content-type fallback below handles it.
+              log.debug(
+                'Ignoring malformed Content-Disposition header from arXiv source download',
+                {
+                  data: {
+                    header: disposition,
+                    error: toErrorMessage(error),
+                  },
+                },
+              );
+              return undefined;
+            }),
+          ),
+        );
       }
       if (filename) {
         // basename prevents path traversal from a crafted header value.
@@ -204,136 +300,176 @@ class ArxivSourceProcessor {
         );
       } else {
         const contentType = response.headers.get('content-type') ?? '';
-        const extension = this.getExtensionFromContentType(contentType);
-        destPath = destBasePath + extension;
+        if (contentType.includes('pdf')) {
+          // No LaTeX source available: a permanent failure, not retried.
+          return yield* Effect.fail(
+            new ArxivSourcePermanentError({
+              message: PDF_ONLY_SUBMISSION_ERROR,
+            }),
+          );
+        }
+        destPath = destBasePath + getExtensionFromContentType(contentType);
       }
 
       if (!response.body) {
-        throw new Error('Response has no body');
+        return yield* Effect.fail(
+          new ArxivSourceTransientError({
+            message: 'Response has no body',
+            cause: undefined,
+          }),
+        );
       }
 
-      await pipeline(
-        // response.body is a web ReadableStream; Readable.fromWeb bridges to Node streams.
-        Readable.fromWeb(response.body as NodeWebReadableStream),
-        AbsoluteFS.createWriteStream(destPath),
-      );
-      shouldCleanup = false;
+      yield* Effect.tryPromise({
+        try: () =>
+          pipeline(
+            // response.body is a web ReadableStream; Readable.fromWeb bridges to Node streams.
+            Readable.fromWeb(response.body as NodeWebReadableStream),
+            AbsoluteFS.createWriteStream(destPath),
+          ),
+        catch: (cause) =>
+          new ArxivSourceTransientError({
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      });
       return destPath;
-    } finally {
-      if (shouldCleanup) {
-        // Await so a retry attempt can't race this delete on the same path.
-        await this.cleanUpBestEffort(destPath, 'partial download');
-      }
-    }
+    }).pipe(
+      // A failed attempt deletes its partial download so a retry cannot race
+      // stale bytes at the same path (the old `finally` + shouldCleanup flag;
+      // `onError`'s cleanup is uninterruptible).
+      Effect.onError(() =>
+        this.cleanUpBestEffort(destPath, 'partial download'),
+      ),
+    );
   }
 
-  public async extractTarFile(
+  public extractTarFile(
     tarPath: string,
     destDir: string,
     options: ExtractOptions = {},
-  ): Promise<ExtractResult> {
+  ): Effect.Effect<ExtractResult> {
     const log = this.log;
     log.debug(`Extracting tar file: ${tarPath} to ${destDir}`);
 
-    try {
-      const extraction = tar.x({ file: tarPath, cwd: destDir });
-      if (options.timeout) {
-        await pTimeout(extraction, {
-          milliseconds: options.timeout,
-          message: 'Extraction timed out',
-        });
-      } else {
-        await extraction;
+    return Effect.tryPromise({
+      try: () => tar.x({ file: tarPath, cwd: destDir }),
+      catch: toErrorMessage,
+    }).pipe(
+      options.timeout == null
+        ? (effect) => effect
+        : Effect.timeoutOrElse({
+            duration: Duration.millis(options.timeout),
+            orElse: () => Effect.fail('Extraction timed out'),
+          }),
+      Effect.as({ success: true }),
+      Effect.catch((errorMsg) =>
+        Effect.sync((): ExtractResult => {
+          log.error(`Failed to extract tar file: ${errorMsg}`);
+          return { success: false, error: errorMsg };
+        }),
+      ),
+    );
+  }
+
+  public readonly downloadSource = Effect.fn('arxivProcessor.downloadSource')(
+    { self: this },
+    function* (
+      this: ArxivSourceProcessor,
+      input: string,
+      options: DownloadSourceOptions = {},
+    ) {
+      const {
+        progressCallback,
+        autoIndent = true,
+        destination = 'references',
+      } = options;
+      const log = this.log;
+      // Normalize input (URL or ID) to plain arXiv ID
+      const id = normalizeArxivInput(input);
+      if (!id) {
+        return yield* Effect.fail(
+          new ArxivSourcePermanentError({ message: INVALID_ARXIV_INPUT_ERROR }),
+        );
       }
-      return { success: true };
-    } catch (err) {
-      const errorMsg = toErrorMessage(err);
-      log.error(`Failed to extract tar file: ${errorMsg}`);
-      return { success: false, error: errorMsg };
-    }
-  }
 
-  public async downloadSource(
-    input: string,
-    options: DownloadSourceOptions = {},
-  ): Promise<{ path: string; alreadyExisted: boolean }> {
-    const {
-      progressCallback,
-      autoIndent = true,
-      destination = 'references',
-    } = options;
+      log.info(`Downloading arXiv source for ID: ${id}`);
 
-    // Normalize input (URL or ID) to plain arXiv ID
-    const id = this.normalizeInput(input);
-    if (!id) {
-      throw new Error(INVALID_ARXIV_INPUT_ERROR);
-    }
+      if (!WorkspaceFS.getPath()) {
+        return yield* Effect.fail(
+          new ArxivSourcePermanentError({
+            message: 'No workspace folder is open',
+          }),
+        );
+      }
 
-    this.log.info(`Downloading arXiv source for ID: ${id}`);
+      const paperDirRelative = resolveArxivPaperDirectoryRelative(id, {
+        destination,
+      });
+      const isRoot = paperDirRelative === '.';
+      const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
 
-    if (!WorkspaceFS.getPath()) {
-      throw new Error('No workspace folder is open');
-    }
-
-    const paperDirRelative = resolveArxivPaperDirectoryRelative(id, {
-      destination,
-    });
-    const isRoot = paperDirRelative === '.';
-    const paperDirFull = WorkspaceFS.fullPath(paperDirRelative);
-
-    const needsDownload = !(await this.hasExistingSource(
-      paperDirRelative,
-      isRoot,
-      paperDirFull,
-    ));
-    if (needsDownload) {
-      await this.fetchAndPlaceSource(
-        id,
+      const needsDownload = !(yield* this.hasExistingSource(
         paperDirRelative,
-        paperDirFull,
         isRoot,
-        progressCallback,
-      );
-    }
+        paperDirFull,
+      ));
+      if (needsDownload) {
+        yield* this.fetchAndPlaceSource(
+          id,
+          paperDirRelative,
+          paperDirFull,
+          isRoot,
+          progressCallback,
+        );
+      }
 
-    // Skip auto-indent for root destination to avoid reformatting existing workspace files
-    if (autoIndent && !isRoot) {
-      progressCallback?.('Formatting LaTeX files...', 85);
+      // Skip auto-indent for root destination to avoid reformatting existing workspace files
+      if (autoIndent && !isRoot) {
+        progressCallback?.('Formatting LaTeX files...', 85);
 
-      const indentResult = await indentLatexFilesInDirectory(
-        paperDirRelative,
-        progressCallback,
-      );
+        const indentResult = yield* permanent(() =>
+          indentLatexFilesInDirectory(paperDirRelative, progressCallback),
+        );
 
-      progressCallback?.(`Formatted ${indentResult.count} LaTeX files`, 95);
-    }
+        progressCallback?.(`Formatted ${indentResult.count} LaTeX files`, 95);
+      }
 
-    progressCallback?.('arXiv source downloaded successfully!', 100);
+      progressCallback?.('arXiv source downloaded successfully!', 100);
 
-    this.log.info(`arXiv source downloaded to: ${paperDirFull}`);
+      log.info(`arXiv source downloaded to: ${paperDirFull}`);
 
-    return { path: paperDirFull, alreadyExisted: !needsDownload };
-  }
+      return { path: paperDirFull, alreadyExisted: !needsDownload };
+    },
+  );
 
   /**
    * Whether a previously-downloaded source already exists at the paper directory.
    * Skipped for the workspace root, where stray .tex files would be a false
    * positive.
    */
-  private async hasExistingSource(
+  private hasExistingSource(
     paperDirRelative: string,
     isRoot: boolean,
     paperDirFull: string,
-  ): Promise<boolean> {
-    if (isRoot || !(await WorkspaceFS.exists(paperDirRelative))) {
-      return false;
-    }
-    const entries = await WorkspaceFS.readDir(paperDirRelative);
-    const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
-    if (hasTexFiles) {
-      this.log.info(`arXiv source already exists at: ${paperDirFull}`);
-    }
-    return hasTexFiles;
+  ): Effect.Effect<boolean, ArxivSourceError> {
+    const log = this.log;
+    return Effect.gen(function* () {
+      if (isRoot) {
+        return false;
+      }
+      if (!(yield* permanent(() => WorkspaceFS.exists(paperDirRelative)))) {
+        return false;
+      }
+      const entries = yield* permanent(() =>
+        WorkspaceFS.readDir(paperDirRelative),
+      );
+      const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
+      if (hasTexFiles) {
+        log.info(`arXiv source already exists at: ${paperDirFull}`);
+      }
+      return hasTexFiles;
+    });
   }
 
   /**
@@ -341,121 +477,139 @@ class ArxivSourceProcessor {
    * PDF-only submissions, place the source files into the paper root, then
    * remove the staging directory.
    */
-  private async fetchAndPlaceSource(
-    id: string,
-    paperDirRelative: string,
-    paperDirFull: string,
-    isRoot: boolean,
-    progressCallback: DownloadSourceOptions['progressCallback'],
-  ): Promise<void> {
-    await WorkspaceFS.ensureDir(paperDirRelative);
+  private readonly fetchAndPlaceSource = Effect.fn(
+    'arxivProcessor.fetchAndPlaceSource',
+  )(
+    { self: this },
+    function* (
+      this: ArxivSourceProcessor,
+      id: string,
+      paperDirRelative: string,
+      paperDirFull: string,
+      isRoot: boolean,
+      progressCallback: DownloadSourceOptions['progressCallback'],
+    ) {
+      yield* permanent(() => WorkspaceFS.ensureDir(paperDirRelative));
 
-    // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
-    const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
-    const downloadDirRelative = path.join(paperDirRelative, stagingDirName);
-    await WorkspaceFS.ensureDir(downloadDirRelative);
+      // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
+      const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
+      const downloadDirRelative = path.join(paperDirRelative, stagingDirName);
+      yield* permanent(() => WorkspaceFS.ensureDir(downloadDirRelative));
 
-    const downloadDirFull = path.join(paperDirFull, stagingDirName);
-    const downloadBasePath = path.join(downloadDirFull, 'source');
+      const downloadDirFull = path.join(paperDirFull, stagingDirName);
+      const downloadBasePath = path.join(downloadDirFull, 'source');
 
-    progressCallback?.(`Downloading arXiv source for ${id}...`, 20);
+      progressCallback?.(`Downloading arXiv source for ${id}...`, 20);
 
-    const downloadUrl = `https://arxiv.org/src/${id}`;
-    const downloadedPath = await this.downloadFile(
-      downloadUrl,
-      downloadBasePath,
-      DOWNLOAD_TIMEOUT_MS,
-    );
+      const downloadUrl = `https://arxiv.org/src/${id}`;
+      const downloadedPath = yield* this.downloadFile(
+        downloadUrl,
+        downloadBasePath,
+        DOWNLOAD_TIMEOUT_MS,
+      );
 
-    // Detect PDF-only submissions (no LaTeX source available)
-    if (hasExtension(downloadedPath, '.pdf')) {
-      await AbsoluteFS.delete(downloadedPath);
-      await this.cleanUpBestEffort(downloadDirFull, 'download dir', {
-        recursive: true,
-      });
-      // Only clean up the paper directory when it was created for this download
-      if (!isRoot) {
-        await this.cleanUpBestEffort(paperDirFull, 'paper dir', {
+      // Detect PDF-only submissions (no LaTeX source available)
+      if (hasExtension(downloadedPath, '.pdf')) {
+        yield* permanent(() => AbsoluteFS.delete(downloadedPath));
+        yield* this.cleanUpBestEffort(downloadDirFull, 'download dir', {
           recursive: true,
         });
+        // Only clean up the paper directory when it was created for this download
+        if (!isRoot) {
+          yield* this.cleanUpBestEffort(paperDirFull, 'paper dir', {
+            recursive: true,
+          });
+        }
+        return yield* Effect.fail(
+          new ArxivSourcePermanentError({ message: PDF_ONLY_SUBMISSION_ERROR }),
+        );
       }
-      throw new Error(PDF_ONLY_SUBMISSION_ERROR);
-    }
 
-    await this.placeSourceFiles(
-      downloadedPath,
-      paperDirRelative,
-      paperDirFull,
-      progressCallback,
-    );
+      yield* this.placeSourceFiles(
+        downloadedPath,
+        paperDirRelative,
+        paperDirFull,
+        progressCallback,
+      );
 
-    // Remove the temporary download directory (files are now in paper root)
-    await this.cleanUpBestEffort(downloadDirFull, 'temporary download dir', {
-      recursive: true,
-    });
-  }
+      // Remove the temporary download directory (files are now in paper root)
+      yield* this.cleanUpBestEffort(downloadDirFull, 'temporary download dir', {
+        recursive: true,
+      });
+    },
+  );
 
   /**
    * Place the downloaded source into the paper directory: extract a tar/tgz
    * archive in place, or decompress (gzip) and rename a single source file to
    * main.tex. Removes the downloaded artifact on success.
    */
-  private async placeSourceFiles(
-    downloadedPath: string,
-    paperDirRelative: string,
-    paperDirFull: string,
-    progressCallback: DownloadSourceOptions['progressCallback'],
-  ): Promise<void> {
-    const isArchive =
-      hasExtension(downloadedPath, '.tar') ||
-      downloadedPath.endsWith('.tar.gz') ||
-      hasExtension(downloadedPath, '.tgz');
-    const isGzipOnly = !isArchive && hasExtension(downloadedPath, '.gz');
+  private readonly placeSourceFiles = Effect.fn(
+    'arxivProcessor.placeSourceFiles',
+  )(
+    { self: this },
+    function* (
+      this: ArxivSourceProcessor,
+      downloadedPath: string,
+      paperDirRelative: string,
+      paperDirFull: string,
+      progressCallback: DownloadSourceOptions['progressCallback'],
+    ) {
+      const isArchive =
+        hasExtension(downloadedPath, '.tar') ||
+        downloadedPath.endsWith('.tar.gz') ||
+        hasExtension(downloadedPath, '.tgz');
+      const isGzipOnly = !isArchive && hasExtension(downloadedPath, '.gz');
 
-    if (isArchive) {
-      progressCallback?.('Extracting source files...', 60);
+      if (isArchive) {
+        progressCallback?.('Extracting source files...', 60);
 
-      const extractResult = await this.extractTarFile(
-        downloadedPath,
-        paperDirFull,
-        { timeout: 30000 },
-      );
-
-      if (!extractResult.success) {
-        throw new Error(
-          `Failed to extract arXiv source: ${extractResult.error}`,
+        const extractResult = yield* this.extractTarFile(
+          downloadedPath,
+          paperDirFull,
+          { timeout: 30000 },
         );
+
+        if (!extractResult.success) {
+          return yield* Effect.fail(
+            new ArxivSourcePermanentError({
+              message: `Failed to extract arXiv source: ${extractResult.error}`,
+            }),
+          );
+        }
+
+        progressCallback?.('Cleaning up...', 80);
+
+        // Remove the downloaded archive file
+        yield* permanent(() => AbsoluteFS.delete(downloadedPath));
+        return;
       }
 
-      progressCallback?.('Cleaning up...', 80);
+      // For gzip-compressed single files, decompress first
+      let sourceFilePath = downloadedPath;
+      if (isGzipOnly) {
+        progressCallback?.('Decompressing source file...', 60);
+        const decompressedPath = downloadedPath.replace(/\.gz$/, '');
+        yield* permanent(() =>
+          pipeline(
+            AbsoluteFS.createReadStream(downloadedPath),
+            createGunzip(),
+            AbsoluteFS.createWriteStream(decompressedPath),
+          ),
+        );
+        yield* permanent(() => AbsoluteFS.delete(downloadedPath));
+        sourceFilePath = decompressedPath;
+      }
 
-      // Remove the downloaded archive file
-      await AbsoluteFS.delete(downloadedPath);
-      return;
-    }
-
-    // For gzip-compressed single files, decompress first
-    let sourceFilePath = downloadedPath;
-    if (isGzipOnly) {
-      progressCallback?.('Decompressing source file...', 60);
-      const decompressedPath = downloadedPath.replace(/\.gz$/, '');
-      await pipeline(
-        AbsoluteFS.createReadStream(downloadedPath),
-        createGunzip(),
-        AbsoluteFS.createWriteStream(decompressedPath),
-      );
-      await AbsoluteFS.delete(downloadedPath);
-      sourceFilePath = decompressedPath;
-    }
-
-    // Rename to main.tex and move to paper root
-    const downloadedRel = WorkspaceFS.relativePath(sourceFilePath);
-    // Use forward slashes to match WorkspaceFS.relativePath() convention
-    const targetRel = [paperDirRelative, 'main.tex'].join('/');
-    if (downloadedRel !== targetRel) {
-      await WorkspaceFS.rename(downloadedRel, targetRel);
-    }
-  }
+      // Rename to main.tex and move to paper root
+      const downloadedRel = WorkspaceFS.relativePath(sourceFilePath);
+      // Use forward slashes to match WorkspaceFS.relativePath() convention
+      const targetRel = [paperDirRelative, 'main.tex'].join('/');
+      if (downloadedRel !== targetRel) {
+        yield* permanent(() => WorkspaceFS.rename(downloadedRel, targetRel));
+      }
+    },
+  );
 }
 
 export const ArxivProcessor = new ArxivSourceProcessor();
