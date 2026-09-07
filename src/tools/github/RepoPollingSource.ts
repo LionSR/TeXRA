@@ -34,7 +34,7 @@
  * - **CI / check-run status and inline annotations.** Per-PR by design.
  */
 
-import { Effect, Exit } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { Disposable } from '@platform/interfaces';
@@ -56,9 +56,8 @@ import {
   dedupeComments,
   type DedupedResource,
   type PollEventListener,
-  type PollHookRejected,
+  PollHookRejected,
   PollingSourceBase,
-  pollRequest,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
@@ -186,7 +185,13 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     _key: RepoKey,
     state: SubscriptionState,
   ): Effect.Effect<void, PollHookRejected> {
-    return this.pollRepo(state);
+    return this.pollRepo(state).pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
+        ),
+      ),
+    );
   }
 
   private readonly pollRepo = Effect.fn('RepoPollingSource.pollRepo')(
@@ -201,9 +206,9 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
 
       const [rawIssueRes, rawReviewRes, rawPullsRes] = yield* Effect.all(
         [
-          pollRequest(() => ghGet<unknown>(issuePath)),
-          pollRequest(() => ghGet<unknown>(reviewPath)),
-          pollRequest(() => ghGet<unknown>(pullsPath)),
+          ghGet<unknown>(issuePath),
+          ghGet<unknown>(reviewPath),
+          ghGet<unknown>(pullsPath),
         ],
         { concurrency: 3 },
       );
@@ -445,7 +450,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       pr: GhPullsListEntry,
     ) {
       const path = `/repos/${state.owner}/${state.repo}/pulls/${pr.number}`;
-      const res = yield* pollRequest(() => ghGet<GhPullRequest>(path));
+      const res = yield* ghGet<GhPullRequest>(path);
       if (res.status !== 200) return undefined;
       const parsed = GhPullRequestSchema.safeParse(res.data);
       if (!parsed.success) {
