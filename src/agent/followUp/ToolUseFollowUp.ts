@@ -20,7 +20,6 @@ import {
 } from '@shared/streams/streamStatusDisplay';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { FollowUpQueueInput } from './FollowUpQueue';
-import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
 
 /**
  * Why a submission could not be admitted, worded for the user by
@@ -128,7 +127,6 @@ export function enqueueLiveFollowUp(
 
 interface PendingResume {
   readonly resume: Promise<boolean>;
-  readonly recovery: FollowUpRecoveryLease;
 }
 
 type Admission =
@@ -190,11 +188,15 @@ function admitFollowUp(
   }
 
   const recovery = submission.lease;
-  const resume = (options.resumePort ?? platform().agentResume).tryResumeStream(
-    streamId,
-    recovery,
-  );
-  return { resume, recovery };
+  // The Promise resume port owns its settlement even if the submitting fiber
+  // stops waiting. A declined wake must release its claim for the next attempt.
+  const resume = (options.resumePort ?? platform().agentResume)
+    .tryResumeStream(streamId, recovery)
+    .then((resumed) => {
+      if (!resumed) ownerSession.followUps.release(recovery, 'recoverable');
+      return resumed;
+    });
+  return { resume };
 }
 
 /** Read the authored execution identity from the stream's committed prefix. */
@@ -324,7 +326,6 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       catch: ensureError,
     });
     if (resumed) return { status: 'queued' };
-    ownerSession.followUps.release(dispatch.recovery, 'recoverable');
     return { status: 'queued', wake: 'failed' };
   }
   if (dispatch.status === 'no_session') {

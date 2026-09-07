@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import * as resumability from '@agent/storage/resumability';
@@ -186,6 +186,30 @@ describe('submitFollowUp', () => {
 
     barrier.resolve(true);
     await expect(first).resolves.toEqual({ status: 'queued' });
+  });
+
+  it('releases declined recovery after the submitting fiber is interrupted', async () => {
+    const streamId = id('stream:interrupted-submission');
+    const session = fakeSession({ kind: 'queue' });
+    const resumed = createDeferred<boolean>();
+    const admitted = createDeferred<void>();
+    const fiber = Effect.runFork(
+      submitFollowUp(streamId, 'keep this input', {
+        session,
+        resumePort: { tryResumeStream: () => resumed.promise },
+        onAdmitted: () => admitted.resolve(),
+      }),
+    );
+    await admitted.promise;
+    await Effect.runPromise(Fiber.interrupt(fiber));
+    resumed.resolve(false);
+    await resumed.promise;
+
+    const successor = session.followUps.claimLive(streamId, 'child');
+    expect(successor).toBeDefined();
+    expect(session.followUps.queue(successor!).getAll()).toEqual([
+      'keep this input',
+    ]);
   });
 
   it('starts recovery after the child generation releases', async () => {
