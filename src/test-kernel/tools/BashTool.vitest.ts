@@ -39,6 +39,7 @@ import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagem
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import {
   RUN_OUTCOME,
+  aggregateId,
   STREAM_PHASE,
   type ExecResult,
   type StreamTabId,
@@ -854,8 +855,13 @@ describe('BashTool', () => {
 
     await vi.waitFor(() => {
       assert.equal(
-        defaultSession().status.get(childStreamId),
-        STREAM_PHASE.FAILED,
+        recorded.events.some(
+          (event) =>
+            event.type === 'status' &&
+            event.aggregateId === aggregateId('stream', childStreamId) &&
+            event.phase === STREAM_PHASE.FAILED,
+        ),
+        true,
       );
     });
     assert.equal(defaultSession().executions.getHandle(executionId), undefined);

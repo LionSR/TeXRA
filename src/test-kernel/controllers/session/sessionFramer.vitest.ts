@@ -349,6 +349,7 @@ describe('session framer', () => {
               read: 'all',
               event: {
                 type: 'stream.removed',
+                executionIds: [EXECUTION],
                 aggregateId: qualifyAggregateId('stream', STREAM),
                 seq: 9,
                 commit: 99,

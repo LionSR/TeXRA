@@ -190,6 +190,7 @@ export function createDesktopHostRequests(
   const fileActions = new DesktopProgressFileActions(
     { ...host, showErrorMessage: rejectRequest },
     {
+      snapshots: session.snapshots,
       // The request schedules a merge; its later run failure belongs to this
       // lifecycle callback, after the request has already completed.
       startExecution: (request) => {
@@ -258,7 +259,7 @@ export function createDesktopHostRequests(
     streamId: StreamTabId,
     editedFile: string,
   ): Promise<DesktopLatexdiffRunContext | undefined> {
-    await snapshots.preload([streamId]);
+    await effectRuntime().runPromise(snapshots.preload([streamId]));
     const outputsByRound = cloneRoundIndexed(
       snapshots.getOutputFiles(streamId),
     );
@@ -404,7 +405,10 @@ export function createDesktopHostRequests(
               path.join(options.resourcesPath, 'templates', 'chatExport.tex'),
               'utf8',
             );
-            return new Controller({ latexPreamble });
+            return new Controller({
+              snapshots: session.snapshots,
+              latexPreamble,
+            });
           },
           catch: (error) => error,
         }),
@@ -423,17 +427,19 @@ export function createDesktopHostRequests(
 
   async function exportTranscript(streamId: StreamTabId): Promise<void> {
     const { executionId } = stream(streamId);
-    await exportStreamTranscript(executionId, {
-      pickFormat: () => host.pickTranscriptExportFormat(),
-      openPath: (filePath) => host.openPath(filePath),
-      showInfo: (message) => host.showInfoMessage(message),
-      showWarning: (message) => host.showWarningMessage(message),
-      showError: rejectRequest,
-      reportDetail: (message) => logger.error(message),
-      getController: getChatExportController,
-      getTraceViewerTemplate: () =>
-        path.join(options.resourcesPath, 'traceViewer', 'index.html'),
-    });
+    await effectRuntime().runPromise(
+      exportStreamTranscript(executionId, {
+        pickFormat: () => host.pickTranscriptExportFormat(),
+        openPath: (filePath) => host.openPath(filePath),
+        showInfo: (message) => host.showInfoMessage(message),
+        showWarning: (message) => host.showWarningMessage(message),
+        showError: rejectRequest,
+        reportDetail: (message) => logger.error(message),
+        getController: getChatExportController,
+        getTraceViewerTemplate: () =>
+          path.join(options.resourcesPath, 'traceViewer', 'index.html'),
+      }),
+    );
   }
 
   /** A run's saved setup into the launcher (PRD 8.3, 8.5): the launch
@@ -597,31 +603,47 @@ export function createDesktopHostRequests(
         return done;
       }
       case 'openTaskStorage':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await workflowFileActions.openTaskStorage(request.streamId);
         return done;
       case 'exportTranscript':
         await exportTranscript(request.streamId);
         return done;
       case 'restoreIntoLauncher':
-        restoreIntoLauncher(await runActions.restoreState(request.streamId));
+        restoreIntoLauncher(
+          await effectRuntime().runPromise(
+            runActions.restoreState(request.streamId),
+          ),
+        );
         return done;
       case 'resume':
-        await runActions.resume(request.streamId);
+        await effectRuntime().runPromise(runActions.resume(request.streamId));
         return done;
       case 'runNew':
-        await runActions.runNew(request.streamId);
+        await effectRuntime().runPromise(runActions.runNew(request.streamId));
         return done;
       case 'runCompileFixer':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await runActions.runCompileFixer(request.streamId);
         return done;
       case 'useOwnApiKey':
         await effectRuntime().runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await workflowRunActions.diffStream(request.streamId);
         return done;
       case 'pack':
       case 'clean':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await workflowRunActions.runFileOperation(
           request.streamId,
           request.kind,
@@ -689,6 +711,9 @@ export function createDesktopHostRequests(
         );
         return done;
       case 'fileAction':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await workflowFileActions.handle(request);
         return done;
       case 'restoreProposalConfig':

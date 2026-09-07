@@ -105,9 +105,7 @@ export type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
  * has a log-rebuild fallback for a timestamp-less entry — additionally
  * filters on that.
  */
-export function parseSummaryShape(
-  value: unknown,
-): StreamLogSummary | undefined {
+function parseSummaryShape(value: unknown): StreamLogSummary | undefined {
   // A missing cache file (KVStore's quiet-missing `undefined`) is an
   // ordinary rebuild, not a stale shape — nothing to warn about.
   if (value === undefined) return undefined;

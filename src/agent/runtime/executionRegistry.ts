@@ -5,6 +5,8 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
+import { Effect } from 'effect';
+
 import type { ResultEvent } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
@@ -257,13 +259,21 @@ export class ExecutionRegistry {
     );
   }
 
-  /**
-   * Run one lifecycle step of `executionId` after every earlier step has
-   * returned and the generation the last launch started has disposed.
-   */
-  runExecutionStep<T>(executionId: string, step: () => Promise<T>): Promise<T> {
-    this.assertActive();
-    return this.lanes.enqueue(executionId, step);
+  /** Reserve an inactive execution for deletion; never wait for a live owner. */
+  withInactiveExecutionStep<A, E, R>(
+    executionId: string,
+    operation: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | Error, R> {
+    return Effect.suspend(() => {
+      this.assertActive();
+      return this.lanes.withInactiveStep(
+        executionId,
+        () =>
+          this.handles.has(executionId) ||
+          this.childActivations.has(executionId),
+        operation,
+      );
+    });
   }
 
   /**
@@ -381,7 +391,7 @@ export class ExecutionRegistry {
   }
 
   /** Remove `handle` only if it is still the current registration. */
-  private untrackIfCurrent(handle: AgentExecutionHandle): boolean {
+  untrackIfCurrent(handle: AgentExecutionHandle): boolean {
     if (this.handles.get(handle.executionId) !== handle) return false;
     this.untrackHandle(handle);
     return true;
@@ -640,6 +650,18 @@ export class ExecutionRegistry {
    * for the difference: a native child between turns would be emitted twice.
    */
   detachActiveChildren(parentStreamId: StreamTabId): readonly StreamTabId[] {
+    const detachedChildStreamIds = this.detachChildren(parentStreamId);
+    for (const childStreamId of detachedChildStreamIds) {
+      this.emitParentStreamUpdate({
+        childStreamId,
+        parentStreamId: null,
+      });
+    }
+    return detachedChildStreamIds;
+  }
+
+  /** Apply parent removal to local handles and approval ancestry without publishing. */
+  detachChildren(parentStreamId: StreamTabId): readonly StreamTabId[] {
     // A Set, not an array: a child detached mid-turn has both a per-turn
     // handle and a ChildExecutionActivation under one executionId, so both
     // loops below reach the same childStreamId and it must still be emitted
@@ -657,12 +679,6 @@ export class ExecutionRegistry {
       detachedChildStreamIds.add(handle.childStreamId);
     }
     this.emitChildActivity(parentStreamId);
-    for (const childStreamId of detachedChildStreamIds) {
-      this.emitParentStreamUpdate({
-        childStreamId,
-        parentStreamId: null,
-      });
-    }
     return [...detachedChildStreamIds];
   }
 

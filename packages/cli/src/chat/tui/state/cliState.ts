@@ -15,7 +15,6 @@ import {
 } from '@shared/schemas';
 import type { StreamView } from '@shared/session/sessionView';
 import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
-import type { WorkPlanProvenance } from '@transcript';
 import { sessionView } from './sessionView';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
@@ -276,14 +275,6 @@ type ForegroundReaderTarget =
       readonly kind: 'workPlan';
       readonly streamId: StreamTabId;
       readonly loading?: false;
-      /**
-       * Set only when this reader opened from a partially failed load: the
-       * work-plan fields the store could vouch for at that instant. The reader
-       * masks the rest until `snapshots.workPlanProvenance` establishes them,
-       * so nothing promotes this snapshot — it records one load's outcome and
-       * the store answers for everything after it.
-       */
-      readonly provenanceAtOpen?: WorkPlanProvenance;
     }
   | {
       readonly kind: 'workPlan';
@@ -389,13 +380,11 @@ export function workPlanReaderRequestIsCurrent(
 /** Resolve the loading reader without allowing an older request to replace it. */
 export function finishWorkPlanReaderRequest(
   request: WorkPlanReaderRequest,
-  provenanceAtOpen?: WorkPlanProvenance,
 ): boolean {
   if (!workPlanReaderRequestIsCurrent(request)) return false;
   FOREGROUND_READER.set({
     kind: 'workPlan',
     streamId: request.streamId,
-    ...(provenanceAtOpen ? { provenanceAtOpen } : {}),
   });
   return true;
 }

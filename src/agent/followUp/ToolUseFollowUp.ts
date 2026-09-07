@@ -194,7 +194,7 @@ export async function lookupStreamExecutionId(
   session: SessionHandle,
 ): Promise<ExecutionId | undefined> {
   return (
-    session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
+    session.snapshots.getRunMetadata(streamId).executionId ??
     (await listExecutionStreamReferences()).references.findLast(
       (reference) => reference.streamId === streamId,
     )?.executionId

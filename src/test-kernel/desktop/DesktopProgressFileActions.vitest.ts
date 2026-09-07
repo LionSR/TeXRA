@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { Effect } from 'effect';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -78,13 +79,15 @@ async function loadFileActions(options: {
   // host-neutral `runLatexdiffForExecution`; mock it at that boundary so these
   // tests cover the desktop param-building + outcome-handling, not the core
   // (which `RunLatexdiff.vitest.ts` exercises in isolation).
-  const runLatexdiffForExecution = vi.fn(async () => {
-    if (options.throws) throw new Error('No workspace path found');
-    return {
-      outcome: options.outcome ?? { results: [] },
-      source: 'metadata' as const,
-    };
-  });
+  const runLatexdiffForExecution = vi.fn(() =>
+    options.throws
+      ? Effect.fail(new Error('No workspace path found'))
+      : Effect.succeed({
+          outcome: options.outcome ?? { results: [] },
+          source: 'metadata' as const,
+        }),
+  );
+
   const runDiff = vi.fn(
     async (): Promise<LaTeXdiffResult> =>
       options.fallbackResult ?? {
@@ -94,6 +97,12 @@ async function loadFileActions(options: {
       },
   );
 
+  mocks.doMock('@platform/platform', () => ({
+    platform: () => ({ fs: { readDirectory: vi.fn(), isSymlink: vi.fn() } }),
+  }));
+  mocks.doMock('@platform/processRuntime', () => ({
+    effectRuntime: () => ({ runPromise: Effect.runPromise }),
+  }));
   mocks.doMock('@latex/latexdiff/runLatexdiff', () => ({
     runLatexdiffForExecution,
   }));
@@ -129,6 +138,7 @@ async function loadFileActions(options: {
     {
       startExecution: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(async () => []),
+      snapshots: { read: vi.fn() },
     },
   );
 
