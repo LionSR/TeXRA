@@ -2,7 +2,8 @@
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
@@ -34,7 +35,7 @@ const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   };
   return {
     ORCHESTRATOR_AGENT,
-    listRemoteAgents: vi.fn(async () => [ORCHESTRATOR_AGENT]),
+    listRemoteAgents: vi.fn(),
   };
 });
 
@@ -98,11 +99,17 @@ function remoteAgentFixture(id: string, name: string, description: string) {
 }
 
 describe('agent registry', () => {
+  beforeEach(() => {
+    listRemoteAgents.mockImplementation(() =>
+      Effect.succeed([ORCHESTRATOR_AGENT]),
+    );
+  });
+
   beforeAll(async () => {
     // Use the real bundled agent YAMLs rather than synthetic fixtures.
     await initPlatformWithState({});
     useAgentDirectories();
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
   });
 
   it('keeps unknown names unresolved', () => {
@@ -134,7 +141,9 @@ describe('agent registry', () => {
     });
 
     try {
-      const pendingRefresh = refresh({ includeRemote: false });
+      const pendingRefresh = Effect.runPromise(
+        refresh({ includeRemote: false }),
+      );
       await delay(0);
 
       expect(getAgent('assistant')?.name).toBe('assistant');
@@ -149,23 +158,27 @@ describe('agent registry', () => {
 
   it('forces a new remote fetch after an older initialization settles', async () => {
     useAgentDirectories();
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
 
     const staleLoadGate = createDeferred<void>();
     let remoteCall = 0;
-    listRemoteAgents.mockImplementation(async () => {
-      remoteCall += 1;
-      if (remoteCall === 1) {
-        await staleLoadGate.promise;
-        return [remoteAgentFixture('stale-agent', 'staleAgent', 'Stale')];
-      }
-      return [remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh')];
-    });
+    listRemoteAgents.mockImplementation(() =>
+      Effect.promise(async () => {
+        remoteCall += 1;
+        if (remoteCall === 1) {
+          await staleLoadGate.promise;
+          return [remoteAgentFixture('stale-agent', 'staleAgent', 'Stale')];
+        }
+        return [remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh')];
+      }),
+    );
 
     try {
-      const staleInitialization = loadAgents({ includeRemote: true });
+      const staleInitialization = Effect.runPromise(
+        loadAgents({ includeRemote: true }),
+      );
       await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalledOnce());
-      const forcedRefresh = refresh({ includeRemote: true });
+      const forcedRefresh = Effect.runPromise(refresh({ includeRemote: true }));
 
       staleLoadGate.resolve();
       await staleInitialization;
@@ -177,18 +190,20 @@ describe('agent registry', () => {
     } finally {
       staleLoadGate.resolve();
       listRemoteAgents.mockReset();
-      listRemoteAgents.mockResolvedValue([ORCHESTRATOR_AGENT]);
-      await refresh({ includeRemote: false });
+      listRemoteAgents.mockImplementation(() =>
+        Effect.succeed([ORCHESTRATOR_AGENT]),
+      );
+      await Effect.runPromise(refresh({ includeRemote: false }));
     }
   });
 
   it('reloads local-only definitions after sign-out invalidation', async () => {
     useAgentDirectories();
-    await refresh({ includeRemote: true });
+    await Effect.runPromise(refresh({ includeRemote: true }));
     expect(isRemoteAgent('orchestrator')).toBe(true);
     const remoteFetchCount = listRemoteAgents.mock.calls.length;
 
-    await invalidateRemoteAgentsAfterSignOut();
+    await Effect.runPromise(invalidateRemoteAgentsAfterSignOut());
 
     expect(isRemoteAgent('orchestrator')).toBe(false);
     expect(listRemoteAgents).toHaveBeenCalledTimes(remoteFetchCount);
@@ -197,7 +212,7 @@ describe('agent registry', () => {
   it('removes remote definitions even when the local rebuild fails', async () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     useAgentDirectories();
-    await refresh({ includeRemote: true });
+    await Effect.runPromise(refresh({ includeRemote: true }));
     expect(isRemoteAgent('orchestrator')).toBe(true);
     useAgentDirectories({
       builtIn: async () => {
@@ -206,7 +221,9 @@ describe('agent registry', () => {
     });
 
     try {
-      const invalidation = invalidateRemoteAgentsAfterSignOut();
+      const invalidation = Effect.runPromise(
+        invalidateRemoteAgentsAfterSignOut(),
+      );
       expect(isRemoteAgent('orchestrator')).toBe(false);
       await expect(invalidation).resolves.toBeUndefined();
       expect(isRemoteAgent('orchestrator')).toBe(false);
@@ -218,14 +235,14 @@ describe('agent registry', () => {
       );
     } finally {
       useAgentDirectories();
-      await refresh({ includeRemote: false });
+      await Effect.runPromise(refresh({ includeRemote: false }));
       warn.mockRestore();
     }
   });
 
   it('fences an in-flight remote load before rebuilding locally', async () => {
     useAgentDirectories();
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
     const remoteLoad = createDeferred<void>();
     const localRebuild = createDeferred<void>();
     let builtInCalls = 0;
@@ -236,18 +253,22 @@ describe('agent registry', () => {
         return BUILTIN_AGENTS_DIR;
       },
     });
-    listRemoteAgents.mockImplementationOnce(async () => {
-      await remoteLoad.promise;
-      return [
-        remoteAgentFixture('late-remote', 'lateRemote', 'Late remote result'),
-      ];
-    });
+    listRemoteAgents.mockImplementationOnce(() =>
+      Effect.promise(async () => {
+        await remoteLoad.promise;
+        return [
+          remoteAgentFixture('late-remote', 'lateRemote', 'Late remote result'),
+        ];
+      }),
+    );
 
-    const staleLoad = loadAgents({ includeRemote: true });
+    const staleLoad = Effect.runPromise(loadAgents({ includeRemote: true }));
     await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalled());
 
     try {
-      const invalidation = invalidateRemoteAgentsAfterSignOut();
+      const invalidation = Effect.runPromise(
+        invalidateRemoteAgentsAfterSignOut(),
+      );
       remoteLoad.resolve();
       await staleLoad;
 
@@ -273,7 +294,9 @@ describe('agent registry', () => {
     });
 
     try {
-      await expect(loadAgents()).rejects.toThrow('refresh failed');
+      await expect(Effect.runPromise(loadAgents())).rejects.toThrow(
+        'refresh failed',
+      );
 
       expect(getAgent('assistant')?.name).toBe('assistant');
     } finally {
@@ -283,18 +306,18 @@ describe('agent registry', () => {
 
   it('includes remote agents in launcher options after local-only startup load', async () => {
     try {
-      await refresh({ includeRemote: false });
+      await Effect.runPromise(refresh({ includeRemote: false }));
       expect(
         getVisibleAgents('toolUse').map((agent) => agent.name),
       ).not.toContain('orchestrator');
 
-      const options = await computeAgentOptionsData();
+      const options = await Effect.runPromise(computeAgentOptionsData());
 
       expect(options.toolUse.map((option) => option.label)).toContain(
         'orchestrator',
       );
     } finally {
-      await refresh({ includeRemote: false });
+      await Effect.runPromise(refresh({ includeRemote: false }));
     }
   });
 
@@ -309,9 +332,11 @@ describe('agent registry', () => {
         },
       });
 
-      const pendingRefresh = refresh({ includeRemote: false });
+      const pendingRefresh = Effect.runPromise(
+        refresh({ includeRemote: false }),
+      );
       await delay(0);
-      const optionsPromise = computeAgentOptionsData();
+      const optionsPromise = Effect.runPromise(computeAgentOptionsData());
 
       builtInToolUseDir.resolve();
       await pendingRefresh;
@@ -323,7 +348,7 @@ describe('agent registry', () => {
     } finally {
       builtInToolUseDir.resolve();
       useAgentDirectories();
-      await refresh({ includeRemote: false });
+      await Effect.runPromise(refresh({ includeRemote: false }));
     }
   });
 });

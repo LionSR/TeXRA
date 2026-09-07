@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { Effect } from 'effect';
 import {
   applyTeamRosterWithPreflight,
   type TeamRosterApplicationDeps,
@@ -55,11 +56,11 @@ function makeDeps(
       commitPreset: vi.fn(),
       ...catalog,
     },
-    loadLocalCatalog: async () => {},
+    loadLocalCatalog: () => Effect.void,
     canAccessRemoteCatalog: async () => false,
     choose: async () => 'cancel',
     signIn: async () => false,
-    forceRefreshRemoteCatalog: async () => {},
+    forceRefreshRemoteCatalog: () => Effect.void,
     ...rest,
   };
 }
@@ -72,33 +73,37 @@ describe('team roster application', () => {
       calls.push('commit');
     });
 
-    const result = await applyTeamRosterWithPreflight(
-      'research',
-      makeDeps({
-        catalog: {
-          resolvePreset: () => ({
-            ok: true,
-            preset,
-            resolution: refreshed ? resolved : unresolved,
-          }),
-          commitPreset,
-        },
-        loadLocalCatalog: async () => {
-          calls.push('local-load');
-        },
-        choose: async () => {
-          calls.push('choose');
-          return 'sign-in';
-        },
-        signIn: async () => {
-          calls.push('sign-in');
-          return true;
-        },
-        forceRefreshRemoteCatalog: async () => {
-          calls.push('forced-refresh');
-          refreshed = true;
-        },
-      }),
+    const result = await Effect.runPromise(
+      applyTeamRosterWithPreflight(
+        'research',
+        makeDeps({
+          catalog: {
+            resolvePreset: () => ({
+              ok: true,
+              preset,
+              resolution: refreshed ? resolved : unresolved,
+            }),
+            commitPreset,
+          },
+          loadLocalCatalog: () =>
+            Effect.sync(() => {
+              calls.push('local-load');
+            }),
+          choose: async () => {
+            calls.push('choose');
+            return 'sign-in';
+          },
+          signIn: async () => {
+            calls.push('sign-in');
+            return true;
+          },
+          forceRefreshRemoteCatalog: () =>
+            Effect.sync(() => {
+              calls.push('forced-refresh');
+              refreshed = true;
+            }),
+        }),
+      ),
     );
 
     expect(result).toEqual({
@@ -119,21 +124,26 @@ describe('team roster application', () => {
 
   it('cancels before refresh or roster writes', async () => {
     const commitPreset = vi.fn();
-    const forceRefreshRemoteCatalog = vi.fn();
+    let forcedRefresh = false;
     const signIn = vi.fn();
 
-    const result = await applyTeamRosterWithPreflight(
-      'research',
-      makeDeps({
-        catalog: { commitPreset },
-        signIn,
-        forceRefreshRemoteCatalog,
-      }),
+    const result = await Effect.runPromise(
+      applyTeamRosterWithPreflight(
+        'research',
+        makeDeps({
+          catalog: { commitPreset },
+          signIn,
+          forceRefreshRemoteCatalog: () =>
+            Effect.sync(() => {
+              forcedRefresh = true;
+            }),
+        }),
+      ),
     );
 
     expect(result).toEqual({ status: 'cancelled', preset });
     expect(signIn).not.toHaveBeenCalled();
-    expect(forceRefreshRemoteCatalog).not.toHaveBeenCalled();
+    expect(forcedRefresh).toBe(false);
     expect(commitPreset).not.toHaveBeenCalled();
   });
 
@@ -153,29 +163,31 @@ describe('team roster application', () => {
     );
     const commitPreset = vi.fn();
 
-    const result = await applyTeamRosterWithPreflight(
-      'legacy',
-      makeDeps({
-        catalog: {
-          resolvePreset: () => ({
-            ok: true,
-            preset: legacyPreset,
-            resolution: {
-              keys: {
-                workflow: [],
-                toolUse: ['builtInToolUse:review'],
+    const result = await Effect.runPromise(
+      applyTeamRosterWithPreflight(
+        'legacy',
+        makeDeps({
+          catalog: {
+            resolvePreset: () => ({
+              ok: true,
+              preset: legacyPreset,
+              resolution: {
+                keys: {
+                  workflow: [],
+                  toolUse: ['builtInToolUse:review'],
+                },
+                nameSlots: {
+                  workflow: [],
+                  toolUse: ['remoteSpecialist'],
+                },
+                unresolvedNames: ['remoteSpecialist'],
               },
-              nameSlots: {
-                workflow: [],
-                toolUse: ['remoteSpecialist'],
-              },
-              unresolvedNames: ['remoteSpecialist'],
-            },
-          }),
-          commitPreset,
-        },
-        choose: async (_preset, names) => choose(names),
-      }),
+            }),
+            commitPreset,
+          },
+          choose: async (_preset, names) => choose(names),
+        }),
+      ),
     );
 
     expect(result.status).toBe('cancelled');
@@ -198,28 +210,30 @@ describe('team roster application', () => {
       async (_names: readonly string[]) => 'cancel' as const,
     );
 
-    await applyTeamRosterWithPreflight(
-      'mixed-legacy',
-      makeDeps({
-        catalog: {
-          resolvePreset: () => ({
-            ok: true,
-            preset: legacyPreset,
-            resolution: {
-              keys: {
-                workflow: [],
-                toolUse: ['builtInToolUse:review'],
+    await Effect.runPromise(
+      applyTeamRosterWithPreflight(
+        'mixed-legacy',
+        makeDeps({
+          catalog: {
+            resolvePreset: () => ({
+              ok: true,
+              preset: legacyPreset,
+              resolution: {
+                keys: {
+                  workflow: [],
+                  toolUse: ['builtInToolUse:review'],
+                },
+                nameSlots: {
+                  workflow: ['generic'],
+                  toolUse: ['remoteSpecialist'],
+                },
+                unresolvedNames: ['generic', 'remoteSpecialist'],
               },
-              nameSlots: {
-                workflow: ['generic'],
-                toolUse: ['remoteSpecialist'],
-              },
-              unresolvedNames: ['generic', 'remoteSpecialist'],
-            },
-          }),
-        },
-        choose: async (_preset, names) => choose(names),
-      }),
+            }),
+          },
+          choose: async (_preset, names) => choose(names),
+        }),
+      ),
     );
 
     expect(choose).toHaveBeenCalledWith(['generic', 'remoteSpecialist']);
@@ -230,29 +244,31 @@ describe('team roster application', () => {
     const calls: string[] = [];
     const getPresetToolUseRoot = vi.fn(() => 'orchestrator');
 
-    await applySettingsTeamRoster('research', {
-      catalog: {
-        resolvePreset: () => ({ ok: true, preset, resolution: resolved }),
-        commitPreset: async () => {
-          calls.push('apply');
+    await Effect.runPromise(
+      applySettingsTeamRoster('research', {
+        catalog: {
+          resolvePreset: () => ({ ok: true, preset, resolution: resolved }),
+          commitPreset: async () => {
+            calls.push('apply');
+          },
+          getPresetToolUseRoot,
         },
-        getPresetToolUseRoot,
-      },
-      loadLocalCatalog: async () => {},
-      canAccessRemoteCatalog: async () => false,
-      signIn: async () => false,
-      forceRefreshRemoteCatalog: async () => {},
-      presentation: {
-        chooseTeamAvailability: async () => 'cancel',
-        showErrorMessage: async () => {},
-        showInfoMessage: async (message) => {
-          calls.push(`info:${message}`);
+        loadLocalCatalog: () => Effect.void,
+        canAccessRemoteCatalog: async () => false,
+        signIn: async () => false,
+        forceRefreshRemoteCatalog: () => Effect.void,
+        presentation: {
+          chooseTeamAvailability: async () => 'cancel',
+          showErrorMessage: async () => {},
+          showInfoMessage: async (message) => {
+            calls.push(`info:${message}`);
+          },
         },
-      },
-      refreshAfterApply: async (selectedToolUseAgent) => {
-        calls.push(`refresh:${selectedToolUseAgent}`);
-      },
-    });
+        refreshAfterApply: async (selectedToolUseAgent) => {
+          calls.push(`refresh:${selectedToolUseAgent}`);
+        },
+      }),
+    );
 
     expect(getPresetToolUseRoot).toHaveBeenCalledWith(
       ['orchestrator'],
@@ -269,28 +285,30 @@ describe('team roster application', () => {
     const prompts: unknown[] = [];
     const errors: string[] = [];
 
-    await applySettingsTeamRoster('research', {
-      catalog: {
-        resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
-        commitPreset: vi.fn(),
-        getPresetToolUseRoot: vi.fn(),
-      },
-      loadLocalCatalog: async () => {},
-      canAccessRemoteCatalog: async () => false,
-      signIn: async () => true,
-      forceRefreshRemoteCatalog: async () => {},
-      presentation: {
-        chooseTeamAvailability: async (prompt) => {
-          prompts.push(prompt);
-          return 'sign-in';
+    await Effect.runPromise(
+      applySettingsTeamRoster('research', {
+        catalog: {
+          resolvePreset: () => ({ ok: true, preset, resolution: unresolved }),
+          commitPreset: vi.fn(),
+          getPresetToolUseRoot: vi.fn(),
         },
-        showErrorMessage: async (message) => {
-          errors.push(message);
+        loadLocalCatalog: () => Effect.void,
+        canAccessRemoteCatalog: async () => false,
+        signIn: async () => true,
+        forceRefreshRemoteCatalog: () => Effect.void,
+        presentation: {
+          chooseTeamAvailability: async (prompt) => {
+            prompts.push(prompt);
+            return 'sign-in';
+          },
+          showErrorMessage: async (message) => {
+            errors.push(message);
+          },
+          showInfoMessage: async () => {},
         },
-        showInfoMessage: async () => {},
-      },
-      refreshAfterApply: async () => {},
-    });
+        refreshAfterApply: async () => {},
+      }),
+    );
 
     expect(prompts).toEqual([
       {
@@ -315,14 +333,16 @@ describe('team roster application', () => {
     const signIn = vi.fn();
     const commitPreset = vi.fn();
 
-    const result = await applyTeamRosterWithPreflight(
-      'research',
-      makeDeps({
-        catalog: { commitPreset },
-        providedChoice: 'continue',
-        choose,
-        signIn,
-      }),
+    const result = await Effect.runPromise(
+      applyTeamRosterWithPreflight(
+        'research',
+        makeDeps({
+          catalog: { commitPreset },
+          providedChoice: 'continue',
+          choose,
+          signIn,
+        }),
+      ),
     );
 
     expect(result).toEqual({

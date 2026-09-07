@@ -1,5 +1,7 @@
 /** Remote agent metadata persistence and loading for the agent registry. */
 
+import { Effect } from 'effect';
+import { RemoteAgentListError } from '@agent/remote/errorData';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { AgentCategory } from '@shared/schemas';
@@ -41,10 +43,14 @@ function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
   );
 }
 
-export async function loadRemoteAgents(): Promise<AgentEntry[]> {
-  try {
-    const { listRemoteAgents } = await import('@agent/remote/remoteAgentList');
-    const remotes = await listRemoteAgents();
+export function loadRemoteAgents(): Effect.Effect<AgentEntry[]> {
+  return Effect.gen(function* () {
+    const { listRemoteAgents } = yield* Effect.tryPromise({
+      try: () => import('@agent/remote/remoteAgentList'),
+      catch: (cause) =>
+        new RemoteAgentListError({ message: toErrorMessage(cause), cause }),
+    });
+    const remotes = yield* listRemoteAgents();
     const metaCache = getPersistedRemoteAgentMeta();
 
     return remotes.map((remote) => {
@@ -62,8 +68,12 @@ export async function loadRemoteAgents(): Promise<AgentEntry[]> {
         defaultOutputFiles: cached?.defaultOutputFiles,
       };
     });
-  } catch (err) {
-    log.warn(`Failed to load remote agents: ${toErrorMessage(err)}`);
-    return [];
-  }
+  }).pipe(
+    Effect.catch((error: RemoteAgentListError) =>
+      Effect.sync(() => {
+        log.warn(`Failed to load remote agents: ${error.message}`);
+        return [];
+      }),
+    ),
+  );
 }

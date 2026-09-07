@@ -24,6 +24,7 @@ import {
   refresh,
 } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { hostPort } from '@common/hostPort';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -529,7 +530,7 @@ function createWindow(options: {
   const refreshDesktopAuthSurfaces = async () => {
     await Promise.all(
       [...paperBindings.values()].map((binding) =>
-        binding.snapshot.refreshAuth(),
+        effectRuntime().runPromise(binding.snapshot.refreshAuth),
       ),
     );
     await settingsIpcRef.current?.refreshAuthDependentData({
@@ -799,7 +800,7 @@ function createWindow(options: {
         postToRendererIfAlive(message);
       },
     });
-    void snapshot.refresh();
+    void effectRuntime().runPromise(snapshot.refresh);
     return {
       paper,
       bridge,
@@ -856,7 +857,7 @@ function createWindow(options: {
     await Promise.all(
       [...paperBindings.values()].map((binding) =>
         runInSession(binding.paper.session, () =>
-          binding.snapshot.refreshCatalogs(),
+          effectRuntime().runPromise(binding.snapshot.refreshCatalogs),
         ),
       ),
     );
@@ -1198,15 +1199,14 @@ function createWindow(options: {
                   'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
                 );
               }
-              // Idempotent: returns the in-flight/initialized registry so a kickoff
+              // Idempotent: joins the in-flight/initialized registry so a kickoff
               // racing the startup `loadAgents()` cannot hit "Could not find agent:
               // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-              await loadAgents();
+              await effectRuntime().runPromise(loadAgents());
               await runInSession(binding.paper.session, async () =>
                 binding.execution.runValidated(
-                  await prepareMainViewExecutionLaunch(
-                    message,
-                    agentExecutionHost,
+                  await effectRuntime().runPromise(
+                    prepareMainViewExecutionLaunch(message, agentExecutionHost),
                   ),
                 ),
               );
@@ -1604,10 +1604,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         );
         for (const root of remembered.roots) {
           await effectRuntime().runPromise(
-            Effect.tryPromise({
-              try: () => papers.open(root),
-              catch: (error) => error,
-            }).pipe(
+            hostPort(() => papers.open(root)).pipe(
               Effect.catch((error) =>
                 Effect.sync(() => {
                   unopenedPapers.push(`${root}: ${toErrorMessage(error)}`);

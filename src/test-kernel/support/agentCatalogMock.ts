@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { vi } from 'vitest';
 
 /**
@@ -25,8 +26,10 @@ const agentCatalogMock = vi.hoisted(() => ({
   getAgentsByCategory: vi.fn(),
   getVisibleAgents: vi.fn(),
   getCustomAgentScanIssues: vi.fn(() => []),
-  loadAgents: vi.fn(),
-  refresh: vi.fn(),
+  // The registry's load functions are Effect programs; the callers under
+  // test run them, so the fakes must return Effects, not promises.
+  loadAgents: vi.fn(() => Effect.void),
+  refresh: vi.fn(() => Effect.void),
   resolveAgentForLaunch: vi.fn(),
 }));
 

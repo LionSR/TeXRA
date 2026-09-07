@@ -1,9 +1,13 @@
+// Node imports
 import { readFile as nodeReadFile, writeFile } from 'node:fs/promises';
 import path, { join } from 'node:path';
 
+// Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
+// Local imports
 import {
   buildInitConfig,
   ensureTexraGitignored,
@@ -49,17 +53,25 @@ describe('buildInitConfig', () => {
 });
 
 describe('writeInitConfig', () => {
-  it('writes pretty JSON with a trailing newline', async () => {
-    const workspace = await makeTempDir('texra-init-config-', tempDirs);
-    const configPath = workspaceTexraConfigPath(workspace);
+  it.effect('writes pretty JSON with a trailing newline', () =>
+    Effect.gen(function* () {
+      const workspace = yield* Effect.promise(() =>
+        makeTempDir('texra-init-config-', tempDirs),
+      );
+      const configPath = workspaceTexraConfigPath(workspace);
 
-    await writeInitConfig(configPath, buildInitConfig(ANSWERS));
+      yield* Effect.promise(() =>
+        writeInitConfig(configPath, buildInitConfig(ANSWERS)),
+      );
 
-    const text = await nodeReadFile(configPath, 'utf8');
-    expect(text.endsWith('\n')).toBe(true);
-    expect(JSON.parse(text)).toEqual(buildInitConfig(ANSWERS));
-    expect(text).toContain('  "texra.chat": {');
-  });
+      const text = yield* Effect.promise(() =>
+        nodeReadFile(configPath, 'utf8'),
+      );
+      expect(text.endsWith('\n')).toBe(true);
+      expect(JSON.parse(text)).toEqual(buildInitConfig(ANSWERS));
+      expect(text).toContain('  "texra.chat": {');
+    }),
+  );
 });
 
 describe('workspaceTexraConfigPath', () => {
@@ -71,37 +83,47 @@ describe('workspaceTexraConfigPath', () => {
 });
 
 describe('setWorkspaceCliChatAgent', () => {
-  it('updates only chat.agent and preserves other workspace defaults', async () => {
-    const workspace = await makeTempDir('texra-chat-default-', tempDirs);
-    const configPath = workspaceTexraConfigPath(workspace);
-    await writeInitConfig(configPath, buildInitConfig(ANSWERS));
+  it.effect(
+    'updates only chat.agent and preserves other workspace defaults',
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* Effect.promise(() =>
+          makeTempDir('texra-chat-default-', tempDirs),
+        );
+        const configPath = workspaceTexraConfigPath(workspace);
+        yield* Effect.promise(() =>
+          writeInitConfig(configPath, buildInitConfig(ANSWERS)),
+        );
 
-    await Effect.runPromise(
-      setWorkspaceCliChatAgent(workspace, 'builtInToolUse:review'),
-    );
+        yield* setWorkspaceCliChatAgent(workspace, 'builtInToolUse:review');
 
-    const raw = JSON.parse(await nodeReadFile(configPath, 'utf8')) as {
-      'texra.model': string;
-      'texra.chat': { agent: string; model: string };
-    };
-    expect(raw['texra.model']).toBe('deepseekT');
-    expect(raw['texra.chat']).toEqual({
-      agent: 'builtInToolUse:review',
-      model: 'deepseekT',
-    });
-    expect((await loadWorkspaceCliConfig(workspace)).values.chat?.agent).toBe(
-      'builtInToolUse:review',
-    );
+        const raw = JSON.parse(
+          yield* Effect.promise(() => nodeReadFile(configPath, 'utf8')),
+        ) as {
+          'texra.model': string;
+          'texra.chat': { agent: string; model: string };
+        };
+        expect(raw['texra.model']).toBe('deepseekT');
+        expect(raw['texra.chat']).toEqual({
+          agent: 'builtInToolUse:review',
+          model: 'deepseekT',
+        });
+        const withAgent = yield* Effect.promise(() =>
+          loadWorkspaceCliConfig(workspace),
+        );
+        expect(withAgent.values.chat?.agent).toBe('builtInToolUse:review');
 
-    await Effect.runPromise(setWorkspaceCliChatAgent(workspace, undefined));
-    expect((await loadWorkspaceCliConfig(workspace)).values.chat).toEqual({
-      model: 'deepseekT',
-    });
-  });
+        yield* setWorkspaceCliChatAgent(workspace, undefined);
+        const cleared = yield* Effect.promise(() =>
+          loadWorkspaceCliConfig(workspace),
+        );
+        expect(cleared.values.chat).toEqual({ model: 'deepseekT' });
+      }),
+  );
 });
 
 describe('ensureTexraGitignored', () => {
-  it.each([
+  it.effect.each([
     ['creates an absent file', undefined, 'created', '.texra/\n'],
     [
       'appends to existing content',
@@ -116,37 +138,60 @@ describe('ensureTexraGitignored', () => {
       'node_modules\n.texra/\n',
     ],
     ['recognizes a bare .texra entry', '.texra\n', 'present', '.texra\n'],
-  ] as const)('%s', async (_case, existing, outcome, expected) => {
-    const workspace = await makeTempDir('texra-gitignore-', tempDirs);
-    const gitignorePath = join(workspace, '.gitignore');
-    if (existing !== undefined)
-      await writeFile(gitignorePath, existing, 'utf8');
+  ] as const)('%s', ([_case, existing, outcome, expected]) =>
+    Effect.gen(function* () {
+      const workspace = yield* Effect.promise(() =>
+        makeTempDir('texra-gitignore-', tempDirs),
+      );
+      const gitignorePath = join(workspace, '.gitignore');
+      if (existing !== undefined)
+        yield* Effect.promise(() => writeFile(gitignorePath, existing, 'utf8'));
 
-    await expect(ensureTexraGitignored(workspace)).resolves.toBe(outcome);
-    await expect(nodeReadFile(gitignorePath, 'utf8')).resolves.toBe(expected);
-  });
+      const result = yield* Effect.promise(() =>
+        ensureTexraGitignored(workspace),
+      );
+      expect(result).toBe(outcome);
+      const text = yield* Effect.promise(() =>
+        nodeReadFile(gitignorePath, 'utf8'),
+      );
+      expect(text).toBe(expected);
+    }),
+  );
 
-  it('does not overwrite .gitignore on a non-ENOENT read failure', async () => {
-    // Reproduces #7470: a transient EACCES (or any non-missing-file error)
-    // must not be treated as "file absent" — that would fall through to the
-    // write below and clobber the user's existing .gitignore content.
-    const workspace = await makeTempDir('texra-gitignore-', tempDirs);
-    const gitignorePath = join(workspace, '.gitignore');
-    await writeFile(gitignorePath, 'node_modules\ndist\n', 'utf8');
+  it.effect('does not overwrite .gitignore on a non-ENOENT read failure', () =>
+    Effect.gen(function* () {
+      // Reproduces #7470: a transient EACCES (or any non-missing-file error)
+      // must not be treated as "file absent" — that would fall through to the
+      // write below and clobber the user's existing .gitignore content.
+      const workspace = yield* Effect.promise(() =>
+        makeTempDir('texra-gitignore-', tempDirs),
+      );
+      const gitignorePath = join(workspace, '.gitignore');
+      yield* Effect.promise(() =>
+        writeFile(gitignorePath, 'node_modules\ndist\n', 'utf8'),
+      );
 
-    const eacces = Object.assign(new Error('EACCES: permission denied'), {
-      code: 'EACCES',
-    });
-    mockedReadFile.mockImplementationOnce(async () => {
-      throw eacces;
-    });
+      const eacces = Object.assign(new Error('EACCES: permission denied'), {
+        code: 'EACCES',
+      });
+      mockedReadFile.mockImplementationOnce(async () => {
+        throw eacces;
+      });
 
-    await expect(ensureTexraGitignored(workspace)).rejects.toBe(eacces);
+      const error = yield* Effect.flip(
+        Effect.tryPromise({
+          try: () => ensureTexraGitignored(workspace),
+          catch: (thrown) => thrown,
+        }),
+      );
+      expect(error).toBe(eacces);
 
-    // Original content survives — the old bug silently overwrote it with
-    // just `.texra/\n`.
-    await expect(nodeReadFile(gitignorePath, 'utf8')).resolves.toBe(
-      'node_modules\ndist\n',
-    );
-  });
+      // Original content survives — the old bug silently overwrote it with
+      // just `.texra/\n`.
+      const text = yield* Effect.promise(() =>
+        nodeReadFile(gitignorePath, 'utf8'),
+      );
+      expect(text).toBe('node_modules\ndist\n');
+    }),
+  );
 });

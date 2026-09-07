@@ -1,13 +1,24 @@
 // Suites for the annotation-page budget path of @tools/github
 // (PRPollingSource pagination + AnnotationFetchBudget token bucket).
 
+// Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
+import { afterEach, describe, expect, vi, type Mock } from 'vitest';
+
+// Local imports - agent
 import type { AgentTrace } from '@agent/trace';
-import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
+
+// Local imports - tools
 import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
+import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 import type { PollHookRejected } from '@tools/github/PollingSourceBase';
 import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
+
+// Local imports - utils
+import { ensureError } from '@utils/errors/errorMessage';
+
+// Local imports - test support
 import { mockGitHubClient } from '../support/githubClientMock';
 import {
   createPRCurrentShaState,
@@ -111,83 +122,108 @@ describe('PRPollingSource annotation pagination', () => {
     vi.resetModules();
   });
 
-  it('fetches later annotation pages before level filtering runs', async () => {
-    const { ghGet, fetchAnnotations } = await createHarness();
-    ghGet
-      .mockResolvedValueOnce({ status: 200, data: fullWarningPage() })
-      .mockResolvedValueOnce({
-        status: 200,
-        data: [annotation('failure', 100)],
-      });
+  it.effect('fetches later annotation pages before level filtering runs', () =>
+    Effect.gen(function* () {
+      const { ghGet, fetchAnnotations } = yield* Effect.promise(() =>
+        createHarness(),
+      );
+      ghGet
+        .mockResolvedValueOnce({ status: 200, data: fullWarningPage() })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: [annotation('failure', 100)],
+        });
 
-    const annotations = await fetchAnnotations(
-      'owner',
-      'repo',
-      42,
-      testLogger(),
-      new AnnotationFetchBudget(2, 60_000),
-    );
+      const annotations = yield* Effect.promise(() =>
+        fetchAnnotations(
+          'owner',
+          'repo',
+          42,
+          testLogger(),
+          new AnnotationFetchBudget(2, 60_000),
+        ),
+      );
 
-    expect(annotations).toHaveLength(101);
-    expect(annotations.at(-1)?.annotation_level).toBe('failure');
-    expect(ghGet).toHaveBeenCalledTimes(2);
-    expect(ghGet.mock.calls.map((call) => call[0])).toEqual([
-      '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=1',
-      '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=2',
-    ]);
-  });
+      expect(annotations).toHaveLength(101);
+      expect(annotations.at(-1)?.annotation_level).toBe('failure');
+      expect(ghGet).toHaveBeenCalledTimes(2);
+      expect(ghGet.mock.calls.map((call) => call[0])).toEqual([
+        '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=1',
+        '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=2',
+      ]);
+    }),
+  );
 
-  it('caps annotation pagination for malformed full pages', async () => {
-    const { ghGet, fetchAnnotations } = await createHarness();
-    ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
+  it.effect('caps annotation pagination for malformed full pages', () =>
+    Effect.gen(function* () {
+      const { ghGet, fetchAnnotations } = yield* Effect.promise(() =>
+        createHarness(),
+      );
+      ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
 
-    const annotations = await fetchAnnotations(
-      'owner',
-      'repo',
-      42,
-      testLogger(),
-      new AnnotationFetchBudget(50, 60_000),
-    );
+      const annotations = yield* Effect.promise(() =>
+        fetchAnnotations(
+          'owner',
+          'repo',
+          42,
+          testLogger(),
+          new AnnotationFetchBudget(50, 60_000),
+        ),
+      );
 
-    expect(annotations).toHaveLength(5000);
-    expect(ghGet).toHaveBeenCalledTimes(50);
-    expect(ghGet.mock.calls.at(-1)?.[0]).toBe(
-      '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=50',
-    );
-  });
+      expect(annotations).toHaveLength(5000);
+      expect(ghGet).toHaveBeenCalledTimes(50);
+      expect(ghGet.mock.calls.at(-1)?.[0]).toBe(
+        '/repos/owner/repo/check-runs/42/annotations?per_page=100&page=50',
+      );
+    }),
+  );
 
-  it('counts annotation budget by endpoint page', async () => {
-    const { ghGet, fetchAnnotations } = await createHarness();
-    ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
+  it.effect('counts annotation budget by endpoint page', () =>
+    Effect.gen(function* () {
+      const { ghGet, fetchAnnotations } = yield* Effect.promise(() =>
+        createHarness(),
+      );
+      ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
 
-    await expect(
-      fetchAnnotations(
-        'owner',
-        'repo',
-        42,
-        testLogger(),
-        new AnnotationFetchBudget(1, 60_000),
-      ),
-    ).rejects.toThrow('Annotation fetch budget exhausted');
+      const error = yield* Effect.flip(
+        Effect.tryPromise({
+          try: () =>
+            fetchAnnotations(
+              'owner',
+              'repo',
+              42,
+              testLogger(),
+              new AnnotationFetchBudget(1, 60_000),
+            ),
+          catch: ensureError,
+        }),
+      );
 
-    expect(ghGet).toHaveBeenCalledTimes(1);
-  });
+      expect(error.message).toContain('Annotation fetch budget exhausted');
+      expect(ghGet).toHaveBeenCalledTimes(1);
+    }),
+  );
 
-  it('leaves queued annotation runs in place when the page budget is exhausted', async () => {
-    const { ghGet, PRPollingSource } = await createHarness();
-    const source = new PRPollingSource();
-    source.has = vi.fn().mockReturnValue(true);
-    PRPollingSource.resetAnnotationFetchBudgetForTests(0);
-    const runs = [checkRun(7), checkRun(8)];
-    const state = drainState(runs);
+  it.effect(
+    'leaves queued annotation runs in place when the page budget is exhausted',
+    () =>
+      Effect.gen(function* () {
+        const { ghGet, PRPollingSource } = yield* Effect.promise(() =>
+          createHarness(),
+        );
+        const source = new PRPollingSource();
+        source.has = vi.fn().mockReturnValue(true);
+        PRPollingSource.resetAnnotationFetchBudgetForTests(0);
+        const runs = [checkRun(7), checkRun(8)];
+        const state = drainState(runs);
 
-    await Effect.runPromise(
-      source.drainAnnotationQueues([['owner/repo#7', state]]),
-    );
+        yield* source.drainAnnotationQueues([['owner/repo#7', state]]);
 
-    expect(ghGet).not.toHaveBeenCalled();
-    expect(state.currentShaState?.pendingAnnotationRuns).toEqual(runs);
-  });
+        expect(ghGet).not.toHaveBeenCalled();
+        expect(state.currentShaState?.pendingAnnotationRuns).toEqual(runs);
+      }),
+  );
 });
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import { Effect, Semaphore } from 'effect';
+import { hostPort } from '@common/hostPort';
 
 /** Serialize funnel refreshes and collapse an in-flight burst to one rerun. */
 export class OnboardingRefreshQueue {
@@ -18,10 +19,7 @@ export class OnboardingRefreshQueue {
   ) {
     while (this.rerunRequested) {
       this.rerunRequested = false;
-      yield* Effect.tryPromise({
-        try: () => this.refresh(),
-        catch: (error) => error,
-      });
+      yield* hostPort(() => this.refresh());
     }
   });
 
