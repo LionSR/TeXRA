@@ -152,7 +152,6 @@
       "src/transcript/StagedDeletionCoordinator.ts": 1
     },
     "import:async-mutex": {
-      "src/tools/goal/goalStore.ts": 1,
       "src/transcript/SidecarWriteCoordinator.ts": 1,
       "src/utils/core/keyedMutex.ts": 1
     },
