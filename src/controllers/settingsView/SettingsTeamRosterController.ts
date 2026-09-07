@@ -10,6 +10,7 @@ import {
   applyTeamRosterWithPreflight,
   type TeamRosterApplicationDeps,
 } from '@common/teams/TeamRosterApplication';
+import { hostPort } from '@controllers/effectPort';
 import type { MessageHost } from '@hosts/uiHosts';
 import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -38,12 +39,6 @@ interface SettingsTeamRosterOptions extends Omit<
   readonly presentation: SettingsTeamRosterPresentation;
   readonly refreshAfterApply: (selectedToolUseAgent?: string) => Promise<void>;
 }
-
-/** Call a host presentation port from the program. */
-const hostPort = <A>(
-  call: () => A | PromiseLike<A>,
-): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: async () => call(), catch: (error) => error });
 
 /** Apply a settings team and present its outcome consistently across hosts. */
 export function applySettingsTeamRoster(

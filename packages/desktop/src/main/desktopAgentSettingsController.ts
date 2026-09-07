@@ -316,7 +316,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
    * registry was built from, so a plain re-post would serve a stale catalog.
    */
   private async refreshAfterAgentMutation(): Promise<void> {
-    await this.registry.refreshAgents();
+    await effectRuntime().runPromise(this.registry.refreshAgents());
     await this.refreshCatalogData();
   }
 
