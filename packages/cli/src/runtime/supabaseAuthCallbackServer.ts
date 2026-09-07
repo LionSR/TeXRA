@@ -10,7 +10,7 @@ import pDefer from 'p-defer';
 import { z } from 'zod';
 
 // Local imports - auth
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import { runAuthProgram } from '@auth/authProgram';
 import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';
 import {
@@ -18,6 +18,7 @@ import {
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { effectRuntime } from '@platform/processRuntime';
 import { escapeHtml } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -25,6 +26,11 @@ const LOOPBACK_HOST = '127.0.0.1';
 const CALLBACK_PATH = '/auth-callback';
 const CALLBACK_NONCE_BYTES = 24;
 const MAX_CALLBACK_BODY_BYTES = 8 * 1024;
+
+/** `Effect.tryPromise` with the identity catch every Promise boundary below
+ *  wants: the rejection value flows through unchanged as the error. */
+const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: run, catch: (error) => error });
 
 interface CallbackAttemptState {
   acceptingCallbacks: boolean;
@@ -59,24 +65,32 @@ export async function startLoopbackCallbackServer(
   };
 
   const server = createServer((request, response) => {
-    void handleCallbackRequest(
-      request,
-      response,
-      authCoordinator,
-      nonce,
-      attemptState,
-    )
-      .then((session) => {
+    void effectRuntime().runPromise(
+      tryPromise(async () => {
+        const session = await handleCallbackRequest(
+          request,
+          response,
+          authCoordinator,
+          nonce,
+          attemptState,
+        );
         if (session) resolveSession(session);
-      })
-      .catch((error: unknown) => {
-        const recoverable = error instanceof RecoverableCallbackRequestError;
-        const message = toErrorMessage(error);
-        if (!recoverable) {
-          rejectSession(error instanceof Error ? error : new Error(message));
-        }
-        writeHtml(response, recoverable ? 400 : 500, failureHtml(message));
-      });
+      }).pipe(
+        Effect.catch((error: unknown) =>
+          Effect.sync(() => {
+            const recoverable =
+              error instanceof RecoverableCallbackRequestError;
+            const message = toErrorMessage(error);
+            if (!recoverable) {
+              rejectSession(
+                error instanceof Error ? error : new Error(message),
+              );
+            }
+            writeHtml(response, recoverable ? 400 : 500, failureHtml(message));
+          }),
+        ),
+      ),
+    );
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -99,9 +113,10 @@ export async function startLoopbackCallbackServer(
   const cleanup = (): void => {
     clearTimeout(timeout);
   };
-  sessionPromise.catch(() => {
-    // Prevent unhandled rejections if OAuth setup fails before callers wait.
-  });
+  // Prevent unhandled rejections if OAuth setup fails before callers wait.
+  void effectRuntime().runPromise(
+    Effect.ignoreCause(tryPromise(() => sessionPromise)),
+  );
 
   return {
     redirectTo: `http://${LOOPBACK_HOST}:${address.port}${CALLBACK_PATH}`,
@@ -216,12 +231,16 @@ function readRequestBody(request: IncomingMessage): Promise<string> {
 
 /**
  * The loopback callback body we accept. A non-object body is rejected; a
- * present-but-non-string field degrades to `undefined` (per-field `.catch`),
- * matching the previous manual `typeof === 'string'` guards.
+ * present-but-non-string field degrades to `undefined` (the fallback union
+ * branch), matching the previous manual `typeof === 'string'` guards.
  */
+const OptionalStringFieldSchema = z.union([
+  z.string().nullish(),
+  z.unknown().transform(() => undefined),
+]);
 const CallbackBodySchema = z.object({
-  query: z.string().nullish().catch(undefined),
-  nonce: z.string().nullish().catch(undefined),
+  query: OptionalStringFieldSchema,
+  nonce: OptionalStringFieldSchema,
 });
 
 function parseCallbackBody(

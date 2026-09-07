@@ -7,7 +7,7 @@
 // other sign-in flows in `supabaseAuth.ts`.
 
 // Third-party imports
-import { Data, Effect, Ref } from 'effect';
+import { Data, Effect, Ref, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports - auth
@@ -18,6 +18,7 @@ import {
   pollDeviceAuthorization,
 } from '@auth/oauth/deviceAuthorization';
 import { parseOAuthJson, postOAuth } from '@auth/oauth/oauthRequest';
+import { safeParseJson } from '@common/parsing/safeParseJson';
 import { isObject } from '@utils/core';
 
 const DEVICE_AUTH_REQUEST_TIMEOUT_MS = 30000;
@@ -36,7 +37,9 @@ export const DeviceAuthorizationSchema = z.object({
   verification_uri: z.string().min(1),
   verification_uri_complete: z.string().optional(),
   expires_in: z.number().positive(),
-  interval: z.number().positive().catch(5),
+  // A missing or malformed interval degrades to the RFC 8628 default of 5s
+  // rather than failing the whole authorization response.
+  interval: z.union([z.number().positive(), z.unknown().transform(() => 5)]),
 });
 export type DeviceAuthorization = z.infer<typeof DeviceAuthorizationSchema>;
 
@@ -114,14 +117,10 @@ export const requestDeviceAuthorization = Effect.fn(
 
 /** Best-effort read of the RFC 6749 `error` code; anything else is absent. */
 function deviceErrorCode(text: string): string | undefined {
-  try {
-    const body: unknown = JSON.parse(text);
-    return isObject(body) && typeof body.error === 'string'
-      ? body.error
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  const body = Result.getOrUndefined(safeParseJson(text));
+  return isObject(body) && typeof body.error === 'string'
+    ? body.error
+    : undefined;
 }
 
 /**

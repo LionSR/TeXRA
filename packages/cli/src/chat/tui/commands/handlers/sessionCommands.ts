@@ -77,22 +77,31 @@ async function hydrateStreamArtifacts(
   store: StreamArtifactReader,
   streamId: StreamTabId,
 ): Promise<StreamArtifactHydrationOutcome> {
-  try {
-    await store.preload([streamId], { reportArtifactAuthority: true });
-  } catch (error) {
-    if (
-      error instanceof StreamSnapshotPreloadError &&
-      error.streamId === streamId
-    ) {
-      return {
-        kind: 'partial',
-        workPlanProvenance: error.workPlanProvenance,
-        error,
-      };
-    }
-    return { kind: 'failed', error };
-  }
-  return { kind: 'complete' };
+  return effectRuntime().runPromise(
+    Effect.tryPromise({
+      try: () => store.preload([streamId], { reportArtifactAuthority: true }),
+      catch: (error) => error,
+    }).pipe(
+      Effect.match({
+        onFailure: (error): StreamArtifactHydrationOutcome => {
+          if (
+            error instanceof StreamSnapshotPreloadError &&
+            error.streamId === streamId
+          ) {
+            return {
+              kind: 'partial',
+              workPlanProvenance: error.workPlanProvenance,
+              error,
+            };
+          }
+          return { kind: 'failed', error };
+        },
+        onSuccess: (): StreamArtifactHydrationOutcome => ({
+          kind: 'complete',
+        }),
+      }),
+    ),
+  );
 }
 
 export async function showCliWorkPlan(

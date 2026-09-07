@@ -1,4 +1,4 @@
-import { Cause, Exit } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
@@ -51,6 +51,11 @@ const CHAT_LOGIN_USAGE = [
   '       /login grok [--no-browser] [--device]',
 ].join('\n');
 const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | grok | texra | all';
+
+/** `Effect.tryPromise` with the identity catch every Promise boundary below
+ *  wants: the rejection value flows through unchanged as the error. */
+const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: run, catch: (error) => error });
 
 export function loginStartMessage(args: CliLoginSlashArgs): string {
   if (args.target === 'chatgpt') {
@@ -206,30 +211,47 @@ export async function logoutFromChat(
   const lines: string[] = [];
 
   if (target === 'texra' || target === 'all') {
-    try {
-      await signOutCliSupabase();
-      lines.push(RESEARCHER_ACCESS_AUTH.signedOut);
-    } catch (error: unknown) {
-      lines.push(
-        RESEARCHER_ACCESS_AUTH.signOutFailedWithReason(toErrorMessage(error)),
-      );
-    }
+    await effectRuntime().runPromise(
+      tryPromise(async () => {
+        await signOutCliSupabase();
+        lines.push(RESEARCHER_ACCESS_AUTH.signedOut);
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            lines.push(
+              RESEARCHER_ACCESS_AUTH.signOutFailedWithReason(
+                toErrorMessage(error),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
   }
 
   async function signOutSubscription(
     providerId: SubscriptionProviderId,
     label: string,
   ): Promise<void> {
-    try {
-      const update = await signOutCliSubscription(providerId);
-      bumpCodexPreferenceVersion();
-      lines.push(ACCOUNT_OUTCOME.signedOut(label));
-      lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
-    } catch (error: unknown) {
-      lines.push(
-        ACCOUNT_OUTCOME.signOutFailedWithReason(label, toErrorMessage(error)),
-      );
-    }
+    await effectRuntime().runPromise(
+      tryPromise(async () => {
+        const update = await signOutCliSubscription(providerId);
+        bumpCodexPreferenceVersion();
+        lines.push(ACCOUNT_OUTCOME.signedOut(label));
+        lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            lines.push(
+              ACCOUNT_OUTCOME.signOutFailedWithReason(
+                label,
+                toErrorMessage(error),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
   }
 
   if (target === 'chatgpt' || target === 'all') {
@@ -240,12 +262,18 @@ export async function logoutFromChat(
     await signOutSubscription('grok', GROK_AUTH.label);
   }
 
-  try {
-    const overview = await loadCliModelAccessOverview();
-    lines.push(...overview.lines);
-  } catch (error: unknown) {
-    lines.push(toErrorMessage(error));
-  }
+  await effectRuntime().runPromise(
+    tryPromise(async () => {
+      const overview = await loadCliModelAccessOverview();
+      lines.push(...overview.lines);
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          lines.push(toErrorMessage(error));
+        }),
+      ),
+    ),
+  );
 
   output.appendOutcome(collapseWhitespace(lines.join(' · ')));
 }

@@ -12,6 +12,7 @@ import {
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
 import type { ConfigTarget } from '@platform/interfaces';
+import { effectRuntime } from '@platform/processRuntime';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -137,11 +138,21 @@ export async function signOutCliSubscription(
 ): Promise<CliSubscriptionSignOutResult> {
   const provider = subscriptionProvider(providerId);
   await provider.signOut();
-  try {
-    return { preferenceUpdate: await provider.setPreferSubscription(false) };
-  } catch (error: unknown) {
-    return { preferenceError: toErrorMessage(error) };
-  }
+  return effectRuntime().runPromise(
+    Effect.tryPromise({
+      try: () => provider.setPreferSubscription(false),
+      catch: (error) => error,
+    }).pipe(
+      Effect.match({
+        onFailure: (error): CliSubscriptionSignOutResult => ({
+          preferenceError: toErrorMessage(error),
+        }),
+        onSuccess: (preferenceUpdate): CliSubscriptionSignOutResult => ({
+          preferenceUpdate,
+        }),
+      }),
+    ),
+  );
 }
 
 /** The preference half of a sign-out report. */

@@ -132,6 +132,11 @@ interface AutoResumeOptions {
 // Controller
 // ---------------------------------------------------------------------------
 
+/** `Effect.tryPromise` with the identity catch every Promise boundary below
+ *  wants: the rejection value flows through unchanged as the error. */
+const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: run, catch: (error) => error });
+
 /**
  * Narrow commands the chat-session controller exposes to the Ink component.
  * Every mutation to {@link TuiSession} flows through one of these methods so
@@ -437,7 +442,7 @@ export function createChatSessionController(
     });
   };
 
-  // Shared tail of the run/resume `.catch()` handlers: surface the error to
+  // Shared tail of the run/resume failure recovery: surface the error to
   // the local transcript unless the run was stopped intentionally, and set
   // the exit code accordingly.
   const reportRunFailure = (error: unknown): void => {
@@ -488,6 +493,9 @@ export function createChatSessionController(
   // process lifetime.
   const liveOwnerships = new Set<{ readonly release: () => void }>();
   disposables.add(() => {
+    // The raw catch stays: this is a synchronous dispose callback that cannot
+    // return an Effect (PRD R7's permitted synchronous callback), and a
+    // teardown path must not depend on the process runtime it may outlive.
     const failures: unknown[] = [];
     for (const ownership of liveOwnerships) {
       try {
@@ -570,49 +578,56 @@ export function createChatSessionController(
     ownExecution(executionId);
     session.executionId = executionId;
 
-    const runPromise = Promise.resolve()
-      .then(() => AgentConfigSchema.parse(config))
-      .then((registeredConfig) =>
-        runAgent(
-          { kind: 'fresh', config: registeredConfig, executionId },
-          {
-            enforceCategory: true,
-            approvalPromptsUnavailable: approvalsUnavailable,
-            onApprovalPolicyDenial: () =>
-              warnApprovalDenied(sessionContext, 'Tool or edit approval'),
-            runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
-            onStreamResolved: (resolvedStreamId) => {
-              // Each chat round mints a fresh root StreamTabId (new
-              // executionId), so bash/tool-edit/super-YOLO bypass, which is
-              // keyed per stream, would otherwise reset every round even
-              // though the user is continuing the same conversation. Link the
-              // new round's stream to the previous one so bypass resolution
-              // (see `registerStreamParent`) falls through to whatever the
-              // prior round had, unless this round sets its own explicit value.
-              const previousRootStreamId = rootStreamId.get();
-              if (
-                previousRootStreamId &&
-                previousRootStreamId !== resolvedStreamId
-              ) {
-                runtimeSession.approvals.registerStreamParent(
-                  resolvedStreamId,
-                  previousRootStreamId,
-                );
-              }
-              session.streamId = resolvedStreamId;
-              rootStreamId.set(resolvedStreamId);
-              moveLocalTranscriptToStream(resolvedStreamId);
-              focusStream(resolvedStreamId);
-              if (session.stopRequested) interruptActiveRun();
-            },
-          },
+    const runPromise = effectRuntime()
+      .runPromise(
+        tryPromise(() =>
+          Promise.resolve()
+            .then(() => AgentConfigSchema.parse(config))
+            .then((registeredConfig) =>
+              runAgent(
+                { kind: 'fresh', config: registeredConfig, executionId },
+                {
+                  enforceCategory: true,
+                  approvalPromptsUnavailable: approvalsUnavailable,
+                  onApprovalPolicyDenial: () =>
+                    warnApprovalDenied(sessionContext, 'Tool or edit approval'),
+                  runtimeUnavailableTools:
+                    getDefaultUnavailableToolNames('cli'),
+                  onStreamResolved: (resolvedStreamId) => {
+                    // Each chat round mints a fresh root StreamTabId (new
+                    // executionId), so bash/tool-edit/super-YOLO bypass, which is
+                    // keyed per stream, would otherwise reset every round even
+                    // though the user is continuing the same conversation. Link the
+                    // new round's stream to the previous one so bypass resolution
+                    // (see `registerStreamParent`) falls through to whatever the
+                    // prior round had, unless this round sets its own explicit value.
+                    const previousRootStreamId = rootStreamId.get();
+                    if (
+                      previousRootStreamId &&
+                      previousRootStreamId !== resolvedStreamId
+                    ) {
+                      runtimeSession.approvals.registerStreamParent(
+                        resolvedStreamId,
+                        previousRootStreamId,
+                      );
+                    }
+                    session.streamId = resolvedStreamId;
+                    rootStreamId.set(resolvedStreamId);
+                    moveLocalTranscriptToStream(resolvedStreamId);
+                    focusStream(resolvedStreamId);
+                    if (session.stopRequested) interruptActiveRun();
+                  },
+                },
+              ),
+            )
+            .then((result) => {
+              session.runExitCode = runOutcomeExitCode(result.outcome);
+              notify('agentFinished');
+            }),
+        ).pipe(
+          Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
         ),
       )
-      .then((result) => {
-        session.runExitCode = runOutcomeExitCode(result.outcome);
-        notify('agentFinished');
-      })
-      .catch(reportRunFailure)
       .finally(finalize);
     session.markRunPending(runPromise);
   };
@@ -643,7 +658,7 @@ export function createChatSessionController(
     const supersededRecovery = supersedeInterruptedRecovery();
     let recovery: FollowUpRecoveryLease | undefined;
     let recoveryHandedOff = false;
-    try {
+    const attemptResume = async (): Promise<void> => {
       // The durable record names the stream (FK stamped at registration) and
       // the config the TUI adopts before the run. Workflow runs resume
       // headless through `texra resume`, not inside a chat.
@@ -734,31 +749,39 @@ export function createChatSessionController(
       // cleared the interrupted stream, so the follow-ups typed during the
       // interruption are lost unless both go back where they came from.
       let followUpQueueReady = false;
-      const runChain = Promise.resolve()
-        .then(() => {
-          recoveryHandedOff = true;
-          return resumeRun(id, {
-            ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
-            recovery,
-            extraFollowUps: supersededRecovery?.followUps,
-            onResumeResolved: adoptResumedStream,
-            onFollowUpQueueReady: () => {
-              followUpQueueReady = true;
-            },
-            isCancellationRequested: () => session.stopRequested,
-          });
-        })
-        .then((result) => {
-          if ('started' in result) {
-            settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
-          } else if (session.stopRequested) {
-            session.runExitCode = CliExitCode.Interrupted;
-          } else {
-            appendLocalErrorTranscript(describeFollowUpFailure(result.failed));
-            session.runExitCode = CliExitCode.Usage;
-          }
-        })
-        .catch(reportRunFailure)
+      const runChain = effectRuntime()
+        .runPromise(
+          tryPromise(() =>
+            Promise.resolve()
+              .then(() => {
+                recoveryHandedOff = true;
+                return resumeRun(id, {
+                  ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+                  recovery,
+                  extraFollowUps: supersededRecovery?.followUps,
+                  onResumeResolved: adoptResumedStream,
+                  onFollowUpQueueReady: () => {
+                    followUpQueueReady = true;
+                  },
+                  isCancellationRequested: () => session.stopRequested,
+                });
+              })
+              .then((result) => {
+                if ('started' in result) {
+                  settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
+                } else if (session.stopRequested) {
+                  session.runExitCode = CliExitCode.Interrupted;
+                } else {
+                  appendLocalErrorTranscript(
+                    describeFollowUpFailure(result.failed),
+                  );
+                  session.runExitCode = CliExitCode.Usage;
+                }
+              }),
+          ).pipe(
+            Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
+          ),
+        )
         .finally(() => {
           handBackUnusedRecovery(recovery, recoveryHandedOff);
           if (!followUpQueueReady) {
@@ -774,13 +797,20 @@ export function createChatSessionController(
       // settles here, before the run finishes, fire-and-forget per the
       // interface contract.
       runChain.then(resolveRunPromise, rejectRunPromise);
-    } catch (error: unknown) {
-      handBackUnusedRecovery(recovery, recoveryHandedOff);
-      restoreInterruptedRecovery(supersededRecovery);
-      reportRunFailure(error);
-      session.markRunCompleted();
-      resolveRunPromise();
-    }
+    };
+    await effectRuntime().runPromise(
+      tryPromise(attemptResume).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            handBackUnusedRecovery(recovery, recoveryHandedOff);
+            restoreInterruptedRecovery(supersededRecovery);
+            reportRunFailure(error);
+            session.markRunCompleted();
+            resolveRunPromise();
+          }),
+        ),
+      ),
+    );
   };
 
   /**
@@ -827,7 +857,7 @@ export function createChatSessionController(
       let finalize = (): void => session.markRunCompleted();
       let recovery: FollowUpRecoveryLease | undefined;
       let recoveryHandedOff = false;
-      try {
+      const attempt = async (): Promise<boolean> => {
         recovery = options.recovery
           ? runtimeSession.followUps.useRecovery(options.recovery)
           : runtimeSession.followUps.claimRecovery(streamId, true);
@@ -896,16 +926,26 @@ export function createChatSessionController(
           session.runExitCode = CliExitCode.Interrupted;
         }
         return false;
-      } catch (error: unknown) {
-        reportRunFailure(error);
-        return false;
-      } finally {
-        handBackUnusedRecovery(recovery, recoveryHandedOff);
-        finalize();
-        if (activeAutoResumeCancellation === attemptCancellation) {
-          activeAutoResumeCancellation = undefined;
-        }
-      }
+      };
+      return effectRuntime().runPromise(
+        tryPromise(attempt).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              reportRunFailure(error);
+              return false;
+            }),
+          ),
+          Effect.ensuring(
+            Effect.sync(() => {
+              handBackUnusedRecovery(recovery, recoveryHandedOff);
+              finalize();
+              if (activeAutoResumeCancellation === attemptCancellation) {
+                activeAutoResumeCancellation = undefined;
+              }
+            }),
+          ),
+        ),
+      );
     };
 
     void runResume().then(resolveRun, rejectRun);
@@ -937,7 +977,13 @@ export function createChatSessionController(
     };
     pendingInterruptedFollowUps = [];
     batch.completion = (async () => {
-      await session.runPromise?.catch(() => undefined);
+      // Best-effort settle-wait on the interrupted run: its outcome (including
+      // any failure) is already reported by the run's own recovery.
+      await effectRuntime().runPromise(
+        Effect.ignoreCause(
+          tryPromise(() => session.runPromise ?? Promise.resolve()),
+        ),
+      );
       if (batch.superseded) return true;
       let followUpQueueReady = false;
       try {
@@ -999,8 +1045,8 @@ export function createChatSessionController(
     followUpQueue.clear();
     session.executionId = undefined;
     let started = false;
-    const pendingStart = Promise.resolve().then(async (): Promise<void> => {
-      try {
+    const pendingStart = effectRuntime().runPromise(
+      tryPromise(async (): Promise<void> => {
         const meta = sessionMetaSignal.get();
         const currentAgent = meta.agent || initialAgent;
         const currentModel = meta.model || initialModel;
@@ -1031,17 +1077,21 @@ export function createChatSessionController(
             : {}),
         });
         started = true;
-      } catch (error: unknown) {
-        if (!session.stopRequested) {
-          appendLocalUserTranscript(displayInstruction ?? instruction);
-          appendLocalErrorTranscript(toErrorMessage(error));
-        }
-        session.runExitCode = session.stopRequested
-          ? CliExitCode.Success
-          : CliExitCode.AgentError;
-        session.markRunCompleted();
-      }
-    });
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            if (!session.stopRequested) {
+              appendLocalUserTranscript(displayInstruction ?? instruction);
+              appendLocalErrorTranscript(toErrorMessage(error));
+            }
+            session.runExitCode = session.stopRequested
+              ? CliExitCode.Success
+              : CliExitCode.AgentError;
+            session.markRunCompleted();
+          }),
+        ),
+      ),
+    );
     session.markRunPending(pendingStart);
     await pendingStart;
     return started;

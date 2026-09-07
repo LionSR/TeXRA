@@ -6,8 +6,9 @@
 
 import { z } from 'zod';
 
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { effectRuntime } from '@platform/processRuntime';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 const HISTORY_DIR = 'tui';
@@ -46,20 +47,27 @@ function serializeRecords(records: readonly HistoryRecord[]): string {
 export async function loadInputHistory(): Promise<InputHistory> {
   let records: HistoryRecord[] = [];
   if (await GlobalStorageFS.exists(HISTORY_PATH)) {
-    try {
-      const raw = await GlobalStorageFS.read(HISTORY_PATH);
-      for (const line of raw.split('\n')) {
-        const rec = Result.getOrUndefined(
-          parseJsonWith(line, HistoryRecordSchema),
-        );
-        if (rec && rec.v.length > 0) records.push(rec);
-      }
-    } catch {
-      // A read failure (EIO, permission, race-after-exists) must not block
-      // the TUI from mounting — the user can still type, just without
-      // history this session.
-      records = [];
-    }
+    records = await effectRuntime().runPromise(
+      Effect.tryPromise({
+        try: async (): Promise<HistoryRecord[]> => {
+          const raw = await GlobalStorageFS.read(HISTORY_PATH);
+          const parsed: HistoryRecord[] = [];
+          for (const line of raw.split('\n')) {
+            const rec = Result.getOrUndefined(
+              parseJsonWith(line, HistoryRecordSchema),
+            );
+            if (rec && rec.v.length > 0) parsed.push(rec);
+          }
+          return parsed;
+        },
+        catch: (error) => error,
+      }).pipe(
+        // A read failure (EIO, permission, race-after-exists) must not block
+        // the TUI from mounting — the user can still type, just without
+        // history this session.
+        Effect.catch(() => Effect.succeed([] as HistoryRecord[])),
+      ),
+    );
   }
   // Cap on load; older entries fall off when the ring is full.
   if (records.length > MAX_LINES) records = records.slice(-MAX_LINES);

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
 import { z } from 'zod';
 
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { effectRuntime } from '@platform/processRuntime';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
@@ -82,6 +82,12 @@ export function detectInstallMethod(
 }
 
 function currentModulePath(): string {
+  // Synchronous Node ESM boundary adapter: `fileURLToPath` throws on a
+  // non-file `import.meta.url`, and the raw catch is that translation to the
+  // entrypoint-path fallback. It stays raw because this runs before the
+  // process runtime exists (`detectInstallMethod` precedes
+  // `installCliProcessRuntime` in `notifyCliUpdate`), so there is no runtime
+  // to recover through.
   try {
     return fileURLToPath(import.meta.url);
   } catch {
@@ -162,13 +168,15 @@ async function readCommandStdout(
 const HomebrewInfoSchema = z.object({
   formulae: z
     .array(
-      z
-        .object({
-          name: z.string(),
-          versions: z.object({ stable: z.string().nullish() }).nullish(),
-        })
-        .nullable()
-        .catch(null),
+      z.union([
+        z
+          .object({
+            name: z.string(),
+            versions: z.object({ stable: z.string().nullish() }).nullish(),
+          })
+          .nullable(),
+        z.unknown().transform(() => null),
+      ]),
     )
     .nullish(),
 });
@@ -283,40 +291,53 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   // check is best-effort and must never block `chat` / `orchestrate` startup.
   let latest: string | undefined;
   let confirmed = false;
-  try {
-    await installCliProcessRuntime();
-    const globalState = await effectRuntime().runPromise(
-      openCliGlobalStateStore(createNodeStorageProvider()),
-    );
-    latest = await runDailyUpdateCheck({
-      currentVersion: context.version,
-      state: globalState,
-      lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-      fetchLatest: async () => {
-        if (method === 'brew') {
-          return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
-        }
-        const version = await fetchLatestCliVersion();
-        return { version, refreshed: version !== undefined };
-      },
-      notify: async (latestVersion) => {
-        writeTextStderr(
-          `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
-        );
-        const answer = await askCliQuestion(
-          `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
-        );
-        const normalized = answer.trim().toLowerCase();
-        confirmed =
-          normalized === '' || normalized === 'y' || normalized === 'yes';
-      },
-      // A readable-but-unwritable global state file must not cancel an update
-      // the user already accepted; the next launch merely checks again early.
-      stampFailure: 'ignore',
-    });
-  } catch {
-    return;
-  }
+  // The runtime install's recovery is a Promise boundary because the runtime
+  // everything after it runs on is the one being installed; once installed,
+  // the rest runs on it with every failure ignored (`catch { return; }` left
+  // `latest` undefined, which the guard below turns into the same return).
+  const runtimeInstalled = await installCliProcessRuntime().then(
+    () => true,
+    () => false,
+  );
+  if (!runtimeInstalled) return;
+  await effectRuntime().runPromise(
+    Effect.ignoreCause(
+      Effect.tryPromise({
+        try: async () => {
+          const globalState = await effectRuntime().runPromise(
+            openCliGlobalStateStore(createNodeStorageProvider()),
+          );
+          latest = await runDailyUpdateCheck({
+            currentVersion: context.version,
+            state: globalState,
+            lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
+            fetchLatest: async () => {
+              if (method === 'brew') {
+                return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
+              }
+              const version = await fetchLatestCliVersion();
+              return { version, refreshed: version !== undefined };
+            },
+            notify: async (latestVersion) => {
+              writeTextStderr(
+                `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
+              );
+              const answer = await askCliQuestion(
+                `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
+              );
+              const normalized = answer.trim().toLowerCase();
+              confirmed =
+                normalized === '' || normalized === 'y' || normalized === 'yes';
+            },
+            // A readable-but-unwritable global state file must not cancel an update
+            // the user already accepted; the next launch merely checks again early.
+            stampFailure: 'ignore',
+          });
+        },
+        catch: (error) => error,
+      }),
+    ),
+  );
   if (!latest) return;
   if (!confirmed) {
     writeTextStderr(
