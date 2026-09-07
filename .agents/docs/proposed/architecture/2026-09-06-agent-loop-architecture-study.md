@@ -1,7 +1,6 @@
 # Agent loops: an explicit interpreter on Effect, with one durable authority
 
 Status: proposed
-Archived: 2026-09-06
 
 Date: 2026-09-06. Research snapshot and recommendation; proposed states below are not existing production APIs. Read with the [decision document](./2026-09-06-agent-architecture-study.md) and [LLM package study](../../proposed/architecture/2026-09-06-llm-package-architecture-study.md).
 
