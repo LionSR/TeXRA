@@ -221,8 +221,8 @@ class UsageLogServiceImpl {
   private queue: QueuedUsageEntry[] = [];
   private retryBatch: RetryBatch | null = null;
   /** The ticker that schedules the periodic flush, forked by `initialize`
-   *  and interrupted by `dispose`. It only schedules: each flush runs on a
-   *  fiber of its own, so interrupting the ticker never touches a send. */
+   *  and interrupted by `dispose`. It only signals the sender, so interrupting
+   *  the ticker never touches a send. */
   private flushTimer: Fiber.Fiber<never> | null = null;
   private sender: Fiber.Fiber<never> | null = null;
   private triggers: Queue.Queue<void> | null = null;

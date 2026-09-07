@@ -1,4 +1,3 @@
-import { effectRuntime } from '@platform/processRuntime';
 import { Exit, Scope } from 'effect';
 import {
   afterEach,
@@ -12,6 +11,7 @@ import {
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as logger from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
