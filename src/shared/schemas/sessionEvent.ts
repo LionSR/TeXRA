@@ -378,7 +378,7 @@ const DisplaySessionEventSchema = z.discriminatedUnion('type', [
         (event.parentStartCommit === undefined) &&
       (event.parentStreamId == null) ===
         (event.parentExecutionId === undefined),
-    'A declared parent requires its creation commit, and a root has neither.',
+    'A declared parent requires its creation commit and execution ID; a root has neither.',
   ),
   StreamRemovedEventSchema.extend(envelope),
   ...DisplaySessionEventDraftSchema.options

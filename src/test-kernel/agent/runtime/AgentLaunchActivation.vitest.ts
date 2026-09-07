@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   getPersistedUserFollowUpSupport: vi.fn(),
   hasPersistedParent: vi.fn(),
   load: vi.fn(),
-  releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
 }));
@@ -43,8 +42,6 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   assertOwnedExecutionLease: vi.fn(),
-  releaseOwnedExecutionLeaseAfterFailure:
-    mocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
@@ -224,9 +221,6 @@ describe('native agent launch activation', () => {
     mocks.clearTerminalExecutionState.mockReturnValue(Effect.succeed({}));
     mocks.getPersistedUserFollowUpSupport.mockReturnValue(
       Effect.succeed(USER_FOLLOW_UP_SUPPORT.UNSUPPORTED),
-    );
-    mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
-      async (_executionId: ExecutionId, error: unknown) => error,
     );
   });
 

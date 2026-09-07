@@ -1,9 +1,8 @@
 /**
  * Execution-scoped key-value store infrastructure.
  *
- * Provides a unified storage interface for all execution-scoped data,
- * including typed accessors for well-known keys (meta, config, report, etc.)
- * and generic read/write for arbitrary keys.
+ * Checkpoints and delegation state retain file-backed key-value access.
+ * Canonical execution metadata is read and written through private events.
  */
 
 import { Cause, Effect } from 'effect';

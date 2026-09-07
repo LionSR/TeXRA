@@ -17,8 +17,8 @@ const mocks = vi.hoisted(() => ({
     async (_executionId: ExecutionId, operation: () => Promise<unknown>) =>
       operation(),
   ),
-  releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
   releaseOwnedExecutionLease: vi.fn(),
+  releaseExecutionClaims: vi.fn(),
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
@@ -27,8 +27,6 @@ vi.mock('@agent/storage/executionLease', () => ({
   releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
   validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
   runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
-  releaseOwnedExecutionLeaseAfterFailure:
-    mocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', async () => {
@@ -136,7 +134,7 @@ const LANE_SESSION = {
     ) => operation,
   },
   acquireExecutionClaims: () => Effect.succeed(Effect.void),
-  graph: { releaseExecutionClaims: () => Effect.void },
+  graph: { releaseExecutionClaims: mocks.releaseExecutionClaims },
   transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
   status: {},
   flushArtifacts: vi.fn(async () => {}),
@@ -195,10 +193,8 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     mocks.getPersistedUserFollowUpSupport.mockResolvedValue(
       USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     );
-    mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
-      async (_executionId: ExecutionId, error: unknown) => error,
-    );
     mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
+    mocks.releaseExecutionClaims.mockReturnValue(Effect.void);
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
@@ -295,13 +291,13 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
 
     expect(mocks.hasPersistedParent).not.toHaveBeenCalled();
     expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledWith(
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
       snapshot.executionId,
-      storageError,
     );
-    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledTimes(
-      1,
+    expect(mocks.releaseExecutionClaims).toHaveBeenCalledWith(
+      snapshot.executionId,
     );
+    expect(mocks.releaseExecutionClaims).toHaveBeenCalledTimes(1);
   });
 
   it('resolves execution lineage before activating the resume stream', async () => {
@@ -317,13 +313,13 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
 
     expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
-    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledWith(
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
       snapshot.executionId,
-      storageError,
     );
-    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledTimes(
-      1,
+    expect(mocks.releaseExecutionClaims).toHaveBeenCalledWith(
+      snapshot.executionId,
     );
+    expect(mocks.releaseExecutionClaims).toHaveBeenCalledTimes(1);
   });
 
   it('reports a reloaded session that is no longer resumable distinctly', async () => {

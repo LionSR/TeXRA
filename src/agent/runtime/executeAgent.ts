@@ -20,10 +20,7 @@ import {
   getPersistedUserFollowUpSupport,
   hasPersistedParent,
 } from '@agent/storage/executionLifecycle';
-import {
-  assertOwnedExecutionLease,
-  releaseOwnedExecutionLeaseAfterFailure,
-} from '@agent/storage/executionLease';
+import { assertOwnedExecutionLease } from '@agent/storage/executionLease';
 import { AgentError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
@@ -604,17 +601,11 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
       }),
     );
     if (Exit.isFailure(setup)) {
-      const failure = yield* Effect.tryPromise({
-        try: async () =>
-          runInSession(runSession, () =>
-            releaseOwnedExecutionLeaseAfterFailure(
-              resume.executionId,
-              Cause.squash(setup.cause),
-            ),
-          ),
-        catch: ensureError,
-      });
-      return yield* Effect.fail(ensureError(failure));
+      return yield* Effect.failCause(setup.cause).pipe(
+        Effect.onExit(() =>
+          runSession.releaseExecutionLease(resume.executionId),
+        ),
+      );
     }
     const { ctx, isSubagent } = setup.value;
     const { setting } = ctx;

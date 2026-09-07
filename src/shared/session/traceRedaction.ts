@@ -9,6 +9,8 @@ import { isObject } from '@utils/core';
 /** Apply the existing transcript rules before source facts enter the event table. */
 export function redactTraceDraft(event: SessionEventDraft): SessionEventDraft {
   switch (event.type) {
+    case 'updateStreamDescription':
+      return { ...event, description: redactSecrets(event.description) };
     case 'run.config':
       return { ...event, config: redactDisplayValue(event.config) };
     case 'result':

@@ -10,7 +10,6 @@ const launchMocks = vi.hoisted(() => ({
   createHandler: vi.fn(),
   hasPersistedParent: vi.fn(),
   loadAgent: vi.fn(),
-  releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
   resolveAgent: vi.fn(),
 }));
 
@@ -43,8 +42,6 @@ vi.mock('@agent/storage/executionLease', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/executionLease')>()),
   acquireResumedExecutionLease: launchMocks.acquireResumedExecutionLease,
   assertOwnedExecutionLease: vi.fn(),
-  releaseOwnedExecutionLeaseAfterFailure:
-    launchMocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
 
 import {
@@ -58,6 +55,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput as loadChatExportInputEffect } from '@agent/export/loadChatExportInput';
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { flowKey } from '@agent/node/persistedFlow';
@@ -292,6 +290,11 @@ describe('completedRunArchive facade', () => {
           description: content,
         },
         {
+          type: 'updateStreamDescription',
+          aggregateId: aggregateId('stream', streamId),
+          description: content,
+        },
+        {
           type: 'run.config',
           aggregateId: aggregateId('stream', streamId),
           executionId,
@@ -345,6 +348,10 @@ describe('completedRunArchive facade', () => {
       JSON.stringify(
         SubscriptionRef.getUnsafe(taskSession.view).streams.get(streamId)
           ?.inputFiles,
+      ),
+      JSON.stringify(
+        SubscriptionRef.getUnsafe(taskSession.view).streams.get(streamId)
+          ?.description,
       ),
     ];
     for (const output of outputs) {
@@ -568,12 +575,16 @@ describe('completedRunArchive facade', () => {
         const launchFailure = new Error(
           'stop after resumed writer acquisition',
         );
-        launchMocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+        const leaseModule = yield* Effect.promise(() =>
+          vi.importActual<typeof import('@agent/storage/executionLease')>(
+            '@agent/storage/executionLease',
+          ),
+        );
+        launchMocks.acquireResumedExecutionLease.mockImplementation(
+          leaseModule.acquireResumedExecutionLease,
+        );
         launchMocks.clearTerminalExecutionState.mockResolvedValue(undefined);
         launchMocks.hasPersistedParent.mockResolvedValue(false);
-        launchMocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
-          async (_executionId: ExecutionId, error: unknown) => error,
-        );
         launchMocks.resolveAgent.mockReturnValue({
           entry: { path: '/agents/orchestrator.yaml' },
         });
@@ -643,9 +654,29 @@ describe('completedRunArchive facade', () => {
         ).toBe(launchFailure);
 
         expect(resumedWriter).toHaveBeenCalledWith(streamId, executionId);
+        const released = yield* Effect.result(
+          getExecutionRecords(session, executionId).writeReport('late write'),
+        );
+        expect(released._tag).toBe('Failure');
         expect(
-          launchMocks.releaseOwnedExecutionLeaseAfterFailure,
-        ).toHaveBeenCalledWith(executionId, launchFailure);
+          (yield* Effect.exit(
+            session.commit([
+              {
+                type: 'log',
+                aggregateId: aggregateId('stream', streamId),
+                level: 'info',
+                message: 'late stream write',
+              },
+            ]),
+          ))._tag,
+        ).toBe('Failure');
+        expect(
+          yield* Effect.promise(() =>
+            runInSession(session, () =>
+              leaseModule.inspectExecutionLease(executionId),
+            ),
+          ),
+        ).toEqual({ status: 'free' });
         resumedWriter.mockRestore();
 
         const archived = yield* readCompletedRunConversationEffect(

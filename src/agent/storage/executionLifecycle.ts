@@ -28,6 +28,7 @@ import {
   aggregateTarget,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
+  type AggregateId,
   type ExecutionId,
   type ExecutionMeta,
   type RunIdentity,
@@ -524,6 +525,11 @@ export const readExecutionChildren = Effect.fn('readExecutionChildren')(
         .map((row) => row.aggregateId),
     );
     if (closed.has(parent.aggregateId)) return [];
+    const labels = new Map<AggregateId, string>();
+    for (const row of rows) {
+      if (row.type === 'execution.launchLabel')
+        labels.set(row.aggregateId, row.label);
+    }
     return rows.flatMap((row) => {
       if (
         row.type !== 'run.start' ||
@@ -532,17 +538,13 @@ export const readExecutionChildren = Effect.fn('readExecutionChildren')(
         closed.has(row.aggregateId)
       )
         return [];
-      const label = rows.findLast(
-        (event) =>
-          event.type === 'execution.launchLabel' &&
-          event.aggregateId === aggregateId('execution', row.executionId),
-      );
-      if (label?.type !== 'execution.launchLabel')
+      const label = labels.get(aggregateId('execution', row.executionId));
+      if (label === undefined)
         throw new Error(`Child launch label missing for ${row.executionId}`);
       return [
         {
           id: row.executionId,
-          agent: label.label,
+          agent: label,
           timestamp: new Date(row.at).toISOString(),
         },
       ];
