@@ -10,11 +10,12 @@ commentary/final-answer labels and completed encrypted reasoning. Google
 Interactions additionally supports signed reasoning
 and inline image, audio, video and document input; its tool results support text
 and images. Preparation freezes the selected
-deployment and protocol-specific controls; each execution makes one SDK request
-without automatic retries. Stream completion collects the final
+deployment and protocol-specific controls; each foreground execution sends one
+generation request without automatic retries. Stream completion collects the final
 usage receipt when present and represents missing usage as unknown. Common usage
 retains token totals, cache-read tokens and reasoning tokens; Anthropic also retains
-its cache-creation breakdown and returned tier and geography. Further provider
+its cache-creation breakdown and returned tier and geography. OpenRouter retains
+reported billing, cache, server-tool and service-tier evidence. Further provider
 usage categories remain incomplete, and pricing remains runtime-owned.
 
 Unsupported content fails explicitly; a protocol does not silently discard
@@ -84,6 +85,13 @@ Unsupported temperature requests fail before transport; numeric zero remains a
 value. Absent reasoning and service-tier controls inherit selected defaults,
 whereas explicit null requests omission. A supplied reasoning object replaces
 the whole default object; its nullable fields select individual omissions.
+Selected capabilities also determine output-limit and storage support, allowed
+reasoning efforts, instruction requirements and response chaining. Required
+instructions are trimmed or replaced by the selected fallback during preparation,
+before prefix identity is fixed; execution never rewrites an admitted request.
+A null output limit means omission of the wire parameter, not an unlimited
+runtime generation allowance. Unsupported authored controls and altered admitted
+bindings fail before a request is sent.
 All foreground protocols emit observed provider identity before progress or a
 completed result. This evidence is not acceptance of recoverable background work
 or confirmation of remote cancellation.
@@ -119,16 +127,54 @@ A returned terminal status is an observed outcome, without any claim about wheth
 it preceded the cancellation request; queued or running remains unconfirmed.
 Interrupting the local HTTP request does not confirm remote cancellation.
 
-Responses continuation is a pure operation over rematerialized admitted input and
-completed output. It checks the exact origin, effective instructions and canonical
+The exported pure Responses continuation operation uses the same selected
+configuration, rematerialized admitted input and completed output. It constructs
+only stored anchors and checks the exact origin, effective instructions and canonical
 prefix, lowers the whole history to retain tool-call context, and sends only the
-appended wire items. Instructions are sent again on chained requests. Anchors are
-currently limited to stored responses ending normally or with complete local calls;
-other outcomes remain available for canonical replay. Temporary background retrieval
+appended wire items. Instructions are sent again on chained requests. Stored anchors
+are limited to responses ending normally or with complete local calls; other
+outcomes remain available for canonical replay. Temporary background retrieval
 with `store: false` is not treated as a reusable conversation anchor. This follows
 the separate [background retrieval](https://developers.openai.com/api/docs/guides/background)
 and [conversation-state](https://developers.openai.com/api/docs/guides/conversation-state)
 contracts.
+
+Responses WebSocket acquisition owns one physical connection, one Node object-mode
+readable and one persistent iterator. HTTP and WebSocket execution share the same
+ordered response decoder and request lowering. Only one turn may execute on a
+connection at a time; semantic completion ends that turn without returning the
+connection's iterator. The Effect scope owns 30-second keepalive and physical
+teardown. After 55 minutes, further execution requires explicit reacquisition;
+there is no transparent reconnect or replacement. Interruption invalidates the
+connection before joining its pending read, and only acquisition cleanup returns
+the persistent iterator. These rules do not establish a bounded cleanup duration.
+
+Prepared WebSocket turns name their acquisition and cannot run through HTTP or a
+different connection. When selected chaining is supported, the live acquisition
+may issue an exact-prefix local anchor for its actual latest eligible response.
+A newer ineligible response, failure or connection invalidation clears that
+eligibility. A pure constructor cannot manufacture local authority from a supplied
+connection identifier. Stored anchors remain distinct and portable between matching
+origins. The [WebSocket contract](https://developers.openai.com/api/docs/guides/websocket-mode)
+describes the separate connection-local cache and implicit default lane; this
+implementation adds no named lanes or multiplexing.
+
+Buffered post-terminal frames and traffic arriving while idle invalidate the
+connection. A repeated immediately preceding response identity is rejected, but
+this is not universal correlation of arbitrarily delayed older traffic after a
+new send. Interrupted connections are physically isolated before a new acquisition.
+Binary, non-JSON and foreign-lane frames fail explicitly. Node readable flow
+control provides measured backpressure without a second incoming queue; it does
+not bound individual frames, completed output or total process memory.
+
+Responses authentication is a factory-only choice between an API key and a captured
+subscription access-token/account pair. The latter supplies its selected account
+and fixed subscription headers to both HTTP and WebSocket requests; credentials
+never rewrite the body. A nullable account does not establish stable recovery
+identity. Public WebSocket requests omit `stream`, while the explicitly selected
+subscription policy retains `stream: true`; foreground requests omit `background`
+on both transports. Application selection must still resolve the actual backend
+model, allowed effort and instruction policy before admission.
 
 Stream ownership joins iterator cleanup. Active-read interruption aborts before
 joining the iterator; successful one-read background submission closes the iterator
@@ -162,8 +208,25 @@ temperature one or omission; manual thinking cannot force a named tool.
 Completion follows the semantic `message_stop` event, not connection closure.
 Hosted execution, beta APIs, compaction, uploads and `pause_turn` remain unsupported.
 
+OpenRouter Chat has its own direct HTTP/SSE implementation with foreground
+preparation, streaming and generation; it has no continuation, background or
+token-estimate operation. Selected controls cover output limit, nullable
+temperature and supported effort, stop sequences and automatic or supported
+named-tool choice. It preserves grouped plain reasoning and all four typed
+reasoning-detail forms, including absent, null and empty values, original local
+calls, and file and URL annotations for replay. Reported billing and usage details
+remain evidence rather than inferred pricing or default totals. Failure-side file
+annotations retain their originating binding; runtime still owns display and reuse.
+
+OpenRouter accepts selected PNG/JPEG/WebP/GIF images with low, high or omitted
+detail, selected self-contained audio formats and inline PDF input. Text labels
+remain ordered, and tool results are text-only. Video, raw audio, generated media,
+unknown output forms, missing call identities and canonical orders that cannot be
+represented fail explicitly. There is no retry, automatic token preflight, added
+size cap or bounded-memory claim.
+
 Responses hosted tools and sources, text annotations, log probabilities, media
-inputs, uploads, compaction and WebSocket transport remain unsupported. Returned
+inputs, uploads and compaction remain unsupported. Returned
 Responses service-tier billing evidence still requires implementation.
 
 The contract is provisional: remaining media and opaque provider values require

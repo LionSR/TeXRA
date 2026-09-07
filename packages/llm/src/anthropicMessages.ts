@@ -452,6 +452,8 @@ export function anthropicMessagesModel(
       input.store !== undefined ||
       input.promptCacheKey !== undefined ||
       input.reasoning !== undefined ||
+      input.effort === 'none' ||
+      input.effort === 'minimal' ||
       input.thinkingLevel !== undefined ||
       input.serviceTier === 'fast' ||
       input.serviceTier === null ||

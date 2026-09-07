@@ -1610,6 +1610,8 @@ describe('native OpenAI Chat protocol', () => {
     'background mode',
     'thinking control',
     'effort control',
+    'none effort',
+    'minimal effort',
     'cache control',
     'prompt cache key',
     'stop control',
@@ -1619,6 +1621,8 @@ describe('native OpenAI Chat protocol', () => {
   ] as const)('rejects unsupported %s before transport', async (scenario) => {
     const fetch = vi.fn<typeof globalThis.fetch>();
     let config: ChatConfiguration = CONFIG;
+    if (scenario === 'none effort' || scenario === 'minimal effort')
+      config = REASONING_CONFIGS[0];
     if (scenario === 'Kimi tool media') config = REASONING_CONFIGS[1];
     if (scenario === 'GLM tool media') config = REASONING_CONFIGS[2];
     const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
@@ -1677,6 +1681,9 @@ describe('native OpenAI Chat protocol', () => {
     if (scenario === 'thinking control')
       request = { ...REQUEST, thinking: { mode: 'disabled' } };
     if (scenario === 'effort control') request = { ...REQUEST, effort: null };
+    if (scenario === 'none effort') request = { ...REQUEST, effort: 'none' };
+    if (scenario === 'minimal effort')
+      request = { ...REQUEST, effort: 'minimal' };
     if (scenario === 'cache control')
       request = { ...REQUEST, cache: 'disabled' };
     if (scenario === 'prompt cache key')

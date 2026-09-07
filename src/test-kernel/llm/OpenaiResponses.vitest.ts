@@ -1,16 +1,19 @@
 // Node imports
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
 
 // Third-party imports
 import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import {
   openaiResponsesContinuation,
   openaiResponsesModel,
+  openaiResponsesWebSocketModel,
 } from '@texra-ai/llm/openai-responses';
 import { ContinuationSchema } from '@texra-ai/llm/turn';
 import { Cause, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { WebSocketServer, type WebSocket } from 'ws';
 import type {
   BackgroundEvent,
   ModelError,
@@ -28,6 +31,20 @@ const CONFIG: OpenAIResponsesConfiguration = {
     credentialScope: 'synthetic-account',
   },
   supportsTemperature: true,
+  supportsMaxOutputTokens: true,
+  supportsStorage: true,
+  supportsResponseChaining: true,
+  allowedReasoningEfforts: [
+    'none',
+    'minimal',
+    'low',
+    'medium',
+    'high',
+    'xhigh',
+    'max',
+  ],
+  instructions: { kind: 'optional' },
+  webSocketStreamParameter: 'implicit',
   background: 'unsupported',
   defaults: {
     temperature: 0.7,
@@ -36,6 +53,26 @@ const CONFIG: OpenAIResponsesConfiguration = {
     parallelToolCalls: true,
     reasoning: { effort: 'high', mode: 'pro', summary: 'auto' },
     serviceTier: 'fast',
+  },
+};
+const SUBSCRIPTION_CONFIG: OpenAIResponsesConfiguration = {
+  ...CONFIG,
+  supportsTemperature: false,
+  supportsMaxOutputTokens: false,
+  supportsStorage: false,
+  supportsResponseChaining: false,
+  allowedReasoningEfforts: ['low', 'medium'],
+  instructions: {
+    kind: 'required',
+    fallback: "Follow the user's instructions.",
+  },
+  webSocketStreamParameter: 'required',
+  defaults: {
+    ...CONFIG.defaults,
+    temperature: null,
+    maxOutputTokens: null,
+    store: false,
+    reasoning: { effort: 'medium', mode: null, summary: 'auto' },
   },
 };
 const REQUEST: TurnRequest = {
@@ -137,15 +174,555 @@ function response(frames: object[]): Response {
 }
 function modelWith(fetch: typeof globalThis.fetch, configuration = CONFIG) {
   return openaiResponsesModel(configuration, {
-    apiKey: 'synthetic-not-a-secret',
+    authentication: { kind: 'api-key', apiKey: 'synthetic-not-a-secret' },
     fetch,
   });
 }
 
+const socketServers: WebSocketServer[] = [];
+async function socketServer(
+  onConnection: (
+    socket: WebSocket,
+    request: import('node:http').IncomingMessage,
+  ) => void,
+  options: ConstructorParameters<typeof WebSocketServer>[0] = {},
+) {
+  const server = new WebSocketServer({
+    ...options,
+    host: '127.0.0.1',
+    port: 0,
+  });
+  socketServers.push(server);
+  server.on('connection', onConnection);
+  await once(server, 'listening');
+  const address = server.address();
+  assert(address !== null && typeof address !== 'string');
+  return {
+    ...CONFIG,
+    deployment: {
+      ...CONFIG.deployment,
+      endpoint: `http://127.0.0.1:${address.port}/v1`,
+    },
+  };
+}
+
 describe('native OpenAI Responses protocol', () => {
-  afterEach(() => {
+  afterEach(async () => {
+    for (const server of socketServers.splice(0)) {
+      for (const socket of server.clients) socket.terminate();
+      server.close();
+      await once(server, 'close');
+    }
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
+  });
+
+  it.each(['stop', 'length'] as const)(
+    'owns one WebSocket reader through a %s continuation and rejects old connection anchors',
+    async (outcome) => {
+      const requests: Record<string, unknown>[] = [];
+      let connections = 0;
+      let closes = 0;
+      const configuration = await socketServer((socket) => {
+        connections += 1;
+        socket.once('close', () => {
+          closes += 1;
+        });
+        socket.on('message', (data) => {
+          requests.push(JSON.parse(data.toString()));
+          const id = `resp_${requests.length}`;
+          const limited = requests.length === 2 && outcome === 'length';
+          const output =
+            requests.length === 1
+              ? OUTPUT
+              : [{ ...MESSAGE, status: limited ? 'incomplete' : 'completed' }];
+          for (const [sequence_number, event] of events(
+            output,
+            snapshot(output, {
+              id,
+              ...(limited
+                ? {
+                    status: 'incomplete',
+                    incomplete_details: { reason: 'max_output_tokens' },
+                  }
+                : {}),
+            }),
+          ).entries()) {
+            const value =
+              'response' in event
+                ? { ...event, response: { ...(event.response as object), id } }
+                : event;
+            socket.send(
+              JSON.stringify({
+                ...value,
+                sequence_number,
+                ...(limited &&
+                'type' in event &&
+                event.type === 'response.completed'
+                  ? { type: 'response.incomplete' }
+                  : {}),
+              }),
+            );
+          }
+        });
+      });
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const model = yield* openaiResponsesWebSocketModel(configuration, {
+              kind: 'api-key',
+              apiKey: 'synthetic-not-a-secret',
+            });
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert(
+              turn.protocol === 'openai-responses' &&
+                turn.mode === 'foreground',
+            );
+            expect(turn.transport.kind).toBe('websocket');
+            const first = yield* model.generateTurn(turn);
+            assert(first.continuation?.origin.protocol === 'openai-responses');
+            expect(first.continuation.anchor).toMatchObject({
+              kind: 'connection',
+              responseId: 'resp_1',
+            });
+            const nextRequest: TurnRequest = {
+              ...REQUEST,
+              messages: [
+                ...turn.messages,
+                {
+                  role: 'assistant',
+                  origin: first.requestedOrigin,
+                  content: first.content,
+                },
+                {
+                  role: 'tool',
+                  results: [
+                    {
+                      callOrdinal: 0,
+                      status: 'success',
+                      content: [{ kind: 'text', text: 'a' }],
+                    },
+                    {
+                      callOrdinal: 1,
+                      status: 'error',
+                      content: [{ kind: 'text', text: 'b' }],
+                    },
+                  ],
+                },
+              ],
+              continuation: first.continuation,
+            };
+            const next = yield* model.prepareTurn(nextRequest);
+            assert(next.mode === 'foreground');
+            const second = yield* model.generateTurn(next);
+            expect(second.providerResponseId).toBe('resp_2');
+            expect(second.finishReason).toBe(outcome);
+            if (outcome === 'stop')
+              expect(second.continuation?.anchor).toMatchObject({
+                kind: 'connection',
+                responseId: 'resp_2',
+              });
+            else expect(second.continuation).toBeUndefined();
+            expect(yield* Effect.flip(model.generateTurn(next))).toMatchObject({
+              kind: 'invalid-request',
+            });
+            const http = modelWith(vi.fn(), configuration);
+            expect(yield* Effect.flip(http.generateTurn(turn))).toMatchObject({
+              kind: 'unsupported',
+            });
+            expect(connections).toBe(1);
+          }),
+        ),
+      );
+      await vi.waitFor(() => expect(closes).toBe(1));
+      expect(requests).toHaveLength(2);
+      expect(requests[0]).toMatchObject({
+        type: 'response.create',
+        store: false,
+      });
+      expect(requests[0]).not.toHaveProperty('stream');
+      expect(requests[0]).not.toHaveProperty('background');
+      expect(requests[1]).toMatchObject({
+        previous_response_id: 'resp_1',
+        input: [
+          { type: 'function_call_output', call_id: 'call_1', output: 'a' },
+          {
+            type: 'function_call_output',
+            call_id: 'call_2',
+            output: 'Error: b',
+          },
+        ],
+      });
+    },
+  );
+
+  it('invalidates and joins an interrupted WebSocket before explicit reacquisition', async () => {
+    let connections = 0;
+    let requests = 0;
+    let closes = 0;
+    const configuration = await socketServer((socket) => {
+      connections += 1;
+      socket.once('close', () => {
+        closes += 1;
+      });
+      socket.on('message', () => {
+        requests += 1;
+        const frames =
+          connections === 1
+            ? [
+                {
+                  type: 'response.created',
+                  response: snapshot([], { status: 'in_progress' }),
+                },
+              ]
+            : events([MESSAGE]);
+        for (const [sequence_number, frame] of frames.entries())
+          socket.send(JSON.stringify({ ...frame, sequence_number }));
+      });
+    });
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const model = yield* openaiResponsesWebSocketModel(configuration, {
+            kind: 'api-key',
+            apiKey: 'synthetic-not-a-secret',
+          });
+          const turn = yield* model.prepareTurn(REQUEST);
+          assert(turn.mode === 'foreground');
+          const fiber = yield* model.generateTurn(turn).pipe(Effect.forkChild);
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(requests).toBe(1)),
+          );
+          expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+            kind: 'unsupported',
+          });
+          yield* Fiber.interrupt(fiber);
+          const exit = yield* Fiber.await(fiber);
+          assert(exit._tag === 'Failure');
+          expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+          yield* Effect.promise(() => vi.waitFor(() => expect(closes).toBe(1)));
+          expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+            kind: 'transport',
+          });
+          expect(connections).toBe(1);
+          const fresh = yield* openaiResponsesWebSocketModel(configuration, {
+            kind: 'api-key',
+            apiKey: 'synthetic-not-a-secret',
+          });
+          expect(yield* Effect.flip(fresh.generateTurn(turn))).toMatchObject({
+            kind: 'unsupported',
+          });
+          const admitted = yield* fresh.prepareTurn(REQUEST);
+          assert(admitted.mode === 'foreground');
+          expect((yield* fresh.generateTurn(admitted)).finishReason).toBe(
+            'stop',
+          );
+          expect(connections).toBe(2);
+          expect(requests).toBe(2);
+        }),
+      ),
+    );
+    await vi.waitFor(() => expect(closes).toBe(2));
+  });
+
+  it.each([
+    'binary',
+    'malformed-json',
+    'foreign-lane',
+    'post-terminal',
+    'rejection',
+    'streaming-rejection',
+    'connection-limit',
+  ] as const)(
+    'rejects %s WebSocket traffic and does not reuse that connection',
+    async (variant) => {
+      let requests = 0;
+      const configuration = await socketServer((socket) =>
+        socket.on('message', () => {
+          requests += 1;
+          if (variant === 'binary') socket.send(Buffer.from('{}'));
+          else if (variant === 'malformed-json') socket.send('{');
+          else if (variant === 'foreign-lane')
+            socket.send(
+              JSON.stringify({
+                type: 'response.created',
+                stream_id: 'other',
+                sequence_number: 0,
+                response: snapshot([], { status: 'in_progress' }),
+              }),
+            );
+          else if (variant === 'connection-limit')
+            socket.send(
+              JSON.stringify({
+                type: 'error',
+                status: 400,
+                error: {
+                  type: 'invalid_request_error',
+                  code: 'websocket_connection_limit_reached',
+                  message:
+                    'Responses websocket connection limit reached (60 minutes). Create a new websocket connection to continue.',
+                },
+              }),
+            );
+          else if (variant === 'streaming-rejection')
+            socket.send(
+              JSON.stringify({
+                type: 'error',
+                sequence_number: 0,
+                code: 'server_error',
+                message: 'Synthetic streaming rejection',
+                param: null,
+              }),
+            );
+          else if (variant === 'rejection')
+            socket.send(
+              JSON.stringify({
+                type: 'error',
+                status: 429,
+                error: {
+                  type: 'rate_limit_error',
+                  code: 'rate_limit_exceeded',
+                  message: 'Synthetic request rejection',
+                  param: null,
+                },
+              }),
+            );
+          else {
+            for (const [sequence_number, frame] of events([MESSAGE]).entries())
+              socket.send(JSON.stringify({ ...frame, sequence_number }));
+            socket.send(
+              JSON.stringify({
+                type: 'response.created',
+                sequence_number: 0,
+                response: snapshot([], {
+                  id: 'unrequested',
+                  status: 'in_progress',
+                }),
+              }),
+            );
+          }
+        }),
+      );
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const model = yield* openaiResponsesWebSocketModel(configuration, {
+              kind: 'api-key',
+              apiKey: 'synthetic-not-a-secret',
+            });
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert(turn.mode === 'foreground');
+            const error = yield* Effect.flip(model.generateTurn(turn));
+            expect(error.kind).toBe(
+              variant === 'rejection' ||
+                variant === 'streaming-rejection' ||
+                variant === 'connection-limit'
+                ? 'provider-rejection'
+                : 'malformed-output',
+            );
+            if (variant === 'rejection')
+              expect(error).toMatchObject({
+                status: 429,
+                message: 'Synthetic request rejection',
+              });
+            if (variant === 'connection-limit')
+              expect(error).toMatchObject({
+                status: 400,
+                cause: { code: 'websocket_connection_limit_reached' },
+                message:
+                  'Responses websocket connection limit reached (60 minutes). Create a new websocket connection to continue.',
+              });
+            yield* Effect.flip(model.generateTurn(turn));
+            expect(requests).toBe(1);
+          }),
+        ),
+      );
+    },
+  );
+
+  it('retains handshake rejection evidence and sends the selected Codex account headers', async () => {
+    let headers: import('node:http').IncomingHttpHeaders | undefined;
+    const configuration = await socketServer(() => {}, {
+      verifyClient(info, done) {
+        headers = info.req.headers;
+        done(false, 401, 'Unauthorized', { 'x-request-id': 'handshake_1' });
+      },
+    });
+    vi.stubEnv('OPENAI_CUSTOM_HEADERS', 'X-Synthetic: ambient');
+    expect(
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.flip(
+            openaiResponsesWebSocketModel(configuration, {
+              kind: 'codex',
+              accessToken: 'selected-token',
+              accountId: 'selected-account',
+            }),
+          ),
+        ),
+      ),
+    ).toMatchObject({ kind: 'unsupported' });
+    expect(headers).toBeUndefined();
+    vi.stubEnv('OPENAI_CUSTOM_HEADERS', '');
+    const error = await Effect.runPromise(
+      Effect.scoped(
+        Effect.flip(
+          openaiResponsesWebSocketModel(configuration, {
+            kind: 'codex',
+            accessToken: 'selected-token',
+            accountId: 'selected-account',
+          }),
+        ),
+      ),
+    );
+    expect(error).toMatchObject({
+      kind: 'authentication',
+      status: 401,
+      requestId: 'handshake_1',
+    });
+    expect(headers).toMatchObject({
+      authorization: 'Bearer selected-token',
+      'chatgpt-account-id': 'selected-account',
+      originator: 'texra',
+      'openai-beta': 'responses=experimental',
+    });
+  });
+
+  it('sends the selected subscription WebSocket policy without rewriting admitted controls', async () => {
+    const requests: Record<string, unknown>[] = [];
+    let headers: import('node:http').IncomingHttpHeaders | undefined;
+    const local = await socketServer((socket, request) => {
+      headers = request.headers;
+      socket.on('message', (data) => {
+        requests.push(JSON.parse(data.toString()));
+        for (const [sequence_number, frame] of events([MESSAGE]).entries())
+          socket.send(JSON.stringify({ ...frame, sequence_number }));
+      });
+    });
+    const selected = { ...SUBSCRIPTION_CONFIG, deployment: local.deployment };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const model = yield* openaiResponsesWebSocketModel(selected, {
+            kind: 'codex',
+            accessToken: 'selected-token',
+            accountId: 'selected-account',
+          });
+          const turn = yield* model.prepareTurn({ ...REQUEST, system: ' ' });
+          assert(turn.mode === 'foreground');
+          expect(
+            (yield* model.generateTurn(turn)).continuation,
+          ).toBeUndefined();
+          expect(
+            yield* Effect.flip(
+              model.prepareTurn({ ...REQUEST, mode: 'background' }),
+            ),
+          ).toMatchObject({ kind: 'unsupported' });
+          expect(model.background).toBeUndefined();
+        }),
+      ),
+    );
+    expect(headers).toMatchObject({
+      authorization: 'Bearer selected-token',
+      'chatgpt-account-id': 'selected-account',
+      originator: 'texra',
+      'openai-beta': 'responses=experimental',
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      type: 'response.create',
+      stream: true,
+      store: false,
+      instructions: "Follow the user's instructions.",
+      reasoning: { effort: 'medium' },
+    });
+    expect(requests[0]).not.toHaveProperty('background');
+    expect(requests[0]).not.toHaveProperty('max_output_tokens');
+    expect(requests[0]).not.toHaveProperty('temperature');
+  });
+
+  it('invalidates genuinely idle traffic before another turn can be sent', async () => {
+    let requests = 0;
+    let peer: WebSocket | undefined;
+    let closed = false;
+    const configuration = await socketServer((socket) => {
+      peer = socket;
+      socket.once('close', () => {
+        closed = true;
+      });
+      socket.on('message', () => {
+        requests += 1;
+        for (const [sequence_number, frame] of events([MESSAGE]).entries())
+          socket.send(JSON.stringify({ ...frame, sequence_number }));
+      });
+    });
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const model = yield* openaiResponsesWebSocketModel(configuration, {
+            kind: 'api-key',
+            apiKey: 'synthetic-not-a-secret',
+          });
+          const turn = yield* model.prepareTurn(REQUEST);
+          assert(turn.mode === 'foreground');
+          yield* model.generateTurn(turn);
+          peer!.send(
+            JSON.stringify({
+              type: 'response.created',
+              sequence_number: 0,
+              response: snapshot([], {
+                id: 'unrequested',
+                status: 'in_progress',
+              }),
+            }),
+          );
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(closed).toBe(true)),
+          );
+          expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+            kind: 'malformed-output',
+          });
+          expect(requests).toBe(1);
+        }),
+      ),
+    );
+  });
+
+  it('owns keepalive timing and rejects an expired connection without reconnecting', async () => {
+    let pings = 0;
+    let connections = 0;
+    let requests = 0;
+    const configuration = await socketServer((socket) => {
+      connections += 1;
+      socket.on('ping', () => {
+        pings += 1;
+      });
+      socket.on('message', () => {
+        requests += 1;
+      });
+    });
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const model = yield* openaiResponsesWebSocketModel(configuration, {
+            kind: 'api-key',
+            apiKey: 'synthetic-not-a-secret',
+          });
+          const turn = yield* model.prepareTurn(REQUEST);
+          assert(turn.mode === 'foreground');
+          yield* TestClock.adjust(30_000);
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(pings).toBeGreaterThan(0)),
+          );
+          yield* TestClock.adjust(55 * 60_000 - 30_000);
+          expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+            kind: 'transport',
+          });
+          expect(connections).toBe(1);
+          expect(requests).toBe(0);
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    );
   });
 
   it.each(['Chat', 'Responses'] as const)(
@@ -262,7 +839,8 @@ describe('native OpenAI Responses protocol', () => {
           headers: { 'content-type': 'text/event-stream' },
         });
       });
-    const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+    const configuration = { ...CONFIG, background: 'supported' as const };
+    const model = modelWith(fetch, configuration);
     assert(model.background);
     const turn = await Effect.runPromise(
       model.prepareTurn({
@@ -352,12 +930,12 @@ describe('native OpenAI Responses protocol', () => {
     assert(terminal?.kind === 'completed');
     expect(terminal.result.continuation).toBeUndefined();
     const continuation = await Effect.runPromise(
-      openaiResponsesContinuation(turn, terminal.result),
+      openaiResponsesContinuation(configuration, turn, terminal.result),
     );
     assert(continuation && 'responseId' in continuation.anchor);
     expect(continuation).toMatchObject({
       coveredMessages: 2,
-      anchor: { responseId: 'resp_1', coveredItems: 5 },
+      anchor: { kind: 'stored', responseId: 'resp_1', coveredItems: 5 },
     });
     const messages: TurnRequest['messages'] = [
       ...turn.messages,
@@ -1044,7 +1622,6 @@ describe('native OpenAI Responses protocol', () => {
       reasoning: { effort: 'high', mode: 'pro', summary: 'auto' },
       service_tier: 'fast',
       store: false,
-      background: false,
       include: ['reasoning.encrypted_content'],
     });
     await Effect.runPromise(
@@ -1097,11 +1674,119 @@ describe('native OpenAI Responses protocol', () => {
         },
       },
       { ...REQUEST, promptCacheKey: 'admitted-invocation' },
+      ...(
+        [
+          {
+            kind: 'reasoning',
+            summary: [],
+            evidence: { kind: 'openrouter-reasoning', details: [] },
+          },
+          {
+            kind: 'file-annotation',
+            hash: 'provider-file',
+            evidence: { kind: 'openrouter-file-annotation' },
+          },
+          {
+            kind: 'url-citation',
+            url: 'https://example.org/source',
+            evidence: { kind: 'openrouter-url-citation' },
+          },
+        ] as const
+      ).map((part) => ({
+        ...REQUEST,
+        messages: [
+          ...REQUEST.messages,
+          {
+            role: 'assistant' as const,
+            origin: {
+              ...OPERATION.origin,
+              protocol: 'openrouter-chat' as const,
+            },
+            content: [part],
+          },
+        ],
+      })),
     ] satisfies readonly TurnRequest[])
       expect(
         await Effect.runPromise(Effect.flip(model.prepareTurn(request))),
       ).toMatchObject({ kind: 'unsupported' });
     expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('resolves selected subscription request policy before admission and rejects altered bindings', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () => response(events([MESSAGE])));
+    const configuration = SUBSCRIPTION_CONFIG;
+    const authentication = {
+      kind: 'codex' as const,
+      accessToken: 'selected-token',
+      accountId: 'selected-account',
+    };
+    const model = openaiResponsesModel(configuration, {
+      authentication,
+      fetch,
+    });
+    authentication.accessToken = 'later-token';
+    authentication.accountId = 'later-account';
+    const turn = await Effect.runPromise(
+      model.prepareTurn({ ...REQUEST, system: '  selected instructions  ' }),
+    );
+    assert(turn.protocol === 'openai-responses' && turn.mode === 'foreground');
+    expect(turn.system).toBe('selected instructions');
+    expect(turn.transport).toEqual({ kind: 'http' });
+    expect(turn.controls.maxOutputTokens).toBeNull();
+    const result = await Effect.runPromise(model.generateTurn(turn));
+    const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+    const headers = new Headers(fetch.mock.calls[0]?.[1]?.headers);
+    expect(headers.get('authorization')).toBe('Bearer selected-token');
+    expect(headers.get('chatgpt-account-id')).toBe('selected-account');
+    expect(headers.get('originator')).toBe('texra');
+    expect(headers.get('openai-beta')).toBe('responses=experimental');
+    expect(body.instructions).toBe('selected instructions');
+    expect(body.reasoning.effort).toBe('medium');
+    expect(body.stream).toBe(true);
+    expect(body.store).toBe(false);
+    expect(body).not.toHaveProperty('background');
+    expect(body).not.toHaveProperty('max_output_tokens');
+    expect(body).not.toHaveProperty('temperature');
+    expect(result.continuation).toBeUndefined();
+    expect(
+      await Effect.runPromise(
+        openaiResponsesContinuation(configuration, turn, result),
+      ),
+    ).toBeUndefined();
+    expect(
+      (await Effect.runPromise(model.prepareTurn({ ...REQUEST, system: '  ' })))
+        .system,
+    ).toBe("Follow the user's instructions.");
+    for (const control of [
+      { maxOutputTokens: 100 },
+      { store: true },
+      { temperature: 0 },
+      { reasoning: { effort: 'high', mode: null, summary: null } },
+    ] satisfies readonly Partial<TurnRequest>[])
+      expect(
+        await Effect.runPromise(
+          Effect.flip(model.prepareTurn({ ...REQUEST, ...control })),
+        ),
+      ).toMatchObject({ kind: 'unsupported' });
+    for (const altered of [
+      { ...turn, controls: { ...turn.controls, maxOutputTokens: 100 } },
+      { ...turn, controls: { ...turn.controls, store: true } },
+      { ...turn, system: '  ' },
+      {
+        ...turn,
+        transport: {
+          kind: 'websocket' as const,
+          connectionId: '7bdca3ee-ae2a-4551-a7a5-4895b613b40b',
+        },
+      },
+    ])
+      expect(
+        await Effect.runPromise(Effect.flip(model.generateTurn(altered))),
+      ).toMatchObject({ kind: 'unsupported' });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('returns explicit length-limited text without dispatchable unfinished calls', async () => {

@@ -523,6 +523,8 @@ export function openaiChatModel(
         parsed.data.thinkingLevel !== undefined ||
         parsed.data.continuation !== undefined ||
         parsed.data.reasoning !== undefined ||
+        parsed.data.effort === 'none' ||
+        parsed.data.effort === 'minimal' ||
         parsed.data.serviceTier !== undefined ||
         parsed.data.cache !== undefined ||
         parsed.data.stopSequences !== undefined ||

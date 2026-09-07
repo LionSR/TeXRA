@@ -35,6 +35,7 @@ const OriginSchema = BindingSchema.extend({
     'deepseek-chat',
     'kimi-chat',
     'glm-chat',
+    'openrouter-chat',
   ]),
   codecVersion: z.literal(1),
 });
@@ -88,7 +89,90 @@ export const JsonObjectSchema = z
   })
   .pipe(z.record(z.string(), z.json().transform(freezeJson)).readonly());
 
+const OpenRouterDetailMetadataSchema = z.strictObject({
+  format: z.string().nullable().optional(),
+  id: z.string().nullable().optional(),
+  index: z.number().optional(),
+});
+const OpenRouterReasoningSchema = z
+  .strictObject({
+    kind: z.literal('openrouter-reasoning'),
+    plain: z.string().nullable().optional(),
+    details: z
+      .array(
+        z.discriminatedUnion('kind', [
+          OpenRouterDetailMetadataSchema.extend({
+            kind: z.literal('text'),
+            text: z.string().nullable().optional(),
+            signature: z.string().nullable().optional(),
+          }).readonly(),
+          OpenRouterDetailMetadataSchema.extend({
+            kind: z.literal('summary'),
+            summary: z.string(),
+          }).readonly(),
+          OpenRouterDetailMetadataSchema.extend({
+            kind: z.literal('encrypted'),
+            data: z.string(),
+          }).readonly(),
+          OpenRouterDetailMetadataSchema.extend({
+            kind: z.literal('server-tool-call'),
+            toolName: z.string(),
+            toolCallId: z.string().nullable().optional(),
+            arguments: z.string(),
+            result: z.string(),
+          }).readonly(),
+        ]),
+      )
+      .readonly()
+      .nullable()
+      .optional(),
+  })
+  .refine(
+    (evidence) =>
+      evidence.plain !== undefined || evidence.details !== undefined,
+    {
+      message:
+        'OpenRouter reasoning preserves a reported plain or details field.',
+    },
+  )
+  .readonly();
+const OpenRouterFileAnnotationSchema = z
+  .strictObject({
+    kind: z.literal('file-annotation'),
+    hash: z.string(),
+    name: z.string().optional(),
+    content: z
+      .array(
+        z.discriminatedUnion('kind', [
+          TextPartSchema,
+          z
+            .strictObject({ kind: z.literal('image-url'), url: z.string() })
+            .readonly(),
+        ]),
+      )
+      .readonly()
+      .optional(),
+    evidence: z
+      .strictObject({ kind: z.literal('openrouter-file-annotation') })
+      .readonly(),
+  })
+  .readonly();
+
 const OutputPartSchema = z.discriminatedUnion('kind', [
+  OpenRouterFileAnnotationSchema,
+  z
+    .strictObject({
+      kind: z.literal('url-citation'),
+      url: z.string(),
+      title: z.string().optional(),
+      startIndex: z.number().optional(),
+      endIndex: z.number().optional(),
+      content: z.string().optional(),
+      evidence: z
+        .strictObject({ kind: z.literal('openrouter-url-citation') })
+        .readonly(),
+    })
+    .readonly(),
   z
     .strictObject({
       kind: z.literal('message'),
@@ -120,6 +204,7 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
       content: z.array(TextPartSchema).readonly().optional(),
       evidence: z
         .discriminatedUnion('kind', [
+          OpenRouterReasoningSchema,
           z
             .strictObject({ kind: z.literal('chat-reasoning-content') })
             .readonly(),
@@ -180,6 +265,9 @@ const EVIDENCE_PROTOCOL = {
   'openai-responses-function-call': 'openai-responses',
   'anthropic-thinking-signature': 'anthropic-messages',
   'anthropic-redacted-thinking': 'anthropic-messages',
+  'openrouter-reasoning': 'openrouter-chat',
+  'openrouter-file-annotation': 'openrouter-chat',
+  'openrouter-url-citation': 'openrouter-chat',
 } as const;
 
 function validateAssistantContent(
@@ -209,14 +297,15 @@ function validateAssistantContent(
       (((evidence?.kind === 'anthropic-thinking-signature' ||
         evidence?.kind === 'chat-reasoning-content') &&
         (part.summary.length !== 0 || part.content?.length !== 1)) ||
-        (evidence?.kind === 'anthropic-redacted-thinking' &&
+        ((evidence?.kind === 'anthropic-redacted-thinking' ||
+          evidence?.kind === 'openrouter-reasoning') &&
           (part.summary.length !== 0 || part.content !== undefined)))
     ) {
       ctx.addIssue({
         code: 'custom',
         path: ['content', index],
         message:
-          'Signed or Chat thinking preserves one exact returned text field; redacted thinking has no readable content or summary.',
+          'Signed or Chat thinking preserves one exact returned text field; redacted and grouped reasoning keep their content in provider evidence.',
       });
     }
     if (
@@ -361,16 +450,21 @@ const GoogleContinuationSchema = PrefixSchema.extend({
     })
     .readonly(),
 }).readonly();
+const ResponsesAnchorSchema = z.strictObject({
+  responseId: z.string().min(1),
+  coveredItems: z.int().nonnegative(),
+});
 const ResponsesContinuationSchema = PrefixSchema.extend({
   origin: OriginSchema.extend({
     protocol: z.literal('openai-responses'),
   }).readonly(),
-  anchor: z
-    .strictObject({
-      responseId: z.string().min(1),
-      coveredItems: z.int().nonnegative(),
-    })
-    .readonly(),
+  anchor: z.discriminatedUnion('kind', [
+    ResponsesAnchorSchema.extend({ kind: z.literal('stored') }).readonly(),
+    ResponsesAnchorSchema.extend({
+      kind: z.literal('connection'),
+      connectionId: z.uuid(),
+    }).readonly(),
+  ]),
 }).readonly();
 /** Provider acceleration of an exact prefix, never the conversation authority. */
 export const ContinuationSchema = z.union([
@@ -383,11 +477,12 @@ const ToolChoiceSchema = z.union([
   z.literal('auto'),
   z.strictObject({ name: z.string().min(1) }).readonly(),
 ]);
+const ReasoningEffortSchema = z
+  .enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
+  .nullable();
 const ResponsesReasoningSchema = z
   .strictObject({
-    effort: z
-      .enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
-      .nullable(),
+    effort: ReasoningEffortSchema,
     mode: z.enum(['standard', 'pro']).nullable(),
     summary: z.enum(['auto', 'concise', 'detailed']).nullable(),
   })
@@ -416,8 +511,8 @@ const AuthoredThinkingSchema = z.discriminatedUnion('mode', [
     display: true,
   }).readonly(),
 ]);
-const EffortSchema = z
-  .enum(['low', 'medium', 'high', 'xhigh', 'max'])
+const EffortSchema = ReasoningEffortSchema.unwrap()
+  .exclude(['none', 'minimal'])
   .nullable();
 const CacheSchema = z.enum(['disabled', '5m', '1h']);
 const InferenceGeoSchema = z.enum(['global', 'us']).nullable();
@@ -441,7 +536,7 @@ export const TurnRequestSchema = z
       .nullable()
       .optional(),
     thinking: AuthoredThinkingSchema.optional(),
-    effort: EffortSchema.optional(),
+    effort: ReasoningEffortSchema.optional(),
     cache: CacheSchema.optional(),
     promptCacheKey: z.string().min(1).optional(),
     stopSequences: z.array(z.string()).readonly().optional(),
@@ -464,7 +559,7 @@ const GoogleControlsSchema = z.strictObject({
   toolChoice: ToolChoiceSchema,
 });
 const ResponsesControlsSchema = z.strictObject({
-  maxOutputTokens: z.int().positive(),
+  maxOutputTokens: z.int().positive().nullable(),
   temperature: z.number().min(0).max(2).nullable(),
   store: z.boolean(),
   parallelToolCalls: z.boolean(),
@@ -503,9 +598,50 @@ const GlmControlsSchema = ChatReasoningControlsSchema.extend({
   temperature: z.number().min(0).max(1).nullable(),
   clearThinking: z.boolean(),
 });
+const OpenRouterControlsSchema = z.strictObject({
+  maxOutputTokens: z.int().positive(),
+  temperature: z.number().min(0).max(2).nullable(),
+  effort: ReasoningEffortSchema,
+  stopSequences: z.array(z.string()).readonly(),
+  toolChoice: ToolChoiceSchema,
+});
 
 /** Already-selected protocol binding and defaults, provided by the application. */
 export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
+  BindingSchema.extend({
+    protocol: z.literal('openrouter-chat'),
+    supportsTemperature: z.boolean(),
+    supportsForcedToolChoice: z.boolean(),
+    supportsImageInput: z.boolean(),
+    supportsAudioInput: z.boolean(),
+    supportedEfforts: z.array(ReasoningEffortSchema.unwrap()).readonly(),
+    defaults: OpenRouterControlsSchema.omit({ toolChoice: true }).readonly(),
+  })
+    .superRefine((configuration, ctx) => {
+      if (
+        !configuration.supportsTemperature &&
+        configuration.defaults.temperature !== null
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'temperature'],
+          message:
+            'A model without temperature support requires a null default.',
+        });
+      }
+      if (
+        configuration.defaults.effort !== null &&
+        !configuration.supportedEfforts.includes(configuration.defaults.effort)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'effort'],
+          message:
+            'The default reasoning effort must be supported by the selected route.',
+        });
+      }
+    })
+    .readonly(),
   BindingSchema.extend({
     protocol: z.literal('openai-chat'),
     defaults: OpenAIControlsSchema.omit({ toolChoice: true }).readonly(),
@@ -551,6 +687,24 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     protocol: z.literal('openai-responses'),
     background: z.enum(['supported', 'unsupported']),
     supportsTemperature: z.boolean(),
+    supportsMaxOutputTokens: z.boolean(),
+    supportsStorage: z.boolean(),
+    supportsResponseChaining: z.boolean(),
+    webSocketStreamParameter: z.enum(['implicit', 'required']),
+    allowedReasoningEfforts: z
+      .array(ResponsesReasoningSchema.unwrap().unwrap().shape.effort.unwrap())
+      .readonly(),
+    instructions: z.discriminatedUnion('kind', [
+      z.strictObject({ kind: z.literal('optional') }).readonly(),
+      z
+        .strictObject({
+          kind: z.literal('required'),
+          fallback: z.string().refine((value) => value.trim().length > 0, {
+            message: 'Required instructions need a nonblank fallback.',
+          }),
+        })
+        .readonly(),
+    ]),
     defaults: ResponsesControlsSchema.omit({ toolChoice: true }).readonly(),
   })
     .superRefine((configuration, ctx) => {
@@ -563,6 +717,36 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
           path: ['defaults', 'temperature'],
           message:
             'A protocol without temperature support requires a null default.',
+        });
+      }
+      if (
+        !configuration.supportsMaxOutputTokens &&
+        configuration.defaults.maxOutputTokens !== null
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'maxOutputTokens'],
+          message:
+            'A protocol without output-limit support requires a null default.',
+        });
+      }
+      if (!configuration.supportsStorage && configuration.defaults.store) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'store'],
+          message:
+            'A protocol without persistent storage requires store:false.',
+        });
+      }
+      const effort = configuration.defaults.reasoning?.effort;
+      if (
+        effort != null &&
+        !configuration.allowedReasoningEfforts.includes(effort)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'reasoning', 'effort'],
+          message: 'The default reasoning effort must be allowed by the route.',
         });
       }
     })
@@ -609,6 +793,10 @@ export type AnthropicMessagesConfiguration = Extract<
   ModelConfiguration,
   { protocol: 'anthropic-messages' }
 >;
+export type OpenRouterConfiguration = Extract<
+  ModelConfiguration,
+  { protocol: 'openrouter-chat' }
+>;
 
 const PreparedInputSchema = OriginSchema.extend({
   mode: z.literal('foreground'),
@@ -621,9 +809,16 @@ const ResponsesPreparedSchema = PreparedInputSchema.extend({
   controls: ResponsesControlsSchema.readonly(),
   continuation: ResponsesContinuationSchema.optional(),
 });
+const HttpTransportSchema = z
+  .strictObject({ kind: z.literal('http') })
+  .readonly();
 /** Prepared semantic input; execution never reapplies current defaults. */
 export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
   z.discriminatedUnion('protocol', [
+    PreparedInputSchema.extend({
+      protocol: z.literal('openrouter-chat'),
+      controls: OpenRouterControlsSchema.readonly(),
+    }).readonly(),
     PreparedInputSchema.extend({
       protocol: z.literal('openai-chat'),
       controls: OpenAIControlsSchema.readonly(),
@@ -645,13 +840,26 @@ export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
       protocol: z.literal('glm-chat'),
       controls: GlmControlsSchema.readonly(),
     }).readonly(),
-    ResponsesPreparedSchema.readonly(),
+    ResponsesPreparedSchema.extend({
+      transport: z.discriminatedUnion('kind', [
+        HttpTransportSchema,
+        z
+          .strictObject({
+            kind: z.literal('websocket'),
+            connectionId: z.uuid(),
+          })
+          .readonly(),
+      ]),
+    }).readonly(),
     PreparedInputSchema.extend({
       protocol: z.literal('anthropic-messages'),
       controls: AnthropicControlsSchema.readonly(),
     }).readonly(),
   ]),
-  ResponsesPreparedSchema.extend({ mode: z.literal('background') }).readonly(),
+  ResponsesPreparedSchema.extend({
+    mode: z.literal('background'),
+    transport: HttpTransportSchema,
+  }).readonly(),
 ]);
 export type ResolvedTurn = z.infer<typeof ResolvedTurnSchema>;
 
@@ -663,16 +871,76 @@ const UsageSchema = z
     cachedInputTokens: z.int().nonnegative().nullable(),
     reasoningTokens: z.int().nonnegative().nullable(),
     providerUsage: z
-      .strictObject({
-        kind: z.literal('anthropic'),
-        uncachedInputTokens: z.int().nonnegative().nullable(),
-        cacheCreationTokens: z.int().nonnegative().nullable(),
-        cacheCreation5mTokens: z.int().nonnegative().nullable(),
-        cacheCreation1hTokens: z.int().nonnegative().nullable(),
-        serviceTier: z.enum(['standard', 'priority', 'batch']).nullable(),
-        inferenceGeo: z.string().nullable(),
-      })
-      .readonly()
+      .discriminatedUnion('kind', [
+        z
+          .strictObject({
+            kind: z.literal('anthropic'),
+            uncachedInputTokens: z.int().nonnegative().nullable(),
+            cacheCreationTokens: z.int().nonnegative().nullable(),
+            cacheCreation5mTokens: z.int().nonnegative().nullable(),
+            cacheCreation1hTokens: z.int().nonnegative().nullable(),
+            serviceTier: z.enum(['standard', 'priority', 'batch']).nullable(),
+            inferenceGeo: z.string().nullable(),
+          })
+          .readonly(),
+        z
+          .strictObject({
+            kind: z.literal('openrouter'),
+            cost: z.number().nullable().optional(),
+            isByok: z.boolean().optional(),
+            costDetails: z
+              .strictObject({
+                upstreamInferenceCost: z.number().nullable().optional(),
+                upstreamInferencePromptCost: z.number().nullable().optional(),
+                upstreamInferenceCompletionsCost: z
+                  .number()
+                  .nullable()
+                  .optional(),
+                serverToolCost: z.number().nullable().optional(),
+              })
+              .readonly()
+              .nullable()
+              .optional(),
+            inputDetails: z
+              .strictObject({
+                cacheWriteTokens: z.int().nonnegative().nullable().optional(),
+                audioTokens: z.int().nonnegative().nullable().optional(),
+                videoTokens: z.int().nonnegative().nullable().optional(),
+              })
+              .readonly()
+              .nullable()
+              .optional(),
+            outputDetails: z
+              .strictObject({
+                audioTokens: z.int().nonnegative().nullable().optional(),
+                acceptedPredictionTokens: z
+                  .int()
+                  .nonnegative()
+                  .nullable()
+                  .optional(),
+                rejectedPredictionTokens: z
+                  .int()
+                  .nonnegative()
+                  .nullable()
+                  .optional(),
+                imageTokens: z.int().nonnegative().nullable().optional(),
+              })
+              .readonly()
+              .nullable()
+              .optional(),
+            serverToolUseDetails: z
+              .strictObject({
+                toolCallsRequested: z.int().nonnegative().nullable().optional(),
+                toolCallsExecuted: z.int().nonnegative().nullable().optional(),
+                webSearchRequests: z.int().nonnegative().nullable().optional(),
+              })
+              .readonly()
+              .nullable()
+              .optional(),
+            serviceTier: z.string().nullable().optional(),
+          })
+          .readonly(),
+      ])
       .optional(),
   })
   .readonly();
@@ -699,6 +967,13 @@ export const TurnResultSchema = z
       'context-window-exceeded',
     ]),
     stopSequence: z.string().optional(),
+    finishEvidence: z
+      .strictObject({
+        kind: z.literal('openrouter'),
+        nativeFinishReason: z.string().nullable(),
+      })
+      .readonly()
+      .optional(),
     refusalEvidence: z
       .strictObject({
         kind: z.literal('anthropic-refusal'),
@@ -737,13 +1012,16 @@ export const TurnResultSchema = z
       (result.refusalEvidence !== undefined &&
         result.requestedOrigin.protocol !== 'anthropic-messages') ||
       (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
-      (result.usage?.providerUsage !== undefined &&
-        result.requestedOrigin.protocol !== 'anthropic-messages')
+      (result.usage?.providerUsage?.kind === 'anthropic' &&
+        result.requestedOrigin.protocol !== 'anthropic-messages') ||
+      ((result.usage?.providerUsage?.kind === 'openrouter' ||
+        result.finishEvidence !== undefined) &&
+        result.requestedOrigin.protocol !== 'openrouter-chat')
     ) {
       ctx.addIssue({
         code: 'custom',
         message:
-          'Provider refusal and usage evidence require their original protocol and outcome.',
+          'Provider refusal, finish and usage evidence require their original protocol and outcome.',
       });
     }
     if (
@@ -875,6 +1153,16 @@ const ModelErrorFieldsSchema = z.strictObject({
   model: z.string().optional(),
   status: z.int().optional(),
   operation: RemoteOperationSchema.optional(),
+  providerEvidence: z
+    .strictObject({
+      kind: z.literal('openrouter'),
+      origin: OriginSchema.extend({
+        protocol: z.literal('openrouter-chat'),
+      }).readonly(),
+      fileAnnotations: z.array(OpenRouterFileAnnotationSchema).readonly(),
+    })
+    .readonly()
+    .optional(),
 });
 /** Typed provider failure. Fiber interruption remains outside this channel. */
 export class ModelError extends Data.TaggedError('ModelError')<

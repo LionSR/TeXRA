@@ -1,9 +1,11 @@
 // Node imports
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
 import { Cause, Clock, Effect, Exit, Stream, type Scope } from 'effect';
 import OpenAI from 'openai';
+import { WebSocket, createWebSocketStream } from 'ws';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
@@ -28,12 +30,14 @@ import {
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
   type TurnEvent,
+  type TurnRequest,
   type TurnResult,
   type BackgroundEvent,
   type BackgroundSubmission,
   type Continuation,
   type RemoteOperation,
 } from './turn.js';
+import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 const ItemStatusSchema = z.enum(['in_progress', 'completed', 'incomplete']);
 const OutputItemSchema = z.discriminatedUnion('type', [
@@ -360,6 +364,12 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
         });
       }
       switch (part.kind) {
+        case 'file-annotation':
+        case 'url-citation':
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message: 'Responses cannot replay foreign provider annotations.',
+          });
         case 'message': {
           if (part.evidence) {
             input.push({
@@ -462,20 +472,28 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   return input;
 });
 
-/** Builds a stored HTTP response anchor from exact materialized admitted input. */
+/** Builds only a stored anchor, using the same selected configuration as admission. */
 export const openaiResponsesContinuation = Effect.fn(
   'llm.responses.continuation',
 )(function* (
+  configuration: OpenAIResponsesConfiguration,
   input: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
   completed: TurnResult,
 ): Effect.fn.Return<Continuation | undefined, ModelError> {
+  const parsedConfiguration = ModelConfigurationSchema.safeParse(configuration);
   const parsedTurn = ResolvedTurnSchema.safeParse(input);
   const parsedResult = TurnResultSchema.safeParse(completed);
   if (
+    !parsedConfiguration.success ||
+    parsedConfiguration.data.protocol !== 'openai-responses' ||
     !parsedTurn.success ||
     parsedTurn.data.protocol !== 'openai-responses' ||
     !parsedResult.success ||
-    !sameModelOrigin(parsedTurn.data, parsedResult.data.requestedOrigin)
+    !sameModelOrigin(parsedTurn.data, parsedResult.data.requestedOrigin) ||
+    !sameModelOrigin(parsedTurn.data, {
+      ...parsedConfiguration.data,
+      codecVersion: 1,
+    })
   )
     return yield* new ModelError({
       kind: 'invalid-request',
@@ -487,6 +505,8 @@ export const openaiResponsesContinuation = Effect.fn(
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
   if (
+    !parsedConfiguration.data.supportsResponseChaining ||
+    !parsedConfiguration.data.supportsStorage ||
     !turn.controls.store ||
     (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
   )
@@ -510,6 +530,7 @@ export const openaiResponsesContinuation = Effect.fn(
       prefix,
     ),
     anchor: {
+      kind: 'stored',
       responseId: result.providerResponseId,
       coveredItems: encoded.length,
     },
@@ -562,6 +583,310 @@ const DeltaEventSchema = EventSchema.extend({
   logprobs: z.array(z.never()).optional(),
 });
 
+/** One canonical foreground decoder for HTTP and WebSocket response events. */
+function responseEvents(
+  chunks: Stream.Stream<unknown, ModelError>,
+  origin: ModelOrigin,
+): Stream.Stream<TurnEvent, ModelError> {
+  return Stream.suspend(() => {
+    let responseId: string | undefined;
+    let returnedModel: string | undefined;
+    const enrich = (error: ModelError) =>
+      new ModelError({
+        ...error,
+        message: error.message,
+        cause: error.cause,
+        responseId,
+        model: returnedModel ?? origin.requestedModel,
+      });
+    const items = new Map<
+      number,
+      {
+        identity: ReturnType<typeof itemIdentity>;
+        done?: TurnResult['content'][number];
+      }
+    >();
+    let terminal: ResponseValue | undefined;
+    let sequence = -1;
+    const progress = chunks.pipe(
+      Stream.mapEffect((raw) =>
+        Effect.gen(function* (): Effect.fn.Return<
+          readonly TurnEvent[],
+          ModelError
+        > {
+          const header = EventSchema.safeParse(raw);
+          if (!header.success || header.data.sequence_number <= sequence)
+            return yield* new ModelError({
+              kind: 'malformed-output',
+              message: 'The model emitted invalid or out-of-order events.',
+            });
+          sequence = header.data.sequence_number;
+          const type = header.data.type;
+          if (
+            [
+              'response.created',
+              'response.queued',
+              'response.in_progress',
+              'response.completed',
+              'response.incomplete',
+              'response.failed',
+            ].includes(type)
+          ) {
+            const decoded = ResponseEventSchema.safeParse(raw);
+            if (!decoded.success)
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message: 'The response snapshot is malformed or unsupported.',
+                cause: decoded.error,
+              });
+            const response = decoded.data.response;
+            if (
+              (responseId !== undefined && responseId !== response.id) ||
+              (returnedModel !== undefined && returnedModel !== response.model)
+            )
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message: 'The model changed its response identity.',
+              });
+            const firstIdentity = responseId === undefined;
+            responseId = response.id;
+            returnedModel = response.model;
+            if (
+              type === 'response.completed' ||
+              type === 'response.incomplete' ||
+              type === 'response.failed'
+            ) {
+              const expected = type.slice('response.'.length);
+              if (response.status !== expected)
+                return yield* new ModelError({
+                  kind: 'malformed-output',
+                  message: 'The terminal event and response status disagree.',
+                });
+              terminal = response;
+            }
+            return firstIdentity
+              ? [
+                  {
+                    kind: 'identified' as const,
+                    providerResponseId: response.id,
+                    requestedOrigin: origin,
+                    returnedModel: response.model,
+                  },
+                ]
+              : [];
+          }
+          if (responseId === undefined)
+            return yield* new ModelError({
+              kind: 'malformed-output',
+              message: 'Model content arrived before response identity.',
+            });
+          if (
+            type === 'response.output_item.added' ||
+            type === 'response.output_item.done'
+          ) {
+            const decoded = ItemEventSchema.safeParse(raw);
+            if (!decoded.success)
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message: 'The model returned unsupported output content.',
+                cause: decoded.error,
+              });
+            const { output_index: index, item } = decoded.data;
+            const previous = items.get(index);
+            const identity = itemIdentity(item);
+            if (previous && !isDeepStrictEqual(previous.identity, identity))
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message:
+                  'The model changed an output item identity or completed content.',
+              });
+            if (type === 'response.output_item.done') {
+              const done = yield* normalizeItem(item);
+              if (previous?.done && !agreesWithCompleted(previous.done, done))
+                return yield* new ModelError({
+                  kind: 'malformed-output',
+                  message: 'The model changed completed output content.',
+                });
+              items.set(index, {
+                identity,
+                done: previous?.done ?? done,
+              });
+            } else {
+              if (previous)
+                return yield* new ModelError({
+                  kind: 'malformed-output',
+                  message: 'The model added the same output position twice.',
+                });
+              items.set(index, { identity });
+            }
+            return item.type === 'function_call'
+              ? []
+              : [
+                  {
+                    kind: 'phase',
+                    part: item.type === 'reasoning' ? 'reasoning' : 'text',
+                    boundary:
+                      type === 'response.output_item.added' ? 'start' : 'end',
+                    providerItemIndex: index,
+                  },
+                ];
+          }
+          if (
+            [
+              'response.output_text.delta',
+              'response.refusal.delta',
+              'response.reasoning_summary_text.delta',
+              'response.reasoning_text.delta',
+            ].includes(type)
+          ) {
+            const decoded = DeltaEventSchema.safeParse(raw);
+            if (!decoded.success)
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message: 'The model returned malformed progress content.',
+                cause: decoded.error,
+              });
+            const item = items.get(decoded.data.output_index);
+            if (
+              !item ||
+              item.done ||
+              item.identity.id !== decoded.data.item_id ||
+              item.identity.type !==
+                (type === 'response.output_text.delta' ||
+                type === 'response.refusal.delta'
+                  ? 'message'
+                  : 'reasoning')
+            )
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message: 'Progress does not belong to an open output item.',
+              });
+            let part: 'text' | 'refusal' | 'reasoning' = 'reasoning';
+            if (type === 'response.output_text.delta') part = 'text';
+            if (type === 'response.refusal.delta') part = 'refusal';
+            return [
+              {
+                kind: 'delta' as const,
+                part,
+                text: decoded.data.delta,
+                providerItemIndex: decoded.data.output_index,
+              },
+            ];
+          }
+          // These framing events do not own terminal content; output_item.done does.
+          if (
+            [
+              'response.content_part.added',
+              'response.content_part.done',
+              'response.output_text.done',
+              'response.refusal.done',
+              'response.reasoning_summary_part.added',
+              'response.reasoning_summary_part.done',
+              'response.reasoning_summary_text.done',
+              'response.reasoning_text.done',
+              'response.function_call_arguments.delta',
+              'response.function_call_arguments.done',
+            ].includes(type)
+          )
+            return [];
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: `The model returned an unsupported event: ${type}.`,
+          });
+        }),
+      ),
+      Stream.takeUntil(() => terminal !== undefined),
+      Stream.flattenIterable,
+    );
+    const completion = Stream.fromEffect(
+      Effect.gen(function* () {
+        if (!terminal)
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: 'The model stream ended without a terminal response.',
+          });
+        if (terminal.status === 'failed')
+          return yield* new ModelError({
+            kind: 'provider-rejection',
+            message: terminal.error?.message ?? 'The model response failed.',
+            cause: terminal.error,
+          });
+        const output: TurnResult['content'][number][] = [];
+        if (items.size > 0) {
+          const ordered = [...items].toSorted(
+            ([left], [right]) => left - right,
+          );
+          for (const [ordinal, [index]] of ordered.entries()) {
+            if (ordinal !== index)
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message: 'The model omitted an output position.',
+              });
+          }
+          let previousIndex = -1;
+          for (const item of terminal.output) {
+            const match = ordered.find(([, candidate]) =>
+              item.id !== undefined
+                ? candidate.identity.id === item.id
+                : candidate.identity.type === 'function_call' &&
+                  item.type === 'function_call' &&
+                  candidate.identity.callId === item.call_id,
+            );
+            const normalized = yield* normalizeItem(item);
+            if (
+              !match ||
+              match[0] <= previousIndex ||
+              match[1].identity.type !== item.type ||
+              (item.type === 'function_call' &&
+                (match[1].identity.callId !== item.call_id ||
+                  match[1].identity.name !== item.name)) ||
+              (match[1].done && !agreesWithCompleted(match[1].done, normalized))
+            )
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message:
+                  'The terminal snapshot conflicts with completed output items.',
+              });
+            previousIndex = match[0];
+            match[1].done ??= normalized;
+          }
+          for (const [, item] of ordered) {
+            if (!item.done)
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message: 'The model left an output item unfinished.',
+              });
+            output.push(item.done);
+          }
+        } else {
+          output.push(
+            ...(yield* Effect.forEach(terminal.output, normalizeItem)),
+          );
+        }
+        const result = yield* normalizeResponse(terminal, origin, output);
+        return { kind: 'completed' as const, result };
+      }),
+    );
+    return Stream.concat(progress, completion).pipe(Stream.mapError(enrich));
+  });
+}
+
+const completedTurn = Effect.fn('llm.responses.generateTurn')(function* (
+  events: Stream.Stream<TurnEvent, ModelError>,
+) {
+  const result = yield* Stream.runFold(
+    events,
+    () => null as TurnResult | null,
+    (current, event) => (event.kind === 'completed' ? event.result : current),
+  );
+  if (result === null)
+    return yield* new ModelError({
+      kind: 'malformed-output',
+      message: 'The model stream produced no completed result.',
+    });
+  return result;
+});
+
 /** Owns only the foreign iterator lifetime shared by create and retrieve. */
 const sdkEvents = Effect.fn('llm.responses.sdkEvents')(function* (
   source: AsyncIterable<unknown> & { readonly controller: AbortController },
@@ -610,10 +935,240 @@ const sdkEvents = Effect.fn('llm.responses.sdkEvents')(function* (
   );
 });
 
+type ResponsesTransport = Extract<
+  ResolvedTurn,
+  { protocol: 'openai-responses'; mode: 'foreground' }
+>['transport'];
+
+/** Resolves controls before admission; no transport request is made here. */
+const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
+  config: OpenAIResponsesConfiguration,
+  origin: ModelOrigin,
+  transport: ResponsesTransport,
+  request: TurnRequest,
+) {
+  const parsed = TurnRequestSchema.safeParse(request);
+  if (!parsed.success)
+    return yield* new ModelError({
+      kind: 'invalid-request',
+      message: 'The model input is invalid.',
+      cause: parsed.error,
+    });
+  const author = parsed.data;
+  if (
+    author.thinkingLevel !== undefined ||
+    author.thinking !== undefined ||
+    author.effort !== undefined ||
+    author.cache !== undefined ||
+    author.inferenceGeo !== undefined ||
+    author.stopSequences !== undefined ||
+    author.promptCacheKey !== undefined ||
+    (author.continuation !== undefined &&
+      author.continuation.origin.protocol !== 'openai-responses') ||
+    (author.serviceTier != null && author.serviceTier !== 'fast') ||
+    (author.mode === 'background' &&
+      (config.background !== 'supported' || transport.kind !== 'http')) ||
+    (!config.supportsTemperature && author.temperature !== undefined) ||
+    (!config.supportsMaxOutputTokens && author.maxOutputTokens !== undefined) ||
+    (!config.supportsStorage && author.store === true)
+  ) {
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message:
+        'The model does not support the requested controls or continuation.',
+    });
+  }
+  const turn = ResolvedTurnSchema.parse({
+    ...origin,
+    mode: author.mode ?? 'foreground',
+    transport,
+    system:
+      config.instructions.kind === 'required'
+        ? author.system?.trim() || config.instructions.fallback
+        : author.system,
+    messages: author.messages,
+    tools: author.tools ?? [],
+    continuation: author.continuation,
+    controls: {
+      temperature: config.supportsTemperature
+        ? (author.temperature ?? config.defaults.temperature)
+        : null,
+      maxOutputTokens:
+        author.maxOutputTokens ?? config.defaults.maxOutputTokens,
+      store: author.store ?? config.defaults.store,
+      parallelToolCalls:
+        author.parallelToolCalls ?? config.defaults.parallelToolCalls,
+      toolChoice: author.toolChoice ?? 'auto',
+      reasoning:
+        author.reasoning === undefined
+          ? config.defaults.reasoning
+          : author.reasoning,
+      serviceTier:
+        author.serviceTier === undefined
+          ? config.defaults.serviceTier
+          : author.serviceTier,
+    },
+  });
+  if (turn.protocol !== 'openai-responses')
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message: 'The prepared protocol changed.',
+    });
+  yield* responseParameters(config, origin, transport, turn, turn.mode);
+  return turn;
+});
+
+/** Validates the admitted binding and lowers one request without transport flags. */
+const responseParameters = Effect.fn('llm.responses.parameters')(function* (
+  config: OpenAIResponsesConfiguration,
+  origin: ModelOrigin,
+  transport: ResponsesTransport,
+  input: ResolvedTurn,
+  mode: 'foreground' | 'background',
+) {
+  const parsed = ResolvedTurnSchema.safeParse(input);
+  if (
+    !parsed.success ||
+    parsed.data.protocol !== 'openai-responses' ||
+    parsed.data.mode !== mode ||
+    !isDeepStrictEqual(parsed.data.transport, transport) ||
+    !sameModelOrigin(parsed.data, origin) ||
+    (mode === 'background' && config.background !== 'supported')
+  ) {
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message:
+        'The prepared invocation belongs to another model, protocol or execution mode.',
+    });
+  }
+  const turn = parsed.data;
+  if (
+    (!config.supportsTemperature && turn.controls.temperature !== null) ||
+    (!config.supportsMaxOutputTokens &&
+      turn.controls.maxOutputTokens !== null) ||
+    (!config.supportsStorage && turn.controls.store) ||
+    (config.instructions.kind === 'required' && !turn.system?.trim()) ||
+    (turn.controls.reasoning?.effort != null &&
+      !config.allowedReasoningEfforts.includes(
+        turn.controls.reasoning.effort,
+      )) ||
+    (turn.continuation !== undefined &&
+      (!config.supportsResponseChaining ||
+        (turn.continuation.anchor.kind === 'connection' &&
+          (transport.kind !== 'websocket' ||
+            turn.continuation.anchor.connectionId !== transport.connectionId))))
+  )
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message: 'The prepared controls are unsupported by the selected route.',
+    });
+  const wireInput = yield* responseInput(turn);
+  const reasoning = turn.controls.reasoning;
+  const parameters: ResponseCreateParamsBase = {
+    model: turn.requestedModel,
+    ...wireInput,
+    ...(turn.system !== undefined ? { instructions: turn.system } : {}),
+    ...(turn.controls.maxOutputTokens !== null
+      ? { max_output_tokens: turn.controls.maxOutputTokens }
+      : {}),
+    store: turn.controls.store,
+    include: ['reasoning.encrypted_content'],
+    ...(turn.controls.temperature !== null
+      ? { temperature: turn.controls.temperature }
+      : {}),
+    ...(turn.controls.serviceTier !== null
+      ? { service_tier: turn.controls.serviceTier }
+      : {}),
+    ...(reasoning !== null
+      ? {
+          reasoning: {
+            ...(reasoning.effort !== null ? { effort: reasoning.effort } : {}),
+            ...(reasoning.mode !== null ? { mode: reasoning.mode } : {}),
+            ...(reasoning.summary !== null
+              ? { summary: reasoning.summary }
+              : {}),
+          },
+        }
+      : {}),
+    ...(turn.tools.length > 0
+      ? {
+          tools: turn.tools.map((tool) => ({
+            type: 'function' as const,
+            ...tool,
+            strict: false,
+          })),
+          parallel_tool_calls: turn.controls.parallelToolCalls,
+          tool_choice:
+            turn.controls.toolChoice === 'auto'
+              ? ('auto' as const)
+              : {
+                  type: 'function' as const,
+                  name: turn.controls.toolChoice.name,
+                },
+        }
+      : {}),
+  };
+  return { turn, parameters };
+});
+
+const ResponseAuthenticationSchema = z.discriminatedUnion('kind', [
+  z
+    .strictObject({
+      kind: z.literal('api-key'),
+      apiKey: z
+        .string()
+        .min(1)
+        .regex(/^[^\r\n]+$/),
+    })
+    .readonly(),
+  z
+    .strictObject({
+      kind: z.literal('codex'),
+      accessToken: z
+        .string()
+        .min(1)
+        .regex(/^[^\r\n]+$/),
+      accountId: z
+        .string()
+        .min(1)
+        .regex(/^[^\r\n]+$/)
+        .nullable(),
+    })
+    .readonly(),
+]);
+
+/** Secrets are captured together and never become prepared request controls. */
+function responseAuthentication(
+  input: z.infer<typeof ResponseAuthenticationSchema>,
+) {
+  if (process.env.OPENAI_CUSTOM_HEADERS)
+    throw new ModelError({
+      kind: 'unsupported',
+      message:
+        'Ambient OpenAI headers cannot override the selected deployment.',
+    });
+  const authentication = ResponseAuthenticationSchema.parse(input);
+  return authentication.kind === 'api-key'
+    ? { token: authentication.apiKey, headers: {} }
+    : {
+        token: authentication.accessToken,
+        headers: {
+          ...(authentication.accountId !== null
+            ? { 'chatgpt-account-id': authentication.accountId }
+            : {}),
+          originator: 'texra',
+          'openai-beta': 'responses=experimental',
+        },
+      };
+}
+
 /** Direct Responses operations, with no application model adapter. */
 export function openaiResponsesModel(
   configuration: OpenAIResponsesConfiguration,
-  transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
+  transport: {
+    readonly authentication: z.infer<typeof ResponseAuthenticationSchema>;
+    readonly fetch?: typeof fetch;
+  },
 ): Model {
   const config = ModelConfigurationSchema.parse(configuration);
   if (config.protocol !== 'openai-responses') {
@@ -628,15 +1183,10 @@ export function openaiResponsesModel(
     deployment: config.deployment,
     codecVersion: 1,
   });
-  if (process.env.OPENAI_CUSTOM_HEADERS) {
-    throw new ModelError({
-      kind: 'unsupported',
-      message:
-        'Ambient OpenAI headers cannot override the selected deployment.',
-    });
-  }
+  const authentication = responseAuthentication(transport.authentication);
   const client = new OpenAI({
-    apiKey: transport.apiKey,
+    apiKey: authentication.token,
+    defaultHeaders: authentication.headers,
     baseURL: config.deployment.endpoint,
     fetch: transport.fetch,
     maxRetries: 0,
@@ -644,153 +1194,29 @@ export function openaiResponsesModel(
     project: null,
     logLevel: 'off',
   });
-  const prepareTurn: Model['prepareTurn'] = Effect.fn(
-    'llm.responses.prepareTurn',
-  )(function* (request) {
-    const parsed = TurnRequestSchema.safeParse(request);
-    if (!parsed.success)
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'The model input is invalid.',
-        cause: parsed.error,
-      });
-    const author = parsed.data;
-    if (
-      author.thinkingLevel !== undefined ||
-      author.thinking !== undefined ||
-      author.effort !== undefined ||
-      author.cache !== undefined ||
-      author.inferenceGeo !== undefined ||
-      author.stopSequences !== undefined ||
-      author.promptCacheKey !== undefined ||
-      (author.continuation !== undefined &&
-        author.continuation.origin.protocol !== 'openai-responses') ||
-      (author.serviceTier != null && author.serviceTier !== 'fast') ||
-      (author.mode === 'background' && config.background !== 'supported') ||
-      (!config.supportsTemperature && author.temperature !== undefined)
-    ) {
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message:
-          'The model does not support the requested controls or continuation.',
-      });
-    }
-    const turn = ResolvedTurnSchema.parse({
-      ...origin,
-      mode: author.mode ?? 'foreground',
-      system: author.system,
-      messages: author.messages,
-      tools: author.tools ?? [],
-      continuation: author.continuation,
-      controls: {
-        temperature: config.supportsTemperature
-          ? (author.temperature ?? config.defaults.temperature)
-          : null,
-        maxOutputTokens:
-          author.maxOutputTokens ?? config.defaults.maxOutputTokens,
-        store: author.store ?? config.defaults.store,
-        parallelToolCalls:
-          author.parallelToolCalls ?? config.defaults.parallelToolCalls,
-        toolChoice: author.toolChoice ?? 'auto',
-        reasoning:
-          author.reasoning === undefined
-            ? config.defaults.reasoning
-            : author.reasoning,
-        serviceTier:
-          author.serviceTier === undefined
-            ? config.defaults.serviceTier
-            : author.serviceTier,
-      },
-    });
-    if (turn.protocol !== 'openai-responses')
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message: 'The prepared protocol changed.',
-      });
-    yield* responseInput(turn);
-    return turn;
-  });
+  const prepareTurn: Model['prepareTurn'] = (request) =>
+    prepareResponsesTurn(config, origin, { kind: 'http' }, request);
 
   const createResponse = Effect.fn('llm.responses.create')(function* (
     input: ResolvedTurn,
     mode: 'foreground' | 'background',
   ) {
-    const parsed = ResolvedTurnSchema.safeParse(input);
-    if (
-      !parsed.success ||
-      parsed.data.protocol !== 'openai-responses' ||
-      parsed.data.mode !== mode ||
-      !sameModelOrigin(parsed.data, origin) ||
-      (mode === 'background' && config.background !== 'supported')
-    ) {
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message:
-          'The prepared invocation belongs to another model, protocol or execution mode.',
-      });
-    }
-    const turn = parsed.data;
-    if (!config.supportsTemperature && turn.controls.temperature !== null)
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message: 'This model does not support temperature.',
-      });
-    const wireInput = yield* responseInput(turn);
-    const reasoning = turn.controls.reasoning;
+    const { turn, parameters } = yield* responseParameters(
+      config,
+      origin,
+      { kind: 'http' },
+      input,
+      mode,
+    );
     const signal = yield* Effect.abortSignal;
     const opened = yield* Effect.tryPromise({
       try: () =>
         client.responses
           .create(
             {
-              model: turn.requestedModel,
-              ...wireInput,
-              ...(turn.system !== undefined
-                ? { instructions: turn.system }
-                : {}),
-              max_output_tokens: turn.controls.maxOutputTokens,
-              store: turn.controls.store,
+              ...parameters,
               stream: true,
-              background: mode === 'background',
-              include: ['reasoning.encrypted_content'],
-              ...(turn.controls.temperature !== null
-                ? { temperature: turn.controls.temperature }
-                : {}),
-              ...(turn.controls.serviceTier !== null
-                ? { service_tier: turn.controls.serviceTier }
-                : {}),
-              ...(reasoning !== null
-                ? {
-                    reasoning: {
-                      ...(reasoning.effort !== null
-                        ? { effort: reasoning.effort }
-                        : {}),
-                      ...(reasoning.mode !== null
-                        ? { mode: reasoning.mode }
-                        : {}),
-                      ...(reasoning.summary !== null
-                        ? { summary: reasoning.summary }
-                        : {}),
-                    },
-                  }
-                : {}),
-              ...(turn.tools.length > 0
-                ? {
-                    tools: turn.tools.map((tool) => ({
-                      type: 'function' as const,
-                      ...tool,
-                      strict: false,
-                    })),
-                    parallel_tool_calls: turn.controls.parallelToolCalls,
-                    tool_choice:
-                      turn.controls.toolChoice === 'auto'
-                        ? ('auto' as const)
-                        : {
-                            type: 'function' as const,
-                            name: turn.controls.toolChoice.name,
-                          },
-                  }
-                : {}),
+              ...(mode === 'background' ? { background: true } : {}),
             },
             { signal },
           )
@@ -802,339 +1228,51 @@ export function openaiResponsesModel(
 
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.suspend(() => {
+      let requestId: string | undefined;
       let responseId: string | undefined;
       let returnedModel: string | undefined;
-      let requestId: string | undefined;
       const enrich = (error: ModelError) =>
         new ModelError({
           ...error,
           message: error.message,
           cause: error.cause,
           requestId: error.requestId ?? requestId,
-          responseId,
-          model: returnedModel ?? config.requestedModel,
+          responseId: error.responseId ?? responseId,
+          model: error.model ?? returnedModel ?? config.requestedModel,
         });
       return Stream.unwrap(
         Effect.gen(function* () {
           const { turn, opened } = yield* createResponse(input, 'foreground');
           requestId = opened.request_id ?? undefined;
           const chunks = yield* sdkEvents(opened.data, enrich);
-          const items = new Map<
-            number,
-            {
-              identity: ReturnType<typeof itemIdentity>;
-              done?: TurnResult['content'][number];
-            }
-          >();
-          let terminal: ResponseValue | undefined;
-          let sequence = -1;
-          const progress = chunks.pipe(
-            Stream.mapEffect((raw) =>
-              Effect.gen(function* (): Effect.fn.Return<
-                readonly TurnEvent[],
-                ModelError
-              > {
-                const header = EventSchema.safeParse(raw);
-                if (!header.success || header.data.sequence_number <= sequence)
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message:
-                      'The model emitted invalid or out-of-order events.',
-                  });
-                sequence = header.data.sequence_number;
-                const type = header.data.type;
-                if (
-                  [
-                    'response.created',
-                    'response.queued',
-                    'response.in_progress',
-                    'response.completed',
-                    'response.incomplete',
-                    'response.failed',
-                  ].includes(type)
-                ) {
-                  const decoded = ResponseEventSchema.safeParse(raw);
-                  if (!decoded.success)
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The response snapshot is malformed or unsupported.',
-                      cause: decoded.error,
-                    });
-                  const response = decoded.data.response;
-                  if (
-                    (responseId !== undefined && responseId !== response.id) ||
-                    (returnedModel !== undefined &&
-                      returnedModel !== response.model)
-                  )
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'The model changed its response identity.',
-                    });
-                  const firstIdentity = responseId === undefined;
-                  responseId = response.id;
-                  returnedModel = response.model;
-                  if (
-                    type === 'response.completed' ||
-                    type === 'response.incomplete' ||
-                    type === 'response.failed'
-                  ) {
-                    const expected = type.slice('response.'.length);
-                    if (response.status !== expected)
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message:
-                          'The terminal event and response status disagree.',
-                      });
-                    terminal = response;
-                  }
-                  return firstIdentity
-                    ? [
-                        {
-                          kind: 'identified' as const,
-                          providerResponseId: response.id,
-                          requestedOrigin: origin,
-                          returnedModel: response.model,
-                        },
-                      ]
-                    : [];
+          return responseEvents(chunks, origin).pipe(
+            Stream.mapEffect((event) =>
+              Effect.gen(function* () {
+                if (event.kind === 'identified') {
+                  responseId = event.providerResponseId;
+                  returnedModel = event.returnedModel ?? undefined;
                 }
-                if (responseId === undefined)
-                  return yield* new ModelError({
-                    kind: 'malformed-output',
-                    message: 'Model content arrived before response identity.',
-                  });
-                if (
-                  type === 'response.output_item.added' ||
-                  type === 'response.output_item.done'
-                ) {
-                  const decoded = ItemEventSchema.safeParse(raw);
-                  if (!decoded.success)
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'The model returned unsupported output content.',
-                      cause: decoded.error,
-                    });
-                  const { output_index: index, item } = decoded.data;
-                  const previous = items.get(index);
-                  const identity = itemIdentity(item);
-                  if (
-                    previous &&
-                    !isDeepStrictEqual(previous.identity, identity)
-                  )
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The model changed an output item identity or completed content.',
-                    });
-                  if (type === 'response.output_item.done') {
-                    const done = yield* normalizeItem(item);
-                    if (
-                      previous?.done &&
-                      !agreesWithCompleted(previous.done, done)
-                    )
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message: 'The model changed completed output content.',
-                      });
-                    items.set(index, {
-                      identity,
-                      done: previous?.done ?? done,
-                    });
-                  } else {
-                    if (previous)
-                      return yield* new ModelError({
-                        kind: 'malformed-output',
-                        message:
-                          'The model added the same output position twice.',
-                      });
-                    items.set(index, { identity });
-                  }
-                  return item.type === 'function_call'
-                    ? []
-                    : [
-                        {
-                          kind: 'phase',
-                          part:
-                            item.type === 'reasoning' ? 'reasoning' : 'text',
-                          boundary:
-                            type === 'response.output_item.added'
-                              ? 'start'
-                              : 'end',
-                          providerItemIndex: index,
-                        },
-                      ];
-                }
-                if (
-                  [
-                    'response.output_text.delta',
-                    'response.refusal.delta',
-                    'response.reasoning_summary_text.delta',
-                    'response.reasoning_text.delta',
-                  ].includes(type)
-                ) {
-                  const decoded = DeltaEventSchema.safeParse(raw);
-                  if (!decoded.success)
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'The model returned malformed progress content.',
-                      cause: decoded.error,
-                    });
-                  const item = items.get(decoded.data.output_index);
-                  if (
-                    !item ||
-                    item.done ||
-                    item.identity.id !== decoded.data.item_id ||
-                    item.identity.type !==
-                      (type === 'response.output_text.delta' ||
-                      type === 'response.refusal.delta'
-                        ? 'message'
-                        : 'reasoning')
-                  )
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'Progress does not belong to an open output item.',
-                    });
-                  let part: 'text' | 'refusal' | 'reasoning' = 'reasoning';
-                  if (type === 'response.output_text.delta') part = 'text';
-                  if (type === 'response.refusal.delta') part = 'refusal';
-                  return [
-                    {
-                      kind: 'delta' as const,
-                      part,
-                      text: decoded.data.delta,
-                      providerItemIndex: decoded.data.output_index,
-                    },
-                  ];
-                }
-                // These framing events do not own terminal content; output_item.done does.
-                if (
-                  [
-                    'response.content_part.added',
-                    'response.content_part.done',
-                    'response.output_text.done',
-                    'response.refusal.done',
-                    'response.reasoning_summary_part.added',
-                    'response.reasoning_summary_part.done',
-                    'response.reasoning_summary_text.done',
-                    'response.reasoning_text.done',
-                    'response.function_call_arguments.delta',
-                    'response.function_call_arguments.done',
-                  ].includes(type)
-                )
-                  return [];
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message: `The model returned an unsupported event: ${type}.`,
-                });
+                if (event.kind !== 'completed') return event;
+                const continuation = yield* openaiResponsesContinuation(
+                  config,
+                  turn,
+                  event.result,
+                );
+                return {
+                  ...event,
+                  result: continuation
+                    ? TurnResultSchema.parse({ ...event.result, continuation })
+                    : event.result,
+                };
               }),
             ),
-            Stream.takeUntil(() => terminal !== undefined),
-            Stream.flattenIterable,
-          );
-          const completion = Stream.fromEffect(
-            Effect.gen(function* () {
-              if (!terminal)
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message:
-                    'The model stream ended without a terminal response.',
-                });
-              if (terminal.status === 'failed')
-                return yield* new ModelError({
-                  kind: 'provider-rejection',
-                  message:
-                    terminal.error?.message ?? 'The model response failed.',
-                  cause: terminal.error,
-                });
-              const output: TurnResult['content'][number][] = [];
-              if (items.size > 0) {
-                const ordered = [...items].toSorted(
-                  ([left], [right]) => left - right,
-                );
-                for (const [ordinal, [index]] of ordered.entries()) {
-                  if (ordinal !== index)
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'The model omitted an output position.',
-                    });
-                }
-                let previousIndex = -1;
-                for (const item of terminal.output) {
-                  const match = ordered.find(([, candidate]) =>
-                    item.id !== undefined
-                      ? candidate.identity.id === item.id
-                      : candidate.identity.type === 'function_call' &&
-                        item.type === 'function_call' &&
-                        candidate.identity.callId === item.call_id,
-                  );
-                  const normalized = yield* normalizeItem(item);
-                  if (
-                    !match ||
-                    match[0] <= previousIndex ||
-                    match[1].identity.type !== item.type ||
-                    (item.type === 'function_call' &&
-                      (match[1].identity.callId !== item.call_id ||
-                        match[1].identity.name !== item.name)) ||
-                    (match[1].done &&
-                      !agreesWithCompleted(match[1].done, normalized))
-                  )
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message:
-                        'The terminal snapshot conflicts with completed output items.',
-                    });
-                  previousIndex = match[0];
-                  match[1].done ??= normalized;
-                }
-                for (const [, item] of ordered) {
-                  if (!item.done)
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'The model left an output item unfinished.',
-                    });
-                  output.push(item.done);
-                }
-              } else {
-                output.push(
-                  ...(yield* Effect.forEach(terminal.output, normalizeItem)),
-                );
-              }
-              const result = yield* normalizeResponse(terminal, origin, output);
-              const continuation = yield* openaiResponsesContinuation(
-                turn,
-                result,
-              );
-              return {
-                kind: 'completed' as const,
-                result: continuation
-                  ? TurnResultSchema.parse({ ...result, continuation })
-                  : result,
-              };
-            }),
-          );
-          return Stream.concat(progress, completion).pipe(
             Stream.mapError(enrich),
           );
         }).pipe(Effect.mapError(enrich)),
       );
     });
-  const generateTurn: Model['generateTurn'] = Effect.fn(
-    'llm.responses.generateTurn',
-  )(function* (turn) {
-    const result = yield* Stream.runFold(
-      streamTurn(turn),
-      () => null as TurnResult | null,
-      (current, event) => (event.kind === 'completed' ? event.result : current),
-    );
-    if (result === null)
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message: 'The model stream produced no completed result.',
-      });
-    return result;
-  });
+  const generateTurn: Model['generateTurn'] = (turn) =>
+    completedTurn(streamTurn(turn));
 
   const boundOperation = Effect.fn('llm.responses.boundOperation')(function* (
     input: RemoteOperation,
@@ -1239,7 +1377,11 @@ export function openaiResponsesModel(
         ) {
           const content = yield* Effect.forEach(response.output, normalizeItem);
           const result = yield* normalizeResponse(response, origin, content);
-          const continuation = yield* openaiResponsesContinuation(turn, result);
+          const continuation = yield* openaiResponsesContinuation(
+            config,
+            turn,
+            result,
+          );
           return BackgroundSubmissionSchema.parse({
             kind: 'completed',
             result: continuation ? { ...result, continuation } : result,
@@ -1652,3 +1794,446 @@ export function openaiResponsesModel(
       : {}),
   });
 }
+
+const WebSocketEnvelopeSchema = z.object({
+  type: z.string(),
+  // This acquisition owns the implicit lane, not a multiplexed connection.
+  stream_id: z.never().optional(),
+});
+const WebSocketErrorSchema = z.union([
+  z.object({
+    type: z.literal('error'),
+    status: z.int().optional(),
+    error: z.object({
+      type: z.string(),
+      code: z.string().nullable(),
+      message: z.string(),
+      param: z.string().nullish(),
+    }),
+  }),
+  z
+    .object({
+      type: z.literal('error'),
+      sequence_number: z.int().nonnegative(),
+      code: z.string().nullable(),
+      message: z.string(),
+      param: z.string().nullable(),
+    })
+    .transform((error) => ({ error, status: undefined })),
+]);
+
+/** Acquires one physical connection; invalidation requires explicit reacquisition. */
+export const openaiResponsesWebSocketModel = Effect.fn(
+  'llm.responses.webSocketModel',
+)(function* (
+  configuration: OpenAIResponsesConfiguration,
+  authentication: z.infer<typeof ResponseAuthenticationSchema>,
+): Effect.fn.Return<Model, ModelError, Scope.Scope> {
+  const config = ModelConfigurationSchema.parse(configuration);
+  if (config.protocol !== 'openai-responses')
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message: 'This model implements the Responses protocol.',
+    });
+  const origin = ModelOriginSchema.parse({
+    protocol: config.protocol,
+    requestedModel: config.requestedModel,
+    deployment: config.deployment,
+    codecVersion: 1,
+  });
+  const selected = yield* Effect.try({
+    try: () => responseAuthentication(authentication),
+    catch: (cause) => cause,
+  }).pipe(
+    Effect.catch((cause) =>
+      cause instanceof ModelError ? Effect.fail(cause) : Effect.die(cause),
+    ),
+  );
+  const endpoint = new URL(config.deployment.endpoint);
+  if (endpoint.username || endpoint.password)
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message:
+        'Responses endpoint credentials cannot override the selected authentication.',
+    });
+  endpoint.pathname = `${endpoint.pathname.replace(/\/$/, '')}/responses`;
+  if (endpoint.protocol === 'https:') endpoint.protocol = 'wss:';
+  else if (endpoint.protocol === 'http:') endpoint.protocol = 'ws:';
+  else
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message: 'The Responses endpoint must use HTTP or HTTPS.',
+    });
+  const transport = { kind: 'websocket' as const, connectionId: randomUUID() };
+  const openedAt = yield* Clock.currentTimeMillis;
+  const closed = new ModelError({
+    kind: 'transport',
+    message:
+      'The Responses connection is no longer usable; reacquire and admit a new turn.',
+  });
+  let invalid: ModelError | undefined;
+  let phase: 'idle' | 'reading' | 'draining' = 'idle';
+  let pendingRead: Promise<IteratorResult<unknown>> | undefined;
+  let latestResponseId: string | undefined;
+  let eligibleResponseId: string | undefined;
+
+  const failure = (cause: unknown) =>
+    cause instanceof ModelError
+      ? cause
+      : new ModelError({
+          kind: 'transport',
+          message: 'The Responses WebSocket failed.',
+          cause,
+        });
+  const join = (pending: Promise<unknown>, exit: Exit.Exit<unknown, unknown>) =>
+    Effect.tryPromise({ try: () => pending, catch: (cause) => cause }).pipe(
+      Effect.catch((cause) => {
+        const repeated =
+          Exit.isFailure(exit) &&
+          exit.cause.reasons.some(
+            (reason) =>
+              (Cause.isFailReason(reason) &&
+                (reason.error === cause ||
+                  (reason.error instanceof ModelError &&
+                    reason.error.cause === cause))) ||
+              (Cause.isDieReason(reason) && reason.defect === cause),
+          );
+        return cause === closed || repeated ? Effect.void : Effect.die(cause);
+      }),
+      Effect.asVoid,
+    );
+  const resource = yield* Effect.acquireRelease(
+    Effect.sync(() => {
+      const socket = new WebSocket(endpoint, {
+        headers: {
+          Authorization: `Bearer ${selected.token}`,
+          ...selected.headers,
+        },
+        followRedirects: false,
+      });
+      const reader = createWebSocketStream(socket, {
+        readableObjectMode: true,
+      });
+      // This listener records failures while idle as well as during a pending read.
+      reader.on('error', (cause) => {
+        invalid ??= failure(cause);
+        eligibleResponseId = undefined;
+      });
+      socket.once('close', () => {
+        invalid ??= closed;
+        eligibleResponseId = undefined;
+      });
+      return {
+        socket,
+        reader,
+        iterator: reader[Symbol.asyncIterator]() as AsyncIterator<unknown>,
+      };
+    }),
+    ({ socket, reader, iterator }, exit) =>
+      Effect.gen(function* () {
+        invalid ??= closed;
+        eligibleResponseId = undefined;
+        reader.destroy(closed);
+        yield* join(
+          iterator.return ? iterator.return() : Promise.resolve(),
+          exit,
+        ).pipe(
+          Effect.ensuring(
+            Effect.callback<void>((resume) => {
+              if (socket.readyState === WebSocket.CLOSED) resume(Effect.void);
+              else socket.once('close', () => resume(Effect.void));
+            }),
+          ),
+        );
+      }),
+  );
+  const { socket, reader, iterator } = resource;
+  const invalidate = (error: ModelError) => {
+    invalid ??= error;
+    eligibleResponseId = undefined;
+    reader.destroy(invalid);
+  };
+  // The sole consumer decodes frames; this synchronous guard only invalidates idle traffic.
+  socket.on('message', () => {
+    if (phase !== 'reading')
+      invalidate(
+        new ModelError({
+          kind: 'malformed-output',
+          message:
+            'The Responses connection received data without an active turn.',
+        }),
+      );
+  });
+  yield* Effect.callback<void, ModelError>((resume) => {
+    const remove = () => {
+      socket.off('open', onOpen);
+      socket.off('error', onError);
+      socket.off('unexpected-response', onUnexpected);
+    };
+    const onOpen = () => {
+      remove();
+      resume(Effect.void);
+    };
+    const onError = (cause: Error) => {
+      remove();
+      resume(Effect.fail(invalid ?? failure(cause)));
+    };
+    const onUnexpected = (
+      request: import('node:http').ClientRequest,
+      response: import('node:http').IncomingMessage,
+    ) => {
+      const status = response.statusCode;
+      const error = new ModelError({
+        kind:
+          status === 401 || status === 403
+            ? 'authentication'
+            : 'provider-rejection',
+        message: `The Responses WebSocket handshake was rejected${status === undefined ? '' : ` (${status})`}.`,
+        status,
+        requestId:
+          typeof response.headers['x-request-id'] === 'string'
+            ? response.headers['x-request-id']
+            : undefined,
+      });
+      remove();
+      invalid = error;
+      response.destroy();
+      request.destroy();
+      reader.destroy();
+      resume(Effect.fail(error));
+    };
+    socket.once('open', onOpen);
+    socket.once('error', onError);
+    socket.once('unexpected-response', onUnexpected);
+    return Effect.sync(remove);
+  });
+  yield* Effect.gen(function* () {
+    while (!invalid) {
+      yield* Effect.sleep(30_000);
+      if (!invalid)
+        yield* Effect.callback<void>((resume) => {
+          socket.ping((cause: Error | undefined) => {
+            if (cause) invalidate(failure(cause));
+            resume(Effect.void);
+          });
+        });
+    }
+  }).pipe(Effect.forkScoped);
+
+  const prepareTurn: Model['prepareTurn'] = (request) =>
+    prepareResponsesTurn(config, origin, transport, request);
+  const streamTurn: Model['streamTurn'] = (input) =>
+    Stream.suspend(() => {
+      let responseId: string | undefined;
+      let returnedModel: string | undefined;
+      let completed = false;
+      const enrich = (error: ModelError) =>
+        new ModelError({
+          ...error,
+          message: error.message,
+          cause: error.cause,
+          responseId: error.responseId ?? responseId,
+          model: error.model ?? returnedModel ?? config.requestedModel,
+        });
+      return Stream.unwrap(
+        Effect.gen(function* () {
+          const { turn, parameters } = yield* responseParameters(
+            config,
+            origin,
+            transport,
+            input,
+            'foreground',
+          );
+          const now = yield* Clock.currentTimeMillis;
+          const anchor = turn.continuation?.anchor;
+          yield* Effect.acquireRelease(
+            Effect.suspend(() => {
+              if (invalid) return Effect.fail(invalid);
+              if (phase !== 'idle')
+                return Effect.fail(
+                  new ModelError({
+                    kind: 'unsupported',
+                    message:
+                      'This Responses connection already has an active turn.',
+                  }),
+                );
+              if (now - openedAt >= 55 * 60_000) {
+                invalidate(closed);
+                return Effect.fail(closed);
+              }
+              if (
+                anchor?.kind === 'connection' &&
+                anchor.responseId !== eligibleResponseId
+              )
+                return Effect.fail(
+                  new ModelError({
+                    kind: 'invalid-request',
+                    message:
+                      'The connection anchor is not its latest eligible response.',
+                  }),
+                );
+              phase = 'reading';
+              eligibleResponseId = undefined;
+              return Effect.void;
+            }),
+            (_, exit) =>
+              Effect.gen(function* () {
+                if (!completed || Exit.isFailure(exit)) invalidate(closed);
+                if (pendingRead) yield* join(pendingRead, exit);
+                pendingRead = undefined;
+                if (!invalid) phase = 'idle';
+              }),
+          );
+          yield* Effect.callback<void, ModelError>((resume) => {
+            socket.send(
+              JSON.stringify({
+                type: 'response.create',
+                ...parameters,
+                ...(config.webSocketStreamParameter === 'required'
+                  ? { stream: true }
+                  : {}),
+              }),
+              (cause) =>
+                resume(cause ? Effect.fail(failure(cause)) : Effect.void),
+            );
+          });
+          const chunks = Stream.fromPull(
+            Effect.succeed(
+              Effect.gen(function* () {
+                pendingRead = iterator.next();
+                const next = yield* Effect.tryPromise({
+                  try: () => pendingRead!,
+                  catch: failure,
+                });
+                pendingRead = undefined;
+                if (next.done) return yield* closed;
+                if (typeof next.value !== 'string')
+                  return yield* new ModelError({
+                    kind: 'malformed-output',
+                    message:
+                      'The Responses connection returned a binary frame.',
+                  });
+                const raw: unknown = yield* Effect.try({
+                  try: () => JSON.parse(next.value as string),
+                  catch: (cause) =>
+                    new ModelError({
+                      kind: 'malformed-output',
+                      message:
+                        'The Responses connection returned invalid JSON.',
+                      cause,
+                    }),
+                });
+                const envelope = WebSocketEnvelopeSchema.safeParse(raw);
+                if (!envelope.success)
+                  return yield* new ModelError({
+                    kind: 'malformed-output',
+                    message:
+                      'The Responses event does not belong to the implicit lane.',
+                    cause: envelope.error,
+                  });
+                if (envelope.data.type === 'error') {
+                  const rejected = WebSocketErrorSchema.safeParse(raw);
+                  if (!rejected.success)
+                    return yield* new ModelError({
+                      kind: 'malformed-output',
+                      message:
+                        'The Responses connection returned a malformed error.',
+                      cause: rejected.error,
+                    });
+                  return yield* new ModelError({
+                    kind:
+                      rejected.data.status === 401 ||
+                      rejected.data.status === 403
+                        ? 'authentication'
+                        : 'provider-rejection',
+                    message: rejected.data.error.message,
+                    status: rejected.data.status,
+                    cause: rejected.data.error,
+                  });
+                }
+                return [raw] as const;
+              }),
+            ),
+          );
+          return responseEvents(chunks, origin).pipe(
+            Stream.mapEffect((event) =>
+              Effect.gen(function* () {
+                if (event.kind === 'identified') {
+                  if (event.providerResponseId === latestResponseId)
+                    return yield* new ModelError({
+                      kind: 'malformed-output',
+                      message:
+                        'The Responses connection repeated its preceding response identity.',
+                    });
+                  responseId = event.providerResponseId;
+                  returnedModel = event.returnedModel ?? undefined;
+                }
+                if (event.kind !== 'completed') return event;
+                phase = 'draining';
+                if (reader.readableLength > 0)
+                  return yield* new ModelError({
+                    kind: 'malformed-output',
+                    message:
+                      'The Responses connection buffered data beyond its terminal event.',
+                  });
+                latestResponseId = event.result.providerResponseId ?? undefined;
+                let continuation = yield* openaiResponsesContinuation(
+                  config,
+                  turn,
+                  event.result,
+                );
+                if (
+                  config.supportsResponseChaining &&
+                  (event.result.finishReason === 'stop' ||
+                    event.result.finishReason === 'tool-calls')
+                ) {
+                  eligibleResponseId = latestResponseId;
+                  if (!continuation) {
+                    const prefix: ResolvedTurn['messages'] = [
+                      ...turn.messages,
+                      {
+                        role: 'assistant',
+                        origin,
+                        content: event.result.content,
+                      },
+                    ];
+                    const encoded = yield* lowerInput({
+                      ...turn,
+                      messages: prefix,
+                    });
+                    continuation = ContinuationSchema.parse({
+                      origin,
+                      coveredMessages: prefix.length,
+                      prefixFingerprint: prefixFingerprint(
+                        'texra-openai-responses-prefix-v1',
+                        origin,
+                        turn.system,
+                        prefix,
+                      ),
+                      anchor: {
+                        kind: 'connection',
+                        connectionId: transport.connectionId,
+                        responseId: latestResponseId,
+                        coveredItems: encoded.length,
+                      },
+                    });
+                  }
+                }
+                completed = true;
+                return {
+                  ...event,
+                  result: continuation
+                    ? TurnResultSchema.parse({ ...event.result, continuation })
+                    : event.result,
+                };
+              }),
+            ),
+            Stream.mapError(enrich),
+          );
+        }).pipe(Effect.mapError(enrich)),
+      );
+    });
+  const generateTurn: Model['generateTurn'] = (turn) =>
+    completedTurn(streamTurn(turn));
+  return Object.freeze({ prepareTurn, streamTurn, generateTurn });
+});
