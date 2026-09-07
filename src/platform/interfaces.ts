@@ -297,3 +297,28 @@ export interface AgentResumePort {
     recovery?: RecoveryContinuation,
   ): Promise<boolean>;
 }
+
+// ---------------------------------------------------------------------------
+// Host environment
+// ---------------------------------------------------------------------------
+
+/**
+ * Host-owned reads of the current process's raw OS/runtime environment.
+ * Exists so business logic (setup/environment probes, native-binary
+ * resolution) never touches `process`/`os` directly.
+ */
+export interface HostEnvironmentPort {
+  /** OS, architecture, kernel release, and shell of the current process. */
+  hostInfo(): {
+    readonly platform: string;
+    readonly arch: string;
+    readonly osRelease: string;
+    readonly shell: string;
+  };
+  /**
+   * `process.resourcesPath` when running inside a packaged Electron app.
+   * `undefined` in development mode (`defaultApp === true`) and in
+   * non-Electron runtimes (VS Code extension host, CLI, plain Node.js).
+   */
+  packagedElectronResourcesPath(): string | undefined;
+}

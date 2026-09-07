@@ -1,11 +1,11 @@
 // Standard library imports
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
 import { z } from 'zod';
 
 // Local imports
+import { platform as platformServices } from '@platform/platform';
 import { type ToolResult } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { executed } from '@tools/core/result';
@@ -53,6 +53,7 @@ export class ProbeEnvironmentTool extends defineTool({
     const homedir = safeHomedir() ?? '<unresolved>';
     const extendedPath = extendEnvPath();
     const pm = detectPackageManager();
+    const hostInfo = platformServices().hostEnvironment.hostInfo();
     const [
       core,
       optionalTools,
@@ -87,11 +88,11 @@ export class ProbeEnvironmentTool extends defineTool({
     const summary = {
       host: platform.host,
       os: {
-        platform: process.platform,
-        arch: process.arch,
-        release: os.release(),
+        platform: hostInfo.platform,
+        arch: hostInfo.arch,
+        release: hostInfo.osRelease,
       },
-      shell: process.env.SHELL ?? process.env.ComSpec ?? 'unknown',
+      shell: hostInfo.shell,
       home: homedir,
       path: extendedPath.split(path.delimiter).filter(Boolean),
       packageManager: pm,
