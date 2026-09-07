@@ -1120,9 +1120,15 @@ describe('the C1 event table and the C6 publisher', () => {
         const initial = yield* first.appendAll([
           runStart,
           olderStart,
-          { ...thread, parentStreamId: null, status: 'answered' },
-          { ...thread, parentStreamId: OLDER },
-          thread,
+          { ...thread, status: 'answered' },
+          { ...thread, parentStreamId: OLDER, turnCount: 2 },
+          {
+            ...thread,
+            parentStreamId: OLDER,
+            status: 'answered',
+            turnCount: 2,
+          },
+          { ...thread, turnCount: 3 },
         ]);
         expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
           root,
@@ -1134,6 +1140,32 @@ describe('the C1 event table and the C6 publisher', () => {
             ]),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
+        // Visiting the first asker again must not let its delayed turn-1
+        // answer regress state and then admit the former asker's turn-2 open.
+        const staleBatches: SessionEventDraft[][] = [
+          [
+            { ...thread, status: 'answered' },
+            { ...thread, parentStreamId: OLDER, turnCount: 2 },
+          ],
+          [
+            {
+              ...thread,
+              parentStreamId: OLDER,
+              status: 'answered',
+              turnCount: 2,
+            },
+          ],
+          [{ ...thread, parentStreamId: OLDER, turnCount: 2 }],
+        ];
+        for (const stale of staleBatches) {
+          expect((yield* Effect.flip(first.appendAll(stale)))._tag).toBe(
+            'DatabaseWriteFailed',
+          );
+        }
+        expect(yield* first.readAll(0)).toEqual(initial);
+        expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
+          root,
+        );
         yield* first.releaseClaims([inquiry]);
         const removal: SessionEventDraft = {
           type: 'stream.removed',
@@ -1163,8 +1195,8 @@ describe('the C1 event table and the C6 publisher', () => {
         yield* first.acquireClaims([inquiry]);
         const committed = yield* first.appendAll([waiting, removal]);
         expect(committed.map((row) => [row.seq, row.commit])).toEqual([
-          [2, 6],
-          [3, 7],
+          [2, 7],
+          [3, 8],
         ]);
         expect(
           (yield* first.aggregateState([root, inquiry])).every(
@@ -1185,7 +1217,7 @@ describe('the C1 event table and the C6 publisher', () => {
             'DatabaseWriteFailed',
           );
         }
-        expect(yield* first.currentCommit).toBe(7);
+        expect(yield* first.currentCommit).toBe(8);
       }).pipe(Effect.provide(substrate(storage)));
     },
   );

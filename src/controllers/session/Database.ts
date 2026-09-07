@@ -288,6 +288,9 @@ export const databaseLayer = (
       const setInquiryParent = db.prepare(
         'UPDATE event_sequence SET parent_id = ? WHERE aggregate_id = ?',
       );
+      const latestInquiry = db.prepare(`SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.aggregate_id = ? AND e.type = 'inquiryThreadUpdated.1'
+        ORDER BY e.seq DESC LIMIT 1`);
       const all = db.prepare(`SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
           AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
@@ -559,6 +562,22 @@ export const databaseLayer = (
                   parentStartCommit = parent.startCommit;
                 }
                 if (draft.type === 'inquiryThreadUpdated') {
+                  const priorRow = latestInquiry.get(draft.aggregateId);
+                  if (priorRow !== undefined) {
+                    const prior = decodeEvent(priorRow);
+                    if (
+                      prior.type !== 'inquiryThreadUpdated' ||
+                      draft.turnCount < prior.turnCount ||
+                      (prior.parentStreamId !== draft.parentStreamId &&
+                        (prior.status !== 'answered' ||
+                          draft.status !== 'open' ||
+                          draft.turnCount <= prior.turnCount))
+                    ) {
+                      throw new Error(
+                        `Inquiry update must preserve turn order and reopen before reattachment: ${draft.threadId}`,
+                      );
+                    }
+                  }
                   const parentId =
                     draft.parentStreamId === null
                       ? null
