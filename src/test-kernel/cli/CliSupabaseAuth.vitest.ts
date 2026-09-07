@@ -134,7 +134,7 @@ describe('CLI Supabase auth', () => {
     mocks.authCoordinator.clearSession.mockReturnValue(Effect.void);
     mocks.authCoordinator.storeSession.mockReturnValue(Effect.void);
     mocks.platform.mockReturnValue({ secrets: { kind: 'platform-secrets' } });
-    mocks.invalidateRemoteAgentsAfterSignOut.mockResolvedValue(undefined);
+    mocks.invalidateRemoteAgentsAfterSignOut.mockReturnValue(Effect.void);
   });
 
   it('uses platform-owned secrets after CLI platform init', async () => {
@@ -289,8 +289,8 @@ describe('CLI Supabase auth', () => {
   });
 
   it('completes sign-out when the local catalog rebuild fails', async () => {
-    mocks.invalidateRemoteAgentsAfterSignOut.mockRejectedValueOnce(
-      new Error('local rebuild failed'),
+    mocks.invalidateRemoteAgentsAfterSignOut.mockReturnValueOnce(
+      Effect.fail(new Error('local rebuild failed')),
     );
     const warn = vi.fn();
     const { initializeCliSupabaseAuth, signOutCliSupabase } =

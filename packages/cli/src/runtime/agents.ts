@@ -7,6 +7,7 @@ import {
   type AgentEntry,
 } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   AGENT_CATEGORIES,
   AgentSourceSchema,
@@ -162,7 +163,7 @@ export async function resolveCliAgent(
   name: string,
   lookupCategory?: AgentCategory,
 ): Promise<AgentEntry | undefined> {
-  await loadAgents({ includeRemote: false });
+  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
   const agent = lookupCliAgent(name, lookupCategory);
 
   // Keep the local hit only when a remote-inclusive reload could not change
@@ -176,7 +177,7 @@ export async function resolveCliAgent(
     return agent;
   }
 
-  await loadAgents();
+  await effectRuntime().runPromise(loadAgents());
   return lookupCliAgent(name, lookupCategory);
 }
 
@@ -208,7 +209,9 @@ export async function loadCliAgentList(
   options: CliAgentListOptions = {},
 ): Promise<CliAgentListResult> {
   const includeHidden = options.includeHidden === true;
-  await loadAgents(includeHidden ? undefined : { includeRemote: false });
+  await effectRuntime().runPromise(
+    loadAgents(includeHidden ? undefined : { includeRemote: false }),
+  );
 
   const agents = collectCliAgents(
     includeHidden ? 'all' : 'visible',

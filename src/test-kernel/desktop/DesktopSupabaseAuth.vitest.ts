@@ -218,7 +218,7 @@ describe('desktop Supabase auth', () => {
     vi.spyOn(
       agentRegistry,
       'invalidateRemoteAgentsAfterSignOut',
-    ).mockResolvedValue(undefined);
+    ).mockReturnValue(Effect.void);
   });
   afterEach(() => {
     for (const auth of testAuths.splice(0)) auth.dispose();
@@ -847,7 +847,7 @@ describe('desktop Supabase auth', () => {
   it('still publishes sign-out when the local catalog rebuild fails', async () => {
     vi.mocked(
       agentRegistry.invalidateRemoteAgentsAfterSignOut,
-    ).mockRejectedValueOnce(new Error('local rebuild failed'));
+    ).mockReturnValueOnce(Effect.die(new Error('local rebuild failed')));
     const onSessionChanged = vi.fn(async () => {});
     const log = createLog();
     const { coordinator, auth } = createAuthSetup({ onSessionChanged, log });

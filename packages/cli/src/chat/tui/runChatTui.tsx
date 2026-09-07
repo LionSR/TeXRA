@@ -40,6 +40,7 @@ import {
   clearTerminalScrollback,
   installTerminalRestoreOnExit,
 } from '@cli/tui/terminalCleanup';
+import { effectRuntime } from '@platform/processRuntime';
 import { DisposableStore } from '@platform/disposable';
 import { platform } from '@platform/platform';
 import {
@@ -199,7 +200,7 @@ export async function runChat(
     firstRunDone: getFirstRunDone(platform().globalState),
     pinnedAgent: explicitAgent ?? context.envAgent,
   });
-  await loadAgents();
+  await effectRuntime().runPromise(loadAgents());
   const visibleToolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,

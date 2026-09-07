@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import { Effect } from 'effect';
 import {
   afterAll,
   beforeAll,
@@ -253,7 +254,7 @@ describe('inline agent definitions', () => {
       await makeTempDir('texra-empty-agents-', tempDirs),
     );
     registerInlineAgents([SCRATCHPAD]);
-    await loadAgents({ includeRemote: false });
+    await Effect.runPromise(loadAgents({ includeRemote: false }));
   });
 
   it('resolves a registered definition with no YAML behind it', () => {
@@ -290,7 +291,7 @@ describe('inline agent definitions', () => {
   });
 
   it('survives a catalog refresh that rebuilds the cache', async () => {
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
     assert.strictEqual(getAgent('inline:scratchpad')?.source, 'inline');
   });
 
@@ -421,7 +422,7 @@ describe('inline agent definitions', () => {
     first.tools.push('bash');
     first.defaultOutputFiles.push('mutated.md');
 
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
     const restored = getAgent('inline:immutableEntry');
     assert.deepStrictEqual(restored?.tools, ['grep']);
     assert.deepStrictEqual(restored?.defaultOutputFiles, ['report.md']);
@@ -497,7 +498,7 @@ describe('inline agent definitions', () => {
       ].join('\n'),
     );
     await useAgentDirectories(customDir);
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
 
     // Distinct keys, so neither registration displaces the other...
     assert.strictEqual(
@@ -555,12 +556,12 @@ describe('agent registry load state', () => {
   it('runs a single scan for loads that start together', async () => {
     const counter = { scans: 0 };
     await installDirectories(countingDirectories(counter));
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
     counter.scans = 0;
 
     await Promise.all([
-      loadAgents({ includeRemote: true }),
-      loadAgents({ includeRemote: true }),
+      Effect.runPromise(loadAgents({ includeRemote: true })),
+      Effect.runPromise(loadAgents({ includeRemote: true })),
     ]);
 
     assert.strictEqual(counter.scans, 1);
@@ -570,7 +571,7 @@ describe('agent registry load state', () => {
   it('keeps serving the published catalog when a refresh fails', async () => {
     const counter = { scans: 0 };
     await installDirectories(countingDirectories(counter));
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
     assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
 
     const scanFailure = new Error('agent directory unavailable');
@@ -582,7 +583,14 @@ describe('agent registry load state', () => {
       builtInToolUse: async () => agentDir,
     });
 
-    await assert.rejects(refresh({ includeRemote: false }), scanFailure);
+    await assert.rejects(
+      Effect.runPromise(refresh({ includeRemote: false })),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.strictEqual(error.message, scanFailure.message);
+        return true;
+      },
+    );
 
     // A failed rebuild leaves the previously published catalog in place.
     assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');

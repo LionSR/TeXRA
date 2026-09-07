@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -378,28 +379,33 @@ describe('buildTeamOptions', () => {
 
 describe('loadTeamOptions', () => {
   it('refreshes a gapped plan when remote access exists and builds final options', async () => {
+    let ensured = false;
     let refreshed = false;
-    const ensureCatalogLoaded = vi.fn(async () => undefined);
-    const refreshRemote = vi.fn(async () => {
-      refreshed = true;
-    });
     const custom = preset();
 
-    const options = await loadTeamOptions({
-      customPresetsRaw: [custom],
-      ensureCatalogLoaded,
-      getAgents: (category) => {
-        if (!refreshed) return [];
-        return category === 'workflow'
-          ? [agent('writer', { source: 'builtInWorkflow' })]
-          : [agent('lead', { tools: delegateTools }), agent('member')];
-      },
-      canAccessRemoteCatalog: async () => true,
-      refreshRemote,
-    });
+    const options = await Effect.runPromise(
+      loadTeamOptions({
+        customPresetsRaw: [custom],
+        ensureCatalogLoaded: () =>
+          Effect.sync(() => {
+            ensured = true;
+          }),
+        getAgents: (category) => {
+          if (!refreshed) return [];
+          return category === 'workflow'
+            ? [agent('writer', { source: 'builtInWorkflow' })]
+            : [agent('lead', { tools: delegateTools }), agent('member')];
+        },
+        canAccessRemoteCatalog: async () => true,
+        refreshRemote: () =>
+          Effect.sync(() => {
+            refreshed = true;
+          }),
+      }),
+    );
 
-    expect(ensureCatalogLoaded).toHaveBeenCalledOnce();
-    expect(refreshRemote).toHaveBeenCalledOnce();
+    expect(ensured).toBe(true);
+    expect(refreshed).toBe(true);
     expect(options.find((option) => option.value === custom.id)).toMatchObject({
       disabled: undefined,
       unavailableMembers: [],
@@ -407,17 +413,22 @@ describe('loadTeamOptions', () => {
   });
 
   it('does not refresh gapped plans without remote catalog access', async () => {
-    const refreshRemote = vi.fn(async () => undefined);
+    let refreshed = false;
 
-    await loadTeamOptions({
-      customPresetsRaw: [preset()],
-      ensureCatalogLoaded: async () => undefined,
-      getAgents: () => [],
-      canAccessRemoteCatalog: async () => false,
-      refreshRemote,
-    });
+    await Effect.runPromise(
+      loadTeamOptions({
+        customPresetsRaw: [preset()],
+        ensureCatalogLoaded: () => Effect.void,
+        getAgents: () => [],
+        canAccessRemoteCatalog: async () => false,
+        refreshRemote: () =>
+          Effect.sync(() => {
+            refreshed = true;
+          }),
+      }),
+    );
 
-    expect(refreshRemote).not.toHaveBeenCalled();
+    expect(refreshed).toBe(false);
   });
 
   it('loads the catalog before planning team options', async () => {
@@ -427,15 +438,18 @@ describe('loadTeamOptions', () => {
       return [];
     });
 
-    await loadTeamOptions({
-      customPresetsRaw: [],
-      ensureCatalogLoaded: async () => {
-        loaded = true;
-      },
-      getAgents,
-      canAccessRemoteCatalog: async () => false,
-      refreshRemote: async () => undefined,
-    });
+    await Effect.runPromise(
+      loadTeamOptions({
+        customPresetsRaw: [],
+        ensureCatalogLoaded: () =>
+          Effect.sync(() => {
+            loaded = true;
+          }),
+        getAgents,
+        canAccessRemoteCatalog: async () => false,
+        refreshRemote: () => Effect.void,
+      }),
+    );
 
     expect(getAgents).toHaveBeenCalled();
   });
@@ -453,11 +467,11 @@ describe('resolveTeamLaunch', () => {
     return {
       teamId: 'custom-team',
       customPresetsRaw: [preset()],
-      ensureCatalogLoaded: async () => undefined,
+      ensureCatalogLoaded: () => Effect.void,
       getAgents: (category: string) =>
         category === 'workflow' ? workflowAgents : toolUseAgents,
       canAccessRemoteCatalog: async () => false,
-      refreshRemote: async () => undefined,
+      refreshRemote: () => Effect.void,
       choose: async () => 'cancel' as const,
       signIn: async () => false,
       ...overrides,
@@ -473,7 +487,9 @@ describe('resolveTeamLaunch', () => {
   }
 
   it('returns execution-scoped fields for a ready team', async () => {
-    await expect(resolveTeamLaunch(launchArgs())).resolves.toEqual({
+    await expect(
+      Effect.runPromise(resolveTeamLaunch(launchArgs())),
+    ).resolves.toEqual({
       status: 'ready',
       fields: {
         agent: 'builtInToolUse:lead',
@@ -498,13 +514,16 @@ describe('resolveTeamLaunch', () => {
     });
 
     await expect(
-      resolveTeamLaunch(
-        launchArgs({
-          ensureCatalogLoaded: async () => {
-            loaded = true;
-          },
-          getAgents,
-        }),
+      Effect.runPromise(
+        resolveTeamLaunch(
+          launchArgs({
+            ensureCatalogLoaded: () =>
+              Effect.sync(() => {
+                loaded = true;
+              }),
+            getAgents,
+          }),
+        ),
       ),
     ).resolves.toMatchObject({ status: 'ready' });
     expect(getAgents).toHaveBeenCalled();
@@ -520,11 +539,13 @@ describe('resolveTeamLaunch', () => {
     });
 
     await expect(
-      resolveTeamLaunch(
-        launchArgs({
-          customPresetsRaw: [hostedPreset],
-          choose: async () => 'continue' as const,
-        }),
+      Effect.runPromise(
+        resolveTeamLaunch(
+          launchArgs({
+            customPresetsRaw: [hostedPreset],
+            choose: async () => 'continue' as const,
+          }),
+        ),
       ),
     ).resolves.toMatchObject({
       status: 'ready',
@@ -536,12 +557,14 @@ describe('resolveTeamLaunch', () => {
   it('uses a provided continue choice without invoking the interactive port', async () => {
     const choose = vi.fn(async () => undefined);
     await expect(
-      resolveTeamLaunch(
-        launchArgs({
-          customPresetsRaw: [hostedWriterPreset()],
-          providedChoice: 'continue',
-          choose,
-        }),
+      Effect.runPromise(
+        resolveTeamLaunch(
+          launchArgs({
+            customPresetsRaw: [hostedWriterPreset()],
+            providedChoice: 'continue',
+            choose,
+          }),
+        ),
       ),
     ).resolves.toMatchObject({ status: 'ready', partial: true });
     expect(choose).not.toHaveBeenCalled();
@@ -549,59 +572,72 @@ describe('resolveTeamLaunch', () => {
 
   it('treats an explicit cancel or dismissed choice as cancelled', async () => {
     await expect(
-      resolveTeamLaunch(
-        launchArgs({
-          customPresetsRaw: [hostedWriterPreset()],
-        }),
+      Effect.runPromise(
+        resolveTeamLaunch(
+          launchArgs({
+            customPresetsRaw: [hostedWriterPreset()],
+          }),
+        ),
       ),
     ).resolves.toEqual({ status: 'cancelled' });
     await expect(
-      resolveTeamLaunch(
-        launchArgs({
-          customPresetsRaw: [hostedWriterPreset()],
-          choose: async () => undefined,
-        }),
+      Effect.runPromise(
+        resolveTeamLaunch(
+          launchArgs({
+            customPresetsRaw: [hostedWriterPreset()],
+            choose: async () => undefined,
+          }),
+        ),
       ),
     ).resolves.toEqual({ status: 'cancelled' });
   });
 
   it('reports hosted members still unavailable after remote refresh', async () => {
-    const refreshRemote = vi.fn(async () => undefined);
+    let refreshed = false;
     await expect(
-      resolveTeamLaunch(
-        launchArgs({
-          customPresetsRaw: [hostedWriterPreset()],
-          canAccessRemoteCatalog: async () => true,
-          refreshRemote,
-        }),
+      Effect.runPromise(
+        resolveTeamLaunch(
+          launchArgs({
+            customPresetsRaw: [hostedWriterPreset()],
+            canAccessRemoteCatalog: async () => true,
+            refreshRemote: () =>
+              Effect.sync(() => {
+                refreshed = true;
+              }),
+          }),
+        ),
       ),
     ).resolves.toEqual({
       status: 'unavailable',
       unavailableNames: ['hosted-writer'],
     });
-    expect(refreshRemote).toHaveBeenCalledOnce();
+    expect(refreshed).toBe(true);
   });
 
   it('reports an unknown team without consulting catalog ports', async () => {
     const getAgents = vi.fn(() => []);
     await expect(
-      resolveTeamLaunch(launchArgs({ teamId: 'missing', getAgents })),
+      Effect.runPromise(
+        resolveTeamLaunch(launchArgs({ teamId: 'missing', getAgents })),
+      ),
     ).resolves.toEqual({ status: 'unknown-team' });
     expect(getAgents).not.toHaveBeenCalled();
   });
 
   it('blocks a planned team with no delegation-capable root', async () => {
     await expect(
-      resolveTeamLaunch(
-        launchArgs({
-          customPresetsRaw: [
-            preset({ agents: { workflow: ['writer'], toolUse: ['plain'] } }),
-          ],
-          getAgents: (category: string) =>
-            category === 'workflow'
-              ? [agent('writer', { source: 'builtInWorkflow' })]
-              : [agent('plain')],
-        }),
+      Effect.runPromise(
+        resolveTeamLaunch(
+          launchArgs({
+            customPresetsRaw: [
+              preset({ agents: { workflow: ['writer'], toolUse: ['plain'] } }),
+            ],
+            getAgents: (category: string) =>
+              category === 'workflow'
+                ? [agent('writer', { source: 'builtInWorkflow' })]
+                : [agent('plain')],
+          }),
+        ),
       ),
     ).resolves.toEqual({
       status: 'blocked',
@@ -612,22 +648,25 @@ describe('resolveTeamLaunch', () => {
 
 describe('refreshRemoteCatalogForGaps', () => {
   it('refreshes and returns the replanned value only when gaps and access exist', async () => {
-    const refreshRemote = vi.fn(async () => undefined);
+    let refreshed = false;
     const replan = vi.fn(() => 'remote');
     const canAccessRemoteCatalog = vi.fn(async () => true);
 
-    const result = await refreshRemoteCatalogForGaps(
-      'local',
-      () => true,
-      replan,
-      { canAccessRemoteCatalog, refreshRemote },
+    const result = await Effect.runPromise(
+      refreshRemoteCatalogForGaps('local', () => true, replan, {
+        canAccessRemoteCatalog,
+        refreshRemote: () =>
+          Effect.sync(() => {
+            refreshed = true;
+          }),
+      }),
     );
 
     expect(result).toEqual({
       value: 'remote',
       remoteCatalogRefreshAttempted: true,
     });
-    expect(refreshRemote).toHaveBeenCalledOnce();
+    expect(refreshed).toBe(true);
     expect(replan).toHaveBeenCalledOnce();
   });
 
@@ -648,14 +687,17 @@ describe('refreshRemoteCatalogForGaps', () => {
     'returns the local plan $name without refreshing or replanning',
     async ({ hasGaps, canAccess, accessChecks }) => {
       const canAccessRemoteCatalog = vi.fn(async () => canAccess);
-      const refreshRemote = vi.fn(async () => undefined);
+      let refreshed = false;
       const replan = vi.fn(() => 'remote');
 
-      const result = await refreshRemoteCatalogForGaps(
-        'local',
-        () => hasGaps,
-        replan,
-        { canAccessRemoteCatalog, refreshRemote },
+      const result = await Effect.runPromise(
+        refreshRemoteCatalogForGaps('local', () => hasGaps, replan, {
+          canAccessRemoteCatalog,
+          refreshRemote: () =>
+            Effect.sync(() => {
+              refreshed = true;
+            }),
+        }),
       );
 
       expect(result).toEqual({
@@ -663,7 +705,7 @@ describe('refreshRemoteCatalogForGaps', () => {
         remoteCatalogRefreshAttempted: false,
       });
       expect(canAccessRemoteCatalog).toHaveBeenCalledTimes(accessChecks);
-      expect(refreshRemote).not.toHaveBeenCalled();
+      expect(refreshed).toBe(false);
       expect(replan).not.toHaveBeenCalled();
     },
   );
