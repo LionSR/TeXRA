@@ -292,13 +292,14 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   let latest: string | undefined;
   let confirmed = false;
   // `installCliProcessRuntime` is the pre-runtime edge: until it resolves
-  // there is no process runtime to run the check program on, and its failure
-  // stays as silent as the check's own.
-  const runtimeInstalled = await installCliProcessRuntime().then(
-    () => true,
-    () => false,
-  );
-  if (!runtimeInstalled) return;
+  // there is no process runtime to run the check program on. Its failure is
+  // NOT absorbed here. Both callers reach `initCliPlatform` moments later
+  // (`orchestrate` directly, `chat` through `runChat`), and that awaits the
+  // same install with no handler at all, so swallowing the rejection here
+  // would only move the identical crash a few statements down while hiding
+  // why. The check's own best-effort silence is the `Effect.ignoreCause`
+  // below, which covers the part that actually runs on the runtime.
+  await installCliProcessRuntime();
   const check = Effect.gen(function* () {
     const globalState = yield* openCliGlobalStateStore(
       createNodeStorageProvider(),

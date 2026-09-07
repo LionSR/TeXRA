@@ -19,8 +19,7 @@ import {
 } from '../schemas/cliSettings';
 import {
   isCliSupportedModelId,
-  loadUserApprovalPolicy,
-  loadWorkspaceCliConfig,
+  loadCliStartupConfig,
   type CliConfigValues,
 } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
@@ -382,11 +381,13 @@ export async function buildCliContext(
   const env = init.env ?? process.env;
   const cwd = await resolveCliCwd(init.globalArgs.cwd);
   // Workspace file first, user file second — the same order
-  // `workspaceRoots().config` gives the extension and desktop hosts.
-  const [loadedConfig, userApprovalPolicy] = await Promise.all([
-    loadWorkspaceCliConfig(cwd),
-    loadUserApprovalPolicy(init.storageRoot),
-  ]);
+  // `workspaceRoots().config` gives the extension and desktop hosts. This is
+  // the pre-runtime caller of both readers, which is why it goes through
+  // `loadCliStartupConfig` rather than `effectRuntime()`.
+  const [loadedConfig, userApprovalPolicy] = await loadCliStartupConfig(
+    cwd,
+    init.storageRoot,
+  );
   const configWarnings = [
     ...loadedConfig.warnings,
     ...userApprovalPolicy.warnings,

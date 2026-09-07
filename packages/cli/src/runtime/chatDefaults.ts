@@ -8,6 +8,7 @@ import {
   decideRunModel,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
+import { effectRuntime } from '@platform/processRuntime';
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
@@ -198,11 +199,13 @@ export async function resolveChatDefaults(
   if (!skipDefaultTierIo) {
     // Tiers are independent I/O — fan out in parallel.
     // Workspace defaults use the same .texra/config.json reader as the CLI
-    // context so startup does not depend on platform initialization.
+    // context; both chat entries resolve defaults after
+    // `initInteractiveCliPlatform`, so the reader settles on the process
+    // runtime here rather than on a bare run of its own.
     [workspace, user, history] = await Promise.all([
-      loadWorkspaceCliConfig(init.cwd).then((loaded) =>
-        defaultsFromConfigValues(loaded.values),
-      ),
+      effectRuntime()
+        .runPromise(loadWorkspaceCliConfig(init.cwd))
+        .then((loaded) => defaultsFromConfigValues(loaded.values)),
       loadUserDefaults(init.quiet ?? false),
       loadHistoryDefaults(),
     ]);

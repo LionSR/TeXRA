@@ -106,7 +106,10 @@ export const unwrapAuthPortCause = (error: AuthPortError): Error =>
   ensureError(error.cause);
 
 function rethrowPortCause(error: unknown): never {
-  throw error instanceof AuthPortError ? unwrapAuthPortCause(error) : error;
+  // The port's own error, re-thrown unchanged — not `unwrapAuthPortCause`,
+  // which mints an `Error` from a non-`Error` cause and would break the
+  // identity this class documents.
+  throw error instanceof AuthPortError ? error.cause : error;
 }
 
 /**
