@@ -294,18 +294,31 @@ function connectorRequestFailure(
 }
 
 /**
- * Call a Zotero Connector endpoint. Never fails: every outcome, the
- * transport's included, is a `ConnectorResult` the tool reports per item.
+ * Call a Zotero Connector endpoint. Never *fails*: every outcome the typed
+ * channel can carry, the transport's included, is a `ConnectorResult` the
+ * tool reports per item. It can still exit interrupted — see below.
  *
  * The request is **uninterruptible**: `saveItems`/`saveSnapshot` write to the
  * user's library, so aborting one mid-flight would leave Zotero having
- * possibly stored the item while the tool reports nothing at all. Cancelling
- * the run instead waits for this one write to settle and to yield its
- * `ConnectorResult`; the interrupt then takes effect at the caller's next
- * item. The deadline is unaffected — `Effect.timeoutOrElse` races the request
- * in a fiber that `raceAllFirst` forks interruptible regardless of the
- * enclosing region (`forkUnsafe(..., uninterruptible: false)` in effect
- * rc.112), so `ZOTERO_CONNECTOR_TIMEOUT_MS` still bounds a wedged Zotero.
+ * possibly stored the item with no way to tell whether it landed. Cancelling
+ * the run instead lets this one write settle deterministically.
+ *
+ * The interrupt is deferred, not absorbed. When the region ends it is
+ * delivered as the continuation of the write's completion, and the
+ * `Effect.catch` below recovers `Fail` reasons only (`findError` matches
+ * `_tag === 'Fail'`), so this item's `ConnectorResult` is discarded and
+ * `addItems`' `Effect.forEach` stops before the next item. The guarantee is
+ * that Zotero's state is knowable afterwards — not that the result is
+ * reported.
+ *
+ * The deadline is separate and unaffected by the region: `Effect.timeoutOrElse`
+ * races the request in a fiber that `raceAllFirst` forks interruptible
+ * regardless of the enclosing region (`forkUnsafe(..., uninterruptible: false)`
+ * in effect rc.112), so `ZOTERO_CONNECTOR_TIMEOUT_MS` still bounds a wedged
+ * Zotero. That cuts both ways: a *timeout* still aborts the write mid-flight,
+ * so the torn write this guards against remains possible on the deadline path.
+ * That is the deliberate trade — an unbounded write against a wedged Zotero is
+ * the worse failure.
  */
 export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
   (endpoint: string, body: object, port: number) =>
