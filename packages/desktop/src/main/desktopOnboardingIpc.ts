@@ -1,7 +1,6 @@
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { OnboardingFunnelState } from '@shared/schemas';
@@ -25,7 +24,8 @@ import {
 const logger = createLog('DesktopOnboarding');
 
 interface DesktopOnboardingIpcOptions {
-  state?: StateStore;
+  /** The process global store, handed down by the composition root. */
+  state: StateStore;
   /**
    * Host-provided check for a usable credential (a subscription or any
    * provider API key). Async because the secrets read can involve disk I/O.
@@ -72,7 +72,7 @@ export function createDesktopOnboardingIpc(
   renderer: DesktopRenderer,
   options: DesktopOnboardingIpcOptions,
 ): DesktopOnboardingIpc {
-  const state = options.state ?? platform().globalState;
+  const state = options.state;
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
   let previousFunnelState: OnboardingFunnelState | undefined;
   let setupKickoffStarted = false;

@@ -46,9 +46,10 @@ import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { platform } from '@platform/platform';
 import { DisposableStore } from '@platform/disposable';
+import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
+import type { PlatformSecrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
   type AgentSource,
@@ -275,6 +276,15 @@ function createWindow(options: {
   papers: DesktopPaperRegistry;
   authCoordinator: DesktopAuthCoordinator;
   authCallbackState: DesktopAuthCallbackState;
+  /**
+   * The process services the composition root built (see
+   * `ElectronPlatformInitResult`). Handed down so the window's controllers and
+   * IPC surfaces take their stores from their owner rather than re-reading the
+   * ambient `platform()` singleton.
+   */
+  globalState: StateStore;
+  secrets: PlatformSecrets;
+  agentDirectories: AgentDirectoriesPort;
   /** See ElectronPlatformInitResult.resourcesPath. */
   resourcesPath: string;
 }): void {
@@ -442,7 +452,7 @@ function createWindow(options: {
   // itself dedupes concurrent calls and window reopens.
   checkForDesktopUpdate({
     currentVersion: app.getVersion(),
-    globalState: platform().globalState,
+    globalState: options.globalState,
     isPackaged: app.isPackaged,
     notify: async (release) => {
       const { response } = await dialog.showMessageBox(window, {
@@ -472,7 +482,7 @@ function createWindow(options: {
   // Session requests present errors at their dispatcher. Menu, navigation,
   // and runtime preview callers retain the reporting host above.
   const requestPreviewHost = createDesktopPreviewHost(previewOptions);
-  const getCustomAgentDirectory = () => platform().agentDirectories.custom();
+  const getCustomAgentDirectory = () => options.agentDirectories.custom();
 
   // Button labels for the instruction dialog below. Desktop has one settings
   // home (Settings tab), so SET_API_KEY opens it directly rather than the
@@ -746,7 +756,7 @@ function createWindow(options: {
     });
     const snapshot = createHostSnapshotSource({
       paper: paperDisplayOf(paper.key, paper.root),
-      globalState: platform().globalState,
+      globalState: options.globalState,
       fileOptions: () => files.fileOptions(),
       readRecentCommits: () => recentCommitsOf(paper.root),
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
@@ -932,7 +942,7 @@ function createWindow(options: {
     );
     const agentSettingsController = new DefaultDesktopAgentSettingsController({
       workspaceState: paper.roots.workspaceState,
-      globalState: platform().globalState,
+      globalState: options.globalState,
       registry: {
         loadAgents,
         refreshAgents: refresh,
@@ -945,11 +955,11 @@ function createWindow(options: {
         getSourceDirectory: (source: AgentSource) => {
           switch (source) {
             case 'custom':
-              return platform().agentDirectories.custom();
+              return options.agentDirectories.custom();
             case 'builtInWorkflow':
-              return platform().agentDirectories.builtIn();
+              return options.agentDirectories.builtIn();
             case 'builtInToolUse':
-              return platform().agentDirectories.builtInToolUse();
+              return options.agentDirectories.builtInToolUse();
             // No local directory: remote agents live in Supabase, inline ones
             // were supplied as values and were never written to disk.
             case 'remote':
@@ -997,9 +1007,9 @@ function createWindow(options: {
     const credentialSettingsController =
       new DefaultDesktopCredentialSettingsController({
         workspaceState: paper.roots.workspaceState,
-        globalState: platform().globalState,
+        globalState: options.globalState,
         config: paper.roots.config,
-        secrets: platform().secrets,
+        secrets: options.secrets,
         renderer: {
           postToRenderer: postForActivePaper,
         },
@@ -1084,7 +1094,7 @@ function createWindow(options: {
       new DefaultDesktopToolingSettingsController({
         onError: reportAsyncError,
         workspaceState: paper.roots.workspaceState,
-        globalState: platform().globalState,
+        globalState: options.globalState,
         config: paper.roots.config,
         renderer: {
           postToRenderer: postForActivePaper,
@@ -1134,7 +1144,8 @@ function createWindow(options: {
       agentSettingsController,
       credentialSettingsController,
       toolingSettingsController,
-      globalState: platform().globalState,
+      globalState: options.globalState,
+      secrets: options.secrets,
       ui: settingsUi,
       session: paper.session,
     });
@@ -1162,11 +1173,12 @@ function createWindow(options: {
   const onboardingIpc = createDesktopOnboardingIpc(
     { postToRenderer: postToRendererIfAlive },
     {
+      state: options.globalState,
       // Single source of truth for "does the user have a usable credential",
       // shared by every host (extension, desktop, CLI) so this credential-gating
       // logic can't drift between them.
       hasCredential: () =>
-        hasUsableSetupCredential(platform().secrets, credentialLog.warn),
+        hasUsableSetupCredential(options.secrets, credentialLog.warn),
       // The setup card launches its own request (`kickoffSetup` below), so
       // the launcher's agent selection, which is the surface's (PRD 9),
       // is not moved from here.
@@ -1588,7 +1600,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           dataRoot: platformInit.dataRoot,
           processRoots: platformInit.processRoots,
           globalConfigStore: platformInit.globalConfigStore,
-          globalState: platform().globalState,
+          globalState: platformInit.globalState,
           warn,
         });
         processResources.add(() => papers.dispose());
@@ -1596,7 +1608,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         // last. A folder that is gone or no longer opens is reported once the
         // window exists; the others open regardless.
         const remembered = await readRememberedDesktopPapers(
-          platform().globalState,
+          platformInit.globalState,
           warn,
         );
         const unopenedPapers = remembered.missing.map(
@@ -1636,12 +1648,12 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           log: console,
         });
         const authCoordinator = createDesktopAuthCoordinator({
-          secrets: platform().secrets,
+          secrets: platformInit.secrets,
           log: console,
         });
         const authCallbackState = createDesktopAuthCallbackState(
           console,
-          platform().globalState,
+          platformInit.globalState,
         );
         installContentSecurityPolicy();
         reopenMainWindow = () =>
@@ -1649,6 +1661,9 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             papers,
             authCoordinator,
             authCallbackState,
+            globalState: platformInit.globalState,
+            secrets: platformInit.secrets,
+            agentDirectories: platformInit.agentDirectories,
             resourcesPath: platformInit.resourcesPath,
           });
         reopenMainWindow();
