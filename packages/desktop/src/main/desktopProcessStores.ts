@@ -23,13 +23,21 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {
         if (event.type !== 'stream.removed') return;
-        void stores
-          .deleteStream(aggregateTarget(event.aggregateId).id)
-          .catch((error: unknown) => {
-            logger.warn('Failed to delete a headless desktop stream', {
-              data: toLogData(error),
-            });
-          });
+        effectRuntime().runFork(
+          Effect.tryPromise({
+            try: () =>
+              stores.deleteStream(aggregateTarget(event.aggregateId).id),
+            catch: (error) => error,
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.sync(() => {
+                logger.warn('Failed to delete a headless desktop stream', {
+                  data: toLogData(error),
+                });
+              }),
+            ),
+          ),
+        );
       }),
     ),
   );
