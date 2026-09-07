@@ -113,10 +113,6 @@ async function processEmptyResponse(stopReason: ProviderStopReason) {
 
 function createServices(interrupted = false, supportsManualCompaction = false) {
   const round = { continuationCount: 0 };
-  const checkStopConditions = vi.fn(() => ({
-    endTurn: false,
-    shouldStop: false,
-  }));
   const shouldContinue = vi.fn(() => false);
   const requestCompaction = vi.fn(() => 7);
   const addContinueMessage = vi.fn();
@@ -125,14 +121,21 @@ function createServices(interrupted = false, supportsManualCompaction = false) {
       signal: interrupted ? AbortSignal.abort() : undefined,
     }),
     round,
-    run: {},
+    run: {
+      usageAccumulator: {
+        totals: {
+          firstInputTokens: 100,
+          totalInputTokens: 100,
+          totalOutputTokens: 50,
+        },
+      },
+    },
     setting: {},
     config: {},
     workspace: {},
-    logger: { info: vi.fn(), warn: vi.fn() },
+    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
     modelCell: testModelCell({
       supportsManualCompaction,
-      checkStopConditions,
       shouldContinue,
       requestCompaction,
       addContinueMessage,
@@ -142,7 +145,6 @@ function createServices(interrupted = false, supportsManualCompaction = false) {
   return {
     services,
     round,
-    checkStopConditions,
     shouldContinue,
     requestCompaction,
     addContinueMessage,
@@ -191,13 +193,6 @@ describe('response cycle continuation phases', () => {
         processedResponse: 'partial response',
       },
     });
-    expect(harness.checkStopConditions).toHaveBeenCalledWith(
-      'length',
-      'partial response',
-      harness.round,
-      {},
-      {},
-    );
     expect(harness.shouldContinue).toHaveBeenCalledWith(
       'length',
       'partial response',
@@ -338,7 +333,6 @@ describe('response cycle continuation phases', () => {
 
     const { action } = await runContinuationNode(shared, harness.services);
 
-    expect(harness.checkStopConditions).not.toHaveBeenCalled();
     expect(harness.shouldContinue).not.toHaveBeenCalled();
     expect(shared).toMatchObject({ shouldStop: true, endTurn: false });
     expect(harness.addContinueMessage).not.toHaveBeenCalled();

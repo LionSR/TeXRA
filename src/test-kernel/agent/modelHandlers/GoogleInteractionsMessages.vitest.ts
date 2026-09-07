@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
+import { createResponseCycleFlow } from '@agent/implementations/flows/reflection/ResponseCycleFlow';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
 import type { MediaAttachmentContext } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
@@ -541,10 +542,10 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(extracted.stopReason).toBe(GOOGLE_FINISH.STOP);
   });
 
-  it('maps a completed interaction to endTurn (not a spurious cancellation)', () => {
+  it('maps a completed interaction to endTurn (not a spurious cancellation)', async () => {
     // Regression: a background/non-streaming Interactions response that finished
     // cleanly on the document end tag was returning the raw 'completed' status,
-    // which is not in `endTurnReasons` — so checkStopConditions yielded
+    // which is not a reflection end-turn reason — so the cycle yielded
     // endTurn=false while encounterDocumentTag forced shouldStop=true. The
     // ResponseCycle then read `shouldStop && !endTurn` as a user cancellation
     // and discarded the already-generated output. The status must normalize to
@@ -577,14 +578,25 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
       },
     } as never;
 
-    const { endTurn, shouldStop } = handler.checkStopConditions(
-      stopReason,
-      text,
+    const continuationNode = createResponseCycleFlow()
+      .start.getNextNode()
+      ?.getNextNode()
+      ?.getNextNode();
+    if (!continuationNode) throw new Error('Missing continuation node');
+    continuationNode.setServices({
+      modelCell: { handler },
       round,
-      global,
+      run: global,
       setting,
-    );
-    expect(shouldStop).toBe(true);
-    expect(endTurn).toBe(true);
+      logger: noopTrace,
+    });
+    const result = await continuationNode.exec({
+      kind: 'success',
+      value: { interrupted: false, stopReason, processedResponse: text },
+    });
+    expect(result).toMatchObject({
+      kind: 'success',
+      value: { shouldStop: true, shouldEndTurn: true },
+    });
   });
 });
