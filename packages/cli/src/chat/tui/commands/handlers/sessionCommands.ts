@@ -37,7 +37,7 @@ import {
   type StreamSnapshotStore,
 } from '@transcript';
 import type { WorkPlanProvenance } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
 import { listSlashCommands } from '../slashRegistry';
@@ -73,26 +73,27 @@ type StreamArtifactHydrationOutcome =
   | { readonly kind: 'failed'; readonly error: unknown };
 
 /** Load a stream's artifact tier from disk so the reader can vouch for it. */
-async function hydrateStreamArtifacts(
+function hydrateStreamArtifacts(
   store: StreamArtifactReader,
   streamId: StreamTabId,
-): Promise<StreamArtifactHydrationOutcome> {
-  try {
-    await store.preload([streamId], { reportArtifactAuthority: true });
-  } catch (error) {
-    if (
-      error instanceof StreamSnapshotPreloadError &&
-      error.streamId === streamId
-    ) {
-      return {
-        kind: 'partial',
-        workPlanProvenance: error.workPlanProvenance,
-        error,
-      };
-    }
-    return { kind: 'failed', error };
-  }
-  return { kind: 'complete' };
+): Effect.Effect<StreamArtifactHydrationOutcome> {
+  return Effect.tryPromise({
+    try: () => store.preload([streamId], { reportArtifactAuthority: true }),
+    catch: (cause) => ensureError(cause),
+  }).pipe(
+    Effect.match({
+      onFailure: (error): StreamArtifactHydrationOutcome =>
+        error instanceof StreamSnapshotPreloadError &&
+        error.streamId === streamId
+          ? {
+              kind: 'partial',
+              workPlanProvenance: error.workPlanProvenance,
+              error,
+            }
+          : { kind: 'failed', error },
+      onSuccess: (): StreamArtifactHydrationOutcome => ({ kind: 'complete' }),
+    }),
+  );
 }
 
 export async function showCliWorkPlan(
@@ -106,7 +107,9 @@ export async function showCliWorkPlan(
   }
   clearTransientNotice();
   const request = beginWorkPlanReaderRequest(streamId);
-  const outcome = await hydrateStreamArtifacts(snapshots, streamId);
+  const outcome = await effectRuntime().runPromise(
+    hydrateStreamArtifacts(snapshots, streamId),
+  );
   if (!workPlanReaderRequestIsCurrent(request)) return;
   if (outcome.kind === 'failed') {
     if (!cancelWorkPlanReaderRequest(request)) return;

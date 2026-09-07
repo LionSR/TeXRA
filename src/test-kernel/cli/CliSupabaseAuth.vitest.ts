@@ -93,22 +93,46 @@ const DEVICE_AUTHORIZATION = Object.freeze({
 });
 
 interface FakeCallbackServer {
-  readonly close: Mock<() => Promise<void>>;
   readonly redirectTo: string;
-  readonly waitForSession: Mock<(signal?: AbortSignal) => Promise<unknown>>;
+  readonly commitStarted: boolean;
+  readonly sessionSettled: Effect.Effect<void, unknown>;
+  readonly waitForSession: Effect.Effect<unknown, unknown>;
+  readonly cancel: Effect.Effect<void>;
+  readonly close: Effect.Effect<void, unknown>;
+  readonly cancelled: Mock<() => void>;
+  readonly closed: Mock<() => void>;
+  /** Swap what the next `waitForSession` evaluation awaits (the commit-grace
+   *  test arms the commit's completion after the abort lands). */
+  readonly setWaitForSession: (effect: Effect.Effect<unknown, unknown>) => void;
 }
 
 /** Arm the browser sign-in transport and hand back its loopback server. */
-function stubBrowserSignIn(
-  waitForSession: (signal?: AbortSignal) => Promise<unknown>,
-): FakeCallbackServer {
-  const callbackServer: FakeCallbackServer = {
-    close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    redirectTo: 'http://127.0.0.1:0/callback',
-    waitForSession:
-      vi.fn<(signal?: AbortSignal) => Promise<unknown>>(waitForSession),
+function stubBrowserSignIn(init: {
+  readonly waitForSession: Effect.Effect<unknown, unknown>;
+  readonly sessionSettled?: Effect.Effect<void, unknown>;
+  readonly commitStarted?: boolean;
+}): FakeCallbackServer {
+  const cancelled = vi.fn<() => void>();
+  const closed = vi.fn<() => void>();
+  const wait: { current: Effect.Effect<unknown, unknown> } = {
+    current: init.waitForSession,
   };
-  mocks.startLoopbackCallbackServer.mockResolvedValue(callbackServer);
+  const callbackServer: FakeCallbackServer = {
+    redirectTo: 'http://127.0.0.1:0/callback',
+    commitStarted: init.commitStarted ?? false,
+    sessionSettled: init.sessionSettled ?? Effect.void,
+    waitForSession: Effect.suspend(() => wait.current),
+    cancel: Effect.sync(cancelled),
+    close: Effect.sync(closed),
+    cancelled,
+    closed,
+    setWaitForSession: (effect) => {
+      wait.current = effect;
+    },
+  };
+  mocks.startLoopbackCallbackServer.mockReturnValue(
+    Effect.succeed(callbackServer),
+  );
   mocks.signInWithOAuth.mockResolvedValue({
     data: { url: 'https://auth.example/login' },
     error: null,
@@ -120,7 +144,9 @@ function stubBrowserSignIn(
 function stubSuccessfulSignIns(session: {
   access_token: string;
 }): FakeCallbackServer {
-  const callbackServer = stubBrowserSignIn(async () => session);
+  const callbackServer = stubBrowserSignIn({
+    waitForSession: Effect.succeed(session),
+  });
   mocks.requestDeviceAuthorization.mockReturnValue(
     Effect.succeed(DEVICE_AUTHORIZATION),
   );
@@ -180,7 +206,7 @@ describe('CLI Supabase auth', () => {
 
   it('forwards interactive cancellation to both TeXRA transports', async () => {
     const controller = new AbortController();
-    const callbackServer = stubSuccessfulSignIns({ access_token: 'token' });
+    stubSuccessfulSignIns({ access_token: 'token' });
     let pollInterrupted = false;
     mocks.pollForDeviceSession.mockReturnValue(
       Effect.never.pipe(
@@ -206,9 +232,7 @@ describe('CLI Supabase auth', () => {
     controller.abort();
     await expect(deviceSignIn).rejects.toThrow(/interrupted/);
 
-    expect(callbackServer.waitForSession).toHaveBeenCalledWith(
-      controller.signal,
-    );
+    expect(mocks.startLoopbackCallbackServer).toHaveBeenCalledOnce();
     expect(mocks.requestDeviceAuthorization).toHaveBeenCalledOnce();
     expect(mocks.pollForDeviceSession).toHaveBeenCalledWith(
       DEVICE_AUTHORIZATION,
@@ -218,34 +242,51 @@ describe('CLI Supabase auth', () => {
 
   it('settles browser sign-in cancellation while its launcher remains pending', async () => {
     const controller = new AbortController();
-    const callbackServer = stubBrowserSignIn(
-      (signal) =>
-        new Promise((_resolve, reject) => {
-          signal?.addEventListener('abort', () => reject(signal.reason), {
-            once: true,
-          });
-        }),
-    );
+    const callbackServer = stubBrowserSignIn({
+      waitForSession: Effect.never,
+      sessionSettled: Effect.never,
+    });
     mocks.openBrowser.mockReturnValue(new Promise(() => {}));
     const { signInCliSupabase } = await loadSupabaseAuth();
     const completion = signInCliSupabase({ signal: controller.signal });
-    const rejection = expect(completion).rejects.toMatchObject({
-      name: 'AbortError',
-    });
+    const rejection = expect(completion).rejects.toThrow(/interrupted/);
 
-    await vi.waitFor(() =>
-      expect(callbackServer.waitForSession).toHaveBeenCalledOnce(),
-    );
     controller.abort();
 
     await rejection;
-    expect(callbackServer.close).toHaveBeenCalledOnce();
+    // Cancellation reached the transport as fiber interruption: the server
+    // refuses further callbacks and the release half closed it.
+    expect(callbackServer.cancelled).toHaveBeenCalledOnce();
+    expect(callbackServer.closed).toHaveBeenCalledOnce();
+  });
+
+  it('settles a commit that began before cancellation despite the abort', async () => {
+    const controller = new AbortController();
+    const session = { access_token: 'token' };
+    const callbackServer = stubBrowserSignIn({
+      waitForSession: Effect.never,
+      sessionSettled: Effect.never,
+      commitStarted: true,
+    });
+    mocks.openBrowser.mockReturnValue(new Promise(() => {}));
+    const { signInCliSupabase } = await loadSupabaseAuth();
+    const completion = signInCliSupabase({ signal: controller.signal });
+
+    controller.abort();
+    // The commit grace re-awaits the session on a fresh fiber; arm the
+    // commit's completion after the interrupted fiber settled.
+    callbackServer.setWaitForSession(Effect.succeed(session));
+
+    await expect(completion).resolves.toBe(session);
+    expect(callbackServer.closed).toHaveBeenCalledOnce();
   });
 
   it('keeps a completed callback successful if the browser launcher later fails', async () => {
     let failBrowserLaunch!: (error: Error) => void;
     const session = { access_token: 'token' };
-    const callbackServer = stubBrowserSignIn(async () => session);
+    const callbackServer = stubBrowserSignIn({
+      waitForSession: Effect.succeed(session),
+    });
     mocks.openBrowser.mockReturnValue(
       new Promise((_resolve, reject) => {
         failBrowserLaunch = reject;
@@ -257,7 +298,7 @@ describe('CLI Supabase auth', () => {
     failBrowserLaunch(new Error('launcher exited late'));
     await Promise.resolve();
 
-    expect(callbackServer.close).toHaveBeenCalledOnce();
+    expect(callbackServer.closed).toHaveBeenCalledOnce();
   });
 
   it('removes cached remote agents after sign-out', async () => {

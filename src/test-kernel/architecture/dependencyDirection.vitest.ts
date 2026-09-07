@@ -126,6 +126,11 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // reap must still run so a `void`-ed TUI copy settles instead of
   // rejecting unhandled.
   'packages/cli/src/runtime/clipboardText.ts': 1,
+  // The CLI config readers' single shared edge: `buildCliContext` resolves
+  // `.texra/config.json` and the user approval policy BEFORE
+  // `initCliPlatform` (and with it `installCliProcessRuntime`), so no
+  // process runtime exists to borrow; the programs are service-free.
+  'packages/cli/src/runtime/cliConfig.ts': 1,
 };
 
 function sourceFilesUnder(

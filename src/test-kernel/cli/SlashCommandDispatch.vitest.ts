@@ -290,9 +290,11 @@ function mockSignOuts(): {
     .mockResolvedValue(undefined);
   const signOutChatGpt = vi
     .spyOn(subscriptionLogin, 'signOutCliSubscription')
-    .mockResolvedValue({
-      preferenceUpdate: { effective: false, target: 'global' },
-    });
+    .mockReturnValue(
+      Effect.succeed({
+        preferenceUpdate: { effective: false, target: 'global' as const },
+      }),
+    );
   mockModelAccessOverview();
   return { signOutSupabase, signOutChatGpt };
 }
@@ -900,8 +902,8 @@ describe('handleTuiSlashCommand', () => {
   it('reports successful TeXRA sign-out when ChatGPT logout fails', async () => {
     registerBuiltinSlashCommands();
     vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
-    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockRejectedValue(
-      new Error('Codex logout failed'),
+    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
+      Effect.fail(new Error('Codex logout failed')),
     );
     mockModelAccessOverview();
 
@@ -916,9 +918,9 @@ describe('handleTuiSlashCommand', () => {
   it('reports ChatGPT sign-out success when only preference cleanup fails', async () => {
     registerBuiltinSlashCommands();
     vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockResolvedValue(undefined);
-    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockResolvedValue({
-      preferenceError: 'Config write failed',
-    });
+    vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
+      Effect.succeed({ preferenceError: 'Config write failed' }),
+    );
     mockModelAccessOverview();
 
     const handled = await handleTuiSlashCommand('/logout all', createContext());

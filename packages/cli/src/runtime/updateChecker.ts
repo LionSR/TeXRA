@@ -3,11 +3,12 @@ import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
 import { z } from 'zod';
 
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { effectRuntime } from '@platform/processRuntime';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { ensureError } from '@utils/errors/errorMessage';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { executeCommand } from '@utils/system/execUtils';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -82,11 +83,12 @@ export function detectInstallMethod(
 }
 
 function currentModulePath(): string {
-  try {
-    return fileURLToPath(import.meta.url);
-  } catch {
-    return readCliEntrypointPath();
-  }
+  // A bundled or otherwise non-file module has no `file:` URL to convert;
+  // discriminate on the URL instead of catching `fileURLToPath`'s throw
+  // (R7: an exception used as a branch becomes a discriminated read).
+  return import.meta.url.startsWith('file:')
+    ? fileURLToPath(import.meta.url)
+    : readCliEntrypointPath();
 }
 
 export function buildUpdateCommand(method: InstallMethod): {
@@ -157,18 +159,21 @@ async function readCommandStdout(
 /**
  * Shape of `brew info --json=v2` that we read. Tolerant by design: a single
  * malformed formula entry degrades to `null` (skipped) rather than failing the
- * whole parse, so one odd entry cannot hide an available upgrade.
+ * whole parse, so one odd entry cannot hide an available upgrade. The per-entry
+ * recovery is a `safeParse` fold inside `transform`, not a `.catch`, so this
+ * file stays at zero raw catches (catch:effect-importer ratchet row).
  */
+const HomebrewFormulaEntrySchema = z.object({
+  name: z.string(),
+  versions: z.object({ stable: z.string().nullish() }).nullish(),
+});
 const HomebrewInfoSchema = z.object({
   formulae: z
     .array(
-      z
-        .object({
-          name: z.string(),
-          versions: z.object({ stable: z.string().nullish() }).nullish(),
-        })
-        .nullable()
-        .catch(null),
+      z.unknown().transform((entry) => {
+        const parsed = HomebrewFormulaEntrySchema.nullable().safeParse(entry);
+        return parsed.success ? parsed.data : null;
+      }),
     )
     .nullish(),
 });
@@ -283,40 +288,54 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   // check is best-effort and must never block `chat` / `orchestrate` startup.
   let latest: string | undefined;
   let confirmed = false;
-  try {
-    await installCliProcessRuntime();
-    const globalState = await effectRuntime().runPromise(
-      openCliGlobalStateStore(createNodeStorageProvider()),
+  // `installCliProcessRuntime` is the pre-runtime edge: until it resolves
+  // there is no process runtime to run the check program on, and its failure
+  // stays as silent as the check's own.
+  const runtimeInstalled = await installCliProcessRuntime().then(
+    () => true,
+    () => false,
+  );
+  if (!runtimeInstalled) return;
+  const check = Effect.gen(function* () {
+    const globalState = yield* openCliGlobalStateStore(
+      createNodeStorageProvider(),
     );
-    latest = await runDailyUpdateCheck({
-      currentVersion: context.version,
-      state: globalState,
-      lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-      fetchLatest: async () => {
-        if (method === 'brew') {
-          return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
-        }
-        const version = await fetchLatestCliVersion();
-        return { version, refreshed: version !== undefined };
-      },
-      notify: async (latestVersion) => {
-        writeTextStderr(
-          `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
-        );
-        const answer = await askCliQuestion(
-          `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
-        );
-        const normalized = answer.trim().toLowerCase();
-        confirmed =
-          normalized === '' || normalized === 'y' || normalized === 'yes';
-      },
-      // A readable-but-unwritable global state file must not cancel an update
-      // the user already accepted; the next launch merely checks again early.
-      stampFailure: 'ignore',
+    latest = yield* Effect.tryPromise({
+      try: () =>
+        runDailyUpdateCheck({
+          currentVersion: context.version,
+          state: globalState,
+          lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
+          fetchLatest: async () => {
+            if (method === 'brew') {
+              return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
+            }
+            const version = await fetchLatestCliVersion();
+            return { version, refreshed: version !== undefined };
+          },
+          notify: async (latestVersion) => {
+            writeTextStderr(
+              `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
+            );
+            const answer = await askCliQuestion(
+              `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
+            );
+            const normalized = answer.trim().toLowerCase();
+            confirmed =
+              normalized === '' || normalized === 'y' || normalized === 'yes';
+          },
+          // A readable-but-unwritable global state file must not cancel an
+          // update the user already accepted; the next launch merely checks
+          // again early.
+          stampFailure: 'ignore',
+        }),
+      catch: (cause) => ensureError(cause),
     });
-  } catch {
-    return;
-  }
+  });
+  // Best-effort by policy: any failure — typed, defect, or interruption —
+  // leaves `latest` unset and the check exits silently, as the `catch` it
+  // replaces did.
+  await effectRuntime().runPromise(Effect.ignore(check));
   if (!latest) return;
   if (!confirmed) {
     writeTextStderr(
