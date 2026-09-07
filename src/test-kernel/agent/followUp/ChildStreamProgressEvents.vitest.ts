@@ -2,8 +2,9 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -415,65 +416,76 @@ describe('child stream progress events', () => {
     );
   });
 
-  it('finalizes a child stream when agent CLI loop setup fails synchronously', async () => {
-    const setupError = new Error('child loop setup failed');
-    const session = defaultSession();
-    const recorded = recordSessionEvents(session);
-    let childStream: ChildStream | undefined;
-    let childExecutionId: ExecutionId | undefined;
-    let handle: ReturnType<typeof session.executions.getAgentHandleByStream>;
+  it.effect(
+    'finalizes a child stream when agent CLI loop setup fails synchronously',
+    () =>
+      Effect.gen(function* () {
+        const setupError = new Error('child loop setup failed');
+        const session = defaultSession();
+        const recorded = recordSessionEvents(session);
+        let childStream: ChildStream | undefined;
+        let childExecutionId: ExecutionId | undefined;
+        let handle: ReturnType<
+          typeof session.executions.getAgentHandleByStream
+        >;
 
-    try {
-      await expect(
-        Effect.runPromise(
-          reraiseAgentCliCallFailure(
-            launchAgentCliSession({
-              parentStreamId,
-              parentExecutionId: undefined,
-              agentName: 'codex',
-              streamPrefix: 'codex',
-              description: 'Fail during synchronous loop setup',
-              config,
-              registerFailedMessage: 'registration failed',
-              store: codexThreadsFor,
-              startLoop: (context) => {
-                childStream = context.childStream;
-                childExecutionId = context.executionId;
-                handle = session.executions.getAgentHandleByStream(
-                  context.childStream.childStreamId,
-                );
-                throw setupError;
-              },
-              summary: 'unreachable',
-              launchedLine: 'unreachable',
-              followUpLine: 'unreachable',
-            }),
-          ),
-        ),
-      ).rejects.toBe(setupError);
+        try {
+          // `reraiseAgentCliCallFailure` re-raises the loop's throw as a
+          // defect, so flip the defect back into the error channel.
+          const defect = yield* Effect.flip(
+            reraiseAgentCliCallFailure(
+              launchAgentCliSession({
+                parentStreamId,
+                parentExecutionId: undefined,
+                agentName: 'codex',
+                streamPrefix: 'codex',
+                description: 'Fail during synchronous loop setup',
+                config,
+                registerFailedMessage: 'registration failed',
+                store: codexThreadsFor,
+                startLoop: (context) => {
+                  childStream = context.childStream;
+                  childExecutionId = context.executionId;
+                  handle = session.executions.getAgentHandleByStream(
+                    context.childStream.childStreamId,
+                  );
+                  throw setupError;
+                },
+                summary: 'unreachable',
+                launchedLine: 'unreachable',
+                followUpLine: 'unreachable',
+              }),
+            ).pipe(Effect.catchDefect((cause) => Effect.fail(cause))),
+          );
+          expect(defect).toBe(setupError);
 
-      expect(childStream).toBeDefined();
-      expect(childExecutionId).toBeDefined();
-      expect(handle).toBeDefined();
-      if (!childStream || !childExecutionId || !handle) {
-        throw new Error('expected the failed child launch to be captured');
-      }
-      expect(session.executions.getHandle(childExecutionId)).toBeUndefined();
-      expect(session.status.get(childStream.childStreamId)).toBe(
-        STREAM_PHASE.FAILED,
-      );
-      await expect(handle.result).resolves.toMatchObject({
-        type: 'result',
-        outcome: 'failed',
-        executionId: childExecutionId,
-        streamId: childStream.childStreamId,
-      });
-    } finally {
-      if (childStream) {
-        clearStreamStatusForTest(session.status, childStream.childStreamId);
-      }
-    }
-  });
+          expect(childStream).toBeDefined();
+          expect(childExecutionId).toBeDefined();
+          expect(handle).toBeDefined();
+          if (!childStream || !childExecutionId || !handle) {
+            throw new Error('expected the failed child launch to be captured');
+          }
+          expect(
+            session.executions.getHandle(childExecutionId),
+          ).toBeUndefined();
+          expect(session.status.get(childStream.childStreamId)).toBe(
+            STREAM_PHASE.FAILED,
+          );
+          const failedHandle = handle;
+          const result = yield* Effect.promise(() => failedHandle.result);
+          expect(result).toMatchObject({
+            type: 'result',
+            outcome: 'failed',
+            executionId: childExecutionId,
+            streamId: childStream.childStreamId,
+          });
+        } finally {
+          if (childStream) {
+            clearStreamStatusForTest(session.status, childStream.childStreamId);
+          }
+        }
+      }),
+  );
 
   it('publishes child loop status changes through the child stream owner', async () => {
     const childStream = await startCodexChild(

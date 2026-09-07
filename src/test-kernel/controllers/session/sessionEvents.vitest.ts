@@ -452,122 +452,142 @@ describe('Sessions owner', () => {
       }),
     );
 
-  it('delivers committed runtime facts and never announces a rejected write', async () => {
-    const session = open('/workspace/owner/committed-status');
-    const handleStatus = vi.fn();
-    const onResult = vi.fn();
-    const detachResult = session.onResult(onResult);
-    const detach = session.attachRunTrace(
-      { trace: new TraceEmitter(), handleStatus },
-      STREAM,
-    );
-    try {
-      session.publish([
-        runStart,
-        { ...runStart, aggregateId: qualifyAggregateId('stream', OLDER) },
-        {
-          type: 'stream.removed',
-          aggregateId: qualifyAggregateId('stream', STREAM),
-        },
-      ]);
-      await vi.waitFor(() => expect(session.now()).toBe(3));
-      session.publishStatus({
-        type: 'status',
-        streamId: STREAM,
-        phase: STREAM_PHASE.COMPLETED,
-        cause: 'lifecycle',
-      });
-      session.publishStatus({
-        type: 'status',
-        streamId: OLDER,
-        phase: STREAM_PHASE.WAITING,
-        cause: 'wait',
-      });
-      await vi.waitFor(() => expect(handleStatus).toHaveBeenCalledOnce());
-      expect(handleStatus.mock.calls[0][0]).toMatchObject({
-        type: 'status',
-        streamId: OLDER,
-        phase: STREAM_PHASE.WAITING,
-        seq: 2,
-        commit: 4,
-      });
-      const result = {
-        type: 'result',
-        outcome: 'completed',
-        executionId: EXECUTION,
-        streamId: STREAM,
-        agentName: 'chat',
-        category: AgentCategory.ToolUse,
-        isSubagent: false,
-      } as const;
-      session.publishRunEvent(STREAM, result);
-      session.publishRunEvent(OLDER, { ...result, streamId: OLDER });
-      await vi.waitFor(() => expect(onResult).toHaveBeenCalledOnce());
-      expect(onResult.mock.calls[0][0]).toMatchObject({
-        type: 'result',
-        streamId: OLDER,
-        outcome: 'completed',
-        agentName: 'chat',
-        seq: 3,
-        commit: 5,
-      });
-    } finally {
-      detachResult();
-      detach();
-      session.dispose();
-    }
-  });
+  // Real polling loops (`vi.waitFor`) on the process runtime's live work:
+  // `it.live`, so nothing the session does waits on a test clock.
+  it.live(
+    'delivers committed runtime facts and never announces a rejected write',
+    () =>
+      Effect.gen(function* () {
+        const session = open('/workspace/owner/committed-status');
+        const handleStatus = vi.fn();
+        const onResult = vi.fn();
+        const detachResult = session.onResult(onResult);
+        const detach = session.attachRunTrace(
+          { trace: new TraceEmitter(), handleStatus },
+          STREAM,
+        );
+        try {
+          session.publish([
+            runStart,
+            { ...runStart, aggregateId: qualifyAggregateId('stream', OLDER) },
+            {
+              type: 'stream.removed',
+              aggregateId: qualifyAggregateId('stream', STREAM),
+            },
+          ]);
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(session.now()).toBe(3)),
+          );
+          session.publishStatus({
+            type: 'status',
+            streamId: STREAM,
+            phase: STREAM_PHASE.COMPLETED,
+            cause: 'lifecycle',
+          });
+          session.publishStatus({
+            type: 'status',
+            streamId: OLDER,
+            phase: STREAM_PHASE.WAITING,
+            cause: 'wait',
+          });
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(handleStatus).toHaveBeenCalledOnce()),
+          );
+          expect(handleStatus.mock.calls[0][0]).toMatchObject({
+            type: 'status',
+            streamId: OLDER,
+            phase: STREAM_PHASE.WAITING,
+            seq: 2,
+            commit: 4,
+          });
+          const result = {
+            type: 'result',
+            outcome: 'completed',
+            executionId: EXECUTION,
+            streamId: STREAM,
+            agentName: 'chat',
+            category: AgentCategory.ToolUse,
+            isSubagent: false,
+          } as const;
+          session.publishRunEvent(STREAM, result);
+          session.publishRunEvent(OLDER, { ...result, streamId: OLDER });
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(onResult).toHaveBeenCalledOnce()),
+          );
+          expect(onResult.mock.calls[0][0]).toMatchObject({
+            type: 'result',
+            streamId: OLDER,
+            outcome: 'completed',
+            agentName: 'chat',
+            seq: 3,
+            commit: 5,
+          });
+        } finally {
+          detachResult();
+          detach();
+          session.dispose();
+        }
+      }),
+  );
 
-  it('close reports settled once the run ended, and releases the session', async () => {
-    const session = open('/workspace/owner/settled');
-    track(session, 'exec:settled');
-    // The run completes: its driver untracks it as it unwinds.
-    session.executions.untrack('exec:settled');
-    // A native child between turns, detached from its stopped parent: its
-    // activation is its only record, so the close must stop it itself, and
-    // wait for the loop to release the activation after its last delivery.
-    let releaseChild = (): void => {};
-    const interrupt = vi.fn(() => releaseChild());
-    releaseChild = session.executions.reserveChildActivation({
-      executionId: 'exec:child' as ExecutionId,
-      parentStreamId: 'stream:exec:settled' as StreamTabId,
-      childStreamId: 'stream:exec:child' as StreamTabId,
-      interrupt,
-      detach: () => {},
-      isDetached: () => true,
-    });
+  it.effect(
+    'close reports settled once the run ended, and releases the session',
+    () =>
+      Effect.gen(function* () {
+        const session = open('/workspace/owner/settled');
+        track(session, 'exec:settled');
+        // The run completes: its driver untracks it as it unwinds.
+        session.executions.untrack('exec:settled');
+        // A native child between turns, detached from its stopped parent: its
+        // activation is its only record, so the close must stop it itself, and
+        // wait for the loop to release the activation after its last delivery.
+        let releaseChild = (): void => {};
+        const interrupt = vi.fn(() => releaseChild());
+        releaseChild = session.executions.reserveChildActivation({
+          executionId: 'exec:child' as ExecutionId,
+          parentStreamId: 'stream:exec:settled' as StreamTabId,
+          childStreamId: 'stream:exec:child' as StreamTabId,
+          interrupt,
+          detach: () => {},
+          isDetached: () => true,
+        });
 
-    await expect(
-      Effect.runPromise(closeSession('/workspace/owner/settled')),
-    ).resolves.toEqual({
-      settled: true,
-      abandoned: [],
-    });
-    expect(interrupt).toHaveBeenCalledOnce();
-    expect(isLive(session)).toBe(false);
-  });
+        expect(yield* closeSession('/workspace/owner/settled')).toEqual({
+          settled: true,
+          abandoned: [],
+        });
+        expect(interrupt).toHaveBeenCalledOnce();
+        expect(isLive(session)).toBe(false);
+      }),
+  );
 
-  it('close reports a run still live past the budget as abandoned, and releases the session at its settlement', async () => {
-    const session = open('/workspace/owner/abandoned');
-    // A run that ignores its interrupt: no handler, no driver to unwind it.
-    track(session, 'exec:slow');
-    vi.useFakeTimers();
-    try {
-      const closing = Effect.runPromise(
-        closeSession('/workspace/owner/abandoned'),
-      );
-      await vi.advanceTimersByTimeAsync(SHUTDOWN_PHASE_DEADLINE_MS);
-      await expect(closing).resolves.toEqual({
-        settled: false,
-        abandoned: ['exec:slow'],
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-    expect(isLive(session)).toBe(true);
-    session.executions.untrack('exec:slow');
-    await vi.waitFor(() => expect(isLive(session)).toBe(false));
-  });
+  it.effect(
+    'close reports a run still live past the budget as abandoned, and releases the session at its settlement',
+    () =>
+      Effect.gen(function* () {
+        const session = open('/workspace/owner/abandoned');
+        // A run that ignores its interrupt: no handler, no driver to unwind it.
+        track(session, 'exec:slow');
+        const closing = yield* Effect.forkChild(
+          closeSession('/workspace/owner/abandoned'),
+        );
+        // Let the forked close reach its settlement wait and register the
+        // budget's sleep before the clock moves past the deadline.
+        yield* Effect.promise(
+          () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+        );
+        yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
+        expect(yield* Fiber.join(closing)).toEqual({
+          settled: false,
+          abandoned: ['exec:slow'],
+        });
+        expect(isLive(session)).toBe(true);
+        session.executions.untrack('exec:slow');
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(isLive(session)).toBe(false)),
+        );
+      }),
+  );
 });
 
 /**
