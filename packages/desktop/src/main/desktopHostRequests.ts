@@ -406,7 +406,7 @@ export function createDesktopHostRequests(
               'utf8',
             );
             return new Controller({
-              snapshots: session.snapshots,
+              session,
               latexPreamble,
             });
           },

@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -26,9 +28,16 @@ vi.mock('@agent/storage/executionLifecycle', () => ({
   finalizeRun: mocks.finalizeRun,
 }));
 
-vi.mock('@agent/runtime/executeAgent', () => ({
-  executeAgent: mocks.executeAgent,
-}));
+vi.mock('@agent/runtime/executeAgent', async () => {
+  const { Effect } = await import('effect');
+  return {
+    executeAgent: (...args: unknown[]) =>
+      Effect.tryPromise({
+        try: () => mocks.executeAgent(...args),
+        catch: ensureError,
+      }),
+  };
+});
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
@@ -43,7 +52,7 @@ import {
 import { AgentError } from '@common/errors/agentErrors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const EXECUTION_ID = 'run-agent-owner' as ExecutionId;
 const CONFIG = AgentConfigSchema.parse({
@@ -70,8 +79,9 @@ const SESSION = {
     ),
     untrack: untrackExecution,
     // No competing generation exists in this fixture; the lane is a passthrough.
-    launchExecution: vi.fn((_executionId: ExecutionId, start: () => unknown) =>
-      start(),
+    launchExecution: vi.fn(
+      (_executionId: ExecutionId, operation: Effect.Effect<unknown, unknown>) =>
+        operation,
     ),
   },
   flushArtifacts,
@@ -91,12 +101,12 @@ type RunOptions = Omit<Parameters<typeof runAgent>[1], 'session'> & {
   readonly kind?: 'fresh' | 'resume';
 };
 
-function launch({ kind = 'resume', ...options }: RunOptions = {}): ReturnType<
-  typeof runAgent
-> {
-  return runAgent(
-    { kind, config: CONFIG, executionId: EXECUTION_ID },
-    { session: SESSION, ...options },
+function launch({ kind = 'resume', ...options }: RunOptions = {}) {
+  return Effect.runPromise(
+    runAgent(
+      { kind, config: CONFIG, executionId: EXECUTION_ID },
+      { session: SESSION, ...options },
+    ),
   );
 }
 
@@ -357,12 +367,9 @@ describe('runAgent execution ownership', () => {
       const runError = new AgentError(primaryError.message, {
         cause: primaryError,
       });
-      const artifactError = Object.assign(
-        new Error('transcript flush failed'),
-        {
-          code: 'ENOSPC',
-        },
-      );
+      const artifactError = Object.assign(new Error('artifact writer failed'), {
+        code: 'ENOSPC',
+      });
       const finalizationError = new Error('terminal status write failed');
       const lifecycleStarted = kind !== 'context-window';
       if (!lifecycleStarted) {
@@ -387,9 +394,8 @@ describe('runAgent execution ownership', () => {
 
       expect(failure).toBeInstanceOf(AggregateError);
       expect((failure as AggregateError).errors).toEqual([
-        lifecycleStarted
-          ? runError
-          : expect.objectContaining({ errors: [runError, finalizationError] }),
+        runError,
+        ...(!lifecycleStarted ? [finalizationError] : []),
         artifactError,
       ]);
       expect(classifyAgentError(failure)).toBe(kind);

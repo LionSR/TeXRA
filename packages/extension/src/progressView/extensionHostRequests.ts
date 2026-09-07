@@ -276,7 +276,7 @@ export function createExtensionHostRequests(
         getController: () =>
           Promise.resolve(
             (chatExportController ??= new ChatExportController({
-              snapshots: session.snapshots,
+              session,
               latexPreamble,
             })),
           ),

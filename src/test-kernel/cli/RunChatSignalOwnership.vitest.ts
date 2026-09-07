@@ -507,7 +507,7 @@ describe('runChat signal ownership wiring', () => {
     }
   }, 20_000);
 
-  it('drops only the current conversation on /clear and keeps hydrated history', async () => {
+  it('releases only the current conversation on /clear and preserves history', async () => {
     const exitTui = createDeferred();
     mocks.waitUntilExit.mockReturnValue(exitTui.promise);
     const restoreAgentRegistry = await stubAgentRegistry();
@@ -543,17 +543,17 @@ describe('runChat signal ownership wiring', () => {
         expect(currentView().streams.has(ownRoot)).toBe(true),
       );
       rootStreamIdSignal.set(ownRoot);
-      const deleted = vi
-        .spyOn(session.transcripts, 'delete')
-        .mockResolvedValue(undefined);
+      const released = vi.spyOn(session.transcripts, 'requestEviction');
 
       const { getSlashCommandContext } =
         mocks.createChatSessionController.mock.calls[0]![0];
       getSlashCommandContext().resetSession();
 
-      expect(deleted.mock.calls.map(([streamId]) => streamId)).toEqual([
-        ownRoot,
-      ]);
+      await vi.waitFor(() =>
+        expect(released.mock.calls.map(([streamId]) => streamId)).toEqual([
+          ownRoot,
+        ]),
+      );
     } finally {
       exitTui.resolve();
       await runPromise;

@@ -501,7 +501,7 @@ export async function executeCliRequest(
     },
   );
   const openWorkflowOutput = options.openWorkflowOutput;
-  const invoke = async (): Promise<ExecuteAgentResult> =>
+  const invoke = (): Effect.Effect<ExecuteAgentResult, Error> =>
     runAgent(request, {
       session,
       enforceCategory: options.enforceCategory,
@@ -555,9 +555,7 @@ export async function executeCliRequest(
     await presentationHost.close();
   };
   const invocation = await effectRuntime().runPromise(
-    Effect.result(
-      Effect.tryPromise({ try: invoke, catch: (error: unknown) => error }),
-    ),
+    Effect.result(Effect.suspend(invoke)),
   );
   if (Result.isSuccess(invocation)) {
     runResult = { ok: true, result: invocation.success };

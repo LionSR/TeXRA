@@ -758,9 +758,7 @@ describe('TUI retry approvals', () => {
       agentCategory: AgentCategory.ToolUse,
     });
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload.kind).toBe('proposal');
-    });
+    await waitForApproval('proposal', { requestId: 'proposal-one-off' });
     currentApproval.get()?.decide({ accepted: true });
 
     await expect(result).resolves.toEqual({ action: 'approve' });

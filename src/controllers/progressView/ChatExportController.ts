@@ -27,15 +27,16 @@ import {
 } from '@agent/export/chatExportFormatter';
 import type { ChatExportInput } from '@agent/export/schemas';
 
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecutionId } from '@shared/schemas';
 import {
   assembleTrace,
   injectStandaloneTrace,
   type AssembleTraceResult,
 } from '@transcript';
-import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { ensureError } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
@@ -76,7 +77,7 @@ interface ChatExportControllerDeps {
    * the template lives under the extension's `resources/` tree.
    */
   readonly latexPreamble: string;
-  readonly snapshots: Pick<StreamSnapshotStore, 'read'>;
+  readonly session: Pick<SessionHandle, 'roots' | 'snapshots' | 'transcripts'>;
 }
 
 export class ChatExportController {
@@ -92,9 +93,15 @@ export class ChatExportController {
    * validate, and assemble export input identically (including treating a
    * stored-but-empty conversation array as absent, not present).
    */
-  async buildExportInput(historyId: string): Promise<ExportInputResult> {
-    const { config, exportInput } = await loadChatExportInput(
+  readonly buildExportInput = Effect.fn(
+    'ChatExportController.buildExportInput',
+  )(function* (
+    this: ChatExportController,
+    historyId: string,
+  ): Effect.fn.Return<ExportInputResult, Error> {
+    const { config, exportInput } = yield* loadChatExportInput(
       historyId as ExecutionId,
+      this.deps.session,
     );
 
     if (!config) {
@@ -106,7 +113,7 @@ export class ChatExportController {
     }
 
     return { status: 'ok', exportInput };
-  }
+  });
 
   /**
    * Format and write a Markdown export.
@@ -167,7 +174,7 @@ export class ChatExportController {
     ): Effect.fn.Return<HtmlExportOutcome, Error> {
       const traceResult = yield* assembleTrace(
         historyId as ExecutionId,
-        this.deps.snapshots,
+        this.deps.session,
       );
       if (traceResult.status !== 'ok') {
         return { status: traceResult.status };
@@ -222,7 +229,9 @@ export class ChatExportController {
     content: string,
   ): Promise<ChatExportResult> {
     const storagePath = `executions/${historyId}/${filename}`;
-    await StorageFS.write(storagePath, content);
-    return { storagePath, absolutePath: StorageFS.fullPath(storagePath) };
+    return runWithWorkspaceRoots(this.deps.session.roots, async () => {
+      await StorageFS.write(storagePath, content);
+      return { storagePath, absolutePath: StorageFS.fullPath(storagePath) };
+    });
   }
 }

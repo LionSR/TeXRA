@@ -26,7 +26,6 @@ import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
-import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
@@ -347,7 +346,7 @@ function projectionOver(session: SessionHandle) {
   const publish = async (source: Source): Promise<void> => {
     if ('run' in source) session.publishRunEvent(streamId, source.run);
     else session.publish([source.draft]);
-    await settleSessionEvents();
+    await session.settlePublications();
   };
   return {
     writeRecord,
@@ -439,7 +438,7 @@ describe('attachCliSessionProgressProjection', () => {
         description: 'Recorded before the resume',
       },
     ]);
-    await settleSessionEvents();
+    await session.settlePublications();
 
     const { writeRecord, publish, detach } = projectionOver(session);
     try {
@@ -533,7 +532,7 @@ describe('attachCliSessionProgressProjection', () => {
     const { writeRecord, emitRoster, detach } = projectionOver(session);
     try {
       emitRoster(streamId, items);
-      await settleSessionEvents();
+      await session.settlePublications();
       expect(writeRecord).toHaveBeenCalledTimes(1);
       const [record] = vi.mocked(writeRecord).mock.calls[0]!;
       expect(record.payload).toEqual({
@@ -597,7 +596,7 @@ describe('attachCliSessionProgressProjection', () => {
     );
 
     detach();
-    await settleSessionEvents();
+    await session.settlePublications();
     await publish(
       draft({
         type: 'updateStreamDescription',

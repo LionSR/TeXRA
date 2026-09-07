@@ -57,7 +57,6 @@ import {
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import type { StreamSummaryMeta } from '@transcript/StreamSummaryCacheStore';
 import {
   bindTestSessionView,
   makeStreamView,
@@ -160,7 +159,14 @@ function setRunning(...streamIds: StreamTabId[]): void {
 }
 /** Summary metadata as the fold states it: an absent identity or support
  *  level is the fold's null and unsupported, never the fixture's default. */
-function seedStreamMeta(streamId: StreamTabId, meta: StreamSummaryMeta): void {
+function seedStreamMeta(
+  streamId: StreamTabId,
+  meta: {
+    identity?: StreamView['identity'];
+    userFollowUpSupport?: StreamView['followUpSupport'];
+    agentCategory?: StreamView['category'];
+  },
+): void {
   seedStream(streamId, {
     identity: meta.identity ?? null,
     followUpSupport:

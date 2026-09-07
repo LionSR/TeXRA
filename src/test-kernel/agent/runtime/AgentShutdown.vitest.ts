@@ -2,6 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -46,6 +47,7 @@ describe('agent shutdown', () => {
     try {
       const lifecycle = createLifecycleHost();
       registerRuntimeShutdownHandlers(lifecycle, {
+        runSettlement: (settlement) => Effect.runPromise(settlement),
         flushArtifacts: () => {},
       });
 
@@ -75,6 +77,7 @@ describe('agent shutdown', () => {
     try {
       const lifecycle = createLifecycleHost();
       registerRuntimeShutdownHandlers(lifecycle, {
+        runSettlement: (settlement) => Effect.runPromise(settlement),
         beforeAgentShutdown: [() => void order.push('before-agent')],
         afterAgentShutdown: [() => void order.push('after-agent')],
         flushArtifacts: () => void order.push('flush'),

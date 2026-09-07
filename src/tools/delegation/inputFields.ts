@@ -2,14 +2,30 @@
  * Shared input-field schemas and attachment validation for delegation tools.
  */
 
+// Node imports
+import { createHash } from 'node:crypto';
+import { realpath } from 'node:fs/promises';
+import * as path from 'node:path';
+
 // Third-party imports
 import { z } from 'zod';
 
 // Local imports
+import { resolveChildRunOutput } from '@agent/storage';
+import {
+  WorkflowRunAbortError,
+  type WorkflowAgentCallOptions,
+} from '@agent/workflowScript';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
+import { formatError } from '@common/errors';
+import type { ExecutionId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
+import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/runStorageFs';
+import { StorageFS } from '@utils/files/storageFS';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
@@ -223,4 +239,121 @@ export async function assertWorkflowFilesExist(
   if (missing) {
     throw new Error(`${missing.label} not found: ${missing.path}`);
   }
+}
+
+/** Resolve workflow file dependencies within their owning session. */
+export async function resolveInvocationFileList(
+  session: SessionHandle,
+  parentExecutionId: ExecutionId,
+  label: string,
+  files: readonly string[],
+): Promise<{ file: string; absolutePath: string }[]> {
+  try {
+    return await runInSession(session, async () => {
+      const storageRoot = await realpath(StorageFS.fullPath(''));
+      const references = await Promise.all(
+        files.map(async (file) => {
+          const absolutePath = WorkspaceFS.toAbsolute(file);
+          const canonicalPath = await realpath(absolutePath);
+          const relative = path.relative(storageRoot, canonicalPath);
+          const storagePath =
+            !path.isAbsolute(relative) && relative.split(path.sep)[0] !== '..'
+              ? StorageFS.fullPath(relative)
+              : undefined;
+          if (
+            storagePath !== undefined &&
+            runStorageLocationFromAnyAbsolutePath(storagePath) === undefined
+          ) {
+            throw new Error(
+              `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+            );
+          }
+          // Explicit run paths still pass the resolver's symlink rejection,
+          // even when a workspace mirror points outside storage.
+          const runStoragePath =
+            runStorageLocationFromAnyAbsolutePath(absolutePath) !== undefined
+              ? absolutePath
+              : storagePath;
+          return {
+            file,
+            absolutePath: canonicalPath,
+            runStoragePath,
+          };
+        }),
+      );
+      await assertWorkflowFilesExist([
+        {
+          label,
+          files: references
+            .filter((reference) => reference.runStoragePath === undefined)
+            .map((reference) => reference.absolutePath),
+        },
+      ]);
+      return await Promise.all(
+        references.map(async ({ file, absolutePath, runStoragePath }) => {
+          if (runStoragePath !== undefined) {
+            const output = await resolveChildRunOutput(
+              parentExecutionId,
+              runStoragePath,
+            );
+            if (!output) {
+              throw new Error(
+                `${runStoragePath}; pass a matching workflow file option whose files still exist.`,
+              );
+            }
+          }
+          // Workspace names remain the caller's prompt and output identity.
+          return {
+            file: runStoragePath === undefined ? file : absolutePath,
+            absolutePath,
+          };
+        }),
+      );
+    });
+  } catch (error) {
+    throw new WorkflowRunAbortError(
+      formatError(`Workflow ${label} files could not be resolved`, error),
+      { cause: error },
+    );
+  }
+}
+
+/** Hash the bytes behind every file option used by one workflow agent call. */
+export async function fingerprintWorkflowAgentDependencies(
+  session: SessionHandle,
+  parentExecutionId: ExecutionId,
+  options: WorkflowAgentCallOptions,
+): Promise<string> {
+  const groups = [
+    { kind: 'input', label: 'Input file', files: options.inputFiles ?? [] },
+    {
+      kind: 'context',
+      label: 'Context file',
+      files: options.contextFiles ?? [],
+    },
+    { kind: 'media', label: 'Media file', files: options.mediaFiles ?? [] },
+  ] as const;
+  if (groups.every((group) => group.files.length === 0)) {
+    throw new WorkflowRunAbortError(
+      'Cannot fingerprint a workflow agent call without file dependencies.',
+    );
+  }
+
+  const hash = createHash('sha256');
+  for (const { kind, label, files } of groups) {
+    const resolved = await resolveInvocationFileList(
+      session,
+      parentExecutionId,
+      label,
+      files,
+    );
+    for (const [index, { absolutePath }] of resolved.entries()) {
+      const bytes = await runInSession(session, () =>
+        AbsoluteFS.readBytes(absolutePath),
+      );
+      hash.update(`${kind}\0${index}\0${bytes.length}\0`);
+      hash.update(bytes);
+    }
+  }
+  return hash.digest('hex');
 }

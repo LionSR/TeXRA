@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 // Third-party imports
 import { z } from 'zod';
 
@@ -15,6 +17,7 @@ import {
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import {
   getRunContextExecutionId,
+  runInSession,
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
 import {
@@ -22,6 +25,11 @@ import {
   getStreamTabId,
 } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
@@ -49,6 +57,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
 import { formatDuration, generateExecutionId } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -298,26 +307,30 @@ function createBackgroundBashStrategy(params: {
     autoCloseChildStream: true,
     deliverAfterInterrupt: true,
 
-    launch: (_ports, signal) => {
-      startedAt = Date.now();
-      return executeCommand(command, {
-        ...(params.cwd !== undefined && { cwd: params.cwd }),
-        timeout: params.timeoutMs,
-        buffer: false,
-        // The string command form gets shell teardown: abort/timeout signal
-        // the whole process group so backgrounded jobs and piped children are
-        // torn down rather than left running.
-        signal,
-        onStdout: (chunk) => {
-          stdout.append(chunk);
-          logChunk(chunk, 'info');
+    launch: (_ports, signal) =>
+      Effect.tryPromise({
+        try: () => {
+          startedAt = Date.now();
+          return executeCommand(command, {
+            ...(params.cwd !== undefined && { cwd: params.cwd }),
+            timeout: params.timeoutMs,
+            buffer: false,
+            // The string command form gets shell teardown: abort/timeout signal
+            // the whole process group so backgrounded jobs and piped children are
+            // torn down rather than left running.
+            signal,
+            onStdout: (chunk) => {
+              stdout.append(chunk);
+              logChunk(chunk, 'info');
+            },
+            onStderr: (chunk) => {
+              stderr.append(chunk);
+              logChunk(chunk, 'warn');
+            },
+          });
         },
-        onStderr: (chunk) => {
-          stderr.append(chunk);
-          logChunk(chunk, 'warn');
-        },
-      });
-    },
+        catch: ensureError,
+      }),
 
     isTerminal: () => true,
     // `executeCommand` never rejects on a non-zero exit — it resolves with the
@@ -338,16 +351,18 @@ function createBackgroundBashStrategy(params: {
         : formatBashError(executionId, command, err),
 
     buildResultMeta: (turn, _isError, wallTimeMs) =>
-      turn
-        ? {
-            producer: 'backgroundBash' as const,
-            exitCode: turn.exitCode,
-            wallTimeMs,
-            success: turn.success,
-            timedOut: turn.timedOut,
-            command,
-          }
-        : undefined,
+      Effect.sync(() =>
+        turn
+          ? {
+              producer: 'backgroundBash' as const,
+              exitCode: turn.exitCode,
+              wallTimeMs,
+              success: turn.success,
+              timedOut: turn.timedOut,
+              command,
+            }
+          : undefined,
+      ),
   };
 }
 
@@ -409,12 +424,15 @@ export class BashTool extends defineTool({
         'bash run_in_background',
         runContext,
       );
-      return this.executeBackground(
-        input.command,
-        timeoutMs,
-        streamId,
-        getRunContextExecutionId(runContext),
-        cwd,
+      return effectRuntime().runPromise(
+        this.executeBackground(
+          currentSession(),
+          input.command,
+          timeoutMs,
+          streamId,
+          getRunContextExecutionId(runContext),
+          cwd,
+        ),
       );
     }
 
@@ -489,89 +507,100 @@ export class BashTool extends defineTool({
     throw new ToolError(`Command failed (${duration}): ${errorOutput}`);
   }
 
-  private async executeBackground(
-    command: string,
-    timeoutMs: number,
-    parentStreamId: StreamTabId,
-    parentExecutionId: ExecutionId | undefined,
-    cwd?: string,
-  ): Promise<ToolResult> {
-    const executionId = generateExecutionId();
-    const preview = previewLabel(command);
-    const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
-      executionId,
-    });
+  private readonly executeBackground = Effect.fn('BashTool.executeBackground')(
+    function* (
+      session: SessionHandle,
+      command: string,
+      timeoutMs: number,
+      parentStreamId: StreamTabId,
+      parentExecutionId: ExecutionId | undefined,
+      cwd?: string,
+    ) {
+      const executionId = generateExecutionId();
+      const preview = previewLabel(command);
+      const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
+        executionId,
+      });
 
-    const syntheticConfig = AgentConfigSchema.parse({
-      agent: 'bash',
-      instruction: command,
-      agentCategory: AgentCategory.ToolUse,
-    });
+      const syntheticConfig = AgentConfigSchema.parse({
+        agent: 'bash',
+        instruction: command,
+        agentCategory: AgentCategory.ToolUse,
+      });
 
-    // The durable record states only what a shell command has: no execution
-    // mode, no model. The synthetic AgentConfig above feeds the ephemeral
-    // live wire only.
-    await registerExecution(
-      executionId,
-      { name: 'bash', instruction: command },
-      'bash',
-      {
-        streamId: childStreamId,
-        identity: { kind: 'process', tool: 'bash' },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-        parentExecutionId,
-        description: childStreamDescription(command),
-      },
-    );
+      // The durable record states only what a shell command has: no execution
+      // mode, no model. The synthetic AgentConfig above feeds the ephemeral
+      // live wire only.
+      yield* Effect.tryPromise({
+        try: () =>
+          runInSession(session, () =>
+            registerExecution(
+              executionId,
+              { name: 'bash', instruction: command },
+              'bash',
+              {
+                streamId: childStreamId,
+                identity: { kind: 'process', tool: 'bash' },
+                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+                parentExecutionId,
+                description: childStreamDescription(command),
+              },
+            ),
+          ),
+        catch: ensureError,
+      });
 
-    await startDetachedChildRunLoop({
-      executionId,
-      parentStreamId,
-      childStreamId,
-      agentName: 'bash',
-      // A background shell is an external process on no model budget, like
-      // the agent-CLI children (see the child-run concurrency budget note).
-      budgeted: false,
-      createChildStream: () =>
-        createChildStream(executionId, parentStreamId, {
-          streamPrefix: BASH_CHILD_STREAM_PREFIX,
-          run: { kind: 'process', tool: 'bash' },
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          description: command,
-          config: syntheticConfig,
-        }),
-      buildLaunch: async (childStream) => {
-        return {
-          strategy: createBackgroundBashStrategy({
-            executionId,
-            command,
-            timeoutMs,
-            cwd,
-            logger: childStream.logger,
+      yield* startDetachedChildRunLoop({
+        session,
+        executionId,
+        parentStreamId,
+        childStreamId,
+        agentName: 'bash',
+        // A background shell is an external process on no model budget, like
+        // the agent-CLI children (see the child-run concurrency budget note).
+        budgeted: false,
+        createChildStream: () =>
+          createChildStream(session, executionId, parentStreamId, {
+            streamPrefix: BASH_CHILD_STREAM_PREFIX,
+            run: { kind: 'process', tool: 'bash' },
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            description: command,
+            config: syntheticConfig,
           }),
-          // Nobody awaits this run: own late loop failures here as trace
-          // diagnostics, since the loop already owns its one user-facing
-          // result delivery.
-          onLoopFailed: (error: unknown): void => {
-            childStream.logger.error(
-              'Background command run loop failed after launch',
-              { data: error },
-            );
-          },
-        };
-      },
-    });
+        buildLaunch: (childStream) =>
+          Effect.sync(() => {
+            return {
+              strategy: createBackgroundBashStrategy({
+                executionId,
+                command,
+                timeoutMs,
+                cwd,
+                logger: childStream.logger,
+              }),
+              // Nobody awaits this run: own late loop failures here as trace
+              // diagnostics, since the loop already owns its one user-facing
+              // result delivery.
+              onLoopFailed: (error: unknown): void => {
+                childStream.logger.error(
+                  'Background command run loop failed after launch',
+                  { data: error },
+                );
+              },
+            };
+          }),
+      });
 
-    return executed(
-      [
-        `Command launched in background.`,
-        `Execution ID: ${executionId}`,
-        `Stream tab: ${childStreamId}`,
-        'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
-        `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
-        `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,
-      ].join('\n'),
-      `Launched background: ${preview}`,
-    );
-  }
+      return executed(
+        [
+          `Command launched in background.`,
+          `Execution ID: ${executionId}`,
+          `Stream tab: ${childStreamId}`,
+          'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
+          `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
+          `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,
+        ].join('\n'),
+        `Launched background: ${preview}`,
+      );
+    },
+  );
 }

@@ -20,7 +20,7 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
+import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 const tempRoots = useTempDirs();
@@ -231,7 +231,7 @@ describe('runtime skills', () => {
     const store = StreamLogStore.ephemeral('bounded-skills');
     const streamId = 'stream:bounded-skills';
     store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    attachTestTranscriptFold(trace, store.acquireWriter(streamId, streamId));
 
     expect(() =>
       trace.emit({ type: 'skills.snapshot', skills: result.skills }),

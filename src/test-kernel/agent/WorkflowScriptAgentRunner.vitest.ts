@@ -2,6 +2,8 @@ import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowAgentInvocation } from '@agent/workflowScript';
@@ -9,12 +11,34 @@ import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import {
-  createWorkflowScriptAgentRunner,
-  fingerprintWorkflowAgentDependencies,
-} from '@tools/delegation/workflowScriptAgentRunner';
-import { SubagentDurabilityError } from '@tools/delegation/inBandSubagentExecution';
+import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
+import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
+import { SubagentDurabilityError } from '@tools/delegation/stableSubagentAttempt';
+import { ensureError } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
+
+/** Keep Promise assertions at the test entry point. */
+function createWorkflowScriptAgentRunner(
+  ...args: Parameters<typeof createNativeWorkflowScriptAgentRunner>
+) {
+  const runner = createNativeWorkflowScriptAgentRunner(...args);
+  return (invocation: WorkflowAgentInvocation) =>
+    Effect.runPromise(runner(invocation));
+}
+
+function fingerprintWorkflowAgentDependencies(
+  ...args: Parameters<typeof fingerprintInputDependencies> extends [
+    unknown,
+    ...infer Rest,
+  ]
+    ? Rest
+    : never
+) {
+  return fingerprintInputDependencies(
+    parentContext().runScope.session,
+    ...args,
+  );
+}
 
 const mocks = vi.hoisted(() => ({
   executeStableSubagentInBand: vi.fn(),
@@ -23,7 +47,7 @@ const mocks = vi.hoisted(() => ({
   selectAvailableDelegationModel: vi.fn(),
   resolveChildRunOutput: vi.fn(),
   runStorageLocationFromAnyAbsolutePath: vi.fn(),
-  assertWorkflowFilesExist: vi.fn(),
+  workspaceExists: vi.fn(),
   rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
   workspaceToAbsolute: vi.fn(),
@@ -36,16 +60,20 @@ vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
 }));
 
-vi.mock('@tools/delegation/inBandSubagentExecution', () => {
-  class SubagentDurabilityError extends Error {
-    constructor(message: string, options?: ErrorOptions) {
-      super(message, options);
-      this.name = 'SubagentDurabilityError';
-    }
-  }
+vi.mock('@tools/delegation/inBandSubagentExecution', async () => {
+  const { Effect } = await import('effect');
   return {
-    executeStableSubagentInBand: mocks.executeStableSubagentInBand,
-    SubagentDurabilityError,
+    executeStableSubagentInBand: (options: {
+      prepare: () => Effect.Effect<unknown, Error>;
+    }) =>
+      Effect.tryPromise({
+        try: () =>
+          mocks.executeStableSubagentInBand({
+            ...options,
+            prepare: () => Effect.runPromise(options.prepare()),
+          }),
+        catch: ensureError,
+      }),
   };
 });
 
@@ -67,13 +95,16 @@ vi.mock('@utils/files/runStorageFs', () => ({
     mocks.runStorageLocationFromAnyAbsolutePath,
 }));
 
-vi.mock('@tools/delegation/inputFields', () => ({
-  assertWorkflowFilesExist: mocks.assertWorkflowFilesExist,
+vi.mock('@tools/delegation/inputFields', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/delegation/inputFields')>()),
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
 vi.mock('@utils/files/workspaceFS', () => ({
-  WorkspaceFS: { toAbsolute: mocks.workspaceToAbsolute },
+  WorkspaceFS: {
+    toAbsolute: mocks.workspaceToAbsolute,
+    exists: mocks.workspaceExists,
+  },
 }));
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:fs/promises')>()),
@@ -229,7 +260,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       path: `/agents/${name}.yml`,
     }));
     mocks.selectAvailableDelegationModel.mockResolvedValue('child-model');
-    mocks.assertWorkflowFilesExist.mockResolvedValue(undefined);
+    mocks.workspaceExists.mockResolvedValue(true);
     mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
     mocks.workspaceToAbsolute.mockImplementation((file: string) =>
@@ -297,7 +328,7 @@ describe('createWorkflowScriptAgentRunner', () => {
           name: 'WorkflowRunAbortError',
           message: expect.stringContaining(file),
         });
-        expect(mocks.assertWorkflowFilesExist).not.toHaveBeenCalled();
+        expect(mocks.workspaceExists).not.toHaveBeenCalled();
         expect(mocks.absoluteReadBytes).not.toHaveBeenCalled();
       } finally {
         storagePath.mockRestore();
@@ -386,18 +417,12 @@ describe('createWorkflowScriptAgentRunner', () => {
 
     await expect(runner(call)).resolves.toBe(result);
     expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
-    expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
-      { label: 'Input file', files: ['/workspace/paper.tex'] },
-    ]);
-    expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
-      { label: 'Context file', files: ['/workspace/notes.tex'] },
-    ]);
+    expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/paper.tex');
+    expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/notes.tex');
     expect(mocks.rejectOversizedBibAttachments).toHaveBeenCalledWith([
       'notes.tex',
     ]);
-    expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
-      { label: 'Media file', files: ['/workspace/figure.pdf'] },
-    ]);
+    expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/figure.pdf');
     expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
       parentModel: 'parent-model',
     });
@@ -447,9 +472,7 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('treats missing workspace files as run-fatal configuration', async () => {
-    mocks.assertWorkflowFilesExist.mockRejectedValueOnce(
-      new Error('Missing file: absent.tex'),
-    );
+    mocks.workspaceExists.mockResolvedValueOnce(false);
     const runner = defaultRunner();
 
     await expect(
@@ -492,9 +515,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.selectAvailableDelegationModel.mockRejectedValueOnce(
       new Error('Model "missing-model" is not currently available.'),
     );
-    mocks.assertWorkflowFilesExist.mockRejectedValue(
-      new Error('Input file "paper.tex" does not exist.'),
-    );
+    mocks.workspaceExists.mockResolvedValue(false);
     const runner = defaultRunner();
 
     await expect(
@@ -508,7 +529,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       name: 'WorkflowRunAbortError',
       message: expect.stringContaining('missing-model'),
     });
-    expect(mocks.assertWorkflowFilesExist).not.toHaveBeenCalled();
+    expect(mocks.workspaceExists).not.toHaveBeenCalled();
   });
 
   it('preserves delegation failures when no model is declared', async () => {
@@ -577,9 +598,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       runExecutionId,
       secondRequested,
     );
-    expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
-      { label: 'Input file', files: ['/workspace/notes.tex'] },
-    ]);
+    expect(mocks.workspaceExists).toHaveBeenCalledWith('/workspace/notes.tex');
     expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({
         agentName: 'merge',
@@ -950,7 +969,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(
       (mocks.preparedOptions[0] as { configPayload: object }).configPayload,
     ).not.toHaveProperty('inputFiles');
-    expect(mocks.assertWorkflowFilesExist).not.toHaveBeenCalled();
+    expect(mocks.workspaceExists).not.toHaveBeenCalled();
   });
 
   it('exempts a schema call from the workflow empty-files guard', async () => {

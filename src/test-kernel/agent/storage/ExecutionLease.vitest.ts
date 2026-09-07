@@ -1,6 +1,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -415,20 +416,30 @@ describe('cross-process execution leases', () => {
     let resumeStarted = false;
 
     try {
-      const first = registry.launchExecution(executionId, async () => {
-        await acquireFreshExecutionLease(executionId);
-        await disposing.promise;
-        await releaseOwnedExecutionLease(executionId);
-      });
+      const first = Effect.runPromise(
+        registry.launchExecution(
+          executionId,
+          Effect.promise(async () => {
+            await acquireFreshExecutionLease(executionId);
+            await disposing.promise;
+            await releaseOwnedExecutionLease(executionId);
+          }),
+        ),
+      );
       await vi.waitFor(() =>
         expect(ownsExecutionLease(executionId)).toBe(true),
       );
       const firstToken = await readToken();
 
-      const second = registry.launchExecution(executionId, async () => {
-        resumeStarted = true;
-        return acquireResumedExecutionLease(executionId);
-      });
+      const second = Effect.runPromise(
+        registry.launchExecution(
+          executionId,
+          Effect.promise(async () => {
+            resumeStarted = true;
+            return acquireResumedExecutionLease(executionId);
+          }),
+        ),
+      );
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       // The first generation is still disposing: the resume waits and the

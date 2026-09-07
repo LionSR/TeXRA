@@ -29,6 +29,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -160,7 +161,16 @@ Optional auto-attach from the input LaTeX:
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
-    return proposeAndExecute(proposal, agentName, streamId);
+    return effectRuntime().runPromise(
+      proposeAndExecute(
+        currentSession(),
+        context,
+        getCurrentToolCallContext(),
+        proposal,
+        agentName,
+        streamId,
+      ),
+    );
   }
 }
 
@@ -267,7 +277,16 @@ Git worktree support: resolved from the active workspace at runtime.`,
       workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
 
-    return proposeAndExecute(proposal, agentName, streamId);
+    return effectRuntime().runPromise(
+      proposeAndExecute(
+        currentSession(),
+        context,
+        getCurrentToolCallContext(),
+        proposal,
+        agentName,
+        streamId,
+      ),
+    );
   }
 
   /** Queue follow-up instructions for a tool-use subagent. */

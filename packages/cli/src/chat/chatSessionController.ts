@@ -578,58 +578,63 @@ export function createChatSessionController(
     ownExecution(executionId);
     session.executionId = executionId;
 
-    const runPromise = effectRuntime()
+    const {
+      promise: claimedRunPromise,
+      resolve: resolveRunPromise,
+      reject: rejectRunPromise,
+    } = pDefer<void>();
+    // Native launch may resolve its stream on this turn. Claim first so
+    // marking the run pending cannot erase that stream or a reentrant stop.
+    session.markRunPending(claimedRunPromise);
+    void effectRuntime()
       .runPromise(
-        tryPromise(() =>
-          Promise.resolve()
-            .then(() => AgentConfigSchema.parse(config))
-            .then((registeredConfig) =>
-              runAgent(
-                { kind: 'fresh', config: registeredConfig, executionId },
-                {
-                  enforceCategory: true,
-                  approvalPromptsUnavailable: approvalsUnavailable,
-                  onApprovalPolicyDenial: () =>
-                    warnApprovalDenied(sessionContext, 'Tool or edit approval'),
-                  runtimeUnavailableTools:
-                    getDefaultUnavailableToolNames('cli'),
-                  onStreamResolved: (resolvedStreamId) => {
-                    // Each chat round mints a fresh root StreamTabId (new
-                    // executionId), so bash/tool-edit/super-YOLO bypass, which is
-                    // keyed per stream, would otherwise reset every round even
-                    // though the user is continuing the same conversation. Link the
-                    // new round's stream to the previous one so bypass resolution
-                    // (see `registerStreamParent`) falls through to whatever the
-                    // prior round had, unless this round sets its own explicit value.
-                    const previousRootStreamId = rootStreamId.get();
-                    if (
-                      previousRootStreamId &&
-                      previousRootStreamId !== resolvedStreamId
-                    ) {
-                      runtimeSession.approvals.registerStreamParent(
-                        resolvedStreamId,
-                        previousRootStreamId,
-                      );
-                    }
-                    session.streamId = resolvedStreamId;
-                    rootStreamId.set(resolvedStreamId);
-                    moveLocalTranscriptToStream(resolvedStreamId);
-                    focusStream(resolvedStreamId);
-                    if (session.stopRequested) interruptActiveRun();
-                  },
+        Effect.try(() => AgentConfigSchema.parse(config)).pipe(
+          Effect.flatMap((registeredConfig) =>
+            runAgent(
+              { kind: 'fresh', config: registeredConfig, executionId },
+              {
+                session: runtimeSession,
+                enforceCategory: true,
+                approvalPromptsUnavailable: approvalsUnavailable,
+                onApprovalPolicyDenial: () =>
+                  warnApprovalDenied(sessionContext, 'Tool or edit approval'),
+                runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+                onStreamResolved: (resolvedStreamId) => {
+                  // Each chat round mints a fresh root StreamTabId (new
+                  // executionId), so bash/tool-edit/super-YOLO bypass, which is
+                  // keyed per stream, would otherwise reset every round even
+                  // though the user is continuing the same conversation. Link the
+                  // new round's stream to the previous one so bypass resolution
+                  // (see `registerStreamParent`) falls through to whatever the
+                  // prior round had, unless this round sets its own explicit value.
+                  const previousRootStreamId = rootStreamId.get();
+                  if (
+                    previousRootStreamId &&
+                    previousRootStreamId !== resolvedStreamId
+                  ) {
+                    runtimeSession.approvals.registerStreamParent(
+                      resolvedStreamId,
+                      previousRootStreamId,
+                    );
+                  }
+                  session.streamId = resolvedStreamId;
+                  rootStreamId.set(resolvedStreamId);
+                  moveLocalTranscriptToStream(resolvedStreamId);
+                  focusStream(resolvedStreamId);
+                  if (session.stopRequested) interruptActiveRun();
                 },
-              ),
-            )
-            .then((result) => {
-              session.runExitCode = runOutcomeExitCode(result.outcome);
-              notify('agentFinished');
-            }),
-        ).pipe(
+              },
+            ),
+          ),
+          Effect.map((result) => {
+            session.runExitCode = runOutcomeExitCode(result.outcome);
+            notify('agentFinished');
+          }),
           Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
         ),
       )
-      .finally(finalize);
-    session.markRunPending(runPromise);
+      .finally(finalize)
+      .then(resolveRunPromise, rejectRunPromise);
   };
 
   // -----------------------------------------------------------------------
@@ -725,16 +730,11 @@ export function createChatSessionController(
         // marks recoverable.
         if (session.stopRequested) interruptActiveRun();
 
-        await runtimeSession.transcripts.ensureLoaded(streamId);
-        // `load` evicts every other record synchronously before its async
-        // seed, and the store reports no provenance for an evicted record, so
-        // nothing projects an evicted/unseeded stream (or re-emits
-        // warnIfUnseeded) mid-seed without any marker bookkeeping here. A
-        // previously seeded retained root deliberately keeps its provenance
-        // during reseeding: this keeps its canonical pre-resume projection
-        // visible at the cost of bounded warnIfUnseeded notices until the seed
-        // completes.
-        await effectRuntime().runPromise(snapshotStore.load([streamId]));
+        await effectRuntime().runPromise(
+          runtimeSession.transcripts
+            .ensureLoaded(streamId)
+            .pipe(Effect.andThen(snapshotStore.load([streamId]))),
+        );
         // The load re-establishes this stream's work-plan provenance in the
         // store, which is what an open `/plan` reader re-reads to clear its
         // failure-time mask. The transcript itself is the fold's: the TUI

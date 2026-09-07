@@ -1,5 +1,5 @@
 // Test composition imports
-import '@test/support/defaultSessionTestSetup';
+import '@test/support/sessionGraphTestSetup';
 
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 
@@ -19,9 +19,7 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import {
-  LOG_LEVELS,
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -78,14 +76,20 @@ vi.mock('@transcript', async () => {
   return {
     ...actual,
     assembleTrace: mocks.assembleTrace,
-    readCompletedRunConversation: vi.fn(async (...args: unknown[]) => {
-      const conversation = await mocks.readConversation();
-      return conversation === null
-        ? actual.readCompletedRunConversation(
-            ...(args as Parameters<typeof actual.readCompletedRunConversation>),
-          )
-        : { conversation, source: 'streamLog' };
-    }),
+    readCompletedRunConversation: vi.fn((...args: unknown[]) =>
+      Effect.gen(function* () {
+        const conversation = yield* Effect.promise(() =>
+          mocks.readConversation(),
+        );
+        return conversation === null
+          ? yield* actual.readCompletedRunConversation(
+              ...(args as Parameters<
+                typeof actual.readCompletedRunConversation
+              >),
+            )
+          : { conversation, source: 'streamLog' };
+      }),
+    ),
   };
 });
 
@@ -103,11 +107,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import {
-  StreamLogStore,
-  STREAM_LOGS_DIR,
-  type TraceDocument,
-} from '@transcript';
+import type { TraceDocument } from '@transcript';
 import {
   cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
@@ -123,7 +123,6 @@ import {
   readCliHistoryStandaloneTemplate,
   stageCliHistoryTraceViewerAssets,
 } from '@cli/runtime/history';
-import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 
 const config = AgentConfigSchema.parse({
   agent: 'correct',
@@ -241,7 +240,11 @@ describe('CLI history runtime', () => {
     );
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const { initializeDefaultSession, teardownDefaultSession } =
+      await import('@agent/runtime/SessionHandle');
+    teardownDefaultSession();
+    initializeDefaultSession({});
     vi.clearAllMocks();
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
@@ -452,16 +455,16 @@ describe('CLI history runtime', () => {
   it('finds a stamped diagnostic-only root in CLI history details', async () => {
     const executionId = 'a11ce7a11ce7' as ExecutionId;
     const root = `orchestrator@model#${executionId}` as StreamTabId;
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(logs, root, {
-      id: 'diagnostic-only-root',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1000,
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
+    const session = defaultSession();
+    publishTestRunStart(session, root, executionId);
+    session.publishRunEvent(root, {
+      type: 'log',
+      level: 'info',
+      message: 'Root status only',
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      text: 'Root status only',
     });
-    await logs.flush();
+    await session.settlePublications();
     mockNothingPersisted();
     // The streamId stamped on execution metadata at registration is the one
     // execution→stream mapping; the diagnostic-only transcript row proves

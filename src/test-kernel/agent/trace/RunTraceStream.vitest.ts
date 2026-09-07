@@ -8,8 +8,8 @@ import {
   type AgentEvent,
 } from '@agent/trace';
 import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
-import { createRunTrace, StreamLogStore } from '@transcript';
-import type { RunTraceFlushEntry } from '@transcript/runTrace';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import { StreamLogStore } from '@transcript';
 
 function streamEntries(store: StreamLogStore): StreamLogEntry[] {
   return store.get('stream')?.getRange(0) ?? [];
@@ -23,18 +23,15 @@ function openDeferredThinking(
 
 /** Run against a fresh, test-local store. */
 function withStore(
-  run: (
-    store: StreamLogStore,
-    logger: AgentTrace,
-    flushPending: () => void,
-  ) => void,
+  run: (store: StreamLogStore, logger: AgentTrace) => void,
 ): void {
   const store = StreamLogStore.ephemeral('test');
-  const flushers = new Map<string, RunTraceFlushEntry>();
-  const handle = createRunTrace('stream', store, flushers);
-  run(store, handle.trace, () => {
-    for (const entry of flushers.values()) entry.flush();
-  });
+  const handle = createTestRunTrace('stream', store);
+  try {
+    run(store, handle.trace);
+  } finally {
+    handle.dispose();
+  }
 }
 
 describe('AgentTrace stream output', () => {
@@ -63,7 +60,7 @@ describe('AgentTrace stream output', () => {
   });
 
   it('emits nothing for a deferred stream until the first chunk', () => {
-    withStore((store, logger, flushPending) => {
+    withStore((store, logger) => {
       const events: AgentEvent[] = [];
       logger.subscribe((event) => events.push(event));
       const thinking = openDeferredThinking(logger);
@@ -71,7 +68,6 @@ describe('AgentTrace stream output', () => {
       expect(store.get('stream')).toBeUndefined();
 
       thinking.append('reasoning delta');
-      flushPending();
 
       const entries = streamEntries(store);
       expect(entries).toHaveLength(1);
@@ -189,7 +185,7 @@ describe('tool-use card input redaction', () => {
 describe('tool-use card groupId resolution', () => {
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', async () => {
     const store = StreamLogStore.ephemeral('test');
-    const logger = createRunTrace('stream', store).trace;
+    const logger = createTestRunTrace('stream', store).trace;
     const outer = logger.openStage('outer');
     const ref = await outer.within(async () =>
       startToolUseCard(logger, 'demoTool', { arg: 1 }),
@@ -217,7 +213,7 @@ describe('per-trace stage scope (cross-trace isolation)', () => {
 
     // Orchestrator trace with an active "Task:" stage — mirrors a subagent
     // launched from inside a delegation tool's stage scope.
-    const orchestrator = createRunTrace('orchestrator', store).trace;
+    const orchestrator = createTestRunTrace('orchestrator', store).trace;
     const taskStage = orchestrator.openStage('Task: orchestrator');
 
     // Subagent run on a SEPARATE trace/stream, opened *inside* the
@@ -226,7 +222,7 @@ describe('per-trace stage scope (cross-trace isolation)', () => {
     // subagent's run stage is a root on its own stream with no extra flag.
     // (A module-level shared scope would orphan it under the cross-trace id.)
     await taskStage.within(async () => {
-      const subagent = createRunTrace('subagent', store).trace;
+      const subagent = createTestRunTrace('subagent', store).trace;
       subagent.openStage('Run: subagent');
     });
 

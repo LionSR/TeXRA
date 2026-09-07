@@ -6,6 +6,7 @@ import {
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import type { Effect } from 'effect';
 
 /**
  * Owns the two session-keyed stores (`codexThreadsFor`, `claudeAgentSessionsFor`)
@@ -70,6 +71,8 @@ function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
 type ShutdownHandler = (signal: AbortSignal) => void | Promise<void>;
 
 export interface RuntimeShutdownHooks {
+  /** Execute settlement at the existing host or SDK runtime boundary. */
+  readonly runSettlement: (settlement: Effect.Effect<void>) => Promise<void>;
   /** BEFORE handlers that must run before agent processes are interrupted. */
   readonly beforeAgentShutdown?: readonly ShutdownHandler[];
   /** BEFORE handlers between agent interruption and artifact persistence. */
@@ -114,7 +117,7 @@ export function registerRuntimeShutdownHandlers(
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, hooks.flushArtifacts);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterFlushArtifacts);
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-    settleLiveSessionExecutions(signal),
+    hooks.runSettlement(settleLiveSessionExecutions(signal)),
   );
   registerHandlers(
     lifecycle,

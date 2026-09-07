@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 /**
  * Codex tool — spin off an OpenAI Codex agent via the @openai/codex-sdk.
  *
@@ -30,6 +31,15 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime/RunContext';
+import {
+  getCurrentToolContexts,
+  type CurrentToolContexts,
+} from '@agent/followUp/ToolFileInteractionContext';
 import { effectRuntime } from '@platform/processRuntime';
 import type {
   ExecutionId,
@@ -46,6 +56,7 @@ import {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { requestBashApproval } from '@tools/approval/bashApproval';
 import { formatWallTimeSeconds } from '@utils/core';
 import { previewLabel } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -343,6 +354,7 @@ export async function runStreamedTurn(
  * execution, registry bookkeeping, and result formatting.
  */
 function startCodexLoop(params: {
+  session: SessionHandle;
   thread: Thread;
   childStream: ChildStream;
   parentStreamId: StreamTabId;
@@ -357,7 +369,7 @@ function startCodexLoop(params: {
   releaseFallbackClaim: (() => void) | undefined;
   /** Settled by the loop wrapper when the loop's completion settles. */
   loopSettled: Deferred.Deferred<void>;
-}): void {
+}): Effect.Effect<void, Error> {
   const {
     thread,
     childStream,
@@ -370,7 +382,8 @@ function startCodexLoop(params: {
   } = params;
   const { childStreamId, logger } = childStream;
 
-  startAgentCliLoop({
+  return startAgentCliLoop({
+    session: params.session,
     childStream,
     parentStreamId,
     executionId,
@@ -473,21 +486,36 @@ export class CodexTool extends defineTool({
     // collaborator's rejection is re-raised as its own cause; a `ToolError`
     // stays a typed failure and `runPromise` rejects with it.
     return effectRuntime().runPromise(
-      reraiseAgentCliCallFailure(this.run(input)),
+      reraiseAgentCliCallFailure(
+        this.run(
+          input,
+          currentSession(),
+          getCurrentToolContexts(),
+          AsyncLocalStorage.bind(requestBashApproval),
+        ),
+      ),
     );
   }
 
   private readonly run = Effect.fn('CodexTool.run')(function* (
     this: CodexTool,
     input: CodexInput,
+    session: SessionHandle,
+    contexts: CurrentToolContexts | undefined,
+    requestApproval: typeof requestBashApproval,
   ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
     // Resolve the effective sandbox mode once (per-call override, else the
     // user-configured default) rather than mutating the parsed input object.
     const sandboxMode =
       input.sandbox_mode ??
-      (yield* agentCliCall(() => getCodexConfig())).getCodexSandboxMode();
+      (yield* agentCliCall(() =>
+        runInSession(session, getCodexConfig),
+      )).getCodexSandboxMode();
 
     return yield* dispatchAgentCliTool({
+      session,
+      contexts,
+      requestApproval,
       agentName: 'codex',
       approvalLabel: `[codex ${sandboxMode}] ${input.prompt}`,
       store: codexThreadsFor,
@@ -507,6 +535,7 @@ export class CodexTool extends defineTool({
           context.parentExecutionId,
           context.parentWorkingDirectory,
           context.releaseFallbackClaim,
+          session,
         ),
     });
   });
@@ -519,17 +548,21 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
+  session: SessionHandle,
 ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const thread = yield* agentCliCall(() =>
-    createCodexThread(input, sandboxMode, workingDir),
+    runInSession(session, () =>
+      createCodexThread(input, sandboxMode, workingDir),
+    ),
   );
-  const config = (yield* agentCliCall(() => getCodexConfig())).buildCodexConfig(
-    input.prompt,
-  );
+  const config = (yield* agentCliCall(() =>
+    runInSession(session, getCodexConfig),
+  )).buildCodexConfig(input.prompt);
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
+    session,
     parentStreamId,
     parentExecutionId,
     agentName: 'codex',
@@ -540,6 +573,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
     store: codexThreadsFor,
     startLoop: ({ childStream, executionId, loopSettled }) =>
       startCodexLoop({
+        session,
         thread,
         childStream,
         parentStreamId,

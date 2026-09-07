@@ -19,7 +19,7 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
+import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
@@ -33,7 +33,7 @@ function attachRecorder(streamId: StreamTabId = 'stream:test' as StreamTabId): {
   const trace = new TraceEmitter();
   const store = StreamLogStore.ephemeral('test');
   store.ensureStream(streamId);
-  const recorder = attachTranscriptRecorder(
+  const recorder = attachTestTranscriptFold(
     trace,
     store.acquireWriter(streamId, streamId),
   );
@@ -51,7 +51,7 @@ function dataOf(entry: StreamLogEntry | undefined): Record<string, unknown> {
   return isObject(entry?.data) ? entry.data : {};
 }
 
-describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)', () => {
+describe('attachTestTranscriptFold StreamPhase-native group rows (issue #7993)', () => {
   it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
     const { trace, row } = attachRecorder();
 
@@ -102,7 +102,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)',
   });
 });
 
-describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
+describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
   it("preserves a round stage's kind onto its persisted GROUP_END row", () => {
     const { trace, row } = attachRecorder();
 
@@ -177,7 +177,7 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
   });
 });
 
-describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
+describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
   it('upserts the round MODEL_RESPONSE stream entry to the authoritative text', () => {
     const { trace, rows } = attachRecorder();
 
@@ -300,7 +300,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 });
 
-describe('attachTranscriptRecorder workflow task state', () => {
+describe('attachTestTranscriptFold workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const streamId = 'stream:terminal-settlement' as StreamTabId;
     const { trace, handleStatus, row, rows } = attachRecorder(streamId);
@@ -543,7 +543,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
   });
 });
 
-describe('attachTranscriptRecorder record-time secret redaction', () => {
+describe('attachTestTranscriptFold record-time secret redaction', () => {
   const API_KEY = 'sk-live1234567890abcdef';
 
   it('redacts a secret in a plain log row before it is persisted', () => {
@@ -625,7 +625,7 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
   });
 });
 
-describe('attachTranscriptRecorder active skills', () => {
+describe('attachTestTranscriptFold active skills', () => {
   const tempDirs = useTempDirs();
   setupPlatform(() => createTempDirPlatform('texra-recorder-', tempDirs));
 
@@ -664,13 +664,13 @@ describe('attachTranscriptRecorder active skills', () => {
     expect(records.at(-1)?.data).toStrictEqual({ skills: [] });
   });
 
-  it('redacts summaries before truncating the disk projection', async () => {
+  it('redacts summaries before truncating the recorded projection', async () => {
     const trace = new TraceEmitter();
     const streamId = 'stream:skill-redaction' as StreamTabId;
-    const store = await StreamLogStore.open();
+    const store = StreamLogStore.ephemeral('redacted transcript fixture');
     store.ensureStream(streamId);
     const writer = store.acquireWriter(streamId, streamId);
-    const recorder = attachTranscriptRecorder(trace, writer);
+    const recorder = attachTestTranscriptFold(trace, writer);
     const descriptionPrefix = `${'Review credentials carefully. '.padEnd(168, 'a')} `;
     const providerKey = 'sk-proj-redaction-example-1234567890abcdef';
 
@@ -686,11 +686,7 @@ describe('attachTranscriptRecorder active skills', () => {
     });
     recorder.unsubscribe();
     writer.close();
-    await store.flush();
-
-    const reopened = await StreamLogStore.openReadOnlyForStream(streamId);
-    await reopened.ensureLoaded(streamId);
-    const persisted = reopened
+    const persisted = store
       .get(streamId)
       ?.getRange(0)
       .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)?.data;

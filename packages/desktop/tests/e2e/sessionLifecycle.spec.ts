@@ -1,5 +1,8 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { hostname } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
+import { Effect, Layer } from 'effect';
 
 import { expect, test } from '@playwright/test';
 
@@ -19,85 +22,135 @@ const WAITING_EXECUTION = 'a11ce1';
 const ORPHAN_STREAM = 'e2e-orphan#baddad';
 const ORPHAN_EXECUTION = 'baddad';
 
-interface PersistedLogEntry {
-  id?: unknown;
-  type?: unknown;
-  data?: { status?: unknown };
-}
+type DatabaseFixture = Pick<
+  typeof import('@controllers/session/Database'),
+  'databaseLayer'
+> &
+  Pick<typeof import('@controllers/session/WorkspaceRoots'), 'WorkspaceRoots'> &
+  Pick<typeof import('@shared/session/database'), 'Database'> &
+  Pick<typeof import('@shared/session/sessionEvents'), 'ProcessIdentity'> &
+  Pick<typeof import('@shared/schemas'), 'aggregateId'>;
 
-function writeJson(path: string, value: unknown): void {
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-}
-
-function writeCanonicalStreamFixture(input: {
-  storagePath: string;
-  streamId: string;
-  executionId: string;
-  resumable: boolean;
-  timestamp: number;
-}): void {
-  const encodedStream = encodeURIComponent(input.streamId);
-  const transcriptDirectory = join(input.storagePath, 'streamLogs');
-  const sidecarDirectory = join(input.storagePath, 'streamData', encodedStream);
-  const executionDirectory = join(
-    input.storagePath,
-    'executions',
-    input.executionId,
-  );
-  mkdirSync(transcriptDirectory, { recursive: true });
-  mkdirSync(sidecarDirectory, { recursive: true });
-  mkdirSync(executionDirectory, { recursive: true });
-
-  writeJson(join(transcriptDirectory, `${encodedStream}.json`), [
-    {
-      seqNo: 1,
-      id: `${input.streamId}-running-group`,
-      type: 'group-start',
-      level: 'info',
-      timestamp: input.timestamp,
-      data: { status: 'running' },
+/** Playwright's ESM loader cannot directly import the root's CommonJS-shaped TS modules. */
+async function loadDatabaseFixture(
+  userDataPath: string,
+): Promise<DatabaseFixture> {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
+  const bundle = join(userDataPath, 'session-database-fixture.mjs');
+  await build({
+    stdin: {
+      contents: `
+        export { databaseLayer } from '@controllers/session/Database';
+        export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+        export { Database } from '@shared/session/database';
+        export { ProcessIdentity } from '@shared/session/sessionEvents';
+        export { aggregateId } from '@shared/schemas';
+      `,
+      loader: 'ts',
+      resolveDir: root,
     },
-  ]);
-  writeJson(join(sidecarDirectory, 'meta.json'), {
-    schemaVersion: 1,
-    executionId: input.executionId,
+    outfile: bundle,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node22.13',
+    tsconfig: join(root, 'tsconfig.json'),
+    banner: {
+      js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+    },
   });
-  writeJson(join(executionDirectory, 'config.json'), {
-    agent: 'search',
-    model: 'deepseekproT',
-    agentCategory: 'toolUse',
-  });
-  writeJson(join(executionDirectory, 'meta.json'), {
-    schemaVersion: 1,
-    timestamp: new Date(input.timestamp).toISOString(),
-    streamId: input.streamId,
-  });
-
-  if (input.resumable) {
-    writeJson(join(executionDirectory, `flow_${input.executionId}.json`), {
-      schemaVersion: 2,
-      shared: { messages: [] },
-      cursor: { nextNodeId: 'start' },
-    });
-  }
+  return import(pathToFileURL(bundle).href) as Promise<DatabaseFixture>;
 }
 
-function readTranscript(
+/** Open the same C1 database implementation used by the application. */
+function inEventDatabase<A, E>(
+  fixture: DatabaseFixture,
   storagePath: string,
-  streamId: string,
-): PersistedLogEntry[] {
-  const path = join(
-    storagePath,
-    'streamLogs',
-    `${encodeURIComponent(streamId)}.json`,
+  operation: Effect.Effect<A, E, import('@shared/session/database').Database>,
+) {
+  return Effect.runPromise(
+    operation.pipe(
+      Effect.provide(
+        fixture
+          .databaseLayer('persistent')
+          .pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                Layer.succeed(fixture.WorkspaceRoots)({ storage: storagePath }),
+                fixture.ProcessIdentity.layer(
+                  JSON.stringify([hostname().toLowerCase(), process.pid, null]),
+                ),
+              ),
+            ),
+          ),
+      ),
+    ),
   );
-  return JSON.parse(readFileSync(path, 'utf8')) as PersistedLogEntry[];
 }
 
-function terminalGroupStatus(storagePath: string, streamId: string): unknown {
-  return readTranscript(storagePath, streamId).find(
-    (entry) => entry.id === `${streamId}-running-group`,
-  )?.data?.status;
+async function writeCanonicalStreamFixtures(
+  fixture: DatabaseFixture,
+  storagePath: string,
+) {
+  return inEventDatabase(
+    fixture,
+    storagePath,
+    Effect.gen(function* () {
+      const database = yield* fixture.Database;
+      const fixtures = [
+        {
+          streamId: WAITING_STREAM,
+          executionId: WAITING_EXECUTION,
+          phase: 'waiting' as const,
+        },
+        {
+          streamId: ORPHAN_STREAM,
+          executionId: ORPHAN_EXECUTION,
+          phase: 'running' as const,
+        },
+      ];
+      for (const streamFixture of fixtures) {
+        const id = fixture.aggregateId('stream', streamFixture.streamId);
+        yield* database.appendAll([
+          {
+            type: 'run.start',
+            aggregateId: id,
+            executionId: streamFixture.executionId,
+            identity: { kind: 'agent', agent: streamFixture.streamId },
+            category: 'toolUse',
+            userFollowUpSupport: 'nativeInteractive',
+            isRemote: false,
+          },
+          {
+            type: 'stage.start',
+            aggregateId: id,
+            id: `${streamFixture.streamId}-running-group`,
+            label: 'Persisted round',
+            kind: 'round',
+          },
+          {
+            type: 'response.finalized',
+            aggregateId: id,
+            text: `Saved history for ${streamFixture.streamId}.`,
+          },
+          {
+            type: 'status',
+            aggregateId: id,
+            phase: streamFixture.phase,
+            cause: streamFixture.phase === 'waiting' ? 'wait' : 'lifecycle',
+          },
+        ]);
+      }
+      // These rows belong to a stopped writer. The next process must derive
+      // interrupted presentation without rewriting the recorded phases.
+      yield* database.releaseClaims(
+        fixtures.map((streamFixture) =>
+          fixture.aggregateId('stream', streamFixture.streamId),
+        ),
+      );
+      return yield* database.readAll(0);
+    }),
+  );
 }
 
 async function processId(launched: LaunchedApp): Promise<number> {
@@ -131,7 +184,7 @@ test('macOS window close detaches and activation reopens in the same process', a
   }
 });
 
-test('a new desktop process repairs canonical waiting and orphaned streams', async () => {
+test('a new desktop process hydrates waiting and orphaned histories without rewriting them', async () => {
   const { workspacePath, userDataPath } = createIsolatedProfile();
   let currentLaunch: LaunchedApp | undefined;
 
@@ -145,47 +198,40 @@ test('a new desktop process repairs canonical waiting and orphaned streams', asy
       userDataPath,
       workspacePath,
     });
-    writeCanonicalStreamFixture({
-      storagePath,
-      streamId: WAITING_STREAM,
-      executionId: WAITING_EXECUTION,
-      resumable: true,
-      timestamp: 1_750_000_000_000,
-    });
-    writeCanonicalStreamFixture({
-      storagePath,
-      streamId: ORPHAN_STREAM,
-      executionId: ORPHAN_EXECUTION,
-      resumable: false,
-      timestamp: 1_750_000_001_000,
-    });
+    const fixture = await loadDatabaseFixture(userDataPath);
+    const persisted = await writeCanonicalStreamFixtures(fixture, storagePath);
 
     currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
     expect(await processId(currentLaunch)).not.toBe(firstPid);
 
     await expect
-      .poll(() => terminalGroupStatus(storagePath, WAITING_STREAM))
-      .toBe('cancelled');
-    await expect
-      .poll(() => terminalGroupStatus(storagePath, ORPHAN_STREAM))
-      .toBe('failed');
-
-    await expect
       .poll(async () =>
         currentLaunch!.page.locator('stream-tab').evaluateAll((tabs) =>
           tabs.map((tab) => ({
-            streamId: (tab as HTMLElement & { info?: { name?: string } }).info
-              ?.name,
-            status: (tab as HTMLElement & { status?: string }).status,
+            streamId: (tab as HTMLElement & { stream: { id: string } }).stream
+              .id,
+            status: (tab as HTMLElement & { stream: { status: string } }).stream
+              .status,
+            group: (tab as HTMLElement & { stream: { group: string } }).stream
+              .group,
           })),
         ),
       )
       .toEqual(
         expect.arrayContaining([
-          { streamId: WAITING_STREAM, status: 'waiting' },
-          { streamId: ORPHAN_STREAM, status: 'failed' },
+          { streamId: WAITING_STREAM, status: 'waiting', group: 'interrupted' },
+          { streamId: ORPHAN_STREAM, status: 'running', group: 'interrupted' },
         ]),
       );
+    const reloaded = await inEventDatabase(
+      fixture,
+      storagePath,
+      Effect.gen(function* () {
+        const database = yield* fixture.Database;
+        return yield* database.readAll(0);
+      }),
+    );
+    expect(reloaded).toEqual(persisted);
   } finally {
     if (currentLaunch) await closeTexraApp(currentLaunch);
     cleanupDirectory(workspacePath);

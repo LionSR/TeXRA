@@ -29,7 +29,6 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { withTempDir } from '@test/support/tempDirPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { StorageFS } from '@utils/files/storageFS';
@@ -47,15 +46,14 @@ const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
 }));
 
-vi.mock('@agent/storage', async () => {
-  const actual =
-    await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
+vi.mock('@agent/storage/ExecutionKVStore', async () => {
+  const actual = await vi.importActual<
+    typeof import('@agent/storage/ExecutionKVStore')
+  >('@agent/storage/ExecutionKVStore');
   return {
     ...actual,
     getExecutionStore: vi.fn(() => ({
       readConfig: mocks.readConfig,
-      // The tool reads the record; this suite's fixtures are all agent-arm,
-      // so the record IS the config.
       readRunRecord: mocks.readConfig,
       readMeta: mocks.readMeta,
       readChildren: mocks.readChildren,
@@ -64,8 +62,13 @@ vi.mock('@agent/storage', async () => {
       readTurnState: mocks.readTurnState,
       readWorkspaceFiles: mocks.readWorkspaceFiles,
     })),
-    listExecutions: mocks.listExecutions,
   };
+});
+
+vi.mock('@agent/storage', async () => {
+  const actual =
+    await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
+  return { ...actual, listExecutions: mocks.listExecutions };
 });
 
 const config = {
@@ -234,11 +237,13 @@ describe('ExecutionsTool', () => {
       });
 
       try {
+        publishTestRunStart(session, parentStreamId);
+        publishTestRunStart(session, childStreamId, executionId);
+        await session.settlePublications();
         session.executions.track(handle);
         seedStreamStatusForTest(session.status, childStreamId, {
           phase: STREAM_PHASE.RUNNING,
         });
-        publishTestRunStart(session, childStreamId, executionId);
         session.publish([
           {
             type: 'updateTodos',
@@ -252,7 +257,7 @@ describe('ExecutionsTool', () => {
             ],
           },
         ]);
-        await settleSessionEvents();
+        await session.settlePublications();
         mocks.readMeta.mockResolvedValue(toolUseMeta);
 
         const [summary, todos] = await withRunContext(
@@ -393,7 +398,7 @@ describe('ExecutionsTool', () => {
             ],
           },
         ]);
-        await settleSessionEvents();
+        await session.settlePublications();
         mocks.readMeta.mockResolvedValue({ ...toolUseMeta, streamId });
         mocks.readConfig.mockResolvedValue(config);
         const result = await withRunContext(

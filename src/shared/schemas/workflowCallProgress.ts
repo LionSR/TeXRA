@@ -188,12 +188,10 @@ const INTERRUPTED_WORKFLOW_CALL_ERROR =
  * How a host that stopped mid-run leaves one unsettled call — the single
  * vocabulary for an interrupted card.
  *
- * Both settlements go through here: the persisted one
- * (`StreamLogStore.endRunningGroupsForStreams`, which rewrites the row on
- * disk) and the read-time repaint of a durably final run
- * (`workflowRunModel`), for the crash and deadline-skip cases the write side
- * never reaches. A transcript settled on disk and one repainted at read time
- * therefore say the same thing about the same call.
+ * Both settlements use this vocabulary: host exit publishes a canonical
+ * workflow.call fact, and workflowRunModel repaints a durably final run when
+ * a crash or expired deadline prevented that publication. Replay and the
+ * read-time view therefore describe the interrupted call consistently.
  */
 export function interruptedWorkflowCall(
   call: WorkflowCallLiveProgress,

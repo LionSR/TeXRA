@@ -7,9 +7,11 @@ import {
   AgentConfigSchema,
   ModelHandlerCompatibilityKeySchema,
   runAgent,
+  defaultSession,
 } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
 import { ExecutionIdSchema } from '@shared/schemas';
 
@@ -53,17 +55,20 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     const request = wrapped?.executionId
       ? ({ kind: 'resume', config, executionId: wrapped.executionId } as const)
       : ({ kind: 'fresh', config } as const);
-    await runAgent(request, {
-      openWorkflowOutput: openFinalOutputIfAvailable,
-      // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
-      // progress-view compile fixer); a direct main-view launch omits it and
-      // keeps the user's selected model.
-      preferHelperModel: wrapped?.preferHelperModel ?? false,
-      modelHandlerCompatibilityKey: wrapped?.modelHandlerCompatibilityKey,
-      copilotRouteOverride: wrapped?.copilotRouteOverride,
-      onRun,
-      onStreamResolved: presentLaunchedProgressStream,
-    });
+    await effectRuntime().runPromise(
+      runAgent(request, {
+        session: defaultSession(),
+        openWorkflowOutput: openFinalOutputIfAvailable,
+        // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
+        // progress-view compile fixer); a direct main-view launch omits it and
+        // keeps the user's selected model.
+        preferHelperModel: wrapped?.preferHelperModel ?? false,
+        modelHandlerCompatibilityKey: wrapped?.modelHandlerCompatibilityKey,
+        copilotRouteOverride: wrapped?.copilotRouteOverride,
+        onRun,
+        onStreamResolved: presentLaunchedProgressStream,
+      }),
+    );
   } catch (error) {
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${z.prettifyError(error)}`;

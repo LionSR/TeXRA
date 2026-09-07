@@ -20,8 +20,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
+import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript/StreamLogStore';
-import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { isObject } from '@utils/core';
 
 /**
@@ -507,7 +507,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
       };
 
       store.ensureStream(streamId);
-      const recorder = attachTranscriptRecorder(
+      const recorder = attachTestTranscriptFold(
         logger,
         store.acquireWriter(streamId, streamId),
       );

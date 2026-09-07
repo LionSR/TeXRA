@@ -9,7 +9,7 @@
  * Three rules the shape encodes:
  *  - Text is untruncated. Elision is measurement ({@link TranscriptText}),
  *    applied by the painter at its own width.
- *  - Redaction already happened at record time in `TexraTranscriptRecorder`.
+ *  - Canonical event publication and `createTranscriptFold` apply redaction.
  *    Nothing here redacts.
  *  - Model ids arrive pre-projected. `projectWorkflowCallEntry`
  *    (`@model/projectWorkflowCallEntry`) turns a `WorkflowCallProgress.model`

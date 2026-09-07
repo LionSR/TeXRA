@@ -425,21 +425,14 @@ export async function runChat(
     chatController.clearInterruptedRecovery();
     chatController.clearPendingSkills();
     session.clearRunState();
-    // StreamLogStore entries outlive resetCliState (which only clears the
-    // React/signal view). Drop them so transcript projection can't replay
-    // the cleared conversation into the fresh `<Static>` scrollback.
-    // Only this chat's conversation goes: the root run and its descendants.
-    // The view also holds every earlier run hydrated from the transcript
-    // summary; those are history, not this chat, and stay.
+    // Release this conversation's resident transcripts when their remaining
+    // readers and writers leave. Clearing the terminal does not delete history.
     const store = runtimeSession.transcripts;
     for (const streamId of descendantStreamIds(
       currentView(),
       rootStreamIdSignal.get(),
     )) {
-      store.delete(streamId).catch(() => {
-        // Best-effort: a KV failure leaves the log on disk, but the run
-        // is already torn down, nothing actionable to surface here.
-      });
+      store.requestEviction(streamId);
     }
     resetCliState(meta);
     clearTerminalScrollback();

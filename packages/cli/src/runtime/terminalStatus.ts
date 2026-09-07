@@ -1,12 +1,12 @@
 import { getExecutionStore } from '@agent/storage';
-import { runAgent } from '@agent/runtime';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { RUN_OUTCOME, type RunOutcome, STREAM_PHASE } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
 
-export type ExecuteAgentResult = Awaited<ReturnType<typeof runAgent>>;
+export type ExecuteAgentResult = AgentFlowResult;
 
 interface CliRunResultMetadata {
   readonly workingDirectory?: string;

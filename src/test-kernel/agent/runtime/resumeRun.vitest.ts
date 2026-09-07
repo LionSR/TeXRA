@@ -109,10 +109,11 @@ describe('resumeRun tool-use queue ownership', () => {
     });
     resumeToolUseFromResumeDataMock.mockReset();
     resumeToolUseFromResumeDataMock.mockImplementation(
-      async (_resume: unknown, options: ResumeToolUseFromResumeDataOptions) => {
-        options.onFollowUpConsumed?.();
-        return completed;
-      },
+      (_resume: unknown, options: ResumeToolUseFromResumeDataOptions) =>
+        Effect.sync(() => {
+          options.onFollowUpConsumed?.();
+          return completed;
+        }),
     );
   });
 
@@ -231,10 +232,9 @@ describe('resumeRun tool-use queue ownership', () => {
       const session = createSession();
       seedRecoverable(session, 'once');
       const barrier = createDeferred();
-      resumeToolUseFromResumeDataMock.mockImplementationOnce(async () => {
-        await barrier.promise;
-        return completed;
-      });
+      resumeToolUseFromResumeDataMock.mockReturnValueOnce(
+        Effect.promise(() => barrier.promise).pipe(Effect.as(completed)),
+      );
 
       const first = yield* Effect.forkChild(
         resumeRun(EXECUTION, { session, executeWorkflow }),
@@ -293,8 +293,8 @@ describe('resumeRun tool-use queue ownership', () => {
     Effect.gen(function* () {
       const session = createSession();
       seedRecoverable(session, 'keep me');
-      resumeToolUseFromResumeDataMock.mockRejectedValueOnce(
-        new Error('failed'),
+      resumeToolUseFromResumeDataMock.mockReturnValueOnce(
+        Effect.fail(new Error('failed')),
       );
 
       expect(
@@ -313,7 +313,12 @@ describe('resumeRun tool-use queue ownership', () => {
       const barrier = new Promise<never>((_resolve, reject) => {
         rejectResume = reject;
       });
-      resumeToolUseFromResumeDataMock.mockReturnValueOnce(barrier);
+      resumeToolUseFromResumeDataMock.mockReturnValueOnce(
+        Effect.tryPromise({
+          try: () => barrier,
+          catch: (error) => error,
+        }),
+      );
 
       const resuming = yield* Effect.forkChild(
         resumeRun(EXECUTION, { session, executeWorkflow }),

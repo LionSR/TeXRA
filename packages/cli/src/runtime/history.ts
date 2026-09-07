@@ -39,6 +39,7 @@ import {
 import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { initializeCliTranscriptSession } from './transcriptSession';
 import { CliUsageError } from './cliContext';
 import { isCliRunResumable, readCliResumedModel } from './toolUseResumeData';
 import {
@@ -168,6 +169,7 @@ export async function readCliHistoryDetails(
   id: ExecutionId,
   options: { includeFullConversation?: boolean } = {},
 ): Promise<CliHistoryDetails | null> {
+  const session = await initializeCliTranscriptSession();
   const store = getExecutionStore(id);
   const [
     meta,
@@ -183,8 +185,7 @@ export async function readCliHistoryDetails(
     store.readConfig(),
     store.readResultMeta(),
     store.readReport(),
-    // Transcript sidecar owns completed-run display (#7246 Decision 1).
-    readCompletedRunConversation(id),
+    effectRuntime().runPromise(readCompletedRunConversation(id, session)),
     store.readWorkspaceFiles(),
     listRunGeneratedFiles(id),
     checkpointExists(id),
@@ -283,8 +284,9 @@ type CliHistoryExportInputResult =
 export async function readCliHistoryExportInput(
   id: ExecutionId,
 ): Promise<CliHistoryExportInputResult> {
+  const session = await initializeCliTranscriptSession();
   const { meta, config, conversation, hasTranscriptEvidence, exportInput } =
-    await loadChatExportInput(id);
+    await effectRuntime().runPromise(loadChatExportInput(id, session));
   if (exportInput) return { status: 'ok', exportInput };
   if (!meta && !config && !conversation && !hasTranscriptEvidence) {
     return { status: 'not_found' };
