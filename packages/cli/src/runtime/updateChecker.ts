@@ -84,15 +84,14 @@ export function detectInstallMethod(
 
 function currentModulePath(): string {
   // A bundled or otherwise non-file module has no `file:` URL to convert.
-  // `fileURLToPath` can still throw on a `file:` URL with a non-local host
-  // or a malformed path, so keep the conversion inside a catch: this check
-  // is best-effort and must not block `chat`/`orchestrate` startup.
+  // `fileURLToPath` can still fail on a `file:` URL with a non-local host
+  // or a malformed path; fold that into the entrypoint fallback so this
+  // check stays best-effort and never blocks `chat`/`orchestrate` startup.
   if (!import.meta.url.startsWith('file:')) return readCliEntrypointPath();
-  try {
-    return fileURLToPath(import.meta.url);
-  } catch {
-    return readCliEntrypointPath();
-  }
+  return Result.getOrElse(
+    Result.try(() => fileURLToPath(import.meta.url)),
+    () => readCliEntrypointPath(),
+  );
 }
 
 export function buildUpdateCommand(method: InstallMethod): {
