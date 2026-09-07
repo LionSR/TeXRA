@@ -56,7 +56,7 @@ import {
   isNonEmptyString,
   linkAbortSignals,
 } from '@utils/core';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { previewLabel } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -599,7 +599,7 @@ const launchClaudeAgentSession = Effect.fn(
     findClaudeBinaryPath(),
   );
   const agentConfig = config.buildClaudeAgentConfig(input.prompt);
-  const preview = truncateWithEllipsis(input.prompt, 60);
+  const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
     parentStreamId,

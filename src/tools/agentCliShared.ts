@@ -48,7 +48,7 @@ import {
 import { executed } from '@tools/core/result';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { previewLabel } from '@utils/text/stringUtils';
 
 import {
   childStreamDescription,
@@ -183,7 +183,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       );
     }
 
-    const preview = truncateWithEllipsis(prompt, 60);
+    const preview = previewLabel(prompt);
     // A queued follow-up whose wake failed is still queued: it is delivered
     // when the agent is resumed, so the caller must not offer it again.
     const wakeFailed = result.status === 'queued' && result.wake === 'failed';

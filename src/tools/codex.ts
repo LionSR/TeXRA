@@ -47,7 +47,7 @@ import {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { previewLabel } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -527,7 +527,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   const config = (yield* agentCliCall(() => getCodexConfig())).buildCodexConfig(
     input.prompt,
   );
-  const preview = truncateWithEllipsis(input.prompt, 60);
+  const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
     parentStreamId,
