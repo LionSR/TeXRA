@@ -24,7 +24,9 @@ export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
   await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
   const roster = createWorkspaceAgentRosterController();
   const cwd = workspaceRoots().workspace;
-  const config = cwd ? await loadWorkspaceCliConfig(cwd) : undefined;
+  const config = cwd
+    ? await effectRuntime().runPromise(loadWorkspaceCliConfig(cwd))
+    : undefined;
   return {
     ...roster.snapshot(),
     defaultChatAgent: resolveConfiguredAgent(config?.values, 'chat'),
