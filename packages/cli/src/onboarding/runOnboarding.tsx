@@ -35,7 +35,7 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { platform } from '@platform/platform';
+import type { StateStore } from '@platform/interfaces';
 import { effectRuntime } from '@platform/processRuntime';
 import {
   backfillFirstRunDone,
@@ -59,6 +59,7 @@ import { saveProviderApiKey } from '../runtime/providerApiKey';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
+import type { CliPlatformServices } from '../runtime/initPlatform';
 
 /**
  * Human-facing "we stored your key here" line. Naming the exact secret entry
@@ -128,6 +129,7 @@ interface OnboardingResolution extends CliOnboardingResult {
  * emitting anything.
  */
 export async function maybeRunCliOnboarding(
+  services: CliPlatformServices,
   context: OnboardingGateContext,
 ): Promise<CliOnboardingResult> {
   // context.* carries the parsed intent (headless / non-TTY / dumb); the final
@@ -137,9 +139,9 @@ export async function maybeRunCliOnboarding(
   if (interactiveTerminalFailure(context) || !process.stdout.isTTY) {
     return NO_ONBOARDING_RESULT;
   }
-  const globalState = platform().globalState;
+  const { globalState } = services;
   const hasCredential = await hasUsableSetupCredential(
-    platform().secrets,
+    services.secrets,
     credentialLog.warn,
   );
   // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
@@ -197,6 +199,7 @@ export async function maybeRunCliOnboarding(
     return NO_ONBOARDING_RESULT;
   }
   return runOnboardingFlow({
+    globalState,
     firstRun: true,
     colorEnabled: context.stdoutColorEnabled,
   });
@@ -210,13 +213,19 @@ export async function maybeRunCliOnboarding(
  * rejects headless before calling this.
  */
 export async function runCliOnboarding(
+  services: CliPlatformServices,
   colorEnabled = true,
 ): Promise<CliOnboardingResult> {
   if (!process.stdout.isTTY) return NO_ONBOARDING_RESULT;
-  return runOnboardingFlow({ firstRun: false, colorEnabled });
+  return runOnboardingFlow({
+    globalState: services.globalState,
+    firstRun: false,
+    colorEnabled,
+  });
 }
 
 async function runOnboardingFlow(options: {
+  readonly globalState: StateStore;
   readonly firstRun: boolean;
   readonly colorEnabled?: boolean;
 }): Promise<CliOnboardingResult> {
@@ -250,7 +259,7 @@ async function runOnboardingFlow(options: {
     // global-state write fails (read-only home, permissions), tell the user
     // rather than silently re-prompting later with no explanation.
     try {
-      await setOnboardingDeclined(platform().globalState, true);
+      await setOnboardingDeclined(options.globalState, true);
     } catch {
       writeTextStderr(
         "Note: couldn't save your choice, so you may be asked again next time.",
@@ -261,7 +270,7 @@ async function runOnboardingFlow(options: {
     // skipped, then configured via `texra setup` (which bypasses the gate), then
     // signed out would have the stale flag suppress onboarding and land back on
     // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
-    await setOnboardingDeclined(platform().globalState, false).catch(
+    await setOnboardingDeclined(options.globalState, false).catch(
       (error: unknown) =>
         warnOnboardingFailure('Clearing the stale skip flag', error),
     );

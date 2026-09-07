@@ -26,7 +26,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { createLog } from '@logger/logUtils';
 import type { DisposableStore } from '@platform/disposable';
-import { platform } from '@platform/platform';
+import type { LifecycleHost } from '@platform/interfaces';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { StreamTabId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
@@ -73,6 +73,12 @@ interface SessionExitControllerContext {
   readonly ink: InkInstance;
   /** Mutable run-state record shared with the rest of the session. */
   readonly session: TuiSession;
+  /**
+   * The platform lifecycle host `runChat` received from the CLI composition
+   * root — these exit paths call `process.exit()` directly, so they run the
+   * shutdown sequence themselves rather than leaving it to `bin/texra.ts`.
+   */
+  readonly lifecycle: LifecycleHost;
   /** `context.commandName` — names the resume command in the exit hint. */
   readonly commandName: string;
   /** `context.cwd` — the launch directory shown in the resume hint. */
@@ -174,7 +180,7 @@ export function createSessionExitController(
   // is idempotent-safe to call again, so the normal return path can still
   // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
-    runCliPlatformShutdownSequence(platform().lifecycle);
+    runCliPlatformShutdownSequence(ctx.lifecycle);
   // Drain artifact writes and canonical event publication before shutdown.
   // Platform shutdown then settles executions whose leases are still held,
   // including the WAITING flow whose checkpoint this exit preserves.

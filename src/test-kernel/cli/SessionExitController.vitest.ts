@@ -5,6 +5,7 @@ import { createSessionExitController } from '@cli/chat/tui/sessionExitController
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { DisposableStore } from '@platform/disposable';
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const mocks = vi.hoisted(() => ({
@@ -48,10 +49,6 @@ vi.mock('@logger/logUtils', async (importOriginal) => {
   };
 });
 
-vi.mock('@platform/platform', () => ({
-  platform: () => ({ lifecycle: {} }),
-}));
-
 describe('chat TUI session exit controller', () => {
   beforeAll(bindTestSessionView);
   beforeEach(() => {
@@ -82,6 +79,7 @@ describe('chat TUI session exit controller', () => {
         cleanup: vi.fn(),
       },
       session,
+      lifecycle: createLifecycleHost(),
       commandName: 'texra',
       cwd: '/tmp/project',
       disposables: new DisposableStore(),
