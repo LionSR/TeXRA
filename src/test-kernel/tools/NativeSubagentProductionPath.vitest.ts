@@ -48,6 +48,7 @@ import {
 
 // Local imports - shared/runtime boundaries
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
 import {
@@ -155,13 +156,15 @@ async function resumePersistedStream(
   const executionId = streamId.slice(
     streamId.lastIndexOf('#') + 1,
   ) as ExecutionId;
-  const resumed = await resumeRun(executionId, {
-    session,
-    recovery,
-    executeWorkflow: async () => {
-      throw new Error('Workflow resume is not part of this fixture.');
-    },
-  });
+  const resumed = await effectRuntime().runPromise(
+    resumeRun(executionId, {
+      session,
+      recovery,
+      executeWorkflow: async () => {
+        throw new Error('Workflow resume is not part of this fixture.');
+      },
+    }),
+  );
   completedResumes.push(streamId);
   return 'started' in resumed && resumed.delivered;
 }

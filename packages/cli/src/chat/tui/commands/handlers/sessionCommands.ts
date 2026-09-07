@@ -32,12 +32,8 @@ import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { effectRuntime } from '@platform/processRuntime';
 import { MESSAGE_TYPES, type StreamTabId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
-import {
-  StreamSnapshotPreloadError,
-  type StreamSnapshotStore,
-} from '@transcript';
-import type { WorkPlanProvenance } from '@transcript';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { StreamSnapshotStore } from '@transcript';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
 import { listSlashCommands } from '../slashRegistry';
@@ -46,7 +42,7 @@ import { type SlashCommandContext } from './slashContext';
 /** What the work-plan reader loads and reads from the snapshot store. */
 export type StreamArtifactReader = Pick<
   StreamSnapshotStore,
-  'preload' | 'getWorkPlan' | 'workPlanProvenance'
+  'preload' | 'getWorkPlan'
 >;
 
 export function showCliSlashCommandHelp(): void {
@@ -63,39 +59,6 @@ export function showCliGoalModeHelp(): void {
   openInfoPane('/goal', GOAL_MODE_HELP);
 }
 
-type StreamArtifactHydrationOutcome =
-  | { readonly kind: 'complete' }
-  | {
-      readonly kind: 'partial';
-      readonly workPlanProvenance: WorkPlanProvenance;
-      readonly error: unknown;
-    }
-  | { readonly kind: 'failed'; readonly error: unknown };
-
-/** Load a stream's artifact tier from disk so the reader can vouch for it. */
-function hydrateStreamArtifacts(
-  store: StreamArtifactReader,
-  streamId: StreamTabId,
-): Effect.Effect<StreamArtifactHydrationOutcome> {
-  return Effect.tryPromise({
-    try: () => store.preload([streamId], { reportArtifactAuthority: true }),
-    catch: (cause) => ensureError(cause),
-  }).pipe(
-    Effect.match({
-      onFailure: (error): StreamArtifactHydrationOutcome =>
-        error instanceof StreamSnapshotPreloadError &&
-        error.streamId === streamId
-          ? {
-              kind: 'partial',
-              workPlanProvenance: error.workPlanProvenance,
-              error,
-            }
-          : { kind: 'failed', error },
-      onSuccess: (): StreamArtifactHydrationOutcome => ({ kind: 'complete' }),
-    }),
-  );
-}
-
 export async function showCliWorkPlan(
   snapshots: StreamArtifactReader = defaultSession().snapshots,
 ): Promise<void> {
@@ -107,44 +70,26 @@ export async function showCliWorkPlan(
   }
   clearTransientNotice();
   const request = beginWorkPlanReaderRequest(streamId);
-  const outcome = await effectRuntime().runPromise(
-    hydrateStreamArtifacts(snapshots, streamId),
-  );
-  if (!workPlanReaderRequestIsCurrent(request)) return;
-  if (outcome.kind === 'failed') {
-    if (!cancelWorkPlanReaderRequest(request)) return;
-    setTransientNotice(
-      `Could not load workflow artifacts: ${toErrorMessage(outcome.error)}`,
-    );
-    return;
-  }
-  const workPlan = snapshots.getWorkPlan(streamId);
-  const provenance =
-    outcome.kind === 'complete'
-      ? { plan: true, todos: true }
-      : outcome.workPlanProvenance;
-  const { plan: planIsAuthoritative, todos: todosAreAuthoritative } =
-    provenance;
-  if (
-    (planIsAuthoritative && workPlan.plan !== null) ||
-    (todosAreAuthoritative && workPlan.todos.length > 0)
-  ) {
-    finishWorkPlanReaderRequest(
-      request,
-      outcome.kind === 'partial' ? provenance : undefined,
-    );
-    return;
-  }
-  if (!cancelWorkPlanReaderRequest(request)) return;
-  if (
-    outcome.kind === 'complete' ||
-    (planIsAuthoritative && todosAreAuthoritative)
-  ) {
-    setTransientNotice('The focused session has no work plan.');
-    return;
-  }
-  setTransientNotice(
-    `Could not load workflow artifacts: ${toErrorMessage(outcome.error)}`,
+  await effectRuntime().runPromise(
+    snapshots.preload([streamId]).pipe(
+      Effect.match({
+        onFailure: (error) => {
+          if (!cancelWorkPlanReaderRequest(request)) return;
+          setTransientNotice(
+            `Could not load workflow artifacts: ${toErrorMessage(error)}`,
+          );
+        },
+        onSuccess: () => {
+          if (!workPlanReaderRequestIsCurrent(request)) return;
+          const workPlan = snapshots.getWorkPlan(streamId);
+          if (workPlan.plan !== null || workPlan.todos.length > 0) {
+            finishWorkPlanReaderRequest(request);
+          } else if (cancelWorkPlanReaderRequest(request)) {
+            setTransientNotice('The focused session has no work plan.');
+          }
+        },
+      }),
+    ),
   );
 }
 

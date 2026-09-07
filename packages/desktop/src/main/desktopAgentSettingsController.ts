@@ -242,10 +242,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private async postAgentSelectionData(): Promise<void> {
+    await effectRuntime().runPromise(this.registry.loadAgents());
     this.renderer.postToRenderer(
-      await buildAgentSelectionMessage({
-        loadAgents: () =>
-          effectRuntime().runPromise(this.registry.loadAgents()),
+      buildAgentSelectionMessage({
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
         getCustomAgentScanIssues,
       }),

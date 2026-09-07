@@ -15,7 +15,15 @@ import '@test/support/sessionGraphTestSetup';
 
 // Node imports
 import * as childProcess from 'node:child_process';
-import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import * as os from 'node:os';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,7 +42,9 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { closeSession, openSession } from '@agent/runtime/sessionGraph';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { databaseLayer } from '@controllers/session/Database';
+import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { sessionRequests } from '@controllers/session/SessionRequests';
 import {
   LocalRuntimeSource,
@@ -213,6 +223,94 @@ describe('session events and view', () => {
       }).pipe(Effect.provide(graph([]))),
   );
 
+  it.effect(
+    'reparents an answered inquiry atomically before old-parent deletion',
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const oldParent = qualifyAggregateId('stream', STREAM);
+        const newParentId = 'new-inquiry-parent' as StreamTabId;
+        const newParent = qualifyAggregateId('stream', newParentId);
+        const inquiry = qualifyAggregateId('inquiry', 'ei_012345abcdef');
+        const opened = {
+          type: 'inquiryThreadUpdated' as const,
+          aggregateId: inquiry,
+          threadId: 'ei_012345abcdef',
+          parentStreamId: STREAM,
+          status: 'open' as const,
+          lastQuestionPreview: 'Which boundary condition applies?',
+          lastActivityIso: '2026-09-07T12:00:00.000Z',
+          turnCount: 1,
+        };
+        yield* db.appendAll([
+          runStart,
+          {
+            ...runStart,
+            aggregateId: newParent,
+            executionId: 'aabbccdd1122' as ExecutionId,
+          },
+          opened,
+        ]);
+        expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
+          parentId: oldParent,
+          ownerId: null,
+        });
+        const invalid = yield* Effect.exit(
+          db.appendAll([{ ...opened, parentStreamId: newParentId }]),
+        );
+        expect(invalid._tag).toBe('Failure');
+        expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
+          parentId: oldParent,
+          ownerId: null,
+        });
+        expect(
+          (yield* db.readAggregate(inquiry, 0)).map((row) => row.seq),
+        ).toEqual([1]);
+        yield* db.appendAll([{ ...opened, status: 'answered' }]);
+        yield* db.releaseClaims([newParent]);
+        expect(
+          (yield* Effect.exit(
+            db.appendAll([
+              { ...opened, parentStreamId: newParentId, turnCount: 2 },
+            ]),
+          ))._tag,
+        ).toBe('Failure');
+        expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
+          parentId: oldParent,
+          ownerId: null,
+        });
+        expect((yield* db.readAggregate(inquiry, 0)).at(-1)?.seq).toBe(2);
+        yield* db.acquireClaims([newParent]);
+        yield* db.appendAll([
+          { ...opened, parentStreamId: newParentId, turnCount: 2 },
+        ]);
+        expect((yield* db.aggregateState([inquiry]))[0]).toMatchObject({
+          parentId: newParent,
+          ownerId: null,
+        });
+        expect(
+          (yield* db.readAggregate(inquiry, 0)).map((row) => row.seq),
+        ).toEqual([1, 2, 3]);
+        yield* db.removeStream(
+          oldParent,
+          'single',
+          (yield* db.aggregateState([oldParent]))[0]!.startCommit!,
+        );
+        expect((yield* db.aggregateState([inquiry]))[0]?.closed).toBe(false);
+        yield* db.removeStream(
+          newParent,
+          'single',
+          (yield* db.aggregateState([newParent]))[0]!.startCommit!,
+        );
+        expect((yield* db.aggregateState([inquiry]))[0]?.closed).toBe(true);
+        expect(
+          (yield* Effect.exit(
+            db.appendAll([{ ...opened, status: 'answered' }]),
+          ))._tag,
+        ).toBe('Failure');
+      }).pipe(Effect.provide(graph([]))),
+  );
+
   it.effect('publishes complete replay and finite live batches in order', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;
@@ -367,8 +465,16 @@ describe('session events and view', () => {
     }).pipe(
       Effect.provide(
         graph([
-          { ...runStart, aggregateId: qualifyAggregateId('stream', OLDER) },
-          { ...runStart, aggregateId: qualifyAggregateId('stream', NEWER) },
+          {
+            ...runStart,
+            executionId: 'ab12ce',
+            aggregateId: qualifyAggregateId('stream', OLDER),
+          },
+          {
+            ...runStart,
+            executionId: 'ab12cf',
+            aggregateId: qualifyAggregateId('stream', NEWER),
+          },
           {
             type: 'updateStreamDescription',
             aggregateId: qualifyAggregateId('stream', NEWER),
@@ -469,7 +575,11 @@ describe('Sessions owner', () => {
         try {
           session.publish([
             runStart,
-            { ...runStart, aggregateId: qualifyAggregateId('stream', OLDER) },
+            {
+              ...runStart,
+              executionId: 'ab12ce',
+              aggregateId: qualifyAggregateId('stream', OLDER),
+            },
             {
               type: 'stream.removed',
               aggregateId: qualifyAggregateId('stream', STREAM),
@@ -616,6 +726,7 @@ describe('the C1 event table and the C6 publisher', () => {
 
   const olderStart: SessionEventDraft = {
     ...runStart,
+    executionId: 'ab12ce',
     aggregateId: qualifyAggregateId('stream', OLDER),
   };
 
@@ -678,6 +789,17 @@ describe('the C1 event table and the C6 publisher', () => {
         // One wake per committed batch, independent of its event ordinal.
         expect(yield* SubscriptionRef.get(db.level)).toBe(2);
         expect(yield* db.currentCommit).toBe(4);
+        // An execution has one owning stream. A conflicting creation rolls
+        // back its stream row as well as its event and sequence allocation.
+        const conflicting = qualifyAggregateId('stream', NEWER);
+        expect(
+          (yield* Effect.flip(
+            db.appendAll([{ ...runStart, aggregateId: conflicting }]),
+          ))._tag,
+        ).toBe('DatabaseWriteFailed');
+        expect(yield* db.aggregateState([conflicting])).toEqual([]);
+        expect(yield* db.currentCommit).toBe(4);
+        expect(yield* SubscriptionRef.get(db.level)).toBe(2);
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
@@ -815,7 +937,7 @@ describe('the C1 event table and the C6 publisher', () => {
             ownerId: SELF,
             at: now,
             data: JSON.stringify({
-              executionId: EXECUTION,
+              executionId: 'ab12ce',
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
               category: AgentCategory.ToolUse,
@@ -823,9 +945,23 @@ describe('the C1 event table and the C6 publisher', () => {
             }),
           },
         ]);
-        // A sequence row per aggregate: an independent root, open (C9's
-        // closure is stage 6), claimed by the same first-event transaction.
+        // Creation claims each stream and its dependent execution atomically.
+        // An execution has no events until its first own append.
         expect(observed.sequences).toEqual([
+          {
+            aggregateId: qualifyAggregateId('execution', EXECUTION),
+            seq: 0,
+            ownerId: SELF,
+            parentId: qualifyAggregateId('stream', STREAM),
+            closed: 0,
+          },
+          {
+            aggregateId: qualifyAggregateId('execution', 'ab12ce'),
+            seq: 0,
+            ownerId: SELF,
+            parentId: qualifyAggregateId('stream', OLDER),
+            closed: 0,
+          },
           {
             aggregateId: qualifyAggregateId('stream', STREAM),
             seq: 1,
@@ -1116,16 +1252,16 @@ describe('the C1 event table and the C6 publisher', () => {
             turnCount: 1,
           },
         ]);
-        // Seed the C9 ownership edge. Inquiry reparenting is a separate writer
-        // operation; this regression exercises deletion of the resulting graph.
+        // Include another execution owned by this stream in the recursive closure.
         yield* Effect.sync(() => {
           const raw = new DatabaseSync(join(storage, 'texra.db'));
           try {
             raw
               .prepare(
-                'UPDATE event_sequence SET parent_id = ? WHERE aggregate_id = ?',
+                `INSERT INTO event_sequence
+              (aggregate_id, seq, owner_id, parent_id) VALUES (?, 0, ?, ?)`,
               )
-              .run(root, inquiry);
+              .run(qualifyAggregateId('execution', 'cd34ef'), SELF, root);
           } finally {
             raw.close();
           }
@@ -1154,10 +1290,27 @@ describe('the C1 event table and the C6 publisher', () => {
           const second = yield* Database;
           yield* second.acquireClaims([inquiry]);
           yield* refusesDeletion;
+          expect(
+            yield* Effect.flip(
+              first.removeStream(root, 'bulk', initial[0]!.commit),
+            ),
+          ).toMatchObject({
+            _tag: 'DatabaseWriteFailed',
+          });
+          expect(yield* first.readAll(0)).toEqual(initial);
           yield* second.releaseClaims([inquiry]);
         }).pipe(Effect.provide(substrate(storage, OTHER)));
-        yield* first.acquireClaims([inquiry]);
-        const committed = yield* first.appendAll([waiting, removal]);
+        const committed = [
+          ...(yield* first.appendAll([waiting])),
+          ...(yield* first.removeStream(root, 'bulk', initial[0]!.commit)),
+        ];
+        expect(committed.at(-1)).toMatchObject({
+          type: 'stream.removed',
+          executionIds: [EXECUTION, 'cd34ef'],
+        });
+        expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(
+          committed.at(-1),
+        );
         expect(committed.map((row) => [row.seq, row.commit])).toEqual([
           [2, 3],
           [3, 4],
@@ -1167,6 +1320,113 @@ describe('the C1 event table and the C6 publisher', () => {
             (row) => row.closed,
           ),
         ).toBe(true);
+        const tombstone = committed.at(-1)!;
+        const cleanupError = new Error(
+          'The generated directory is not writable.',
+        );
+        expect(
+          yield* Effect.flip(
+            first.collectDeletion(root, tombstone.commit, () =>
+              Effect.gen(function* () {
+                yield* Effect.gen(function* () {
+                  const second = yield* Database;
+                  const remove = vi.fn(() => Effect.void);
+                  expect(
+                    yield* Effect.result(
+                      second.collectDeletion(root, tombstone.commit, remove),
+                    ),
+                  ).toMatchObject({
+                    _tag: 'Failure',
+                    failure: { _tag: 'DatabaseWriteFailed' },
+                  });
+                  expect(remove).not.toHaveBeenCalled();
+                }).pipe(Effect.provide(substrate(storage, OTHER)));
+                return yield* Effect.fail(cleanupError);
+              }),
+            ),
+          ),
+        ).toBe(cleanupError);
+        expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(tombstone);
+        // Losing the claim during file removal preserves the database record.
+        expect(
+          yield* Effect.flip(
+            first.collectDeletion(root, tombstone.commit, () =>
+              first.releaseClaims([root]),
+            ),
+          ),
+        ).toMatchObject({ _tag: 'DatabaseWriteFailed' });
+        expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(tombstone);
+        const unrelated = {
+          ...runStart,
+          aggregateId: qualifyAggregateId('stream', NEWER),
+          executionId: 'ef56ab',
+        };
+        yield* first.collectDeletion(root, tombstone.commit, (ids) =>
+          Effect.gen(function* () {
+            expect(ids).toEqual([EXECUTION, 'cd34ef']);
+            // Cleanup holds its root claim, not the database write permit.
+            // Unrelated runs remain writable while generated files are removed.
+            yield* first.appendAll([unrelated]);
+          }),
+        );
+        expect(
+          yield* first.aggregateState([
+            root,
+            inquiry,
+            qualifyAggregateId('execution', EXECUTION),
+            qualifyAggregateId('execution', 'cd34ef'),
+          ]),
+        ).toEqual([]);
+        expect(
+          (yield* first.readAll(0)).map((event) => event.aggregateId),
+        ).toEqual([unrelated.aggregateId]);
+        const replacement = yield* first.appendAll([runStart]);
+        expect(
+          (yield* Effect.flip(
+            first.removeStream(root, 'single', initial[0]!.commit),
+          ))._tag,
+        ).toBe('DatabaseWriteFailed');
+        expect(yield* first.readAggregate(root, 0)).toEqual(replacement);
+        expect((yield* first.aggregateState([root]))[0]?.closed).toBe(false);
+        // The production worker removes the recorded generated directory,
+        // never a sibling or a linked file outside that directory.
+        const runs = join(storage, WORKSPACE_STORAGE_LAYOUT.runs);
+        const outside = join(storage, 'outside-runs');
+        yield* Effect.sync(() => {
+          mkdirSync(outside);
+          writeFileSync(join(outside, 'keep.tex'), 'outside');
+          symlinkSync(outside, runs, 'dir');
+        });
+        yield* first.appendAll([
+          { type: 'stream.removed', aggregateId: unrelated.aggregateId },
+        ]);
+        yield* collectPendingDeletions(first, storage);
+        expect(existsSync(join(outside, 'keep.tex'))).toBe(true);
+        expect(
+          yield* first.aggregateState([unrelated.aggregateId]),
+        ).toMatchObject([{ closed: true, ownerId: null }]);
+        yield* Effect.sync(() => rmSync(runs));
+        const generated = join(
+          storage,
+          WORKSPACE_STORAGE_LAYOUT.runs,
+          'ef56ab',
+        );
+        const sibling = join(storage, WORKSPACE_STORAGE_LAYOUT.runs, 'fe78bc');
+        const accepted = join(storage, 'accepted.tex');
+        yield* Effect.sync(() => {
+          mkdirSync(generated, { recursive: true });
+          mkdirSync(sibling);
+          writeFileSync(join(generated, 'output.tex'), 'generated');
+          writeFileSync(accepted, 'accepted workspace output');
+          symlinkSync(accepted, join(generated, 'reference.tex'));
+        });
+        yield* collectPendingDeletions(first, storage);
+        expect(existsSync(generated)).toBe(false);
+        expect(existsSync(sibling)).toBe(true);
+        expect(existsSync(accepted)).toBe(true);
+        expect(yield* first.aggregateState([unrelated.aggregateId])).toEqual(
+          [],
+        );
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
@@ -1219,6 +1479,26 @@ describe('the C1 event table and the C6 publisher', () => {
             'DatabaseWriteFailed',
           );
           expect((yield* second.appendAll([waiting]))[0]?.commit).toBe(3);
+          const otherRoot = qualifyAggregateId('stream', OLDER);
+          const otherStart = (yield* first.aggregateState([otherRoot]))[0]!
+            .startCommit!;
+          for (const mode of ['bulk', 'automatic'] as const) {
+            expect(
+              yield* Effect.flip(
+                first.removeStream(otherRoot, mode, otherStart),
+              ),
+            ).toMatchObject({
+              _tag: 'DatabaseWriteFailed',
+              cause: { _tag: 'DatabaseClaimRefused', verdict: 'unprovable' },
+            });
+          }
+          expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
+            false,
+          );
+          yield* first.removeStream(otherRoot, 'single', otherStart);
+          expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
+            true,
+          );
         }).pipe(Effect.provide(substrate(storage, OTHER)));
       }).pipe(Effect.provide(substrate(storage)));
     },

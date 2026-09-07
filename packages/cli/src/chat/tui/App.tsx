@@ -414,11 +414,6 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <WorkPlanReader
             availableRows={availableRows}
-            provenanceAtOpen={
-              foregroundReader.loading === true
-                ? undefined
-                : foregroundReader.provenanceAtOpen
-            }
             loading={foregroundReader.loading === true}
             onClose={closeForegroundReader}
             streamId={foregroundReader.streamId}

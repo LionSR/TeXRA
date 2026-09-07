@@ -547,4 +547,4 @@ Breaking existing functionality while extracting components.
 - [Phase 5 PRD](./2026-01-25-prd-progressview-phase5.md) - Completed regression fixes
 - [Lit Documentation](https://lit.dev/)
 - [ProgressView patterns](./2026-01-24-prd-progressview-phase3.md) - Reference implementation
-- [ProgressViewState.ts](../../src/controllers/progressView/backend/ProgressViewState.ts) - Zod schema pattern reference
+- [ProgressViewState.ts](https://github.com/LionSR/TeXRA/blob/47840c3990b0230021fa2cd88dd8d8944732c175/src/controllers/progressView/backend/ProgressViewState.ts) - Zod schema pattern reference

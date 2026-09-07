@@ -1292,12 +1292,6 @@
       "name": "selectSetupCredentialModelExcludingOpenRouter"
     },
     {
-      "file": "src/controllers/session/Database.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/controllers/session/Database.ts"
-    },
-    {
       "file": "src/controllers/settingsView/LatexToolingController.ts",
       "category": "production-dead",
       "kind": "types",

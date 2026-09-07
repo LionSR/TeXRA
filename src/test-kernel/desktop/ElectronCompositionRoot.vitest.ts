@@ -119,19 +119,9 @@ describe('desktop composition root and launch environment', () => {
     expect(source).not.toContain('createDesktopDiffHostDisposeQueue');
     expectOrderedAfter(
       source,
-      'const current = desktopDiffHost.dispose().catch(reportBackgroundError)',
-      ['diffHostDisposeQueue.add(() => current)'],
+      'const settled = awaitOrReport(desktopDiffHost.dispose())',
+      ['diffHostDisposeQueue.add(() => settled)'],
     );
-  });
-
-  it('imports process-store initialization directly from its owner', async () => {
-    const source = await readFile(
-      desktopSourcePath('main', 'desktopPapers.ts'),
-      'utf8',
-    );
-    expect(
-      namedImportSources(source, 'initializeDesktopProcessStores'),
-    ).toContain('./desktopProcessStores.js');
   });
 
   it('keeps platform initialization in the Electron composition root', async () => {

@@ -80,6 +80,11 @@ export interface LanguageModelRequestOptions {
   readonly justification?: string;
   readonly tools?: readonly LanguageModelToolDefinition[];
   readonly toolMode?: 'auto' | 'required';
+  /**
+   * Max completion tokens. Mapped to the editor API's `modelOptions.max_tokens`,
+   * which Copilot accepts as a number.
+   */
+  readonly maxTokens?: number;
 }
 
 export type LanguageModelResponsePart =

@@ -15,11 +15,7 @@ export {
   STREAM_LOG_SUMMARIES_DIR,
 } from './StreamLogStore';
 export { createRunTrace, type RunTrace } from './runTrace';
-export {
-  StreamSnapshotPreloadError,
-  StreamSnapshotStore,
-  type WorkPlanProvenance,
-} from './StreamSnapshotStore';
+export { StreamSnapshotStore } from './StreamSnapshotStore';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
 export type { TraceDocument } from './traceDocumentSchema';
 export {

@@ -5,9 +5,16 @@ import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
   CommitOrdinal,
+  ExecutionId,
+  OwnerId,
   SessionEvent,
   SessionEventDraft,
 } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+/** Only an explicit single-run deletion may replace an unprovable owner. */
+export const DeletionModeSchema = z.enum(['single', 'bulk', 'automatic']);
+export type DeletionMode = z.infer<typeof DeletionModeSchema>;
 
 /** C7's current claim and existence, independent of historical event writers. */
 export const AggregateStateSchema = z.object({
@@ -38,11 +45,21 @@ export class DatabaseWriteFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
+/** A claim cannot be acquired under the requested deletion policy. */
+export class DatabaseClaimRefused extends Data.TaggedError(
+  'DatabaseClaimRefused',
+)<{
+  readonly ownerId: OwnerId;
+  readonly verdict: 'alive' | 'unprovable';
+}> {}
+
 /** A query failed or encountered an invalid persisted row. */
 export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   readonly path: string;
   readonly cause: unknown;
-}> {}
+}> {
+  override readonly message = toErrorMessage(this.cause);
+}
 
 export class Database extends Context.Service<
   Database,
@@ -88,6 +105,27 @@ export class Database extends Context.Service<
     readonly acquireClaims: (
       ids: readonly AggregateId[],
     ) => Effect.Effect<void, DatabaseReadFailed | DatabaseWriteFailed>;
+    /** C9: recheck the owning tree, acquire its claims, append the tombstone
+     *  and close all dependents in one transaction after liveness proofs.
+     *  The recorded start identifies the lifetime admitted by the caller. */
+    readonly removeStream: (
+      id: AggregateId,
+      mode: DeletionMode,
+      expectedStartCommit: CommitOrdinal,
+    ) => Effect.Effect<
+      readonly SessionEvent[],
+      DatabaseReadFailed | DatabaseWriteFailed
+    >;
+    /** C9: claim a closed root, clean its recorded executions, then cascade
+     *  only if the same tombstone and claim still hold. Cleanup failure keeps
+     *  the deletion record. The callback runs outside the SQLite transaction. */
+    readonly collectDeletion: (
+      id: AggregateId,
+      tombstoneCommit: CommitOrdinal,
+      cleanup: (
+        executionIds: readonly ExecutionId[],
+      ) => Effect.Effect<void, Error>,
+    ) => Effect.Effect<void, Error>;
     /** Clear only this process's claims, in one transaction. */
     readonly releaseClaims: (
       ids: readonly AggregateId[],

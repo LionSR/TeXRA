@@ -40,11 +40,6 @@ export type ReadonlyRoundIndexed<T> = {
   readonly [round: number]: readonly T[];
 };
 
-/** Shared empty view for a stream with no rounds recorded yet. */
-export const EMPTY_ROUND_INDEXED: ReadonlyRoundIndexed<never> = Object.freeze(
-  {},
-);
-
 /**
  * Coerces and validates round keys from string record keys: non-negative
  * safe integers only. Rounds never go negative (round 0 is the first), and
@@ -195,4 +190,25 @@ export function parsePersistedRoundIndexed<T>(
     if (items.length > 0) rounds[round.data] = items;
   }
   return rounds;
+}
+
+/**
+ * Round-keyed merge shared by the session view and stream-state folds: an
+ * empty round drops the key for files and compile failures (the tab shows no
+ * empty round), and overwrites for missing outputs (an empty list clears the
+ * round's missing set).
+ */
+export function mergeRounds<T>(
+  current: RoundIndexed<T>,
+  incoming: RoundIndexed<T>,
+  emptyRound: 'drop' | 'keep',
+): RoundIndexed<T> {
+  const next: RoundIndexed<T> = { ...current };
+  for (const key of Object.keys(incoming)) {
+    const round = Number(key);
+    const files = incoming[round];
+    if (emptyRound === 'drop' && files.length === 0) delete next[round];
+    else next[round] = files;
+  }
+  return next;
 }
