@@ -45,7 +45,10 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { createProcessSession } from '@test/support/sessionTestUtils';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 
 import { testModelCell } from './modelCellTestUtils';
 import { reflectionFlowShared } from './progressTestUtils';
@@ -308,6 +311,8 @@ async function runPersistedFlow(
 ) {
   const { attachment } = options;
   const session = options.session ?? createProcessSession();
+  publishTestRunStart(session, streamId);
+  await session.settlePublications();
   const config = options.config ?? resume?.agentConfig ?? CONFIG;
   const userVarChannels = resume?.shared.stateSlices.userChannels ?? {
     MODEL: config.model,

@@ -199,6 +199,8 @@ export class SessionHandle {
    */
   private readonly statusPorts = new Set<(event: StatusEvent) => void>();
   private disposed = false;
+  private readonly publications = new Set<Promise<readonly SessionEvent[]>>();
+  private readonly publicationFailures: unknown[] = [];
   /** This session's execution-keyed trace flushers. */
   readonly flushers: Map<string, RunTraceFlushEntry>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
@@ -411,6 +413,7 @@ export class SessionHandle {
       await validateOwnedExecutionLease(executionId);
       await this.flushArtifacts(executionId);
       await afterArtifactsDrained?.();
+      await this.settlePublications();
     } catch (error) {
       drainError = error;
       logger.warn(
@@ -572,15 +575,39 @@ export class SessionHandle {
    */
   publish(events: readonly SessionEventDraft[]): void {
     if (this.disposed || events.length === 0) return;
-    effectRuntime().runFork(
+    const publication = effectRuntime().runPromise(
       this.graph.publish(events).pipe(
         Effect.tapDefect((cause) =>
           Effect.sync(() => {
             logger.error('Session publication failed', { data: cause });
-          }),
+          }).pipe(Effect.ignoreCause),
         ),
       ),
     );
+    this.publications.add(publication);
+    void publication.then(
+      () => {
+        this.publications.delete(publication);
+      },
+      (cause: unknown) => {
+        this.publications.delete(publication);
+        this.publicationFailures.push(cause);
+      },
+    );
+  }
+
+  /** Await owned publications and their committed status/result consumers. */
+  async settlePublications(): Promise<void> {
+    await Promise.allSettled([...this.publications]);
+    throwAggregated(
+      this.publicationFailures.splice(0),
+      'Session publication failed',
+    );
+  }
+
+  /** Stream existence from the committed view, after publication settlement. */
+  hasStream(streamId: StreamTabId): boolean {
+    return SubscriptionRef.getUnsafe(this.view).streams.has(streamId);
   }
 
   /** Apply a durable fact delivered by the root's ordered table tail. */

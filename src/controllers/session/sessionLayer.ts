@@ -21,6 +21,7 @@
  */
 import {
   Context,
+  Deferred,
   Duration,
   Effect,
   Equal,
@@ -267,9 +268,46 @@ const sessionHandleLayer = (
       const local = yield* LocalRuntimeSource;
       const inputs = yield* SessionInputs;
       const subscriptions = yield* TranscriptSubscriptions;
+      const delivered = yield* SubscriptionRef.make(0);
+      const tailEnded = yield* Deferred.make<void>();
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
-        publish,
+        publish: (events) =>
+          Effect.gen(function* () {
+            const rows = yield* publish(events);
+            const last = rows.at(-1);
+            if (last) {
+              yield* SubscriptionRef.changes(delivered).pipe(
+                Stream.filter((commit) => commit >= last.commit),
+                Stream.runHead,
+                Effect.raceFirst(
+                  Deferred.await(tailEnded).pipe(
+                    Effect.andThen(
+                      Effect.die(
+                        new Error('Session committed-event consumer stopped'),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+            if (last) {
+              yield* view.changes.pipe(
+                Stream.filter((state) => state.cursor >= last.commit),
+                Stream.runHead,
+                Effect.flatMap((state) =>
+                  Option.isSome(state)
+                    ? Effect.void
+                    : Effect.die(
+                        new Error(
+                          'Session view stopped before publication settled',
+                        ),
+                      ),
+                ),
+              );
+            }
+            return rows;
+          }),
         view: view.ref,
         viewChanges: view.changes,
         // The plane's tail woken by the view's cursor instead of the log's
@@ -306,10 +344,14 @@ const sessionHandleLayer = (
         Effect.sync(() => new SessionHandle({ ...key.open, graph })),
         (session) => Effect.sync(() => session.unwind()),
       );
+      yield* SubscriptionRef.set(delivered, anchor);
       yield* reads.all(anchor).pipe(
         Stream.runForEach((event) =>
-          Effect.sync(() => session.receiveCommittedEvent(event)),
+          Effect.sync(() => session.receiveCommittedEvent(event)).pipe(
+            Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
+          ),
         ),
+        Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkScoped,
       );
       return session;

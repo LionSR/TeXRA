@@ -92,7 +92,7 @@ describe('child stream progress events', () => {
     const recorded = recordSessionEvents(defaultSession());
     const rosters = recordChildRosters(defaultSession().executions);
 
-    const childStream = startBashChild(executionId);
+    const childStream = await startBashChild(executionId);
 
     expect(childStream.childStreamId).toBe(childStreamId);
 
@@ -184,7 +184,7 @@ describe('child stream progress events', () => {
   });
 
   it('marks a deterministic child-stream relaunch as running', async () => {
-    const firstRun = createChildStream(
+    const firstRun = await createChildStream(
       workflowRelaunchExecutionId,
       parentStreamId,
       {
@@ -295,6 +295,13 @@ describe('child stream progress events', () => {
             event.aggregateId ===
             qualifyAggregateId('stream', setupRetryChildStreamId),
         ),
+      ).toHaveLength(1);
+      expect(
+        eventsOfType(recorded.events, 'run.activate').filter(
+          (event) =>
+            event.aggregateId ===
+            qualifyAggregateId('stream', setupRetryChildStreamId),
+        ),
       ).toHaveLength(2);
       await retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
     } finally {
@@ -310,7 +317,7 @@ describe('child stream progress events', () => {
       agentCategory: AgentCategory.Workflow,
     };
 
-    const childStream = createChildStream(
+    const childStream = await createChildStream(
       workflowRelaunchExecutionId,
       parentStreamId,
       {
@@ -349,7 +356,7 @@ describe('child stream progress events', () => {
     const active = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession());
 
-    const childStream = startBashChild(executionId);
+    const childStream = await startBashChild(executionId);
 
     expect(active.events).toEqual([]);
     expect(eventsOfType(recorded.events, 'run.start')).toEqual([
@@ -368,7 +375,7 @@ describe('child stream progress events', () => {
     const active = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession());
 
-    const childStream = startBashChild(noProjectionAutoCloseExecutionId);
+    const childStream = await startBashChild(noProjectionAutoCloseExecutionId);
 
     await childStream.finalize({
       outcome: RUN_OUTCOME.COMPLETED,
@@ -389,7 +396,7 @@ describe('child stream progress events', () => {
   it('emits removeStream for child stream auto-close', async () => {
     const recorded = recordSessionEvents(defaultSession());
 
-    const childStream = startBashChild(executionId);
+    const childStream = await startBashChild(executionId);
 
     await childStream.finalize({
       outcome: RUN_OUTCOME.COMPLETED,
@@ -459,7 +466,7 @@ describe('child stream progress events', () => {
   });
 
   it('publishes child loop status changes through the child stream owner', async () => {
-    const childStream = startCodexChild(
+    const childStream = await startCodexChild(
       loopExecutionId,
       'Run a long-lived Codex child loop',
     );
@@ -510,7 +517,7 @@ describe('child stream progress events', () => {
   // the stream, and `finalizeRunTerminal` resolves the run's terminal outcome
   // from that phase rather than from the failure the child reports.
   it('settles a stopped child loop as cancelled from the stream phase', async () => {
-    const childStream = startCodexChild(
+    const childStream = await startCodexChild(
       stoppedExecutionId,
       'Run a stopped Codex child loop',
     );
@@ -547,7 +554,7 @@ describe('child stream progress events', () => {
   });
 
   it('settles child handle results as cancelled for stopped finalization', async () => {
-    const childStream = startCodexChild(
+    const childStream = await startCodexChild(
       cancelledExecutionId,
       'Run an interrupted Codex child loop',
     );
@@ -567,7 +574,7 @@ describe('child stream progress events', () => {
   });
 
   it('settles failed child handle results with error details', async () => {
-    const childStream = startCodexChild(
+    const childStream = await startCodexChild(
       failedExecutionId,
       'Run a failing Codex child loop',
     );

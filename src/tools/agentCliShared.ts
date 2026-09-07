@@ -249,13 +249,17 @@ export async function launchAgentCliSession(
   const childStream = await runWithOwnedExecutionLeaseLaunchGuard(
     executionId,
     async () => {
-      const stream = createChildStream(executionId, params.parentStreamId, {
-        streamPrefix: params.streamPrefix,
-        run: identity,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-        description: params.description,
-        config: params.config,
-      });
+      const stream = await createChildStream(
+        executionId,
+        params.parentStreamId,
+        {
+          streamPrefix: params.streamPrefix,
+          run: identity,
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+          description: params.description,
+          config: params.config,
+        },
+      );
       try {
         await params.startLoop({ childStream: stream, executionId });
       } catch (error) {

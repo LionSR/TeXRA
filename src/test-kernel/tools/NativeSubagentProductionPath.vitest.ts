@@ -57,6 +57,7 @@ import {
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -71,7 +72,7 @@ import { readCompletedRunConversation, StreamLogStore } from '@transcript';
 const PARENT_EXECUTION_ID = 'a9531a9531a9' as ExecutionId;
 const OUTER_EXECUTION_ID = '0a95310a9531' as ExecutionId;
 const OUTER_STREAM_ID = 'outer_9531@gpt54#0a95310a9531' as StreamTabId;
-const PARENT_STREAM_ID = 'parent_9531@gpt54#a9531a9531a9' as StreamTabId;
+const PARENT_STREAM_ID = 'parent_9531#a9531a9531a9' as StreamTabId;
 const PARENT_AGENT = 'parent_9531';
 const CHILD_AGENT = 'child_9531';
 const PARENT_MODEL = 'gpt54';
@@ -363,6 +364,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     session = initializeDefaultSession({
       transcripts: await StreamLogStore.open(),
     });
+    publishTestRunStart(session, OUTER_STREAM_ID);
+    await session.settlePublications();
     childId = undefined;
     resumedStreams = [];
     completedResumes = [];
