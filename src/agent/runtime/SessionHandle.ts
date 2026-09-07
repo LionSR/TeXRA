@@ -200,7 +200,6 @@ export class SessionHandle {
   private readonly statusPorts = new Set<(event: StatusEvent) => void>();
   private disposed = false;
   private readonly publications = new Set<Promise<readonly SessionEvent[]>>();
-  private readonly publicationFailures: unknown[] = [];
   /** This session's execution-keyed trace flushers. */
   readonly flushers: Map<string, RunTraceFlushEntry>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
@@ -585,22 +584,23 @@ export class SessionHandle {
       ),
     );
     this.publications.add(publication);
-    void publication.then(
-      () => {
+    void publication
+      .catch(() => {
+        // Observed by `settlePublications` via `allSettled` on this promise.
+      })
+      .finally(() => {
         this.publications.delete(publication);
-      },
-      (cause: unknown) => {
-        this.publications.delete(publication);
-        this.publicationFailures.push(cause);
-      },
-    );
+      });
   }
 
-  /** Await owned publications and their committed status/result consumers. */
+  /** Await in-flight publications. Failures belong to those promises, not a
+   *  session-wide leftover array a later settler would drain. */
   async settlePublications(): Promise<void> {
-    await Promise.allSettled([...this.publications]);
+    const results = await Promise.allSettled([...this.publications]);
     throwAggregated(
-      this.publicationFailures.splice(0),
+      results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      ),
       'Session publication failed',
     );
   }
@@ -612,7 +612,12 @@ export class SessionHandle {
 
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): void {
-    this.applySnapshotEvent(event);
+    // Compatibility sidecars are still file writers. Every process tails the
+    // same log; only the owner may project a usage delta onto disk.
+    const { self } = SubscriptionRef.getUnsafe(this.graph.local);
+    if (event.ownerId != null && self.includes(event.ownerId)) {
+      this.applySnapshotEvent(event);
+    }
     if (event.type === 'result') {
       for (const listener of [...this.resultListeners]) {
         try {
