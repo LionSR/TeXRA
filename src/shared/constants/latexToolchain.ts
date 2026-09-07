@@ -435,7 +435,7 @@ export const DEPENDENCY_INSTALL_COMMANDS: Record<
  *  an entry for it — most `LatexSettingsStatus` keys (paths, `platform`,
  *  `latexWorkshopInstalled`) do not. */
 export function hasInstallCommands(key: string): key is DependencyInstallKey {
-  return key in DEPENDENCY_INSTALL_COMMANDS;
+  return Object.hasOwn(DEPENDENCY_INSTALL_COMMANDS, key);
 }
 
 // ============================================================
