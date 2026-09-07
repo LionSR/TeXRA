@@ -513,12 +513,50 @@ and `AgentTrace` hold a third `AsyncLocalStorage` for stage scope).
 | W7  | `effect/unstable/*` adoption for the foreign edges               | 28 (A1)      | Needs an owner ruling first (§2.5)       |
 | W8  | Collapse the duplicate identity-catch wrappers                   | 4 (B1)       | **Done** (§9)                            |
 
-**W1 is bigger than the first draft of this note claimed.** `BaseFS` exposes 21
-static async methods, and `StorageFS`/`GlobalStorageFS` alone are called from
-113 sites across 27 files. Under the 2026-09-06 ruling there is no adapter to
-soften that: converting the base means converting every consumer upward to a
-real boundary in the same PR, and execution rule 2 ("one pass per file") pulls
-each touched file's other mechanisms in with it. It is a lane, not a task.
+### W1's real shape
+
+The first draft called `BaseFS` "21 static async methods". It declares **29
+members**, and the difference matters, because a third of them never convert:
+
+- **17 async methods** convert. Five dominate the work — `read` (63 call
+  sites), `exists` (60), `ensureDir` (40), `delete` (32), `write` (20) — and
+  the tail is thin: `publish`, `removeEmptyDir` and `isSymbolicLink` have one
+  production caller each.
+- **8 synchronous or stream members do not**: `existsSync`, `readSync`,
+  `readBytesSync`, `deleteSync`, `statSync`, `createReadStream`,
+  `createWriteStream`, `fullPath`. A synchronous API has no Effect to return
+  that would help its callers, and the stream factories hand back Node
+  streams. (A ninth, `mkdirSync`, had no caller at all and is deleted — §9.)
+- `RelativeFS` adds `readJson` and `cleanupOldFiles`; `WorkspaceFS` adds four
+  synchronous path helpers (`getPath`, `relativePath`, `toAbsolute`,
+  `locatePath`) with 81 production uses between them, none of which convert.
+
+So W1 leaves a mixed class behind: an Effect-typed async surface beside a
+synchronous one that stays as it is. That is not a defect of the plan — a
+`statSync` is not a boundary — but it should be expected rather than
+discovered.
+
+**There is no smaller legal slice.** Converting one method looks like the
+obvious increment, and it is not one: `removeEmptyDir`'s single consumer is
+`src/agent/storage/executionLease.ts`, `publish`'s and `isSymbolicLink`'s
+consumers are likewise ordinary `async` functions, and none of those files
+contains an Effect program today. Under the 2026-09-06 ruling the consumer
+converts upward to a real boundary in the same PR, so the cascade starts at
+the first method, whichever one is chosen. Per-method is not a smaller unit
+than per-class.
+
+The cascade's size was measured rather than estimated: of the ~29 files that
+call these classes, **only four contain any `Effect.fn`/`Effect.gen` at all**
+(`arxivProcessor.ts`, `memoryFileSystem.ts`, `MemoryTool.ts`,
+`platformAgentDirectories.ts`). The other 25 — `StagedDeletionCoordinator`
+(14 calls), `runStorageFs` (12), `AcceptRunFilesTool` (11), `img.ts` (10),
+`executionLease` (9), `KVStore` (8), `XmlOutputManager` (8) among them — are
+wholly Promise-based, so W1 does not merely retype 113 call sites: it turns
+25 non-Effect files into Effect programs and then converts their callers
+upward.
+
+W1 is therefore atomic. It lands as one PR, or it needs a ruling that permits
+a temporary adapter — which the 2026-09-06 ruling forbids.
 
 **Two items the first draft called trivial are not.** Both would only move a
 wrap inward rather than remove it, which is the pass-through the design
@@ -611,6 +649,9 @@ was never its right home.
 
 `loopbackLogin.ts:86` and `ExecutionsTool.ts:163` already carried their
 reasons and were left alone.
+
+**Deleted:** `BaseFS.mkdirSync` — no caller in production or tests; every
+other `mkdirSync` in the tree is Node's own. One member fewer for W1 to carry.
 
 **Deliberately not done:** W1, W2, W5, W6, W7 — each for the reason given in
 §7. The common thread is that the remaining wraps are not local mistakes; they
