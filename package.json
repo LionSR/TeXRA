@@ -48,7 +48,7 @@
     "check:desktop-build-artifacts": "node scripts/verify-desktop-build-artifacts.mjs",
     "check:initial-build-artifacts": "corepack pnpm run check:vsix-contents && corepack pnpm run check:desktop-build-artifacts",
     "check:desktop-package": "node scripts/verify-desktop-package.mjs",
-    "check:dead-code": "VITE_WEBVIEW=webview knip --no-progress --include files,exports,types,duplicates",
+    "check:dead-code": "VITE_WEBVIEW=progressView knip --no-progress --include files,exports,types,duplicates",
     "check:dead-code-ratchet": "node scripts/check-dead-code-ratchet.mjs",
     "check:effect-migration-ratchet": "node scripts/check-effect-migration-ratchet.mjs",
     "check:guidance-refs": "node scripts/check-guidance-refs.mjs",
