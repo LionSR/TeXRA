@@ -24,6 +24,7 @@
  */
 
 // Third-party imports
+import { Effect, type Deferred } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -33,10 +34,12 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
   MESSAGE_TYPES,
+  ToolError,
 } from '@shared/schemas';
 import type {
   ClaudeAgentEffort,
@@ -67,8 +70,11 @@ import {
 import { type ChildStream } from './delegation/childStream';
 import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
+  agentCliCall,
+  type AgentCliToolFailure,
   dispatchAgentCliTool,
   launchAgentCliSession,
+  reraiseAgentCliCallFailure,
   startAgentCliLoop,
 } from './agentCliShared';
 import {
@@ -411,6 +417,8 @@ function startClaudeAgentLoop(params: {
   resumeSessionId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
+  /** Settled by the loop wrapper when the loop's completion settles. */
+  loopSettled: Deferred.Deferred<void>;
 }): void {
   const { childStream, parentStreamId, executionId, initialPrompt } = params;
   const { logger } = childStream;
@@ -432,6 +440,7 @@ function startClaudeAgentLoop(params: {
     stageLabel: 'Claude Code session',
     initialPrompt,
     store: claudeAgentSessionsFor,
+    loopSettled: params.loopSettled,
     releaseFallbackClaim: params.releaseFallbackClaim,
     runProviderTurn: async (prompt, _ports, signal) => {
       const forkSession = isFirstTurn && params.forkSession;
@@ -511,8 +520,21 @@ export class ClaudeAgentTool extends defineTool({
     'Set fork_session to branch from that session while leaving the original unchanged.',
   schema: ClaudeAgentInputSchema,
 }) {
-  protected async execute(input: ClaudeAgentInput): Promise<ToolResult> {
-    const config = await getClaudeAgentConfig();
+  protected execute(input: ClaudeAgentInput): Promise<ToolResult> {
+    // The one run edge of this tool (PRD run-edge category b): the dispatch
+    // below is an Effect program, run once here on the process runtime. A
+    // collaborator's rejection is re-raised as its own cause; a `ToolError`
+    // stays a typed failure and `runPromise` rejects with it.
+    return effectRuntime().runPromise(
+      reraiseAgentCliCallFailure(this.run(input)),
+    );
+  }
+
+  private readonly run = Effect.fn('ClaudeAgentTool.run')(function* (
+    this: ClaudeAgentTool,
+    input: ClaudeAgentInput,
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+    const config = yield* agentCliCall(() => getClaudeAgentConfig());
     const permissionMode =
       input.permission_mode ?? config.getClaudeAgentPermissionMode();
     const model = input.model ?? config.getClaudeAgentModel();
@@ -520,7 +542,7 @@ export class ClaudeAgentTool extends defineTool({
     const sessionId = input.session_id ?? undefined;
     const isFork = input.fork_session === true;
 
-    return dispatchAgentCliTool({
+    return yield* dispatchAgentCliTool({
       agentName: CLAUDE_AGENT_NAME,
       approvalLabel: `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       store: claudeAgentSessionsFor,
@@ -547,10 +569,12 @@ export class ClaudeAgentTool extends defineTool({
           context.releaseFallbackClaim,
         ),
     });
-  }
+  });
 }
 
-async function launchClaudeAgentSession(
+const launchClaudeAgentSession = Effect.fn(
+  'claudeAgent.launchClaudeAgentSession',
+)(function* (
   input: ClaudeAgentInput,
   permissionMode: ClaudeAgentPermissionMode,
   model: string,
@@ -559,8 +583,8 @@ async function launchClaudeAgentSession(
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
-): Promise<ToolResult> {
-  const config = await getClaudeAgentConfig();
+): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+  const config = yield* agentCliCall(() => getClaudeAgentConfig());
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   // Mirrors codex behavior so subagents can see the project: when the call
   // is made from inside the workspace, the agent runs in that directory but
@@ -570,12 +594,14 @@ async function launchClaudeAgentSession(
   // `additionalDirectories`, unlike codex's `workingDirectory`.
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(workingDir);
-  const env = await config.buildClaudeAgentEnv();
-  const pathToClaudeCodeExecutable = await findClaudeBinaryPath();
+  const env = yield* agentCliCall(() => config.buildClaudeAgentEnv());
+  const pathToClaudeCodeExecutable = yield* agentCliCall(() =>
+    findClaudeBinaryPath(),
+  );
   const agentConfig = config.buildClaudeAgentConfig(input.prompt);
   const preview = truncateWithEllipsis(input.prompt, 60);
 
-  return launchAgentCliSession({
+  return yield* launchAgentCliSession({
     parentStreamId,
     parentExecutionId,
     agentName: CLAUDE_AGENT_NAME,
@@ -583,7 +609,8 @@ async function launchClaudeAgentSession(
     description: input.prompt,
     config: agentConfig,
     registerFailedMessage: 'Failed to register Claude Code CLI execution.',
-    startLoop: ({ childStream, executionId }) =>
+    store: claudeAgentSessionsFor,
+    startLoop: ({ childStream, executionId, loopSettled }) =>
       startClaudeAgentLoop({
         childStream,
         parentStreamId,
@@ -599,9 +626,10 @@ async function launchClaudeAgentSession(
         resumeSessionId: input.session_id ?? undefined,
         forkSession: input.fork_session === true,
         releaseFallbackClaim,
+        loopSettled,
       }),
     summary: `Launched Claude Code CLI: ${preview}`,
     launchedLine: `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,
     followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the session_id. Pass it back on a later call to send a follow-up.`,
   });
-}
+});
