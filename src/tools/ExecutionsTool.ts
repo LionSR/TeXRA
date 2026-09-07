@@ -415,7 +415,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // One page, not one directory — see DURABLE_READ_CONCURRENCY.
       const lines = yield* Effect.forEach(
         page,
-        (entry) => Effect.promise(() => formatListingLine(entry)),
+        (entry) => executionsRead(() => formatListingLine(entry)),
         { concurrency: DURABLE_READ_CONCURRENCY },
       );
 
@@ -599,7 +599,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       Effect.forEach(
         children,
         (child) =>
-          Effect.promise(async () =>
+          executionsRead(async () =>
             formatChildLine(
               child,
               await getExecutionStore(child.id).readMeta(),
