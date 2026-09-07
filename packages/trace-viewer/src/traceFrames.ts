@@ -341,8 +341,9 @@ export function* traceFrames(
       );
     }
     if (
-      events.length >= SESSION_FRAME_ROWS ||
-      bytes + size > SESSION_FRAME_TARGET_BYTES
+      events.length > 0 &&
+      (events.length >= SESSION_FRAME_ROWS ||
+        bytes + size > SESSION_FRAME_TARGET_BYTES)
     ) {
       yield {
         ...frame,

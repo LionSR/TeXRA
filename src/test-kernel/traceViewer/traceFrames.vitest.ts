@@ -116,6 +116,29 @@ function legacyTrace(
 }
 
 describe('traceEvents legacy-status fallback (issue #7188)', () => {
+  it('delivers an oversized first row intact without an empty intermediate frame', () => {
+    const name = 'a'.repeat(300 * 1024);
+    const trace = legacyTrace(undefined);
+    trace.config = AgentConfigSchema.parse({ ...trace.config, agent: name });
+    const frames = [
+      ...traceFrames(trace, 'trace', {
+        kind: 'subscribe',
+        session: 'trace',
+        generation: 1,
+        cursor: 0,
+        aggregates: [
+          { id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 },
+        ],
+      }),
+    ];
+    expect(frames.every((frame) => frame.events.length > 0)).toBe(true);
+    expect(frames[0]?.events[0]).toMatchObject({
+      _tag: 'event',
+      event: { type: 'run.start', identity: { agent: name } },
+    });
+    expect(frames.at(-1)?.replayComplete).toBe(true);
+  });
+
   it('replays workflow content without tool-use state', () => {
     const trace = legacyTrace(undefined);
     trace.entries.push(
