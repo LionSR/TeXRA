@@ -890,6 +890,8 @@ describe('StreamLogStore load', () => {
       },
     });
 
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
     const store = await StreamLogStore.open();
 
     expect(storage.fullLogReads()).toBe(1);
@@ -897,6 +899,12 @@ describe('StreamLogStore load', () => {
     expect(store.getTimestampRange('alpha')).toEqual({ first: 200, last: 250 });
     expect(writtenSummary(storage.writes, 'alpha')).toEqual(
       settledSummary(200, 250),
+    );
+    // The derived-tier discard is loud, not silent: a stale-shaped cache is
+    // ignored with a warning rather than migrated in place (#9434).
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamLogStore',
+      expect.stringContaining('Ignoring a stale-shaped summary cache entry'),
     );
   });
 
