@@ -285,6 +285,9 @@ export const databaseLayer = (
         UPDATE event_sequence SET closed = 1
         WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
       `);
+      const setInquiryParent = db.prepare(
+        'UPDATE event_sequence SET parent_id = ? WHERE aggregate_id = ?',
+      );
       const all = db.prepare(`SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
           AND json_extract(e.aggregate_id, '$[0]') <> 'migration'
@@ -554,6 +557,22 @@ export const databaseLayer = (
                     );
                   }
                   parentStartCommit = parent.startCommit;
+                }
+                if (draft.type === 'inquiryThreadUpdated') {
+                  const parentId =
+                    draft.parentStreamId === null
+                      ? null
+                      : qualifyAggregateId('stream', draft.parentStreamId);
+                  if (parentId !== null) {
+                    const parent = readState([parentId])[0];
+                    if (!parent || parent.closed || parent.startCommit === null)
+                      throw new Error(
+                        `Inquiry publication requires an open parent: ${draft.parentStreamId}`,
+                      );
+                  }
+                  // An answered thread can attach to a new asker while still open.
+                  // NEXT_SEQ has already refused a C9-closed inquiry; never revive it.
+                  setInquiryParent.run(parentId, draft.aggregateId);
                 }
                 const commit = insertEvent.get(
                   draft.aggregateId,

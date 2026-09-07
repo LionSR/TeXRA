@@ -35,7 +35,10 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 
 import {
   injectContinuationForAnsweredThread,
@@ -157,6 +160,8 @@ describe('external inquiry continuation session routing', () => {
 
   it('emits inquiry thread updates through the explicit session plane', async () => {
     const session = createTestSession({ roots: paperRoots() });
+    publishTestRunStart(session, STREAM);
+    await session.settlePublications();
     const explicit = captureFacts(session);
     const fallback = captureFacts(defaultSession());
 
@@ -166,6 +171,7 @@ describe('external inquiry continuation session routing', () => {
         answeredManifest(),
         session,
       );
+      await session.settlePublications();
 
       expect(explicit.facts).toMatchObject([
         {
@@ -190,6 +196,8 @@ describe('external inquiry continuation session routing', () => {
 
   it("emits inquiry thread updates through the active run's session when no explicit session is provided", async () => {
     const session = createTestSession({ roots: paperRoots() });
+    publishTestRunStart(session, STREAM);
+    await session.settlePublications();
     const run = captureFacts(session);
     const fallback = captureFacts(defaultSession());
 
@@ -200,6 +208,7 @@ describe('external inquiry continuation session routing', () => {
         }),
         () => injectContinuationForAnsweredThread(THREAD, answeredManifest()),
       );
+      await session.settlePublications();
 
       expect(run.facts).toMatchObject([
         expect.objectContaining({

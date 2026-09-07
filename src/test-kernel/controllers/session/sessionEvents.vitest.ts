@@ -511,6 +511,17 @@ describe('Sessions owner', () => {
         seq: 3,
         commit: 5,
       });
+      const committed = await Effect.runPromise(
+        Stream.runCollect(
+          session.events.aggregate(qualifyAggregateId('stream', OLDER), 0),
+        ),
+      );
+      const handleRegistryStatus = vi.spyOn(session.executions, 'handleStatus');
+      for (const event of committed)
+        session.receiveCommittedEvent({ ...event, ownerId: OTHER });
+      expect(handleStatus).toHaveBeenCalledOnce();
+      expect(onResult).toHaveBeenCalledOnce();
+      expect(handleRegistryStatus).not.toHaveBeenCalled();
     } finally {
       detachResult();
       detach();
@@ -520,6 +531,16 @@ describe('Sessions owner', () => {
 
   it('close reports settled once the run ended, and releases the session', async () => {
     const session = open('/workspace/owner/settled');
+    session.publish([runStart]);
+    await session.settlePublications();
+    const pending = session.interactions.requestPlanApproval({
+      requestId: 'closing-plan',
+      streamId: STREAM,
+      plan: { objective: 'Settle the pending approval during close.' },
+      goalEnabled: false,
+    });
+    await session.settlePublications();
+    expect(SubscriptionRef.getUnsafe(session.view).approvals).toHaveLength(1);
     track(session, 'exec:settled');
     // The run completes: its driver untracks it as it unwinds.
     session.executions.untrack('exec:settled');
@@ -544,6 +565,9 @@ describe('Sessions owner', () => {
       abandoned: [],
     });
     expect(interrupt).toHaveBeenCalledOnce();
+    await expect(pending).resolves.toMatchObject({ action: 'reject' });
+    expect(SubscriptionRef.getUnsafe(session.view).approvals).toHaveLength(0);
+    expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(session.now());
     expect(isLive(session)).toBe(false);
   });
 
@@ -1083,33 +1107,33 @@ describe('the C1 event table and the C6 publisher', () => {
         const first = yield* Database;
         const root = runStart.aggregateId;
         const inquiry = qualifyAggregateId('inquiry', 'ei_012345abcdef');
+        const thread = {
+          type: 'inquiryThreadUpdated',
+          aggregateId: inquiry,
+          threadId: 'ei_012345abcdef',
+          parentStreamId: STREAM,
+          status: 'open',
+          lastQuestionPreview: 'Which boundary condition applies?',
+          lastActivityIso: '2026-09-06T12:00:00.000Z',
+          turnCount: 1,
+        } as const;
         const initial = yield* first.appendAll([
           runStart,
-          {
-            type: 'inquiryThreadUpdated',
-            aggregateId: inquiry,
-            threadId: 'ei_012345abcdef',
-            parentStreamId: STREAM,
-            status: 'open',
-            lastQuestionPreview: 'Which boundary condition applies?',
-            lastActivityIso: '2026-09-06T12:00:00.000Z',
-            turnCount: 1,
-          },
+          olderStart,
+          { ...thread, parentStreamId: null, status: 'answered' },
+          { ...thread, parentStreamId: OLDER },
+          thread,
         ]);
-        // Seed the C9 ownership edge. Inquiry reparenting is a separate writer
-        // operation; this regression exercises deletion of the resulting graph.
-        yield* Effect.sync(() => {
-          const raw = new DatabaseSync(join(storage, 'texra.db'));
-          try {
-            raw
-              .prepare(
-                'UPDATE event_sequence SET parent_id = ? WHERE aggregate_id = ?',
-              )
-              .run(root, inquiry);
-          } finally {
-            raw.close();
-          }
-        });
+        expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
+          root,
+        );
+        expect(
+          (yield* Effect.flip(
+            first.appendAll([
+              { ...thread, parentStreamId: 'stream:missing' as StreamTabId },
+            ]),
+          ))._tag,
+        ).toBe('DatabaseWriteFailed');
         yield* first.releaseClaims([inquiry]);
         const removal: SessionEventDraft = {
           type: 'stream.removed',
@@ -1139,14 +1163,29 @@ describe('the C1 event table and the C6 publisher', () => {
         yield* first.acquireClaims([inquiry]);
         const committed = yield* first.appendAll([waiting, removal]);
         expect(committed.map((row) => [row.seq, row.commit])).toEqual([
-          [2, 3],
-          [3, 4],
+          [2, 6],
+          [3, 7],
         ]);
         expect(
           (yield* first.aggregateState([root, inquiry])).every(
             (row) => row.closed,
           ),
         ).toBe(true);
+        // Neither a late update nor a new inquiry can attach to the tombstoned asker.
+        for (const draft of [
+          thread,
+          { ...thread, parentStreamId: OLDER },
+          {
+            ...thread,
+            aggregateId: qualifyAggregateId('inquiry', 'ei_abcdef012345'),
+            threadId: 'ei_abcdef012345',
+          },
+        ]) {
+          expect((yield* Effect.flip(first.appendAll([draft])))._tag).toBe(
+            'DatabaseWriteFailed',
+          );
+        }
+        expect(yield* first.currentCommit).toBe(7);
       }).pipe(Effect.provide(substrate(storage)));
     },
   );

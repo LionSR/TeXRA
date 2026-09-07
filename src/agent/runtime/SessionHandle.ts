@@ -617,12 +617,11 @@ export class SessionHandle {
 
   /** Apply a durable fact delivered by the root's ordered table tail. */
   receiveCommittedEvent(event: SessionEvent): void {
-    // Compatibility sidecars are still file writers. Every process tails the
-    // same log; only the owner may project a usage delta onto disk.
+    // The shared fold receives every row. File writers, host notifications and
+    // runtime waiters belong only to the process that authored the fact.
     const { self } = SubscriptionRef.getUnsafe(this.graph.local);
-    if (event.ownerId != null && self.includes(event.ownerId)) {
-      this.applySnapshotEvent(event);
-    }
+    if (event.ownerId == null || !self.includes(event.ownerId)) return;
+    this.applySnapshotEvent(event);
     if (event.type === 'result') {
       for (const listener of [...this.resultListeners]) {
         try {
