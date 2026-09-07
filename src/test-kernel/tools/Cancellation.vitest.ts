@@ -93,16 +93,19 @@ describe('withRequestTimeout under Effect.uninterruptible', () => {
   it.effect('still ends the request at its deadline', () =>
     Effect.gen(function* () {
       let aborted = false;
+      const request = Effect.gen(function* () {
+        const signal = yield* Effect.abortSignal;
+        signal.addEventListener('abort', () => {
+          aborted = true;
+        });
+        return yield* Effect.tryPromise({
+          try: () => new Promise<never>(() => {}),
+          catch: (cause) => cause,
+        });
+      });
       const fiber = yield* Effect.forkChild(
         Effect.flip(
-          Effect.uninterruptible(
-            withRequestTimeout(1000, (signal) => {
-              signal.addEventListener('abort', () => {
-                aborted = true;
-              });
-              return new Promise<never>(() => {});
-            }),
-          ),
+          Effect.uninterruptible(withRequestTimeout(1000, request)),
         ),
       );
       yield* started;
@@ -118,20 +121,24 @@ describe('withRequestTimeout under Effect.uninterruptible', () => {
       let aborted = false;
       let settled = false;
       let finish: () => void = () => {};
-      const fiber = yield* Effect.forkChild(
-        Effect.uninterruptible(
-          withRequestTimeout(1000, (signal) => {
-            signal.addEventListener('abort', () => {
-              aborted = true;
-            });
-            return new Promise<string>((resolve) => {
+      const request = Effect.gen(function* () {
+        const signal = yield* Effect.abortSignal;
+        signal.addEventListener('abort', () => {
+          aborted = true;
+        });
+        return yield* Effect.tryPromise({
+          try: () =>
+            new Promise<string>((resolve) => {
               finish = () => {
                 settled = true;
                 resolve('written');
               };
-            });
-          }),
-        ),
+            }),
+          catch: (cause) => cause,
+        });
+      });
+      const fiber = yield* Effect.forkChild(
+        Effect.uninterruptible(withRequestTimeout(1000, request)),
       );
       yield* started;
       const interrupting = yield* Effect.forkChild(Fiber.interrupt(fiber));
@@ -141,21 +148,11 @@ describe('withRequestTimeout under Effect.uninterruptible', () => {
       expect(settled).toBe(false);
       finish();
       yield* Fiber.join(interrupting);
-      // The write ran to completion, and only then did the interrupt land.
+      // The write ran to completion before the deferred interrupt closed its
+      // request scope and aborted the now-settled transport signal.
       expect(settled).toBe(true);
-      expect(aborted).toBe(false);
+      expect(aborted).toBe(true);
       expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
-    }),
-  );
-});
-
-describe('withRequestTimeout misuse', () => {
-  it.effect('dies on a request that declares no AbortSignal parameter', () =>
-    Effect.gen(function* () {
-      const exit = yield* Effect.exit(
-        withRequestTimeout(1000, () => Promise.resolve('unabortable')),
-      );
-      expect(Exit.hasDies(exit)).toBe(true);
     }),
   );
 });
