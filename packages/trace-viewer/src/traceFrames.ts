@@ -22,6 +22,13 @@ import {
   emptyHostSnapshot,
   type HostSnapshot,
 } from '@shared/session/hostSnapshot';
+import {
+  SESSION_FRAME_BYTES,
+  SESSION_FRAME_ROWS,
+  SESSION_FRAME_TARGET_BYTES,
+  SessionReaderError,
+  sessionMessageBytes,
+} from '@shared/session/sessionReadBudget';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import type { TraceDocument } from '@transcript';
@@ -254,35 +261,37 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
  * legacy import stamps `ownerId: null` (contract C3), which folds every
  * unfinished run as interrupted and every finished one as durably final.
  */
-function traceEvents(trace: TraceDocument): {
-  readonly listing: SessionEvent[];
-  readonly transcript: SessionEvent[];
-} {
+function* traceEvents(
+  trace: TraceDocument,
+  named: boolean,
+): Generator<EventsFrame['events'][number]> {
   const at = trace.entries[0]?.timestamp ?? 0;
   let seq = 0;
-  // The publisher's stamp (contract C2), as `SessionEventLog` would have
-  // applied it: a draft is a distributive omit over the union, so the
-  // spread cannot be typed back into the union without the assertion.
   const stamp = (draft: SessionEventDraft): SessionEvent => {
     seq += 1;
     return { ...draft, seq, commit: seq, ownerId: null, at } as SessionEvent;
   };
-  const listing = listingBodies(trace).map(stamp);
-  const transcript = trace.entries.map((entry) =>
-    stamp({
-      type: 'transcript.entry',
-      aggregateId: qualifyAggregateId('stream', trace.streamId),
-      entry,
-    }),
-  );
-  return { listing, transcript };
+  for (const draft of listingBodies(trace)) {
+    yield { _tag: 'event', read: 'listing', event: stamp(draft) };
+  }
+  if (named)
+    for (const entry of trace.entries) {
+      yield {
+        _tag: 'event',
+        read: 'aggregate',
+        event: stamp({
+          type: 'transcript.entry',
+          aggregateId: qualifyAggregateId('stream', trace.streamId),
+          entry,
+        }),
+      };
+    }
 }
 
 /**
  * The host snapshot of an exported trace (PRD 8.1): the run's display name
  * as the paper, no catalogs (a trace launches nothing), no banners. The
- * shell renders nothing until a host snapshot arrives, and a trace's one
- * frame is the only one it ever gets.
+ * shell renders nothing until the completed replay's host snapshot arrives.
  */
 function traceHost(trace: TraceDocument): HostSnapshot {
   const name = traceDisplayName(trace);
@@ -295,43 +304,67 @@ function traceHost(trace: TraceDocument): HostSnapshot {
 }
 
 /**
- * The one frame that answers a `Subscribe` over an exported trace: the
+ * The frames that answer a `Subscribe` over an exported trace: the
  * listing, the transcript rows of the stream when the subscriber named it,
  * the marker, an empty local snapshot, and the trace's host snapshot. A
  * trace has no tail.
  */
-export function traceFrame(
+export function* traceFrames(
   trace: TraceDocument,
   session: string,
   subscribe: Subscribe,
-): EventsFrame {
-  const { listing, transcript } = traceEvents(trace);
+): Generator<EventsFrame> {
   const named = subscribe.aggregates.some(
     (aggregate) =>
       aggregate.id === qualifyAggregateId('stream', trace.streamId),
   );
-  return {
+  const frame: EventsFrame = {
     kind: 'events',
     session,
     generation: subscribe.generation,
-    cursor: listing.length + transcript.length,
-    events: [
-      ...listing.map((event) => ({
-        _tag: 'event' as const,
-        read: 'listing' as const,
-        event,
-      })),
-      ...(named
-        ? transcript.map((event) => ({
-            _tag: 'event' as const,
-            read: 'aggregate' as const,
-            event,
-          }))
-        : []),
-    ],
+    sequence: 1,
+    cursor: listingBodies(trace).length + trace.entries.length,
+    events: [],
     chunks: [],
     local: { self: [], heldBy: [], unreadable: [] },
     host: traceHost(trace),
     replayComplete: true,
   };
+  let events: EventsFrame['events'] = [];
+  let bytes = 0;
+  let sequence = 1;
+  for (const event of traceEvents(trace, named)) {
+    const size = sessionMessageBytes(event);
+    if (size > SESSION_FRAME_BYTES - SESSION_FRAME_TARGET_BYTES) {
+      throw new SessionReaderError(
+        'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
+      );
+    }
+    if (
+      events.length > 0 &&
+      (events.length >= SESSION_FRAME_ROWS ||
+        bytes + size > SESSION_FRAME_TARGET_BYTES)
+    ) {
+      yield {
+        ...frame,
+        sequence,
+        events,
+        local: null,
+        host: null,
+        replayComplete: false,
+      };
+      sequence += 1;
+      events = [];
+      bytes = 0;
+    }
+    events.push(event);
+    bytes += size;
+  }
+  const final = { ...frame, sequence, events };
+  if (sessionMessageBytes(final) > SESSION_FRAME_BYTES) {
+    throw new SessionReaderError(
+      'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
+    );
+  }
+  yield final;
 }

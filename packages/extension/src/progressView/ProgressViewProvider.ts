@@ -459,21 +459,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       sessionKey: this.bridge.key,
       placement: id,
     });
-    const send = (message: DownMessage): void => {
-      void Promise.resolve(view.webview.postMessage(message)).then(
-        (delivered) => {
-          if (!delivered) {
-            log.warn(`A ${message.kind} message was not delivered to ${id}`);
-          }
-        },
-        (error: unknown) => {
-          log.warn(
-            `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
-          );
-        },
-      );
+    const deliver = async (message: DownMessage): Promise<void> => {
+      if (!(await view.webview.postMessage(message))) {
+        throw new Error(`A ${message.kind} message was not delivered to ${id}`);
+      }
     };
-    const attached = this.bridge.attach({ id, send });
+    const send = (message: DownMessage): void => {
+      void deliver(message).then(undefined, (error: unknown) => {
+        log.warn(
+          `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
+        );
+      });
+    };
+    const attached = this.bridge.attach({ id, send: deliver });
     const disposables: vscode.Disposable[] = [
       view.webview.onDidReceiveMessage((message) => attached.receive(message)),
     ];

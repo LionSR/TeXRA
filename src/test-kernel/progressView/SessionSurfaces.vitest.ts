@@ -28,6 +28,7 @@ const transport = vi.hoisted(() => ({
   subscribe: vi.fn(),
   request: vi.fn<WebviewTransport['request']>(),
   onSurfaceAction: vi.fn(),
+  onReaderFailure: vi.fn(),
   close: vi.fn(),
   dispose: vi.fn(),
 }));

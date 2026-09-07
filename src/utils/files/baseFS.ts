@@ -8,6 +8,7 @@ import {
   isFileNotFoundError,
   isNotADirectoryError,
 } from '@common/errors';
+import { FileReadLimitError } from '@common/storage/fileReadLimit';
 
 // Platform imports
 import { type FileStat } from '@platform/interfaces';
@@ -75,7 +76,25 @@ export abstract class BaseFS {
   public static async read(
     this: typeof BaseFS,
     target: string,
+    maxBytes?: number,
   ): Promise<string> {
+    if (maxBytes !== undefined) {
+      // Bound the actual local-file stream, including growth after open.
+      // Stored JSON readers use this before decoding or expanding saved rows.
+      const chunks: Buffer[] = [];
+      let bytes = 0;
+      for await (const chunk of this.createReadStream(target, {
+        highWaterMark: 64 * 1024,
+      })) {
+        const data = Buffer.from(chunk);
+        bytes += data.byteLength;
+        if (bytes > maxBytes) throw new FileReadLimitError('bytes');
+        chunks.push(data);
+      }
+      return normalizeLineEndings(
+        Buffer.concat(chunks, bytes).toString('utf-8'),
+      );
+    }
     const content = await platform().fs.readFile(this.preparePath(target));
     return normalizeLineEndings(Buffer.from(content).toString('utf-8'));
   }

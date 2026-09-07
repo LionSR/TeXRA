@@ -17,7 +17,14 @@
  * is answered `Internal` under the request id the host log carries the
  * cause under (7.6): the surface hears that it failed, never the text (C3).
  */
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Fiber,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { z } from 'zod';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -42,9 +49,11 @@ import {
   type HostOutcome,
   type RequestErrorWire,
   type Response,
+  type ReaderProgress,
   type Subscribe,
   type SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
+import { SessionReaderError } from '@shared/session/sessionReadBudget';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('SessionBridge');
@@ -72,7 +81,8 @@ export interface SessionBridgeOptions {
 /** One attached transport port: the host posts `send`'s messages to it. */
 export interface SessionPort {
   readonly id: string;
-  readonly send: (message: DownMessage) => void;
+  /** Resolves when the host accepted delivery; receiver progress is separate. */
+  readonly send: (message: DownMessage) => Promise<void>;
 }
 
 /** What the backend gives a host per attached port. */
@@ -114,7 +124,16 @@ function wireError(error: RequestError): RequestErrorWire {
  * only this port held.
  */
 class PortFramer {
+  private static nextInstance = 0;
+  /** Public port ids can be reused after detach. Only this attachment can
+   * clear its own transcript interest, even while old cleanup is pending. */
+  private readonly subscriptionPort = `bridge/${(PortFramer.nextInstance += 1)}`;
   private fiber: Fiber.Fiber<void> | null = null;
+  private generation = -1;
+  private pending: {
+    readonly sequence: number;
+    readonly done: Deferred.Deferred<void>;
+  } | null = null;
 
   constructor(
     private readonly source: FramerSource,
@@ -123,26 +142,107 @@ class PortFramer {
   ) {}
 
   subscribe(subscribe: Subscribe): void {
-    this.interrupt();
+    if (subscribe.generation <= this.generation) return;
+    const previous = this.fiber;
+    this.generation = subscribe.generation;
+    this.pending = null;
     this.fiber = effectRuntime().runFork(
-      Stream.runForEach(
-        frameSubscription(this.source, this.port.id, this.host, subscribe),
-        (frame) => Effect.sync(() => this.port.send(frame)),
+      Effect.gen({ self: this }, function* () {
+        // A replacement waits for the old read's cleanup before acquiring
+        // this port's transcript interests, so its finalizer cannot clear ours.
+        if (previous) yield* Fiber.interrupt(previous);
+        yield* Stream.runForEach(
+          frameSubscription(
+            this.source,
+            this.subscriptionPort,
+            this.host,
+            subscribe,
+          ),
+          (frame) =>
+            Effect.gen({ self: this }, function* () {
+              const done = yield* Deferred.make<void>();
+              this.pending = { sequence: frame.sequence, done };
+              // One frame in flight. The receiver acknowledges only after
+              // staging/consuming it; posting alone cannot release this credit.
+              yield* Effect.tryPromise({
+                try: () => this.port.send(frame),
+                catch: (error) => error,
+              }).pipe(
+                Effect.andThen(Deferred.await(done)),
+                Effect.timeoutOrElse({
+                  duration: '30 seconds',
+                  orElse: () =>
+                    Effect.fail(
+                      new Error(
+                        'The conversation view stopped receiving updates.',
+                      ),
+                    ),
+                }),
+              );
+              this.pending = null;
+            }),
+        );
+      }).pipe(
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+          const failure = Cause.squash(cause);
+          const error =
+            failure instanceof Error &&
+            failure.cause instanceof SessionReaderError
+              ? failure.cause
+              : failure;
+          log.warn(
+            `Conversation reader ${this.port.id} stopped: ${toErrorMessage(error)}`,
+          );
+          return Effect.tryPromise({
+            try: () =>
+              this.port.send({
+                kind: 'reader.error',
+                session: this.source.key,
+                generation: subscribe.generation,
+                reason:
+                  error instanceof SessionReaderError
+                    ? error.message
+                    : 'Conversation delivery was interrupted. Reload the conversation to continue.',
+                retryable: !(error instanceof SessionReaderError),
+              }),
+            catch: (deliveryError) => deliveryError,
+          }).pipe(
+            Effect.timeout('5 seconds'),
+            // The root failure is logged above; this port cannot receive a notice.
+            Effect.catch(() => Effect.void),
+          );
+        }),
+        Effect.ensuring(
+          this.source.setTranscriptSubscriptions(this.subscriptionPort, []),
+        ),
       ),
     );
   }
 
+  acknowledge(progress: ReaderProgress): void {
+    if (
+      progress.generation !== this.generation ||
+      progress.sequence !== this.pending?.sequence
+    )
+      return;
+    Deferred.doneUnsafe(this.pending.done, Effect.void);
+  }
+
+  stop(generation: number): void {
+    if (generation === this.generation) this.interrupt();
+  }
+
   close(): void {
     this.interrupt();
-    effectRuntime().runFork(
-      this.source.setTranscriptSubscriptions(this.port.id, []),
-    );
   }
 
   private interrupt(): void {
     if (!this.fiber) return;
     effectRuntime().runFork(Fiber.interrupt(this.fiber));
-    this.fiber = null;
+    // Keep the interrupted fiber as the cleanup barrier for a restart
+    // within this attachment.
+    this.pending = null;
   }
 }
 
@@ -179,11 +279,13 @@ export class SessionBridge {
   surfaceAction(action: SurfaceActionMessage['action']): void {
     if (this.disposed) return;
     for (const port of this.ports.keys()) {
-      this.portOf(port)?.send({
-        kind: 'surface.action',
-        session: this.key,
-        action,
-      });
+      const target = this.portOf(port);
+      if (target)
+        this.send(target, {
+          kind: 'surface.action',
+          session: this.key,
+          action,
+        });
     }
   }
 
@@ -236,7 +338,7 @@ export class SessionBridge {
       const reason = `Unparseable message from port ${port.id}: ${z.prettifyError(parsed.error)}`;
       log.warn(reason);
       if (envelope.success) {
-        port.send({
+        this.send(port, {
           kind: 'response',
           session: envelope.data.session,
           requestId: envelope.data.requestId,
@@ -255,6 +357,12 @@ export class SessionBridge {
     switch (up.kind) {
       case 'subscribe':
         framer.subscribe(up);
+        return;
+      case 'reader.stop':
+        framer.stop(up.generation);
+        return;
+      case 'reader.progress':
+        framer.acknowledge(up);
         return;
       case 'runtime.request':
         void effectRuntime()
@@ -309,7 +417,16 @@ export class SessionBridge {
     result: Response['result'],
   ): void {
     if (this.disposed || this.portOf(port.id) !== port) return;
-    port.send({ kind: 'response', session: this.key, requestId, result });
+    this.send(port, { kind: 'response', session: this.key, requestId, result });
+  }
+
+  /** Requests have their own lifetime; a reader restart never cancels them. */
+  private send(port: SessionPort, message: DownMessage): void {
+    void port.send(message).then(undefined, (error: unknown) => {
+      log.warn(
+        `Posting ${message.kind} to ${port.id} failed: ${toErrorMessage(error)}`,
+      );
+    });
   }
 
   /** A handler died: the cause goes to the host log under the request id,

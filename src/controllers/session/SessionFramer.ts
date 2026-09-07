@@ -10,14 +10,11 @@
  * carries the commit the framer had drained when it cut it, left-out rows
  * included, so the subscriber's cursor moves past them.
  *
- * Framing is `Stream.groupedWithin(rows, 16 millis)` then
- * `Stream.buffer({ strategy: 'suspend' })`: durable rows must not drop, and
- * suspension parks the framer, never the publisher. Text chunks ride the
- * same buffer, merged to one per streaming row per frame where adjacent,
- * which the offsets make lossless. A later `Subscribe` on the port
- * supersedes the replay in flight; its frames echo its generation and the
- * decoder drops the superseded one's; `SessionBridge` owns the fiber per
- * port and forks the next `Subscribe`'s stream after interrupting it.
+ * Frames contain at most 256 inputs and target 256 KiB, while a single
+ * retained row can use the independent 16 MiB envelope. SessionBridge waits
+ * for receiver progress after each frame; there is no queued frame buffer.
+ * This suspends only this reader, never the durable publisher. Superseding
+ * a generation interrupts its read and clears its transcript interests.
  *
  * Display redaction (contract C3): every framer to a renderer process
  * applies display redaction and truncation. The rows this plane carries
@@ -28,7 +25,14 @@
  * redaction map here, in `cutFrame`, as the obligation it makes
  * load-bearing. Nothing is framed that is not already display-safe.
  */
-import { Effect, Stream, SubscriptionRef, type Context } from 'effect';
+import {
+  Effect,
+  Schedule,
+  Sink,
+  Stream,
+  SubscriptionRef,
+  type Context,
+} from 'effect';
 
 import {
   aggregateId as qualifyAggregateId,
@@ -40,6 +44,15 @@ import {
 } from '@shared/schemas';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import {
+  SESSION_FRAME_BYTES,
+  SESSION_FRAME_ROWS,
+  SESSION_FRAME_TARGET_BYTES,
+  SESSION_REPLAY_BYTES,
+  SESSION_REPLAY_ROWS,
+  SessionReaderError,
+  sessionMessageBytes,
+} from '@shared/session/sessionReadBudget';
 import type {
   EventsFrame,
   FoldEvent,
@@ -47,12 +60,8 @@ import type {
 } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 
-/** Rows per frame before the window cuts it. */
-const FRAME_ROWS = 256;
 /** The framing window: the 16 ms cadence of the old delta batches. */
 const FRAME_WINDOW = '16 millis';
-/** Frames buffered ahead of the port before the framer suspends. */
-const FRAME_BUFFER = 64;
 
 /** The session view, ordered input reader, and per-port subscription setter. */
 export interface FramerSource {
@@ -80,6 +89,7 @@ type FrameItem =
 function cutFrame(
   key: string,
   subscribe: Subscribe,
+  sequence: number,
   named: ReadonlySet<string>,
   drainedBefore: CommitOrdinal,
   items: readonly FrameItem[],
@@ -136,6 +146,7 @@ function cutFrame(
     kind: 'events',
     session: key,
     generation: subscribe.generation,
+    sequence,
     cursor: drained,
     events,
     chunks: [...chunks.values()],
@@ -167,10 +178,13 @@ export function frameSubscription(
           ? (yield* SubscriptionRef.get(source.view)).cursor
           : subscribe.cursor;
       const inputs = source
-        .inputs(subscribe.aggregates, tailFrom)
+        .inputs(subscribe.aggregates, tailFrom, {
+          bytes: SESSION_REPLAY_BYTES,
+          rows: SESSION_REPLAY_ROWS,
+        })
         .pipe(
           Stream.flatMap((batch) =>
-            Stream.fromIterable(batch).pipe(
+            Stream.fromIterable(batch, { chunkSize: 1 }).pipe(
               Stream.filter(
                 (
                   input,
@@ -185,19 +199,71 @@ export function frameSubscription(
         Stream.map((value): FrameItem => ({ _tag: 'host', host: value })),
       );
       return Stream.merge(inputs, hosts).pipe(
-        Stream.groupedWithin(FRAME_ROWS, FRAME_WINDOW),
-        Stream.buffer({ capacity: FRAME_BUFFER, strategy: 'suspend' }),
+        Stream.aggregateWithin(
+          Sink.fold(
+            () => ({
+              items: [] as FrameItem[],
+              bytes: 0,
+              next: null as FrameItem | null,
+            }),
+            (batch) =>
+              batch.next === null &&
+              batch.items.length < SESSION_FRAME_ROWS &&
+              batch.bytes < SESSION_FRAME_TARGET_BYTES,
+            (batch, item: FrameItem) =>
+              Effect.sync(() => {
+                const size = sessionMessageBytes(item);
+                if (size > SESSION_FRAME_BYTES - SESSION_FRAME_TARGET_BYTES)
+                  throw new SessionReaderError(
+                    'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
+                  );
+                if (
+                  batch.items.length > 0 &&
+                  batch.bytes + size > SESSION_FRAME_TARGET_BYTES
+                ) {
+                  batch.next = item;
+                  return batch;
+                }
+                batch.items.push(item);
+                batch.bytes += size;
+                return batch;
+              }),
+          ).pipe(
+            Sink.mapEnd(
+              ([batch, leftovers]) =>
+                [
+                  { items: batch.items },
+                  // fold consumed the prospective row; return it as the first
+                  // leftover so the next frame receives it exactly once.
+                  batch.next === null
+                    ? leftovers
+                    : [batch.next, ...(leftovers ?? [])],
+                ] as const,
+            ),
+          ),
+          Schedule.spaced(FRAME_WINDOW),
+        ),
+        Stream.filter((batch) => batch.items.length > 0),
         Stream.mapAccum(
-          () => tailFrom,
-          (drained, items: readonly FrameItem[]) => {
+          () => ({ cursor: tailFrom, sequence: 0 }),
+          (previous, batch) => {
             const frame = cutFrame(
               source.key,
               subscribe,
+              previous.sequence + 1,
               named,
-              drained,
-              items,
+              previous.cursor,
+              batch.items,
             );
-            return [frame.cursor, [frame]] as const;
+            if (sessionMessageBytes(frame) > SESSION_FRAME_BYTES) {
+              throw new SessionReaderError(
+                'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
+              );
+            }
+            return [
+              { cursor: frame.cursor, sequence: frame.sequence },
+              [frame],
+            ] as const;
           },
         ),
       );

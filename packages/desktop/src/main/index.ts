@@ -795,8 +795,10 @@ function createWindow(options: {
     });
     const port = bridge.attach({
       id: `window:${window.id}`,
-      send: (message) => {
-        postToRendererIfAlive(message);
+      send: async (message) => {
+        if (!postToRendererIfAlive(message)) {
+          throw new Error('The conversation window is unavailable.');
+        }
       },
     });
     void snapshot.refresh();

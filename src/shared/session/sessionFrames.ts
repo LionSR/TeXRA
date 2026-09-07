@@ -40,6 +40,13 @@ import { HostRequestSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
 import { OutcomeSchema, RuntimeRequestSchema } from './runtimeRequest';
 import { LaunchPatchSchema } from './surface';
+import {
+  SESSION_FRAME_BYTES,
+  SESSION_FRAME_ROWS,
+  SESSION_REPLAY_BYTES,
+  SESSION_REPLAY_ROWS,
+  sessionMessageBytes,
+} from './sessionReadBudget';
 
 /** The workspace root that keys the layer maps, on every message. */
 const SessionKeySchema = z.string().min(1);
@@ -65,6 +72,8 @@ const EventsFrameSchema = z.object({
   kind: z.literal('events'),
   session: SessionKeySchema,
   generation: GenerationSchema,
+  /** One-based, contiguous within this subscription generation. */
+  sequence: z.int().positive(),
   cursor: CommitOrdinalSchema,
   events: z.array(FoldEventSchema),
   chunks: z.array(TextChunkSchema),
@@ -74,6 +83,29 @@ const EventsFrameSchema = z.object({
   replayComplete: z.boolean(),
 });
 export type EventsFrame = z.infer<typeof EventsFrameSchema>;
+
+const ReaderProgressSchema = z.object({
+  kind: z.literal('reader.progress'),
+  session: SessionKeySchema,
+  generation: GenerationSchema,
+  sequence: z.int().positive(),
+});
+export type ReaderProgress = z.infer<typeof ReaderProgressSchema>;
+
+const ReaderStopSchema = z.object({
+  kind: z.literal('reader.stop'),
+  session: SessionKeySchema,
+  generation: GenerationSchema,
+});
+
+const ReaderFailureSchema = z.object({
+  kind: z.literal('reader.error'),
+  session: SessionKeySchema,
+  generation: GenerationSchema,
+  reason: z.string(),
+  retryable: z.boolean(),
+});
+export type ReaderFailure = z.infer<typeof ReaderFailureSchema>;
 
 /** The request errors of 7.6 on the wire, plus the bridge's own `Invalid`
  *  for a message it could not parse. `Internal` is a handler defect: the
@@ -163,6 +195,8 @@ export const UpMessageSchema = z.discriminatedUnion('kind', [
   SubscribeSchema,
   RuntimeRequestMessageSchema,
   HostRequestMessageSchema,
+  ReaderProgressSchema,
+  ReaderStopSchema,
 ]);
 export type UpMessage = z.infer<typeof UpMessageSchema>;
 
@@ -170,13 +204,23 @@ export const DownMessageSchema = z.discriminatedUnion('kind', [
   EventsFrameSchema,
   ResponseSchema,
   SurfaceActionMessageSchema,
+  ReaderFailureSchema,
 ]);
 export type DownMessage = z.infer<typeof DownMessageSchema>;
 
 /** One generation's ordered frames; replay is collected before publication. */
+interface QueuedFrame {
+  readonly frame: EventsFrame;
+  readonly consumed: () => void;
+}
+
 interface FrameRead {
   readonly generation: number;
-  readonly queue: Queue.Queue<EventsFrame, Cause.Done>;
+  readonly queue: Queue.Queue<QueuedFrame, Cause.Done>;
+  sequence: number;
+  replayBytes: number;
+  replayRows: number;
+  replayComplete: boolean;
 }
 
 export class SessionFrames extends Context.Service<
@@ -188,7 +232,12 @@ export class SessionFrames extends Context.Service<
     readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
     readonly begin: (generation: number) => Effect.Effect<void>;
     /** Feed a frame synchronously, preserving arrival order. */
-    readonly feed: (frame: EventsFrame) => Effect.Effect<void>;
+    readonly feed: (
+      frame: EventsFrame,
+      consumed: () => void,
+    ) => Effect.Effect<Pick<ReaderFailure, 'reason' | 'retryable'> | null>;
+    /** End only this read; a new subscription can reuse the fold's last level. */
+    readonly stop: Effect.Effect<void>;
   }
 >()('@texra/session/SessionFrames') {
   static readonly layer = Layer.effect(
@@ -197,8 +246,13 @@ export class SessionFrames extends Context.Service<
       const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
       let current: FrameRead = {
         generation: 0,
-        queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
+        queue: yield* Queue.bounded<QueuedFrame, Cause.Done>(1),
+        sequence: 0,
+        replayBytes: 0,
+        replayRows: 0,
+        replayComplete: false,
       };
+      yield* Effect.addFinalizer(() => Queue.shutdown(current.queue));
       return {
         host,
         inputs: (aggregates) =>
@@ -211,7 +265,7 @@ export class SessionFrames extends Context.Service<
                   ] as FoldInput[],
                   complete: false,
                 }),
-                (state, frame) => {
+                (state, { frame, consumed }) => {
                   const history = frame.events.filter(
                     (row) => row.read !== 'all',
                   );
@@ -225,14 +279,21 @@ export class SessionFrames extends Context.Service<
                     ...local,
                     { _tag: 'drained', cursor: frame.cursor },
                   ];
-                  if (state.complete) return [state, [live]] as const;
+                  if (state.complete) {
+                    consumed();
+                    return [state, [live]] as const;
+                  }
                   state.replay.push(...history, ...local);
-                  if (!frame.replayComplete) return [state, []] as const;
+                  if (!frame.replayComplete) {
+                    consumed();
+                    return [state, []] as const;
+                  }
                   const batch: FoldInput[] = [
                     ...state.replay,
                     { _tag: 'replay.complete' },
                     ...live,
                   ];
+                  consumed();
                   return [
                     { replay: [] as FoldInput[], complete: true },
                     [batch],
@@ -243,16 +304,67 @@ export class SessionFrames extends Context.Service<
           ),
         begin: (generation) =>
           Effect.gen(function* () {
+            yield* Queue.clear(current.queue);
+            yield* Queue.end(current.queue);
             current = {
               generation,
-              queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
+              queue: yield* Queue.bounded<QueuedFrame, Cause.Done>(1),
+              sequence: 0,
+              replayBytes: 0,
+              replayRows: 0,
+              replayComplete: false,
             };
           }),
-        feed: (frame) =>
+        stop: Effect.suspend(() =>
+          Queue.clear(current.queue).pipe(
+            Effect.andThen(Queue.end(current.queue)),
+            Effect.asVoid,
+          ),
+        ),
+        feed: (frame, consumed) =>
           Effect.gen(function* () {
-            if (frame.generation !== current.generation) return;
-            yield* Queue.offer(current.queue, frame);
+            if (frame.generation !== current.generation) return null;
+            if (frame.sequence !== current.sequence + 1) {
+              return {
+                reason:
+                  'Conversation delivery was interrupted. Reload the conversation to continue.',
+                retryable: true,
+              };
+            }
+            const bytes = sessionMessageBytes(frame);
+            const rows = frame.events.length + frame.chunks.length;
+            if (bytes > SESSION_FRAME_BYTES || rows > SESSION_FRAME_ROWS) {
+              return {
+                reason:
+                  'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
+                retryable: false,
+              };
+            }
+            if (!current.replayComplete) {
+              current.replayBytes += bytes;
+              current.replayRows += rows;
+              if (
+                current.replayBytes > SESSION_REPLAY_BYTES ||
+                current.replayRows > SESSION_REPLAY_ROWS
+              ) {
+                return {
+                  reason:
+                    'This conversation exceeds the history display limit. Its saved content is unchanged.',
+                  retryable: false,
+                };
+              }
+            }
+            if (!Queue.offerUnsafe(current.queue, { frame, consumed })) {
+              return {
+                reason:
+                  'Conversation updates arrived faster than this view could read them. Reload the conversation to continue.',
+                retryable: true,
+              };
+            }
+            current.sequence = frame.sequence;
+            current.replayComplete ||= frame.replayComplete;
             if (frame.host) yield* SubscriptionRef.set(host, frame.host);
+            return null;
           }),
       };
     }),

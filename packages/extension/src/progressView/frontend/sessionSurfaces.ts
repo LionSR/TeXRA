@@ -102,6 +102,14 @@ export function createSessionSurfaces(options: {
     unsubscribe(): void;
   }
   const held = new Map<string, Held>();
+  transport.onReaderFailure((key, reason) => {
+    const entry = held.get(key);
+    if (!entry) return;
+    setSurface(entry, {
+      ...entry.surface$.get(),
+      requestError: { _tag: 'Rejected', reason },
+    });
+  });
   const listeners = new Set<() => void>();
   const notify = () => {
     for (const listener of [...listeners]) listener();

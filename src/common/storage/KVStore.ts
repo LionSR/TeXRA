@@ -10,9 +10,38 @@
 import * as path from 'node:path';
 
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
+import { FileReadLimitError } from '@common/storage/fileReadLimit';
 import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 import { StorageFS } from '@utils/files/storageFS';
+
+/** Count top-level array values before JSON.parse allocates the decoded array. */
+function checkArrayRows(raw: string, maxRows: number): void {
+  if (!raw.trimStart().startsWith('[')) return;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  let started = false;
+  let rows = 0;
+  for (const char of raw) {
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') quoted = false;
+      continue;
+    }
+    if (depth === 1) {
+      if (char === ',') started = false;
+      else if (!started && char !== ']' && !/\s/.test(char)) {
+        started = true;
+        if (++rows > maxRows) throw new FileReadLimitError('rows');
+      }
+    }
+    if (char === '"') quoted = true;
+    else if (char === '[' || char === '{') depth += 1;
+    else if (char === ']' || char === '}') depth -= 1;
+  }
+}
 
 function keyToPath(dir: string, key: string): string {
   return path.join(dir, `${encodeURIComponent(key)}.json`);
@@ -52,12 +81,16 @@ export class KVStore {
     this.indent = options.compactJson ? undefined : 2;
   }
 
-  async read<T = unknown>(key: string): Promise<T | undefined> {
+  async read<T = unknown>(
+    key: string,
+    budget?: { readonly bytes: number; readonly rows: number },
+  ): Promise<T | undefined> {
     const raw = await withMissingFallback(
-      () => StorageFS.read(keyToPath(this.dir, key)),
+      () => StorageFS.read(keyToPath(this.dir, key), budget?.bytes),
       undefined,
     );
     if (raw === undefined) return undefined;
+    if (budget) checkArrayRows(raw, budget.rows);
     return JSON.parse(raw) as T;
   }
 

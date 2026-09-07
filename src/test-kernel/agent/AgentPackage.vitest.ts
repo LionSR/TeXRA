@@ -19,6 +19,7 @@ interface FakeStreamView {
   readonly executionId: string;
   readonly ancestors: readonly { readonly id: string }[];
   readonly durableOutcome: 'completed' | null;
+  readonly transcript?: { readonly rows: readonly string[] };
 }
 type FakeSessionView = Omit<RuntimeSessionView, 'streams'> & {
   readonly streams: Map<string, FakeStreamView>;
@@ -37,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   executionId: 'execution-1',
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
+  deferHydration: false,
   eventListener: undefined as ((event: unknown) => void) | undefined,
   initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
@@ -114,11 +116,21 @@ vi.mock('@agent/runtime', async () => {
       ),
     );
 
-    /** The transcript interest port, as the owner's graph exposes it. */
+    /** Atomic replay publication, independently delayable for late readers. */
     readonly subscriptions = {
-      set: (port: string, set: readonly unknown[]) =>
-        Effect.sync(() => {
+      set: (port: string, set: readonly { readonly id: AggregateId }[]) =>
+        Effect.gen({ self: this }, function* () {
           mocks.setTranscriptSubscriptions(port, set);
+          if (mocks.deferHydration || set.length === 0) return;
+          const current = yield* SubscriptionRef.get(this.view);
+          if (set.every((entry) => current.folded.has(entry.id))) return;
+          yield* SubscriptionRef.update(this.view, (view) => ({
+            ...view,
+            folded: new Map([
+              ...view.folded,
+              ...set.map((entry) => [entry.id, 0] as const),
+            ]),
+          }));
         }),
     };
 
@@ -189,6 +201,7 @@ vi.mock('@transcript/StreamLogStore', () => ({
 }));
 
 // Local imports - package API under test
+import type { AggregateId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
 import {
   runAgent,
@@ -284,6 +297,7 @@ describe('agent package run lifecycle', () => {
     mocks.activePlatform = null;
     mocks.agentCategory = 'toolUse';
     mocks.eventListener = undefined;
+    mocks.deferHydration = false;
     mocks.ownerInstalled = false;
     mocks.initPlatform.mockImplementation((platform: object) => {
       mocks.activePlatform = platform;
@@ -354,6 +368,49 @@ describe('agent package run lifecycle', () => {
       value: undefined,
     });
   });
+
+  it.each([
+    { label: 'event count', count: 514, event: EVENT },
+    {
+      label: 'encoded bytes',
+      count: 2,
+      event: { type: 'trace', text: 'x'.repeat(9 * 1024 * 1024) },
+    },
+  ])(
+    'fails a slow attached trace on $label overflow while its run completes',
+    async ({ count, event }) => {
+      let finish: (() => void) | undefined;
+      mocks.runValidatedAgent.mockImplementationOnce(
+        async (_input: unknown, options: RunAgentOptions) => {
+          options.onStreamResolved?.('stream-1', TRACE);
+          await enterStream('stream-1');
+          await new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+          await completeRunView();
+          return RESULT;
+        },
+      );
+      const run = runAgent(INPUT);
+      const iterator = run[Symbol.asyncIterator]();
+      const first = iterator.next();
+      await vi.waitFor(() => expect(finish).toBeDefined());
+      mocks.eventListener?.(EVENT);
+      await first;
+      for (let i = 0; i < count; i += 1) mocks.eventListener?.(event);
+      expect(mocks.detachEvents).toHaveBeenCalledOnce();
+      finish?.();
+      await expect(run.result).resolves.toBe(RESULT);
+      // Overflow is explicit after already accepted trace events are consumed.
+      await expect(
+        (async () => {
+          while (!(await iterator.next()).done) {
+            /* drain accepted events */
+          }
+        })(),
+      ).rejects.toThrow('exceeded its unread event budget');
+    },
+  );
 
   it('rejects caller tools that require unavailable approval', async () => {
     const run = runAgent({
@@ -586,10 +643,11 @@ describe('agent package run lifecycle', () => {
     expect(reader[0]?.[1]).toEqual(interest);
     expect(reader[1]?.[0]).toBe(reader[0]?.[0]);
     expect(reader[1]?.[1]).toEqual([]);
-    // The run's port is the run's: the reader never touched it, so the
-    // README's residency contract still holds for a finished run.
+    // Finishing the run released its own interest before this reader
+    // opened; scoped readers cannot retain all earlier runs accidentally.
     expect(ports.filter(([port]) => port === 'sdk/stream-1')).toEqual([
       ['sdk/stream-1', interest],
+      ['sdk/stream-1', []],
     ]);
   });
 
@@ -689,7 +747,7 @@ describe('agent package run lifecycle', () => {
     await enterStream('stream-2', { ancestors: [{ id: 'stream-1' }] });
     await views.next();
     await vi.waitFor(() =>
-      expect(mocks.setTranscriptSubscriptions).toHaveBeenLastCalledWith(
+      expect(mocks.setTranscriptSubscriptions).toHaveBeenCalledWith(
         'sdk/stream-1',
         [
           { id: '["stream","stream-1"]', fromSeq: 0 },
@@ -710,20 +768,57 @@ describe('agent package run lifecycle', () => {
     expect(settled).toBe(false);
 
     await completeRunView();
-    const last = (await views.next()).value as SessionView;
-    expect(last.streams.get('stream-1')?.durableOutcome).toBe('completed');
+    let last = (await views.next()).value as SessionView;
+    while (last.streams.get('stream-1')?.durableOutcome !== 'completed') {
+      last = (await views.next()).value as SessionView;
+    }
     await expect(views.next()).resolves.toEqual({
       done: true,
       value: undefined,
     });
     await expect(run.result).resolves.toBe(RESULT);
 
-    // A reader attaching after settlement receives the final state once.
+    // The terminal drain and finished observer released both interests.
+    expect(mocks.setTranscriptSubscriptions).toHaveBeenCalledWith(
+      'sdk/stream-1',
+      [],
+    );
+    await Effect.runPromise(
+      SubscriptionRef.update(sessionView(), (view) => ({
+        ...view,
+        folded: new Map(),
+      })),
+    );
+    mocks.deferHydration = true;
     const lateViews = run.view[Symbol.asyncIterator]();
-    await expect(lateViews.next()).resolves.toEqual({
-      done: false,
-      value: last,
+    let hydrated = false;
+    const late = lateViews.next().then((value) => {
+      hydrated = true;
+      return value;
     });
+    await setImmediate();
+    expect(hydrated).toBe(false);
+    // A retained row arrives only with the new subscription's atomic replay.
+    await Effect.runPromise(
+      SubscriptionRef.update(sessionView(), (view) => ({
+        ...view,
+        folded: new Map(
+          [...view.streams.keys()].map((id) => [aggregateId('stream', id), 10]),
+        ),
+        streams: new Map(
+          [...view.streams].map(([id, stream]) => [
+            id,
+            {
+              ...stream,
+              transcript: { rows: ['retained transcript row'] },
+            },
+          ]),
+        ),
+      })),
+    );
+    expect(
+      (await late).value?.streams.get('stream-1')?.transcript.rows,
+    ).toEqual(['retained transcript row']);
     await expect(lateViews.next()).resolves.toEqual({
       done: true,
       value: undefined,

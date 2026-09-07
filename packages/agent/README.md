@@ -66,14 +66,13 @@ Trace events are buffered from the moment the run enters its session, so an
 iteration begun right after `runAgent()` misses none of the launch events.
 Ending the iteration detaches the event source while the run itself continues,
 and a run that settles without ever being iterated discards what it buffered.
-That buffer is only the handover to the first reader, and it is bounded: a run
-whose events pass the handover window with nobody reading has no reader, so it
-logs a warning naming the run and detaches its trace. Awaiting only `result`
-therefore never retains a long run's whole trace. A reader that did attach is
-never dropped: past its first pull the buffer is that reader's, and nothing
-discards what it has yet to read.
+The unread buffer is limited to 512 events and 8 MiB of encoded data,
+including after a reader attaches. A reader that falls behind fails explicitly
+and detaches; the run continues and its result is unaffected. Use `view` or
+canonical session events to recover retained state. Awaiting only `result`
+therefore never retains a long run's whole trace.
 
-Every failure reaches the caller on `result`; `runAgent()` itself does not
+Every execution failure reaches the caller on `result`; `runAgent()` itself does not
 throw. A refusal before any model work is one of the tagged errors the Effect
 surface names below (`AgentNotFound`, `ToolsRefused`, and `PlatformConflict`
 for a second, different platform); a run that fails after entering its session
@@ -82,8 +81,8 @@ rejects with exactly what the launch path threw.
 `view` is the folded session state every TeXRA host renders, so stream
 status, transcript rows, and pending approvals are read from it rather than
 re-folded from the trace. Each `for await` over it yields the current view
-first, then subsequent changes through the first view containing the run's
-durable outcome. That final view is included even when iteration starts after
+after its requested transcripts have replayed, then subsequent changes through
+the first hydrated view containing the run's durable outcome. That final view is included even when iteration starts after
 `result` settles, and the first view yielded always holds the run's stream.
 `result` settles only once the final view has folded, independently of whether
 the caller reads it; if the session's fold dies first, `result` and every
@@ -104,7 +103,10 @@ so nothing in the package folds onto anything but the latest level. The exported
 arrays); a write through a cast corrupts the session every later run in the
 process reads. The run's transcript rows (`StreamView.transcript`) are
 subscribed on its behalf, its stream and its descendants as they appear, and
-stay resident for the life of the process.
+stay resident until the run's final fold. Each active `view` reader holds its
+own scoped interest and releases it when iteration ends. A late reader
+reacquires that interest and waits for transcript replay before yielding the
+terminal view. Other readers' interests remain independent.
 
 Runs share one session per workspace storage root. The runtime's session
 owner holds it, the same owner every TeXRA host opens its sessions through, so
