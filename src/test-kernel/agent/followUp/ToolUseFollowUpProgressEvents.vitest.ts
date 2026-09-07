@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -104,9 +105,11 @@ describe('tool-use follow-up progress events', () => {
 
     trackToolUseFlow({ session });
 
-    const result = await submitFollowUp(streamId, 'please continue', {
-      session,
-    });
+    const result = await Effect.runPromise(
+      submitFollowUp(streamId, 'please continue', {
+        session,
+      }),
+    );
 
     expect(result).toEqual({ status: 'sent' });
     expect(session.followUps.queue(lease).drainItems()).toMatchObject([
@@ -186,7 +189,9 @@ describe('tool-use follow-up progress events', () => {
     });
     trackToolUseFlow();
 
-    const result = await submitFollowUp(streamId, 'late follow-up');
+    const result = await Effect.runPromise(
+      submitFollowUp(streamId, 'late follow-up', { session: defaultSession() }),
+    );
 
     expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
     expect(defaultSession().followUps.getAll(streamId)).toEqual([]);
@@ -196,10 +201,12 @@ describe('tool-use follow-up progress events', () => {
     const session = trackSession();
     const recorded = recordSessionEvents(session);
 
-    const result = await submitFollowUp(
-      'stream:no-follow-up-session' as StreamTabId,
-      'cannot deliver',
-      { session },
+    const result = await Effect.runPromise(
+      submitFollowUp(
+        'stream:no-follow-up-session' as StreamTabId,
+        'cannot deliver',
+        { session },
+      ),
     );
 
     expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
@@ -215,9 +222,10 @@ describe('tool-use follow-up progress events', () => {
     });
 
     try {
-      const result = await submitFollowUp(
-        resumingStreamId,
-        'queued while resuming',
+      const result = await Effect.runPromise(
+        submitFollowUp(resumingStreamId, 'queued while resuming', {
+          session: defaultSession(),
+        }),
       );
 
       // The fake platform's resume port refuses, so the input stays queued

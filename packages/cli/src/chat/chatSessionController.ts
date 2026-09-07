@@ -13,7 +13,6 @@ import {
   attachTerminalResultToast,
   describeFollowUpFailure,
   detachSubagentsOnStop,
-  lookupStreamExecutionId,
   resumeRun,
   runAgent,
   type AgentConfig,
@@ -870,9 +869,7 @@ export function createChatSessionController(
 
         await effectRuntime().runPromise(snapshotStore.preload([streamId]));
         const runMetadata = snapshotStore.getRunMetadata(streamId);
-        const executionId =
-          runMetadata.executionId ??
-          (await lookupStreamExecutionId(streamId, runtimeSession));
+        const executionId = runMetadata.executionId;
         if (!executionId) return false;
 
         const config =

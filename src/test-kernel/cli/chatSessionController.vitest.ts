@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   attachTerminalResultToast: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
-  lookupStreamExecutionId: vi.fn(),
   notify: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
   appendLocalErrorTranscript: vi.fn(),
@@ -47,7 +46,6 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/runtime/resumeRun', () => ({
   resumeRun: mocks.resumeRun,
-  lookupStreamExecutionId: mocks.lookupStreamExecutionId,
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
@@ -597,7 +595,6 @@ describe('createChatSessionController', () => {
     );
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
-    mocks.lookupStreamExecutionId.mockResolvedValue('exec-1');
     installResumeExecutionStore();
     rootStreamId.set(undefined);
     rootRunPending.set(false);
@@ -1161,7 +1158,6 @@ describe('createChatSessionController', () => {
       preload: () => preload.promise,
       executionId: undefined,
     });
-    mocks.lookupStreamExecutionId.mockResolvedValueOnce(undefined);
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );

@@ -43,6 +43,7 @@ import type {
 } from '@agent/followUp/FollowUpQueue';
 import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { deliverChildRunFollowUp } from '@agent/followUp/childRunDelivery';
+import { enqueueLiveFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
@@ -724,19 +725,19 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
  * Resolve a pending delivery's wake step (no-op when there is nothing to
  * wake, or the enqueue itself found no session; already logged above).
  */
-async function submitPendingDelivery(
+const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   pending: PendingChildDelivery | undefined,
   session: SessionHandle,
   executionId: ExecutionId,
   logger: AgentTrace,
-): Promise<void> {
+): Effect.fn.Return<void, Error> {
   if (!pending) return;
   const targetStreamId = pending.resolveTargetStreamId();
   if (!targetStreamId) {
     warnDetachedChildDelivery(logger, executionId);
     return;
   }
-  const delivery = await deliverChildRunFollowUp({
+  const delivery = yield* deliverChildRunFollowUp({
     targetStreamId,
     followUp: pending.followUp,
     session,
@@ -758,7 +759,7 @@ async function submitPendingDelivery(
       { data: { executionId, parentStreamId: targetStreamId } },
     );
   }
-}
+});
 
 /**
  * Run pre-handoff launch work under one failure policy: if the operation
@@ -941,12 +942,11 @@ export function startChildRunLoop<TTurn>(
         );
         if (!targetStreamId) return;
         const msg = formatSubagentProgress(executionId, agentName, update);
-        void deliverChildRunFollowUp({
+        enqueueLiveFollowUp(
           targetStreamId,
-          followUp: { text: msg, origin: 'subagent_result' },
-          session: runSession,
-          mode: 'live_notification',
-        });
+          { text: msg, origin: 'subagent_result' },
+          runSession,
+        );
       },
       recordCost: (totalCostUsd) => {
         if (totalCostUsd !== undefined) {
@@ -1120,18 +1120,12 @@ export function startChildRunLoop<TTurn>(
               // the instant this turn settled); then just drain the next batch. A
               // follow-up already raced into the queue resumes immediately instead
               // of genuinely waiting.
-              yield* Effect.tryPromise({
-                try: () =>
-                  runInSession(runSession, () =>
-                    submitPendingDelivery(
-                      delivery,
-                      runSession,
-                      executionId,
-                      logger,
-                    ),
-                  ),
-                catch: ensureError,
-              });
+              yield* submitPendingDelivery(
+                delivery,
+                runSession,
+                executionId,
+                logger,
+              );
               childStream?.waitForInput();
               if (loop.isInterrupted()) break;
 
@@ -1232,18 +1226,12 @@ export function startChildRunLoop<TTurn>(
             }
           }
           // Parent wake follows the child's terminal commit and handle settlement.
-          yield* Effect.tryPromise({
-            try: () =>
-              runInSession(runSession, () =>
-                submitPendingDelivery(
-                  pendingDelivery,
-                  runSession,
-                  executionId,
-                  logger,
-                ),
-              ),
-            catch: ensureError,
-          });
+          yield* submitPendingDelivery(
+            pendingDelivery,
+            runSession,
+            executionId,
+            logger,
+          );
         }),
       );
       const released = yield* Effect.exit(

@@ -6,6 +6,7 @@ import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import pDefer from 'p-defer';
+import { Effect } from 'effect';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
@@ -671,7 +672,7 @@ describe('BashTool', () => {
 
     const submitFollowUpSpy = vi
       .spyOn(toolUseFollowUp, 'submitFollowUp')
-      .mockResolvedValue({ status: 'sent' });
+      .mockReturnValue(Effect.succeed({ status: 'sent' }));
 
     const parentStreamId = 'bash-tool-bg-parent' as StreamTabId;
     const parentLease = defaultSession().followUps.claimLive(

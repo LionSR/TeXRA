@@ -307,7 +307,8 @@ export function createDesktopHostRequests(
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
     },
-    sendFollowUp: runActions.sendFollowUp,
+    sendFollowUp: (streamId, text) =>
+      effectRuntime().runPromise(runActions.sendFollowUp(streamId, text)),
   });
 
   async function runWorkflowDiff(request: WorkflowDiffRequest): Promise<void> {

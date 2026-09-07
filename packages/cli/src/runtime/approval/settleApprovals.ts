@@ -9,6 +9,7 @@
 
 import { defaultSession } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   decideHumanInputRequest,
   decideRetryApproval,
@@ -157,16 +158,23 @@ export function denyExternalInquiryIfNoHumanInput(
   // Persisting the drop writes the inquiry thread; nothing else owns this
   // promise, so its rejection is logged here instead of surfacing as an
   // unhandled rejection.
-  handleExternalInquiryAction({
-    action: 'drop',
-    threadId,
-    turnIndex,
-    reason: denial.reason,
-  }).catch((error: unknown) => {
-    logWarning(
-      'cli.approval',
-      `External inquiry ${threadId} drop failed: ${toErrorMessage(error)}`,
-    );
-  });
+  effectRuntime()
+    .runPromise(
+      handleExternalInquiryAction(
+        {
+          action: 'drop',
+          threadId,
+          turnIndex,
+          reason: denial.reason,
+        },
+        { session: defaultSession() },
+      ),
+    )
+    .catch((error: unknown) => {
+      logWarning(
+        'cli.approval',
+        `External inquiry ${threadId} drop failed: ${toErrorMessage(error)}`,
+      );
+    });
   return true;
 }

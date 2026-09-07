@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   importCodexClass: vi.fn(),
   findCodexBinaryPath: vi.fn(),
   resumeThread: vi.fn(),
-  submitFollowUp: vi.fn(async () => ({ status: 'sent' as const })),
+  submitFollowUp: vi.fn(),
 }));
 
 vi.mock('@tools/approval/bashApproval', () => ({
@@ -144,6 +144,7 @@ function captureRunLoopStrategy(): () => ChildRunStrategy<unknown> | undefined {
 
 describe('codex tool - atomic resume fallback', () => {
   beforeEach(() => {
+    mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
     mocks.startChildRunLoop.mockReset();
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.importCodexClass.mockReset();

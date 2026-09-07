@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
@@ -82,7 +83,7 @@ async function launchBackgroundRun(
   );
   const followUp = vi
     .spyOn(toolUseFollowUp, 'submitFollowUp')
-    .mockResolvedValue({ status: 'sent' });
+    .mockReturnValue(Effect.succeed({ status: 'sent' }));
 
   const { host } = createRecordingHost();
   const recorded = recordSessionEvents(defaultSession());

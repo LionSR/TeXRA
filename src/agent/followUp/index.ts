@@ -23,7 +23,6 @@ export {
   notifyFollowUpSent,
   presentFollowUpResult,
   submitFollowUp,
-  type SubmitFollowUpResult,
 } from './ToolUseFollowUp';
 export type { FollowUpQueueInput } from './FollowUpQueue';
 export type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';

@@ -155,10 +155,7 @@ export const resumeStream = Effect.fn('resumeStream')(function* (
     if (recovery) session.followUps.release(recovery, 'recoverable');
     return REFUSED;
   }
-  const executionId = yield* Effect.tryPromise({
-    try: () => lookupStreamExecutionId(streamId, session),
-    catch: ensureError,
-  }).pipe(
+  const executionId = yield* lookupStreamExecutionId(streamId, session).pipe(
     Effect.onError(() =>
       Effect.sync(() =>
         releaseUnstartedRecovery(session, recovery, options.recovery == null),
@@ -175,8 +172,6 @@ export const resumeStream = Effect.fn('resumeStream')(function* (
     options.recovery == null,
   );
 }, Effect.uninterruptible);
-
-export { lookupStreamExecutionId } from '@agent/followUp/ToolUseFollowUp';
 
 const log = createLog('ResumeRun');
 

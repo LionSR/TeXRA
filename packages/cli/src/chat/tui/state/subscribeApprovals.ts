@@ -64,6 +64,7 @@ import {
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   isCodingPlanQuotaRoute,
   type QuotaFallbackRouteId,
@@ -809,11 +810,15 @@ function handleExternalInquiry(
     // Persisting the action writes the inquiry thread; nothing else owns
     // this promise, so its rejection is logged here instead of surfacing as
     // an unhandled rejection.
-    handleExternalInquiryAction(action).catch((error: unknown) => {
-      logWarning(
-        'cli.tui',
-        `External inquiry ${threadId} ${action.action} failed: ${toErrorMessage(error)}`,
-      );
-    });
+    effectRuntime()
+      .runPromise(
+        handleExternalInquiryAction(action, { session: currentSession() }),
+      )
+      .catch((error: unknown) => {
+        logWarning(
+          'cli.tui',
+          `External inquiry ${threadId} ${action.action} failed: ${toErrorMessage(error)}`,
+        );
+      });
   });
 }

@@ -286,7 +286,9 @@ beforeEach(async () => {
   mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.persistChildRunReport.mockResolvedValue(undefined);
   mocks.persistChildRunResultMeta.mockResolvedValue(undefined);
-  mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+  mocks.deliverChildRunFollowUp.mockReturnValue(
+    Effect.succeed({ kind: 'delivered' }),
+  );
 });
 
 afterEach(() => {
@@ -559,10 +561,12 @@ describe('childRunLoop E2E fixtures', () => {
         phase: STREAM_PHASE.RUNNING,
       });
       await expect(
-        submitFollowUp(PARENT_STREAM_ID, 'active parent', {
-          session,
-          resumePort,
-        }),
+        Effect.runPromise(
+          submitFollowUp(PARENT_STREAM_ID, 'active parent', {
+            session,
+            resumePort,
+          }),
+        ),
       ).resolves.toEqual({ status: 'queued', wake: 'failed' });
 
       seedStreamStatusForTest(session.status, PARENT_STREAM_ID, {
@@ -570,18 +574,22 @@ describe('childRunLoop E2E fixtures', () => {
       });
       const userAdmission = vi.fn();
       await expect(
-        submitFollowUp(PARENT_STREAM_ID, 'restore me', {
-          session,
-          resumePort,
-          onAdmitted: userAdmission,
-        }),
+        Effect.runPromise(
+          submitFollowUp(PARENT_STREAM_ID, 'restore me', {
+            session,
+            resumePort,
+            onAdmitted: userAdmission,
+          }),
+        ),
       ).resolves.toMatchObject({ status: 'failed' });
       expect(userAdmission).toHaveBeenCalledWith(false);
       await expect(
-        submitFollowUp(
-          PARENT_STREAM_ID,
-          { text: 'late child result', origin: 'subagent_result' },
-          { session, resumePort, mode: 'child_delivery' },
+        Effect.runPromise(
+          submitFollowUp(
+            PARENT_STREAM_ID,
+            { text: 'late child result', origin: 'subagent_result' },
+            { session, resumePort, mode: 'child_delivery' },
+          ),
         ),
       ).resolves.toMatchObject({ status: 'failed' });
       expect(session.followUps.getAll(PARENT_STREAM_ID)).toEqual([
@@ -598,24 +606,28 @@ describe('childRunLoop E2E fixtures', () => {
       });
       try {
         await expect(
-          submitFollowUp(PARENT_STREAM_ID, 'native child result', {
-            session,
-            resumePort,
-            mode: 'child_delivery',
-          }),
+          Effect.runPromise(
+            submitFollowUp(PARENT_STREAM_ID, 'native child result', {
+              session,
+              resumePort,
+              mode: 'child_delivery',
+            }),
+          ),
         ).resolves.toEqual({ status: 'queued', wake: 'failed' });
       } finally {
         releaseNativeChild();
       }
 
+      const terminalQueue = session.followUps.getAll(PARENT_STREAM_ID);
       notifyProgress({ kind: 'started' });
-      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
-        expect.objectContaining({
-          targetStreamId: PARENT_STREAM_ID,
-          mode: 'live_notification',
-        }),
-      );
-      mocks.deliverChildRunFollowUp.mockClear();
+      expect(session.followUps.getAll(PARENT_STREAM_ID)).toEqual(terminalQueue);
+
+      seedStreamStatusForTest(session.status, PARENT_STREAM_ID, {
+        phase: STREAM_PHASE.RUNNING,
+      });
+      notifyProgress({ kind: 'started' });
+      const progressQueue = session.followUps.getAll(PARENT_STREAM_ID);
+      expect(progressQueue).toHaveLength(terminalQueue.length + 1);
 
       turn.resolve({ kind: 'terminal', value: 'done' });
       await formatStarted.promise;
@@ -624,6 +636,7 @@ describe('childRunLoop E2E fixtures', () => {
       formattedDelivery.resolve('delivered:done');
       await completion;
 
+      expect(session.followUps.getAll(PARENT_STREAM_ID)).toEqual(progressQueue);
       expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
     } finally {
       session.followUps.terminalize(PARENT_STREAM_ID);
@@ -657,18 +670,23 @@ describe('childRunLoop E2E fixtures', () => {
     const ids = loopIds('terminal-retry');
     const parentLease = session.followUps.claimLive(PARENT_STREAM_ID, 'flow')!;
     const admissions: string[] = [];
-    mocks.deliverChildRunFollowUp.mockImplementation(async (delivery) => {
-      const admission = delivery.session.followUps.submit(
-        delivery.targetStreamId,
-        delivery.followUp,
-        'live_owner',
-        delivery.expectedGenerationId,
-      );
-      admissions.push(admission.kind);
-      return admission.kind === 'duplicate' || admission.kind === 'refused'
-        ? { kind: 'dropped' as const }
-        : { kind: 'delivered' as const };
-    });
+    mocks.deliverChildRunFollowUp.mockImplementation((delivery) =>
+      Effect.tryPromise({
+        try: async () => {
+          const admission = delivery.session.followUps.submit(
+            delivery.targetStreamId,
+            delivery.followUp,
+            'live_owner',
+            delivery.expectedGenerationId,
+          );
+          admissions.push(admission.kind);
+          return admission.kind === 'duplicate' || admission.kind === 'refused'
+            ? { kind: 'dropped' as const }
+            : { kind: 'delivered' as const };
+        },
+        catch: (error) => error,
+      }),
+    );
 
     try {
       await startLoop(ids, createTerminalStrategy('First attempt'));
@@ -696,10 +714,15 @@ describe('childRunLoop E2E fixtures', () => {
     const { childStreamId, executionId } = loopIds('failed-turn-release');
     const { strategy, rejectTurn } = createFakeStrategy();
     const releaseSessionOwnership = vi.fn();
-    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
-      expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-      return { kind: 'delivered' };
-    });
+    mocks.deliverChildRunFollowUp.mockImplementation(() =>
+      Effect.tryPromise({
+        try: async () => {
+          expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+          return { kind: 'delivered' };
+        },
+        catch: (error) => error,
+      }),
+    );
 
     startLoop(
       { childStreamId, executionId },
@@ -744,10 +767,15 @@ describe('childRunLoop E2E fixtures', () => {
     const onTurnSuccess = vi.fn();
     const parentWake = vi.fn();
     const deliveryCompleted = pDefer<{ kind: 'delivered' }>();
-    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
-      parentWake();
-      return deliveryCompleted.promise;
-    });
+    mocks.deliverChildRunFollowUp.mockImplementation(() =>
+      Effect.tryPromise({
+        try: async () => {
+          parentWake();
+          return deliveryCompleted.promise;
+        },
+        catch: (error) => error,
+      }),
+    );
 
     startLoop(
       { childStreamId, executionId },
@@ -935,11 +963,16 @@ describe('childRunLoop E2E fixtures', () => {
       childStreamId,
     );
     let deliveryGate: DeferredPromise<void> | undefined;
-    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
-      deliveryGate = pDefer<void>();
-      await deliveryGate.promise;
-      return { kind: 'delivered' };
-    });
+    mocks.deliverChildRunFollowUp.mockImplementation(() =>
+      Effect.tryPromise({
+        try: async () => {
+          deliveryGate = pDefer<void>();
+          await deliveryGate.promise;
+          return { kind: 'delivered' };
+        },
+        catch: (error) => error,
+      }),
+    );
 
     const strategy = createTerminalStrategy('Reregister test');
 
@@ -971,15 +1004,20 @@ describe('childRunLoop E2E fixtures', () => {
 
     let releaseWake: (() => void) | undefined;
     let handleAtWakeTime: unknown;
-    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
-      // Snapshot registry state the instant the wake step is reached — the
-      // same moment a resumed parent's own turn would begin running.
-      handleAtWakeTime = session.executions.getHandle(executionId);
-      await new Promise<void>((resolve) => {
-        releaseWake = resolve;
-      });
-      return { kind: 'delivered' };
-    });
+    mocks.deliverChildRunFollowUp.mockImplementation(() =>
+      Effect.tryPromise({
+        try: async () => {
+          // Snapshot registry state the instant the wake step is reached. The
+          // same moment a resumed parent's own turn would begin running.
+          handleAtWakeTime = session.executions.getHandle(executionId);
+          await new Promise<void>((resolve) => {
+            releaseWake = resolve;
+          });
+          return { kind: 'delivered' };
+        },
+        catch: (error) => error,
+      }),
+    );
 
     const strategy = createTerminalStrategy('Finalize-before-wake test');
 
