@@ -4,8 +4,9 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 const submitFollowUpMock = vi.hoisted(() =>
   vi.fn(async () => ({ status: 'sent' as const })),
@@ -18,6 +19,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { appSignals, type AppSignalPayloads } from '@eventBus/AppSignals';
+import { effectRuntime } from '@platform/processRuntime';
 import type { StreamTabId } from '@shared/schemas';
 
 // Test support imports
@@ -26,6 +28,7 @@ import { GitHubAuthError } from '@tools/github/githubClient';
 import {
   PollingSourceBase,
   type BasePollSubscriptionState,
+  type PollEventListener,
   type PollHookRejected,
 } from '@tools/github/PollingSourceBase';
 import {
@@ -84,8 +87,8 @@ class TestPollingSource extends PollingSourceBase<
     return 'subscription error';
   }
 
-  failWithAuthError(state: BasePollSubscriptionState): void {
-    this.handleFailure(
+  failWithAuthError(state: BasePollSubscriptionState): Effect.Effect<void> {
+    return this.handleFailure(
       'owner/repo',
       state,
       new GitHubAuthError('bad token'),
@@ -93,15 +96,23 @@ class TestPollingSource extends PollingSourceBase<
     );
   }
 
-  failWithTransient(key: string, state: BasePollSubscriptionState): void {
-    this.handleFailure(key, state, new Error('network down'), Date.now());
+  failWithTransient(
+    key: string,
+    state: BasePollSubscriptionState,
+  ): Effect.Effect<void> {
+    return this.handleFailure(
+      key,
+      state,
+      new Error('network down'),
+      Date.now(),
+    );
   }
 }
 
 class RegistryTestSource {
   private readonly keys = new Set<string>();
   private readonly keyListeners = new Set<(keys: readonly string[]) => void>();
-  private readonly onEventByKey = new Map<string, (text: string) => void>();
+  private readonly onEventByKey = new Map<string, PollEventListener>();
 
   activeKeys(): readonly string[] {
     return [...this.keys];
@@ -116,22 +127,30 @@ class RegistryTestSource {
 
   subscribe(
     input: string,
-    onEvent: (text: string) => void,
-  ): { dispose(): void } {
-    this.keys.add(input);
-    this.onEventByKey.set(input, onEvent);
-    this.emitKeysChanged();
-    return {
-      dispose: () => {
-        this.keys.delete(input);
-        this.onEventByKey.delete(input);
-        this.emitKeysChanged();
-      },
-    };
+    onEvent: PollEventListener,
+  ): Effect.Effect<{ dispose(): void }> {
+    return Effect.suspend(() => {
+      this.keys.add(input);
+      this.onEventByKey.set(input, onEvent);
+      this.emitKeysChanged();
+      return Effect.succeed({
+        dispose: () => {
+          this.keys.delete(input);
+          this.onEventByKey.delete(input);
+          this.emitKeysChanged();
+        },
+      });
+    });
   }
 
-  emit(input: string, text: string): void {
-    this.onEventByKey.get(input)?.(text);
+  /**
+   * Deliver one event the way `PollingSourceBase.emitToListener` does: the
+   * listener builds its delivery program on this turn, then the program runs.
+   * Awaiting the program keeps the assertions below deterministic.
+   */
+  async emit(input: string, text: string): Promise<void> {
+    const listener = this.onEventByKey.get(input);
+    if (listener) await effectRuntime().runPromise(listener(text));
   }
 
   private emitKeysChanged(): void {
@@ -146,13 +165,15 @@ describe('GitHub subscription app signals and follow-ups', () => {
     submitFollowUpMock.mockResolvedValue({ status: 'sent' as const });
   });
 
-  it('publishes githubSubscriptionsChanged through app signals', () => {
+  it('publishes githubSubscriptionsChanged through app signals', async () => {
     const signal = recordAppSignal('githubSubscriptionsChanged');
     const source = new RegistryTestSource();
     const registry = createTestRegistry(source);
 
     try {
-      registry.bind('stream-a' as StreamTabId, 'owner/repo');
+      await effectRuntime().runPromise(
+        registry.bind('stream-a' as StreamTabId, 'owner/repo'),
+      );
       expect(signal.events).toEqual([
         { event: 'githubSubscriptionsChanged', payload: undefined },
       ]);
@@ -168,65 +189,71 @@ describe('GitHub subscription app signals and follow-ups', () => {
     }
   });
 
-  it('reports token invalid events through app signals', () => {
-    const host = createRecordingHost();
-    const signal = recordAppSignal('githubTokenInvalid');
-    const listener = () => {};
-    const state: BasePollSubscriptionState = {
-      listeners: new Set([listener]),
-      lastSuccessAt: Date.now(),
-      consecutiveFailures: 0,
-      skipPollUntilMs: 0,
-    };
+  it.effect('reports token invalid events through app signals', () =>
+    Effect.gen(function* () {
+      const host = createRecordingHost();
+      const signal = recordAppSignal('githubTokenInvalid');
+      const listener = (): Effect.Effect<void> => Effect.void;
+      const state: BasePollSubscriptionState = {
+        listeners: new Set([listener]),
+        lastSuccessAt: Date.now(),
+        consecutiveFailures: 0,
+        skipPollUntilMs: 0,
+      };
 
-    try {
-      new TestPollingSource().failWithAuthError(state);
+      try {
+        yield* new TestPollingSource().failWithAuthError(state);
 
-      expect(signal.events).toContainEqual({
-        event: 'githubTokenInvalid',
-        payload: { message: 'bad token' },
+        expect(signal.events).toContainEqual({
+          event: 'githubTokenInvalid',
+          payload: { message: 'bad token' },
+        });
+        expect(host.events).toEqual([]);
+      } finally {
+        signal.dispose();
+      }
+    }),
+  );
+
+  it.effect('tracks transient backoff independently per subscription', () =>
+    Effect.gen(function* () {
+      const now = 1_800_000_000_000;
+      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+      const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+      const createState = (): BasePollSubscriptionState => ({
+        listeners: new Set(),
+        lastSuccessAt: now,
+        consecutiveFailures: 0,
+        skipPollUntilMs: 0,
       });
-      expect(host.events).toEqual([]);
-    } finally {
-      signal.dispose();
-    }
-  });
+      const source = new TestPollingSource();
+      const first = createState();
+      const second = createState();
 
-  it('tracks transient backoff independently per subscription', () => {
-    const now = 1_800_000_000_000;
-    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
-    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
-    const createState = (): BasePollSubscriptionState => ({
-      listeners: new Set(),
-      lastSuccessAt: now,
-      consecutiveFailures: 0,
-      skipPollUntilMs: 0,
-    });
-    const source = new TestPollingSource();
-    const first = createState();
-    const second = createState();
+      try {
+        yield* source.failWithTransient('owner/repo#1', first);
+        yield* source.failWithTransient('owner/repo#1', first);
+        yield* source.failWithTransient('owner/repo#2', second);
 
-    try {
-      source.failWithTransient('owner/repo#1', first);
-      source.failWithTransient('owner/repo#1', first);
-      source.failWithTransient('owner/repo#2', second);
+        expect(first.skipPollUntilMs).toBe(now + 2_000);
+        expect(second.skipPollUntilMs).toBe(now + 1_000);
+      } finally {
+        nowSpy.mockRestore();
+        randomSpy.mockRestore();
+      }
+    }),
+  );
 
-      expect(first.skipPollUntilMs).toBe(now + 2_000);
-      expect(second.skipPollUntilMs).toBe(now + 1_000);
-    } finally {
-      nowSpy.mockRestore();
-      randomSpy.mockRestore();
-    }
-  });
-
-  it('emits one binding change when unsubscribe disposes synchronously', () => {
+  it('emits one binding change when unsubscribe disposes synchronously', async () => {
     const host = createRecordingHost();
     const signal = recordAppSignal('githubSubscriptionsChanged');
     const source = new RegistryTestSource();
     const registry = createTestRegistry(source);
 
     try {
-      registry.bind('stream-a' as StreamTabId, 'owner/repo');
+      await effectRuntime().runPromise(
+        registry.bind('stream-a' as StreamTabId, 'owner/repo'),
+      );
       host.events.length = 0;
       signal.events.length = 0;
 
@@ -243,7 +270,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     }
   });
 
-  it('passes the bind-time session to detached subscription follow-ups', () => {
+  it('passes the bind-time session to detached subscription follow-ups', async () => {
     const streamId = 'stream-a' as StreamTabId;
     const source = new RegistryTestSource();
     const session = createTestSession();
@@ -251,15 +278,11 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const registry = createTestRegistry(source);
 
     try {
-      withRunContext(
-        createRunContext({
-          streamId,
-          session,
-        }),
-        () => registry.bind(streamId, 'owner/repo'),
+      await withRunContext(createRunContext({ streamId, session }), () =>
+        effectRuntime().runPromise(registry.bind(streamId, 'owner/repo')),
       );
 
-      source.emit('owner/repo', 'new github event');
+      await source.emit('owner/repo', 'new github event');
 
       expect(submitFollowUpMock).toHaveBeenCalledWith(
         streamId,
@@ -271,7 +294,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
     }
   });
 
-  it('rebinds an existing subscription to the session that rebound it', () => {
+  it('rebinds an existing subscription to the session that rebound it', async () => {
     const streamId = 'stream-a' as StreamTabId;
     const source = new RegistryTestSource();
     const firstSession = createTestSession();
@@ -281,16 +304,16 @@ describe('GitHub subscription app signals and follow-ups', () => {
     const registry = createTestRegistry(source);
 
     try {
-      withRunContext(
+      await withRunContext(
         createRunContext({ streamId, session: firstSession }),
-        () => registry.bind(streamId, 'owner/repo'),
+        () => effectRuntime().runPromise(registry.bind(streamId, 'owner/repo')),
       );
-      withRunContext(
+      await withRunContext(
         createRunContext({ streamId, session: secondSession }),
-        () => registry.bind(streamId, 'owner/repo'),
+        () => effectRuntime().runPromise(registry.bind(streamId, 'owner/repo')),
       );
 
-      source.emit('owner/repo', 'new github event');
+      await source.emit('owner/repo', 'new github event');
 
       expect(submitFollowUpMock).toHaveBeenCalledWith(
         streamId,
@@ -316,10 +339,11 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
     try {
       process.once('unhandledRejection', unhandledRejection);
-      registry.bind(streamId, 'owner/repo');
+      await effectRuntime().runPromise(registry.bind(streamId, 'owner/repo'));
 
-      source.emit('owner/repo', 'new github event');
-      await new Promise((resolve) => setImmediate(resolve));
+      // emit() awaits the delivery program, so the recovery has run by the
+      // time it resolves — no settle-and-hope.
+      await source.emit('owner/repo', 'new github event');
 
       expect(unhandledRejection).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenCalledWith(

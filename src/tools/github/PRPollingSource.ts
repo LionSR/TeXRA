@@ -66,6 +66,7 @@ import {
   dedupeComments,
   DedupedResource,
   MAX_SEEN_IDS,
+  type PollEventListener,
   type PollHookRejected,
   PollingSourceBase,
   pollRequest,
@@ -147,10 +148,7 @@ export interface PRSubscriptionState extends BasePollSubscriptionState {
    * can't mistake a still-present run for a new one.
    */
   lastAnnotationKeys: Set<string>;
-  annotationLevelByListener: Map<
-    (text: string) => void,
-    GitHubCheckAnnotationLevel
-  >;
+  annotationLevelByListener: Map<PollEventListener, GitHubCheckAnnotationLevel>;
   /**
    * Everything scoped to the current head SHA: the SHA itself, the CI one-shot
    * markers, the check-runs page cache, and the pending annotation-fetch
@@ -222,28 +220,27 @@ export class PRPollingSource extends PollingSourceBase<
 
   subscribe(
     input: PRSubscribeInput,
-    onEvent: (text: string) => void,
-  ): Disposable {
+    onEvent: PollEventListener,
+  ): Effect.Effect<Disposable> {
     const key = prKeyToString(input);
-    const disposable = this.register(
-      key,
-      () => createInitialState(input),
-      onEvent,
+    return this.register(key, () => createInitialState(input), onEvent).pipe(
+      Effect.map((disposable) => {
+        this.setListenerAnnotationLevel(key, onEvent, input);
+        return {
+          dispose: () => {
+            this.getSubscriptionState(key)?.annotationLevelByListener.delete(
+              onEvent,
+            );
+            disposable.dispose();
+          },
+        };
+      }),
     );
-    this.setListenerAnnotationLevel(key, onEvent, input);
-    return {
-      dispose: () => {
-        this.getSubscriptionState(key)?.annotationLevelByListener.delete(
-          onEvent,
-        );
-        disposable.dispose();
-      },
-    };
   }
 
   updateSubscription(
     input: PRSubscribeInput,
-    onEvent: (text: string) => void,
+    onEvent: PollEventListener,
   ): void {
     const key = prKeyToString(input);
     this.setListenerAnnotationLevel(key, onEvent, input);
@@ -252,7 +249,7 @@ export class PRPollingSource extends PollingSourceBase<
   /** Resolve the effective annotation level and record it per listener. */
   private setListenerAnnotationLevel(
     key: string,
-    onEvent: (text: string) => void,
+    onEvent: PollEventListener,
     input: PRSubscribeInput,
   ): void {
     const minAnnotationLevel =
@@ -354,7 +351,7 @@ export class PRPollingSource extends PollingSourceBase<
     // before the checks/reviews seeding below, but the resources are
     // independent and the relative emit order (comments before reviews) is
     // unchanged from the original inline seed/diff blocks.
-    this.consumeCommentList(
+    yield* this.consumeCommentList(
       commentsRes,
       (etag) => {
         state.etags.issueComments = etag;
@@ -364,7 +361,7 @@ export class PRPollingSource extends PollingSourceBase<
         this.emit(state, formatPRIssueComment(state.slug, pr.pullNumber, c)),
       () => state.initialized,
     );
-    this.consumeCommentList(
+    yield* this.consumeCommentList(
       reviewCommentsRes,
       (etag) => {
         state.etags.reviewComments = etag;
@@ -389,17 +386,23 @@ export class PRPollingSource extends PollingSourceBase<
       // keep the same id when submitted, and emitting "reviewed" on a draft
       // would both be misleading and prevent the real submission event from
       // firing.
+      const freshReviews: GhReview[] = [];
       state.reviews.diff(reviewsRes.data.filter(isSubmittedReview), (r) => {
         if (shouldDropBotEvent(r.user)) return;
-        this.emit(state, formatReview(state.slug, pr.pullNumber, r));
+        freshReviews.push(r);
       });
+      yield* Effect.forEach(
+        freshReviews,
+        (r) => this.emit(state, formatReview(state.slug, pr.pullNumber, r)),
+        { discard: true },
+      );
     }
 
     if (checksRes.status === 200) {
       // ETag/page caching is owned by `fetchAllCheckRuns` via
       // `state.currentShaState.checkRunsCache`; nothing to record on
       // `state.etags` here.
-      this.consumeCheckRuns(
+      yield* this.consumeCheckRuns(
         state,
         checksRes.data.check_runs,
         checksRes.data.total_count,
@@ -454,7 +457,7 @@ export class PRPollingSource extends PollingSourceBase<
     // every closed 200 response here covers both initially-closed and
     // open-to-closed subscriptions without mirroring the remote state locally.
     if (prData.state === 'closed') {
-      this.emit(
+      yield* this.emit(
         state,
         formatPRClosed(state.slug, pr.pullNumber, prData.merged),
       );
@@ -490,12 +493,12 @@ export class PRPollingSource extends PollingSourceBase<
       state.mergeableState = newMergeable;
       if (isDefiniteMergeableState(prev) && prev !== newMergeable) {
         if (newMergeable === 'dirty') {
-          this.emit(
+          yield* this.emit(
             state,
             formatMergeConflictDetected(state.slug, pr.pullNumber, prev),
           );
         } else if (prev === 'dirty') {
-          this.emit(
+          yield* this.emit(
             state,
             formatMergeConflictResolved(
               state.slug,
@@ -582,11 +585,14 @@ export class PRPollingSource extends PollingSourceBase<
    * past {@link COALESCE_THRESHOLD}), the one-shot "CI complete"/"CI passed",
    * and the annotation candidates queued for the post-tick drain.
    */
-  private consumeCheckRuns(
+  private readonly consumeCheckRuns = Effect.fn(
+    'PRPollingSource.consumeCheckRuns',
+  )(function* (
+    this: PRPollingSource,
     state: PRSubscriptionState,
     runs: GhCheckRun[],
     totalCount: number,
-  ): void {
+  ) {
     const { pr } = state;
     const currentShaState = state.currentShaState;
     const headSha = currentShaState?.sha;
@@ -597,7 +603,7 @@ export class PRPollingSource extends PollingSourceBase<
       !currentShaState.ciStarted
     ) {
       currentShaState.ciStarted = true;
-      this.emit(
+      yield* this.emit(
         state,
         formatCIStarted(state.slug, pr.pullNumber, headSha, runs, totalCount),
       );
@@ -609,13 +615,16 @@ export class PRPollingSource extends PollingSourceBase<
     );
     state.lastFailedCheckKeys = currentFailureKeys;
     if (newFailures.length >= COALESCE_THRESHOLD) {
-      this.emit(
+      yield* this.emit(
         state,
         formatCheckFailureSummary(state.slug, pr.pullNumber, newFailures),
       );
     } else {
       for (const r of newFailures) {
-        this.emit(state, formatCheckFailure(state.slug, pr.pullNumber, r));
+        yield* this.emit(
+          state,
+          formatCheckFailure(state.slug, pr.pullNumber, r),
+        );
       }
     }
 
@@ -631,14 +640,14 @@ export class PRPollingSource extends PollingSourceBase<
     if (complete && currentShaState && headSha) {
       if (!currentShaState.ciComplete) {
         currentShaState.ciComplete = true;
-        this.emit(
+        yield* this.emit(
           state,
           formatCIComplete(state.slug, pr.pullNumber, headSha, runs),
         );
       }
       if (!currentShaState.ciPassed && passed) {
         currentShaState.ciPassed = true;
-        this.emit(
+        yield* this.emit(
           state,
           formatCIPassed(state.slug, pr.pullNumber, headSha, runs),
         );
@@ -651,7 +660,7 @@ export class PRPollingSource extends PollingSourceBase<
     // (including 304) so excess candidates aren't stranded once check-runs
     // settle.
     this.enqueueAnnotationCandidates(state, runs);
-  }
+  });
 
   /**
    * Commit the check-runs page cache staged by `fetchAllCheckRuns`. The single
@@ -731,7 +740,12 @@ export class PRPollingSource extends PollingSourceBase<
           // poll and several annotation pages, and timing the backoff from
           // `at` would put skipPollUntilMs in the past and retry at once.
           const failedAt = yield* Clock.currentTimeMillis;
-          this.handleFailure(key, state, drained.failure.cause, failedAt);
+          yield* this.handleFailure(
+            key,
+            state,
+            drained.failure.cause,
+            failedAt,
+          );
           if (drained.failure.cause instanceof GitHubRateLimitError) {
             this.nextAnnotationDrainKey = key;
             return;
@@ -815,7 +829,7 @@ export class PRPollingSource extends PollingSourceBase<
     if (fetched.ok) {
       this.removePendingAnnotationRun(state, run.id);
       if (fetched.annotations.length > 0) {
-        this.emitCheckAnnotations(state, run, fetched.annotations);
+        yield* this.emitCheckAnnotations(state, run, fetched.annotations);
       }
       return true;
     }
@@ -850,11 +864,14 @@ export class PRPollingSource extends PollingSourceBase<
       state.currentShaState.pendingAnnotationRuns.filter((p) => p.id !== runId);
   }
 
-  private emitCheckAnnotations(
+  private readonly emitCheckAnnotations = Effect.fn(
+    'PRPollingSource.emitCheckAnnotations',
+  )(function* (
+    this: PRPollingSource,
     state: PRSubscriptionState,
     run: GhCheckRun,
     annotations: readonly GhCheckAnnotation[],
-  ): void {
+  ) {
     for (const listener of state.listeners) {
       const minLevel =
         state.annotationLevelByListener.get(listener) ??
@@ -870,7 +887,7 @@ export class PRPollingSource extends PollingSourceBase<
           annotations_count: visibleAnnotations.length,
         },
       };
-      this.emitToListener(
+      yield* this.emitToListener(
         listener,
         formatCheckAnnotations(
           state.slug,
@@ -880,7 +897,7 @@ export class PRPollingSource extends PollingSourceBase<
         ),
       );
     }
-  }
+  });
 }
 
 /** Process-wide singleton. */
