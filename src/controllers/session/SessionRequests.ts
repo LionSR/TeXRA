@@ -276,6 +276,11 @@ function handle(
         }
       });
     case 'followUp.send':
+      // A collaborator rejection is a handler defect by this module's
+      // contract (see the header), and `Effect.promise` is what routes it
+      // there. Where the defect surfaces depends on the path: a bridge logs
+      // the cause under the request id and answers `Internal`; in process it
+      // reaches whatever ran the Effect.
       return Effect.promise(() =>
         submitFollowUp(
           req.streamId,
@@ -357,6 +362,8 @@ function handle(
           : Effect.fail(settled(req.streamId, 'user question')),
       );
     case 'decision.retry':
+      // A rejection from the run's client preparation is a handler defect,
+      // per the module contract above, not a `RequestError` to word.
       return Effect.promise(() =>
         session.interactions.settleRetry(
           req.approvalId,
@@ -381,6 +388,8 @@ function handle(
       );
     case 'externalInquiry.submit':
     case 'externalInquiry.drop':
+      // A rejection from the inquiry persistence is a handler defect, per the
+      // module contract above, not a `RequestError` to word.
       return Effect.promise(() =>
         handleExternalInquiryAction(
           req.kind === 'externalInquiry.submit'
