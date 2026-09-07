@@ -2,14 +2,22 @@ import pDefer from 'p-defer';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  installProgressApiKeyRetryEdge,
   ProgressApiKeyRetryController,
   type ProgressApiKeyRetryControllerDeps,
 } from '@controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiProvider } from '@model/apiProviders';
 import { prefersCopilotRoute } from '@model/copilotRouting';
 import type { QuotaFallbackRuntime } from '@model/quotaFallbackRoutes';
+import { effectRuntime } from '@platform/processRuntime';
 import type { QuotaFallbackRoute } from '@shared/quotaFallbackRoutes';
 import { installPlatform } from '@test/support/setupPlatform';
+
+// The controller's Promise facade settles through the edge a host entry
+// installs; this suite stands in for the host.
+installProgressApiKeyRetryEdge((program) =>
+  effectRuntime().runPromiseExit(program),
+);
 
 const PROVIDERS = [
   'openai',

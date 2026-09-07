@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { StreamTabId } from '@shared/schemas';
@@ -130,8 +131,8 @@ describe('desktop preview host', () => {
       shell.openExternal.mockRejectedValue(new Error('Browser unavailable'));
       const preview = createDesktopPreviewHost({ shell });
       const draftRequests = new HostDraftRequests();
-      vi.spyOn(draftRequests, 'handle').mockRejectedValue(
-        new Error('Text service unavailable'),
+      vi.spyOn(draftRequests, 'handle').mockReturnValue(
+        Effect.fail(new Error('Text service unavailable')),
       );
       const files = createDesktopFileSelection({
         workspacePath: undefined,

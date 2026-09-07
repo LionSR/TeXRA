@@ -137,9 +137,15 @@ vi.mock('@platform/defaults/nodeAgentRuntime', () => ({
   initNodeAgentRuntime: mocks.initNodeAgentRuntime,
 }));
 
-vi.mock('@telemetry/UsageLogService', () => ({
-  UsageLogService: { initialize: vi.fn(), dispose: vi.fn() },
-}));
+vi.mock('@telemetry/UsageLogService', async () => {
+  const { Effect } = await import('effect');
+  return {
+    UsageLogService: {
+      initialize: vi.fn(() => Effect.void),
+      dispose: vi.fn(() => Effect.void),
+    },
+  };
+});
 
 // First-init dependencies: only exercised when tryPlatform() returns undefined.
 // Most cases keep tryPlatform truthy and skip this block, so these stubs are

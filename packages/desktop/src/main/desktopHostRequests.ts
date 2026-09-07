@@ -18,6 +18,7 @@ import {
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportStreamTranscript } from '@controllers/progressView/exportTranscript';
+import { installProgressApiKeyRetryEdge } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import {
   ProgressWorkflowRunActionsController,
@@ -39,6 +40,7 @@ import {
 import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { effectRuntime } from '@platform/processRuntime';
 import {
   cloneRoundIndexed,
   type ExecutionId,
@@ -129,6 +131,12 @@ export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
   const { session, host, execution, logger } = options;
+  // The retry controller's programs settle through this edge (PRD R1): the
+  // run stays in boundary code while its lane-D consumer keeps a Promise
+  // surface.
+  installProgressApiKeyRetryEdge((program) =>
+    effectRuntime().runPromiseExit(program),
+  );
   // Shared controllers propagate request failures to the dispatcher.
   const rejectRequest = async (reason: string): Promise<never> => {
     throw new Rejected({ reason });
@@ -613,7 +621,7 @@ export function createDesktopHostRequests(
       case 'record':
       case 'polish':
       case 'savePastedImage':
-        return draftRequests.handle(request, port);
+        return effectRuntime().runPromise(draftRequests.handle(request, port));
       case 'popOut':
       case 'popBack':
         throw notOnDesktop('Pop-out to editor');

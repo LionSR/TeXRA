@@ -389,7 +389,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * auto-starts setup; the user launches it from the setup card.
    */
   public refreshOnboardingFunnel(): Promise<void> {
-    return this.onboardingFunnelRefreshQueue.run();
+    return effectRuntime().runPromise(this.onboardingFunnelRefreshQueue.run());
   }
 
   private async refreshOnboardingFunnelSerially(): Promise<void> {

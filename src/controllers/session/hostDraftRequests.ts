@@ -4,7 +4,6 @@ import { Deferred, Effect } from 'effect';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
-import { effectRuntime } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
@@ -69,12 +68,15 @@ export class HostDraftRequests {
     return () => this.listeners.delete(listener);
   }
 
+  /** Answer one draft request. The host edge runs the returned effect; a
+   *  failure is the request's own error (`Rejected`, `Cancelled`, or the
+   *  port's rejection). */
   handle(
     session: SessionHandle,
     request: DraftRequest,
     port: string,
-  ): Promise<HostOutcome> {
-    return effectRuntime().runPromise(this.draft(session, request, port));
+  ): Effect.Effect<HostOutcome, unknown> {
+    return this.draft(session, request, port);
   }
 
   private readonly draft = Effect.fn('HostDraftRequests.handle')(function* (
