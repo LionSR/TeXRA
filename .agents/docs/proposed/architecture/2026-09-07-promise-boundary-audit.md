@@ -27,10 +27,11 @@ remain: 82 `Effect.tryPromise`, 16 `Effect.promise`.** Each was read at its
 call site and its callee traced to its defining module to decide whether the
 wrapped promise is foreign or ours.
 
-_Rebased onto `main` at b28e981._ The tree now holds **91** sites (78
-`tryPromise`, 13 `promise`). Six of the seven went in this branch's own work
-(§9): two `Effect.promise` sites converted in `ExecutionsTool`, four duplicate
-wrapper declarations deleted. The seventh went upstream —
+_Rebased onto `main` at b28e981._ The tree now holds **86** sites (73
+`tryPromise`, 13 `promise`). Eleven of the twelve went in this branch's own
+work (§9): two `Effect.promise` sites converted in `ExecutionsTool`, four
+duplicate wrapper declarations deleted, five inline copies of the same wrapper
+folded into it. The twelfth went upstream —
 `SessionEvents.ts:329`, the `runWithWorkspaceRoots(transcripts.readEntries)`
 wrap, which the SQLite event plane (#11978) removed. It was a C2b site and one
 of §5.2's ambient-context crossings, so both counts drop by one below. Line
@@ -556,7 +557,7 @@ of this tool's Promise collaborators" and already uses at 30+ sites. The
 failure was reaching `execute`'s `Effect.die(error.cause)` either way; it now
 does so through the typed channel rather than around it.
 
-**Collapsed (W8) — four duplicate wrappers deleted:**
+**Collapsed (W8) — four duplicate wrappers and five inline copies:**
 
 The identity-catch host-port wrapper existed five times under five names.
 `src/controllers/effectPort.ts` moved to `src/common/hostPort.ts` and the
@@ -568,6 +569,28 @@ other four were deleted in favour of it:
 | `VscodeIntegration.ts` `tryHost`   | 7 sites    | `hostPort` |
 | `initPlatform.ts` `tryPromise`     | 4 sites    | `hostPort` |
 | `modelAccessSelection.ts` `step`   | 5 sites    | `hostPort` |
+
+Then the same shape inline, five more sites that had never been given a name
+— each an identity catch over a host call, followed by its own
+`.pipe(Effect.catch(...))`:
+
+| Site                            | Was                            |
+| ------------------------------- | ------------------------------ |
+| `OnboardingRefreshQueue.ts:21`  | host `refresh()` callback      |
+| `desktop/index.ts:1607`         | `papers.open(root)`            |
+| `desktop/platform/index.ts:178` | `refreshModelListAndLog`       |
+| `desktopPapers.ts:332`          | `writeRememberedPapers`        |
+| `desktopPapers.ts:433`          | `runInSession(flushArtifacts)` |
+
+The last of those also loses an `async`/`await` wrapper: `hostPort` accepts
+`() => A | PromiseLike<A>`, and `runInSession` already returns
+`T | Promise<T>`, so the callback no longer has to normalise it.
+
+Not swept: the identity catches over `ky`, `node:fs`, `execFile` and
+`clipboardy`. Those are foreign _library_ edges rather than host ports, several
+declare a signal or type their catch as `NodeJS.ErrnoException`, and
+`hostPort`'s contract ("a host port has no cancellation to hand it") would be
+a poor fit. They stay as they are.
 
 `common` rather than `controllers` because the subsystem-edge baseline records
 **no inbound edge to `controllers` at all** — `src/tools` importing it would

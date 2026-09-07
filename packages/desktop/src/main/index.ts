@@ -24,6 +24,7 @@ import {
   refresh,
 } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { hostPort } from '@common/hostPort';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -1604,10 +1605,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         );
         for (const root of remembered.roots) {
           await effectRuntime().runPromise(
-            Effect.tryPromise({
-              try: () => papers.open(root),
-              catch: (error) => error,
-            }).pipe(
+            hostPort(() => papers.open(root)).pipe(
               Effect.catch((error) =>
                 Effect.sync(() => {
                   unopenedPapers.push(`${root}: ${toErrorMessage(error)}`);
