@@ -18,6 +18,7 @@
  */
 
 // Third-party imports
+import { Effect, type Deferred } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -29,6 +30,7 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
+import { effectRuntime } from '@platform/processRuntime';
 import type {
   ExecutionId,
   StreamTabId,
@@ -59,8 +61,11 @@ import {
 import { type ChildStream } from './delegation/childStream';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
+  agentCliCall,
+  type AgentCliToolFailure,
   dispatchAgentCliTool,
   launchAgentCliSession,
+  reraiseAgentCliCallFailure,
   startAgentCliLoop,
 } from './agentCliShared';
 import {
@@ -350,6 +355,8 @@ function startCodexLoop(params: {
   resumeThreadId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
+  /** Settled by the loop wrapper when the loop's completion settles. */
+  loopSettled: Deferred.Deferred<void>;
 }): void {
   const {
     thread,
@@ -359,6 +366,7 @@ function startCodexLoop(params: {
     initialPrompt,
     resumeThreadId: fallbackThreadId,
     releaseFallbackClaim,
+    loopSettled,
   } = params;
   const { childStreamId, logger } = childStream;
 
@@ -370,6 +378,7 @@ function startCodexLoop(params: {
     stageLabel: 'Codex session',
     initialPrompt,
     store: codexThreadsFor,
+    loopSettled,
     releaseFallbackClaim,
     runProviderTurn: (prompt, _ports, signal) =>
       runStreamedTurn(thread, prompt, childStreamId, logger, signal),
@@ -458,13 +467,27 @@ export class CodexTool extends defineTool({
     'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
   schema: CodexInputSchema,
 }) {
-  protected async execute(input: CodexInput): Promise<ToolResult> {
+  protected execute(input: CodexInput): Promise<ToolResult> {
+    // The one run edge of this tool (PRD run-edge category b): the dispatch
+    // below is an Effect program, run once here on the process runtime. A
+    // collaborator's rejection is re-raised as its own cause; a `ToolError`
+    // stays a typed failure and `runPromise` rejects with it.
+    return effectRuntime().runPromise(
+      reraiseAgentCliCallFailure(this.run(input)),
+    );
+  }
+
+  private readonly run = Effect.fn('CodexTool.run')(function* (
+    this: CodexTool,
+    input: CodexInput,
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
     // Resolve the effective sandbox mode once (per-call override, else the
     // user-configured default) rather than mutating the parsed input object.
     const sandboxMode =
-      input.sandbox_mode ?? (await getCodexConfig()).getCodexSandboxMode();
+      input.sandbox_mode ??
+      (yield* agentCliCall(() => getCodexConfig())).getCodexSandboxMode();
 
-    return dispatchAgentCliTool({
+    return yield* dispatchAgentCliTool({
       agentName: 'codex',
       approvalLabel: `[codex ${sandboxMode}] ${input.prompt}`,
       store: codexThreadsFor,
@@ -486,23 +509,27 @@ export class CodexTool extends defineTool({
           context.releaseFallbackClaim,
         ),
     });
-  }
+  });
 }
 
-async function launchCodexSession(
+const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,
   sandboxMode: SandboxMode,
   parentStreamId: StreamTabId,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
   releaseFallbackClaim: (() => void) | undefined,
-): Promise<ToolResult> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
-  const thread = await createCodexThread(input, sandboxMode, workingDir);
-  const config = (await getCodexConfig()).buildCodexConfig(input.prompt);
+  const thread = yield* agentCliCall(() =>
+    createCodexThread(input, sandboxMode, workingDir),
+  );
+  const config = (yield* agentCliCall(() => getCodexConfig())).buildCodexConfig(
+    input.prompt,
+  );
   const preview = truncateWithEllipsis(input.prompt, 60);
 
-  return launchAgentCliSession({
+  return yield* launchAgentCliSession({
     parentStreamId,
     parentExecutionId,
     agentName: 'codex',
@@ -510,7 +537,8 @@ async function launchCodexSession(
     description: input.prompt,
     config,
     registerFailedMessage: 'Failed to register Codex execution.',
-    startLoop: ({ childStream, executionId }) =>
+    store: codexThreadsFor,
+    startLoop: ({ childStream, executionId, loopSettled }) =>
       startCodexLoop({
         thread,
         childStream,
@@ -519,9 +547,10 @@ async function launchCodexSession(
         initialPrompt: input.prompt,
         resumeThreadId: input.thread_id ?? undefined,
         releaseFallbackClaim,
+        loopSettled,
       }),
     summary: `Launched Codex: ${preview}`,
     launchedLine: `Codex agent launched (sandbox: ${sandboxMode}).`,
     followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id. Pass it to codex on a later call to send a follow-up instruction.`,
   });
-}
+});
