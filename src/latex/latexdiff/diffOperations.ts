@@ -9,7 +9,6 @@ import * as path from 'node:path';
 // Local imports
 import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
 import {
   getEffectiveDiffBase,
   roundIndexedEntries,
@@ -201,7 +200,6 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     throw new Error('No workspace path found');
   }
 
-  const fs = platform().fs;
   const toAbsolute = (file: string): string =>
     path.isAbsolute(file) ? file : path.join(workspacePath, file);
 
@@ -226,7 +224,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     );
 
     const absoluteDir = path.join(workspacePath, outputDirPath);
-    const dirEntries = await fs.readDirectory(absoluteDir);
+    const dirEntries = await AbsoluteFS.readDir(absoluteDir);
 
     const roundOutputs = new Map<number, string>();
 
@@ -273,7 +271,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       const roundAbsoluteDir = path.join(absoluteDir, entryName);
       let roundEntries: [string, number][];
       try {
-        roundEntries = await fs.readDirectory(roundAbsoluteDir);
+        roundEntries = await AbsoluteFS.readDir(roundAbsoluteDir);
       } catch (error) {
         // Skip unreadable round dirs but record which one so a missing
         // round output isn't silently invisible during diagnosis.
