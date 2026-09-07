@@ -114,7 +114,7 @@ describe('StreamStatusMachine', () => {
     expect(machine.tryAcquire(streamId)).toBe(false);
 
     machine.releaseIfReserved(streamId);
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+    expect(machine.get(streamId)).toBeUndefined();
 
     expect(machine.tryAcquire(streamId)).toBe(true);
     expect(machine.transition(streamId, STREAM_PHASE.WAITING, 'wait')).toBe(
@@ -137,7 +137,7 @@ describe('StreamStatusMachine', () => {
 
     // The rollback the reservation owns still runs.
     machine.releaseIfReserved(streamId);
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+    expect(machine.get(streamId)).toBeUndefined();
   });
 
   it('closes the active window in WAITING and restamps after the resume gap', () => {
@@ -318,40 +318,9 @@ describe('StreamStatusMachine', () => {
     hidden.releaseIfReserved(streamId);
     observed.releaseIfReserved(streamId);
 
-    expect(hidden.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+    expect(hidden.get(streamId)).toBeUndefined();
     expect(observed.get(streamId)).toBe(hidden.get(streamId));
-    expect(published.events.map((event) => event.phase)).toEqual([
-      STREAM_PHASE.RUNNING,
-      STREAM_PHASE.CANCELLED,
-    ]);
-  });
-
-  it('publishes rollback when a visible reservation is released', () => {
-    const { machine, statusEvents, streamId } = setupMachine(
-      'stream-status-reservation-rollback',
-    );
-
-    expect(machine.tryAcquire(streamId)).toBe(true);
-    machine.releaseIfReserved(streamId);
-
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-    expect(statusEvents()).toEqual([
-      {
-        streamId,
-        type: 'status',
-        phase: STREAM_PHASE.RUNNING,
-        cause: 'lifecycle',
-        substate: STREAM_SUBSTATE.STARTING,
-        runStartedAt: expect.any(Number),
-      },
-      {
-        streamId,
-        type: 'status',
-        phase: STREAM_PHASE.CANCELLED,
-        previousPhase: STREAM_PHASE.RUNNING,
-        cause: 'reservation-rollback',
-      },
-    ]);
+    expect(published.events).toEqual([]);
   });
 
   it('overlays reservations on stale terminal phases and restores them on rollback', () => {
@@ -372,17 +341,12 @@ describe('StreamStatusMachine', () => {
     seedStreamStatusForTest(machine, streamId, {
       phase: STREAM_PHASE.COMPLETED,
     });
+    const beforeReservation = statusEvents();
     expect(machine.tryAcquire(streamId)).toBe(true);
     machine.releaseIfReserved(streamId);
 
     expect(machine.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
-    expect(statusEvents().at(-1)).toEqual({
-      streamId,
-      type: 'status',
-      phase: STREAM_PHASE.COMPLETED,
-      previousPhase: STREAM_PHASE.RUNNING,
-      cause: 'reservation-rollback',
-    });
+    expect(statusEvents()).toEqual(beforeReservation);
   });
 
   // One rail: the session fact is published by the machine itself, so a

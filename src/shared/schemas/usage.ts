@@ -121,3 +121,23 @@ export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
 export type ExtendedTokenUsageStats = z.infer<
   typeof ExtendedTokenUsageStatsSchema
 >;
+
+/**
+ * Schema for the totals recorded when a run ends.
+ *
+ * `totalCost` is the running sum of `NormalizedUsage.cost`, which is already
+ * calculated per provider (including prompt-cache discounts or creation
+ * premiums). No extra adjustments are applied here.
+ */
+export const RunUsageTotalsSchema = z.object({
+  firstInputTokens: TokenCountSchema.prefault(0),
+  totalInputTokens: TokenCountSchema.prefault(0),
+  totalOutputTokens: TokenCountSchema.prefault(0),
+  totalCost: z.number().nonnegative().prefault(0),
+  totalCacheReadInputTokens: TokenCountSchema.prefault(0),
+  totalCacheMissInputTokens: TokenCountSchema.prefault(0),
+  totalCacheCreationInputTokens: TokenCountSchema.prefault(0),
+  totalReasoningTokens: TokenCountSchema.prefault(0),
+  totalToolUsePromptTokens: TokenCountSchema.prefault(0),
+  totalServerToolRequests: TokenCountSchema.prefault(0),
+});

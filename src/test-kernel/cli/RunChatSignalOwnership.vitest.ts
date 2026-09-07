@@ -22,6 +22,12 @@ import {
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { installFakeHost } from '@test/support/setupPlatform';
+import {
+  createTempDirPlatform,
+  useTempDirs,
+} from '@test/support/tempDirPlatform';
+import { generateExecutionId } from '@utils/core';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -243,8 +249,11 @@ async function stubAgentRegistry(): Promise<() => void> {
   };
 }
 
+const tempDirs = useTempDirs();
+
 describe('runChat signal ownership wiring', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await installFakeHost(await createTempDirPlatform('texra-chat-', tempDirs));
     vi.clearAllMocks();
     mocks.callOrder.length = 0;
     mocks.initCliPlatform.mockImplementation(async () => {
@@ -517,7 +526,7 @@ describe('runChat signal ownership wiring', () => {
         [history, ownRoot].map((streamId) => ({
           type: 'run.start' as const,
           aggregateId: qualifyAggregateId('stream', streamId),
-          executionId: `execution:${streamId}` as ExecutionId,
+          executionId: generateExecutionId(),
           identity: { kind: 'agent' as const, agent: 'assistant' },
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
           category: AgentCategory.ToolUse,

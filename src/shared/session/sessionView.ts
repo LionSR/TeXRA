@@ -90,7 +90,7 @@ const StreamViewCommonSchema = z.object({
   identity: RunIdentitySchema.nullable(),
   // Launch facts from the `run.start` payload, never derived (5.2).
   isRemote: z.boolean(),
-  /** Owner of the latest durable event. */
+  /** Current sequence-row owner; null when unclaimed. */
   ownerId: OwnerIdSchema.nullable(),
   /** Agent name, or the id-prefix fallback for an identity-less stream. */
   label: z.string(),
@@ -213,6 +213,8 @@ const SessionViewSchema = z.object({
    *  Created when the aggregate enters the subscription set, deleted with
    *  its transcript tier on eviction; never a commit ordinal. */
   folded: z.map(AggregateIdSchema, z.int().nonnegative()),
+  /** Current sequence-row claims for the checked resident scope. */
+  claims: z.map(AggregateIdSchema, OwnerIdSchema.nullable()),
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
    *  lifecycle entry outlives its stream: it is what keeps a tombstone
@@ -252,13 +254,14 @@ export function emptySessionView(key: string, cursor = 0): SessionView {
     order: [],
     cursor,
     folded: new Map(),
+    claims: new Map(),
     latest: new Map(),
     inflight: new Map(),
     rollup: { running: 0, waiting: 0, interrupted: 0 },
     approvals: [],
     policy: new Map(),
     inquiries: [],
-    local: { self: [], heldBy: [], unreadable: [] },
+    local: { self: [], dead: [], unreadable: [] },
     queuedFollowUps: new Map(),
   };
 }

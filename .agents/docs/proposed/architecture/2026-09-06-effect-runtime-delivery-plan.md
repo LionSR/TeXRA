@@ -95,6 +95,11 @@ This is evaluation input to the existing substrate owner, not authorization to s
 competing database layer or discard its in-progress implementation. Compare the official
 client against that implementation at the integration head and retain one implementation.
 The schema and transaction invariants remain unchanged.
+The substrate owner's [client comparison](2026-09-03-persistence-substrate-decision.md#client-selection-at-the-approved-host-floor)
+retains the current implementation: rc.112's official client requires SQLite APIs
+introduced after the approved Node 22.13.0 floor. This resolves the client-selection
+comparison without a host-floor change or a second implementation. It does not
+claim that the remaining responsiveness measurements or persistence cutover are complete.
 
 Effect Solutions was consulted (`list`, `basics`, `services-and-layers`, `error-handling`,
 `testing`). Its examples were checked against installed rc.112 source and the local

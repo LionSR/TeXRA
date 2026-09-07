@@ -4,7 +4,7 @@
  * keyed by workspace storage root: one session per root and one only,
  * built on the one `ManagedRuntime` each process makes at its entry
  * (`installProcessRuntime`). A root's entry is the complete session: the
- * root-scoped services (the memory log over the root's transcript store,
+ * root-scoped services (the database event log,
  * the fold, the three local sources, the owner-liveness prober, and the
  * transcript bridge) and the `SessionHandle` built over them, whose request
  * handler admits on that graph. Every opener (the hosts' default session,
@@ -15,14 +15,13 @@
  *
  * One piece of this file exists only until the persistence cutover and is
  * marked so: the transcript bridge, which turns the root's transcript
- * store's change feed into `transcript.entry` rows and in-flight text (the
- * runtime's flow rows replace it). The historical streams enter the view
- * through the memory log's listing tier (`historicalListing.ts`), read
- * from the summary tier when a reader subscribes; the event table replaces
- * that.
+ * store's change feed into in-flight text. Source events in the database
+ * supply durable transcript history; the remaining bridge is removed with
+ * the transcript file writer.
  */
 import {
   Context,
+  Deferred,
   Duration,
   Effect,
   Equal,
@@ -43,7 +42,6 @@ import { runInSession } from '@agent/runtime/RunContext';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
   processOwnerId,
-  SessionEventLog,
   sessionEventsLayer,
   tailFrom,
 } from '@agent/runtime/SessionEvents';
@@ -75,7 +73,9 @@ import {
   isRunningStreamingTextEntry,
   type StreamLogDelta,
 } from '@shared/session/traceEntries';
+import { Database } from '@shared/session/database';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
+import { databaseLayer } from './Database';
 import { sessionRequests } from './SessionRequests';
 import {
   LocalRuntimeSource,
@@ -142,8 +142,8 @@ function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
  * on a non-terminal stream other than this process, proved by
  * `kill(pid, 0)` plus the start-identity check per distinct owner, never
  * per run. Probed whenever that owner set changes and on an interval
- * between changes. Alive and unprovable owners hold their runs (`heldBy`);
- * a dead owner's runs fold to interrupted. It writes only `heldBy`;
+ * between changes. Alive and unprovable owners hold their runs; only an
+ * explicit death verdict permits an interrupted classification. It writes `dead`;
  * `unreadable` is the status machine's.
  */
 const ownerLiveness = Layer.effectDiscard(
@@ -156,21 +156,21 @@ const ownerLiveness = Layer.effectDiscard(
         yield* SubscriptionRef.get(view.ref),
         identity.ownerId,
       );
-      const held: OwnerId[] = [];
+      const dead: OwnerId[] = [];
       for (const owner of owners) {
         const liveness = yield* Effect.promise(() =>
           proveOwnerLiveness(ownerIdentity(owner)),
         );
-        if (liveness !== 'dead') held.push(owner);
+        if (liveness === 'dead') dead.push(owner);
       }
       const snapshot = yield* SubscriptionRef.get(local.ref);
       if (
-        snapshot.heldBy.length === held.length &&
-        snapshot.heldBy.every((owner, i) => owner === held[i])
+        snapshot.dead.length === dead.length &&
+        snapshot.dead.every((owner, i) => owner === dead[i])
       ) {
         return;
       }
-      yield* SubscriptionRef.set(local.ref, { ...snapshot, heldBy: held });
+      yield* SubscriptionRef.set(local.ref, { ...snapshot, dead });
     });
     const ownerSetChanges = SubscriptionRef.changes(view.ref).pipe(
       Stream.map((current) =>
@@ -192,15 +192,12 @@ const ownerLiveness = Layer.effectDiscard(
 
 /**
  * The transcript bridge, until the cutover: the root's transcript store's
- * change feed, in emission order, as `transcript.entry` rows on the plane
- * (every appended or dirtied row; every row of a stream whose log was
- * replaced) and as the in-flight text level of its streaming rows. Attached
- * once the plane is built, so the history import precedes every live row.
+ * change feed supplies only the in-flight text level of its streaming rows.
+ * Source trace facts now supply durable transcript history directly.
  */
 const transcriptBridge = (transcripts: StreamLogStore) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      const events = yield* SessionEvents;
       const chunks = yield* TextChunkSource;
       const deltas = yield* Queue.unbounded<{
         readonly streamId: StreamTabId;
@@ -220,15 +217,6 @@ const transcriptBridge = (transcripts: StreamLogStore) =>
             const rows = delta.reset
               ? (transcripts.get(streamId)?.getRange(0) ?? [])
               : [...delta.appended, ...delta.dirtied];
-            if (rows.length > 0) {
-              yield* events.publish(
-                rows.map((entry) => ({
-                  type: 'transcript.entry',
-                  aggregateId: qualifyAggregateId('stream', streamId),
-                  entry,
-                })),
-              );
-            }
             if (rows.length === 0 && delta.textChunks.length === 0) return;
             yield* SubscriptionRef.update(chunks.ref, (held) => {
               const next = new Map(held);
@@ -275,14 +263,51 @@ const sessionHandleLayer = (
     Session,
     Effect.gen(function* () {
       const { publish, ...reads } = yield* SessionEvents;
-      const eventLog = yield* SessionEventLog;
+      const eventLog = yield* Database;
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
       const inputs = yield* SessionInputs;
       const subscriptions = yield* TranscriptSubscriptions;
+      const delivered = yield* SubscriptionRef.make(0);
+      const tailEnded = yield* Deferred.make<void>();
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
-        publish,
+        publish: (events) =>
+          Effect.gen(function* () {
+            const rows = yield* publish(events);
+            const last = rows.at(-1);
+            if (last) {
+              yield* SubscriptionRef.changes(delivered).pipe(
+                Stream.filter((commit) => commit >= last.commit),
+                Stream.runHead,
+                Effect.raceFirst(
+                  Deferred.await(tailEnded).pipe(
+                    Effect.andThen(
+                      Effect.die(
+                        new Error('Session committed-event consumer stopped'),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+            if (last) {
+              yield* view.changes.pipe(
+                Stream.filter((state) => state.cursor >= last.commit),
+                Stream.runHead,
+                Effect.flatMap((state) =>
+                  Option.isSome(state)
+                    ? Effect.void
+                    : Effect.die(
+                        new Error(
+                          'Session view stopped before publication settled',
+                        ),
+                      ),
+                ),
+              );
+            }
+            return rows;
+          }),
         view: view.ref,
         viewChanges: view.changes,
         // The plane's tail woken by the view's cursor instead of the log's
@@ -290,7 +315,10 @@ const sessionHandleLayer = (
         // has landed the state it produced.
         folded: (fromCommit) =>
           tailFrom(
-            eventLog.readAll,
+            (from) =>
+              Stream.fromIterableEffect(
+                eventLog.readAll(from).pipe(Effect.orDie),
+              ),
             {
               get: SubscriptionRef.get(view.ref).pipe(
                 Effect.map((v) => v.cursor),
@@ -305,27 +333,49 @@ const sessionHandleLayer = (
         inputs: inputs.read,
         subscriptions,
         // The request handler admits on the root graph's log.
-        requests: sessionRequests(session, eventLog),
-        now: () => SubscriptionRef.getUnsafe(eventLog.level),
+        requests: sessionRequests(session, eventLog, local.ref),
+        now: () => SubscriptionRef.getUnsafe(eventLog.observedCommit),
         close: () => release(key),
       });
-      return yield* Effect.acquireRelease(
+      // Capture before constructing the handle: constructor publications and
+      // commits preceding subscription are covered by the tail's first read.
+      const anchor = yield* eventLog.currentCommit.pipe(Effect.orDie);
+      const session = yield* Effect.acquireRelease(
         Effect.sync(() => new SessionHandle({ ...key.open, graph })),
         (session) => Effect.sync(() => session.unwind()),
       );
+      yield* SubscriptionRef.set(delivered, anchor);
+      yield* reads.all(anchor).pipe(
+        Stream.runForEach((event) =>
+          Effect.sync(() => session.receiveCommittedEvent(event)).pipe(
+            Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
+          ),
+        ),
+        Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
+        Effect.forkScoped,
+      );
+      return session;
     }),
   );
 
 /** The runtime graph of one root (PRD 7.3): the root-scoped services the
  *  handle is built over. */
-const sessionGraphLayer = (key: SessionKey) =>
-  Layer.mergeAll(ownerLiveness, transcriptBridge(key.open.transcripts)).pipe(
+const sessionGraphLayer = (key: SessionKey) => {
+  if (key.open.transcripts.mode.kind === 'read-only') {
+    throw new Error(
+      'SessionHandle requires a writable transcript store; read-only stores are reserved for call-scoped readers.',
+    );
+  }
+  return Layer.mergeAll(
+    ownerLiveness,
+    transcriptBridge(key.open.transcripts),
+  ).pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(
       sessionEventsLayer.pipe(
         Layer.provideMerge(
-          SessionEventLog.memoryLayer(key.open.transcripts, key.open.roots),
+          databaseLayer(key.open.transcripts.mode.kind).pipe(Layer.orDie),
         ),
       ),
     ),
@@ -338,6 +388,7 @@ const sessionGraphLayer = (key: SessionKey) =>
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)(key.open.roots)),
   );
+};
 
 /**
  * The complete session of one root: the handle over the root's graph, the

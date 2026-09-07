@@ -86,6 +86,17 @@ function projectCliSessionEvent(
     case 'approval.policy':
     case 'result':
     case 'context.state':
+    case 'log':
+    case 'stage.end':
+    case 'tool.start':
+    case 'tool.end':
+    case 'workflow.plan':
+    case 'workflow.call':
+    case 'skills.snapshot':
+    case 'stream.start':
+    case 'stream.end':
+    case 'response.finalized':
+    case 'domain':
     case 'transcript.entry':
       return undefined;
     case 'status':
@@ -111,17 +122,14 @@ function projectCliSessionEvent(
         },
       };
     case 'run.config':
-      // The producers publish the run's whole `AgentConfig`; the durable
-      // schema is a loose object that keeps every key, so the frozen
-      // `taskState` line carries the same bytes it always did.
+      // Publication validates the canonical AgentConfig before this frozen
+      // task-state projection reads its fields.
       return {
         event: 'setTaskState',
         payload: {
           streamId,
           executionId: event.executionId,
-          taskState: agentConfigToTaskState(
-            event.config as Parameters<typeof agentConfigToTaskState>[0],
-          ),
+          taskState: agentConfigToTaskState(event.config),
         },
       };
     case 'conversation.progress':

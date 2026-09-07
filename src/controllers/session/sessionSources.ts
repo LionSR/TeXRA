@@ -40,7 +40,7 @@ export class LocalRuntimeSource extends Context.Service<
       const identity = yield* ProcessIdentity;
       const ref = yield* SubscriptionRef.make<LocalRuntimeState>({
         self: [identity.ownerId],
-        heldBy: [],
+        dead: [],
         unreadable: [],
       });
       return { ref };

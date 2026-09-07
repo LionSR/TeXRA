@@ -17,7 +17,10 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { GoalStore, goalStateChanges } from '@tools/goal';
@@ -176,6 +179,8 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     const explicitSession = createTestSession({
       roots: paperRoots('explicit'),
     });
+    publishTestRunStart(runSession, STREAM_A);
+    publishTestRunStart(explicitSession, STREAM_A);
     const run = collectGoalChanges(runSession);
     const explicit = collectGoalChanges(explicitSession);
     const fallback = collectGoalChanges(defaultSession());
@@ -281,6 +286,8 @@ describe('goalStateChanges', () => {
     // Two papers: a session's plane is its workspace root's.
     const sessionA = createTestSession({ roots: paperRoots('a') });
     const sessionB = createTestSession({ roots: paperRoots('b') });
+    publishTestRunStart(sessionA, 'same-session');
+    publishTestRunStart(sessionB, 'other-session');
     const { seen, detach } = collectGoalChanges(sessionA);
 
     try {
@@ -318,6 +325,7 @@ describe('goalStateChanges', () => {
   it('routes start, status, and edit notifications through the current run session only', async () => {
     const runSession = createTestSession({ roots: paperRoots('run') });
     const otherSession = createTestSession({ roots: paperRoots('other') });
+    publishTestRunStart(runSession, SUBSCRIPTION_STREAM);
     const run = collectGoalChanges(runSession);
     const other = collectGoalChanges(otherSession);
     const fallback = collectGoalChanges(defaultSession());

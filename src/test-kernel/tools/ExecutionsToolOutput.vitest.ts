@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { afterEach, describe, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, it, vi } from 'vitest';
 
 // Local imports
 import {
@@ -25,6 +25,10 @@ import {
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
+import {
+  createProcessSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { withToolEnvironment } from '@test/support/toolEnvironment';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
@@ -76,6 +80,7 @@ async function launchBackgroundRun(
 
   const { host } = createRecordingHost();
   const recorded = recordSessionEvents(defaultSession());
+  publishTestRunStart(defaultSession(), PARENT_STREAM_ID);
   const launched = await withToolEnvironment(
     {
       run: { streamId: PARENT_STREAM_ID, session: defaultSession() },
@@ -172,6 +177,9 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     config: { 'texra.toolUse.requireBashApproval': false },
   });
 
+  beforeEach(() => {
+    createProcessSession();
+  });
   afterEach(() => {
     vi.restoreAllMocks();
   });

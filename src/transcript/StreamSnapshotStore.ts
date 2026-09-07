@@ -702,12 +702,9 @@ export class StreamSnapshotStore {
           );
           return;
         case 'run.config':
-          // The live draft carries the trace's whole `AgentConfig`
-          // (`runEventDraft` passes it through); the plane's schema names the
-          // fields the fold reads, the sidecar keeps the run's full config.
           this.setRunConfig(
             aggregateTarget(event.aggregateId).id,
-            event.config as AgentConfig,
+            event.config,
             event.executionId,
           );
           return;
@@ -777,6 +774,17 @@ export class StreamSnapshotStore {
         case 'approval.resolved':
         case 'context.state':
         case 'conversation.progress':
+        case 'log':
+        case 'stage.end':
+        case 'tool.start':
+        case 'tool.end':
+        case 'workflow.plan':
+        case 'workflow.call':
+        case 'skills.snapshot':
+        case 'stream.start':
+        case 'stream.end':
+        case 'response.finalized':
+        case 'domain':
         case 'transcript.entry':
         case 'goalStateChanged':
         case 'goalPaused':

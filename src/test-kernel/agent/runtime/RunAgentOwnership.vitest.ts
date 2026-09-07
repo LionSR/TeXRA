@@ -75,6 +75,7 @@ const SESSION = {
     ),
   },
   flushArtifacts,
+  settlePublications: vi.fn(async () => {}),
   releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
 } as never;
 

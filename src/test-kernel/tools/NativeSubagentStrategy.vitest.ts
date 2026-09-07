@@ -84,7 +84,10 @@ vi.mock('@agent/storage/childRunPersistence', () => ({
 }));
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import {
   createNativeSubagentStrategy,
   provideAgentEngine,
@@ -581,10 +584,11 @@ describe('NativeSubagentStrategy', () => {
 
   it('keeps a second child follow-up available after two resumed WAITING turns', async () => {
     const session = defaultSession();
-    const childStreamId =
-      'native-follow-up-loop-child#native-follow-up-loop-exec' as StreamTabId;
+    const childStreamId = 'native-follow-up-loop-child#fa110001' as StreamTabId;
     const parentStreamId = 'native-follow-up-loop-parent' as StreamTabId;
-    const executionId = 'native-follow-up-loop-exec' as ExecutionId;
+    const executionId = 'fa110001' as ExecutionId;
+    publishTestRunStart(session, childStreamId, executionId);
+    await session.settlePublications();
     const interactions = { emit: vi.fn() } as never;
     const handle = testExecutionHandle({
       executionId,

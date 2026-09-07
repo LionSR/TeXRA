@@ -130,6 +130,7 @@ function buildResumeContext(
         // The real exit choreography over the fake's flushArtifacts and the
         // mocked lease verbs, so the releaseOwnedExecutionLease assertion
         // keeps observing the drain through its one owner.
+        settlePublications: vi.fn(async () => {}),
         releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
       },
       signal: abortController.signal,
