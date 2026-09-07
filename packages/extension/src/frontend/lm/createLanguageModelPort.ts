@@ -143,6 +143,9 @@ function toVscodeOptions(
       inputSchema: tool.inputSchema,
     })),
     toolMode: toVscodeToolMode(options.toolMode),
+    ...(options.maxTokens == null
+      ? {}
+      : { modelOptions: { max_tokens: options.maxTokens } }),
   };
 }
 

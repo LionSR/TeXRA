@@ -258,6 +258,7 @@ describe('createLanguageModelPort', () => {
           },
         ],
         toolMode: 'required',
+        maxTokens: 128,
       },
       new AbortController().signal,
     )) {
@@ -298,6 +299,7 @@ describe('createLanguageModelPort', () => {
         },
       ],
       toolMode: 2,
+      modelOptions: { max_tokens: 128 },
     });
   });
 
