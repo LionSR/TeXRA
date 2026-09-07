@@ -136,6 +136,8 @@ export async function startLoopbackCallbackServer(
     },
     close: async () => {
       cleanup();
+      attemptState.acceptingCallbacks = false;
+      rejectSession(new Error('Authentication attempt closed.'));
       await closeServer(server);
     },
   };
