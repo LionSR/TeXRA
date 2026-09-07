@@ -124,16 +124,6 @@ describe('desktop composition root and launch environment', () => {
     );
   });
 
-  it('imports process-store initialization directly from its owner', async () => {
-    const source = await readFile(
-      desktopSourcePath('main', 'desktopPapers.ts'),
-      'utf8',
-    );
-    expect(
-      namedImportSources(source, 'initializeDesktopProcessStores'),
-    ).toContain('./desktopProcessStores.js');
-  });
-
   it('keeps platform initialization in the Electron composition root', async () => {
     const files = sourceFilesUnder(DESKTOP_SRC_DIR);
     const initPlatformFiles: string[] = [];

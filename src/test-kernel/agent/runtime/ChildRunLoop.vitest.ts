@@ -502,7 +502,7 @@ describe('childRunLoop E2E fixtures', () => {
   });
 
   it('keeps follow-up ownership distinct across child-stream and native child lifecycles', async () => {
-    const { executionId } = loopIds('follow-up-ownership');
+    const executionId = generateExecutionId();
     const turn = pDefer<FakeTurn>();
     const launchStarted = pDefer<void>();
     const formatStarted = pDefer<void>();

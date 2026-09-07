@@ -52,7 +52,6 @@
       "src/latex/LatexMediaManager.ts": 4,
       "src/latex/latexParsingUtils.ts": 1,
       "src/latex/latexdiff/diffOperations.ts": 1,
-      "src/latex/latexdiff/outputDiscovery.ts": 2,
       "src/model/codingPlanSubscriptions.ts": 2,
       "src/model/computeModelOptions.ts": 3,
       "src/model/copilotRouting.ts": 2,
@@ -105,13 +104,10 @@
       "src/agent/runtime/childRunLoop.ts": 1,
       "src/agent/runtime/executionLanes.ts": 1,
       "src/agent/runtime/streamApprovalQueue.ts": 1,
-      "src/agent/storage/SessionStores.ts": 1,
       "src/agent/storage/executionLease.ts": 1,
       "src/agent/workflowScript/persistence.ts": 1,
       "src/agent/workflowScript/runWorkflowScript.ts": 1,
-      "src/transcript/StagedDeletionCoordinator.ts": 1,
       "src/transcript/StreamLogStore.ts": 1,
-      "src/transcript/StreamSnapshotStore.ts": 1,
       "src/utils/core/perKeyQueue.ts": 1
     },
     "import:p-map": {
@@ -119,9 +115,7 @@
       "src/agent/storage/executionListing.ts": 1,
       "src/latex/LatexMediaManager.ts": 1,
       "src/latex/extractFileDependencies.ts": 1,
-      "src/transcript/StagedDeletionCoordinator.ts": 1,
       "src/transcript/StreamLogStore.ts": 1,
-      "src/transcript/StreamSnapshotStore.ts": 1,
       "src/transcript/StreamSummaryCacheStore.ts": 1
     },
     "import:p-retry": {
@@ -140,11 +134,9 @@
       "src/agent/runtime/ModelRetryGate.ts": 1,
       "src/agent/runtime/SessionHandle.ts": 1,
       "src/agent/runtime/executionLanes.ts": 1,
-      "src/agent/storage/executionLease.ts": 1,
-      "src/transcript/StagedDeletionCoordinator.ts": 1
+      "src/agent/storage/executionLease.ts": 1
     },
     "import:async-mutex": {
-      "src/transcript/SidecarWriteCoordinator.ts": 1,
       "src/utils/core/keyedMutex.ts": 1
     },
     "import:delay": {
@@ -163,7 +155,6 @@
     "catch:effect-importer": {
       "packages/cli/src/chat/chatSessionController.ts": 7,
       "packages/cli/src/chat/tui/commands/handlers/loginCommands.ts": 3,
-      "packages/cli/src/chat/tui/commands/handlers/sessionCommands.ts": 1,
       "packages/cli/src/chat/tui/history/inputHistory.ts": 1,
       "packages/cli/src/runtime/cliConfig.ts": 1,
       "packages/cli/src/runtime/subscriptionLogin.ts": 1,

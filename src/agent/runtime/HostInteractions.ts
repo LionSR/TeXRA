@@ -723,6 +723,16 @@ export class SessionHostInteractions implements HostInteractions {
     return undefined;
   }
 
+  /** Settle a removed stream's local requests without appending to its closed aggregate. */
+  discardStream(streamId: StreamTabId): void {
+    for (const pending of this.pending) {
+      if (pending.streamId !== streamId) continue;
+      this.pending.delete(pending);
+      pending.cancellationRequested = true;
+      pending.settle(pending.cancellationResult('Stream removed.'));
+    }
+  }
+
   cancel(selector: HostInteractionCancelSelector = {}): void {
     const matching = [...this.pending].filter((pending) =>
       matchesCancelSelector(pending, selector),

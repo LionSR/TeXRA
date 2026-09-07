@@ -162,8 +162,6 @@ export const OutputFileInfoSchema = OutputFileSchema.extend({
   diff: DiffStatsSchema.nullable(),
 });
 
-export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
-
 /**
  * Flattened projection of {@link OutputFileInfo} for agent results and
  * execution metadata. It keeps persisted workflow summaries independent from

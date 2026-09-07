@@ -1,13 +1,9 @@
-/**
- * Completed-run archive reads (#7246 Decision 1): once a run finishes, its
- * durable display/export data is owned by the transcript sidecars
- * (`streamLogs/{stream}.json` + `streamData/{stream}/*`), keyed through the
- * execution→stream mapping.
- */
+/** Completed-run display reads, keyed by the registered execution-to-stream link. */
+import { Effect } from 'effect';
 import { getExecutionStore } from '@agent/storage';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
-import { KVStore } from '@common/storage/KVStore';
+
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -21,10 +17,10 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { assertNever, isObject } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { StreamLogStore } from './StreamLogStore';
-import { streamDataDir } from './streamDataPaths';
-import { readWorkPlan } from './streamSnapshotRead';
+import type { StreamSnapshotStore } from './StreamSnapshotStore';
 
 /**
  * The execution→stream foreign key: the `streamId` stamped on execution
@@ -50,22 +46,21 @@ export async function resolveStreamForExecution(
   return { streamId: meta.streamId, meta };
 }
 
-/**
- * Read the archived task list for a completed run from the durable stream
- * sidecar (`streamData/{stream}/workPlan.json`), keyed through
- * {@link resolveStreamForExecution}. An unresolved execution, a missing
- * sidecar and an empty one all read as `[]` — no consumer distinguished them.
- */
-export async function readCompletedRunTodos(
-  executionId: ExecutionId,
-): Promise<readonly TodoItem[]> {
-  const resolution = await resolveStreamForExecution(executionId);
-  if (!resolution) return [];
-  const workPlan = await readWorkPlan(
-    new KVStore(streamDataDir(resolution.streamId)),
-  );
-  return workPlan.todos;
-}
+/** Read completed tasks from the session's committed stream fold. */
+export const readCompletedRunTodos = Effect.fn('readCompletedRunTodos')(
+  function* (
+    executionId: ExecutionId,
+    snapshots: Pick<StreamSnapshotStore, 'read'>,
+  ): Effect.fn.Return<readonly TodoItem[], Error> {
+    const resolution = yield* Effect.tryPromise({
+      try: () => resolveStreamForExecution(executionId),
+      catch: ensureError,
+    });
+    if (!resolution) return [];
+    const snapshot = yield* snapshots.read(resolution.streamId);
+    return snapshot.todos;
+  },
+);
 
 // ============================================================================
 // Conversation

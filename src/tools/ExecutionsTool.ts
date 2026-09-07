@@ -491,7 +491,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           executionsRead(() => store.readMeta()),
           executionsRead(() => store.readRunRecord()),
           executionsRead(() => store.readChildren()),
-          executionsRead(() => readCompletedRunTodos(executionId)),
+          readCompletedRunTodos(executionId, session.snapshots).pipe(
+            Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
+          ),
           executionsRead(() => store.readReport()),
         ],
         { concurrency: 5 },
@@ -681,7 +683,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const handle = session.executions.getHandle(executionId);
     const todos = handle
       ? getRunningTodos(session, handle)
-      : yield* executionsRead(() => readCompletedRunTodos(executionId));
+      : yield* readCompletedRunTodos(executionId, session.snapshots).pipe(
+          Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
+        );
 
     if (todos.length === 0) {
       return executed(`No task list found for execution ${executionId}.`);
