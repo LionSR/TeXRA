@@ -4,7 +4,7 @@ import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 
 import { parse as parseContentDisposition } from 'content-disposition';
-import { Data, Duration, Effect, Random, Schedule } from 'effect';
+import { Cause, Clock, Data, Duration, Effect, Random, Schedule } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
@@ -88,6 +88,61 @@ const permanent = <T>(
     catch: (cause) =>
       new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
   });
+
+/**
+ * Abort foreign stream work on interruption, then join its actual promise.
+ * Join outside the timeout race so a late rejection remains observable.
+ */
+function joinedStream<T, A, E>(
+  start: (signal: AbortSignal) => Promise<T>,
+  onError: (error: unknown) => Effect.Effect<A, E>,
+  timeout?: number,
+): Effect.Effect<T | A, E> {
+  return Effect.suspend(() => {
+    let pending: Promise<T> | undefined;
+    let signal: AbortSignal | undefined;
+    let primary: { error: unknown } | undefined;
+    const operation = Effect.tryPromise({
+      try: (requestSignal) => {
+        signal = requestSignal;
+        pending = start(requestSignal);
+        return pending;
+      },
+      catch: (error) => error,
+    });
+    return (
+      timeout == null
+        ? operation
+        : operation.pipe(Effect.timeout(Duration.millis(timeout)))
+    ).pipe(
+      Effect.catch((error) => {
+        primary = { error };
+        return onError(error);
+      }),
+      Effect.onExit(() =>
+        Effect.promise(
+          () =>
+            pending?.then(
+              () => {},
+              (error: unknown) => {
+                if (primary !== undefined && primary.error === error) return;
+                if (
+                  signal?.aborted &&
+                  (error === signal.reason ||
+                    (error instanceof Error &&
+                      error.name === 'AbortError' &&
+                      error.cause === signal.reason))
+                )
+                  return;
+                // A distinct late stream failure must survive interruption.
+                throw error;
+              },
+            ) ?? Promise.resolve(),
+        ),
+      ),
+    );
+  });
+}
 
 export type ArxivDownloadDestination = 'root' | 'references';
 
@@ -198,54 +253,63 @@ class ArxivSourceProcessor {
     timeout = 30000,
   ): Effect.Effect<string, ArxivSourceError> {
     const log = this.log;
-    return this.downloadFileOnce(url, destBasePath).pipe(
-      Effect.timeoutOrElse({
-        duration: Duration.millis(timeout),
-        orElse: () =>
-          Effect.fail(
-            new ArxivSourceTransientError({
-              message: `Download timed out after ${timeout} ms`,
-              cause: undefined,
-            }),
-          ),
-      }),
-      Effect.tapError((error) =>
+    return this.downloadFileOnce(url, destBasePath, timeout).pipe(
+      // Retry the whole ordinary failure, never a mixed cleanup cause. Effect's
+      // typed-error retry otherwise selects one failure and drops its siblings.
+      Effect.catchCause((cause) => Effect.fail(cause)),
+      Effect.tapError((cause) =>
         Effect.gen(function* () {
           // A permanent failure ends the retry unobserved, since it never had
           // retries left to report.
-          if (error._tag !== 'ArxivSourceTransientError') return;
+          const reason = cause.reasons[0];
+          if (
+            cause.reasons.length !== 1 ||
+            reason?._tag !== 'Fail' ||
+            reason.error._tag !== 'ArxivSourceTransientError'
+          )
+            return;
           const { attempt } = yield* Schedule.CurrentMetadata;
           log.debug(
-            `Download attempt failed (${DOWNLOAD_RETRIES - attempt} retries left): ${error.message}`,
+            `Download attempt failed (${DOWNLOAD_RETRIES - attempt} retries left): ${reason.error.message}`,
           );
         }),
       ),
       Effect.retry({
         schedule: downloadBackoff,
         times: DOWNLOAD_RETRIES,
-        while: (error) => error._tag === 'ArxivSourceTransientError',
+        while: (cause) =>
+          cause.reasons.length === 1 &&
+          cause.reasons[0]?._tag === 'Fail' &&
+          cause.reasons[0].error._tag === 'ArxivSourceTransientError',
       }),
+      Effect.catch((cause) => Effect.failCause(cause)),
     );
   }
 
   private downloadFileOnce(
     url: string,
     destBasePath: string,
+    timeout: number,
   ): Effect.Effect<string, ArxivSourceError> {
     const log = this.log;
     let destPath = destBasePath;
     return Effect.gen(function* () {
+      const deadline = (yield* Clock.currentTimeMillis) + timeout;
+      const downloadError = (cause: unknown): ArxivSourceTransientError =>
+        new ArxivSourceTransientError({
+          message: Cause.isTimeoutError(cause)
+            ? `Download timed out after ${timeout} ms`
+            : toErrorMessage(cause),
+          cause: Cause.isTimeoutError(cause) ? undefined : cause,
+        });
       // The fiber's own signal aborts the in-flight fetch when the attempt is
-      // interrupted — by the per-attempt deadline in downloadFile or by the
+      // interrupted — by the per-attempt deadline or by the
       // caller — covering connection establishment and body streaming.
-      const response = yield* Effect.tryPromise({
-        try: (signal) => fetch(url, { signal }),
-        catch: (cause) =>
-          new ArxivSourceTransientError({
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      });
+      const response = yield* joinedStream(
+        (signal) => fetch(url, { signal }),
+        (cause) => Effect.fail(downloadError(cause)),
+        timeout,
+      );
 
       if (response.status === StatusCodes.NOT_FOUND) {
         return yield* Effect.fail(
@@ -320,24 +384,21 @@ class ArxivSourceProcessor {
         );
       }
 
-      yield* Effect.tryPromise({
-        try: () =>
+      yield* joinedStream(
+        (signal) =>
           pipeline(
             // response.body is a web ReadableStream; Readable.fromWeb bridges to Node streams.
             Readable.fromWeb(response.body as NodeWebReadableStream),
             AbsoluteFS.createWriteStream(destPath),
+            { signal },
           ),
-        catch: (cause) =>
-          new ArxivSourceTransientError({
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      });
+        (cause) => Effect.fail(downloadError(cause)),
+        Math.max(0, deadline - (yield* Clock.currentTimeMillis)),
+      );
       return destPath;
     }).pipe(
-      // A failed attempt deletes its partial download so a retry cannot race
-      // stale bytes at the same path (the old `finally` + shouldCleanup flag;
-      // `onError`'s cleanup is uninterruptible).
+      // Failure and interruption both clean up, after the body writer settles,
+      // so neither cleanup nor a retry can race its remaining writes.
       Effect.onError(() =>
         this.cleanUpBestEffort(destPath, 'partial download'),
       ),
@@ -352,24 +413,21 @@ class ArxivSourceProcessor {
     const log = this.log;
     log.debug(`Extracting tar file: ${tarPath} to ${destDir}`);
 
-    return Effect.tryPromise({
-      try: () => tar.x({ file: tarPath, cwd: destDir }),
-      catch: toErrorMessage,
-    }).pipe(
-      options.timeout == null
-        ? (effect) => effect
-        : Effect.timeoutOrElse({
-            duration: Duration.millis(options.timeout),
-            orElse: () => Effect.fail('Extraction timed out'),
-          }),
-      Effect.as({ success: true }),
-      Effect.catch((errorMsg) =>
+    return joinedStream(
+      (signal) =>
+        // tar has no abort option. Stop admitting entries and join its public
+        // promise. This is unbounded; rejection need not mean all writes closed.
+        tar.x({ file: tarPath, cwd: destDir, filter: () => !signal.aborted }),
+      (cause) =>
         Effect.sync((): ExtractResult => {
-          log.error(`Failed to extract tar file: ${errorMsg}`);
-          return { success: false, error: errorMsg };
+          const error = Cause.isTimeoutError(cause)
+            ? 'Extraction timed out'
+            : toErrorMessage(cause);
+          log.error(`Failed to extract tar file: ${error}`);
+          return { success: false, error };
         }),
-      ),
-    );
+      options.timeout,
+    ).pipe(Effect.map((result) => result ?? { success: true }));
   }
 
   public readonly downloadSource = Effect.fn('arxivProcessor.downloadSource')(
@@ -590,12 +648,18 @@ class ArxivSourceProcessor {
       if (isGzipOnly) {
         progressCallback?.('Decompressing source file...', 60);
         const decompressedPath = downloadedPath.replace(/\.gz$/, '');
-        yield* permanent(() =>
-          pipeline(
-            AbsoluteFS.createReadStream(downloadedPath),
-            createGunzip(),
-            AbsoluteFS.createWriteStream(decompressedPath),
-          ),
+        yield* joinedStream(
+          (signal) =>
+            pipeline(
+              AbsoluteFS.createReadStream(downloadedPath),
+              createGunzip(),
+              AbsoluteFS.createWriteStream(decompressedPath),
+              { signal },
+            ),
+          (cause) =>
+            Effect.fail(
+              new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
+            ),
         );
         yield* permanent(() => AbsoluteFS.delete(downloadedPath));
         sourceFilePath = decompressedPath;
