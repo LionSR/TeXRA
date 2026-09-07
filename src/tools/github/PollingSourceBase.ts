@@ -5,10 +5,16 @@
  * Subclasses implement only `pollOne()` — the actual endpoints to hit and
  * per-tick state to mutate — plus the error-formatting hook that names the
  * subscription type. Everything around it
- * (subscribe/unsubscribe, change-listener fan-out, the tick loop with
- * `tickInFlight` guard, classification of GitHub errors into auth /
+ * (subscribe/unsubscribe, change-listener fan-out, the poll loop,
+ * classification of GitHub errors into auth /
  * permanent / rate-limit / transient, jittered exponential backoff, and the
  * 24 h detach gate) lives here once.
+ *
+ * The subscribe path is Effect-typed end to end (`register` →
+ * `StreamSubscriptionRegistry.bind` → the tool's `execute()` runs it, R1);
+ * this module holds no `Effect.run*` call. Listener fan-out returns delivery
+ * programs that the emit turn forks detached ({@link PollEventListener}), so
+ * a slow listener never stalls a poll round.
  */
 
 import {
@@ -32,7 +38,6 @@ import {
   type LifecycleHost,
 } from '@platform/interfaces';
 import { platform } from '@platform/platform';
-import { effectRuntime } from '@platform/processRuntime';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
   createBoundedIdSet,
@@ -49,8 +54,18 @@ import { shouldDropBotEvent } from './botFilter';
 import type { GhUser } from './prTypes';
 import type { ZodType } from 'zod';
 
+/**
+ * A subscription event listener. The poller invokes it synchronously on the
+ * emitting turn — so any state the delivery depends on is captured with the
+ * emit, not with a later scheduler turn — and forks the returned program
+ * detached, the fire-and-forget shape the old `(text) => void` Promise
+ * listeners had. The program must recover its own failures and defects;
+ * `emitToListener` guards only the synchronous invocation itself.
+ */
+export type PollEventListener = (text: string) => Effect.Effect<void>;
+
 export interface BasePollSubscriptionState {
-  listeners: Set<(text: string) => void>;
+  listeners: Set<PollEventListener>;
   /** Most recent successful poll. The 24 h detach gate compares against this. */
   lastSuccessAt: number;
   consecutiveFailures: number;
@@ -310,55 +325,75 @@ export abstract class PollingSourceBase<
   /**
    * Subclass entry point. Looks up `key` in the map, creates initial state via
    * `initState()` if absent (enforcing the max-concurrent cap), adds the
-   * listener, and returns a Disposable that removes only this listener.
+   * listener, and returns the Disposable that removes only this listener.
+   *
+   * The returned Effect is run by the caller's boundary (the subscription
+   * tool's `execute()`): the map mutation happens in the run's synchronous
+   * prelude, and starting the poll loop is forking a daemon fiber of the
+   * runtime that runs it — so this module holds no `Effect.run*` call of its
+   * own (R1). The max-concurrent throw stays a defect: it reaches the tool as
+   * the same plain `Error` it always was.
    */
   protected register(
     key: K,
     initState: () => S,
-    onEvent: (text: string) => void,
-  ): Disposable {
-    let state = this.subscriptions.get(key);
-    let created = false;
-    if (!state) {
-      if (this.subscriptions.size >= this.config.maxConcurrent) {
-        throw new Error(
-          `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
-        );
+    onEvent: PollEventListener,
+  ): Effect.Effect<Disposable> {
+    return Effect.suspend(() => {
+      let state = this.subscriptions.get(key);
+      let created = false;
+      if (!state) {
+        if (this.subscriptions.size >= this.config.maxConcurrent) {
+          throw new Error(
+            `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
+          );
+        }
+        state = initState();
+        this.subscriptions.set(key, state);
+        this.logger.info(`Subscribed to ${key}`);
+        created = true;
       }
-      state = initState();
-      this.subscriptions.set(key, state);
-      this.logger.info(`Subscribed to ${key}`);
-      created = true;
-    }
-    state.listeners.add(onEvent);
-    if (created) this.notifyKeysChanged();
-    this.ensurePolling();
-    return {
-      dispose: () => this.removeListener(key, onEvent),
-    };
+      state.listeners.add(onEvent);
+      if (created) this.notifyKeysChanged();
+      const disposable: Disposable = {
+        dispose: () => this.removeListener(key, onEvent),
+      };
+      return this.ensurePolling().pipe(Effect.as(disposable));
+    });
   }
 
   /** Emit a text message to every listener attached to a subscription. */
-  protected emit(state: S, text: string): void {
-    for (const cb of state.listeners) {
-      this.emitToListener(cb, text);
-    }
+  protected emit(state: S, text: string): Effect.Effect<void> {
+    return Effect.forEach(
+      state.listeners,
+      (listener) => this.emitToListener(listener, text),
+      { discard: true },
+    );
   }
 
   /**
    * Deliver one message to one listener. The single guarded delivery point:
    * subclasses that build per-listener text (e.g. annotation filtering) route
    * through here instead of calling the listener directly.
+   *
+   * The listener is invoked on the emit turn — its capture (which binding,
+   * which owner) happens before any later detach can re-key the maps — and
+   * its delivery program is forked as a daemon, so a slow or hanging delivery
+   * never stalls the poll round. A synchronous throw while building the
+   * program is the defect the old try/catch logged as 'Listener threw'.
    */
   protected emitToListener(
-    listener: (text: string) => void,
+    listener: PollEventListener,
     text: string,
-  ): void {
-    try {
-      listener(text);
-    } catch (err) {
-      this.logger.warn('Listener threw', { data: err });
-    }
+  ): Effect.Effect<void> {
+    return Effect.suspend(() => Effect.forkDetach(listener(text))).pipe(
+      Effect.asVoid,
+      Effect.catchDefect((defect) =>
+        Effect.sync(() => {
+          this.logger.warn('Listener threw', { data: defect });
+        }),
+      ),
+    );
   }
 
   /**
@@ -410,25 +445,30 @@ export abstract class PollingSourceBase<
    * (formatting plus any URL gate). The seed-or-diff choice reads
    * `isInitialized()` so callers that interleave phases (Issue) and callers
    * that split them behind an early-return first-tick block (PR/Repo) both
-   * work. Never throws.
+   * work. Never fails: the whole batch is classified against the dedup window
+   * before the first delivery forks, exactly as the sync diff-then-emit did.
    */
   protected consumeCommentList<T extends { user: GhUser | null | undefined }>(
     res: ConditionalResponse<readonly T[]>,
     etagSlot: (etag: string | undefined) => void,
     deduped: DedupedResource<T>,
-    emitEvent: (item: T) => void,
+    emitEvent: (item: T) => Effect.Effect<void>,
     isInitialized: () => boolean,
-  ): void {
-    if (res.status !== 200) return;
-    etagSlot(res.etag);
-    if (isInitialized()) {
+  ): Effect.Effect<void> {
+    if (res.status !== 200) return Effect.void;
+    return Effect.suspend(() => {
+      etagSlot(res.etag);
+      if (!isInitialized()) {
+        deduped.seed(res.data);
+        return Effect.void;
+      }
+      const fresh: T[] = [];
       deduped.diff(res.data, (item) => {
         if (shouldDropBotEvent(item.user)) return;
-        emitEvent(item);
+        fresh.push(item);
       });
-    } else {
-      deduped.seed(res.data);
-    }
+      return Effect.forEach(fresh, emitEvent, { discard: true });
+    });
   }
 
   /**
@@ -441,13 +481,19 @@ export abstract class PollingSourceBase<
     this.notifyKeysChanged();
   }
 
-  /** Emit a formatted halted-subscription error, then detach the key. */
-  private emitErrorAndDetach(key: K, state: S, detail: string): void {
-    this.emit(state, this.formatErrorEvent(state, detail));
-    this.detach(key);
+  /** Emit a formatted halted-subscription error, then detach the key. The
+   *  listeners capture their delivery before the detach re-keys anything. */
+  private emitErrorAndDetach(
+    key: K,
+    state: S,
+    detail: string,
+  ): Effect.Effect<void> {
+    return this.emit(state, this.formatErrorEvent(state, detail)).pipe(
+      Effect.andThen(Effect.sync(() => this.detach(key))),
+    );
   }
 
-  private removeListener(key: K, onEvent: (text: string) => void): void {
+  private removeListener(key: K, onEvent: PollEventListener): void {
     const state = this.subscriptions.get(key);
     if (!state) return;
     state.listeners.delete(onEvent);
@@ -471,35 +517,42 @@ export abstract class PollingSourceBase<
   }
 
   /**
-   * Start the poll loop if it is not already running: one fiber, forked from
-   * the process runtime, that runs a round and then repeats on
-   * `Schedule.fixed(pollIntervalMs)`. `Effect.repeat` evaluates the round
-   * once before the schedule steps, so first-subscribe polls immediately
-   * instead of waiting a full interval, and a single sequential fiber makes
-   * overlapping rounds impossible — the in-flight guard the `setInterval`
-   * cadence needed is gone with it. A round that outruns the interval is
-   * followed immediately by the next one, as the interval's skip-then-fire
-   * behaviour did.
+   * Start the poll loop if it is not already running: one detached fiber that
+   * runs a round and then repeats on `Schedule.fixed(pollIntervalMs)`.
+   * `Effect.repeat` evaluates the round once before the schedule steps, so
+   * first-subscribe polls immediately instead of waiting a full interval, and
+   * a single sequential fiber makes overlapping rounds impossible — the
+   * in-flight guard the `setInterval` cadence needed is gone with it. A round
+   * that outruns the interval is followed immediately by the next one, as the
+   * interval's skip-then-fire behaviour did.
+   *
+   * The fiber is forked detached (into the global scope) by the returned
+   * Effect, so it roots at the runtime that runs the subscribe path — the
+   * tool boundary's process runtime in production (R1). It lives until
+   * `stopPolling` completes its stop Deferred (last unsubscribe,
+   * `disposeAll`) or the runtime itself shuts down.
    *
    * The loop sleeps on {@link unrefSleepClock}: a polling timer must never
    * keep a host process alive on its own. Its readings are the ambient
    * clock's, so `Clock.currentTimeMillis` inside a round is unaffected.
    */
-  private ensurePolling(): void {
-    this.registerShutdownIfNeeded();
-    if (this.pollLoopStop) return;
-    const stop = Deferred.makeUnsafe<void>();
-    this.pollLoopStop = stop;
-    effectRuntime().runFork(
-      Effect.raceFirst(this.pollLoopProgram(), Deferred.await(stop)).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            // A stopped loop may finish after a new subscription has started.
-            if (this.pollLoopStop === stop) this.pollLoopStop = undefined;
-          }),
+  private ensurePolling(): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      this.registerShutdownIfNeeded();
+      if (this.pollLoopStop) return Effect.void;
+      const stop = Deferred.makeUnsafe<void>();
+      this.pollLoopStop = stop;
+      return Effect.forkDetach(
+        Effect.raceFirst(this.pollLoopProgram(), Deferred.await(stop)).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              // A stopped loop may finish after a new subscription has started.
+              if (this.pollLoopStop === stop) this.pollLoopStop = undefined;
+            }),
+          ),
         ),
-      ),
-    );
+      ).pipe(Effect.asVoid);
+    });
   }
 
   private readonly pollLoopProgram = Effect.fn('PollingSourceBase.pollLoop')(
@@ -636,16 +689,14 @@ export abstract class PollingSourceBase<
         ),
         Effect.catchTag('PollHookRejected', (rejection) =>
           Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
-            Effect.sync(() =>
-              this.handleFailure(key, state, rejection.cause, failedAt),
-            ),
+            this.handleFailure(key, state, rejection.cause, failedAt),
           ),
         ),
         Effect.catchDefect((defect) =>
           Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
-            Effect.sync(() => {
+            Effect.suspend(() => {
               this.logger.warn('Poll threw a defect', { data: defect });
-              this.handleFailure(key, state, defect, failedAt);
+              return this.handleFailure(key, state, defect, failedAt);
             }),
           ),
         ),
@@ -658,14 +709,23 @@ export abstract class PollingSourceBase<
    * clock. The caller supplies it so this stays a pure function of the state
    * and that reading — the rate-limit branch compares it against GitHub's own
    * epoch (`resetAt`), which only a wall-clock reading can be measured
-   * against.
+   * against. Emits (the auth and permanent branches) run as Effects so the
+   * listener captures land before the detach.
    */
-  protected handleFailure(key: K, state: S, err: unknown, now: number): void {
+  protected readonly handleFailure = Effect.fn(
+    'PollingSourceBase.handleFailure',
+  )(function* (
+    this: PollingSourceBase<K, S>,
+    key: K,
+    state: S,
+    err: unknown,
+    now: number,
+  ) {
     if (err instanceof GitHubAuthError) {
       this.logger.warn(`Auth error for ${key}; stopping subscription.`, {
         data: err,
       });
-      this.emit(state, this.formatErrorEvent(state, err.message));
+      yield* this.emit(state, this.formatErrorEvent(state, err.message));
       appSignals.emit('githubTokenInvalid', { message: err.message });
       this.detach(key);
       return;
@@ -674,7 +734,7 @@ export abstract class PollingSourceBase<
       this.logger.warn(`Permanent error for ${key}; stopping subscription.`, {
         data: err,
       });
-      this.emitErrorAndDetach(key, state, err.message);
+      yield* this.emitErrorAndDetach(key, state, err.message);
       return;
     }
     if (err instanceof GitHubRateLimitError) {
@@ -688,7 +748,7 @@ export abstract class PollingSourceBase<
         this.logger.warn(
           `Rate limited polling ${key} and unreachable for over 24 h; detaching.`,
         );
-        this.emitErrorAndDetach(
+        yield* this.emitErrorAndDetach(
           key,
           state,
           'unreachable for over 24 h; detaching',
@@ -714,7 +774,7 @@ export abstract class PollingSourceBase<
         `Poll failed for ${key}; unreachable for over 24 h, detaching.`,
         { data: { failureCount: state.consecutiveFailures, error: err } },
       );
-      this.emitErrorAndDetach(
+      yield* this.emitErrorAndDetach(
         key,
         state,
         'unreachable for over 24 h; detaching',
@@ -728,5 +788,5 @@ export abstract class PollingSourceBase<
         error: err,
       },
     });
-  }
+  });
 }
