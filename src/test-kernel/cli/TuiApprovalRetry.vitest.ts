@@ -126,7 +126,6 @@ import {
   AgentCategory,
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
   type RetryPermission,
   type StreamTabId,
 } from '@shared/schemas';
@@ -134,6 +133,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionAutoApproval } from '@tools/goal';
 import { proposalApprovals } from '@tools/approval';
+import { generateExecutionId } from '@utils/core';
 import {
   bashApprovalRequest,
   toolEditApprovalRequest,
@@ -159,7 +159,7 @@ function port(): SessionHostInteractions {
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('stream', streamId),
-        executionId: `${streamId}-exec` as ExecutionId,
+        executionId: generateExecutionId(),
         identity: { kind: 'agent', agent: 'agent' },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
         category: AgentCategory.ToolUse,
@@ -482,13 +482,13 @@ describe('TUI retry approvals', () => {
       allowBypass: false,
       streamId: 'inquiry-stream',
       question: 'Which external fact should be checked?',
-      threadId: 'thread-interrupted',
+      threadId: 'ei_aabbccddeeff',
       sessionLinks: null,
       draft: null,
       transcript: null,
     });
     await waitForApproval('externalInquiry', {
-      threadId: 'thread-interrupted',
+      threadId: 'ei_aabbccddeeff',
     });
 
     defaultSession().interactions.cancel({ cause: 'Session interrupted.' });
@@ -496,7 +496,7 @@ describe('TUI retry approvals', () => {
     await vi.waitFor(() =>
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
-        threadId: 'thread-interrupted',
+        threadId: 'ei_aabbccddeeff',
         turnIndex: 1,
         cause: 'Session interrupted.',
       }),
@@ -510,13 +510,13 @@ describe('TUI retry approvals', () => {
       allowBypass: false,
       streamId: 'inquiry-stream',
       question: 'Which external fact should be checked?',
-      threadId: 'thread-note-free',
+      threadId: 'ei_112233445566',
       sessionLinks: null,
       draft: null,
       transcript: null,
     });
     await waitForApproval('externalInquiry', {
-      threadId: 'thread-note-free',
+      threadId: 'ei_112233445566',
     });
 
     currentApproval.get()?.decide({ accepted: false });
@@ -524,7 +524,7 @@ describe('TUI retry approvals', () => {
     await vi.waitFor(() =>
       expect(mocks.handleExternalInquiryAction).toHaveBeenCalledWith({
         action: 'drop',
-        threadId: 'thread-note-free',
+        threadId: 'ei_112233445566',
         turnIndex: 1,
       }),
     );
@@ -777,6 +777,7 @@ describe('TUI retry approvals', () => {
     mocks.hasUsableApiKey.mockResolvedValue(true);
     const { interactions, prepareRetry } = tui();
     const result = port().requestRetry({
+      requestId: 'retry-unknown-provider',
       streamId: 's1',
       operation: 'model request',
       errorMessage: 'ChatGPT subscription usage limit reached.',

@@ -2,6 +2,7 @@
 export * from './identifiers';
 export * from './jsonValue';
 export * from './agent';
+export * from './agentConfig';
 export * from './runIdentity';
 export * from './agentRoster';
 export * from './agentCliSettings';
@@ -76,5 +77,4 @@ export * from './subscriptionUsage';
 export * from './streamState';
 export * from './streamSnapshot';
 export * from './sessionEvent';
-
 export * from './traceEvent';

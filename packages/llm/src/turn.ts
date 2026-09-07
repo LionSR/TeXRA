@@ -37,6 +37,7 @@ const OriginSchema = BindingSchema.extend({
     'glm-chat',
     'xai-chat',
     'dashscope-chat',
+    'minimax-chat',
     'openrouter-chat',
   ]),
   codecVersion: z.literal(1),
@@ -185,6 +186,40 @@ const OpenRouterFileAnnotationSchema = z
       .readonly(),
   })
   .readonly();
+const MiniMaxReasoningSchema = z
+  .strictObject({
+    kind: z.literal('minimax-reasoning'),
+    plain: z.string().optional(),
+    details: z
+      .array(
+        z
+          .strictObject({
+            type: z.string().optional(),
+            id: z.string().optional(),
+            format: z.string().optional(),
+            index: z.int().optional(),
+            text: z.string().optional(),
+          })
+          .readonly(),
+      )
+      .readonly()
+      .optional(),
+  })
+  .refine(
+    (evidence) =>
+      evidence.plain !== undefined || evidence.details !== undefined,
+    {
+      message: 'MiniMax reasoning preserves a reported plain or details field.',
+    },
+  )
+  .readonly();
+const MiniMaxDetectionSchema = z.strictObject({
+  inputSensitive: z.boolean().optional(),
+  inputSensitiveType: z.int().optional(),
+  outputSensitive: z.boolean().optional(),
+  outputSensitiveType: z.int().optional(),
+  outputSensitiveInt: z.int().optional(),
+});
 const MessagePartSchema = z.strictObject({
   kind: z.literal('message'),
   content: z
@@ -198,13 +233,23 @@ const MessagePartSchema = z.strictObject({
     )
     .readonly(),
   evidence: z
-    .strictObject({
-      kind: z.literal('openai-responses-message'),
-      itemId: z.string().min(1),
-      status: z.enum(['completed', 'incomplete']),
-      phase: z.enum(['commentary', 'final_answer']).nullable().optional(),
-    })
-    .readonly()
+    .discriminatedUnion('kind', [
+      z
+        .strictObject({
+          kind: z.literal('openai-responses-message'),
+          itemId: z.string().min(1),
+          status: z.enum(['completed', 'incomplete']),
+          phase: z.enum(['commentary', 'final_answer']).nullable().optional(),
+        })
+        .readonly(),
+      z
+        .strictObject({
+          kind: z.literal('minimax-message'),
+          name: z.string().optional(),
+          audioContent: z.literal('').optional(),
+        })
+        .readonly(),
+    ])
     .optional(),
 });
 const LocalCallPartSchema = z.strictObject({
@@ -213,12 +258,21 @@ const LocalCallPartSchema = z.strictObject({
   name: z.string().min(1),
   arguments: JsonObjectSchema,
   evidence: z
-    .strictObject({
-      kind: z.literal('openai-responses-function-call'),
-      itemId: z.string().min(1).optional(),
-      status: z.literal('completed').optional(),
-    })
-    .readonly()
+    .discriminatedUnion('kind', [
+      z
+        .strictObject({
+          kind: z.literal('openai-responses-function-call'),
+          itemId: z.string().min(1).optional(),
+          status: z.literal('completed').optional(),
+        })
+        .readonly(),
+      z
+        .strictObject({
+          kind: z.literal('minimax-function-call'),
+          index: z.int().optional(),
+        })
+        .readonly(),
+    ])
     .optional(),
 });
 
@@ -246,6 +300,7 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
       evidence: z
         .discriminatedUnion('kind', [
           OpenRouterReasoningSchema,
+          MiniMaxReasoningSchema,
           z
             .strictObject({ kind: z.literal('chat-reasoning-content') })
             .readonly(),
@@ -308,6 +363,9 @@ const EVIDENCE_PROTOCOL = {
   'openrouter-reasoning': 'openrouter-chat',
   'openrouter-file-annotation': 'openrouter-chat',
   'openrouter-url-citation': 'openrouter-chat',
+  'minimax-reasoning': 'minimax-chat',
+  'minimax-message': 'minimax-chat',
+  'minimax-function-call': 'minimax-chat',
 } as const;
 
 function validateAssistantContent(
@@ -344,7 +402,8 @@ function validateAssistantContent(
         evidence?.kind === 'chat-reasoning-content') &&
         (part.summary.length !== 0 || part.content?.length !== 1)) ||
         ((evidence?.kind === 'anthropic-redacted-thinking' ||
-          evidence?.kind === 'openrouter-reasoning') &&
+          evidence?.kind === 'openrouter-reasoning' ||
+          evidence?.kind === 'minimax-reasoning') &&
           (part.summary.length !== 0 || part.content !== undefined)))
     ) {
       ctx.addIssue({
@@ -666,6 +725,10 @@ const DashscopeControlsSchema = OpenAIControlsSchema.extend({
   stopSequences: TurnRequestSchema.unwrap().shape.stopSequences.unwrap(),
   thinking: DisabledThinkingSchema.readonly(),
 });
+const MiniMaxControlsSchema = OpenAIControlsSchema.extend({
+  reasoningSplit: z.boolean(),
+  stopSequences: TurnRequestSchema.unwrap().shape.stopSequences.unwrap(),
+});
 const OpenRouterControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
   temperature: z.number().min(0).max(2).nullable(),
@@ -680,6 +743,15 @@ const EditorControlsSchema = z.strictObject({
 
 /** Already-selected protocol binding and defaults, provided by the application. */
 export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
+  BindingSchema.extend({
+    protocol: z.literal('minimax-chat'),
+    outputMode: z.literal('complete'),
+    reasoningSplit: z.boolean(),
+    defaults: MiniMaxControlsSchema.omit({
+      toolChoice: true,
+      reasoningSplit: true,
+    }).readonly(),
+  }).readonly(),
   EditorBindingSchema.extend({
     protocol: z.literal('vscode-lm'),
     supportsImageInput: z.boolean(),
@@ -915,7 +987,8 @@ export type ChatConfiguration = Extract<
       | 'kimi-chat'
       | 'glm-chat'
       | 'xai-chat'
-      | 'dashscope-chat';
+      | 'dashscope-chat'
+      | 'minimax-chat';
   }
 >;
 export type GoogleInteractionsConfiguration = Extract<
@@ -956,6 +1029,11 @@ const HttpTransportSchema = z
 /** Prepared semantic input; execution never reapplies current defaults. */
 export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
   z.discriminatedUnion('protocol', [
+    PreparedInputSchema.extend({
+      protocol: z.literal('minimax-chat'),
+      outputMode: z.literal('complete'),
+      controls: MiniMaxControlsSchema.readonly(),
+    }).readonly(),
     EditorOriginSchema.extend({
       ...PreparedInputSchema.pick({
         mode: true,
@@ -1032,6 +1110,12 @@ const UsageSchema = z
     reasoningTokens: z.int().nonnegative().nullable(),
     providerUsage: z
       .discriminatedUnion('kind', [
+        z
+          .strictObject({
+            kind: z.literal('minimax'),
+            totalCharacters: z.int().nonnegative(),
+          })
+          .readonly(),
         z
           .strictObject({
             kind: z.literal('xai'),
@@ -1134,11 +1218,17 @@ const HttpTurnResultSchema = z
     ]),
     stopSequence: z.string().optional(),
     finishEvidence: z
-      .strictObject({
-        kind: z.literal('openrouter'),
-        nativeFinishReason: z.string().nullable(),
-      })
-      .readonly()
+      .discriminatedUnion('kind', [
+        z
+          .strictObject({
+            kind: z.literal('openrouter'),
+            nativeFinishReason: z.string().nullable(),
+          })
+          .readonly(),
+        MiniMaxDetectionSchema.extend({
+          kind: z.literal('minimax'),
+        }).readonly(),
+      ])
       .optional(),
     refusalEvidence: z
       .strictObject({
@@ -1183,8 +1273,11 @@ const HttpTurnResultSchema = z
       (result.usage?.providerUsage?.kind === 'xai' &&
         result.requestedOrigin.protocol !== 'xai-chat') ||
       ((result.usage?.providerUsage?.kind === 'openrouter' ||
-        result.finishEvidence !== undefined) &&
-        result.requestedOrigin.protocol !== 'openrouter-chat')
+        result.finishEvidence?.kind === 'openrouter') &&
+        result.requestedOrigin.protocol !== 'openrouter-chat') ||
+      ((result.usage?.providerUsage?.kind === 'minimax' ||
+        result.finishEvidence?.kind === 'minimax') &&
+        result.requestedOrigin.protocol !== 'minimax-chat')
     ) {
       ctx.addIssue({
         code: 'custom',
@@ -1346,6 +1439,14 @@ const ModelErrorFieldsSchema = z.strictObject({
   operation: RemoteOperationSchema.optional(),
   providerEvidence: z
     .discriminatedUnion('kind', [
+      MiniMaxDetectionSchema.extend({
+        kind: z.literal('minimax'),
+        origin: OriginSchema.extend({
+          protocol: z.literal('minimax-chat'),
+        }).readonly(),
+        statusCode: z.int(),
+        statusMessage: z.string().optional(),
+      }).readonly(),
       z
         .strictObject({
           kind: z.literal('openrouter'),

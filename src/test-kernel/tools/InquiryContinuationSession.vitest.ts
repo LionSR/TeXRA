@@ -117,7 +117,6 @@ describe('external inquiry continuation session routing', () => {
     getThreadSummaryMock.mockResolvedValue({
       threadId: THREAD,
       parentStreamId: STREAM,
-      parentExecutionId: null,
       status: 'answered',
       lastQuestionPreview: 'Check the boundary case.',
       lastActivityIso: '2026-06-14T08:01:00.000Z',
@@ -174,7 +173,6 @@ describe('external inquiry continuation session routing', () => {
           aggregateId: qualifyAggregateId('inquiry', THREAD),
           threadId: THREAD,
           parentStreamId: STREAM,
-          parentExecutionId: null,
           status: 'answered',
           lastQuestionPreview: 'Check the boundary case.',
           lastActivityIso: '2026-06-14T08:01:00.000Z',

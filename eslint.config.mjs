@@ -546,7 +546,6 @@ export default tseslint.config(
       parserOptions: {
         project: [
           './tsconfig.json',
-          './tsconfig.test-kernel.json',
           './tsconfig.build.json',
           './packages/desktop/tsconfig.main.json',
           './packages/desktop/tsconfig.preload.json',
@@ -656,6 +655,15 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': 'off',
       'local/no-vscode-import-in-free-zones': 'error',
       'prefer-const': 'error',
+    },
+  },
+
+  // Tests run separately so their application-wide program is not retained
+  // alongside the production programs. Both passes keep the same rules.
+  {
+    files: ['src/test-kernel/**/*.ts'],
+    languageOptions: {
+      parserOptions: { project: ['./tsconfig.test-kernel.json'] },
     },
   },
 

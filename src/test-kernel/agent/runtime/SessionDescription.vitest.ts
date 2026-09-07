@@ -13,7 +13,10 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 
 import { recordSessionEvents } from '../progressTestUtils';
 
@@ -97,11 +100,12 @@ describe('session description helpers', () => {
 
   it('uses the exact workflow-agent description carried by launch context', async () => {
     const session = createTestSession();
+    publishTestRunStart(session, 'stream-workflow', 'a0b0c1' as ExecutionId);
     const recorded = recordSessionEvents(session);
     const handler = mockToolUseAnswer('Correcting derivation signs');
 
     await runDescription(
-      'exec-workflow',
+      'a0b0c1',
       'stream-workflow',
       session,
       AgentCategory.Workflow,
@@ -112,7 +116,7 @@ describe('session description helpers', () => {
       '<agent-purpose>Corrects a draft</agent-purpose>',
     );
     expect(mocks.writeSessionDescription).toHaveBeenCalledWith(
-      'exec-workflow',
+      'a0b0c1',
       'Correcting derivation signs',
     );
     expect(recorded.events).toMatchObject([
@@ -157,13 +161,14 @@ describe('session description helpers', () => {
 
   it('keeps generating compact descriptions for tool-use runs', async () => {
     const session = createTestSession();
+    publishTestRunStart(session, 'stream-tool', 'a0b0c2' as ExecutionId);
     const recorded = recordSessionEvents(session);
     mockToolUseAnswer('Fixing proof typos');
 
-    await runDescription('exec-tool', 'stream-tool', session);
+    await runDescription('a0b0c2', 'stream-tool', session);
 
     expect(mocks.writeSessionDescription).toHaveBeenCalledWith(
-      'exec-tool',
+      'a0b0c2',
       'Fixing proof typos',
     );
     expect(recorded.events).toMatchObject([

@@ -101,6 +101,11 @@ function agreesWithCompleted(
   candidate: HttpTurnResult['content'][number],
 ): boolean {
   if (completed.kind === 'message' && candidate.kind === 'message') {
+    if (
+      completed.evidence?.kind !== 'openai-responses-message' ||
+      candidate.evidence?.kind !== 'openai-responses-message'
+    )
+      return false;
     return (
       isDeepStrictEqual(completed.content, candidate.content) &&
       completed.evidence?.itemId === candidate.evidence?.itemId &&
@@ -128,6 +133,13 @@ function agreesWithCompleted(
     );
   }
   if (completed.kind === 'local-call' && candidate.kind === 'local-call') {
+    if (
+      (completed.evidence !== undefined &&
+        completed.evidence.kind !== 'openai-responses-function-call') ||
+      (candidate.evidence !== undefined &&
+        candidate.evidence.kind !== 'openai-responses-function-call')
+    )
+      return false;
     return (
       completed.providerCallId === candidate.providerCallId &&
       completed.name === candidate.name &&
@@ -373,6 +385,12 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
           });
         case 'message': {
           if (part.evidence) {
+            if (part.evidence.kind !== 'openai-responses-message') {
+              return yield* new ModelError({
+                kind: 'unsupported',
+                message: 'Responses cannot replay foreign message evidence.',
+              });
+            }
             input.push({
               type: 'message',
               role: 'assistant',
@@ -436,10 +454,15 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
           break;
         }
         case 'local-call': {
-          if (part.providerCallId === null) {
+          if (
+            part.providerCallId === null ||
+            (part.evidence !== undefined &&
+              part.evidence.kind !== 'openai-responses-function-call')
+          ) {
             return yield* new ModelError({
               kind: 'unsupported',
-              message: 'Responses tool history requires original call IDs.',
+              message:
+                'Responses tool history requires original call IDs without foreign evidence.',
             });
           }
           callIds.push(part.providerCallId);

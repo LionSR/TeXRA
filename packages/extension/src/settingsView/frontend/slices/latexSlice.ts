@@ -7,9 +7,9 @@
  */
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  LatexConfigValues,
-  SettingsViewOutboundHandlerRegistry,
+import {
+  LatexConfigValuesSchema,
+  type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
 import { LATEX_CONFIG_FIELD_TO_KEY } from '@shared/constants/latexConfig';
 
@@ -28,12 +28,14 @@ export const latexHandlers = {
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES]: (data) => {
     latexConfigValues.set(
-      Object.fromEntries(
-        Object.entries(LATEX_CONFIG_FIELD_TO_KEY).map(([field, key]) => [
-          field,
-          data.values[key],
-        ]),
-      ) as LatexConfigValues,
+      LatexConfigValuesSchema.parse(
+        Object.fromEntries(
+          Object.entries(LATEX_CONFIG_FIELD_TO_KEY).map(([field, key]) => [
+            field,
+            data.values[key],
+          ]),
+        ),
+      ),
     );
   },
 

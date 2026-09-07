@@ -94,7 +94,25 @@ JPEG/PNG. MIME spelling and base64 bytes are retained exactly, including empty
 encodings, with ordered text labels. Image detail, tool-result images, audio,
 video and documents remain unsupported in these Chat branches. Hosted execution,
 background, storage, cache-lifetime, stopping and geography controls are also
-unsupported. MiniMax remains unsupported pending its authoritative stream contract.
+unsupported.
+
+MiniMax uses the same Chat implementation with explicitly selected
+`outputMode: 'complete'`. It reads one ordinary JSON response and emits observed
+identity followed by the completed result; it does not invent incremental text
+or phase events. Selected model, endpoint, reasoning-split choice and the existing
+`max_tokens` field are retained. Plain reasoning and ordered reasoning details
+remain separate, including reported empty values, as required for
+[reasoning replay](https://platform.minimax.io/docs/api-reference/text-openai-api).
+Original complete local calls retain their identities and order. Usage counts
+remain independently unknown when absent, and reported character counts are
+retained. Embedded nonzero provider status is a failure even under HTTP 200;
+sensitivity observations are retained without inventing a filtering outcome.
+The inherited stop, parallel-call and tool-choice controls preserve the selected
+old request behavior; the current
+[request schema](https://platform.minimax.io/docs/api-reference/text/api/openapi-chat-openai.json)
+does not independently document those controls. Media and incremental MiniMax
+delivery remain unsupported. No application caller switches in this change,
+and older configured models and endpoints are not retired.
 
 Two further branches cover the currently configured xAI and Qwen Chat routes,
 without another handler or transport. xAI accepts a selected subset of
@@ -131,7 +149,7 @@ preflight, retry or budget adjustment. Application admission must still supply
 the stable cache identity and must not treat the old automatically assigned
 image detail as authored intent; those production consumers have not switched.
 
-Chat reads one SDK HTTP response through the native Effect SSE parser. This retains
+Streaming Chat reads one SDK HTTP response through the native Effect SSE parser. This retains
 Kimi's and xAI's required `[DONE]` terminator, which the SDK's parsed iterator suppresses;
 it is not a second parser or reader over an already-decoded stream. Top-level usage is
 authoritative, with Kimi's choice receipt used only when the top-level receipt is absent;

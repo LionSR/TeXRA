@@ -106,7 +106,8 @@ vi.mock('vscode', () => {
   };
 });
 
-const { createTestSession } = await import('@test/support/sessionTestUtils');
+const { createTestSession, publishTestRunStart } =
+  await import('@test/support/sessionTestUtils');
 const { settleSessionEvents } = await import('../agent/progressTestUtils');
 const { appSignals } = await import('@eventBus/AppSignals');
 const { registerInlineCriticism, setInlineCriticismEnabled } =
@@ -177,6 +178,7 @@ describe('output-file run fact frontend subscriptions', () => {
 
   it('badges run-fact output files and app-scoped workspace writes', async () => {
     const session = createTestSession();
+    publishTestRunStart(session, streamId);
     const context = { subscriptions: [] };
     registerFileDecorations(
       context as unknown as VSCode.ExtensionContext,
@@ -217,6 +219,7 @@ describe('output-file run fact frontend subscriptions', () => {
     );
 
     const session = createTestSession();
+    publishTestRunStart(session, streamId);
     const context = { subscriptions: [] };
     registerInlineCriticism(
       context as unknown as VSCode.ExtensionContext,

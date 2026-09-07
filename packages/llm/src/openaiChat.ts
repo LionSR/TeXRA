@@ -148,6 +148,93 @@ const DashscopeChunkSchema = ReasoningChunkSchema.extend({
     .max(1),
 });
 
+const MiniMaxEnvelopeSchema = z.object({
+  id: z.string().optional(),
+  model: z.string().optional(),
+  base_resp: z
+    .strictObject({
+      status_code: z.int(),
+      status_msg: z.string().optional(),
+    })
+    .optional(),
+  input_sensitive: z.boolean().optional(),
+  input_sensitive_type: z.int().optional(),
+  output_sensitive: z.boolean().optional(),
+  output_sensitive_type: z.int().optional(),
+  output_sensitive_int: z.int().optional(),
+});
+const MiniMaxCompletionSchema = z.strictObject({
+  ...MiniMaxEnvelopeSchema.shape,
+  id: z.string().min(1),
+  model: z.string().min(1),
+  created: z.int(),
+  object: z.literal('chat.completion'),
+  choices: z
+    .array(
+      z.strictObject({
+        index: z.literal(0),
+        finish_reason: z.enum([
+          'stop',
+          'length',
+          'content_filter',
+          'tool_calls',
+        ]),
+        message: z.strictObject({
+          role: z.literal('assistant'),
+          content: z.string(),
+          name: z.string().optional(),
+          // Current ordinary examples report an empty placeholder, not audio output.
+          audio_content: z.literal('').optional(),
+          reasoning_content: z.string().optional(),
+          reasoning_details: z
+            .array(
+              z.strictObject({
+                type: z.string().optional(),
+                id: z.string().optional(),
+                format: z.string().optional(),
+                index: z.int().optional(),
+                text: z.string().optional(),
+              }),
+            )
+            .optional(),
+          tool_calls: z
+            .array(
+              z.strictObject({
+                id: z.string().min(1),
+                type: z.literal('function'),
+                index: z.int().optional(),
+                function: z.strictObject({
+                  name: z.string().min(1),
+                  arguments: z.string(),
+                }),
+              }),
+            )
+            .optional(),
+        }),
+      }),
+    )
+    .length(1),
+  // MiniMax documents partial receipts; no principal count is manufactured.
+  usage: z
+    .strictObject({
+      prompt_tokens: z.int().nonnegative().optional(),
+      completion_tokens: z.int().nonnegative().optional(),
+      total_tokens: z.int().nonnegative().optional(),
+      total_characters: z.int().nonnegative().optional(),
+      prompt_tokens_details: z
+        .strictObject({ cached_tokens: z.int().nonnegative().optional() })
+        .optional(),
+      completion_tokens_details: z
+        .strictObject({ reasoning_tokens: z.int().nonnegative().optional() })
+        .optional(),
+    })
+    .optional(),
+});
+type MiniMaxReasoning = Extract<
+  Extract<TurnResult['content'][number], { kind: 'reasoning' }>['evidence'],
+  { kind: 'minimax-reasoning' }
+>;
+
 // Used by preparation as well as execution: unsupported history fails before I/O.
 const chatMessages = Effect.fn('llm.chatMessages')(function* (
   history: ResolvedTurn['messages'],
@@ -168,8 +255,11 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
           'image/heif',
         ]
       : ['image/jpeg', 'image/png'];
-  let calls: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall[] =
-    [];
+  let calls: Array<
+    OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall & {
+      index?: number;
+    }
+  > = [];
   for (const message of history) {
     if (message.role === 'tool') {
       for (const result of message.results) {
@@ -234,7 +324,12 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
         content: content.every((part) => part.type === 'text')
           ? content
               .map((part) => part.text)
-              .join(origin.protocol === 'dashscope-chat' ? '\n' : '')
+              .join(
+                origin.protocol === 'dashscope-chat' ||
+                  origin.protocol === 'minimax-chat'
+                  ? '\n'
+                  : '',
+              )
           : content,
       });
       continue;
@@ -242,13 +337,27 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
     let assistant:
       | (OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam & {
           reasoning_content?: string;
+          reasoning_details?: MiniMaxReasoning['details'];
+          audio_content?: '';
         })
       | undefined;
     let reasoning: string | undefined;
+    let minimaxReasoning: MiniMaxReasoning | undefined;
     for (const part of message.content) {
       if (
         part.kind === 'reasoning' &&
+        origin.protocol === 'minimax-chat' &&
+        part.evidence?.kind === 'minimax-reasoning' &&
+        sameModelOrigin(message.origin, origin) &&
+        minimaxReasoning === undefined &&
+        assistant === undefined &&
+        calls.length === 0
+      ) {
+        minimaxReasoning = part.evidence;
+      } else if (
+        part.kind === 'reasoning' &&
         origin.protocol !== 'openai-chat' &&
+        origin.protocol !== 'minimax-chat' &&
         part.evidence?.kind === 'chat-reasoning-content' &&
         sameModelOrigin(message.origin, origin) &&
         reasoning === undefined &&
@@ -258,7 +367,13 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
         // The canonical boundary guarantees exactly one original text value.
         reasoning = part.content![0].text;
       } else if (part.kind === 'local-call') {
-        if (part.providerCallId === null || part.evidence !== undefined) {
+        if (
+          part.providerCallId === null ||
+          (part.evidence !== undefined &&
+            (origin.protocol !== 'minimax-chat' ||
+              part.evidence.kind !== 'minimax-function-call' ||
+              !sameModelOrigin(message.origin, origin)))
+        ) {
           return yield* new ModelError({
             kind: 'unsupported',
             message:
@@ -268,6 +383,10 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
         calls.push({
           type: 'function',
           id: part.providerCallId,
+          ...(part.evidence?.kind === 'minimax-function-call' &&
+          part.evidence.index !== undefined
+            ? { index: part.evidence.index }
+            : {}),
           function: {
             name: part.name,
             arguments: JSON.stringify(part.arguments),
@@ -276,8 +395,12 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
       } else if (
         part.kind === 'message' &&
         calls.length === 0 &&
-        part.evidence === undefined &&
-        (reasoning === undefined || assistant === undefined)
+        (part.evidence === undefined ||
+          (origin.protocol === 'minimax-chat' &&
+            part.evidence.kind === 'minimax-message' &&
+            sameModelOrigin(message.origin, origin))) &&
+        ((reasoning === undefined && minimaxReasoning === undefined) ||
+          assistant === undefined)
       ) {
         if (
           origin.protocol !== 'openai-chat' &&
@@ -290,6 +413,16 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
         }
         assistant = {
           role: 'assistant',
+          ...(part.evidence?.kind === 'minimax-message'
+            ? {
+                ...(part.evidence.name !== undefined
+                  ? { name: part.evidence.name }
+                  : {}),
+                ...(part.evidence.audioContent !== undefined
+                  ? { audio_content: part.evidence.audioContent }
+                  : {}),
+              }
+            : {}),
           content:
             origin.protocol === 'openai-chat' || origin.protocol === 'xai-chat'
               ? part.content.map((child) =>
@@ -299,7 +432,12 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
                 )
               : part.content
                   .map((child) => child.text)
-                  .join(origin.protocol === 'dashscope-chat' ? '\n' : ''),
+                  .join(
+                    origin.protocol === 'dashscope-chat' ||
+                      origin.protocol === 'minimax-chat'
+                      ? '\n'
+                      : '',
+                  ),
         };
         messages.push(assistant);
       } else {
@@ -319,6 +457,10 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
     // as its first-party client does, without requiring an absent trace.
     if (reasoning !== undefined && origin.protocol !== 'dashscope-chat')
       assistant.reasoning_content = reasoning;
+    if (minimaxReasoning?.plain !== undefined)
+      assistant.reasoning_content = minimaxReasoning.plain;
+    if (minimaxReasoning?.details !== undefined)
+      assistant.reasoning_details = minimaxReasoning.details;
     if (calls.length > 0) assistant.tool_calls = calls;
   }
   return messages;
@@ -386,6 +528,32 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
     stream: true,
     stream_options: { include_usage: true },
   };
+  if (turn.protocol === 'minimax-chat') {
+    if (
+      config.protocol !== 'minimax-chat' ||
+      turn.controls.reasoningSplit !== config.reasoningSplit
+    ) {
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message:
+          'The prepared MiniMax format does not match the selected complete-response route.',
+      });
+    }
+    const { stream_options: _streamOptions, ...completeParameters } =
+      parameters;
+    return {
+      ...completeParameters,
+      stream: false as const,
+      max_tokens: turn.controls.maxOutputTokens,
+      reasoning_split: turn.controls.reasoningSplit,
+      ...(turn.controls.stopSequences.length > 0
+        ? { stop: [...turn.controls.stopSequences] }
+        : {}),
+      ...(turn.tools.length > 0
+        ? { parallel_tool_calls: turn.controls.parallelToolCalls }
+        : {}),
+    };
+  }
   if (turn.protocol === 'openai-chat' || turn.protocol === 'xai-chat') {
     parameters.max_completion_tokens = turn.controls.maxOutputTokens;
     if (turn.tools.length > 0)
@@ -432,6 +600,7 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
   if (
     config.protocol === 'openai-chat' ||
     config.protocol === 'xai-chat' ||
+    config.protocol === 'minimax-chat' ||
     config.protocol === 'dashscope-chat'
   ) {
     return yield* new ModelError({
@@ -566,6 +735,7 @@ export function openaiChatModel(
     config.protocol !== 'kimi-chat' &&
     config.protocol !== 'glm-chat' &&
     config.protocol !== 'xai-chat' &&
+    config.protocol !== 'minimax-chat' &&
     config.protocol !== 'dashscope-chat'
   ) {
     throw new ModelError({
@@ -615,7 +785,8 @@ export function openaiChatModel(
         parsed.data.serviceTier !== undefined ||
         parsed.data.cache !== undefined ||
         (parsed.data.stopSequences !== undefined &&
-          config.protocol !== 'dashscope-chat') ||
+          config.protocol !== 'dashscope-chat' &&
+          config.protocol !== 'minimax-chat') ||
         parsed.data.inferenceGeo !== undefined ||
         (parsed.data.promptCacheKey !== undefined &&
           config.protocol !== 'kimi-chat')
@@ -627,7 +798,8 @@ export function openaiChatModel(
         });
       }
       if (
-        (config.protocol === 'dashscope-chat' &&
+        ((config.protocol === 'dashscope-chat' ||
+          config.protocol === 'minimax-chat') &&
           (parsed.data.thinking !== undefined ||
             parsed.data.effort !== undefined)) ||
         ((config.protocol === 'openai-chat' ||
@@ -636,6 +808,7 @@ export function openaiChatModel(
         (config.protocol !== 'openai-chat' &&
           config.protocol !== 'xai-chat' &&
           config.protocol !== 'dashscope-chat' &&
+          config.protocol !== 'minimax-chat' &&
           parsed.data.parallelToolCalls !== undefined)
       ) {
         return yield* new ModelError({
@@ -652,6 +825,9 @@ export function openaiChatModel(
         system: parsed.data.system,
         messages: parsed.data.messages,
         tools,
+        ...(config.protocol === 'minimax-chat'
+          ? { outputMode: config.outputMode }
+          : {}),
       };
       const maxOutputTokens =
         parsed.data.maxOutputTokens ?? config.defaults.maxOutputTokens;
@@ -689,9 +865,11 @@ export function openaiChatModel(
           toolChoice,
           effort,
         };
-      } else if (config.protocol === 'dashscope-chat') {
-        controls = {
-          ...config.defaults,
+      } else if (
+        config.protocol === 'dashscope-chat' ||
+        config.protocol === 'minimax-chat'
+      ) {
+        const ordinary = {
           temperature: parsed.data.temperature ?? config.defaults.temperature,
           maxOutputTokens,
           parallelToolCalls:
@@ -700,6 +878,10 @@ export function openaiChatModel(
           stopSequences:
             parsed.data.stopSequences ?? config.defaults.stopSequences,
         };
+        controls =
+          config.protocol === 'minimax-chat'
+            ? { ...ordinary, reasoningSplit: config.reasoningSplit }
+            : { ...ordinary, thinking: config.defaults.thinking };
       } else {
         if (parsed.data.effort === 'none' || parsed.data.effort === 'minimal') {
           return yield* new ModelError({
@@ -819,6 +1001,7 @@ export function openaiChatModel(
               turn.protocol !== 'kimi-chat' &&
               turn.protocol !== 'glm-chat' &&
               turn.protocol !== 'xai-chat' &&
+              turn.protocol !== 'minimax-chat' &&
               turn.protocol !== 'dashscope-chat') ||
             !sameModelOrigin(turn, origin)
           ) {
@@ -878,6 +1061,233 @@ export function openaiChatModel(
           }
           reader = source.body.getReader();
           const body = reader;
+          if (turn.protocol === 'minimax-chat') {
+            // Complete mode owns this same reader, but never interprets JSON as SSE.
+            const decoder = new TextDecoder('utf-8', { fatal: true });
+            let text = '';
+            while (true) {
+              const next = yield* Effect.tryPromise({
+                try: () => body.read(),
+                catch: openaiFailure,
+              });
+              text += yield* Effect.try({
+                try: () =>
+                  next.done
+                    ? decoder.decode()
+                    : decoder.decode(next.value, { stream: true }),
+                catch: (cause) =>
+                  new ModelError({
+                    kind: 'malformed-output',
+                    message: 'MiniMax returned invalid UTF-8 completion data.',
+                    cause,
+                  }),
+              });
+              if (next.done) break;
+            }
+            const raw: unknown = yield* Effect.try({
+              try: () => JSON.parse(text),
+              catch: (cause) =>
+                new ModelError({
+                  kind: 'malformed-output',
+                  message: 'MiniMax returned malformed completion JSON.',
+                  cause,
+                }),
+            });
+            const envelope = MiniMaxEnvelopeSchema.safeParse(raw);
+            if (!envelope.success) {
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message: 'MiniMax returned malformed completion metadata.',
+                cause: envelope.error,
+              });
+            }
+            responseId = envelope.data.id === '' ? undefined : envelope.data.id;
+            returnedModel =
+              envelope.data.model === '' ? undefined : envelope.data.model;
+            const detection = {
+              ...(envelope.data.input_sensitive !== undefined
+                ? { inputSensitive: envelope.data.input_sensitive }
+                : {}),
+              ...(envelope.data.input_sensitive_type !== undefined
+                ? { inputSensitiveType: envelope.data.input_sensitive_type }
+                : {}),
+              ...(envelope.data.output_sensitive !== undefined
+                ? { outputSensitive: envelope.data.output_sensitive }
+                : {}),
+              ...(envelope.data.output_sensitive_type !== undefined
+                ? { outputSensitiveType: envelope.data.output_sensitive_type }
+                : {}),
+              ...(envelope.data.output_sensitive_int !== undefined
+                ? { outputSensitiveInt: envelope.data.output_sensitive_int }
+                : {}),
+            };
+            const status = envelope.data.base_resp;
+            if (status !== undefined && status.status_code !== 0) {
+              return yield* new ModelError({
+                kind:
+                  status.status_code === 1004 || status.status_code === 2049
+                    ? 'authentication'
+                    : 'provider-rejection',
+                message:
+                  status.status_msg ??
+                  'MiniMax rejected the completion request.',
+                status: source.status,
+                providerEvidence: Object.freeze({
+                  kind: 'minimax',
+                  origin: Object.freeze({ ...origin, protocol: turn.protocol }),
+                  statusCode: status.status_code,
+                  ...(status.status_msg !== undefined
+                    ? { statusMessage: status.status_msg }
+                    : {}),
+                  ...detection,
+                }),
+                cause: raw,
+              });
+            }
+            const decoded = MiniMaxCompletionSchema.safeParse(raw);
+            if (!decoded.success) {
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message:
+                  'MiniMax returned malformed or unsupported completion content.',
+                cause: decoded.error,
+              });
+            }
+            const completion = decoded.data;
+            const choice = completion.choices[0];
+            const message = choice.message;
+            if (
+              (choice.finish_reason === 'tool_calls') !==
+              (message.tool_calls?.length ?? 0) > 0
+            ) {
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message:
+                  'MiniMax reported contradictory tool calls and completion reason.',
+              });
+            }
+            const content: TurnResult['content'][number][] = [];
+            if (
+              message.reasoning_content !== undefined ||
+              message.reasoning_details !== undefined
+            ) {
+              content.push({
+                kind: 'reasoning',
+                summary: [],
+                evidence: {
+                  kind: 'minimax-reasoning',
+                  ...(message.reasoning_content !== undefined
+                    ? { plain: message.reasoning_content }
+                    : {}),
+                  ...(message.reasoning_details !== undefined
+                    ? { details: message.reasoning_details }
+                    : {}),
+                },
+              });
+            }
+            content.push({
+              kind: 'message',
+              content: [{ kind: 'text', text: message.content }],
+              ...(message.name !== undefined ||
+              message.audio_content !== undefined
+                ? {
+                    evidence: {
+                      kind: 'minimax-message' as const,
+                      ...(message.name !== undefined
+                        ? { name: message.name }
+                        : {}),
+                      ...(message.audio_content !== undefined
+                        ? { audioContent: message.audio_content }
+                        : {}),
+                    },
+                  }
+                : {}),
+            });
+            for (const call of message.tool_calls ?? []) {
+              const args: unknown = yield* Effect.try({
+                try: () => JSON.parse(call.function.arguments),
+                catch: (cause) =>
+                  new ModelError({
+                    kind: 'malformed-output',
+                    message: 'MiniMax returned malformed tool arguments.',
+                    cause,
+                  }),
+              });
+              const parsedArguments = JsonObjectSchema.safeParse(args);
+              if (!parsedArguments.success) {
+                return yield* new ModelError({
+                  kind: 'malformed-output',
+                  message:
+                    'MiniMax tool arguments must be supported JSON objects.',
+                  cause: parsedArguments.error,
+                });
+              }
+              content.push({
+                kind: 'local-call',
+                providerCallId: call.id,
+                name: call.function.name,
+                arguments: parsedArguments.data,
+                ...(call.index !== undefined
+                  ? {
+                      evidence: {
+                        kind: 'minimax-function-call' as const,
+                        index: call.index,
+                      },
+                    }
+                  : {}),
+              });
+            }
+            const receipt = completion.usage;
+            const result = TurnResultSchema.safeParse({
+              providerResponseId: completion.id,
+              requestedOrigin: origin,
+              returnedModel: completion.model,
+              modelFingerprint: null,
+              content,
+              finishReason: choice.finish_reason.replaceAll('_', '-'),
+              // Detection flags do not establish that the provider filtered a reply.
+              ...(Object.keys(detection).length > 0
+                ? { finishEvidence: { kind: 'minimax', ...detection } }
+                : {}),
+              usage:
+                receipt === undefined
+                  ? null
+                  : {
+                      inputTokens: receipt.prompt_tokens ?? null,
+                      outputTokens: receipt.completion_tokens ?? null,
+                      totalTokens: receipt.total_tokens ?? null,
+                      cachedInputTokens:
+                        receipt.prompt_tokens_details?.cached_tokens ?? null,
+                      reasoningTokens:
+                        receipt.completion_tokens_details?.reasoning_tokens ??
+                        null,
+                      ...(receipt.total_characters !== undefined
+                        ? {
+                            providerUsage: {
+                              kind: 'minimax',
+                              totalCharacters: receipt.total_characters,
+                            },
+                          }
+                        : {}),
+                    },
+            });
+            if (!result.success) {
+              return yield* new ModelError({
+                kind: 'malformed-output',
+                message: 'MiniMax returned an inconsistent completed response.',
+                cause: result.error,
+              });
+            }
+            return Stream.fromArray<TurnEvent>([
+              {
+                kind: 'identified',
+                providerResponseId: completion.id,
+                requestedOrigin: origin,
+                returnedModel: completion.model,
+              },
+              { kind: 'completed', result: result.data },
+            ]);
+          }
           let fingerprint: string | null = null;
           let finishReason: TurnResult['finishReason'] | undefined;
           let usage: TurnResult['usage'] = null;

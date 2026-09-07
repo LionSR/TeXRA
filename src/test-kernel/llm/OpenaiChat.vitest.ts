@@ -101,6 +101,13 @@ const QWEN_CONFIG = {
     thinking: { mode: 'disabled' },
   },
 } as const satisfies ChatConfiguration;
+const MINIMAX_CONFIG = {
+  ...BASE_CONFIG,
+  protocol: 'minimax-chat',
+  outputMode: 'complete',
+  reasoningSplit: true,
+  defaults: { ...BASE_CONFIG.defaults, stopSequences: ['</answer>'] },
+} as const satisfies ChatConfiguration;
 
 function chunk(overrides: Record<string, unknown> = {}): object {
   return {
@@ -177,6 +184,408 @@ const generate = (model: Model) =>
 afterEach(() => vi.unstubAllEnvs());
 
 describe('native OpenAI Chat protocol', () => {
+  it.each([true, false])(
+    'preserves MiniMax complete JSON and exact replay with split=%s',
+    async (reasoningSplit) => {
+      const details = [
+        {
+          type: 'reasoning.text',
+          id: 'same',
+          format: 'MiniMax-response-v1',
+          index: 7,
+          text: 'first',
+        },
+        { id: 'same', index: 7, text: '' },
+        {},
+      ];
+      const message = {
+        role: 'assistant',
+        content: reasoningSplit ? '' : '<think>original</think>answer',
+        name: 'MiniMax AI',
+        audio_content: '',
+        ...(reasoningSplit
+          ? { reasoning_content: 'separate text', reasoning_details: details }
+          : {}),
+        tool_calls: [
+          {
+            type: 'function',
+            id: 'call_0',
+            index: 9,
+            function: { name: 'search', arguments: '{"query":"first"}' },
+          },
+        ],
+      };
+      const reply = {
+        id: 'minimax-response',
+        model: 'returned-minimax',
+        created: 0,
+        object: 'chat.completion',
+        choices: [{ index: 0, finish_reason: 'tool_calls', message }],
+        usage: {
+          total_tokens: 19,
+          prompt_tokens_details: { cached_tokens: 0 },
+          completion_tokens_details: { reasoning_tokens: 4 },
+          total_characters: 0,
+        },
+        input_sensitive: true,
+        input_sensitive_type: 3,
+        output_sensitive: true,
+        output_sensitive_type: 5,
+        output_sensitive_int: 1,
+        base_resp: { status_code: 0, status_msg: '' },
+      };
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async () => Response.json(reply));
+      const config = structuredClone({
+        ...MINIMAX_CONFIG,
+        reasoningSplit,
+        requestedModel: 'MiniMax-01',
+      });
+      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const prepared = await Effect.runPromise(
+        model.prepareTurn({
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { kind: 'text', text: 'first' },
+                { kind: 'text', text: 'second' },
+              ],
+            },
+          ],
+          tools: TOOLS,
+          toolChoice: { name: 'search' },
+          parallelToolCalls: false,
+        }),
+      );
+      assert(prepared.protocol === 'minimax-chat');
+      expect(prepared.outputMode).toBe('complete');
+      expect(prepared.controls.reasoningSplit).toBe(reasoningSplit);
+      Object.assign(config, { reasoningSplit: !reasoningSplit });
+      const events = await Effect.runPromise(
+        Stream.runCollect(model.streamTurn(prepared)),
+      );
+      expect(events.map((event) => event.kind)).toEqual([
+        'identified',
+        'completed',
+      ]);
+      const completed = events.at(-1);
+      assert(completed?.kind === 'completed');
+      const result = completed.result;
+      expect(result).toMatchObject({
+        providerResponseId: 'minimax-response',
+        returnedModel: 'returned-minimax',
+        finishReason: 'tool-calls',
+        usage: {
+          inputTokens: null,
+          outputTokens: null,
+          totalTokens: 19,
+          cachedInputTokens: 0,
+          reasoningTokens: 4,
+          providerUsage: { kind: 'minimax', totalCharacters: 0 },
+        },
+        finishEvidence: {
+          kind: 'minimax',
+          inputSensitive: true,
+          inputSensitiveType: 3,
+          outputSensitive: true,
+          outputSensitiveType: 5,
+          outputSensitiveInt: 1,
+        },
+      });
+      expect(result.content).toEqual([
+        ...(reasoningSplit
+          ? [
+              {
+                kind: 'reasoning',
+                summary: [],
+                evidence: {
+                  kind: 'minimax-reasoning',
+                  plain: 'separate text',
+                  details,
+                },
+              },
+            ]
+          : []),
+        {
+          kind: 'message',
+          content: [{ kind: 'text', text: message.content }],
+          evidence: {
+            kind: 'minimax-message',
+            name: 'MiniMax AI',
+            audioContent: '',
+          },
+        },
+        {
+          kind: 'local-call',
+          providerCallId: 'call_0',
+          name: 'search',
+          arguments: { query: 'first' },
+          evidence: { kind: 'minimax-function-call', index: 9 },
+        },
+      ]);
+      const firstBody = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+      expect(firstBody).toMatchObject({
+        model: 'MiniMax-01',
+        stream: false,
+        reasoning_split: reasoningSplit,
+        max_tokens: 100,
+        temperature: 0,
+        stop: ['</answer>'],
+        parallel_tool_calls: false,
+        tool_choice: { type: 'function', function: { name: 'search' } },
+        messages: [{ role: 'user', content: 'first\nsecond' }],
+      });
+      for (const key of [
+        'stream_options',
+        'max_completion_tokens',
+        'outputMode',
+        'reasoning_effort',
+      ])
+        expect(firstBody).not.toHaveProperty(key);
+      const history: TurnRequest = {
+        messages: [
+          ...REQUEST.messages,
+          {
+            role: 'assistant',
+            origin: result.requestedOrigin,
+            content: result.content,
+          },
+          {
+            role: 'tool',
+            results: [
+              {
+                callOrdinal: 0,
+                status: 'success',
+                content: [{ kind: 'text', text: 'found' }],
+              },
+            ],
+          },
+        ],
+        tools: TOOLS,
+      };
+      const next = await Effect.runPromise(model.prepareTurn(history));
+      assert(next.protocol === 'minimax-chat');
+      fetch.mockImplementation(async () =>
+        Response.json({
+          ...reply,
+          choices: [
+            {
+              index: 0,
+              finish_reason: 'stop',
+              message: {
+                role: 'assistant',
+                content: '',
+                ...(reasoningSplit
+                  ? { reasoning_content: '', reasoning_details: [] }
+                  : {}),
+              },
+            },
+          ],
+          usage: { completion_tokens: 0 },
+        }),
+      );
+      const final = await Effect.runPromise(model.generateTurn(next));
+      expect(final.finishReason).toBe('stop');
+      expect(final.content).toEqual([
+        ...(reasoningSplit
+          ? [
+              {
+                kind: 'reasoning',
+                summary: [],
+                evidence: { kind: 'minimax-reasoning', plain: '', details: [] },
+              },
+            ]
+          : []),
+        { kind: 'message', content: [{ kind: 'text', text: '' }] },
+      ]);
+      expect(final.usage).toEqual({
+        inputTokens: null,
+        outputTokens: 0,
+        totalTokens: null,
+        cachedInputTokens: null,
+        reasoningTokens: null,
+      });
+      expect(
+        JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).messages[1],
+      ).toEqual(message);
+      expect(Object.isFrozen(result.content)).toBe(true);
+      const thought = result.content[0];
+      if (
+        thought.kind === 'reasoning' &&
+        thought.evidence?.kind === 'minimax-reasoning'
+      ) {
+        expect(Object.isFrozen(thought.evidence.details)).toBe(true);
+        expect(Object.isFrozen(thought.evidence.details?.[0])).toBe(true);
+      }
+      for (const controls of [
+        { reasoningSplit: !reasoningSplit },
+        { toolChoice: { name: 'missing' } },
+      ]) {
+        const failure = await Effect.runPromise(
+          Effect.flip(
+            model.generateTurn({
+              ...next,
+              controls: { ...next.controls, ...controls },
+            }),
+          ),
+        );
+        expect(['unsupported', 'invalid-request']).toContain(failure.kind);
+      }
+      for (const request of [
+        { effort: null },
+        { thinking: { mode: 'disabled' } },
+        { mode: 'background' },
+        {
+          messages: [
+            {
+              role: 'user',
+              content: [{ kind: 'image', mimeType: 'image/png', base64: '' }],
+            },
+          ],
+        },
+      ] as const) {
+        const failure = await Effect.runPromise(
+          Effect.flip(model.prepareTurn({ ...REQUEST, ...request })),
+        );
+        expect(failure.kind).toBe('unsupported');
+      }
+      const foreign = modelWith(vi.fn<typeof globalThis.fetch>());
+      expect(
+        (await Effect.runPromise(Effect.flip(foreign.prepareTurn(history))))
+          .kind,
+      ).toBe('unsupported');
+      expect(fetch).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each([
+    { name: 'input detection', finish: 'stop', input_sensitive: true },
+    {
+      name: 'filtered empty reply',
+      finish: 'content_filter',
+      output_sensitive: true,
+    },
+    { name: 'limited empty reply', finish: 'length' },
+    { name: 'provider refusal code', code: 1027, kind: 'provider-rejection' },
+    {
+      name: 'provider authentication code',
+      code: 1004,
+      noIdentity: true,
+      kind: 'authentication',
+    },
+    {
+      name: 'missing terminal reason',
+      finish: undefined,
+      kind: 'malformed-output',
+    },
+    {
+      name: 'contradictory tools',
+      finish: 'tool_calls',
+      kind: 'malformed-output',
+    },
+    {
+      name: 'unrepresented audio',
+      finish: 'stop',
+      extraMessage: { audio_content: 'audio bytes' },
+      kind: 'malformed-output',
+    },
+    {
+      name: 'unknown reasoning payload',
+      finish: 'stop',
+      extraMessage: { reasoning_details: [{ data: 'opaque' }] },
+      kind: 'malformed-output',
+    },
+    {
+      name: 'null reasoning',
+      finish: 'stop',
+      extraMessage: { reasoning_content: null },
+      kind: 'malformed-output',
+    },
+    {
+      name: 'malformed call arguments',
+      finish: 'tool_calls',
+      kind: 'malformed-output',
+      extraMessage: {
+        tool_calls: [call(0, { function: { name: 'search', arguments: '{' } })],
+      },
+    },
+    {
+      name: 'duplicate call identities',
+      finish: 'tool_calls',
+      kind: 'malformed-output',
+      extraMessage: { tool_calls: [call(0), call(1, { id: 'call_0' })] },
+    },
+  ])(
+    'respects MiniMax terminal evidence: $name',
+    async ({ finish, code, kind, extraMessage, noIdentity, ...flags }) => {
+      const raw = {
+        id: noIdentity ? '' : 'minimax-response',
+        model: noIdentity ? '' : 'returned-minimax',
+        object: 'chat.completion',
+        created: 0,
+        choices: [
+          {
+            index: 0,
+            finish_reason: finish,
+            message: { role: 'assistant', content: '', ...extraMessage },
+          },
+        ],
+        ...(code === undefined
+          ? {}
+          : {
+              base_resp: {
+                status_code: code,
+                status_msg: 'original rejection',
+              },
+            }),
+        ...(flags.input_sensitive === undefined
+          ? {}
+          : { input_sensitive: flags.input_sensitive }),
+        ...(flags.output_sensitive === undefined
+          ? {}
+          : { output_sensitive: flags.output_sensitive }),
+      };
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async () =>
+          Response.json(raw, {
+            headers: { 'x-request-id': 'minimax-request' },
+          }),
+        );
+      const model = openaiChatModel(MINIMAX_CONFIG, {
+        apiKey: 'synthetic',
+        fetch,
+      });
+      if (kind !== undefined) {
+        const failure = await Effect.runPromise(Effect.flip(generate(model)));
+        expect(failure).toMatchObject({
+          kind,
+          responseId: noIdentity ? undefined : 'minimax-response',
+          model: noIdentity
+            ? MINIMAX_CONFIG.requestedModel
+            : 'returned-minimax',
+          requestId: 'minimax-request',
+        });
+        if (code !== undefined) {
+          expect(failure.status).toBe(200);
+          expect(failure.providerEvidence).toMatchObject({
+            kind: 'minimax',
+            statusCode: code,
+            statusMessage: 'original rejection',
+          });
+          expect(failure.cause).toEqual(raw);
+        }
+      } else {
+        const result = await Effect.runPromise(generate(model));
+        expect(result.finishReason).toBe(finish?.replaceAll('_', '-'));
+        expect(result.usage).toBeNull();
+      }
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it.each([REASONING_CONFIGS[1], REASONING_CONFIGS[2]])(
     'preserves selected $protocol image input and rejects unsupported media before I/O',
     async (config) => {
@@ -2474,10 +2883,11 @@ describe('native OpenAI Chat protocol', () => {
     },
   );
 
-  it.each(['generation', 'estimation'] as const)(
+  it.each(['generation', 'estimation', 'MiniMax completion'] as const)(
     'preserves a body-read failure and the HTTP request identity during %s',
     async (operation) => {
       const estimating = operation === 'estimation';
+      const complete = operation === 'MiniMax completion';
       const cause = new Error('Original body failure');
       let controller: ReadableStreamDefaultController<Uint8Array>;
       let requestSignal: AbortSignal | null | undefined;
@@ -2486,7 +2896,7 @@ describe('native OpenAI Chat protocol', () => {
           controller = current;
           current.enqueue(
             new TextEncoder().encode(
-              estimating
+              estimating || complete
                 ? '{"data":'
                 : `data: ${JSON.stringify(
                     chunk({
@@ -2504,7 +2914,7 @@ describe('native OpenAI Chat protocol', () => {
           );
         },
         pull() {
-          if (estimating) controller.error(cause);
+          if (estimating || complete) controller.error(cause);
         },
       });
       const fetch = vi
@@ -2513,25 +2923,25 @@ describe('native OpenAI Chat protocol', () => {
           requestSignal = init?.signal;
           return new Response(body, {
             headers: {
-              'content-type': estimating
-                ? 'application/json'
-                : 'text/event-stream',
+              'content-type':
+                estimating || complete
+                  ? 'application/json'
+                  : 'text/event-stream',
               'x-request-id': 'http-original-request',
             },
           });
         });
-      const model = openaiChatModel(
-        estimating
-          ? {
-              ...REASONING_CONFIGS[1],
-              supportsMessageTokenEstimation: true,
-            }
-          : REASONING_CONFIGS[2],
-        {
-          apiKey: 'synthetic',
-          fetch,
-        },
-      );
+      let config: ChatConfiguration = REASONING_CONFIGS[2];
+      if (complete) config = MINIMAX_CONFIG;
+      if (estimating)
+        config = {
+          ...REASONING_CONFIGS[1],
+          supportsMessageTokenEstimation: true,
+        };
+      const model = openaiChatModel(config, {
+        apiKey: 'synthetic',
+        fetch,
+      });
       const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
       assert(prepared.mode === 'foreground');
       const failure = await Effect.runPromise(
@@ -2547,11 +2957,14 @@ describe('native OpenAI Chat protocol', () => {
       );
       expect(failure).toMatchObject({
         kind: 'transport',
-        model: estimating ? CONFIG.requestedModel : 'returned-model-version',
+        model:
+          estimating || complete
+            ? CONFIG.requestedModel
+            : 'returned-model-version',
         requestId: 'http-original-request',
       });
       expect(failure.responseId).toBe(
-        estimating ? undefined : 'synthetic-response',
+        estimating || complete ? undefined : 'synthetic-response',
       );
       expect(failure.cause).toBe(cause);
       expect(requestSignal?.aborted).toBe(true);
@@ -2571,12 +2984,22 @@ describe('native OpenAI Chat protocol', () => {
     'successful-take',
     'malformed-frame-and-cancel',
     'interruption-and-cancel',
+    'complete-headers',
+    'complete-body',
+    'complete-interruption-and-cancel',
+    'complete-malformed-bytes-and-cancel',
   ] as const)(
     'interrupts a pending %s read and joins cleanup',
     async (phase) => {
       const estimating = phase.startsWith('estimate-');
+      const complete = phase.startsWith('complete-');
+      const malformed =
+        phase === 'malformed-frame-and-cancel' ||
+        phase === 'complete-malformed-bytes-and-cancel';
       const waitingForHeaders =
-        phase === 'headers' || phase === 'estimate-headers';
+        phase === 'headers' ||
+        phase === 'estimate-headers' ||
+        phase === 'complete-headers';
       let requestSignal: AbortSignal | null | undefined;
       let cancelledAfterAbort = false;
       const cancellation = new Error('Cancellation failed');
@@ -2586,7 +3009,9 @@ describe('native OpenAI Chat protocol', () => {
           phase === 'successful-take' ||
           phase === 'malformed-frame-and-cancel' ||
           phase === 'interruption-and-cancel' ||
-          phase === 'estimate-interruption-and-cancel'
+          phase === 'estimate-interruption-and-cancel' ||
+          phase === 'complete-interruption-and-cancel' ||
+          phase === 'complete-malformed-bytes-and-cancel'
         )
           throw cancellation;
       });
@@ -2597,7 +3022,7 @@ describe('native OpenAI Chat protocol', () => {
         start(controller) {
           controller.enqueue(
             new TextEncoder().encode(
-              estimating
+              estimating || complete
                 ? '{"data":'
                 : `data: ${JSON.stringify(chunk({ choices: [{ index: 0, delta: phase === 'reasoning' ? { reasoning_content: 'partial' } : { content: 'partial' }, finish_reason: null }] }))}\n\n`,
             ),
@@ -2612,6 +3037,8 @@ describe('native OpenAI Chat protocol', () => {
             controller.enqueue(
               new TextEncoder().encode('data: malformed JSON\n\n'),
             );
+          if (phase === 'complete-malformed-bytes-and-cancel')
+            controller.enqueue(new Uint8Array([0xff]));
         },
         cancel,
       });
@@ -2623,9 +3050,10 @@ describe('native OpenAI Chat protocol', () => {
             return Promise.resolve(
               new Response(body, {
                 headers: {
-                  'content-type': estimating
-                    ? 'application/json'
-                    : 'text/event-stream',
+                  'content-type':
+                    estimating || complete
+                      ? 'application/json'
+                      : 'text/event-stream',
                 },
               }),
             );
@@ -2638,6 +3066,7 @@ describe('native OpenAI Chat protocol', () => {
           );
         });
       let config: ChatConfiguration = CONFIG;
+      if (complete) config = MINIMAX_CONFIG;
       if (phase === 'reasoning') config = REASONING_CONFIGS[0];
       if (estimating)
         config = {
@@ -2677,23 +3106,25 @@ describe('native OpenAI Chat protocol', () => {
       await vi.waitFor(() => {
         expect(requestSignal).toBeDefined();
         if (!waitingForHeaders) {
-          if (estimating) expect(body.locked).toBe(true);
+          if (estimating || (complete && !malformed))
+            expect(body.locked).toBe(true);
+          else if (complete) expect(cancel).toHaveBeenCalledTimes(1);
           else expect(onDelta).toHaveBeenCalledTimes(1);
         }
       });
 
-      if (phase !== 'malformed-frame-and-cancel')
-        await Effect.runPromise(Fiber.interrupt(fiber));
+      if (!malformed) await Effect.runPromise(Fiber.interrupt(fiber));
       if (
-        phase === 'malformed-frame-and-cancel' ||
+        malformed ||
         phase === 'interruption-and-cancel' ||
-        phase === 'estimate-interruption-and-cancel'
+        phase === 'estimate-interruption-and-cancel' ||
+        phase === 'complete-interruption-and-cancel'
       ) {
         const exit = await Effect.runPromise(Fiber.await(fiber));
         assert(Exit.isFailure(exit));
         const defect = exit.cause.reasons.find(Cause.isDieReason);
         expect(defect?.defect).toBe(cancellation);
-        if (phase === 'malformed-frame-and-cancel') {
+        if (malformed) {
           expect(exit.cause.reasons.map((reason) => reason._tag)).toContain(
             'Fail',
           );

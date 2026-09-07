@@ -165,6 +165,7 @@ export class ToolUseWaitNode extends BaseNode<
 
     await session.transcripts.ensureLoaded(streamId);
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
+    await session.settlePublications();
 
     // Synthesized continuations don't come from the user queue, so they
     // must not emit updateQueuedFollowUps via the consume callback. They
