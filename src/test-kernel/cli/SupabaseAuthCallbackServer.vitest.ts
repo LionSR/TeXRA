@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Effect } from 'effect';
+import { Effect, Exit } from 'effect';
 
-import { type SupabaseSessionCoordinator } from '@auth/SupabaseSession';
+import {
+  type SupabaseSession,
+  type SupabaseSessionCoordinator,
+} from '@auth/SupabaseSession';
 import {
   startLoopbackCallbackServer,
   type LoopbackCallbackServer,
 } from '@cli/runtime/supabaseAuthCallbackServer';
+import { effectRuntime } from '@platform/processRuntime';
 
 function stubCoordinator(
   overrides: {
@@ -18,6 +22,28 @@ function stubCoordinator(
     storeSession: vi.fn(() => Effect.void),
     ...overrides,
   } as unknown as SupabaseSessionCoordinator;
+}
+
+function startServer(
+  coordinator: SupabaseSessionCoordinator,
+): Promise<LoopbackCallbackServer> {
+  return effectRuntime().runPromise(startLoopbackCallbackServer(coordinator));
+}
+
+/** The composition the sign-in edge runs: the wait, with cancellation
+ *  refusing further callbacks on interruption. */
+function waitForSession(
+  server: LoopbackCallbackServer,
+  signal?: AbortSignal,
+): Promise<SupabaseSession> {
+  return effectRuntime().runPromise(
+    server.waitForSession.pipe(Effect.onInterrupt(() => server.cancel)),
+    { signal },
+  );
+}
+
+function closeServer(server: LoopbackCallbackServer): Promise<void> {
+  return effectRuntime().runPromise(server.close);
 }
 
 async function fetchCallbackNonce(
@@ -43,12 +69,10 @@ function postCallbackCompletion(
 describe('CLI Supabase authentication callback server', () => {
   it('stops waiting when interactive sign-in is cancelled', async () => {
     const coordinator = stubCoordinator();
-    const server = await startLoopbackCallbackServer(coordinator);
+    const server = await startServer(coordinator);
     const controller = new AbortController();
-    const completion = server.waitForSession(controller.signal);
-    const rejection = expect(completion).rejects.toMatchObject({
-      name: 'AbortError',
-    });
+    const completion = waitForSession(server, controller.signal);
+    const rejection = expect(completion).rejects.toThrow(/interrupted/);
 
     controller.abort();
 
@@ -59,7 +83,7 @@ describe('CLI Supabase authentication callback server', () => {
     expect(response.status).toBe(400);
     expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
     expect(coordinator.storeSession).not.toHaveBeenCalled();
-    await server.close();
+    await closeServer(server);
   });
 
   it('does not store a callback that finishes after cancellation', async () => {
@@ -77,28 +101,29 @@ describe('CLI Supabase authentication callback server', () => {
       createSessionFromCallback,
       storeSession,
     });
-    const server = await startLoopbackCallbackServer(coordinator);
+    const server = await startServer(coordinator);
     const nonce = await fetchCallbackNonce(server);
     const controller = new AbortController();
-    const completion = server.waitForSession(controller.signal);
-    const rejection = expect(completion).rejects.toMatchObject({
-      name: 'AbortError',
-    });
+    const completion = waitForSession(server, controller.signal);
+    const rejection = expect(completion).rejects.toThrow(/interrupted/);
     const callbackResponse = postCallbackCompletion(server, nonce);
     await vi.waitFor(() =>
       expect(createSessionFromCallback).toHaveBeenCalled(),
     );
 
     controller.abort();
+    // Awaiting the rejection first is what pins the ordering: the cancel
+    // lands (refusing further callbacks) before the in-flight exchange
+    // settles, so its resumed continuation meets the refusal.
+    await rejection;
     finishCallback({
       success: true,
       session: { account: { label: 'person@example.edu' } },
     });
 
-    await rejection;
     expect((await callbackResponse).status).toBe(400);
     expect(storeSession).not.toHaveBeenCalled();
-    await server.close();
+    await closeServer(server);
   });
 
   it('finishes a callback whose storage commit began before cancellation', async () => {
@@ -118,18 +143,28 @@ describe('CLI Supabase authentication callback server', () => {
         .mockReturnValue(Effect.succeed({ success: true, session })),
       storeSession,
     });
-    const server = await startLoopbackCallbackServer(coordinator);
+    const server = await startServer(coordinator);
     const nonce = await fetchCallbackNonce(server);
     const controller = new AbortController();
-    const completion = server.waitForSession(controller.signal);
+    // The Promise edge's shape: settle the wait as an Exit so the
+    // commit-in-flight grace can re-await the session on a fresh fiber (v4
+    // fiber interruption is sticky and cannot be recovered in-runtime).
+    const interrupted = effectRuntime().runPromiseExit(server.waitForSession, {
+      signal: controller.signal,
+    });
     const callbackResponse = postCallbackCompletion(server, nonce);
     await vi.waitFor(() => expect(storeSession).toHaveBeenCalled());
 
     controller.abort();
     finishStorage();
 
-    await expect(completion).resolves.toBe(session);
+    const exit = await interrupted;
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(server.commitStarted).toBe(true);
+    await expect(
+      effectRuntime().runPromise(server.waitForSession),
+    ).resolves.toBe(session);
     expect((await callbackResponse).status).toBe(200);
-    await server.close();
+    await closeServer(server);
   });
 });

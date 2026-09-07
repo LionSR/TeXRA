@@ -19,6 +19,7 @@ import {
   parseChatLoginSlashArgs,
   parseCliLogoutTarget,
   type CliLoginSlashArgs,
+  type CliLogoutTarget,
   type CliTexraLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import {
@@ -37,7 +38,7 @@ import {
   RESEARCHER_ACCESS_AUTH,
 } from '@shared/copy/accountAuth';
 import { collapseWhitespace } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   abortableSlashCommand,
@@ -51,11 +52,6 @@ const CHAT_LOGIN_USAGE = [
   '       /login grok [--no-browser] [--device]',
 ].join('\n');
 const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | grok | texra | all';
-
-/** `Effect.tryPromise` with the identity catch every Promise boundary below
- *  wants: the rejection value flows through unchanged as the error. */
-const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: run, catch: (error) => error });
 
 export function loginStartMessage(args: CliLoginSlashArgs): string {
   if (args.target === 'chatgpt') {
@@ -198,6 +194,81 @@ export function loginFromChat(
   });
 }
 
+/**
+ * The sign-out lines for one `/logout` target. Every leg reports its failure
+ * as a line instead of throwing, so one failed provider never hides the
+ * others' outcomes — the fold happens where each call settles, on the typed
+ * channel (`signOutCliSupabase` and the access overview are still
+ * Promise-facing, wrapped once at that foreign edge).
+ */
+const logoutLines = (
+  target: CliLogoutTarget,
+): Effect.Effect<readonly string[]> =>
+  Effect.gen(function* () {
+    const lines: string[] = [];
+
+    if (target === 'texra' || target === 'all') {
+      lines.push(
+        yield* Effect.tryPromise({
+          try: () => signOutCliSupabase(),
+          catch: (cause) => ensureError(cause),
+        }).pipe(
+          Effect.match({
+            onFailure: (error) =>
+              RESEARCHER_ACCESS_AUTH.signOutFailedWithReason(
+                toErrorMessage(error),
+              ),
+            onSuccess: () => RESEARCHER_ACCESS_AUTH.signedOut,
+          }),
+        ),
+      );
+    }
+
+    const signOutSubscription = (
+      providerId: SubscriptionProviderId,
+      label: string,
+    ): Effect.Effect<void> =>
+      signOutCliSubscription(providerId).pipe(
+        Effect.match({
+          onFailure: (error) => {
+            lines.push(
+              ACCOUNT_OUTCOME.signOutFailedWithReason(
+                label,
+                toErrorMessage(error),
+              ),
+            );
+          },
+          onSuccess: (update) => {
+            bumpCodexPreferenceVersion();
+            lines.push(ACCOUNT_OUTCOME.signedOut(label));
+            lines.push(
+              subscriptionSignOutPreferenceMessage(providerId, update),
+            );
+          },
+        }),
+      );
+
+    if (target === 'chatgpt' || target === 'all') {
+      yield* signOutSubscription('chatgpt', CHATGPT_AUTH.label);
+    }
+
+    if (target === 'grok' || target === 'all') {
+      yield* signOutSubscription('grok', GROK_AUTH.label);
+    }
+
+    const overviewLines = yield* Effect.tryPromise({
+      try: () => loadCliModelAccessOverview(),
+      catch: (cause) => ensureError(cause),
+    }).pipe(
+      Effect.match({
+        onFailure: (error) => [toErrorMessage(error)],
+        onSuccess: (overview) => overview.lines,
+      }),
+    );
+    lines.push(...overviewLines);
+    return lines;
+  });
+
 export async function logoutFromChat(
   input: string,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
@@ -208,72 +279,6 @@ export async function logoutFromChat(
     return;
   }
 
-  const lines: string[] = [];
-
-  if (target === 'texra' || target === 'all') {
-    await effectRuntime().runPromise(
-      tryPromise(async () => {
-        await signOutCliSupabase();
-        lines.push(RESEARCHER_ACCESS_AUTH.signedOut);
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            lines.push(
-              RESEARCHER_ACCESS_AUTH.signOutFailedWithReason(
-                toErrorMessage(error),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
-  async function signOutSubscription(
-    providerId: SubscriptionProviderId,
-    label: string,
-  ): Promise<void> {
-    await effectRuntime().runPromise(
-      tryPromise(async () => {
-        const update = await signOutCliSubscription(providerId);
-        bumpCodexPreferenceVersion();
-        lines.push(ACCOUNT_OUTCOME.signedOut(label));
-        lines.push(subscriptionSignOutPreferenceMessage(providerId, update));
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            lines.push(
-              ACCOUNT_OUTCOME.signOutFailedWithReason(
-                label,
-                toErrorMessage(error),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
-  if (target === 'chatgpt' || target === 'all') {
-    await signOutSubscription('chatgpt', CHATGPT_AUTH.label);
-  }
-
-  if (target === 'grok' || target === 'all') {
-    await signOutSubscription('grok', GROK_AUTH.label);
-  }
-
-  await effectRuntime().runPromise(
-    tryPromise(async () => {
-      const overview = await loadCliModelAccessOverview();
-      lines.push(...overview.lines);
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          lines.push(toErrorMessage(error));
-        }),
-      ),
-    ),
-  );
-
+  const lines = await effectRuntime().runPromise(logoutLines(target));
   output.appendOutcome(collapseWhitespace(lines.join(' · ')));
 }

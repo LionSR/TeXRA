@@ -8,6 +8,7 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { effectRuntime } from '@platform/processRuntime';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { ensureError } from '@utils/errors/errorMessage';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { executeCommand } from '@utils/system/execUtils';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -82,17 +83,15 @@ export function detectInstallMethod(
 }
 
 function currentModulePath(): string {
-  // Synchronous Node ESM boundary adapter: `fileURLToPath` throws on a
-  // non-file `import.meta.url`, and the raw catch is that translation to the
-  // entrypoint-path fallback. It stays raw because this runs before the
-  // process runtime exists (`detectInstallMethod` precedes
-  // `installCliProcessRuntime` in `notifyCliUpdate`), so there is no runtime
-  // to recover through.
-  try {
-    return fileURLToPath(import.meta.url);
-  } catch {
-    return readCliEntrypointPath();
-  }
+  // A bundled or otherwise non-file module has no `file:` URL to convert.
+  // `fileURLToPath` can still fail on a `file:` URL with a non-local host
+  // or a malformed path; fold that into the entrypoint fallback so this
+  // check stays best-effort and never blocks `chat`/`orchestrate` startup.
+  if (!import.meta.url.startsWith('file:')) return readCliEntrypointPath();
+  return Result.getOrElse(
+    Result.try(() => fileURLToPath(import.meta.url)),
+    () => readCliEntrypointPath(),
+  );
 }
 
 export function buildUpdateCommand(method: InstallMethod): {
@@ -163,20 +162,21 @@ async function readCommandStdout(
 /**
  * Shape of `brew info --json=v2` that we read. Tolerant by design: a single
  * malformed formula entry degrades to `null` (skipped) rather than failing the
- * whole parse, so one odd entry cannot hide an available upgrade.
+ * whole parse, so one odd entry cannot hide an available upgrade. The per-entry
+ * recovery is a `safeParse` fold inside `transform`, not a `.catch`, so this
+ * file stays at zero raw catches (catch:effect-importer ratchet row).
  */
+const HomebrewFormulaEntrySchema = z.object({
+  name: z.string(),
+  versions: z.object({ stable: z.string().nullish() }).nullish(),
+});
 const HomebrewInfoSchema = z.object({
   formulae: z
     .array(
-      z.union([
-        z
-          .object({
-            name: z.string(),
-            versions: z.object({ stable: z.string().nullish() }).nullish(),
-          })
-          .nullable(),
-        z.unknown().transform(() => null),
-      ]),
+      z.unknown().transform((entry) => {
+        const parsed = HomebrewFormulaEntrySchema.nullable().safeParse(entry);
+        return parsed.success ? parsed.data : null;
+      }),
     )
     .nullish(),
 });
@@ -291,53 +291,54 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   // check is best-effort and must never block `chat` / `orchestrate` startup.
   let latest: string | undefined;
   let confirmed = false;
-  // The runtime install's recovery is a Promise boundary because the runtime
-  // everything after it runs on is the one being installed; once installed,
-  // the rest runs on it with every failure ignored (`catch { return; }` left
-  // `latest` undefined, which the guard below turns into the same return).
+  // `installCliProcessRuntime` is the pre-runtime edge: until it resolves
+  // there is no process runtime to run the check program on, and its failure
+  // stays as silent as the check's own.
   const runtimeInstalled = await installCliProcessRuntime().then(
     () => true,
     () => false,
   );
   if (!runtimeInstalled) return;
-  await effectRuntime().runPromise(
-    Effect.ignoreCause(
-      Effect.tryPromise({
-        try: async () => {
-          const globalState = await effectRuntime().runPromise(
-            openCliGlobalStateStore(createNodeStorageProvider()),
-          );
-          latest = await runDailyUpdateCheck({
-            currentVersion: context.version,
-            state: globalState,
-            lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-            fetchLatest: async () => {
-              if (method === 'brew') {
-                return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
-              }
-              const version = await fetchLatestCliVersion();
-              return { version, refreshed: version !== undefined };
-            },
-            notify: async (latestVersion) => {
-              writeTextStderr(
-                `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
-              );
-              const answer = await askCliQuestion(
-                `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
-              );
-              const normalized = answer.trim().toLowerCase();
-              confirmed =
-                normalized === '' || normalized === 'y' || normalized === 'yes';
-            },
-            // A readable-but-unwritable global state file must not cancel an update
-            // the user already accepted; the next launch merely checks again early.
-            stampFailure: 'ignore',
-          });
-        },
-        catch: (error) => error,
-      }),
-    ),
-  );
+  const check = Effect.gen(function* () {
+    const globalState = yield* openCliGlobalStateStore(
+      createNodeStorageProvider(),
+    );
+    latest = yield* Effect.tryPromise({
+      try: () =>
+        runDailyUpdateCheck({
+          currentVersion: context.version,
+          state: globalState,
+          lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
+          fetchLatest: async () => {
+            if (method === 'brew') {
+              return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
+            }
+            const version = await fetchLatestCliVersion();
+            return { version, refreshed: version !== undefined };
+          },
+          notify: async (latestVersion) => {
+            writeTextStderr(
+              `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(latestVersion))}`,
+            );
+            const answer = await askCliQuestion(
+              `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
+            );
+            const normalized = answer.trim().toLowerCase();
+            confirmed =
+              normalized === '' || normalized === 'y' || normalized === 'yes';
+          },
+          // A readable-but-unwritable global state file must not cancel an
+          // update the user already accepted; the next launch merely checks
+          // again early.
+          stampFailure: 'ignore',
+        }),
+      catch: (cause) => ensureError(cause),
+    });
+  });
+  // Best-effort by policy: any failure — typed, defect, or interruption —
+  // leaves `latest` unset and the check exits silently, as the `catch` it
+  // replaces did.
+  await effectRuntime().runPromise(Effect.ignoreCause(check));
   if (!latest) return;
   if (!confirmed) {
     writeTextStderr(

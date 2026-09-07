@@ -37,9 +37,13 @@ export const DeviceAuthorizationSchema = z.object({
   verification_uri: z.string().min(1),
   verification_uri_complete: z.string().optional(),
   expires_in: z.number().positive(),
-  // A missing or malformed interval degrades to the RFC 8628 default of 5s
-  // rather than failing the whole authorization response.
-  interval: z.union([z.number().positive(), z.unknown().transform(() => 5)]),
+  // A missing or malformed interval degrades to the 5s default rather than
+  // failing the sign-in — `z.preprocess`, not `.catch`, so this file stays at
+  // zero raw catches (catch:effect-importer ratchet row).
+  interval: z.preprocess(
+    (value) => (typeof value === 'number' && value > 0 ? value : 5),
+    z.number().positive(),
+  ),
 });
 export type DeviceAuthorization = z.infer<typeof DeviceAuthorizationSchema>;
 

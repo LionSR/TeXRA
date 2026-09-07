@@ -336,7 +336,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
               writeTextStdout(
                 subscriptionSignOutOutcomeMessage(
                   action.provider,
-                  await signOutCliSubscription(action.provider),
+                  await effectRuntime().runPromise(
+                    signOutCliSubscription(action.provider),
+                  ),
                 ),
               );
             } else {

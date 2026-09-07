@@ -12,9 +12,8 @@ import {
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
 import type { ConfigTarget } from '@platform/interfaces';
-import { effectRuntime } from '@platform/processRuntime';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { tryOpenBrowser } from './browser';
 import { isLikelyRemoteSession } from './remoteSession';
@@ -132,28 +131,30 @@ export const signInCliSubscription = Effect.fn(
 /**
  * Sign out of a subscription provider and disable its preference, converting
  * a preference-write failure into a reported (not thrown) `preferenceError`.
+ * The command action or slash handler runs the program at its Promise edge.
  */
-export async function signOutCliSubscription(
-  providerId: SubscriptionProviderId,
-): Promise<CliSubscriptionSignOutResult> {
+export const signOutCliSubscription = Effect.fn(
+  'subscriptionLogin.signOutCliSubscription',
+)(function* (providerId: SubscriptionProviderId) {
   const provider = subscriptionProvider(providerId);
-  await provider.signOut();
-  return effectRuntime().runPromise(
-    Effect.tryPromise({
-      try: () => provider.setPreferSubscription(false),
-      catch: (error) => error,
-    }).pipe(
-      Effect.match({
-        onFailure: (error): CliSubscriptionSignOutResult => ({
-          preferenceError: toErrorMessage(error),
-        }),
-        onSuccess: (preferenceUpdate): CliSubscriptionSignOutResult => ({
-          preferenceUpdate,
-        }),
+  yield* Effect.tryPromise({
+    try: () => provider.signOut(),
+    catch: (cause) => ensureError(cause),
+  });
+  return yield* Effect.tryPromise({
+    try: () => provider.setPreferSubscription(false),
+    catch: (cause) => ensureError(cause),
+  }).pipe(
+    Effect.match({
+      onFailure: (error): CliSubscriptionSignOutResult => ({
+        preferenceError: toErrorMessage(error),
       }),
-    ),
+      onSuccess: (preferenceUpdate): CliSubscriptionSignOutResult => ({
+        preferenceUpdate,
+      }),
+    }),
   );
-}
+});
 
 /** The preference half of a sign-out report. */
 export function subscriptionSignOutPreferenceMessage(

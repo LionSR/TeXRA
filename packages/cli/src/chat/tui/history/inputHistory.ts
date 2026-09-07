@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Effect, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { effectRuntime } from '@platform/processRuntime';
+import { ensureError } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 const HISTORY_DIR = 'tui';
@@ -44,29 +45,34 @@ function serializeRecords(records: readonly HistoryRecord[]): string {
   return records.map((r) => JSON.stringify(r)).join('\n') + '\n';
 }
 
+/** Read and parse the JSONL log, skipping malformed lines per the file-format
+ *  policy in the header. */
+function readHistoryRecords(): Effect.Effect<HistoryRecord[], Error> {
+  return Effect.tryPromise({
+    try: () => GlobalStorageFS.read(HISTORY_PATH),
+    catch: (cause) => ensureError(cause),
+  }).pipe(
+    Effect.map((raw) => {
+      const records: HistoryRecord[] = [];
+      for (const line of raw.split('\n')) {
+        const rec = Result.getOrUndefined(
+          parseJsonWith(line, HistoryRecordSchema),
+        );
+        if (rec && rec.v.length > 0) records.push(rec);
+      }
+      return records;
+    }),
+  );
+}
+
 export async function loadInputHistory(): Promise<InputHistory> {
   let records: HistoryRecord[] = [];
   if (await GlobalStorageFS.exists(HISTORY_PATH)) {
+    // A read failure (EIO, permission, race-after-exists) must not block the
+    // TUI from mounting — the user can still type, just without history this
+    // session.
     records = await effectRuntime().runPromise(
-      Effect.tryPromise({
-        try: async (): Promise<HistoryRecord[]> => {
-          const raw = await GlobalStorageFS.read(HISTORY_PATH);
-          const parsed: HistoryRecord[] = [];
-          for (const line of raw.split('\n')) {
-            const rec = Result.getOrUndefined(
-              parseJsonWith(line, HistoryRecordSchema),
-            );
-            if (rec && rec.v.length > 0) parsed.push(rec);
-          }
-          return parsed;
-        },
-        catch: (error) => error,
-      }).pipe(
-        // A read failure (EIO, permission, race-after-exists) must not block
-        // the TUI from mounting — the user can still type, just without
-        // history this session.
-        Effect.catch(() => Effect.succeed([] as HistoryRecord[])),
-      ),
+      readHistoryRecords().pipe(Effect.catch(() => Effect.succeed([]))),
     );
   }
   // Cap on load; older entries fall off when the ring is full.

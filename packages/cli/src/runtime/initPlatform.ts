@@ -334,7 +334,7 @@ export async function initCliPlatform(
     // lives in shared `~/.texra` state. Preferred defaults reconcile when
     // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
     await effectRuntime().runPromise(
-      hostPort(() => refreshModelListAndLog(stateStores.globalState)).pipe(
+      refreshModelListAndLog(stateStores.globalState).pipe(
         Effect.tap(({ messages }) =>
           Effect.sync(() => {
             for (const message of messages)
