@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
+import { openaiChatModel } from '@texra-ai/llm/openai-chat';
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -72,6 +74,21 @@ function createUi(
 }
 
 describe('agent creator orchestration', () => {
+  const fetchModel = vi.fn<typeof fetch>();
+
+  function generatedResponse(text: string): Response {
+    const chunk = {
+      id: 'synthetic-agent-yaml',
+      object: 'chat.completion.chunk',
+      created: 0,
+      model: 'configured-helper',
+      choices: [{ index: 0, delta: { content: text }, finish_reason: 'stop' }],
+    };
+    return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, {
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  }
+
   beforeEach(() => {
     mocks.createHelperModelKit.mockReset();
     mocks.runHelperModelCompletion.mockReset();
@@ -79,8 +96,51 @@ describe('agent creator orchestration', () => {
     mocks.createHelperModelKit.mockResolvedValue({
       kit: { handler: {}, client: {} },
     });
-    mocks.runHelperModelCompletion.mockResolvedValue(
-      '<yaml>generated: true</yaml>',
+    fetchModel
+      .mockReset()
+      .mockImplementation(async () =>
+        generatedResponse('<yaml>generated: true</yaml>'),
+      );
+    const model = openaiChatModel(
+      {
+        model: 'configured-helper',
+        deployment: {
+          endpoint: 'https://synthetic.invalid/v1',
+          credentialScope: 'synthetic-agent-creator',
+        },
+        defaults: { temperature: 0, maxOutputTokens: 4096 },
+      },
+      { apiKey: 'synthetic', fetch: fetchModel },
+    );
+    // Development proof only: the production helper's configured routes remain unchanged.
+    mocks.runHelperModelCompletion.mockImplementation(
+      (
+        _kit: unknown,
+        options: {
+          userPrompt: string;
+          systemPrompt: string;
+          signal?: AbortSignal;
+        },
+      ) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const turn = yield* model.prepareTurn({
+              system: options.systemPrompt,
+              messages: [
+                {
+                  role: 'user',
+                  content: [{ kind: 'text', text: options.userPrompt }],
+                },
+              ],
+            });
+            const result = yield* model.generateTurn(turn);
+            return result.content
+              .filter((part) => part.kind === 'text')
+              .map((part) => part.text)
+              .join('');
+          }),
+          { signal: options.signal },
+        ),
     );
     mocks.validateAgentYamlContent.mockImplementation(() => undefined);
     vi.spyOn(AbsoluteFS, 'write').mockResolvedValue(undefined);
@@ -188,9 +248,13 @@ describe('agent creator orchestration', () => {
 
   it('includes the validation error in the second generation attempt', async () => {
     const ui = createUi();
-    mocks.runHelperModelCompletion
-      .mockResolvedValueOnce('<yaml>invalid</yaml>')
-      .mockResolvedValueOnce('<yaml>valid: true</yaml>');
+    fetchModel
+      .mockImplementationOnce(async () =>
+        generatedResponse('<yaml>invalid</yaml>'),
+      )
+      .mockImplementationOnce(async () =>
+        generatedResponse('<yaml>valid: true</yaml>'),
+      );
     mocks.validateAgentYamlContent
       .mockImplementationOnce(() => {
         throw new Error('missing prompts');
@@ -200,6 +264,7 @@ describe('agent creator orchestration', () => {
     await runAgentCreator(CONFIG, 'workflow', ui);
 
     expect(mocks.runHelperModelCompletion).toHaveBeenCalledTimes(2);
+    expect(fetchModel).toHaveBeenCalledTimes(2);
     expect(mocks.runHelperModelCompletion.mock.calls[1]?.[1]).toEqual(
       expect.objectContaining({
         userPrompt: expect.stringContaining('Retry workflow: missing prompts'),
@@ -213,14 +278,15 @@ describe('agent creator orchestration', () => {
 
   it('uses the deterministic template after both generation attempts fail', async () => {
     const ui = createUi();
-    mocks.runHelperModelCompletion.mockRejectedValue(
-      new Error('model unavailable'),
+    fetchModel.mockRejectedValue(
+      new TypeError('synthetic network unavailable'),
     );
 
     await runAgentCreator(CONFIG, 'workflow', ui);
 
     expect(mocks.createHelperModelKit).toHaveBeenCalledTimes(2);
     expect(mocks.runHelperModelCompletion).toHaveBeenCalledTimes(2);
+    expect(fetchModel).toHaveBeenCalledTimes(2);
     expect(ui.renderTemplate).toHaveBeenCalledWith('workflow fallback', {
       AGENT_NAME: 'editor',
       DESCRIPTION: 'Edit documents',

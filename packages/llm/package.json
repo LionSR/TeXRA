@@ -1,0 +1,25 @@
+{
+  "name": "@texra-ai/llm",
+  "version": "0.41.0",
+  "private": true,
+  "type": "module",
+  "description": "TeXRA-owned canonical model operations",
+  "exports": {
+    "./turn": "./src/turn.ts",
+    "./openai-chat": "./src/openaiChat.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "openai": "7.10.0"
+  },
+  "peerDependencies": {
+    "effect": "4.0.0-rc.112",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "effect": "4.0.0-rc.112",
+    "zod": "4.4.3"
+  }
+}
