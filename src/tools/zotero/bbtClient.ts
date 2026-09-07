@@ -296,6 +296,16 @@ function connectorRequestFailure(
 /**
  * Call a Zotero Connector endpoint. Never fails: every outcome, the
  * transport's included, is a `ConnectorResult` the tool reports per item.
+ *
+ * The request is **uninterruptible**: `saveItems`/`saveSnapshot` write to the
+ * user's library, so aborting one mid-flight would leave Zotero having
+ * possibly stored the item while the tool reports nothing at all. Cancelling
+ * the run instead waits for this one write to settle and to yield its
+ * `ConnectorResult`; the interrupt then takes effect at the caller's next
+ * item. The deadline is unaffected — `Effect.timeoutOrElse` races the request
+ * in a fiber that `raceAllFirst` forks interruptible regardless of the
+ * enclosing region (`forkUnsafe(..., uninterruptible: false)` in effect
+ * rc.112), so `ZOTERO_CONNECTOR_TIMEOUT_MS` still bounds a wedged Zotero.
  */
 export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
   (endpoint: string, body: object, port: number) =>
@@ -330,6 +340,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
         return { status: 'error', message: errorMessage };
       },
     ).pipe(
+      Effect.uninterruptible,
       Effect.catch((error) =>
         Effect.succeed(connectorRequestFailure(error, port)),
       ),

@@ -100,15 +100,18 @@ describe('retryTransientFetch', () => {
         const retriesLeft: number[] = [];
         const fiber = yield* Effect.forkChild(
           Effect.flip(
-            retryTransientFetch(() => Promise.reject(kyErrorWithStatus(503)), {
-              retries: 3,
-              minTimeout: 1,
-              timeoutMs: 1000,
-              onFailedAttempt: (_error, left) =>
-                Effect.sync(() => {
-                  retriesLeft.push(left);
-                }),
-            }),
+            retryTransientFetch(
+              (_signal) => Promise.reject(kyErrorWithStatus(503)),
+              {
+                retries: 3,
+                minTimeout: 1,
+                timeoutMs: 1000,
+                onFailedAttempt: (_error, left) =>
+                  Effect.sync(() => {
+                    retriesLeft.push(left);
+                  }),
+              },
+            ),
           ),
         );
         // Each backoff (at most 8 ms with jitter) sleeps on the test clock;
