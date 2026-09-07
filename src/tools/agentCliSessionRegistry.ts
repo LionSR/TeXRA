@@ -1,4 +1,4 @@
-import { Data, Deferred, Effect, Queue } from 'effect';
+import { Data, Deferred, Effect, Option, Queue } from 'effect';
 
 import { getExecutionStore } from '@agent/storage';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
@@ -179,13 +179,19 @@ export class AgentCliSessionRegistry {
     queue: Queue.Queue<SessionMappingWrite>,
   ): Effect.Effect<void> {
     return Effect.forever(
-      Effect.flatMap(Queue.take(queue), (write) =>
-        Effect.uninterruptible(
-          persistSessionMapping(
-            this.dependencies,
-            write.executionId,
-            this.persistedSessionKey,
-            write.sessionId,
+      Effect.uninterruptibleMask((restore) =>
+        // Waiting owns no write. Dequeue and persistence share the mask;
+        // another drain may consume the peeked item before our poll.
+        Effect.flatMap(restore(Queue.peek(queue)), () =>
+          Effect.flatMap(Queue.poll(queue), (write) =>
+            Option.isSome(write)
+              ? persistSessionMapping(
+                  this.dependencies,
+                  write.value.executionId,
+                  this.persistedSessionKey,
+                  write.value.sessionId,
+                )
+              : Effect.void,
           ),
         ),
       ),

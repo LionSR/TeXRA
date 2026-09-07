@@ -1,4 +1,4 @@
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, type Scheduler } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
@@ -23,6 +23,64 @@ async function withDrain(
 }
 
 describe('AgentCliSessionRegistry', () => {
+  it('keeps a queued mapping when a drain is interrupted at a scheduler handoff', async () => {
+    // Sweep actual runtime yield points through dequeue and persistence. A
+    // surviving drain must find the write unless the retiring drain owns it.
+    for (let pauseAfter = 2; pauseAfter < 80; pauseAfter++) {
+      const tasks: Array<() => void> = [];
+      let operations = 0;
+      const scheduler: Scheduler.Scheduler = {
+        executionMode: 'async',
+        shouldYield: () => ++operations === pauseAfter,
+        makeDispatcher: () => ({
+          scheduleTask: (task) => tasks.push(task),
+          flush: () => {
+            while (tasks.length > 0) tasks.shift()?.();
+          },
+        }),
+      };
+      const executions = testExecutionRegistry();
+      const persistSessionId = vi.fn(async () => {});
+      const registry = new AgentCliSessionRegistry(
+        'test_session_id',
+        executions,
+        {
+          persistSessionId,
+          reportPersistenceFailure: vi.fn(),
+        },
+      );
+      registry.register('session-handoff', {
+        childStreamId: 'child-handoff' as StreamTabId,
+        executionId: 'execution-handoff' as ExecutionId,
+      });
+      const retiring = Effect.runFork(registry.persistenceDrain(), {
+        scheduler,
+      });
+      const interrupted = Effect.runPromise(Fiber.interrupt(retiring));
+      // The paused scheduler also owns cancellation cleanup and promise
+      // settlement. Drain it before starting the surviving consumer.
+      for (let step = 0; step < 100; step++) {
+        while (tasks.length > 0) tasks.shift()?.();
+        await Promise.resolve();
+      }
+      await interrupted;
+      try {
+        await withDrain(registry, async () => {
+          await vi.waitFor(() =>
+            expect(persistSessionId).toHaveBeenCalledOnce(),
+          );
+        });
+        expect(persistSessionId).toHaveBeenCalledWith(
+          'execution-handoff',
+          'test_session_id',
+          'session-handoff',
+        );
+      } finally {
+        executions.dispose();
+      }
+    }
+  });
+
   it.each([
     {
       kind: 'rejected',

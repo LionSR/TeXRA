@@ -228,9 +228,9 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
     if (releaseClaim) {
       // Any failure cause — typed or defect — releases the claim before it
       // propagates, as the previous catch-release-rethrow did.
-      return yield* params
-        .launch(releaseClaim)
-        .pipe(Effect.onError(() => Effect.sync(() => releaseClaim())));
+      return yield* Effect.suspend(() => params.launch(releaseClaim)).pipe(
+        Effect.onError(() => Effect.sync(() => releaseClaim())),
+      );
     }
 
     const stored = yield* store.waitForActive(id);

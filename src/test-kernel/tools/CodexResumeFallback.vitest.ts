@@ -195,6 +195,23 @@ describe('codex tool - atomic resume fallback', () => {
     });
   });
 
+  it('releases a resume reservation when launch rejects a missing run context', async () => {
+    mocks.getCurrentToolContexts.mockReturnValue(undefined);
+
+    await expect(
+      new CodexTool().call({
+        prompt: 'resume Codex',
+        sandbox_mode: 'workspace-write',
+        thread_id: 'stale-thread',
+      }),
+    ).resolves.toMatchObject({ status: 'error' });
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+
+    const release = CodexThreads.claim('stale-thread');
+    expect(release).toBeTypeOf('function');
+    release?.();
+  });
+
   it('launches one fallback loop when concurrent calls use the same stale thread_id', async () => {
     const sdkImportStarted = pDefer<void>();
     const sdkReady = pDefer<any>();
