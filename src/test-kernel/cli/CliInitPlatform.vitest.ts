@@ -304,6 +304,7 @@ describe('CLI platform init', () => {
     );
 
     expect(vi.mocked(UsageLogService.initialize)).toHaveBeenCalledWith(
+      expect.anything(),
       {},
       '1.2.3',
       'cli',
