@@ -1,6 +1,7 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - tools
 import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@tools/github/checkAnnotationLevels';
@@ -93,152 +94,158 @@ describe('PRPollingSource annotation drain', () => {
     mocks.fetchAnnotations.mockReset();
   });
 
-  it('applies the base poller backoff path for annotation rate limits', async () => {
-    const source = createDrainSource();
-    const run = createCheckRun(42);
-    const state = createDrainState([run]);
-    const rateLimit = new GitHubRateLimitError(1_800_000_000);
-    mocks.fetchAnnotations.mockRejectedValue(rateLimit);
+  it.effect(
+    'applies the base poller backoff path for annotation rate limits',
+    () =>
+      Effect.gen(function* () {
+        const source = createDrainSource();
+        const run = createCheckRun(42);
+        const state = createDrainState([run]);
+        const rateLimit = new GitHubRateLimitError(1_800_000_000);
+        mocks.fetchAnnotations.mockRejectedValue(rateLimit);
 
-    await Effect.runPromise(
-      drainAccess(source).drainAnnotationQueues([['owner/repo#7', state]]),
-    );
+        yield* drainAccess(source).drainAnnotationQueues([
+          ['owner/repo#7', state],
+        ]);
 
-    expect(mocks.fetchAnnotations).toHaveBeenCalledWith(
-      'owner',
-      'repo',
-      42,
-      expect.anything(),
-      expect.anything(),
-      expect.any(Number),
-    );
-    expect(state.currentShaState?.pendingAnnotationRuns).toEqual([run]);
-    expect(state.skipPollUntilMs).toBe(1_800_000_000_000);
-  });
+        expect(mocks.fetchAnnotations).toHaveBeenCalledWith(
+          'owner',
+          'repo',
+          42,
+          expect.anything(),
+          expect.anything(),
+          expect.any(Number),
+        );
+        expect(state.currentShaState?.pendingAnnotationRuns).toEqual([run]);
+        expect(state.skipPollUntilMs).toBe(1_800_000_000_000);
+      }),
+  );
 
-  it('drains annotation queues in fair passes across subscriptions', async () => {
-    const source = createDrainSource();
-    const firstState = createDrainState([
-      createCheckRun(1),
-      createCheckRun(2),
-      createCheckRun(3),
-    ]);
-    const secondState = createDrainState([
-      createCheckRun(4),
-      createCheckRun(5),
-      createCheckRun(6),
-    ]);
-    const thirdState = createDrainState([
-      createCheckRun(7),
-      createCheckRun(8),
-      createCheckRun(9),
-    ]);
-    mocks.fetchAnnotations.mockResolvedValue([]);
+  it.effect(
+    'drains annotation queues in fair passes across subscriptions',
+    () =>
+      Effect.gen(function* () {
+        const source = createDrainSource();
+        const firstState = createDrainState([
+          createCheckRun(1),
+          createCheckRun(2),
+          createCheckRun(3),
+        ]);
+        const secondState = createDrainState([
+          createCheckRun(4),
+          createCheckRun(5),
+          createCheckRun(6),
+        ]);
+        const thirdState = createDrainState([
+          createCheckRun(7),
+          createCheckRun(8),
+          createCheckRun(9),
+        ]);
+        mocks.fetchAnnotations.mockResolvedValue([]);
 
-    await Effect.runPromise(
-      drainAccess(source).drainAnnotationQueues([
-        ['first', firstState],
-        ['second', secondState],
-        ['third', thirdState],
-      ]),
-    );
+        yield* drainAccess(source).drainAnnotationQueues([
+          ['first', firstState],
+          ['second', secondState],
+          ['third', thirdState],
+        ]);
 
-    expect(mocks.fetchAnnotations.mock.calls.map((call) => call[2])).toEqual([
-      1, 4, 7, 2, 5, 8, 3, 6, 9,
-    ]);
-    for (const state of [firstState, secondState, thirdState]) {
-      expect(state.currentShaState?.pendingAnnotationRuns).toEqual([]);
-    }
-  });
+        expect(
+          mocks.fetchAnnotations.mock.calls.map((call) => call[2]),
+        ).toEqual([1, 4, 7, 2, 5, 8, 3, 6, 9]);
+        for (const state of [firstState, secondState, thirdState]) {
+          expect(state.currentShaState?.pendingAnnotationRuns).toEqual([]);
+        }
+      }),
+  );
 
-  it('filters check annotations by each listener minimum level', async () => {
-    const source = createDrainSource();
-    const run = createCheckRun(12);
-    const state = createDrainState([run]);
-    const defaultListener = vi.fn<(text: string) => Effect.Effect<void>>(
-      () => Effect.void,
-    );
-    const warningListener = vi.fn<(text: string) => Effect.Effect<void>>(
-      () => Effect.void,
-    );
-    const noticeListener = vi.fn<(text: string) => Effect.Effect<void>>(
-      () => Effect.void,
-    );
-    state.listeners.add(defaultListener);
-    state.listeners.add(warningListener);
-    state.listeners.add(noticeListener);
-    state.annotationLevelByListener.set(
-      defaultListener,
-      DEFAULT_CHECK_ANNOTATION_LEVEL,
-    );
-    state.annotationLevelByListener.set(warningListener, 'warning');
-    state.annotationLevelByListener.set(noticeListener, 'notice');
-    mocks.fetchAnnotations.mockResolvedValue([
-      annotation('notice', 'advisory note'),
-      annotation('warning', 'format warning'),
-      annotation('failure', 'blocking failure'),
-    ]);
+  it.effect('filters check annotations by each listener minimum level', () =>
+    Effect.gen(function* () {
+      const source = createDrainSource();
+      const run = createCheckRun(12);
+      const state = createDrainState([run]);
+      const defaultListener = vi.fn<(text: string) => Effect.Effect<void>>(
+        () => Effect.void,
+      );
+      const warningListener = vi.fn<(text: string) => Effect.Effect<void>>(
+        () => Effect.void,
+      );
+      const noticeListener = vi.fn<(text: string) => Effect.Effect<void>>(
+        () => Effect.void,
+      );
+      state.listeners.add(defaultListener);
+      state.listeners.add(warningListener);
+      state.listeners.add(noticeListener);
+      state.annotationLevelByListener.set(
+        defaultListener,
+        DEFAULT_CHECK_ANNOTATION_LEVEL,
+      );
+      state.annotationLevelByListener.set(warningListener, 'warning');
+      state.annotationLevelByListener.set(noticeListener, 'notice');
+      mocks.fetchAnnotations.mockResolvedValue([
+        annotation('notice', 'advisory note'),
+        annotation('warning', 'format warning'),
+        annotation('failure', 'blocking failure'),
+      ]);
 
-    await Effect.runPromise(
-      drainAccess(source).drainAnnotationQueues([['owner/repo#7', state]]),
-    );
+      yield* drainAccess(source).drainAnnotationQueues([
+        ['owner/repo#7', state],
+      ]);
 
-    expect(defaultListener).toHaveBeenCalledOnce();
-    const defaultMessage = defaultListener.mock.calls[0][0] as string;
-    expect(defaultMessage).toContain('[FAILURE]');
-    expect(defaultMessage).not.toContain('[WARNING]');
-    expect(defaultMessage).not.toContain('[NOTICE]');
+      expect(defaultListener).toHaveBeenCalledOnce();
+      const defaultMessage = defaultListener.mock.calls[0][0] as string;
+      expect(defaultMessage).toContain('[FAILURE]');
+      expect(defaultMessage).not.toContain('[WARNING]');
+      expect(defaultMessage).not.toContain('[NOTICE]');
 
-    expect(warningListener).toHaveBeenCalledOnce();
-    const warningMessage = warningListener.mock.calls[0][0] as string;
-    expect(warningMessage).toContain('[WARNING]');
-    expect(warningMessage).toContain('[FAILURE]');
-    expect(warningMessage).not.toContain('[NOTICE]');
+      expect(warningListener).toHaveBeenCalledOnce();
+      const warningMessage = warningListener.mock.calls[0][0] as string;
+      expect(warningMessage).toContain('[WARNING]');
+      expect(warningMessage).toContain('[FAILURE]');
+      expect(warningMessage).not.toContain('[NOTICE]');
 
-    expect(noticeListener).toHaveBeenCalledOnce();
-    const noticeMessage = noticeListener.mock.calls[0][0] as string;
-    expect(noticeMessage).toContain('[NOTICE]');
-    expect(noticeMessage).toContain('[WARNING]');
-    expect(noticeMessage).toContain('[FAILURE]');
-  });
+      expect(noticeListener).toHaveBeenCalledOnce();
+      const noticeMessage = noticeListener.mock.calls[0][0] as string;
+      expect(noticeMessage).toContain('[NOTICE]');
+      expect(noticeMessage).toContain('[WARNING]');
+      expect(noticeMessage).toContain('[FAILURE]');
+    }),
+  );
 
-  it('updates the annotation level for an existing listener', async () => {
-    const source = new PRPollingSource();
-    const pr = { owner: 'owner', repo: 'repo', pullNumber: 7 };
-    const listener = vi.fn<(text: string) => Effect.Effect<void>>(
-      () => Effect.void,
-    );
-    const disposable = await Effect.runPromise(source.subscribe(pr, listener));
-    const key = prKeyToString(pr);
-    const state = drainAccess(source).getSubscriptionState(key);
-    if (!state) throw new Error('Expected subscription state');
-    mocks.fetchAnnotations.mockResolvedValue([
-      annotation('warning', 'format warning'),
-    ]);
+  it.effect('updates the annotation level for an existing listener', () =>
+    Effect.gen(function* () {
+      const source = new PRPollingSource();
+      const pr = { owner: 'owner', repo: 'repo', pullNumber: 7 };
+      const listener = vi.fn<(text: string) => Effect.Effect<void>>(
+        () => Effect.void,
+      );
+      const disposable = yield* source.subscribe(pr, listener);
+      const key = prKeyToString(pr);
+      const state = drainAccess(source).getSubscriptionState(key);
+      if (!state) throw new Error('Expected subscription state');
+      mocks.fetchAnnotations.mockResolvedValue([
+        annotation('warning', 'format warning'),
+      ]);
 
-    state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
-      pendingAnnotationRuns: [createCheckRun(13)],
-    });
-    await Effect.runPromise(
-      drainAccess(source).drainAnnotationQueues([[key, state]]),
-    );
+      state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
+        pendingAnnotationRuns: [createCheckRun(13)],
+      });
+      yield* drainAccess(source).drainAnnotationQueues([[key, state]]);
 
-    expect(listener).not.toHaveBeenCalled();
+      expect(listener).not.toHaveBeenCalled();
 
-    source.updateSubscription(
-      { ...pr, minAnnotationLevel: 'warning' },
-      listener,
-    );
-    state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
-      pendingAnnotationRuns: [createCheckRun(14)],
-    });
+      source.updateSubscription(
+        { ...pr, minAnnotationLevel: 'warning' },
+        listener,
+      );
+      state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
+        pendingAnnotationRuns: [createCheckRun(14)],
+      });
 
-    await Effect.runPromise(
-      drainAccess(source).drainAnnotationQueues([[key, state]]),
-    );
+      yield* drainAccess(source).drainAnnotationQueues([[key, state]]);
 
-    expect(listener).toHaveBeenCalledOnce();
-    expect(listener.mock.calls[0][0]).toContain('[WARNING]');
-    disposable.dispose();
-  });
+      expect(listener).toHaveBeenCalledOnce();
+      expect(listener.mock.calls[0][0]).toContain('[WARNING]');
+      disposable.dispose();
+    }),
+  );
 });

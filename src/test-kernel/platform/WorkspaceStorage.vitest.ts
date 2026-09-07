@@ -3,8 +3,9 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports - platform
 import { WORKSPACE_SIDECAR_FILE } from '@common/storage/storageLayout';
@@ -141,30 +142,42 @@ describe('workspace storage defaults', () => {
   // Regression pin (#C4): a malformed project config used to fail CLI startup
   // outright — `JsonStore.open` throws and only the GUI hosts caught it. Every
   // host now degrades to the internal workspace store, loudly.
-  it('degrades to the internal workspace config store when the project config is malformed', async () => {
-    const root = await makeStorageRoot();
-    const workspacePath = await makeTempDir('texra-project-', tempDirs);
-    await mkdir(join(workspacePath, '.texra'), { recursive: true });
-    await writeFile(join(workspacePath, '.texra', 'config.json'), '{ broken');
-    const storage = createNodeStorageProvider({
-      storageRoot: root,
-      workspacePath,
-    });
-    const warnings: string[] = [];
+  it.effect(
+    'degrades to the internal workspace config store when the project config is malformed',
+    () =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(() => makeStorageRoot());
+        const workspacePath = yield* Effect.promise(() =>
+          makeTempDir('texra-project-', tempDirs),
+        );
+        yield* Effect.promise(() =>
+          mkdir(join(workspacePath, '.texra'), { recursive: true }),
+        );
+        yield* Effect.promise(() =>
+          writeFile(join(workspacePath, '.texra', 'config.json'), '{ broken'),
+        );
+        const storage = createNodeStorageProvider({
+          storageRoot: root,
+          workspacePath,
+        });
+        const warnings: string[] = [];
 
-    const stores = await Effect.runPromise(
-      openTexraConfigStores(storage, workspacePath, (m) => warnings.push(m)),
-    );
-    await Effect.runPromise(
-      stores.workspace.set('texra.files.exclude', ['dist']),
-    );
+        const stores = yield* openTexraConfigStores(
+          storage,
+          workspacePath,
+          (m) => warnings.push(m),
+        );
+        yield* stores.workspace.set('texra.files.exclude', ['dist']);
 
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('Cannot open project .texra/config.json');
-    await expect(
-      pathExists(join(storage.getStoragePath(), 'config.json')),
-    ).resolves.toBe(true);
-  });
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]).toContain('Cannot open project .texra/config.json');
+        expect(
+          yield* Effect.promise(() =>
+            pathExists(join(storage.getStoragePath(), 'config.json')),
+          ),
+        ).toBe(true);
+      }),
+  );
 
   it('uses the same workspace storage rule for node hosts', async () => {
     const root = await makeStorageRoot();
