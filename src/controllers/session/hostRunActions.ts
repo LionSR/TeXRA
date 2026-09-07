@@ -368,7 +368,7 @@ export function createHostRunActions(
         request.provider != null && isApiProvider(request.provider)
           ? request.provider
           : undefined;
-      const result = await apiKeyRetry.useOwnApiKey({
+      await apiKeyRetry.useOwnApiKey({
         stream: request.streamId,
         requestId: request.requestId,
         model: request.model ?? undefined,
@@ -376,11 +376,6 @@ export function createHostRunActions(
         exhaustionReason: exhaustionReasonOf(request),
         kimiCodeRoutedOnFailure: request.kimiCodeRoutedOnFailure ?? undefined,
       });
-      if (result.proceeded && !result.retried) {
-        await ports.showInfo(
-          'Switched to your own API key. There is no pending retry to resume, so run the agent again when you are ready.',
-        );
-      }
     },
     async restoreState(streamId) {
       const { config } = await nativeAgentRun(streamId, 'restored');

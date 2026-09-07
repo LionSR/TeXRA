@@ -16,19 +16,6 @@ const PROVIDERS = [
   'anthropic',
 ] as const satisfies readonly ApiProvider[];
 
-// The two dominant outcomes: the controller refused to act, or it switched to
-// a stored key and triggered the retry.
-const IDLE_RESULT = {
-  proceeded: false,
-  retried: false,
-  disabledQuotaRoutes: [],
-};
-const RETRIED_WITH_OWN_KEY_RESULT = {
-  proceeded: true,
-  retried: true,
-  disabledQuotaRoutes: [],
-};
-
 function testRuntime(
   descriptor: Pick<
     QuotaFallbackRoute,
@@ -177,14 +164,13 @@ describe('ProgressApiKeyRetryController', () => {
       },
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-a',
       requestId: 'retry-a',
       provider: 'anthropic',
       exhaustionReason: 'upstream-credit',
     });
 
-    expect(result).toStrictEqual(RETRIED_WITH_OWN_KEY_RESULT);
     expect(harness.prompts).toStrictEqual(['anthropic']);
     expect(harness.retries).toStrictEqual(['stream-a']);
   });
@@ -197,14 +183,13 @@ describe('ProgressApiKeyRetryController', () => {
       },
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-a',
       requestId: 'retry-a',
       provider: 'anthropic',
       exhaustionReason: 'upstream-credit',
     });
 
-    expect(result).toStrictEqual(IDLE_RESULT);
     expect(harness.prompts).toStrictEqual(['anthropic']);
     expect(harness.retries).toStrictEqual([]);
   });
@@ -215,34 +200,14 @@ describe('ProgressApiKeyRetryController', () => {
       retryPending: false,
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-a',
       requestId: 'retry:stale',
       provider: 'anthropic',
       exhaustionReason: 'copilot-subscription',
     });
 
-    expect(result).toStrictEqual(IDLE_RESULT);
     expect(harness.retries).toStrictEqual([]);
-  });
-
-  it('returns a fresh result when no retry occurs', async () => {
-    const harness = createHarness({
-      keys: { anthropic: 'stored-key' },
-      retryPending: false,
-    });
-    const request = {
-      stream: 'stream-a' as const,
-      requestId: 'retry:stale',
-      provider: 'anthropic' as const,
-      exhaustionReason: 'copilot-subscription' as const,
-    };
-
-    const first = await harness.controller.useOwnApiKey(request);
-    const second = await harness.controller.useOwnApiKey(request);
-
-    expect(first).not.toBe(second);
-    expect(first).toStrictEqual(second);
   });
 
   it('accepts a changed key from any provider when depletion has no provider hint', async () => {
@@ -253,13 +218,12 @@ describe('ProgressApiKeyRetryController', () => {
       },
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-b',
       requestId: 'retry-b',
       exhaustionReason: 'upstream-credit',
     });
 
-    expect(result).toStrictEqual(RETRIED_WITH_OWN_KEY_RESULT);
     expect(harness.prompts).toStrictEqual([undefined]);
     expect(harness.retries).toStrictEqual(['stream-b']);
   });
@@ -270,14 +234,13 @@ describe('ProgressApiKeyRetryController', () => {
       retryAvailable: false,
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-race',
       requestId: 'retry-race',
       provider: 'openai',
       exhaustionReason: 'chatgpt-subscription',
     });
 
-    expect(result).toStrictEqual(IDLE_RESULT);
     expect(harness.chatGptSubscriptionValues).toStrictEqual([false, true]);
     expect(harness.retries).toStrictEqual(['stream-race']);
   });
@@ -287,18 +250,13 @@ describe('ProgressApiKeyRetryController', () => {
       keys: { openai: 'stored-openai' },
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-d',
       requestId: 'retry-d',
       provider: 'openai',
       exhaustionReason: 'chatgpt-subscription',
     });
 
-    expect(result).toStrictEqual({
-      proceeded: true,
-      retried: true,
-      disabledQuotaRoutes: ['chatgpt-subscription'],
-    });
     // The subscription quota failed, not the key — a stored key is already
     // usable, so "Use your own API key" must not jump to the key-input prompt.
     expect(harness.prompts).toStrictEqual([]);
@@ -311,18 +269,13 @@ describe('ProgressApiKeyRetryController', () => {
       keys: { xai: 'stored-xai' },
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-grok',
       requestId: 'retry-grok',
       provider: 'xai',
       exhaustionReason: 'xai-subscription',
     });
 
-    expect(result).toStrictEqual({
-      proceeded: true,
-      retried: true,
-      disabledQuotaRoutes: ['xai-subscription'],
-    });
     expect(harness.prompts).toStrictEqual([]);
     expect(harness.grokSubscriptionValues).toStrictEqual([false]);
     expect(harness.retries).toStrictEqual(['stream-grok']);
@@ -331,14 +284,13 @@ describe('ProgressApiKeyRetryController', () => {
   it('does not disable the subscription when no usable OpenAI key is available', async () => {
     const harness = createHarness({ keys: {} });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-e',
       requestId: 'retry-e',
       provider: 'openai',
       exhaustionReason: 'chatgpt-subscription',
     });
 
-    expect(result).toStrictEqual(IDLE_RESULT);
     // No usable key exists, so the prompt is still shown (then declined here).
     expect(harness.prompts).toStrictEqual(['openai']);
     expect(harness.chatGptSubscriptionValues).toStrictEqual([]);
@@ -350,18 +302,13 @@ describe('ProgressApiKeyRetryController', () => {
       keys: { glm: 'stored-glm' },
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-glm',
       requestId: 'retry-glm',
       provider: 'glm',
       exhaustionReason: 'glm-coding-plan',
     });
 
-    expect(result).toStrictEqual({
-      proceeded: true,
-      retried: true,
-      disabledQuotaRoutes: ['glm-coding-plan'],
-    });
     // The coding-plan quota failed, not the key — a stored key is already
     // usable, so "Use your own API key" must not jump to the key-input prompt.
     expect(harness.prompts).toStrictEqual([]);
@@ -375,19 +322,15 @@ describe('ProgressApiKeyRetryController', () => {
       glmCodingPlan: false,
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-glm2',
       requestId: 'retry-glm2',
       provider: 'glm',
       exhaustionReason: 'glm-coding-plan',
     });
 
-    expect(result).toStrictEqual({
-      proceeded: true,
-      retried: true,
-      disabledQuotaRoutes: [],
-    });
     expect(harness.glmCodingPlanValues).toStrictEqual([]);
+    expect(harness.retries).toStrictEqual(['stream-glm2']);
   });
 
   it('prepares an existing direct key for a fresh Copilot fallback without retrying in place', async () => {
@@ -560,12 +503,8 @@ describe('ProgressApiKeyRetryController', () => {
     expect(triggerOrder).toStrictEqual(['stream-a']);
 
     firstTrigger.resolve(false);
-    await expect(first).resolves.toStrictEqual(IDLE_RESULT);
-    await expect(second).resolves.toStrictEqual({
-      proceeded: true,
-      retried: true,
-      disabledQuotaRoutes: ['chatgpt-subscription'],
-    });
+    await first;
+    await second;
     expect(harness.chatGptSubscriptionValues).toStrictEqual([
       false,
       true,
@@ -577,14 +516,13 @@ describe('ProgressApiKeyRetryController', () => {
   it('refuses the API-key switch for a Kimi Code-exclusive model', async () => {
     const harness = createHarness({ keys: { openai: 'stored-openai' } });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-kimi-exclusive',
       requestId: 'retry-kimi-exclusive',
       model: 'kimiCoding',
       exhaustionReason: 'kimi-code-subscription',
     });
 
-    expect(result).toStrictEqual(IDLE_RESULT);
     expect(harness.prompts).toStrictEqual([]);
     expect(harness.retries).toStrictEqual([]);
   });
@@ -601,14 +539,13 @@ describe('ProgressApiKeyRetryController', () => {
       },
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-stale-queue',
       requestId: 'retry-stale-queue',
       provider: 'openai',
       exhaustionReason: 'chatgpt-subscription',
     });
 
-    expect(result).toStrictEqual(IDLE_RESULT);
     expect(harness.chatGptSubscriptionValues).toStrictEqual([]);
     expect(harness.retries).toStrictEqual([]);
     expect(pendingChecks).toBe(2);
@@ -623,7 +560,7 @@ describe('ProgressApiKeyRetryController', () => {
       kimiCode: true,
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-kimi-credit',
       requestId: 'retry-kimi-credit',
       model: 'kimiCoding',
@@ -632,11 +569,6 @@ describe('ProgressApiKeyRetryController', () => {
       kimiCodeRoutedOnFailure: true,
     });
 
-    expect(result).toStrictEqual({
-      proceeded: true,
-      retried: true,
-      disabledQuotaRoutes: [],
-    });
     // The SDK error identifies the open-platform Moonshot provider, but the
     // exclusive handler rebinds with `kimiCode`; the prompt and key check must
     // target the same credential or the retry repeats the same failure.
@@ -656,7 +588,7 @@ describe('ProgressApiKeyRetryController', () => {
       kimiCode: true,
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-kimi-dual',
       requestId: 'retry-kimi-dual',
       model: 'kimi3',
@@ -665,11 +597,6 @@ describe('ProgressApiKeyRetryController', () => {
       kimiCodeRoutedOnFailure: true,
     });
 
-    expect(result).toStrictEqual({
-      proceeded: true,
-      retried: true,
-      disabledQuotaRoutes: ['kimi-code-subscription'],
-    });
     // The forwarded SDK provider is `moonshot`, so that is the credential the
     // panel asks to replace; the routing step then turns off "Prefer Kimi
     // Code" so the rebuilt handler actually uses the new Moonshot key. The
@@ -693,7 +620,7 @@ describe('ProgressApiKeyRetryController', () => {
       kimiCode: true,
     });
 
-    const result = await harness.controller.useOwnApiKey({
+    await harness.controller.useOwnApiKey({
       stream: 'stream-kimi-moonshot',
       requestId: 'retry-kimi-moonshot',
       model: 'kimi3',
@@ -702,11 +629,6 @@ describe('ProgressApiKeyRetryController', () => {
       kimiCodeRoutedOnFailure: false,
     });
 
-    expect(result).toStrictEqual({
-      proceeded: true,
-      retried: true,
-      disabledQuotaRoutes: [],
-    });
     // A canonical `kimi3` can also fail through OpenRouter or Moonshot. Those
     // failed handlers were not dispatched onto the Kimi Code endpoint, so the
     // retry must not turn off the user's coding preference.
