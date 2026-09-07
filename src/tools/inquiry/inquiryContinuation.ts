@@ -31,8 +31,8 @@ import {
 } from '@shared/schemas';
 import {
   formatRelativeTime,
+  previewLabel,
   truncateSummary,
-  truncateWithEllipsis,
 } from '@utils/text/stringUtils';
 
 import {
@@ -55,7 +55,7 @@ function formatStillOpen(threads: InquiryThreadSummary[]): string[] {
   for (const t of threads) {
     const since = formatRelativeTime(Date.parse(t.lastActivityIso));
     lines.push(
-      `  - ${t.threadId}  "${truncateWithEllipsis(t.lastQuestionPreview, 60)}"  (dispatched ${since})`,
+      `  - ${t.threadId}  "${previewLabel(t.lastQuestionPreview)}"  (dispatched ${since})`,
     );
   }
   return lines;

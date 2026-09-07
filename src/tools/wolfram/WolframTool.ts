@@ -11,10 +11,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
 import { runToolWithCheck } from '@utils/system/toolUtils';
-import {
-  splitContentLines,
-  truncateWithEllipsis,
-} from '@utils/text/stringUtils';
+import { previewLabel, splitContentLines } from '@utils/text/stringUtils';
 
 const WOLFRAM_CODE_TIMEOUT_MS = 30_000; // 30 s
 
@@ -31,7 +28,7 @@ const WOLFRAM_NOT_INSTALLED_ERROR =
  */
 export function wolframRunSummary(code: string): string {
   const firstLine = splitContentLines(code).find((line) => line.trim());
-  const preview = firstLine ? truncateWithEllipsis(firstLine.trim(), 60) : '';
+  const preview = firstLine ? previewLabel(firstLine.trim()) : '';
   return preview ? `Executed: ${preview}` : 'Executed';
 }
 

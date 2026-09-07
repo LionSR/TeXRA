@@ -202,6 +202,21 @@ export function truncateSummary(text: string, maxLength: number): string {
 }
 
 /**
+ * The shared width for a one-line "here's roughly what this was" label —
+ * a bash command, an agent prompt, a queued follow-up — shown alongside a
+ * tool-run or approval summary. Not a hard protocol limit, just the width
+ * every such label in the codebase already converged on.
+ */
+const PREVIEW_MAX_LENGTH = 60;
+
+/**
+ * Truncate `text` to a fixed one-line preview label.
+ */
+export function previewLabel(text: string): string {
+  return truncateWithEllipsis(text, PREVIEW_MAX_LENGTH);
+}
+
+/**
  * Keep the last `maxLen` grapheme clusters; prepend an ellipsis when truncated.
  * Complement to `truncateWithEllipsis` for cases where the relevant content
  * is at the end (e.g. terminal installer output where success/error appears last).

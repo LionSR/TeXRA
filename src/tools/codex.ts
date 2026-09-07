@@ -45,7 +45,7 @@ import {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { formatWallTimeSeconds } from '@utils/core';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { previewLabel } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -500,7 +500,7 @@ async function launchCodexSession(
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const thread = await createCodexThread(input, sandboxMode, workingDir);
   const config = (await getCodexConfig()).buildCodexConfig(input.prompt);
-  const preview = truncateWithEllipsis(input.prompt, 60);
+  const preview = previewLabel(input.prompt);
 
   return launchAgentCliSession({
     parentStreamId,
