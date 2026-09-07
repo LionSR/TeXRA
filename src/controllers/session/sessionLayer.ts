@@ -167,6 +167,11 @@ const ownerLiveness = Layer.effectDiscard(
       );
       const dead: OwnerId[] = [];
       for (const owner of owners) {
+        // Non-rejecting by port contract: the one thing `proveOwnerLiveness`
+        // awaits is `ProcessesPort.identity`, declared as `string | undefined`
+        // with unreadable meaning undefined, and the `kill(pid, 0)` beside it
+        // catches its own. A rejection here would end this prober's stream for
+        // the life of the process, so the contract is the thing to keep.
         const liveness = yield* Effect.promise(() =>
           proveOwnerLiveness(ownerIdentity(owner)),
         );
@@ -632,7 +637,9 @@ const closeSession = (root: string, signal?: AbortSignal) =>
         }
       }),
     );
-    // Ends at the actual settlement, or when interrupted.
+    // Ends at the actual settlement, or when interrupted. Non-rejecting:
+    // `untilSettled` awaits only `waitForAnyChange`, whose executor resolves
+    // on a registry listener or on the abort and never rejects.
     const settled = Effect.promise(
       (interrupt) =>
         runInSession(session, () =>
@@ -666,6 +673,14 @@ const closeSession = (root: string, signal?: AbortSignal) =>
     // The release is the flush's finalizer: the entry goes, or its release
     // is armed on the settlement, whatever the flush's exit, and a flush
     // that fails still fails this close.
+    //
+    // `flushArtifacts` does reject when a trace or shared artifact writer
+    // fails, and `Effect.promise` is deliberate rather than an oversight:
+    // `close` answers a `SessionCloseReport` and names no error, so the
+    // defect is the channel a failed flush travels on, and `ProcessHold.release`
+    // (packages/agent/src/effect/runtime.ts) documents the embedder seeing
+    // exactly that. Widening it into a typed failure is a contract change,
+    // not a conversion.
     yield* Effect.race(
       Effect.promise(
         () =>
@@ -718,6 +733,9 @@ export function installProcessRuntime(
       ? Layer.effect(
           ProcessIdentity,
           Effect.map(
+            // Non-rejecting by port contract: the one caller that passes a
+            // pending read passes `ProcessesPort.selfIdentity()`, declared as
+            // `string | undefined`, unreadable being undefined.
             Effect.promise(() => processStart),
             (start) => ({ ownerId: processOwnerId(start) }),
           ),
