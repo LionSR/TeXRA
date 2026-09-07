@@ -257,7 +257,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       // Emit PR transitions before comments so "PR opened" precedes any reply.
       if (pullsRes.status === 200) {
         // API returns newest-first; reverse for chronological notification order.
-        const sorted = [...pullsRes.data].reverse();
+        const sorted = pullsRes.data.toReversed();
         for (const pr of sorted) {
           const next = classifyPRState(pr);
           const prev = state.prStateByNumber.get(pr.number);
