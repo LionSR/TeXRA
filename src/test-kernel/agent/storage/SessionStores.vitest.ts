@@ -121,7 +121,10 @@ describe('committed stream removal', () => {
                 ),
             );
             const deletion = yield* Effect.forkScoped(
-              session.executions.withExecutionStep('aabbccdd', operation),
+              session.executions.withInactiveExecutionStep(
+                'aabbccdd',
+                operation,
+              ),
             );
             yield* Deferred.await(started);
             const interruption = yield* Effect.forkScoped(

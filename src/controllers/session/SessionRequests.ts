@@ -32,6 +32,7 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import type { SessionGraph } from '@agent/runtime/sessionGraph';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { ExecutionBusy } from '@agent/runtime/executionLanes';
 import { aggregateId as qualifyAggregateId } from '@shared/schemas';
 import type { LocalRuntimeState, StreamTabId } from '@shared/schemas';
 import {
@@ -171,7 +172,7 @@ function proposalDecision(
   }
 }
 
-/** Delete the admitted lifetime under its execution queue. */
+/** Delete the admitted lifetime after acquiring its inactive execution slot. */
 function deleteAdmittedStream(
   session: SessionHandle,
   log: SessionRequestLog,
@@ -202,12 +203,13 @@ function deleteAdmittedStream(
       );
     }
     yield* session.executions
-      .withExecutionStep(
+      .withInactiveExecutionStep(
         start.executionId,
         log.removeStream(aggregateId, mode, start.commit),
       )
       .pipe(
         Effect.mapError((error): RequestError => {
+          if (error instanceof ExecutionBusy) return new NotOwner({ streamId });
           if (
             error instanceof DatabaseWriteFailed &&
             error.cause instanceof DatabaseClaimRefused

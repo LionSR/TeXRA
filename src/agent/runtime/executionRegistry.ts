@@ -259,14 +259,20 @@ export class ExecutionRegistry {
     );
   }
 
-  /** Serialize an Effect operation with launches and generation disposal. */
-  withExecutionStep<A, E, R>(
+  /** Reserve an inactive execution for deletion; never wait for a live owner. */
+  withInactiveExecutionStep<A, E, R>(
     executionId: string,
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
       this.assertActive();
-      return this.lanes.withStep(executionId, operation);
+      return this.lanes.withInactiveStep(
+        executionId,
+        () =>
+          this.handles.has(executionId) ||
+          this.childActivations.has(executionId),
+        operation,
+      );
     });
   }
 
@@ -385,7 +391,7 @@ export class ExecutionRegistry {
   }
 
   /** Remove `handle` only if it is still the current registration. */
-  private untrackIfCurrent(handle: AgentExecutionHandle): boolean {
+  untrackIfCurrent(handle: AgentExecutionHandle): boolean {
     if (this.handles.get(handle.executionId) !== handle) return false;
     this.untrackHandle(handle);
     return true;

@@ -6,11 +6,16 @@
  * overlap while unrelated executions proceed in parallel.
  */
 
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
 import { ensureError } from '@utils/errors/errorMessage';
+
+/** A local generation or its retained handle still owns the execution. */
+export class ExecutionBusy extends Data.TaggedError('ExecutionBusy')<{
+  readonly executionId: string;
+}> {}
 
 /**
  * The serial lifecycle lane of one execution id. Launch, resume, delete and
@@ -42,9 +47,10 @@ function settled(promise: Promise<unknown>): Promise<void> {
 export class ExecutionLanes {
   private readonly lanes = new Map<string, ExecutionLane>();
 
-  /** Hold the lifecycle queue until the Effect and its finalizers settle. */
-  withStep<A, E, R>(
+  /** Acquire an idle execution slot, refusing competing local ownership. */
+  withInactiveStep<A, E, R>(
     executionId: string,
+    hasRetainedOwner: () => boolean,
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {
     return Effect.scoped(
@@ -54,11 +60,24 @@ export class ExecutionLanes {
           (held) => Effect.sync(() => held.resolve()),
         );
         yield* Effect.tryPromise({
-          try: () =>
-            this.enqueueLaneStep(executionId, () => ({
+          try: () => {
+            // The ownership check and enqueue are synchronous. A launch either
+            // owns the slot already or queues after this operation's hold.
+            const lane = this.lanes.get(executionId);
+            if (
+              hasRetainedOwner() ||
+              (lane !== undefined &&
+                (lane.live !== undefined ||
+                  lane.queue.size > 0 ||
+                  lane.queue.pending > 0))
+            ) {
+              throw new ExecutionBusy({ executionId });
+            }
+            return this.enqueueLaneStep(executionId, () => ({
               result: Promise.resolve(),
               hold: held.promise,
-            })),
+            }));
+          },
           catch: ensureError,
         });
         return yield* operation;
