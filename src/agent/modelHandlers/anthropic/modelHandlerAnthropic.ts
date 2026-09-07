@@ -63,7 +63,10 @@ import {
   estimateTokensFromText,
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
-import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
+import {
+  AUXILIARY_MAX_RETRIES,
+  SDK_RETRIES_DISABLED,
+} from '../support/auxiliaryRetry';
 import {
   classifyMediaEntry,
   unknownMediaCategoryWarning,
@@ -385,7 +388,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         apiKey: credential.apiKey,
         baseURL: credential.baseUrl,
         fetch: this.longRunningModelFetch,
-        maxRetries: 0,
+        maxRetries: SDK_RETRIES_DISABLED,
       }),
       credential.route,
       credential.apiKey,

@@ -146,7 +146,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       appTitle: 'TeXRA.ai',
       ...(credential.baseUrl ? { serverURL: credential.baseUrl } : {}),
       httpClient: new HTTPClient({ fetcher: this.longRunningModelFetch }),
-      // TeXRA's session gate owns retry timing and admission.
+      // TeXRA's session gate owns retry timing and admission. Same policy as
+      // `SDK_RETRIES_DISABLED`, which this SDK spells as a strategy, not a count.
       retryConfig: { strategy: 'none' },
     });
     return this.rememberClientCredentialRoute(
