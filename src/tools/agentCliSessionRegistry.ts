@@ -1,10 +1,9 @@
-import { Data, Deferred, Effect } from 'effect';
+import { Data, Deferred, Effect, Queue } from 'effect';
 
 import { getExecutionStore } from '@agent/storage';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { createLog } from '@logger/logUtils';
-import { effectRuntime } from '@platform/processRuntime';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const logger = createLog('AgentCliSessionRegistry');
@@ -37,7 +36,7 @@ class SessionMappingWriteFailed extends Data.TaggedError(
  * Persist one SDK session id for a child execution. A write failure is
  * reported through the injected diagnostics sink and otherwise contained:
  * registration never waits on it and never fails because of it. The sink
- * itself throwing is a defect of the detached fiber, not a rejection anyone
+ * itself throwing is a defect of the drain fiber, not a rejection anyone
  * observes.
  */
 const persistSessionMapping = Effect.fn(
@@ -59,6 +58,12 @@ const persistSessionMapping = Effect.fn(
     ),
   );
 });
+
+/** One queued session-mapping persistence write. */
+interface SessionMappingWrite {
+  readonly executionId: ExecutionId;
+  readonly sessionId: string;
+}
 
 /**
  * What the registry tracks about one live agent-CLI session: the child run's
@@ -92,6 +97,13 @@ function settleReservation(
 export class AgentCliSessionRegistry {
   private readonly sessions = new Map<string, AgentCliSessionState>();
   private readonly inFlight = new Map<ExecutionId, AgentCliSessionEntry>();
+  /**
+   * The write queue a live drain takes from. Created by the first
+   * {@link persistenceDrain}; absent before any drain starts, in which case
+   * {@link register} buffers instead.
+   */
+  private writes: Queue.Queue<SessionMappingWrite> | undefined;
+  private readonly bufferedWrites: SessionMappingWrite[] = [];
 
   constructor(
     private readonly persistedSessionKey: string,
@@ -120,22 +132,62 @@ export class AgentCliSessionRegistry {
   }
 
   /**
-   * Register an active external-agent session and persist its SDK id for later
-   * display or cross-reference after an extension reload clears memory. When
-   * the id was reserved, registration also wakes callers waiting to enqueue a
-   * follow-up on the new loop. The persistence write runs on a detached fiber
-   * owned by this registry's process runtime; see {@link persistSessionMapping}.
+   * Register an active external-agent session and queue its SDK id for
+   * persistence (for later display or cross-reference after an extension
+   * reload clears memory). When the id was reserved, registration also wakes
+   * callers waiting to enqueue a follow-up on the new loop. The write itself
+   * is taken by a {@link persistenceDrain} fiber — the boundary that launches
+   * a loop forks one — so registration never waits on it and never fails
+   * because of it. A write registered before the first drain starts is
+   * buffered and flushed when one does.
    */
   register(sessionId: string, entry: AgentCliSessionEntry): void {
     const previous = this.sessions.get(sessionId);
     this.sessions.set(sessionId, { kind: 'active', entry });
     settleReservation(previous, entry);
-    effectRuntime().runFork(
-      persistSessionMapping(
-        this.dependencies,
-        entry.executionId,
-        this.persistedSessionKey,
-        sessionId,
+    const write: SessionMappingWrite = {
+      executionId: entry.executionId,
+      sessionId,
+    };
+    if (this.writes) Queue.offerUnsafe(this.writes, write);
+    else this.bufferedWrites.push(write);
+  }
+
+  /**
+   * The session-mapping write drain: takes queued writes one at a time and
+   * runs each to completion. One write is uninterruptible once taken, so a
+   * write racing its loop's teardown still lands; interruption between
+   * writes ends the drain at once. The boundary launching a loop forks this
+   * and races it against that loop's settlement; concurrent drains are safe
+   * because each queued write is taken exactly once. The first drain creates
+   * the queue and flushes anything buffered before it started.
+   */
+  persistenceDrain(): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (this.writes) return this.drainWrites(this.writes);
+      return Effect.flatMap(Queue.unbounded<SessionMappingWrite>(), (queue) => {
+        this.writes = queue;
+        for (const write of this.bufferedWrites.splice(0)) {
+          Queue.offerUnsafe(queue, write);
+        }
+        return this.drainWrites(queue);
+      });
+    });
+  }
+
+  private drainWrites(
+    queue: Queue.Queue<SessionMappingWrite>,
+  ): Effect.Effect<void> {
+    return Effect.forever(
+      Effect.flatMap(Queue.take(queue), (write) =>
+        Effect.uninterruptible(
+          persistSessionMapping(
+            this.dependencies,
+            write.executionId,
+            this.persistedSessionKey,
+            write.sessionId,
+          ),
+        ),
       ),
     );
   }
@@ -163,13 +215,15 @@ export class AgentCliSessionRegistry {
   }
 
   /** Wait for a reserved id to become active, or for its owner to release it. */
-  async waitForActive(
+  waitForActive(
     sessionId: string,
-  ): Promise<AgentCliSessionEntry | undefined> {
-    const state = this.sessions.get(sessionId);
-    if (!state) return undefined;
-    if (state.kind === 'active') return state.entry;
-    return effectRuntime().runPromise(Deferred.await(state.ready));
+  ): Effect.Effect<AgentCliSessionEntry | undefined> {
+    return Effect.suspend(() => {
+      const state = this.sessions.get(sessionId);
+      if (!state) return Effect.succeed(undefined);
+      if (state.kind === 'active') return Effect.succeed(state.entry);
+      return Deferred.await(state.ready);
+    });
   }
 
   release(sessionId: string): void {

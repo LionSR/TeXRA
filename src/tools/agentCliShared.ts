@@ -1,6 +1,8 @@
 // Shared helpers for the agent-CLI tool modules (codex.ts, claudeAgent.ts).
 // Host-agnostic, VS Code-free.
 
+import { Data, Deferred, Effect } from 'effect';
+
 import { registerExecution } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
 import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
@@ -65,6 +67,45 @@ export type AgentCliSessionStoreAccessor = (
 ) => AgentCliSessionRegistry;
 
 /**
+ * A Promise collaborator of the dispatch/launch chain (bash approval,
+ * follow-up submission, thread/session setup, the owned-lease launch guard)
+ * rejected. `cause` is what it raised. The tools' `execute()` edges re-raise
+ * the cause itself, so the tool runner surfaces the same error instance the
+ * collaborator raised, exactly as the previous `await` chain did.
+ */
+export class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
+  readonly cause: unknown;
+}> {}
+
+/**
+ * The one wrap of the agent-CLI chain's Promise collaborators — the shared
+ * dispatch/launch steps and each provider tool's own setup (SDK import,
+ * binary lookup, config/env assembly).
+ */
+export const agentCliCall = <A>(
+  call: () => Promise<A>,
+): Effect.Effect<A, AgentCliCallFailed> =>
+  Effect.tryPromise({
+    try: call,
+    catch: (cause) => new AgentCliCallFailed({ cause }),
+  });
+
+/** The failures the agent-CLI dispatch/launch chain can raise. */
+export type AgentCliToolFailure = ToolError | AgentCliCallFailed;
+
+/**
+ * Re-raise a collaborator's rejection as its own cause: pipe this at the
+ * tool's `execute()` edge so `runPromise` rejects with the instance the
+ * collaborator raised (see ExecutionsTool for the same edge shape).
+ */
+export const reraiseAgentCliCallFailure = <A, R>(
+  effect: Effect.Effect<A, AgentCliToolFailure, R>,
+): Effect.Effect<A, ToolError, R> =>
+  effect.pipe(
+    Effect.catchTag('AgentCliCallFailed', (error) => Effect.die(error.cause)),
+  );
+
+/**
  * Publish a turn's token usage to the progress UI for an agent-CLI child stream.
  * Shared by the codex and claudeAgent session strategies.
  */
@@ -96,55 +137,65 @@ function requireCallerOwnership(
   callerStreamId: StreamTabId | undefined,
   handle: AgentExecutionHandle | undefined,
   labels: AgentCliResumeLabels,
-): void {
-  if (!callerStreamId || !handle || handle.isOwnedBy(callerStreamId)) return;
-  throw new ToolError(
-    `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
-  );
-}
-
-async function queueAgentCliFollowUp(
-  registry: AgentCliSessionRegistry,
-  stored: AgentCliSessionEntry,
-  params: {
-    id: string;
-    prompt: string;
-    callerStreamId: StreamTabId | undefined;
-    labels: AgentCliResumeLabels;
-  },
-): Promise<ToolResult> {
-  const { id, prompt, callerStreamId, labels } = params;
-  // Ownership is a live-handle fact: a detached or re-parented child must not
-  // accept follow-ups from its former orchestrator. A missing handle falls
-  // through to submitFollowUp's no-session outcome below.
-  requireCallerOwnership(
-    id,
-    callerStreamId,
-    registry.getHandle(stored),
-    labels,
-  );
-
-  const result = await submitFollowUp(stored.childStreamId, prompt, {
-    session: currentSession(),
-  });
-  if (result.status === 'failed') {
-    throw new ToolError(
-      `${labels.notActiveLabel} '${id}' did not accept the follow-up (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
-    );
+): Effect.Effect<void, ToolError> {
+  if (!callerStreamId || !handle || handle.isOwnedBy(callerStreamId)) {
+    return Effect.void;
   }
-
-  const preview = truncateWithEllipsis(prompt, 60);
-  // A queued follow-up whose wake failed is still queued: it is delivered
-  // when the agent is resumed, so the caller must not offer it again.
-  const wakeFailed = result.status === 'queued' && result.wake === 'failed';
-  const followUpLine = wakeFailed
-    ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
-    : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`;
-  return executed(
-    [followUpLine, `Execution ID: ${stored.executionId}`].join('\n'),
-    `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
+  return Effect.fail(
+    new ToolError(
+      `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
+    ),
   );
 }
+
+const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
+  function* (
+    registry: AgentCliSessionRegistry,
+    stored: AgentCliSessionEntry,
+    params: {
+      id: string;
+      prompt: string;
+      callerStreamId: StreamTabId | undefined;
+      labels: AgentCliResumeLabels;
+    },
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+    const { id, prompt, callerStreamId, labels } = params;
+    // Ownership is a live-handle fact: a detached or re-parented child must not
+    // accept follow-ups from its former orchestrator. A missing handle falls
+    // through to submitFollowUp's no-session outcome below.
+    yield* requireCallerOwnership(
+      id,
+      callerStreamId,
+      registry.getHandle(stored),
+      labels,
+    );
+
+    const result = yield* agentCliCall(() =>
+      submitFollowUp(stored.childStreamId, prompt, {
+        session: currentSession(),
+      }),
+    );
+    if (result.status === 'failed') {
+      return yield* Effect.fail(
+        new ToolError(
+          `${labels.notActiveLabel} '${id}' did not accept the follow-up (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
+        ),
+      );
+    }
+
+    const preview = truncateWithEllipsis(prompt, 60);
+    // A queued follow-up whose wake failed is still queued: it is delivered
+    // when the agent is resumed, so the caller must not offer it again.
+    const wakeFailed = result.status === 'queued' && result.wake === 'failed';
+    const followUpLine = wakeFailed
+      ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
+      : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`;
+    return executed(
+      [followUpLine, `Execution ID: ${stored.executionId}`].join('\n'),
+      `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
+    );
+  },
+);
 
 /**
  * Atomically choose between queueing onto an owned session id and launching a
@@ -155,40 +206,43 @@ async function queueAgentCliFollowUp(
  * cleanup so an acknowledged follow-up can never be stranded behind a failed
  * initial turn.
  */
-async function resumeOrLaunchAgentCliSession(
+const resumeOrLaunchAgentCliSession = Effect.fn(
+  'agentCliShared.resumeOrLaunchAgentCliSession',
+)(function* (
   store: AgentCliSessionRegistry,
   params: {
     id: string | undefined;
     prompt: string;
     callerStreamId: StreamTabId | undefined;
     labels: AgentCliResumeLabels;
-    launch: (releaseClaim?: () => void) => Promise<ToolResult>;
+    launch: (
+      releaseClaim?: () => void,
+    ) => Effect.Effect<ToolResult, AgentCliToolFailure>;
   },
-): Promise<ToolResult> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
   const { id } = params;
-  if (!id) return params.launch();
+  if (!id) return yield* params.launch();
 
   while (true) {
     const releaseClaim = store.claim(id);
     if (releaseClaim) {
-      try {
-        return await params.launch(releaseClaim);
-      } catch (error) {
-        releaseClaim();
-        throw error;
-      }
+      // Any failure cause — typed or defect — releases the claim before it
+      // propagates, as the previous catch-release-rethrow did.
+      return yield* params
+        .launch(releaseClaim)
+        .pipe(Effect.onError(() => Effect.sync(() => releaseClaim())));
     }
 
-    const stored = await store.waitForActive(id);
+    const stored = yield* store.waitForActive(id);
     if (!stored) continue;
-    return queueAgentCliFollowUp(store, stored, {
+    return yield* queueAgentCliFollowUp(store, stored, {
       id,
       prompt: params.prompt,
       callerStreamId: params.callerStreamId,
       labels: params.labels,
     });
   }
-}
+});
 
 interface AgentCliLaunchParams {
   parentStreamId: StreamTabId;
@@ -198,9 +252,13 @@ interface AgentCliLaunchParams {
   description: string;
   config: AgentConfig;
   registerFailedMessage: string;
+  /** Session-keyed registry accessor; the launched loop's drain forks here. */
+  store: AgentCliSessionStoreAccessor;
   startLoop: (ctx: {
     childStream: ChildStream;
     executionId: ExecutionId;
+    /** Settled by the loop wrapper when the loop's completion settles. */
+    loopSettled: Deferred.Deferred<void>;
   }) => void | Promise<void>;
   summary: string;
   launchedLine: string;
@@ -210,10 +268,19 @@ interface AgentCliLaunchParams {
 /**
  * Register a fresh agent-CLI execution, create its child stream tab, start the
  * provider's turn loop, and return the "launched" ToolResult.
+ *
+ * The registry's persistence drain is forked here — on the tool's run edge,
+ * which is where this Effect runs — and raced against the loop's settlement,
+ * so the drain lives exactly as long as the loop it persists for. Session
+ * writes the loop registers afterwards queue into the drain without any
+ * fiber of their own, and an in-flight write still lands when the loop ends
+ * (see `AgentCliSessionRegistry.persistenceDrain`).
  */
-export async function launchAgentCliSession(
+export const launchAgentCliSession = Effect.fn(
+  'agentCliShared.launchAgentCliSession',
+)(function* (
   params: AgentCliLaunchParams,
-): Promise<ToolResult> {
+): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
   const executionId = generateExecutionId();
   const childStreamId = getStreamTabId(params.streamPrefix, { executionId });
   // An external CLI drives this agent: the CLI is both the agent name and the
@@ -225,30 +292,36 @@ export async function launchAgentCliSession(
     tool: params.agentName,
   } as const;
 
-  try {
-    await registerExecution(executionId, params.config, params.agentName, {
-      streamId: childStreamId,
-      identity,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-      parentExecutionId: params.parentExecutionId,
-      description: childStreamDescription(params.description),
-    });
-  } catch (error) {
+  yield* Effect.tryPromise({
+    try: () =>
+      registerExecution(executionId, params.config, params.agentName, {
+        streamId: childStreamId,
+        identity,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+        parentExecutionId: params.parentExecutionId,
+        description: childStreamDescription(params.description),
+      }),
     // Keep the cause: registration aggregates real store-write failures
     // (unwritable storage root, torn record) that the per-provider prefix
     // alone cannot diagnose.
-    throw new ToolError(
-      `${params.registerFailedMessage} ${toErrorMessage(error)}`,
-      { cause: error },
-    );
-  }
+    catch: (error) =>
+      new ToolError(
+        `${params.registerFailedMessage} ${toErrorMessage(error)}`,
+        { cause: error },
+      ),
+  });
   // The launch guard owns the release-on-failure policy for every launch site
   // (bash background, the two detached child paths, and this one): a failed
   // launch must not leave a record that refuses a relaunch for the rest of the
   // process's life.
-  const childStream = await runWithOwnedExecutionLeaseLaunchGuard(
-    executionId,
-    async () => {
+  const registry = params.store(currentSession());
+  const loopSettled = Deferred.makeUnsafe<void>();
+  yield* Effect.forkDetach(
+    Effect.raceFirst(registry.persistenceDrain(), Deferred.await(loopSettled)),
+    { startImmediately: true },
+  );
+  const childStream = yield* agentCliCall(() =>
+    runWithOwnedExecutionLeaseLaunchGuard(executionId, async () => {
       const stream = createChildStream(executionId, params.parentStreamId, {
         streamPrefix: params.streamPrefix,
         run: identity,
@@ -256,25 +329,47 @@ export async function launchAgentCliSession(
         description: params.description,
         config: params.config,
       });
-      try {
-        await params.startLoop({ childStream: stream, executionId });
-      } catch (error) {
-        try {
-          await stream.finalize({
+      // The guard callback is Promise-land (the lease guard is an agent-layer
+      // Promise API), so failure capture here is a then-continuation, not a
+      // catch clause: a synchronous startLoop throw and a rejection both land
+      // in `startError`, as the previous try/catch delivered them.
+      const startError = await Promise.resolve()
+        .then(() =>
+          params.startLoop({ childStream: stream, executionId, loopSettled }),
+        )
+        .then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+      if (startError !== undefined) {
+        const finalizeError = await stream
+          .finalize({
             outcome: RUN_OUTCOME.FAILED,
-            error,
+            error: startError,
             persistence: { kind: 'finalize', flowRecord: 'delete' },
-          });
-        } catch (finalizeError) {
+          })
+          .then(
+            () => undefined,
+            (error: unknown) => error,
+          );
+        if (finalizeError !== undefined) {
           throw new AggregateError(
-            [error, finalizeError],
+            [startError, finalizeError],
             `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
           );
         }
-        throw error;
+        throw startError;
       }
       return stream;
-    },
+    }),
+  ).pipe(
+    // A launch that fails before its loop starts never settles the loop, so
+    // settle it here to end the drain forked above.
+    Effect.onError(() =>
+      Effect.sync(() => {
+        Deferred.doneUnsafe(loopSettled, Effect.void);
+      }),
+    ),
   );
 
   return executed(
@@ -286,7 +381,7 @@ export async function launchAgentCliSession(
     ].join('\n'),
     params.summary,
   );
-}
+});
 
 /**
  * Run the shared agent-CLI execute() prelude: refuse a run that cannot collect
@@ -299,26 +394,34 @@ export async function launchAgentCliSession(
  * in a turn that never happens and the child's result is stranded. Fail before
  * prompting for approval rather than launching work nobody collects.
  */
-async function withAgentCliApproval(
-  toolName: string,
-  approvalLabel: string,
-  run: (runContext: RunContext | undefined) => ToolResult | Promise<ToolResult>,
-): Promise<ToolResult> {
-  const contexts = getCurrentToolContexts();
-  if (contexts?.runContext?.stopAfterCycle) {
-    throw new ToolError(
-      `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,
+const withAgentCliApproval = Effect.fn('agentCliShared.withAgentCliApproval')(
+  function* (
+    toolName: string,
+    approvalLabel: string,
+    run: (
+      runContext: RunContext | undefined,
+    ) => Effect.Effect<ToolResult, AgentCliToolFailure>,
+  ): Effect.fn.Return<ToolResult, AgentCliToolFailure> {
+    const contexts = getCurrentToolContexts();
+    if (contexts?.runContext?.stopAfterCycle) {
+      return yield* Effect.fail(
+        new ToolError(
+          `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,
+        ),
+      );
+    }
+
+    const approval = yield* agentCliCall(() =>
+      requestBashApproval({ command: approvalLabel }),
     );
-  }
+    if (approval.action !== 'approve') {
+      return buildBashApprovalRejectedResult(approvalLabel, approval);
+    }
 
-  const approval = await requestBashApproval({ command: approvalLabel });
-  if (approval.action !== 'approve') {
-    return buildBashApprovalRejectedResult(approvalLabel, approval);
-  }
-
-  contexts?.callContext?.hooks?.onExecutionReady?.();
-  return run(contexts?.runContext);
-}
+    contexts?.callContext?.hooks?.onExecutionReady?.();
+    return yield* run(contexts?.runContext);
+  },
+);
 
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */
@@ -341,6 +444,9 @@ interface AgentCliLaunchContext {
  * `releaseFallbackClaim` it must promote or release. Callers supply only their
  * approval label, session store, resume id, resume labels, and the
  * provider-specific launch.
+ *
+ * The returned Effect is the tool's whole dispatch: the tool's `execute()`
+ * runs it at its own edge with {@link reraiseAgentCliCallFailure} piped in.
  */
 export function dispatchAgentCliTool(params: {
   agentName: string;
@@ -351,8 +457,10 @@ export function dispatchAgentCliTool(params: {
   sourceId?: string;
   prompt: string;
   labels: AgentCliResumeLabels;
-  launch: (context: AgentCliLaunchContext) => Promise<ToolResult>;
-}): Promise<ToolResult> {
+  launch: (
+    context: AgentCliLaunchContext,
+  ) => Effect.Effect<ToolResult, AgentCliToolFailure>;
+}): Effect.Effect<ToolResult, AgentCliToolFailure> {
   const {
     agentName,
     approvalLabel,
@@ -363,34 +471,40 @@ export function dispatchAgentCliTool(params: {
     labels,
     launch,
   } = params;
-  return withAgentCliApproval(agentName, approvalLabel, (runContext) => {
-    const registry = store(currentSession());
-    const callerStreamId = getRunContextStreamId(runContext);
-    if (sourceId) {
-      requireCallerOwnership(
-        sourceId,
+  return withAgentCliApproval(agentName, approvalLabel, (runContext) =>
+    Effect.gen(function* () {
+      const registry = store(currentSession());
+      const callerStreamId = getRunContextStreamId(runContext);
+      if (sourceId) {
+        yield* requireCallerOwnership(
+          sourceId,
+          callerStreamId,
+          registry.getHandle(registry.lookup(sourceId)),
+          labels,
+        );
+      }
+      return yield* resumeOrLaunchAgentCliSession(registry, {
+        id: resumeId,
+        prompt,
         callerStreamId,
-        registry.getHandle(registry.lookup(sourceId)),
         labels,
-      );
-    }
-    return resumeOrLaunchAgentCliSession(registry, {
-      id: resumeId,
-      prompt,
-      callerStreamId,
-      labels,
-      launch: (releaseFallbackClaim) => {
-        // A missing in-memory entry denotes a disk-based SDK fallback.
-        const { streamId } = requireRunStream(agentName, runContext);
-        return launch({
-          parentStreamId: streamId,
-          parentExecutionId: getRunContextExecutionId(runContext),
-          parentWorkingDirectory: getRunContextWorkingDirectory(runContext),
-          releaseFallbackClaim,
-        });
-      },
-    });
-  });
+        launch: (releaseFallbackClaim) => {
+          // A missing in-memory entry denotes a disk-based SDK fallback.
+          // requireRunStream throws its ToolError synchronously; as a defect
+          // it still reaches the tool runner as the same instance and the
+          // claim-release in resumeOrLaunchAgentCliSession still fires
+          // (onError observes every cause).
+          const { streamId } = requireRunStream(agentName, runContext);
+          return launch({
+            parentStreamId: streamId,
+            parentExecutionId: getRunContextExecutionId(runContext),
+            parentWorkingDirectory: getRunContextWorkingDirectory(runContext),
+            releaseFallbackClaim,
+          });
+        },
+      });
+    }),
+  );
 }
 
 // ============================================================================
@@ -415,6 +529,11 @@ interface AgentCliLoopParams<TTurn> {
   initialPrompt: string;
   /** Session/thread registry the loop tracks in-flight and successful turns in. */
   store: AgentCliSessionStoreAccessor;
+  /**
+   * Settled when the loop's completion promise settles, ending the
+   * persistence drain the launch forked for this loop.
+   */
+  loopSettled: Deferred.Deferred<void>;
   /**
    * The disk-based fallback session/thread id claimed synchronously before the
    * loop starts, if any. Release it if the loop exits before promoting it.
@@ -471,6 +590,7 @@ export function startAgentCliLoop<TTurn>(
     stageLabel,
     initialPrompt,
     store,
+    loopSettled,
     releaseFallbackClaim,
     runProviderTurn,
     resolveSessionIds,
@@ -552,7 +672,14 @@ export function startAgentCliLoop<TTurn>(
     agentName,
     strategy,
   });
-  void completion.catch((error: unknown) => {
-    logger.error(loopFailedMessage, { data: error });
-  });
+  // The loop's completion is the agent layer's Promise, so settling
+  // `loopSettled` is a then-continuation on it; either way it settles, the
+  // launch's drain race ends. A rejection is still logged here, as before.
+  void completion.then(
+    () => Deferred.doneUnsafe(loopSettled, Effect.void),
+    (error: unknown) => {
+      logger.error(loopFailedMessage, { data: error });
+      Deferred.doneUnsafe(loopSettled, Effect.void);
+    },
+  );
 }

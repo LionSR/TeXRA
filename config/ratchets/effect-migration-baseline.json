@@ -172,7 +172,6 @@
       "src/platform/defaults/jsonStore.ts": 1,
       "src/shared/signals.ts": 2,
       "src/telemetry/UsageLogService.ts": 4,
-      "src/tools/agentCliSessionRegistry.ts": 2,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/tools/lean/direct/directLspAdapter.ts": 3
     },
@@ -219,7 +218,6 @@
     "src/platform/defaults/jsonStore.ts": "lane D — Platform ports become Effect-typed",
     "src/shared/signals.ts": "lane D — host composition root and session graph",
     "src/telemetry/UsageLogService.ts": "wave-1 rebuild — controllers, telemetry and session drafts",
-    "src/tools/agentCliSessionRegistry.ts": "wave-1 rebuild — tools: memory, executions, polling sources",
     "src/tools/github/PollingSourceBase.ts": "wave-1 rebuild — tools: memory, executions, polling sources",
     "src/tools/lean/direct/directLspAdapter.ts": "Lean LSP follow-up — the port is Effect-typed and the tool-facing runs moved to the tools' execute(); what remains is pool construction/disposal (the platform-lifetime seam) and the run-end hook's Promise seam, both owned by lane D"
   }
