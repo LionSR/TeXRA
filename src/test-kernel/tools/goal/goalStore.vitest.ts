@@ -13,7 +13,6 @@ import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId as qualifyAggregateId,
-  type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -255,28 +254,6 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     expect(state.get(`goals:byStream:${STREAM_B}`)).toBeUndefined();
     expect(GoalStore.getForStream(STREAM_A)).toBeNull();
   });
-
-  it('forgets indexed streams owned by deleted execution ids, including unparseable blobs', async () => {
-    const state = workspaceRoots().workspaceState;
-    const deleted = 'abc123' as ExecutionId;
-    const kept = 'def456' as ExecutionId;
-    const deletedStream = `chat@deepseek#${deleted}` as StreamTabId;
-    const keptStream = `chat@deepseek#${kept}` as StreamTabId;
-
-    await state.update('goals:index', [deletedStream, keptStream]);
-    await state.update(`goals:byStream:${deletedStream}`, {
-      goalId: 'not-a-valid-goal',
-    });
-    await GoalStore.start(keptStream, 'keep this goal');
-
-    await GoalStore.forgetByExecutionIds([deleted]);
-
-    expect(state.get(`goals:byStream:${deletedStream}`)).toBeUndefined();
-    expect(GoalStore.getForStream(keptStream)?.objective).toBe(
-      'keep this goal',
-    );
-    expect(GoalStore.list().map((g) => g.streamId)).toEqual([keptStream]);
-  });
 });
 
 describe('goalStateChanges', () => {
@@ -315,6 +292,28 @@ describe('goalStateChanges', () => {
       await settleSessionEvents();
 
       expect(seen).toEqual([{ streamId: 'same-session' }]);
+      await withRunContext(createRunContext({ session: sessionA }), () =>
+        GoalStore.start('same-session', 'Determine the boundary conditions.'),
+      );
+      await sessionA.settlePublications();
+      const removed = effectRuntime().runPromise(
+        Stream.runHead(
+          goalStateChanges(sessionA).pipe(
+            Stream.map((change) =>
+              withRunContext(createRunContext({ session: sessionA }), () =>
+                GoalStore.getForStream(change.streamId),
+              ),
+            ),
+          ),
+        ),
+      );
+      sessionA.publish([
+        {
+          type: 'stream.removed',
+          aggregateId: qualifyAggregateId('stream', 'same-session'),
+        },
+      ]);
+      expect(await removed).toMatchObject({ _tag: 'Some', value: null });
     } finally {
       detach();
       sessionA.dispose();

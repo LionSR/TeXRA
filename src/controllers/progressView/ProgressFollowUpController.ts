@@ -71,7 +71,6 @@ export class ProgressFollowUpController {
   async planCompileFixerForStream(
     streamId: StreamTabId,
   ): Promise<ProgressFollowUpPlan> {
-    await this.deps.state.preload?.(streamId);
     const modelOptions = await this.deps.loadModelOptions();
     const compileFailures = Object.values(
       this.deps.state.getCompileFailures(streamId),

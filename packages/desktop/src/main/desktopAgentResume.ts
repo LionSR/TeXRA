@@ -7,6 +7,7 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
+import { effectRuntime } from '@platform/processRuntime';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -80,20 +81,22 @@ export class DesktopProcessResumeOwner {
     }
     if (isCancellationRequested()) return false;
     try {
-      return await resumeStreamWithRefusalNotice(streamId, {
-        session,
-        recovery,
-        runtimeUnavailableTools: (
-          await import('@tools/registry')
-        ).getDefaultUnavailableToolNames('desktop'),
-        isCancellationRequested,
-        executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
-          launchDesktopAgent(
-            { kind: 'resume', config, executionId: id },
-            { session },
-            { modelHandlerCompatibilityKey },
-          ),
-      });
+      return await effectRuntime().runPromise(
+        resumeStreamWithRefusalNotice(streamId, {
+          session,
+          recovery,
+          runtimeUnavailableTools: (
+            await import('@tools/registry')
+          ).getDefaultUnavailableToolNames('desktop'),
+          isCancellationRequested,
+          executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
+            launchDesktopAgent(
+              { kind: 'resume', config, executionId: id },
+              { session },
+              { modelHandlerCompatibilityKey },
+            ),
+        }),
+      );
     } catch (error) {
       if (isCancellationRequested()) return false;
       this.logger.error(`Failed to resume desktop stream ${streamId}`, {

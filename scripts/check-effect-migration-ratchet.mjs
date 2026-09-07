@@ -56,6 +56,8 @@ const baselinePath = join(
 );
 const PRD =
   '.agents/docs/proposed/architecture/2026-08-26-effect-4-runtime-migration.md';
+/** This script, for the message that tells a reader where to retire a row. */
+const SCRIPT_REL = 'scripts/check-effect-migration-ratchet.mjs';
 
 const SUPERSEDED_PACKAGES = [
   'p-queue',
@@ -65,7 +67,6 @@ const SUPERSEDED_PACKAGES = [
   'p-defer',
   'async-mutex',
   'delay',
-  'neverthrow',
 ];
 const PLATFORM_MODULE = '@platform/platform';
 const PLATFORM_MODULE_PATH = 'src/platform/platform';
@@ -671,13 +672,17 @@ function selfTestSurvey() {
       expected: { [ROW_PLATFORM]: 1 },
     },
     {
-      text: "import PQueue from 'p-queue';\nimport type { Options } from 'delay';\nimport pd from 'p-delay';\nimport local from './delay';\nconst map = require('p-map');\nexport { retry } from 'p-retry';\nawait import('neverthrow');\n",
+      // The `await import(...)` is the only case exercising the
+      // ImportKeyword branch of moduleSpecifier, so it must always name a
+      // live row: without it, a dynamic `import('p-queue')` would dodge its
+      // row undetected, in a ratchet whose whole subject is import rows.
+      text: "import PQueue from 'p-queue';\nimport type { Options } from 'delay';\nimport pd from 'p-delay';\nimport local from './delay';\nconst map = require('p-map');\nexport { retry } from 'p-retry';\nawait import('async-mutex');\n",
       expected: {
         [importRow('p-queue')]: 1,
         [importRow('delay')]: 1,
         [importRow('p-map')]: 1,
         [importRow('p-retry')]: 1,
-        [importRow('neverthrow')]: 1,
+        [importRow('async-mutex')]: 1,
       },
     },
     {
@@ -744,7 +749,18 @@ function surveyTree(files) {
     texts.set(file, text);
     const { counts, runsOnlyInExecute } = surveySource(text, file);
     for (const [row, count] of counts) {
-      rows[row][file] = count;
+      const entries = rows[row];
+      // A row retired from ROWS whose counting site survives in surveySource
+      // would otherwise crash here on an undefined index, from a stack trace
+      // that names neither the row nor the leftover bump(). Skipping the
+      // count instead would be worse: the mechanism would go untracked in
+      // silence, which is the failure this whole script exists to prevent.
+      if (entries == null) {
+        throw new Error(
+          `Row '${row}' is counted by surveySource but absent from ROWS (first seen in ${file}). Retiring a row means deleting its counting site too: remove the bump('${row}') call in surveySource and its self-test case, or restore the row to ROWS.`,
+        );
+      }
+      entries[file] = count;
     }
     if (runsOnlyInExecute && file.startsWith(BOUNDARY_TOOL_ROOT)) {
       toolExecuteFiles.add(file);
@@ -1230,6 +1246,38 @@ function main() {
       `  ${row.id.padEnd(24)} ${Object.keys(now).length} files / ${sites(now)} sites` +
         ` (baseline ${Object.keys(was).length} files / ${sites(was)} sites)`,
     );
+  }
+
+  // "The PR that zeroes a row deletes the row" is the baseline's own stated
+  // semantics, and nothing enforced it: once a row's last file is gone,
+  // `--update` writes the row empty and every later run is green, so the row,
+  // its rule text and its counting site sit in the script forever describing
+  // a mechanism the tree no longer has. `import:neverthrow` sat that way.
+  // The gate keys on the BASELINE row being empty, not on the tree count: a
+  // tree that has fallen below a non-empty baseline is stale headroom, which
+  // the stale report below already names loudly and correctly.
+  const emptyRows = ROWS.filter(
+    (row) => Object.keys(baseline.rows[row.id]).length === 0,
+  );
+  if (emptyRows.length > 0) {
+    failed = true;
+    console.error(
+      `\nEffect migration ratchet failed: ${emptyRows.length} baseline row(s) are empty. The PR that zeroes a row deletes the row: an empty row is not a finished ratchet, it is a row nobody removed.`,
+    );
+    for (const row of emptyRows) {
+      // Import rows are generated from SUPERSEDED_PACKAGES; the other three
+      // are hand-written, with their own row-id constant, counting site and
+      // self-test case. Retiring them is not the same edit, so do not print
+      // the same instructions for both.
+      const pkg = SUPERSEDED_PACKAGES.find(
+        (name) => importRow(name) === row.id,
+      );
+      console.error(
+        pkg == null
+          ? `  - [${row.id}] Delete its row-id constant, its ROWS entry, the bump('${row.id}') site in surveySource and its case in selfTestSurvey, all in ${SCRIPT_REL}; then run --update so the row leaves the baseline.`
+          : `  - [${row.id}] Delete '${pkg}' from SUPERSEDED_PACKAGES in ${SCRIPT_REL} (the row and its rule text are generated from that list); if the dynamic-import self-test fixture in selfTestSurvey still names '${pkg}', re-point it at another superseded package rather than deleting it, since it is the only case exercising the import() branch; drop the dependency from package.json once nothing outside the scanned roots needs it; then run --update so the row leaves the baseline.`,
+      );
+    }
   }
 
   const { failures, stale } = diffRows(rows, baseline.rows);

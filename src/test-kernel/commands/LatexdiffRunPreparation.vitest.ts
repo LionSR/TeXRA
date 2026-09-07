@@ -1,5 +1,6 @@
-// Node imports
 import * as path from 'node:path';
+import { Effect } from 'effect';
+// Node imports
 
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,6 +30,16 @@ const mocks = vi.hoisted(() => ({
   runLatexdiffForExecution: vi.fn(),
   runLatexdiffHandler: undefined as
     ((config: unknown) => Promise<void>) | undefined,
+}));
+
+vi.mock('@platform/platform', () => ({
+  platform: () => ({ fs: { readDirectory: vi.fn(), isSymlink: vi.fn() } }),
+}));
+vi.mock('@platform/processRuntime', () => ({
+  effectRuntime: () => ({ runPromise: Effect.runPromise }),
+}));
+vi.mock('@agent/runtime', () => ({
+  defaultSession: () => ({ snapshots: { read: vi.fn() } }),
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -178,9 +189,11 @@ describe('texra.runLatexdiff result preparation and final viewer delivery', () =
     mocks.showLoggedMessageWithDocs.mockResolvedValue(undefined);
     mocks.checkToolInstalled.mockResolvedValue(true);
     mocks.normalizeRunLatexdiffOutputsByRound.mockReturnValue(null);
-    mocks.runLatexdiffForExecution.mockResolvedValue({
-      outcome: { results: mixedResults },
-    });
+    mocks.runLatexdiffForExecution.mockReturnValue(
+      Effect.succeed({
+        outcome: { results: mixedResults },
+      }),
+    );
     mocks.showQuickPick.mockResolvedValue({ value: 'full' });
     mocks.showInformationMessage.mockResolvedValue(undefined);
     mocks.showWarningMessage.mockResolvedValue(undefined);

@@ -49,7 +49,7 @@ describe('WorkPlanReader display model', () => {
     );
   });
 
-  it('distinguishes absent work-plan fields from fields that were not loaded', () => {
+  it('shows absent objective and todos explicitly', () => {
     expect(formatWorkPlanReaderText({ objective: 'Plan only.' }, [])).toContain(
       '(no todos)',
     );
@@ -62,15 +62,6 @@ describe('WorkPlanReader display model', () => {
         },
       ]),
     ).toContain('(no objective)');
-    expect(
-      formatWorkPlanReaderText({ objective: 'Plan only.' }, [], {
-        plan: true,
-        todos: false,
-      }),
-    ).toContain('(todos unavailable)');
-    expect(
-      formatWorkPlanReaderText(null, [], { plan: false, todos: true }),
-    ).toContain('(objective unavailable)');
   });
 
   it('counts a wrapped narrow footer in the available row budget', () => {

@@ -157,6 +157,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
+import { DatabaseReadFailed } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
@@ -164,6 +165,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { StreamSnapshotStore } from '@transcript';
+import { ensureError } from '@utils/errors/errorMessage';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 
@@ -237,7 +239,7 @@ function makeInit(
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
     followUpQueue: new PQueue({ concurrency: 1 }),
-    snapshotStore: new StreamSnapshotStore(),
+    snapshotStore: makeResumeSnapshotStore({}),
     initialAgent: 'demo-agent',
     initialModel: 'demo-model',
     initialModelSource: 'builtin-default',
@@ -266,13 +268,31 @@ function makeResumeSnapshotStore(options: {
   readonly parentStreamId?: StreamTabId | undefined;
 }): StreamSnapshotStore {
   return {
-    preload: vi.fn(options.preload ?? (async () => undefined)),
-    load: vi.fn(options.load ?? (async () => undefined)),
-    read: vi.fn(async () => ({
-      runUsage: {},
-      todos: [],
-      plan: undefined,
-    })),
+    preload: vi.fn(() =>
+      options.preload
+        ? Effect.tryPromise({
+            try: options.preload,
+            catch: (cause) =>
+              new DatabaseReadFailed({ path: ':memory:', cause }),
+          })
+        : Effect.void,
+    ),
+    load: vi.fn(() =>
+      options.load
+        ? Effect.tryPromise({
+            try: options.load,
+            catch: (cause) =>
+              new DatabaseReadFailed({ path: ':memory:', cause }),
+          })
+        : Effect.void,
+    ),
+    read: vi.fn(() =>
+      Effect.succeed({
+        runUsage: {},
+        todos: [],
+        plan: undefined,
+      }),
+    ),
     getRunMetadata: vi.fn(() => ({
       executionId: options.executionId,
       config: options.config,
@@ -395,20 +415,24 @@ function trackRunningExecution(
 /** `resumeRun`'s started result: the run ran and the batch reached it. */
 const STARTED = { started: true, delivered: true } as const;
 
-const defaultResumeRun = async (
+const defaultResumeRun = (
   _executionId: ExecutionId,
   options: ResumeRunOptions,
-): Promise<typeof STARTED> => {
-  // The real `resumeRun` rearranges the host onto the resumed stream only
-  // after its own retrieval succeeded, so every stand-in that reaches a launch
-  // must run the hook or the caller never adopts the stream.
-  if (options.onResumeResolved) await options.onResumeResolved();
-  options.onFollowUpQueueReady?.({
-    streamId: 'stream:test' as StreamTabId,
-    kind: 'recovery',
+) =>
+  Effect.tryPromise({
+    try: async () => {
+      // The real `resumeRun` rearranges the host onto the resumed stream only
+      // after its own retrieval succeeded, so every stand-in that reaches a launch
+      // must run the hook or the caller never adopts the stream.
+      if (options.onResumeResolved) await options.onResumeResolved();
+      options.onFollowUpQueueReady?.({
+        streamId: 'stream:test' as StreamTabId,
+        kind: 'recovery',
+      });
+      return STARTED;
+    },
+    catch: ensureError,
   });
-  return STARTED;
-};
 
 function resumeWithAutoResumeData(): void {
   mocks.resumeRun.mockImplementation(defaultResumeRun);
@@ -1213,7 +1237,7 @@ describe('createChatSessionController', () => {
         makeResumeConfig({ cli: { multiAgentPresetId: 'physicist' } }),
       );
       // Both runtime refusals precede the hook that adopts the target run.
-      mocks.resumeRun.mockResolvedValueOnce({ failed: failure });
+      mocks.resumeRun.mockReturnValueOnce(Effect.succeed({ failed: failure }));
       const ctrl = createChatSessionController(makeInit({ session }));
 
       await ctrl.resume('exec-resume' as ExecutionId);
@@ -1235,10 +1259,14 @@ describe('createChatSessionController', () => {
   it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
     const session = makeSession({ runCompleted: true });
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => {
-        await options.onResumeResolved?.();
-        return { ...STARTED, outcome: STREAM_PHASE.WAITING };
-      },
+      (_id: ExecutionId, options: ResumeRunOptions) =>
+        Effect.tryPromise({
+          try: async () => {
+            await options.onResumeResolved?.();
+            return { ...STARTED, outcome: STREAM_PHASE.WAITING };
+          },
+          catch: ensureError,
+        }),
     );
     // A fake store, like every other resume test: the real store against
     // this harness's storage-less platform now fails loudly (KVStore no
@@ -1356,12 +1384,16 @@ describe('createChatSessionController', () => {
     });
     const snapshotStore = makeResumeSnapshotStore({});
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => {
-        await options.onResumeResolved?.();
-        return options.isCancellationRequested?.()
-          ? { failed: 'not_resumable' as const }
-          : STARTED;
-      },
+      (_id: ExecutionId, options: ResumeRunOptions) =>
+        Effect.tryPromise({
+          try: async () => {
+            await options.onResumeResolved?.();
+            return options.isCancellationRequested?.()
+              ? { failed: 'not_resumable' as const }
+              : STARTED;
+          },
+          catch: ensureError,
+        }),
     );
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
@@ -1422,13 +1454,17 @@ describe('createChatSessionController', () => {
       runCompleted: true,
     });
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => {
-        await resumeReached.promise;
-        await options.onResumeResolved?.();
-        return options.isCancellationRequested?.()
-          ? { failed: 'not_resumable' as const }
-          : STARTED;
-      },
+      (_id: ExecutionId, options: ResumeRunOptions) =>
+        Effect.tryPromise({
+          try: async () => {
+            await resumeReached.promise;
+            await options.onResumeResolved?.();
+            return options.isCancellationRequested?.()
+              ? { failed: 'not_resumable' as const }
+              : STARTED;
+          },
+          catch: ensureError,
+        }),
     );
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
@@ -1485,27 +1521,33 @@ describe('createChatSessionController', () => {
 
     const session = makeSession({ runCompleted: true });
     const snapshotStore = {
-      load: vi.fn(async () => undefined),
-      read: vi.fn(async () => ({
-        runUsage: {},
-        todos: [],
-        plan: undefined,
-      })),
+      load: vi.fn(() => Effect.void),
+      read: vi.fn(() =>
+        Effect.succeed({
+          runUsage: {},
+          todos: [],
+          plan: undefined,
+        }),
+      ),
       getRunMetadata: vi.fn(() => ({})),
     } as unknown as StreamSnapshotStore;
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => {
-        await options.onResumeResolved?.();
-        return {
-          ...STARTED,
-          outcome: options.isCancellationRequested?.()
-            ? RUN_OUTCOME.CANCELLED
-            : RUN_OUTCOME.COMPLETED,
-        };
-      },
+      (_id: ExecutionId, options: ResumeRunOptions) =>
+        Effect.tryPromise({
+          try: async () => {
+            await options.onResumeResolved?.();
+            return {
+              ...STARTED,
+              outcome: options.isCancellationRequested?.()
+                ? RUN_OUTCOME.CANCELLED
+                : RUN_OUTCOME.COMPLETED,
+            };
+          },
+          catch: ensureError,
+        }),
     );
 
     const resumeStarted = ctrl.resume('aaaaaa' as ExecutionId);
@@ -1561,10 +1603,15 @@ describe('createChatSessionController', () => {
       executionId: 'exec-1',
       config,
     });
-    mocks.resumeRun.mockImplementationOnce(async () => ({
-      ...STARTED,
-      outcome: STREAM_PHASE.WAITING,
-    }));
+    mocks.resumeRun.mockImplementationOnce(() =>
+      Effect.tryPromise({
+        try: async () => ({
+          ...STARTED,
+          outcome: STREAM_PHASE.WAITING,
+        }),
+        catch: ensureError,
+      }),
+    );
     const init = makeInit({ session, snapshotStore });
     const ctrl = createChatSessionController(init);
 
@@ -1597,14 +1644,18 @@ describe('createChatSessionController', () => {
     const session = makeSession({ runCompleted: true });
     let resumeOptions: ResumeRunOptions | undefined;
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => {
-        resumeOptions = options;
-        leaseCheckStarted.resolve();
-        await releaseLeaseCheck.promise;
-        return options.isCancellationRequested?.()
-          ? { failed: 'not_resumable' as const }
-          : STARTED;
-      },
+      (_id: ExecutionId, options: ResumeRunOptions) =>
+        Effect.tryPromise({
+          try: async () => {
+            resumeOptions = options;
+            leaseCheckStarted.resolve();
+            await releaseLeaseCheck.promise;
+            return options.isCancellationRequested?.()
+              ? { failed: 'not_resumable' as const }
+              : STARTED;
+          },
+          catch: ensureError,
+        }),
     );
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
@@ -1817,13 +1868,17 @@ describe('createChatSessionController', () => {
     const resume = pDefer<typeof STARTED>();
     const { ctrl } = makeInterruptedController(Promise.resolve(), true);
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => {
-        options.onFollowUpQueueReady?.({
-          streamId: 'stream:test' as StreamTabId,
-          kind: 'recovery',
-        });
-        return resume.promise;
-      },
+      (_id: ExecutionId, options: ResumeRunOptions) =>
+        Effect.tryPromise({
+          try: async () => {
+            options.onFollowUpQueueReady?.({
+              streamId: 'stream:test' as StreamTabId,
+              kind: 'recovery',
+            });
+            return resume.promise;
+          },
+          catch: ensureError,
+        }),
     );
 
     const first = ctrl.admitInterruptedFollowUp({ text: 'Resume now.' });
@@ -1935,10 +1990,14 @@ describe('createChatSessionController', () => {
     });
     mocks.setCliHelperModel.mockReturnValueOnce(helperModel.promise);
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) =>
-        options.isCancellationRequested?.() === true
-          ? { failed: 'not_resumable' as const }
-          : STARTED,
+      (_id: ExecutionId, options: ResumeRunOptions) =>
+        Effect.tryPromise({
+          try: async () =>
+            options.isCancellationRequested?.() === true
+              ? { failed: 'not_resumable' as const }
+              : STARTED,
+          catch: ensureError,
+        }),
     );
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),

@@ -7,7 +7,6 @@ import { statSync } from 'node:fs';
 
 import { Effect } from 'effect';
 
-import type { SessionStores } from '@agent/storage';
 import {
   agentResponseTextConnector,
   openSession,
@@ -15,7 +14,6 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import { hostPort } from '@common/hostPort';
-import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
@@ -40,7 +38,6 @@ import { StreamLogStore } from '@transcript';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { initializeDesktopProcessStores } from './desktopProcessStores.js';
 import type { DesktopPapersMessage } from '../shared/desktopPaperMessages.js';
 
 export interface DesktopPaper {
@@ -51,7 +48,6 @@ export interface DesktopPaper {
   readonly root: string | undefined;
   readonly roots: WorkspaceRoots;
   readonly session: SessionHandle;
-  readonly stores: SessionStores;
   dispose(): void;
 }
 
@@ -234,25 +230,16 @@ async function openPaperSession(
         });
         resources.add(() => session.dispose());
         return await runInSession(session, async () => {
-          const processStores = await initializeDesktopProcessStores(session);
-          resources.add(() => processStores.dispose());
           session.setApprovalPolicy(
             readPlatformSetting<TexraApprovalPolicy>(
               TEXRA_APPROVAL_POLICY_CONFIG_KEY,
             ),
           );
-          // Off the open path: the leftover-stream sweep reads this paper's
-          // whole storage root, so it starts on a timer nothing awaits. It is
-          // scheduled inside the session scope, which the timer inherits, so the
-          // sweep reads this paper's storage and not another's; closing the paper
-          // or shutting the process down cancels it if it has not started.
-          resources.add(scheduleLeftoverStreamSweep(session));
           return {
             key: roots.storage,
             root,
             roots,
             session,
-            stores: processStores.stores,
             dispose: () => runInSession(session, () => resources.dispose()),
           };
         });

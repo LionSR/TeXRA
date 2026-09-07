@@ -255,34 +255,40 @@ export function createExtensionHostRequests(
         reason: 'This run has no transcript to export.',
       });
     }
-    await exportStreamTranscript(executionId, {
-      pickFormat: async () =>
-        (
-          await vscode.window.showQuickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
-            title: 'Export transcript',
-            placeHolder: 'Choose a format',
-            ignoreFocusOut: true,
-          })
-        )?.format,
-      openPath: openExportPath,
-      showInfo,
-      showWarning,
-      showError,
-      reportDetail: (message, data) => log.error(message, { data }),
-      getController: () =>
-        Promise.resolve(
-          (chatExportController ??= new ChatExportController({
-            latexPreamble,
-          })),
-        ),
-      getTraceViewerTemplate: () =>
-        path.join(
-          options.extensionPath,
-          'resources',
-          'traceViewer',
-          'index.html',
-        ),
-    });
+    await effectRuntime().runPromise(
+      exportStreamTranscript(executionId, {
+        pickFormat: async () =>
+          (
+            await vscode.window.showQuickPick(
+              TRANSCRIPT_EXPORT_FORMAT_CHOICES,
+              {
+                title: 'Export transcript',
+                placeHolder: 'Choose a format',
+                ignoreFocusOut: true,
+              },
+            )
+          )?.format,
+        openPath: openExportPath,
+        showInfo,
+        showWarning,
+        showError,
+        reportDetail: (message, data) => log.error(message, { data }),
+        getController: () =>
+          Promise.resolve(
+            (chatExportController ??= new ChatExportController({
+              snapshots: session.snapshots,
+              latexPreamble,
+            })),
+          ),
+        getTraceViewerTemplate: () =>
+          path.join(
+            options.extensionPath,
+            'resources',
+            'traceViewer',
+            'index.html',
+          ),
+      }),
+    );
   }
 
   /** A run's saved setup into the launcher, and the launcher into view. */
@@ -631,6 +637,9 @@ export function createExtensionHostRequests(
         return done;
       }
       case 'openTaskStorage':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await workflowFileActions.openTaskStorage(request.streamId);
         return done;
       case 'exportTranscript':
@@ -638,26 +647,37 @@ export function createExtensionHostRequests(
         return done;
       case 'restoreIntoLauncher':
         await restoreIntoLauncher(
-          await runActions.restoreState(request.streamId),
+          await effectRuntime().runPromise(
+            runActions.restoreState(request.streamId),
+          ),
         );
         return done;
       case 'resume':
-        await runActions.resume(request.streamId);
+        await effectRuntime().runPromise(runActions.resume(request.streamId));
         return done;
       case 'runNew':
-        await runActions.runNew(request.streamId);
+        await effectRuntime().runPromise(runActions.runNew(request.streamId));
         return done;
       case 'runCompileFixer':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await runActions.runCompileFixer(request.streamId);
         return done;
       case 'useOwnApiKey':
         await effectRuntime().runPromise(runActions.useOwnApiKey(request));
         return done;
       case 'latexdiff':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await workflowRunActions.diffStream(request.streamId);
         return done;
       case 'pack':
       case 'clean':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await workflowRunActions.runFileOperation(
           request.streamId,
           request.kind,
@@ -742,6 +762,9 @@ export function createExtensionHostRequests(
         });
         return done;
       case 'fileAction':
+        await effectRuntime().runPromise(
+          session.snapshots.preload([request.streamId]),
+        );
         await workflowFileActions.handle(request);
         return done;
       case 'restoreProposalConfig':

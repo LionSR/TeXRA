@@ -1,6 +1,3 @@
-// Node imports
-import { randomUUID } from 'node:crypto';
-
 // Local imports
 import { logSdkError } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
@@ -430,8 +427,6 @@ export async function runToolUseFlow(
 
   let shared: ToolUseRunShared = {
     messages: [],
-    // Persisted-shape compatibility only: nothing reads this field any more.
-    continuationGenerationId: randomUUID(),
     modelId: services.modelCell.modelId,
     modelHandlerCompatibilityKey: compatibilityKey,
     shouldSkipCycle: false,

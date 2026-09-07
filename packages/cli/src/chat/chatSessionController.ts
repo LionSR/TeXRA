@@ -734,7 +734,7 @@ export function createChatSessionController(
         // during reseeding: this keeps its canonical pre-resume projection
         // visible at the cost of bounded warnIfUnseeded notices until the seed
         // completes.
-        await snapshotStore.load([streamId]);
+        await effectRuntime().runPromise(snapshotStore.load([streamId]));
         // The load re-establishes this stream's work-plan provenance in the
         // store, which is what an open `/plan` reader re-reads to clear its
         // failure-time mask. The transcript itself is the fold's: the TUI
@@ -751,34 +751,29 @@ export function createChatSessionController(
       let followUpQueueReady = false;
       const runChain = effectRuntime()
         .runPromise(
-          tryPromise(() =>
-            Promise.resolve()
-              .then(() => {
-                recoveryHandedOff = true;
-                return resumeRun(id, {
-                  ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
-                  recovery,
-                  extraFollowUps: supersededRecovery?.followUps,
-                  onResumeResolved: adoptResumedStream,
-                  onFollowUpQueueReady: () => {
-                    followUpQueueReady = true;
-                  },
-                  isCancellationRequested: () => session.stopRequested,
-                });
-              })
-              .then((result) => {
-                if ('started' in result) {
-                  settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
-                } else if (session.stopRequested) {
-                  session.runExitCode = CliExitCode.Interrupted;
-                } else {
-                  appendLocalErrorTranscript(
-                    describeFollowUpFailure(result.failed),
-                  );
-                  session.runExitCode = CliExitCode.Usage;
-                }
-              }),
-          ).pipe(
+          Effect.gen(function* () {
+            recoveryHandedOff = true;
+            const result = yield* resumeRun(id, {
+              ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+              recovery,
+              extraFollowUps: supersededRecovery?.followUps,
+              onResumeResolved: adoptResumedStream,
+              onFollowUpQueueReady: () => {
+                followUpQueueReady = true;
+              },
+              isCancellationRequested: () => session.stopRequested,
+            });
+            if ('started' in result) {
+              settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
+            } else if (session.stopRequested) {
+              session.runExitCode = CliExitCode.Interrupted;
+            } else {
+              appendLocalErrorTranscript(
+                describeFollowUpFailure(result.failed),
+              );
+              session.runExitCode = CliExitCode.Usage;
+            }
+          }).pipe(
             Effect.catch((error) => Effect.sync(() => reportRunFailure(error))),
           ),
         )
@@ -862,7 +857,18 @@ export function createChatSessionController(
           ? runtimeSession.followUps.useRecovery(options.recovery)
           : runtimeSession.followUps.claimRecovery(streamId, true);
         if (!recovery) return false;
-        await snapshotStore.preload([streamId]);
+        // Transfer accepted input before hydration yields. A waiting admission
+        // must see the new queue owner before it can attempt a second resume.
+        if (!options.onFollowUpQueueReady) {
+          const previous = supersedeInterruptedRecovery();
+          runtimeSession.followUps
+            .queue(recovery)
+            .restore(previous?.followUps ?? []);
+          if (previous?.followUps.length)
+            runtimeSession.followUps.notifySent(recovery.streamId);
+        }
+
+        await effectRuntime().runPromise(snapshotStore.preload([streamId]));
         const runMetadata = snapshotStore.getRunMetadata(streamId);
         const executionId =
           runMetadata.executionId ??
@@ -897,25 +903,15 @@ export function createChatSessionController(
 
         const result = await setCliHelperModel(config.model).then(() => {
           recoveryHandedOff = true;
-          return resumeRun(executionId, {
-            ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
-            recovery,
-            extraFollowUps: options.extraFollowUps,
-            onFollowUpQueueReady: (lease) => {
-              if (options.onFollowUpQueueReady) {
-                options.onFollowUpQueueReady(lease);
-                return;
-              }
-              const recovery = supersedeInterruptedRecovery();
-              runtimeSession.followUps
-                .queue(lease)
-                .restore(recovery?.followUps ?? []);
-              if (recovery?.followUps.length) {
-                runtimeSession.followUps.notifySent(lease.streamId);
-              }
-            },
-            isCancellationRequested,
-          });
+          return effectRuntime().runPromise(
+            resumeRun(executionId, {
+              ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
+              recovery,
+              extraFollowUps: options.extraFollowUps,
+              onFollowUpQueueReady: options.onFollowUpQueueReady,
+              isCancellationRequested,
+            }),
+          );
         });
 
         if ('started' in result && result.delivered) {

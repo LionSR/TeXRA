@@ -15,10 +15,7 @@
       "packages/cli/src/runtime/runExecution.ts": 1,
       "packages/cli/src/runtime/supabaseAuth.ts": 1,
       "packages/cli/src/runtime/workflowInputs.ts": 1,
-      "packages/desktop/src/main/desktopOnboardingIpc.ts": 1,
-      "packages/desktop/src/main/desktopSettingsIpc.ts": 3,
       "packages/desktop/src/main/desktopWorkspaceIpc.ts": 6,
-      "packages/desktop/src/main/index.ts": 16,
       "packages/extension/src/commands/git/gitCommands.ts": 1,
       "packages/extension/src/commands/setup/setupAssistantCommand.ts": 4,
       "packages/extension/src/frontend/agents/AgentDirectoryManager.ts": 1,
@@ -52,7 +49,6 @@
       "src/latex/LatexMediaManager.ts": 4,
       "src/latex/latexParsingUtils.ts": 1,
       "src/latex/latexdiff/diffOperations.ts": 1,
-      "src/latex/latexdiff/outputDiscovery.ts": 2,
       "src/model/codingPlanSubscriptions.ts": 2,
       "src/model/computeModelOptions.ts": 3,
       "src/model/copilotRouting.ts": 2,
@@ -105,13 +101,10 @@
       "src/agent/runtime/childRunLoop.ts": 1,
       "src/agent/runtime/executionLanes.ts": 1,
       "src/agent/runtime/streamApprovalQueue.ts": 1,
-      "src/agent/storage/SessionStores.ts": 1,
       "src/agent/storage/executionLease.ts": 1,
       "src/agent/workflowScript/persistence.ts": 1,
       "src/agent/workflowScript/runWorkflowScript.ts": 1,
-      "src/transcript/StagedDeletionCoordinator.ts": 1,
       "src/transcript/StreamLogStore.ts": 1,
-      "src/transcript/StreamSnapshotStore.ts": 1,
       "src/utils/core/perKeyQueue.ts": 1
     },
     "import:p-map": {
@@ -119,9 +112,7 @@
       "src/agent/storage/executionListing.ts": 1,
       "src/latex/LatexMediaManager.ts": 1,
       "src/latex/extractFileDependencies.ts": 1,
-      "src/transcript/StagedDeletionCoordinator.ts": 1,
       "src/transcript/StreamLogStore.ts": 1,
-      "src/transcript/StreamSnapshotStore.ts": 1,
       "src/transcript/StreamSummaryCacheStore.ts": 1
     },
     "import:p-retry": {
@@ -140,17 +131,14 @@
       "src/agent/runtime/ModelRetryGate.ts": 1,
       "src/agent/runtime/SessionHandle.ts": 1,
       "src/agent/runtime/executionLanes.ts": 1,
-      "src/agent/storage/executionLease.ts": 1,
-      "src/transcript/StagedDeletionCoordinator.ts": 1
+      "src/agent/storage/executionLease.ts": 1
     },
     "import:async-mutex": {
-      "src/transcript/SidecarWriteCoordinator.ts": 1,
       "src/utils/core/keyedMutex.ts": 1
     },
     "import:delay": {
       "src/utils/core/index.ts": 1
     },
-    "import:neverthrow": {},
     "Effect.run*": {
       "packages/extension/src/progressView/frontend/sessionTransport.ts": 4,
       "src/agent/runtime/SessionHandle.ts": 3,
@@ -164,7 +152,7 @@
       "packages/cli/src/chat/chatSessionController.ts": 1,
       "packages/cli/src/runtime/cliConfig.ts": 1,
       "packages/cli/src/runtime/updateChecker.ts": 1,
-      "packages/desktop/src/main/index.ts": 13,
+      "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
       "src/agent/runtime/SessionHandle.ts": 9,

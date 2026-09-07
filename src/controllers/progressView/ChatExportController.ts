@@ -8,14 +8,16 @@
  * perform only UI actions (opening a file, showing a message, opening a
  * browser).
  *
- * Not a Settings History leftover — that tab was retired. Do not delete this
+ * Not a Settings History leftover: that tab was retired. Do not delete this
  * writer as part of settings-view cleanup.
  *
- * This module is VS Code-free — all platform wiring lives in the caller. The
+ * This module is VS Code-free: all platform wiring lives in the caller. The
  * LaTeX document preamble is a host-supplied asset (the `.tex` template lives
  * under the extension's `resources/`), so the host injects it via the
  * constructor instead of the controller importing `@resources`.
  */
+
+import { Effect } from 'effect';
 
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import {
@@ -33,6 +35,8 @@ import {
   injectStandaloneTrace,
   type AssembleTraceResult,
 } from '@transcript';
+import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import { ensureError } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { StorageFS } from '@utils/files/storageFS';
@@ -72,6 +76,7 @@ interface ChatExportControllerDeps {
    * the template lives under the extension's `resources/` tree.
    */
   readonly latexPreamble: string;
+  readonly snapshots: Pick<StreamSnapshotStore, 'read'>;
 }
 
 export class ChatExportController {
@@ -83,7 +88,7 @@ export class ChatExportController {
    * Returns a discriminated status so the caller can show the right error
    * message for each missing piece without coupling to storage details.
    * Thin wrapper around the shared {@link loadChatExportInput} loader, which
-   * also backs the CLI's `readCliHistoryExportInput` — so both hosts read,
+   * also backs the CLI's `readCliHistoryExportInput`: so both hosts read,
    * validate, and assemble export input identically (including treating a
    * stored-but-empty conversation array as absent, not present).
    */
@@ -147,49 +152,68 @@ export class ChatExportController {
 
   /**
    * Assemble the execution's trace and embed it into the trace-viewer's
-   * single-file standalone bundle — the same faithful Progress View replay
+   * single-file standalone bundle: the same faithful Progress View replay
    * the CLI's `--export html` produces, not the retired hand-written
    * chat-bubble exporter. Single file, no separate `assets/` folder: it
    * opens correctly straight from disk (`file://`) with no server, which
    * matters here because `vscode.env.openExternal` hands the result to the
    * OS's default handler for the file, not a served URL.
    */
-  async exportAsHtml(
-    historyId: string,
-    standaloneTemplatePath: string,
-  ): Promise<HtmlExportOutcome> {
-    const traceResult = await assembleTrace(historyId as ExecutionId);
-    if (traceResult.status !== 'ok') {
-      return { status: traceResult.status };
-    }
-    const { trace } = traceResult;
-
-    const exportTrace = {
-      ...trace,
-      entries: projectWorkflowCallEntries(trace.entries),
-    };
-
-    if (!(await AbsoluteFS.exists(standaloneTemplatePath))) {
-      throw new Error(
-        `Trace-viewer standalone bundle missing at ${standaloneTemplatePath} — ` +
-          'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
+  readonly exportAsHtml = Effect.fn('ChatExportController.exportAsHtml')(
+    function* (
+      this: ChatExportController,
+      historyId: string,
+      standaloneTemplatePath: string,
+    ): Effect.fn.Return<HtmlExportOutcome, Error> {
+      const traceResult = yield* assembleTrace(
+        historyId as ExecutionId,
+        this.deps.snapshots,
       );
-    }
-    const template = await AbsoluteFS.read(standaloneTemplatePath);
-    const html = injectStandaloneTrace(template, exportTrace);
+      if (traceResult.status !== 'ok') {
+        return { status: traceResult.status };
+      }
+      const { trace } = traceResult;
 
-    const filename = generateExportFilename(
-      {
-        timestamp: trace.meta?.timestamp ?? new Date().toISOString(),
-        config: trace.config,
-      },
-      'html',
-    );
-    return {
-      status: 'ok',
-      result: await this.writeExport(historyId, filename, html),
-    };
-  }
+      const exportTrace = {
+        ...trace,
+        entries: projectWorkflowCallEntries(trace.entries),
+      };
+
+      if (
+        !(yield* Effect.tryPromise({
+          try: () => AbsoluteFS.exists(standaloneTemplatePath),
+          catch: ensureError,
+        }))
+      ) {
+        return yield* Effect.fail(
+          new Error(
+            `Trace-viewer standalone bundle missing at ${standaloneTemplatePath}: ` +
+              'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
+          ),
+        );
+      }
+      const template = yield* Effect.tryPromise({
+        try: () => AbsoluteFS.read(standaloneTemplatePath),
+        catch: ensureError,
+      });
+      const html = injectStandaloneTrace(template, exportTrace);
+
+      const filename = generateExportFilename(
+        {
+          timestamp: trace.meta?.timestamp ?? new Date().toISOString(),
+          config: trace.config,
+        },
+        'html',
+      );
+      return {
+        status: 'ok',
+        result: yield* Effect.tryPromise({
+          try: () => this.writeExport(historyId, filename, html),
+          catch: ensureError,
+        }),
+      };
+    },
+  );
 
   /** Write an export payload into the execution's storage directory. */
   private async writeExport(

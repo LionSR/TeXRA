@@ -237,15 +237,29 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   protected override async createResponseImpl(
     options: CreateResponseOptions<LanguageModelMessage, LanguageModelPort>,
   ): Promise<CreateResponseResult<VscodeLmResponse, LanguageModelMessage>> {
-    const tools =
-      this.capabilities.supportsFunctionCalling && options.tools?.length
-        ? toVscodeLmTools(options.tools)
-        : undefined;
+    const tools = this.capabilities.supportsFunctionCalling
+      ? options.tools
+      : undefined;
     const signal = options.signal ?? new AbortController().signal;
     const model = this.languageModelReference();
     const output = this.createOutputStream();
     const text: string[] = [];
     const toolCalls: LanguageModelToolCallPart[] = [];
+    let maxTokens = this.getEffectiveMaxOutputTokens();
+    await this.applyTokenCountLimit({
+      countTokens: () =>
+        this.estimateTokenCount(options.messages, {
+          client: options.client,
+          tools,
+          signal,
+        }),
+      currentMaxTokens: maxTokens,
+      contextWindow: this.getEffectiveContextWindow(),
+      detailLabel: 'VS Code LM: max_tokens reduced to fit context window',
+      applyReduced: (adjusted) => {
+        maxTokens = adjusted;
+      },
+    });
 
     try {
       for await (const part of options.client.sendRequest(
@@ -253,7 +267,10 @@ export class ModelHandlerVscodeLm extends ModelHandler<
         options.messages,
         {
           justification: 'Run the selected TeXRA agent.',
-          ...(tools ? { tools, toolMode: 'auto' as const } : {}),
+          maxTokens,
+          ...(tools?.length
+            ? { tools: toVscodeLmTools(tools), toolMode: 'auto' as const }
+            : {}),
         },
         signal,
       )) {

@@ -7,6 +7,7 @@ import {
   resumeRun,
 } from '@agent/runtime';
 import { executionHeldMessage, getExecutionStore } from '@agent/storage';
+import { effectRuntime } from '@platform/processRuntime';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -159,38 +160,40 @@ export async function runResumeExecution(
   const session = await initializeCliTranscriptSession();
   let exitCode: number = CliExitCode.Usage;
   try {
-    const result = await resumeRun(id, {
-      session,
-      executeWorkflow: async (
-        workflowConfig,
-        executionId,
-        modelHandlerCompatibilityKey,
-      ) => {
-        // Fast-fail on an unusable destination before the run restarts;
-        // `executeCliWorkflowConfig` reads the same persisted `cli` block.
-        await assertOutputFileAvailable(
-          resumeWorkflowOutputFile(workflowConfig),
-          context.cwd,
-        );
-        await assertOutputDirAvailable(
-          resumeWorkflowOutputDirectory(workflowConfig),
-          context.cwd,
-        );
-        exitCode = await executeCliWorkflowConfig(
+    const result = await effectRuntime().runPromise(
+      resumeRun(id, {
+        session,
+        executeWorkflow: async (
           workflowConfig,
-          buildHeadlessRunContext(context),
-          {
-            executionId,
-            modelHandlerCompatibilityKey,
-            recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
-              workflowConfig,
-              context.cwd,
-            ),
-            categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
-          },
-        );
-      },
-    });
+          executionId,
+          modelHandlerCompatibilityKey,
+        ) => {
+          // Fast-fail on an unusable destination before the run restarts;
+          // `executeCliWorkflowConfig` reads the same persisted `cli` block.
+          await assertOutputFileAvailable(
+            resumeWorkflowOutputFile(workflowConfig),
+            context.cwd,
+          );
+          await assertOutputDirAvailable(
+            resumeWorkflowOutputDirectory(workflowConfig),
+            context.cwd,
+          );
+          exitCode = await executeCliWorkflowConfig(
+            workflowConfig,
+            buildHeadlessRunContext(context),
+            {
+              executionId,
+              modelHandlerCompatibilityKey,
+              recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
+                workflowConfig,
+                context.cwd,
+              ),
+              categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
+            },
+          );
+        },
+      }),
+    );
     if ('started' in result) return exitCode;
     writeTextStderr(describeFollowUpFailure(result.failed));
     return CliExitCode.Usage;
