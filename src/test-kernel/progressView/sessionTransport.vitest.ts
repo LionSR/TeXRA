@@ -46,6 +46,7 @@ it('recovers an incomplete replay from the published cursor and preserves pendin
     local: null,
     host: null,
     replayComplete: false,
+    existence: null,
   };
   try {
     transport.subscribe(session, [{ id, fromSeq: 0 }]);
@@ -70,7 +71,30 @@ it('recovers an incomplete replay from the published cursor and preserves pendin
       cursor: 0,
       aggregates: [{ id, fromSeq: 0 }],
     });
-    transport.receive({ ...frame, generation: 2, replayComplete: true });
+    transport.receive({
+      ...frame,
+      generation: 2,
+      replayComplete: true,
+      existence: {
+        checkedAggregateIds: [id],
+        removedAggregateIds: [],
+        claims: [{ aggregateId: id, ownerId: null }],
+      },
+    });
+    await vi.waitFor(() =>
+      expect(session.view$.get().streams.has('run')).toBe(true),
+    );
+    transport.receive({
+      ...frame,
+      generation: 2,
+      sequence: 2,
+      events: [],
+      existence: {
+        checkedAggregateIds: [id],
+        removedAggregateIds: [],
+        claims: [{ aggregateId: id, ownerId: null }],
+      },
+    });
     await vi.waitFor(() => expect(session.view$.get().cursor).toBe(10));
     expect(session.view$.get().streams.has('run')).toBe(true);
     transport.receive({ ...frame, sequence: 4, replayComplete: true });

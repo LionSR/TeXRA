@@ -10,38 +10,9 @@
 import * as path from 'node:path';
 
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
-import { FileReadLimitError } from '@common/storage/fileReadLimit';
 import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 import { StorageFS } from '@utils/files/storageFS';
-
-/** Count top-level array values before JSON.parse allocates the decoded array. */
-function checkArrayRows(raw: string, maxRows: number): void {
-  if (!raw.trimStart().startsWith('[')) return;
-  let depth = 0;
-  let quoted = false;
-  let escaped = false;
-  let started = false;
-  let rows = 0;
-  for (const char of raw) {
-    if (quoted) {
-      if (escaped) escaped = false;
-      else if (char === '\\') escaped = true;
-      else if (char === '"') quoted = false;
-      continue;
-    }
-    if (depth === 1) {
-      if (char === ',') started = false;
-      else if (!started && char !== ']' && !/\s/.test(char)) {
-        started = true;
-        if (++rows > maxRows) throw new FileReadLimitError('rows');
-      }
-    }
-    if (char === '"') quoted = true;
-    else if (char === '[' || char === '{') depth += 1;
-    else if (char === ']' || char === '}') depth -= 1;
-  }
-}
 
 function keyToPath(dir: string, key: string): string {
   return path.join(dir, `${encodeURIComponent(key)}.json`);
@@ -81,100 +52,13 @@ export class KVStore {
     this.indent = options.compactJson ? undefined : 2;
   }
 
-  async read<T = unknown>(
-    key: string,
-    budget?: { readonly bytes: number; readonly rows: number },
-  ): Promise<T | undefined> {
+  async read<T = unknown>(key: string): Promise<T | undefined> {
     const raw = await withMissingFallback(
-      () => StorageFS.read(keyToPath(this.dir, key), budget?.bytes),
+      () => StorageFS.read(keyToPath(this.dir, key)),
       undefined,
     );
     if (raw === undefined) return undefined;
-    if (budget) checkArrayRows(raw, budget.rows);
     return JSON.parse(raw) as T;
-  }
-
-  /** Decode one array value at a time without retaining the preceding values. */
-  async *readArray(key: string, maxRowBytes: number): AsyncGenerator<unknown> {
-    const pieces: string[] = [];
-    let bytes = 0;
-    let opened = false;
-    let closed = false;
-    let active = false;
-    let afterComma = false;
-    let depth = 0;
-    let quoted = false;
-    let escaped = false;
-    const append = (piece: string): void => {
-      bytes += Buffer.byteLength(piece, 'utf8');
-      if (bytes > maxRowBytes) throw new FileReadLimitError('bytes');
-      pieces.push(piece);
-    };
-    const take = (): unknown => {
-      const raw = pieces.join('');
-      pieces.length = 0;
-      bytes = 0;
-      return JSON.parse(raw);
-    };
-    try {
-      for await (const chunk of StorageFS.createReadStream(
-        keyToPath(this.dir, key),
-        { encoding: 'utf8', highWaterMark: 64 * 1024 },
-      )) {
-        const text = String(chunk);
-        let start = active ? 0 : -1;
-        for (let index = 0; index < text.length; index += 1) {
-          const char = text[index];
-          const whitespace =
-            char === ' ' || char === '\n' || char === '\r' || char === '\t';
-          if (!opened) {
-            if (whitespace) continue;
-            if (char !== '[')
-              throw new SyntaxError('Stored value is not a JSON array.');
-            opened = true;
-            continue;
-          }
-          if (closed) {
-            if (!whitespace)
-              throw new SyntaxError(
-                'Unexpected content after stored JSON array.',
-              );
-            continue;
-          }
-          if (!active) {
-            if (whitespace) continue;
-            if (char === ']') {
-              if (afterComma)
-                throw new SyntaxError('Trailing comma in stored JSON array.');
-              closed = true;
-              continue;
-            }
-            active = true;
-            start = index;
-          }
-          if (quoted) {
-            if (escaped) escaped = false;
-            else if (char === '\\') escaped = true;
-            else if (char === '"') quoted = false;
-          } else if (char === '"') quoted = true;
-          else if (char === '[' || char === '{') depth += 1;
-          else if (char === '}' || (char === ']' && depth > 0)) depth -= 1;
-          else if (depth === 0 && (char === ',' || char === ']')) {
-            append(text.slice(start, index));
-            yield take();
-            active = false;
-            start = -1;
-            afterComma = char === ',';
-            closed = char === ']';
-          }
-        }
-        if (active) append(text.slice(start));
-      }
-      if (!opened || !closed || active)
-        throw new SyntaxError('Incomplete stored JSON array.');
-    } catch (error) {
-      if (!isFileNotFoundError(error)) throw error;
-    }
   }
 
   async write<T = unknown>(key: string, value: T): Promise<void> {

@@ -6,7 +6,6 @@ import PQueue from 'p-queue';
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { KVStore } from '@common/storage/KVStore';
-import { FileReadLimitError } from '@common/storage/fileReadLimit';
 import { createLog } from '@logger/logUtils';
 import {
   END_GROUP_STATUS,
@@ -29,11 +28,6 @@ import {
   type StreamLogDelta,
   type StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
-import {
-  sessionMessageBytes,
-  SESSION_REPLAY_BYTES,
-  type SessionReadBudget,
-} from '@shared/session/sessionReadBudget';
 import { createFlushableDebounce, isObject } from '@utils/core';
 import { createListenerSet } from '@utils/core/listenerSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -450,61 +444,15 @@ export class StreamLogStore {
   }
 
   /** Read a transcript once without adding it to the resident set. */
-  async readEntries(
-    streamId: StreamTabId,
-    budget?: SessionReadBudget,
-    fromSeq = 0,
-  ): Promise<StreamLogEntry[]> {
+  async readEntries(streamId: StreamTabId): Promise<StreamLogEntry[]> {
     const resident = this.streams.get(streamId)?.log;
-    if (resident) {
-      if (!budget) return resident.getRange(fromSeq, resident.head);
-      if (resident.head - fromSeq > budget.rows)
-        throw new FileReadLimitError('rows');
-      const entries: StreamLogEntry[] = [];
-      let bytes = 0;
-      for (let index = fromSeq; index < resident.head; index += 1) {
-        const entry = resident.getRange(index, index + 1)[0];
-        if (entry === undefined) continue;
-        bytes += sessionMessageBytes(entry);
-        if (bytes > budget.bytes) throw new FileReadLimitError('bytes');
-        entries.push(entry);
-      }
-      return entries;
-    }
+    if (resident) return resident.toJSON();
     if (this.mode.kind === 'ephemeral' || !this.summaries.has(streamId)) {
       return [];
     }
-    let raw: unknown[] | undefined;
-    if (fromSeq === 0)
-      raw = await this.logsKv.read<unknown[]>(streamId, budget);
-    else {
-      raw = [];
-      let sequence = 0;
-      let bytes = 0;
-      for await (const value of this.logsKv.readArray(
-        streamId,
-        SESSION_REPLAY_BYTES,
-      )) {
-        const parsed = StreamLogEntrySchema.safeParse(value);
-        // Persisted unknown rows never occupied a typed transcript sequence.
-        if (!parsed.success) continue;
-        sequence += 1;
-        if (sequence <= fromSeq) continue;
-        const entry = { ...parsed.data, seqNo: sequence };
-        bytes += sessionMessageBytes(entry);
-        if (budget && (bytes > budget.bytes || raw.length >= budget.rows))
-          throw new FileReadLimitError(bytes > budget.bytes ? 'bytes' : 'rows');
-        raw.push(entry);
-      }
-    }
-    const parsed = await this.hydratePersistedEntries(streamId, raw, budget);
-    // The read-only view needs sequential row numbers, not a second resident
-    // log with its own indexes and copies of the entire entries array.
-    return parsed.entries.map((entry, index) =>
-      entry.seqNo === fromSeq + index + 1
-        ? entry
-        : { ...entry, seqNo: fromSeq + index + 1 },
-    );
+    const raw = await this.logsKv.read<unknown[]>(streamId);
+    const parsed = await this.hydratePersistedEntries(streamId, raw);
+    return new StreamLog(parsed.entries, parsed.preservedRawEntries).toJSON();
   }
 
   has(streamId: StreamTabId): boolean {
@@ -1394,17 +1342,8 @@ export class StreamLogStore {
   private async hydratePersistedEntries(
     streamId: StreamTabId,
     raw: unknown,
-    budget?: SessionReadBudget,
   ): Promise<ParsedPersistedEntries> {
     const parsed = this.parsePersistedEntries(streamId, raw);
-    let bytes = 0;
-    const charge = (entry: StreamLogEntry): StreamLogEntry => {
-      if (budget) {
-        bytes += sessionMessageBytes(entry);
-        if (bytes > budget.bytes) throw new FileReadLimitError('bytes');
-      }
-      return entry;
-    };
     parsed.entries = await pMap(
       parsed.entries,
       async (entry) => {
@@ -1415,9 +1354,9 @@ export class StreamLogStore {
             entry.messageType !== MESSAGE_TYPES.THINKING &&
             entry.messageType !== MESSAGE_TYPES.SCRATCHPAD)
         )
-          return charge(entry);
+          return entry;
         const spillPath = entry.data?.spillPath;
-        if (spillPath === undefined) return charge(entry);
+        if (spillPath === undefined) return entry;
         // Preserve the old reader's confinement to recorder-owned artifacts.
         const segments = spillPath.replaceAll('\\', '/').split('/');
         if (
@@ -1435,22 +1374,10 @@ export class StreamLogStore {
           throw new Error(`Stream ${streamId}: invalid transcript spill path.`);
         let full: string | undefined;
         try {
-          full = await StorageFS.read(
-            segments.join('/'),
-            budget
-              ? Math.max(0, budget.bytes - bytes - sessionMessageBytes(entry))
-              : undefined,
-          );
+          full = await StorageFS.read(segments.join('/'));
         } catch (error) {
           if (!isFileNotFoundError(error)) throw error;
         }
-        if (
-          budget &&
-          full !== undefined &&
-          sessionMessageBytes(full) >
-            budget.bytes - bytes - sessionMessageBytes(entry)
-        )
-          throw new FileReadLimitError('bytes');
         let preview = entry.text ?? '';
         if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
           preview =
@@ -1469,9 +1396,9 @@ export class StreamLogStore {
         if (entry.messageType === MESSAGE_TYPES.TOOL_USE)
           entry.data.output = content;
         else entry.text = content;
-        return charge(entry);
+        return entry;
       },
-      { concurrency: budget ? 1 : STREAM_LOG_LOAD_CONCURRENCY },
+      { concurrency: STREAM_LOG_LOAD_CONCURRENCY },
     );
     return parsed;
   }

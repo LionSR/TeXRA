@@ -18,6 +18,7 @@ import { sessionMessageBytes, SESSION_REPLAY_BYTES, SESSION_REPLAY_ROWS } from '
 const key = 'measurement';
 const aggregateId = '["stream","measurement"]';
 const interests = [{ id: aggregateId, fromSeq: 0 }];
+const existence = { checkedAggregateIds: [aggregateId], removedAggregateIds: [], claims: [{ aggregateId, ownerId: null }] };
 const scenarios = [
   { name: 'normal', rows: 1000, characters: 240 },
   { name: 'large', rows: 100000, characters: 240 },
@@ -48,7 +49,7 @@ for (const scenario of scenarios) {
       if (sourceBytes > SESSION_REPLAY_BYTES || replay.length >= SESSION_REPLAY_ROWS) throw new Error('fixture exceeds declared source budget');
       replay.push(input);
     }
-    replay.push({ _tag: 'replay.complete' });
+    replay.push({ _tag: 'replay.complete', existence });
     sample();
     yield* frames.begin(1);
     const consumer = yield* Effect.forkScoped(frames.inputs(interests).pipe(Stream.runForEach((batch) => SubscriptionRef.update(published, (view) => fold(view, batch)).pipe(Effect.tap(() => Effect.sync(sample))))));
@@ -94,7 +95,7 @@ await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
         pulls[reader] += 1;
         yield [{ _tag: 'event', read: 'aggregate', event: { type: 'status', aggregateId, seq: index, commit: index, at: 1, ownerId: null, phase: 'running', cause: 'benchmark' } }];
       }
-      yield [{ _tag: 'replay.complete' }];
+      yield [{ _tag: 'replay.complete', existence }];
     })(), { chunkSize: 1 }),
   });
   const subscribe = { kind: 'subscribe', session: key, generation: 1, cursor: 0, aggregates: interests };

@@ -9,6 +9,7 @@
  */
 import { it } from '@effect/vitest';
 import {
+  Deferred,
   Effect,
   Exit,
   Fiber,
@@ -20,10 +21,7 @@ import {
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi } from 'vitest';
 
-import {
-  SessionEventLog,
-  sessionEventsLayer,
-} from '@agent/runtime/SessionEvents';
+import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
   frameSubscription,
   type FramerSource,
@@ -34,6 +32,7 @@ import {
   TranscriptSubscriptions,
   type InflightTextChunk,
 } from '@controllers/session/sessionSources';
+import { databaseLayer } from '@controllers/session/Database';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
@@ -43,15 +42,14 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   FoldEventSchema,
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type ExecutionId,
   type FoldInput,
+  type TranscriptSubscription,
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { Database } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -68,7 +66,6 @@ import {
 import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 
 function textTail(
   text: string,
@@ -113,8 +110,8 @@ const runtimeGraph = (history: readonly SessionEventDraft[]) => {
   const roots = createFakeWorkspaceRoots({ storagePath: KEY });
   const seeded = Layer.effectDiscard(
     Effect.gen(function* () {
-      const log = yield* SessionEventLog;
-      yield* log.appendAll(history);
+      const log = yield* Database;
+      yield* log.appendAll(history).pipe(Effect.orDie);
     }),
   );
   return SessionViewService.layer.pipe(
@@ -123,12 +120,7 @@ const runtimeGraph = (history: readonly SessionEventDraft[]) => {
       sessionEventsLayer.pipe(
         Layer.provideMerge(
           seeded.pipe(
-            Layer.provideMerge(
-              SessionEventLog.memoryLayer(
-                StreamLogStore.ephemeral('session framer test'),
-                roots,
-              ),
-            ),
+            Layer.provideMerge(databaseLayer('ephemeral').pipe(Layer.orDie)),
           ),
         ),
       ),
@@ -216,8 +208,10 @@ describe('session framer', () => {
       }).success,
     ).toBe(true);
   });
+
   it('preserves stream and execution subscription keys across the webview bridge', async () => {
     const session = createTestSession();
+    const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
     const bridge = new SessionBridge({
       session,
       onPortClosed: () => {},
@@ -236,9 +230,10 @@ describe('session framer', () => {
         aggregates: keys.map((id) => ({ id, fromSeq: 0 })),
       });
       await vi.waitFor(() => {
-        expect(
-          [...SubscriptionRef.getUnsafe(session.view).folded.keys()].toSorted(),
-        ).toEqual(keys.toSorted());
+        expect(setSubscriptions).toHaveBeenCalledWith(
+          expect.stringMatching(/^bridge\//),
+          keys.map((id) => ({ id, fromSeq: 0 })),
+        );
       });
     } finally {
       bridge.dispose();
@@ -248,10 +243,20 @@ describe('session framer', () => {
   it('gates each port on receiver progress and releases a stopped reader independently', async () => {
     const session = createTestSession();
     const set = session.subscriptions.set;
+    const applied = new Map<string, readonly TranscriptSubscription[]>();
+    const hasInterest = (id: string): boolean =>
+      [...applied.values()].some((entries) =>
+        entries.some((entry) => entry.id === id),
+      );
     vi.spyOn(session.subscriptions, 'set').mockImplementation(
       (port, interests) =>
         (interests.length === 0 ? Effect.sleep('25 millis') : Effect.void).pipe(
           Effect.andThen(set(port, interests)),
+          Effect.tap(() =>
+            Effect.sync(() => {
+              applied.set(port, interests);
+            }),
+          ),
         ),
     );
     const replay = Array.from({ length: 700 }, (_, index) => ({
@@ -268,7 +273,17 @@ describe('session framer', () => {
     // A source replay remains available even when one consumer stalls.
     vi.spyOn(session, 'inputs').mockImplementation(() =>
       Stream.concat(
-        Stream.make([...replay, { _tag: 'replay.complete' as const }]),
+        Stream.make<[readonly FoldInput[]]>([
+          ...replay,
+          {
+            _tag: 'replay.complete' as const,
+            existence: {
+              checkedAggregateIds: [],
+              removedAggregateIds: [],
+              claims: [],
+            },
+          },
+        ]),
         Stream.never,
       ),
     );
@@ -331,24 +346,14 @@ describe('session framer', () => {
       // Restart the same framer while its old cleanup is still delayed.
       slowPort.receive({ ...slowRequest, generation: 2 });
       await new Promise<void>((resolve) => setTimeout(resolve, 75));
-      expect(SubscriptionRef.getUnsafe(session.view).folded.has(slowOnly)).toBe(
-        true,
-      );
+      expect(hasInterest(slowOnly)).toBe(true);
       slowPort.receive({
         kind: 'reader.stop',
         session: session.roots.storage,
         generation: 2,
       });
-      await vi.waitFor(() =>
-        expect(
-          SubscriptionRef.getUnsafe(session.view).folded.has(slowOnly),
-        ).toBe(false),
-      );
-      expect(
-        SubscriptionRef.getUnsafe(session.view).folded.has(
-          runStart.aggregateId,
-        ),
-      ).toBe(true);
+      await vi.waitFor(() => expect(hasInterest(slowOnly)).toBe(false));
+      expect(hasInterest(runStart.aggregateId)).toBe(true);
       fastPort.receive({
         kind: 'reader.stop',
         session: session.roots.storage,
@@ -361,127 +366,28 @@ describe('session framer', () => {
       });
       replacement.receive({ ...request, generation: 2 });
       await vi.waitFor(() =>
-        expect(
-          SubscriptionRef.getUnsafe(session.view).folded.has(
-            runStart.aggregateId,
-          ),
-        ).toBe(true),
+        expect(hasInterest(runStart.aggregateId)).toBe(true),
       );
       await new Promise<void>((resolve) => setTimeout(resolve, 75));
-      expect(
-        SubscriptionRef.getUnsafe(session.view).folded.has(
-          runStart.aggregateId,
-        ),
-      ).toBe(true);
+      expect(hasInterest(runStart.aggregateId)).toBe(true);
       replacement.close();
       const reopened = bridge.attach({ id: 'healthy', send: async () => {} });
       reopened.receive({ ...request, generation: 3 });
       await new Promise<void>((resolve) => setTimeout(resolve, 75));
-      expect(
-        SubscriptionRef.getUnsafe(session.view).folded.has(
-          runStart.aggregateId,
-        ),
-      ).toBe(true);
+      expect(hasInterest(runStart.aggregateId)).toBe(true);
       reopened.receive({
         kind: 'reader.stop',
         session: session.roots.storage,
         generation: 3,
       });
       await vi.waitFor(() =>
-        expect(SubscriptionRef.getUnsafe(session.view).folded.size).toBe(0),
+        expect([...applied.values()].flat().length).toBe(0),
       );
     } finally {
       bridge.dispose();
       session.dispose();
     }
   });
-
-  it.effect(
-    'delivers large retained rows intact independently of preceding small rows',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.forkScoped(ticking);
-        const source = yield* framerSource;
-        const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
-        const event = {
-          ...waiting,
-          seq: 1,
-          commit: 1,
-          ownerId: SELF,
-          at: 0,
-          cause: 'x'.repeat(4 * 1024 * 1024),
-        };
-        const small = {
-          _tag: 'event' as const,
-          read: 'aggregate' as const,
-          event: { ...event, cause: '' },
-        };
-        small.event.cause = 's'.repeat(
-          SESSION_FRAME_TARGET_BYTES - 1 - sessionMessageBytes(small),
-        );
-        const large = { ...small, event: { ...event, cause: '' } };
-        large.event.cause = 'l'.repeat(
-          SESSION_FRAME_BYTES -
-            SESSION_FRAME_TARGET_BYTES -
-            sessionMessageBytes(large),
-        );
-        const hiddenText = 'h'.repeat(SESSION_FRAME_BYTES + 1);
-        const hiddenEvent = {
-          type: 'transcript.entry' as const,
-          aggregateId: qualifyAggregateId('stream', 'stream:unrequested'),
-          seq: 1,
-          commit: 7,
-          ownerId: SELF,
-          at: 0,
-          entry: {
-            id: 'hidden',
-            seqNo: 1,
-            timestamp: 0,
-            type: STREAM_LOG_ENTRY_TYPES.LOG,
-            level: LOG_LEVELS.INFO,
-            messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-            text: hiddenText,
-          },
-        };
-        const frames = yield* frameSubscription(
-          {
-            ...source,
-            inputs: () =>
-              Stream.make([
-                { _tag: 'event', read: 'all', event: hiddenEvent },
-                {
-                  _tag: 'chunk',
-                  streamId: 'stream:unrequested',
-                  rowId: 'hidden',
-                  from: 0,
-                  to: hiddenText.length,
-                  text: hiddenText,
-                },
-                small,
-                large,
-                { _tag: 'event', read: 'aggregate', event },
-                { _tag: 'replay.complete' },
-              ]),
-          },
-          PORT,
-          host,
-          subscribe,
-        ).pipe(
-          Stream.takeUntil((frame) => frame.replayComplete),
-          Stream.runCollect,
-        );
-        expect(
-          frames.flatMap((frame) => frame.events).map((row) => row.event),
-        ).toEqual([small.event, large.event, event]);
-        expect(frames.at(-1)?.cursor).toBe(7);
-        expect(frames.flatMap((frame) => frame.chunks)).toEqual([]);
-        expect(
-          frames.every(
-            (frame) => sessionMessageBytes(frame) <= SESSION_FRAME_BYTES,
-          ),
-        ).toBe(true);
-      }).pipe(Effect.provide(runtimeGraph([]))),
-  );
 
   it.effect(
     'charges live text row envelopes and the shared source row limit before publication',
@@ -529,6 +435,79 @@ describe('session framer', () => {
   );
 
   it.effect(
+    'delivers large retained rows intact independently of preceding small rows',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.forkScoped(ticking);
+        const source = yield* framerSource;
+        const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
+        const event = {
+          ...waiting,
+          seq: 1,
+          commit: 1,
+          ownerId: SELF,
+          at: 0,
+          cause: 'x'.repeat(4 * 1024 * 1024),
+        };
+        const small = {
+          _tag: 'event' as const,
+          read: 'aggregate' as const,
+          event: { ...event, cause: '' },
+        };
+        small.event.cause = 's'.repeat(
+          SESSION_FRAME_TARGET_BYTES - 1 - sessionMessageBytes(small),
+        );
+        const large = { ...small, event: { ...event, cause: '' } };
+        large.event.cause = 'l'.repeat(
+          SESSION_FRAME_BYTES -
+            SESSION_FRAME_TARGET_BYTES -
+            sessionMessageBytes(large),
+        );
+        const frames = yield* frameSubscription(
+          {
+            ...source,
+            inputs: () =>
+              Stream.make<[readonly FoldInput[]]>([
+                {
+                  _tag: 'chunk',
+                  streamId: 'stream:unrequested',
+                  rowId: 'ignored',
+                  from: 0,
+                  to: SESSION_FRAME_BYTES * 2,
+                  text: 'x'.repeat(SESSION_FRAME_BYTES * 2),
+                },
+                small,
+                large,
+                { _tag: 'event', read: 'aggregate', event },
+                {
+                  _tag: 'replay.complete',
+                  existence: {
+                    checkedAggregateIds: [],
+                    removedAggregateIds: [],
+                    claims: [],
+                  },
+                },
+              ]),
+          },
+          PORT,
+          host,
+          subscribe,
+        ).pipe(
+          Stream.takeUntil((frame) => frame.replayComplete),
+          Stream.runCollect,
+        );
+        expect(
+          frames.flatMap((frame) => frame.events).map((row) => row.event),
+        ).toEqual([small.event, large.event, event]);
+        expect(
+          frames.every(
+            (frame) => sessionMessageBytes(frame) <= SESSION_FRAME_BYTES,
+          ),
+        ).toBe(true);
+      }).pipe(Effect.provide(runtimeGraph([]))),
+  );
+
+  it.effect(
     'answers a Subscribe with the replay, then frames the tail every 16 ms with one chunk per row',
     () =>
       Effect.gen(function* () {
@@ -559,6 +538,8 @@ describe('session framer', () => {
         ).toEqual([
           ['listing', 'run.start'],
           ['listing', 'status'],
+          ['aggregate', 'run.start'],
+          ['aggregate', 'status'],
         ]);
         expect(
           replay.findLast((frame) => frame.local !== null)?.local?.self,
@@ -577,13 +558,18 @@ describe('session framer', () => {
           chunks.ref,
           new Map([
             [`${STREAM}/row-1`, textTail('lo', first)],
-            ['stream:unnamed/row-1', textTail('hidden')],
+            [
+              'stream:unnamed/row-1',
+              // This unrelated live row exceeds the per-reader replay budget.
+              textTail('x'.repeat(129 * 1024 * 1024)),
+            ],
           ]),
         );
         const tail: EventsFrame[] = [];
         while (
           !tail.some((frame) => frame.events.length > 0) ||
-          (tail.at(-1)?.chunks.at(-1)?.to ?? 0) < 5
+          (tail.flatMap((frame) => frame.chunks).at(-1)?.to ?? 0) < 5 ||
+          (tail.at(-1)?.cursor ?? 0) < 3
         ) {
           tail.push(yield* Queue.take(frames));
         }
@@ -638,10 +624,22 @@ describe('session framer', () => {
         // post the Subscribe; the decoder feeds every frame that answers it.
         yield* frames.begin(named.generation);
         yield* shell.set('shell', named.aggregates);
+        let sequence = 0;
+        const deliver = (frame: EventsFrame) =>
+          Effect.gen(function* () {
+            sequence = frame.sequence;
+            const consumed = yield* Deferred.make<void>();
+            expect(
+              yield* frames.feed(frame, () =>
+                Deferred.doneUnsafe(consumed, Effect.void),
+              ),
+            ).toBeNull();
+            yield* Deferred.await(consumed);
+          });
         const decoder = yield* Effect.forkScoped(
           Stream.runForEach(
             frameSubscription(source, PORT, host, named),
-            (frame) => frames.feed(frame, () => {}),
+            deliver,
           ),
         );
         // A frame of a superseded generation is dropped: nothing of it
@@ -671,9 +669,11 @@ describe('session framer', () => {
             local: null,
             host: null,
             replayComplete: false,
+            existence: null,
           },
           () => {},
         );
+
         const ticker = yield* Effect.forkScoped(ticking);
         yield* settle(
           view.ref,
@@ -713,7 +713,7 @@ describe('session framer', () => {
           {
             ...runStart,
             aggregateId: qualifyAggregateId('stream', child),
-            executionId: 'second',
+            executionId: 'dec0de',
           },
         ]);
         yield* SubscriptionRef.update(
@@ -747,6 +747,89 @@ describe('session framer', () => {
         // Neither a partial replay nor its superseded generation may mutate
         // the previously published view, whose indexes are shared by the fold.
         yield* Fiber.interrupt(decoder);
+        const beforeLive = yield* SubscriptionRef.get(view.ref);
+        const sameCursorFrame: EventsFrame = {
+          kind: 'events',
+          sequence: sequence + 1,
+          session: KEY,
+          generation: named.generation,
+          cursor: beforeLive.cursor,
+          events: [],
+          chunks: [],
+          local: null,
+          host: null,
+          replayComplete: false,
+          existence: null,
+        };
+        yield* frames.feed(
+          {
+            ...sameCursorFrame,
+            chunks: [
+              {
+                _tag: 'chunk',
+                streamId: STREAM,
+                rowId: 'row-1',
+                from: 11,
+                to: 12,
+                text: '!',
+              },
+            ],
+          },
+          () => {},
+        );
+        yield* TestClock.adjust('16 millis');
+        expect(yield* SubscriptionRef.get(view.ref)).toBe(beforeLive);
+        yield* frames.feed(
+          {
+            ...sameCursorFrame,
+            sequence: sequence + 2,
+            existence: {
+              checkedAggregateIds: [qualifyAggregateId('stream', STREAM)],
+              removedAggregateIds: [],
+              claims: [
+                {
+                  aggregateId: qualifyAggregateId('stream', STREAM),
+                  ownerId: null,
+                },
+              ],
+            },
+          },
+          () => {},
+        );
+        yield* settle(view.ref, (v) => v.streams.get(STREAM)?.ownerId === null);
+        const afterLive = yield* SubscriptionRef.get(view.ref);
+        expect(afterLive.cursor).toBe(beforeLive.cursor);
+        expect(afterLive.inflight.get(`${STREAM}/row-1`)).toBe('Hello again!');
+        // Live batches have the same staging bound as replay. ACKs release
+        // transport credit without publishing an unfinished atomic batch.
+        const largeChunk = 'x'.repeat(15 * 1024 * 1024);
+        for (let index = 1; index <= 9; index += 1) {
+          const consumed = yield* Deferred.make<void>();
+          const failure = yield* frames.feed(
+            {
+              ...sameCursorFrame,
+              sequence: sequence + 2 + index,
+              chunks: [
+                {
+                  _tag: 'chunk',
+                  streamId: STREAM,
+                  rowId: 'large-pending',
+                  from: (index - 1) * largeChunk.length,
+                  to: index * largeChunk.length,
+                  text: largeChunk,
+                },
+              ],
+            },
+            () => Deferred.doneUnsafe(consumed, Effect.void),
+          );
+          if (index < 9) {
+            expect(failure).toBeNull();
+            yield* Deferred.await(consumed);
+          } else {
+            expect(failure).toMatchObject({ retryable: false });
+          }
+          expect(yield* SubscriptionRef.get(view.ref)).toBe(afterLive);
+        }
         const beforeReplay = yield* SubscriptionRef.get(view.ref);
         yield* frames.begin(2);
         yield* shell.set('shell', named.aggregates);
@@ -774,9 +857,11 @@ describe('session framer', () => {
             local: null,
             host: null,
             replayComplete: false,
+            existence: null,
           },
           () => {},
         );
+
         yield* TestClock.adjust('16 millis');
         expect(yield* SubscriptionRef.get(view.ref)).toBe(beforeReplay);
         expect(beforeReplay.streams.get(STREAM)?.status).toBe(
@@ -791,7 +876,7 @@ describe('session framer', () => {
               generation: 3,
               cursor: beforeReplay.cursor,
             }),
-            (frame) => frames.feed(frame, () => {}),
+            deliver,
           ),
         );
         yield* settle(view.ref, (v) => v !== beforeReplay);

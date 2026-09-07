@@ -117,27 +117,33 @@ const LOOGLE_API_URL = 'https://loogle.lean-lang.org/json';
  */
 const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
   retryTransientFetch(
-    async (signal) => {
-      const raw = await ky
-        .get(LOOGLE_API_URL, {
-          searchParams: { q: query },
-          headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
-          timeout: false,
-          signal,
-          retry: 0,
-        })
-        .json<unknown>();
+    Effect.gen(function* () {
+      const raw = yield* Effect.tryPromise({
+        try: (signal) =>
+          ky
+            .get(LOOGLE_API_URL, {
+              searchParams: { q: query },
+              headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
+              timeout: false,
+              signal,
+              retry: 0,
+            })
+            .json<unknown>(),
+        catch: (cause) => cause,
+      });
       // Validate the body at the boundary. A malformed shape is not
       // transient, so it is not retried; searchOne surfaces it as a tool
       // error.
       const parsed = LoogleResponseSchema.safeParse(raw);
       if (!parsed.success) {
-        throw new Error(
-          `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
+        return yield* Effect.fail(
+          new Error(
+            `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
+          ),
         );
       }
       return parsed.data;
-    },
+    }),
     {
       retries: LOOGLE_RETRIES,
       minTimeout: 1000,

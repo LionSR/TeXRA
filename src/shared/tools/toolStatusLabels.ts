@@ -1,5 +1,7 @@
 import type { ToolStatus } from '@shared/schemas';
 
+import { safeLookup } from '@utils/core';
+
 const TOOL_STATUS_FALLBACK_LABELS = {
   available: 'Ready',
   'not-found': 'Needs setup',
@@ -12,7 +14,5 @@ export function toolStatusLabel(
   statusLabel: string | undefined,
 ): string {
   if (statusLabel != null) return statusLabel;
-  return Object.hasOwn(TOOL_STATUS_FALLBACK_LABELS, status)
-    ? TOOL_STATUS_FALLBACK_LABELS[status as ToolStatus]
-    : status;
+  return safeLookup(TOOL_STATUS_FALLBACK_LABELS, status, status);
 }

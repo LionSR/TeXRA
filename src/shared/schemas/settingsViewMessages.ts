@@ -10,13 +10,13 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_CMD, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
+import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
-import type {
-  NonRegexReplacementCategory,
-  RegexReplacementCategory,
+import {
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
 } from '@shared/constants/replacementCategories';
 import {
   createDispatcher,
@@ -623,23 +623,34 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
   settings: LatexSettingsStatusSchema,
 });
 
-/** Frontend field projection of the catalog-derived LaTeX snapshot. */
-export interface LatexConfigValues {
-  workflowAutoCompile?: boolean;
-  workflowAutoCompileTimeoutMs?: number;
-  workflowAutoOpenPdf?: boolean;
-  workflowRejectOnCompileFailure?: boolean;
-  latexdiffBetweenRounds?: boolean;
-  latexdiffTimeoutMs?: number;
-  latexdiffMathMarkup?: (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
-  latexdiffChangesOnly?: boolean;
-  latexFormatter?: (typeof LATEX_FORMATTER_VALUES)[number];
-  wrapCritiqueInAlign?: boolean;
-  enabledReplacements?: NonRegexReplacementCategory[];
-  enabledReplacementsRegex?: RegexReplacementCategory[];
-  customReplacementsRegex?: Record<string, string>;
-  customReplacements?: Record<string, string>;
-}
+/**
+ * Frontend field projection of the catalog-derived LaTeX snapshot. Every
+ * field is optional because `latexSlice` projects only the wire keys named in
+ * `LATEX_CONFIG_FIELD_TO_KEY`, not a fixed subset — parsing through this
+ * schema (rather than casting) turns a future drift between that map and this
+ * shape into a loud failure instead of a silently wrong-typed field.
+ */
+export const LatexConfigValuesSchema = z.object({
+  workflowAutoCompile: z.boolean().optional(),
+  workflowAutoCompileTimeoutMs: z.number().optional(),
+  workflowAutoOpenPdf: z.boolean().optional(),
+  workflowRejectOnCompileFailure: z.boolean().optional(),
+  latexdiffBetweenRounds: z.boolean().optional(),
+  latexdiffTimeoutMs: z.number().optional(),
+  latexdiffMathMarkup: z.enum(LATEXDIFF_MATH_MARKUP_VALUES).optional(),
+  latexdiffChangesOnly: z.boolean().optional(),
+  latexFormatter: z.enum(LATEX_FORMATTER_VALUES).optional(),
+  wrapCritiqueInAlign: z.boolean().optional(),
+  enabledReplacements: z
+    .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
+    .optional(),
+  enabledReplacementsRegex: z
+    .array(z.enum(REGEX_REPLACEMENT_CATEGORIES))
+    .optional(),
+  customReplacementsRegex: z.record(z.string(), z.string()).optional(),
+  customReplacements: z.record(z.string(), z.string()).optional(),
+});
+export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
 
 /** Outbound: backend → frontend current LaTeX/compile/diff config values. */
 const UpdateLatexConfigValuesMessageSchema = snapshotMessage('latex');

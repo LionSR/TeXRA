@@ -152,7 +152,6 @@
       "src/transcript/StagedDeletionCoordinator.ts": 1
     },
     "import:async-mutex": {
-      "src/tools/goal/goalStore.ts": 1,
       "src/transcript/SidecarWriteCoordinator.ts": 1,
       "src/utils/core/keyedMutex.ts": 1
     },
@@ -168,7 +167,6 @@
       "src/controllers/session/sessionLayer.ts": 3,
       "src/platform/defaults/jsonStore.ts": 1,
       "src/shared/signals.ts": 2,
-      "src/tools/agentCliSessionRegistry.ts": 2,
       "src/tools/lean/direct/directLspAdapter.ts": 3
     },
     "catch:effect-importer": {
@@ -189,16 +187,12 @@
       "src/agent/index/agentYamlScanner.ts": 3,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
       "src/agent/remote/remoteAgentList.ts": 2,
-      "src/agent/runtime/SessionHandle.ts": 10,
+      "src/agent/runtime/SessionHandle.ts": 9,
       "src/agent/runtime/bundledPrompts.ts": 1,
       "src/auth/oauth/loopbackLogin.ts": 2,
       "src/common/errors/sdkError/errorInspection.ts": 1,
       "src/common/errors/sdkError/providerErrorFormat.ts": 2,
-      "src/tools/arxiv/ArxivSearchTool.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1,
-      "src/tools/lean/direct/leanServer.ts": 1,
-      "src/tools/web/WebFetchTool.ts": 2,
-      "src/tools/zotero/bbtClient.ts": 1,
       "src/utils/files/relativeFS.ts": 2
     }
   },
@@ -210,7 +204,6 @@
     "src/controllers/session/sessionLayer.ts": "lane D — host composition root and session graph",
     "src/platform/defaults/jsonStore.ts": "lane D — Platform ports become Effect-typed",
     "src/shared/signals.ts": "lane D — host composition root and session graph",
-    "src/tools/agentCliSessionRegistry.ts": "wave-1 rebuild — tools: memory, executions, polling sources",
     "src/tools/lean/direct/directLspAdapter.ts": "Lean LSP follow-up — the port is Effect-typed and the tool-facing runs moved to the tools' execute(); what remains is pool construction/disposal (the platform-lifetime seam) and the run-end hook's Promise seam, both owned by lane D"
   }
 }

@@ -1,13 +1,10 @@
 // Node imports
 import * as path from 'node:path';
-import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { FileReadLimitError } from '@common/storage/fileReadLimit';
 import * as logUtils from '@logger/logUtils';
 import { FileType, type FileStat } from '@platform/interfaces';
 import {
@@ -31,7 +28,6 @@ import {
 import { clearPersistedSummaryParentStream } from '@transcript/StreamLogStore';
 import { delay } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 interface MockStorageOptions {
   /** Values are usually arrays; non-array values simulate corrupt logs. */
@@ -365,116 +361,6 @@ async function flushAcrossDelete(
 }
 
 describe('StreamLogStore load', () => {
-  it('bounds persisted bytes, decoded array rows, and cumulative spill expansion before returning history', async () => {
-    const directory = await mkdtemp(
-      path.join(tmpdir(), 'texra-bounded-history-'),
-    );
-    const spills = [
-      'executions/ab12cd/toolOutput/first.txt',
-      'executions/ab12cd/toolOutput/second.txt',
-    ];
-    const rows = spills.map((spillPath, index) => ({
-      ...logEntry('alpha', index + 1, 100 + index),
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      text: 'preview with ",[,]" and \\" escaped punctuation',
-      data: { status: 'completed', spillPath },
-    }));
-    const raw = JSON.stringify(rows);
-    const file = path.join(directory, storageFile(STREAM_LOGS_DIR, 'alpha'));
-    try {
-      await mkdir(path.dirname(file), { recursive: true });
-      await writeFile(file, raw);
-      for (const spill of spills) {
-        await mkdir(path.dirname(path.join(directory, spill)), {
-          recursive: true,
-        });
-        await writeFile(path.join(directory, spill), 'x'.repeat(10_000));
-      }
-      mockStorage({
-        logs: { alpha: rows },
-        summaries: { alpha: summary(100, 101) },
-      });
-      const summaryRead = vi.mocked(StorageFS.read).getMockImplementation()!;
-      vi.mocked(StorageFS.read).mockImplementation((target, bytes) =>
-        bytes === undefined
-          ? summaryRead(target)
-          : AbsoluteFS.read(path.join(directory, target), bytes),
-      );
-      const store = await StreamLogStore.open();
-      const parse = vi.spyOn(JSON, 'parse');
-      await expect(
-        store.readEntries('alpha', { bytes: 30_000, rows: 1 }),
-      ).rejects.toMatchObject({ limit: 'rows' });
-      await expect(
-        store.readEntries('alpha', {
-          bytes: Buffer.byteLength(raw) - 1,
-          rows: 2,
-        }),
-      ).rejects.toBeInstanceOf(FileReadLimitError);
-      expect(parse.mock.calls.some(([value]) => value === raw)).toBe(false);
-      await expect(
-        store.readEntries('alpha', { bytes: 15_000, rows: 2 }),
-      ).rejects.toMatchObject({ limit: 'bytes' });
-      const spillReads = vi
-        .mocked(StorageFS.read)
-        .mock.calls.filter(([target]) => spills.includes(target));
-      expect(spillReads.at(-1)?.[1]).toBeLessThan(10_000);
-      const complete = await store.readEntries('alpha', {
-        bytes: 30_000,
-        rows: 2,
-      });
-      expect(complete.map((entry) => entry.text)).toEqual([
-        'x'.repeat(10_000),
-        'x'.repeat(10_000),
-      ]);
-      expect(store.get('alpha')).toBeUndefined();
-      expect(await readFile(file, 'utf8')).toBe(raw);
-
-      // Reconnect sequence numbers count typed entries, not malformed raw
-      // array positions. Prefix spill files must never be hydrated again.
-      const prefix = Array.from({ length: 20 }, (_, index) => ({
-        ...rows[0],
-        id: `prefix-${index}`,
-        seqNo: index + 1,
-        text: 'p'.repeat(5000),
-      }));
-      const suffix = { ...rows[1], id: 'suffix', seqNo: 99 };
-      const suffixRaw = JSON.stringify([
-        { unsupported: true },
-        ...prefix,
-        null,
-        suffix,
-      ]);
-      await writeFile(file, suffixRaw);
-      vi.spyOn(StorageFS, 'createReadStream').mockImplementation(
-        (target, options) =>
-          AbsoluteFS.createReadStream(path.join(directory, target), options),
-      );
-      vi.mocked(StorageFS.read).mockClear();
-      const resumed = await store.readEntries(
-        'alpha',
-        { bytes: 15_000, rows: 1 },
-        20,
-      );
-      expect(resumed.map((entry) => [entry.seqNo, entry.text])).toEqual([
-        [21, 'x'.repeat(10_000)],
-      ]);
-      expect(
-        vi.mocked(StorageFS.read).mock.calls.map(([target]) => target),
-      ).toEqual([spills[1]]);
-      expect(await readFile(file, 'utf8')).toBe(suffixRaw);
-      const resident = StreamLogStore.ephemeral('suffix replay regression');
-      for (const entry of [...prefix, suffix])
-        appendTranscriptEntry(resident, 'resident', entry);
-      expect(
-        (
-          await resident.readEntries('resident', { bytes: 1000, rows: 1 }, 20)
-        ).map((entry) => entry.seqNo),
-      ).toEqual([21]);
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
   afterEach(() => {
     vi.restoreAllMocks();
   });

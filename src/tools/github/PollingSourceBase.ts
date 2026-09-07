@@ -43,6 +43,7 @@ import {
   createBoundedIdSet,
   type BoundedIdSet,
 } from '@utils/core/boundedIdSet';
+import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 import { getNewestTimestamp } from './githubPaths';
 import {
   type ConditionalResponse,
@@ -113,37 +114,6 @@ export const pollRequest = <A>(
     try: request,
     catch: (cause) => new PollHookRejected({ cause }),
   });
-
-/**
- * The ambient clock with a sleep that does not hold the event loop.
- *
- * The poll loop sleeps between rounds, and the process clock's sleep
- * schedules a referenced timer, so the loop alone would keep a short-lived
- * host (the CLI) alive until shutdown interrupted it. This clock is what the
- * loop sleeps on: the same readings as the clock in scope, a timer the loop
- * does not wait for, still interrupted through the clock rather than a timer
- * handle this class holds. It replaces the `setInterval` + `timer.unref()`
- * pair this file used to keep off Effect's clock.
- */
-function unrefSleepClock(clock: Clock.Clock): Clock.Clock {
-  return {
-    currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe(),
-    currentTimeMillis: clock.currentTimeMillis,
-    currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe(),
-    currentTimeNanos: clock.currentTimeNanos,
-    monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
-    monotonicTimeNanos: clock.monotonicTimeNanos,
-    sleep: (duration) =>
-      Effect.callback<void>((resume) => {
-        const handle = setTimeout(
-          () => resume(Effect.void),
-          Duration.toMillis(duration),
-        );
-        handle.unref?.();
-        return Effect.sync(() => clearTimeout(handle));
-      }),
-  };
-}
 
 interface PollingSourceConfig {
   /** Display name used in the logger and exception messages. */

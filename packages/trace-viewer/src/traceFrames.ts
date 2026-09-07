@@ -7,7 +7,9 @@
  */
 import {
   aggregateId as qualifyAggregateId,
+  referencedAggregates,
   AgentCategory,
+  AgentConfigFieldsSchema,
   END_GROUP_STATUS,
   runIdentityDisplayName,
   STREAM_LOG_ENTRY_TYPES,
@@ -163,18 +165,36 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
       worktree: null,
       parentStreamId: null,
     },
-    {
+  ];
+  if (agentConfig) {
+    bodies.push({
       type: 'run.config',
       aggregateId: qualifyAggregateId('stream', trace.streamId),
       executionId,
-      config: {
-        model: trace.config.model,
-        instruction: trace.config.instruction,
-        agent: recordName(trace.config),
-        inputFiles: agentConfig?.inputFiles ?? null,
-      },
-    },
-  ];
+      config: agentConfig,
+    });
+  } else if ('name' in trace.config) {
+    // Process and workflow-container exports persist a non-agent RunRecord
+    // (name/instruction/model, no agentCategory). Project that into the
+    // durable config arm the fold already reads for `command` / `model`.
+    const processConfig = trace.config;
+    bodies.push({
+      type: 'run.config',
+      aggregateId: qualifyAggregateId('stream', trace.streamId),
+      executionId,
+      config: AgentConfigFieldsSchema.parse({
+        agentCategory: AgentCategory.ToolUse,
+        agent: processConfig.name,
+        instruction: processConfig.instruction,
+        ...(processConfig.model === undefined
+          ? {}
+          : { model: processConfig.model }),
+        ...(processConfig.workingDirectory === undefined
+          ? {}
+          : { workingDirectory: processConfig.workingDirectory }),
+      }),
+    });
+  }
   if (trace.meta?.description) {
     bodies.push({
       type: 'updateStreamDescription',
@@ -248,7 +268,7 @@ function listingBodies(trace: TraceDocument): SessionEventDraft[] {
         executionId,
         category,
         isSubagent: false,
-        error: null,
+        agentName: runIdentityDisplayName(identity),
       },
     );
   }
@@ -318,6 +338,13 @@ export function* traceFrames(
     (aggregate) =>
       aggregate.id === qualifyAggregateId('stream', trace.streamId),
   );
+  const checkedAggregateIds = [
+    ...new Set(
+      [...traceEvents(trace, false)].flatMap((row) =>
+        referencedAggregates(row.event),
+      ),
+    ),
+  ];
   const frame: EventsFrame = {
     kind: 'events',
     session,
@@ -326,9 +353,17 @@ export function* traceFrames(
     cursor: listingBodies(trace).length + trace.entries.length,
     events: [],
     chunks: [],
-    local: { self: [], heldBy: [], unreadable: [] },
+    local: { self: [], dead: [], unreadable: [] },
     host: traceHost(trace),
     replayComplete: true,
+    existence: {
+      checkedAggregateIds,
+      removedAggregateIds: [],
+      claims: checkedAggregateIds.map((aggregateId) => ({
+        aggregateId,
+        ownerId: null,
+      })),
+    },
   };
   let events: EventsFrame['events'] = [];
   let bytes = 0;
@@ -352,6 +387,7 @@ export function* traceFrames(
         local: null,
         host: null,
         replayComplete: false,
+        existence: null,
       };
       sequence += 1;
       events = [];

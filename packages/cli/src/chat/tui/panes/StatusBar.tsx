@@ -268,16 +268,19 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const display = buildStatusBarDisplay({
     status: displayStatus,
     statusLabel: displayStream?.statusLabel,
-    elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
-    runningFrame: runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
+    turn: {
+      elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
+      runningFrame:
+        runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
+      thinkingActive: displayStream?.thinkingActive ?? false,
+      compactingActive: displayStream?.compactingActive ?? false,
+    },
     transientNotice,
     commandName: props.commandName,
     bypass:
       displayStreamId === undefined
         ? undefined
         : view.policy.get(displayStreamId)?.bypasses,
-    thinkingActive: displayStream?.thinkingActive ?? false,
-    compactingActive: displayStream?.compactingActive ?? false,
     queuedFollowUpMessages:
       displayStreamId === undefined
         ? []

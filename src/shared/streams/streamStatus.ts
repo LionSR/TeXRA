@@ -61,7 +61,6 @@ export function runOutcomeToExecutionStatus(
 
 export const STREAM_TRANSITION_CAUSE = {
   LIFECYCLE: 'lifecycle',
-  RESERVATION_ROLLBACK: 'reservation-rollback',
   WAIT: 'wait',
   RESUME: 'resume',
   USER_STOP: 'user-stop',
@@ -144,8 +143,6 @@ export function canTransitionStreamPhase(
   switch (cause) {
     case STREAM_TRANSITION_CAUSE.LIFECYCLE:
       if (from === undefined) return to === STREAM_PHASE.RUNNING;
-      return from === STREAM_PHASE.RUNNING && isTerminalOutcomePhase(to);
-    case STREAM_TRANSITION_CAUSE.RESERVATION_ROLLBACK:
       return from === STREAM_PHASE.RUNNING && isTerminalOutcomePhase(to);
     case STREAM_TRANSITION_CAUSE.WAIT:
       return from === STREAM_PHASE.RUNNING && to === STREAM_PHASE.WAITING;

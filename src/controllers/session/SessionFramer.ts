@@ -36,7 +36,9 @@ import {
 
 import {
   aggregateId as qualifyAggregateId,
+  listingTypeOf,
   type CommitOrdinal,
+  type ExistenceReconciliation,
   type FoldInput,
   type LocalRuntimeState,
   type TextChunk,
@@ -44,6 +46,11 @@ import {
 } from '@shared/schemas';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import type {
+  EventsFrame,
+  FoldEvent,
+  Subscribe,
+} from '@shared/session/sessionFrames';
 import {
   SESSION_FRAME_BYTES,
   SESSION_FRAME_ROWS,
@@ -53,11 +60,6 @@ import {
   SessionReaderError,
   sessionMessageBytes,
 } from '@shared/session/sessionReadBudget';
-import type {
-  EventsFrame,
-  FoldEvent,
-  Subscribe,
-} from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 
 /** The framing window: the 16 ms cadence of the old delta batches. */
@@ -76,12 +78,8 @@ export interface FramerSource {
 }
 
 type FrameItem =
-  | FoldEvent
-  | TextChunk
-  | { readonly _tag: 'local'; readonly local: LocalRuntimeState }
-  | { readonly _tag: 'host'; readonly host: HostSnapshot }
-  | { readonly _tag: 'replay.complete' }
-  | { readonly _tag: 'drained'; readonly cursor: CommitOrdinal };
+  | Exclude<FoldInput, { _tag: 'subscriptions' }>
+  | { readonly _tag: 'host'; readonly host: HostSnapshot };
 
 /** One frame from the items of one window: chunks merged per row where
  *  adjacent, the last local and host snapshots, the marker, and the drained
@@ -99,17 +97,14 @@ function cutFrame(
   let local: LocalRuntimeState | null = null;
   let host: HostSnapshot | null = null;
   let replayComplete = false;
+  let existence: ExistenceReconciliation | null = null;
   let drained = drainedBefore;
   for (const item of items) {
     switch (item._tag) {
       case 'event': {
         const { event } = item;
         if (item.read === 'all') {
-          drained = Math.max(drained, event.commit);
-          if (
-            event.type === 'transcript.entry' &&
-            !named.has(event.aggregateId)
-          ) {
+          if (listingTypeOf(event) === null && !named.has(event.aggregateId)) {
             continue;
           }
         }
@@ -136,9 +131,11 @@ function cutFrame(
         break;
       case 'replay.complete':
         replayComplete = true;
+        existence = item.existence;
         break;
       case 'drained':
-        drained = Math.max(drained, item.cursor);
+        drained = item.cursor;
+        existence = item.existence;
         break;
     }
   }
@@ -153,6 +150,7 @@ function cutFrame(
     local,
     host,
     replayComplete,
+    existence,
   };
 }
 
@@ -199,22 +197,17 @@ export function frameSubscription(
         Stream.map((value): FrameItem => ({ _tag: 'host', host: value })),
       );
       return Stream.merge(inputs, hosts).pipe(
-        Stream.map((item): FrameItem | null => {
-          if (
-            item._tag === 'chunk' &&
-            !named.has(qualifyAggregateId('stream', item.streamId))
-          )
-            return null;
-          if (
-            item._tag === 'event' &&
-            item.read === 'all' &&
-            item.event.type === 'transcript.entry' &&
-            !named.has(item.event.aggregateId)
-          )
-            return { _tag: 'drained', cursor: item.event.commit };
-          return item;
+        Stream.filter((item) => {
+          if (item._tag === 'chunk')
+            return named.has(qualifyAggregateId('stream', item.streamId));
+          if (item._tag === 'event' && item.read === 'all')
+            return (
+              listingTypeOf(item.event) !== null ||
+              named.has(item.event.aggregateId)
+            );
+          // SQL read batches advance the cursor through their drained marker.
+          return true;
         }),
-        Stream.filter((item): item is FrameItem => item !== null),
         Stream.aggregateWithin(
           Sink.fold(
             () => ({
@@ -263,23 +256,36 @@ export function frameSubscription(
         Stream.mapAccum(
           () => ({ cursor: tailFrom, sequence: 0 }),
           (previous, batch) => {
-            const frame = cutFrame(
-              source.key,
-              subscribe,
-              previous.sequence + 1,
-              named,
-              previous.cursor,
-              batch.items,
-            );
-            if (sessionMessageBytes(frame) > SESSION_FRAME_BYTES) {
-              throw new SessionReaderError(
-                'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
-              );
+            const groups: FrameItem[][] = [];
+            let pending: FrameItem[] = [];
+            for (const item of batch.items) {
+              pending.push(item);
+              if (item._tag === 'drained' || item._tag === 'replay.complete') {
+                groups.push(pending);
+                pending = [];
+              }
             }
-            return [
-              { cursor: frame.cursor, sequence: frame.sequence },
-              [frame],
-            ] as const;
+            if (pending.length > 0) groups.push(pending);
+            const frames: EventsFrame[] = [];
+            let cursor = previous.cursor;
+            let sequence = previous.sequence;
+            for (const group of groups) {
+              const frame = cutFrame(
+                source.key,
+                subscribe,
+                ++sequence,
+                named,
+                cursor,
+                group,
+              );
+              if (sessionMessageBytes(frame) > SESSION_FRAME_BYTES)
+                throw new SessionReaderError(
+                  'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
+                );
+              cursor = frame.cursor;
+              frames.push(frame);
+            }
+            return [{ cursor, sequence }, frames] as const;
           },
         ),
       );

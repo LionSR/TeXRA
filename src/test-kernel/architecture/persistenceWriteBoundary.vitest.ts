@@ -63,7 +63,7 @@ function offenders(pattern: RegExp): string[] {
 }
 
 describe('persistence write boundary', () => {
-  it('scans the host production roots', () => {
+  it('scans the shared, host, and SDK production roots', () => {
     expectRealCoverage(PRODUCTION_ROOTS);
   });
 

@@ -305,7 +305,7 @@ export function createDesktopSettingsIpc(
   // window-scoped and released in `dispose` below.
   const subscriptions = [
     subscribeDesktopGoalChanges(options.session, () =>
-      runAsync(postGoalList()),
+      runAsyncInPaper(postGoalList),
     ),
   ];
 

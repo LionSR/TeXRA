@@ -13,7 +13,7 @@ The renderer posts it in a microtask after the decoder has handed its batch to t
 fold. Thus incomplete replay is never a reconnect cursor. The host's send and
 progress wait share a 30-second deadline.
 
-The renderer accepts one queued frame. It stages a replay until its completion
+The renderer accepts one queued frame. It stages each atomic SQL input batch until its existence reconciliation
 marker, then publishes that complete batch through the existing fold. A sequence
 gap, queue overflow, send failure, or stalled delivery ends that generation. One
 automatic retry uses the **published view's** commit cursor and retained aggregate
@@ -38,7 +38,7 @@ incrementally from the already loaded trace document.
 | One serialized frame                  | 16 MiB                                  |
 | Outstanding host delivery             | One frame per port                      |
 | Renderer inbox                        | One frame                               |
-| Unpublished renderer replay           | 128 MiB encoded frames, 1,000,000 rows  |
+| Unpublished renderer batch            | 128 MiB encoded frames, 1,000,000 rows  |
 | SDK unread callback trace             | 512 events and 8 MiB encoded events     |
 
 The batching target is not a per-message truncation threshold. A retained row may
@@ -56,39 +56,20 @@ whole replay array becoming an aggregation leftover. Intrinsic session/history
 storage and immutable views retained by callers are outside auxiliary delivery
 budgets.
 
-The standalone file-store reader bounds actual file-stream bytes before JSON
-decoding, preflights array row counts, and hydrates spill files sequentially within
-the remaining source budget. Each subscribed transcript receives the remaining
-cumulative budget. The in-memory event tail is materialized one row at a time;
-live text includes both its encoded fragments and its row envelope in the shared
-byte and row accounting. These display limits leave the saved files unchanged.
+SQLite public reads accept an optional display budget. Their iterator checks
+encoded raw-row bytes and row count before decoding or retaining each row. Listing
+SQL returns only compacted current facts and outstanding requests, so superseded
+facts do not consume the replay budget. Aggregate SQL selects the requested
+sequence suffix before accounting; each selected aggregate receives the remaining
+cumulative replay budget.
 
-The standalone listing checks each historical event before retaining its expanded
-row and charges only the final current live facts, in commit order. Superseded
-values and resolved approval payloads do not consume replay bytes. Ordering and
-compaction also have a separate source-index limit of 1,000,000 keys and 128 MiB
-of encoded keys, checked before insertion or ordering-array allocation. This
-scratch limit includes resolved request keys needed to suppress earlier requests;
-it is independent of a reader's smaller replay budget. A listing above either
-limit fails explicitly without caching a partial historical listing. The
-unbudgeted session owner retains its existing current-fact compaction.
-
-A reconnect reads only the requested typed transcript suffix. For saved JSON
-arrays, it scans and validates one raw row at a time without hydrating prefix
-spills; malformed retained rows do not shift typed sequence numbers. One raw row
-has an independent 128 MiB decoding bound, including a row in the skipped prefix.
-Only retained suffix rows consume the replay budget. Unselected transcript and
-text rows are excluded before byte accounting, while the durable cursor still
-advances over skipped events. The reader retains text tails only for its selected
-streams.
-
-The SQLite integration accepts an optional budget on public reads. Its iterator
-checks encoded raw-row bytes and row count before decoding/retaining the next row;
-private execution/checkpoint events are filtered in SQL before public read budgets.
 `readInputBatch` captures its high-water cursor, finite event prefix, and aggregate
 claim state in **one transaction**. No page crosses a new snapshot. The canonical
 runtime fold passes no display budget; a UI overload does not fail the owner or
-mutate durable data. This integration is a separate patch on the persistence lane.
+mutate durable data. Live text is charged for both its fragments and its full row
+envelope before publication. Unselected transcript and text rows are excluded
+before accounting, while the durable cursor still advances over skipped events.
+Each reader retains text tails only for its selected streams.
 
 ## SDK residency
 
@@ -108,14 +89,15 @@ provide retained-state recovery. Closing a trace iterator clears its queued data
 
 Run `node scripts/measure-session-readers.mjs`. It bundles the actual framer,
 receiver, and shared fold and executes synthetic model-response rows without
-network calls or user data. On Node 26.8.1, a September 7 run at source commit
-`0250dd936f` produced:
+network calls or user data. On Node 26.8.1, the September 7 SQLite-composed run
+used framer blob `21dda52f3a`, decoder blob `eb953982e5`,
+and measurement script blob `1a62818d04`. It produced:
 
 | Workload                          | Encoded source |   Max frame | Frames | Rows retained | Observed heap growth | Observed RSS growth |
 | --------------------------------- | -------------: | ----------: | -----: | ------------: | -------------------: | ------------------: |
-| 1,000 rows, 240 characters each   |      526,646 B |   135,319 B |      4 |         1,000 |         19,097,920 B |         5,079,040 B |
-| 100,000 rows, 240 characters each |   53,833,658 B |   138,393 B |    391 |       100,000 |        143,895,840 B |       120,832,000 B |
-| One 4 MiB retained response       |    4,194,867 B | 4,194,731 B |      3 |             1 |         29,714,464 B |        54,870,016 B |
+| 1,000 rows, 240 characters each   |      526,646 B |   135,336 B |      4 |         1,000 |         19,474,208 B |         6,537,216 B |
+| 100,000 rows, 240 characters each |   53,833,658 B |   138,410 B |    391 |       100,000 |        151,668,144 B |       124,059,648 B |
+| One 4 MiB retained response       |    4,194,867 B | 4,194,748 B |      3 |             1 |         12,963,152 B |        59,097,088 B |
 
 Heap/RSS include source objects and the canonical folded transcript, not just
 transport retention. Values are sampled during frame delivery and fold publication
@@ -126,7 +108,7 @@ synthetic acceptance workloads, not a claim about the largest real user history.
 The same script pauses a reader after its first frame while a healthy reader drains
 100,000 rows from a lazy source. The paused reader's source pulls stayed at 257
 before and after that interval; its outstanding frame count stayed at one. Settled
-heap across both readers changed from 46,798,520 B to 47,145,896 B (+347,376 B),
+heap across both readers changed from 48,264,784 B to 48,581,704 B (+316,920 B),
 after forced GC at both samples. This demonstrates bounded pulling during the
 interval; it is not a universal flat total-process-memory guarantee.
 

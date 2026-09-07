@@ -17,7 +17,10 @@ import {
   FakeScopedConfigProvider,
   FakeStateStore,
 } from '@test/support/FakePlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
 
@@ -487,6 +490,7 @@ describe('desktop settings IPC', () => {
     it('reposts the goal list when a run mutates a goal', async () => {
       const streamId = 'stream:desktop-settings-goal-push' as StreamTabId;
       const { posted, session } = createCapturedSettingsFixture();
+      publishTestRunStart(session, streamId);
 
       // A run mutates goals inside its paper's session, as the desktop does.
       await runInSession(session, () =>

@@ -40,15 +40,19 @@ import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetada
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
+  STREAM_SUBSTATE,
   AgentCategory,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
-import { createRecordingHost } from '../progressTestUtils';
+import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
-const EXECUTION_ID = 'launch-context-test' as ExecutionId;
+const EXECUTION_ID = 'a00101' as ExecutionId;
 
 /** Launches an unresolvable agent, asserting the shared missing-agent failure. */
 async function launchWithMissingAgent(
@@ -411,6 +415,65 @@ describe('AgentLaunchContext', () => {
     });
   });
 
+  it('commits initial status with creation instead of publishing a reservation', async () => {
+    const session = createTestSession();
+    const batches = vi.spyOn(session, 'publish');
+    const recording = recordSessionEvents(session);
+    const handler = {
+      capabilities: { supportsVision: false, supportsNativeAudio: false },
+      config: { provider: 'openai' },
+      setAgentCategory: vi.fn(),
+      setLogger: vi.fn(),
+      dispose: vi.fn(),
+    };
+    mocks.resolve.mockReturnValueOnce({ entry: { path: '/agents/chat.yaml' } });
+    mocks.load.mockResolvedValueOnce([
+      { agentCategory: AgentCategory.ToolUse },
+      {},
+    ]);
+    mocks.createHandler.mockResolvedValueOnce(handler);
+    mocks.createTrace.mockReturnValueOnce({
+      trace: noopTrace,
+      handleStatus: () => {},
+      dispose: vi.fn(),
+    });
+    mocks.buildVars.mockResolvedValueOnce({ ATTACHED_MEMORY_MISSES: [] });
+    try {
+      const context = await buildAgentLaunchContext({
+        config: AgentConfigSchema.parse({
+          agent: 'chat',
+          model: 'gpt55',
+          agentCategory: AgentCategory.ToolUse,
+        }),
+        executionId: EXECUTION_ID,
+        session,
+        modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+      });
+      try {
+        expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
+          'run.start',
+          'run.activate',
+          'status',
+        ]);
+        expect(recording.events.slice(0, 3).map((event) => event.type)).toEqual(
+          ['run.start', 'run.activate', 'status'],
+        );
+        expect(recording.events[2]).toMatchObject({
+          seq: 3,
+          phase: STREAM_PHASE.RUNNING,
+          substate: STREAM_SUBSTATE.STARTING,
+          runStartedAt: session.status.getStreamState(context.runScope.streamId)
+            ?.runStartedAt,
+        });
+      } finally {
+        context.disposeTrace();
+        handler.dispose();
+      }
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('compensates a late launch-assembly failure before trace disposal', async () => {
     const order: string[] = [];
     const failure = new Error('user vars unavailable');
@@ -427,6 +490,7 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession({
       responseTextProcessing,
     });
+    publishTestRunStart(session, 'late-assembly-stream', EXECUTION_ID);
     // The recorder-style status port hears the terminal fact in publish
     // order, before any renderer wakes.
     const detachStatus = session.attachRunTrace(

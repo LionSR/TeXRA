@@ -1,3 +1,4 @@
+import { Exit, Scope } from 'effect';
 import {
   afterEach,
   beforeEach,
@@ -73,27 +74,20 @@ function stubBatchFetch(
   return { batches, fetchMock: stubFetch(batches, beforeRespond) };
 }
 
-/** The host's run edge: the two lifecycle arms answer where the host runs. */
-const initialize = (
-  ...args: Parameters<typeof UsageLogService.initialize>
-): Promise<void> =>
-  effectRuntime().runPromise(UsageLogService.initialize(...args));
-
-const dispose = (): Promise<void> =>
-  effectRuntime().runPromise(UsageLogService.dispose());
-
 describe('UsageLogService', () => {
   beforeEach(async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    await initialize({
-      batchSize: 1,
-      flushIntervalMs: 60_000,
-      enabled: true,
-    });
+    await effectRuntime().runPromise(
+      UsageLogService.initialize(effectRuntime().scope, {
+        batchSize: 1,
+        flushIntervalMs: 60_000,
+        enabled: true,
+      }),
+    );
   });
 
   afterEach(async () => {
-    await dispose();
+    await effectRuntime().runPromise(UsageLogService.dispose());
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -140,7 +134,7 @@ describe('UsageLogService', () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     UsageLogService.log(usageEntry('second'));
-    const disposal = dispose();
+    const disposal = effectRuntime().runPromise(UsageLogService.dispose());
 
     releaseFirstFetch();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -159,17 +153,32 @@ describe('UsageLogService', () => {
     expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
   });
 
-  // The ticker only schedules; each flush runs on a fiber of its own.
+  // The ticker only schedules; the process owns the sender independently.
   // Interrupting the ticker on dispose must leave a send already in flight
   // alone and wait behind it, not abort the request and lose the batch it
   // had already taken from the queue.
-  it('waits for a timer-driven flush during disposal instead of aborting it', async () => {
+  it('process scope closure joins a timer-driven send before stopping admission', async () => {
     stubAccessToken();
-    await initialize({
-      batchSize: 100,
-      flushIntervalMs: 20,
-      enabled: true,
-    });
+    const owner = Scope.makeUnsafe();
+    // Reusing a process after explicit disposal must release its old child
+    // finalizers and preserve shutdown ordering for the next in-flight send.
+    for (let cycle = 0; cycle < 3; cycle++) {
+      await effectRuntime().runPromise(
+        UsageLogService.initialize(owner, { enabled: true }),
+      );
+      await effectRuntime().runPromise(UsageLogService.dispose());
+      if (owner.state._tag === 'Open') {
+        expect(owner.state.finalizer).toBeUndefined();
+        expect(owner.state.finalizers?.size ?? 0).toBe(0);
+      }
+    }
+    await effectRuntime().runPromise(
+      UsageLogService.initialize(owner, {
+        batchSize: 100,
+        flushIntervalMs: 20,
+        enabled: true,
+      }),
+    );
 
     const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
     const { batches, fetchMock } = stubBatchFetch(async () => {
@@ -180,7 +189,7 @@ describe('UsageLogService', () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const request = fetchMock.mock.calls[0]?.[0] as Request;
 
-    const disposal = dispose();
+    const disposal = effectRuntime().runPromise(Scope.close(owner, Exit.void));
     let disposed = false;
     void disposal.then(() => {
       disposed = true;
@@ -194,6 +203,9 @@ describe('UsageLogService', () => {
     await expect(disposal).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(batches.map(batchModels)).toEqual([['timer']]);
+    UsageLogService.log(usageEntry('after-close'));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   // The ticker must not keep a short-lived host alive by itself: a process
@@ -203,11 +215,13 @@ describe('UsageLogService', () => {
   it('schedules the ticker on a timer that does not hold the event loop', async () => {
     vi.useRealTimers();
     const timers = vi.spyOn(globalThis, 'setTimeout');
-    await initialize({
-      batchSize: 100,
-      flushIntervalMs: 12_345,
-      enabled: true,
-    });
+    await effectRuntime().runPromise(
+      UsageLogService.initialize(effectRuntime().scope, {
+        batchSize: 100,
+        flushIntervalMs: 12_345,
+        enabled: true,
+      }),
+    );
 
     const tick = timers.mock.calls.findIndex(([, delay]) => delay === 12_345);
     expect(tick).toBeGreaterThanOrEqual(0);
@@ -227,7 +241,7 @@ describe('UsageLogService', () => {
     UsageLogService.log(usageEntry('slow'));
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    const disposal = dispose();
+    const disposal = effectRuntime().runPromise(UsageLogService.dispose());
     let disposed = false;
     void disposal.then(() => {
       disposed = true;
@@ -418,7 +432,12 @@ describe('UsageLogService', () => {
     // queued under the old value rather than letting the next flush ship them.
     it('discards entries queued before the setting was turned off', async () => {
       stubAccessToken();
-      await initialize({ batchSize: 100, flushIntervalMs: 60_000 });
+      await effectRuntime().runPromise(
+        UsageLogService.initialize(effectRuntime().scope, {
+          batchSize: 100,
+          flushIntervalMs: 60_000,
+        }),
+      );
 
       const { batches, fetchMock } = stubBatchFetch();
 
@@ -491,7 +510,12 @@ describe('UsageLogService', () => {
 
     it('drops optional entries from a batch but keeps the accounted ones', async () => {
       stubAccessToken();
-      await initialize({ batchSize: 100, flushIntervalMs: 60_000 });
+      await effectRuntime().runPromise(
+        UsageLogService.initialize(effectRuntime().scope, {
+          batchSize: 100,
+          flushIntervalMs: 60_000,
+        }),
+      );
 
       const { batches, fetchMock } = stubBatchFetch();
 
