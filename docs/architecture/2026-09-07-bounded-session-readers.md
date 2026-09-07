@@ -63,6 +63,16 @@ cumulative budget. The in-memory event tail is materialized one row at a time;
 live text includes both its encoded fragments and its row envelope in the shared
 byte and row accounting. These display limits leave the saved files unchanged.
 
+The standalone listing checks each historical event before retaining its expanded
+row and charges only the final current live facts, in commit order. Superseded
+values and resolved approval payloads do not consume replay bytes. Ordering and
+compaction also have a separate source-index limit of 1,000,000 keys and 128 MiB
+of encoded keys, checked before insertion or ordering-array allocation. This
+scratch limit includes resolved request keys needed to suppress earlier requests;
+it is independent of a reader's smaller replay budget. A listing above either
+limit fails explicitly without caching a partial historical listing. The
+unbudgeted session owner retains its existing current-fact compaction.
+
 A reconnect reads only the requested typed transcript suffix. For saved JSON
 arrays, it scans and validates one raw row at a time without hydrating prefix
 spills; malformed retained rows do not shift typed sequence numbers. One raw row

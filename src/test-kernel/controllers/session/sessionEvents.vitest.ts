@@ -21,7 +21,15 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Clock, Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
+import {
+  Clock,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { afterAll, describe, expect, vi } from 'vitest';
 
 import {
@@ -53,6 +61,7 @@ import {
 } from '@shared/schemas';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
+import { SessionInputs } from '@shared/session/sessionInputs';
 import type { SessionView } from '@shared/session/sessionView';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -185,6 +194,106 @@ function drawnSequence(states: Iterable<ReturnType<typeof drawn>>) {
 }
 
 describe('session events and view', () => {
+  it.effect(
+    'stops listing expansion at the reader budget before retaining later histories',
+    () => {
+      const store = StreamLogStore.ephemeral('bounded listing');
+      for (let index = 0; index < 32; index += 1) {
+        store.recordSummaryMeta(`listing-${index}` as StreamTabId, {
+          executionId: EXECUTION,
+          agentCategory: AgentCategory.ToolUse,
+          description: 'retained description',
+        });
+      }
+      const readMeta = store.getSummaryMeta.bind(store);
+      let descriptions = 0;
+      vi.spyOn(store, 'getSummaryMeta').mockImplementation((id) => {
+        const meta = readMeta(id);
+        return meta === undefined
+          ? undefined
+          : {
+              ...meta,
+              get description() {
+                descriptions += 1;
+                return meta.description;
+              },
+            };
+      });
+      const roots = createFakeWorkspaceRoots({
+        storagePath: '/workspace/listing',
+      });
+      return Effect.gen(function* () {
+        const inputs = yield* SessionInputs;
+        for (const budget of [
+          { rows: 2, bytes: 100_000 },
+          { rows: 100, bytes: 1 },
+        ]) {
+          descriptions = 0;
+          const exit = yield* inputs
+            .read([], 0, budget)
+            .pipe(Stream.take(1), Stream.runCollect, Effect.exit);
+          expect(Exit.isFailure(exit)).toBe(true);
+          expect(descriptions).toBeLessThan(10);
+        }
+        // Failed readers neither cache a partial listing nor affect a healthy
+        // reader. Superseded values and resolved requests are not replay rows.
+        const log = yield* SessionEventLog;
+        const history = yield* Stream.runCollect(log.readListing());
+        expect(history).toHaveLength(64);
+        const aggregateId = qualifyAggregateId('stream', STREAM);
+        yield* log.appendAll([
+          runStart,
+          {
+            type: 'updateStreamDescription',
+            aggregateId,
+            description: 'x'.repeat(250_000),
+          },
+          {
+            type: 'updateStreamDescription',
+            aggregateId,
+            description: 'current description',
+          },
+          {
+            ...requested,
+            payload: {
+              kind: 'bash',
+              data: {
+                requestId: 'req-1',
+                command: 'x'.repeat(250_000),
+                allowBypass: true,
+                streamId: STREAM,
+              },
+            },
+          },
+          { type: 'approval.resolved', aggregateId, requestId: 'req-1' },
+        ]);
+        const compacted = yield* Stream.runCollect(
+          log.readListing({ rows: 66, bytes: 100_000 }),
+        );
+        expect(compacted.slice(0, 64)).toEqual(history);
+        expect(compacted.slice(64).map((event) => event.type)).toEqual([
+          'run.start',
+          'updateStreamDescription',
+        ]);
+        expect(compacted.at(-1)).toMatchObject({
+          description: 'current description',
+        });
+        expect(compacted.map((event) => event.commit)).toEqual(
+          compacted.map((event) => event.commit).toSorted((a, b) => a - b),
+        );
+      }).pipe(
+        Effect.provide(
+          sessionInputsLayer.pipe(
+            Layer.provideMerge(SessionEventLog.memoryLayer(store, roots)),
+            Layer.provide(
+              Layer.mergeAll(LocalRuntimeSource.layer, TextChunkSource.layer),
+            ),
+            Layer.provide(ProcessIdentity.layer(SELF)),
+          ),
+        ),
+      );
+    },
+  );
   it.effect(
     'keeps an inquiry independent of a removed stream with the same logical id',
     () =>

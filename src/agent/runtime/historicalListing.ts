@@ -60,25 +60,36 @@ export function historicalListing(
   transcripts: StreamLogStore,
   historical: ReadonlySet<StreamTabId>,
   ownerId: OwnerId,
+  budget?: {
+    readonly retain: (event: SessionEvent) => void;
+    readonly index: (key: string) => void;
+  },
 ): SessionEvent[] {
-  return streamsParentsFirst(transcripts, historical).flatMap(
-    (streamId, index) => {
-      const drafts = historicalStream(transcripts, streamId);
-      if (drafts === null) return [];
-      const at = transcripts.getTimestampRange(streamId).last ?? Date.now();
-      const base = index * HISTORICAL_COMMITS_PER_STREAM;
-      return drafts.map(
-        (draft, position): SessionEvent =>
-          ({
-            ...draft,
-            seq: position + 1,
-            commit: base + position + 1,
-            ownerId,
-            at,
-          }) as SessionEvent,
-      );
-    },
-  );
+  // The membership is already resident. Check its key workspace before the
+  // ordering arrays are allocated, then each expanded fact before retention.
+  if (budget) for (const id of historical) budget.index(id);
+  const rows: SessionEvent[] = [];
+  for (const [index, streamId] of streamsParentsFirst(
+    transcripts,
+    historical,
+  ).entries()) {
+    const drafts = historicalStream(transcripts, streamId);
+    if (drafts === null) continue;
+    const at = transcripts.getTimestampRange(streamId).last ?? Date.now();
+    const base = index * HISTORICAL_COMMITS_PER_STREAM;
+    for (const [position, draft] of drafts.entries()) {
+      const event = {
+        ...draft,
+        seq: position + 1,
+        commit: base + position + 1,
+        ownerId,
+        at,
+      } as SessionEvent;
+      budget?.retain(event);
+      rows.push(event);
+    }
+  }
+  return rows;
 }
 
 /** The summary tier's streams, parents before children and older before

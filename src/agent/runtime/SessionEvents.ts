@@ -60,7 +60,10 @@ import {
   type SessionCursor,
 } from '@shared/session/sessionEvents';
 import {
+  SESSION_REPLAY_BYTES,
+  SESSION_REPLAY_ROWS,
   SessionReaderError,
+  sessionMessageBytes,
   type SessionReadBudget,
 } from '@shared/session/sessionReadBudget';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
@@ -101,27 +104,61 @@ type LogRow = SessionEvent | TranscriptRef;
 
 /** Every non-transcript row is a listing fact (C8); the approval pair folds
  *  to one outstanding set keyed by request id. */
-function listingRows(rows: readonly LogRow[]): SessionEvent[] {
-  const latest = new Map<string, SessionEvent>();
-  const outstanding = new Map<string, SessionEvent>();
-  for (const row of rows) {
-    switch (row.type) {
-      case 'transcript.ref':
-      case 'transcript.entry':
-        continue;
-      case 'approval.requested':
-        outstanding.set(`${row.aggregateId}/${row.requestId}`, row);
-        continue;
-      case 'approval.resolved':
-        outstanding.delete(`${row.aggregateId}/${row.requestId}`);
-        continue;
-      default:
-        latest.set(`${row.aggregateId}/${row.type}`, row);
+function listingRows(
+  rows: readonly LogRow[],
+  budget?: {
+    readonly retain: (event: SessionEvent) => void;
+    readonly index: (key: string) => void;
+  },
+): SessionEvent[] {
+  if (budget === undefined) {
+    // The intrinsic owner keeps the existing current-fact compaction: it
+    // needs no suppression index of every historically resolved request.
+    const latest = new Map<string, SessionEvent>();
+    const outstanding = new Map<string, SessionEvent>();
+    for (const row of rows) {
+      switch (row.type) {
+        case 'transcript.ref':
+        case 'transcript.entry':
+          continue;
+        case 'approval.requested':
+          outstanding.set(`${row.aggregateId}/${row.requestId}`, row);
+          continue;
+        case 'approval.resolved':
+          outstanding.delete(`${row.aggregateId}/${row.requestId}`);
+          continue;
+        default:
+          latest.set(`${row.aggregateId}/${row.type}`, row);
+      }
     }
+    return [...latest.values(), ...outstanding.values()].sort(
+      (a, b) => a.commit - b.commit,
+    );
   }
-  return [...latest.values(), ...outstanding.values()].sort(
-    (a, b) => a.commit - b.commit,
-  );
+  const seen = new Set<string>();
+  const listing: SessionEvent[] = [];
+  // Only the last fact for a key survives. Resolved approvals suppress older
+  // requests with a key alone; their discarded payloads never use replay bytes.
+  for (let position = rows.length - 1; position >= 0; position -= 1) {
+    const row = rows[position];
+    if (
+      row === undefined ||
+      row.type === 'transcript.ref' ||
+      row.type === 'transcript.entry'
+    )
+      continue;
+    const key =
+      row.type === 'approval.requested' || row.type === 'approval.resolved'
+        ? `${row.aggregateId}/approval/${row.requestId}`
+        : `${row.aggregateId}/${row.type}`;
+    if (seen.has(key)) continue;
+    budget.index(key);
+    seen.add(key);
+    if (row.type === 'approval.resolved') continue;
+    budget.retain(row);
+    listing.push(row);
+  }
+  return listing.sort((a, b) => a.commit - b.commit);
 }
 
 /**
@@ -158,7 +195,9 @@ export class SessionEventLog extends Context.Service<
     readonly readAll: (
       fromCommit: SessionCursor,
     ) => Stream.Stream<SessionEvent>;
-    readonly readListing: () => Stream.Stream<SessionEvent>;
+    readonly readListing: (
+      budget?: SessionReadBudget,
+    ) => Stream.Stream<SessionEvent>;
     readonly readAggregate: (
       aggregateId: AggregateId,
       fromSeq: number,
@@ -191,12 +230,6 @@ export class SessionEventLog extends Context.Service<
         );
         const reserved = historical.size * HISTORICAL_COMMITS_PER_STREAM;
         let listing: SessionEvent[] | undefined;
-        const historicalRows = (): SessionEvent[] =>
-          (listing ??= historicalListing(
-            transcripts,
-            historical,
-            identity.ownerId,
-          ));
         const level = yield* SubscriptionRef.make<CommitOrdinal>(reserved);
         const gate = yield* Semaphore.make(1);
         const rows: LogRow[] = [];
@@ -312,10 +345,65 @@ export class SessionEventLog extends Context.Service<
           // on the first read, in the reserved commit space, then the facts
           // this process appended, which outrank them per key under the
           // fold's commit order. No history is walked at graph open.
-          readListing: () =>
-            Stream.suspend(() =>
-              Stream.fromIterable([...historicalRows(), ...listingRows(rows)]),
-            ),
+          readListing: (budget) =>
+            Stream.suspend(() => {
+              let bytes = 0;
+              let count = 0;
+              const retain = (event: SessionEvent): void => {
+                if (!budget) return;
+                bytes += sessionMessageBytes({
+                  _tag: 'event',
+                  read: 'listing',
+                  event,
+                });
+                count += 1;
+                if (bytes > budget.bytes || count > budget.rows) {
+                  throw new SessionReaderError(
+                    'This conversation exceeds the history display limit. Its saved content is unchanged.',
+                  );
+                }
+              };
+              // Source compaction needs keys even for facts absent from the
+              // final listing (resolved approvals). Bound that scratch index
+              // independently; a small replay budget charges current rows only.
+              let indexBytes = 0;
+              let indexRows = 0;
+              const index = (key: string): void => {
+                if (!budget) return;
+                indexBytes += sessionMessageBytes(key);
+                indexRows += 1;
+                if (
+                  indexBytes > SESSION_REPLAY_BYTES ||
+                  indexRows > SESSION_REPLAY_ROWS
+                ) {
+                  throw new SessionReaderError(
+                    'This workspace exceeds the history listing index limit. Its saved content is unchanged.',
+                  );
+                }
+              };
+              if (listing === undefined) {
+                listing = historicalListing(
+                  transcripts,
+                  historical,
+                  identity.ownerId,
+                  budget ? { retain, index } : undefined,
+                );
+              } else {
+                for (const event of listing) retain(event);
+              }
+              const current = listingRows(
+                rows,
+                budget ? { retain, index } : undefined,
+              );
+              const history = listing;
+              return Stream.fromIterable(
+                (function* () {
+                  yield* history;
+                  yield* current;
+                })(),
+                { chunkSize: 1 },
+              );
+            }),
           // The transcript tier is the store's: its rows for the stream
           // above `fromSeq`, read once without adding residency, stamped
           // with the store's own `seqNo` (below the log's seq for the same

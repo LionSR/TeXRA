@@ -51,10 +51,12 @@ export const sessionInputsLayer = Layer.effect(
               }
               replay.push(input);
             };
-            yield* Stream.runForEach(log.readListing(), (event) =>
-              Effect.sync(() => {
-                appendReplay({ _tag: 'event', read: 'listing', event });
-              }),
+            yield* Stream.runForEach(
+              log.readListing(budget ?? undefined),
+              (event) =>
+                Effect.sync(() => {
+                  appendReplay({ _tag: 'event', read: 'listing', event });
+                }),
             );
             appendReplay({ _tag: 'subscriptions', set: [...aggregates] });
             for (const aggregate of aggregates) {
