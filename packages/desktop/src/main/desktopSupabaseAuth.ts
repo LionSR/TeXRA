@@ -386,7 +386,7 @@ export function createDesktopSupabaseAuth(
         await coordinator.clearSession();
       });
       await refreshRemoteAgentCatalogAfterSignOut(
-        invalidateRemoteAgentsAfterSignOut,
+        () => effectRuntime().runPromise(invalidateRemoteAgentsAfterSignOut()),
         (message) => log.warn(message),
       );
       await host.onSessionChanged();

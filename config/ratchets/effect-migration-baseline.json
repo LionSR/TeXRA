@@ -119,7 +119,6 @@
       "src/utils/core/perKeyQueue.ts": 1
     },
     "import:p-map": {
-      "src/agent/index/agentYamlScanner.ts": 1,
       "src/agent/modelHandlers/support/MediaAttachmentProcessor.ts": 1,
       "src/agent/storage/executionListing.ts": 1,
       "src/latex/LatexMediaManager.ts": 1,
@@ -163,7 +162,6 @@
       "packages/extension/src/progressView/frontend/sessionTransport.ts": 4,
       "src/agent/runtime/SessionHandle.ts": 3,
       "src/controllers/session/SessionBridge.ts": 6,
-      "src/controllers/session/hostRunActions.ts": 1,
       "src/controllers/session/sessionLayer.ts": 3,
       "src/platform/defaults/jsonStore.ts": 1,
       "src/shared/signals.ts": 2,
@@ -184,14 +182,9 @@
       "packages/desktop/src/main/desktopProcessStores.ts": 1,
       "packages/desktop/src/main/index.ts": 13,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
-      "src/agent/index/agentYamlScanner.ts": 3,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
-      "src/agent/remote/remoteAgentList.ts": 2,
       "src/agent/runtime/SessionHandle.ts": 9,
       "src/agent/runtime/bundledPrompts.ts": 1,
-      "src/auth/oauth/loopbackLogin.ts": 2,
-      "src/common/errors/sdkError/errorInspection.ts": 1,
-      "src/common/errors/sdkError/providerErrorFormat.ts": 2,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/relativeFS.ts": 2
     }
@@ -200,7 +193,6 @@
     "packages/extension/src/progressView/frontend/sessionTransport.ts": "webview frontends — the progress view subscribes through an Effect-typed session plane instead of running fibers in the view",
     "src/agent/runtime/SessionHandle.ts": "Phase 3 — run lifecycle and cancellation",
     "src/controllers/session/SessionBridge.ts": "lane D — host composition root and session graph",
-    "src/controllers/session/hostRunActions.ts": "lane D — host composition root and session graph",
     "src/controllers/session/sessionLayer.ts": "lane D — host composition root and session graph",
     "src/platform/defaults/jsonStore.ts": "lane D — Platform ports become Effect-typed",
     "src/shared/signals.ts": "lane D — host composition root and session graph",

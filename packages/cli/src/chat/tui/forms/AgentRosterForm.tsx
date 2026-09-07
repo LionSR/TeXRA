@@ -97,7 +97,7 @@ function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
 const AGENT_ROSTER_SELECT_CHROME_ROWS = 5;
 
 async function loadRosterData(): Promise<AgentRosterData> {
-  await loadAgents({ includeRemote: false });
+  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
   return {
     record: await readCliAgentRoster(),
     presets: createWorkspaceAgentRosterController().allPresets(),

@@ -594,10 +594,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
       );
       await registerAgentDirectoryRoots(context);
       try {
-        await loadAgents({ includeRemote: false });
-        void loadAgents().catch((err) => {
-          log.warn(`Remote agent refresh failed: ${toErrorMessage(err)}`);
-        });
+        await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
+        void effectRuntime()
+          .runPromise(loadAgents())
+          .catch((err) => {
+            log.warn(`Remote agent refresh failed: ${toErrorMessage(err)}`);
+          });
       } catch (err) {
         log.error(`Failed to initialize agent index: ${toErrorMessage(err)}`);
       }

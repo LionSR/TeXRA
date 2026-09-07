@@ -31,6 +31,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
     credentialScope: 'synthetic-account',
   },
   supportsTemperature: true,
+  supportsInputTokenEstimation: false,
   supportsMaxOutputTokens: true,
   supportsStorage: true,
   supportsResponseChaining: true,
@@ -214,13 +215,317 @@ describe('native OpenAI Responses protocol', () => {
       await once(server, 'close');
     }
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
+
+  it.each(['http', 'websocket'] as const)(
+    'counts selected cold input over HTTP for the %s factory without generating or changing its binding',
+    async (transport) => {
+      const frames: object[] = [];
+      const configuration = {
+        ...(transport === 'websocket'
+          ? await socketServer((socket) => {
+              socket.on('message', (raw) => {
+                frames.push(JSON.parse(raw.toString()));
+                for (const [sequence_number, event] of events([
+                  MESSAGE,
+                ]).entries())
+                  socket.send(JSON.stringify({ ...event, sequence_number }));
+              });
+            })
+          : CONFIG),
+        supportsInputTokenEstimation: true,
+      };
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async (url) =>
+          String(url).endsWith('/input_tokens')
+            ? Response.json({
+                object: 'response.input_tokens',
+                input_tokens: 0,
+              })
+            : response(events([MESSAGE])),
+        );
+      vi.stubGlobal('fetch', fetch);
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const model =
+              transport === 'websocket'
+                ? yield* openaiResponsesWebSocketModel(configuration, {
+                    kind: 'api-key',
+                    apiKey: 'synthetic-not-a-secret',
+                  })
+                : modelWith(fetch, configuration);
+            assert(model.estimateInputTokens);
+            const turn = yield* model.prepareTurn({
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    { kind: 'text', text: '' },
+                    { kind: 'text', text: ' exact user text\n' },
+                  ],
+                },
+              ],
+              system: ' exact system text\n',
+            });
+            assert(
+              turn.protocol === 'openai-responses' &&
+                turn.mode === 'foreground',
+            );
+            expect(fetch).not.toHaveBeenCalled();
+            const estimate = yield* model.estimateInputTokens(
+              structuredClone(turn),
+            );
+            expect(estimate).toStrictEqual({
+              inputTokens: 0,
+              coverage: 'responses-input',
+            });
+            expect(Object.isFrozen(estimate)).toBe(true);
+            expect(frames).toHaveLength(0);
+            const [url, init] = fetch.mock.calls[0]!;
+            expect(String(url)).toBe(
+              `${configuration.deployment.endpoint}/responses/input_tokens`,
+            );
+            expect(new Headers(init?.headers).get('authorization')).toBe(
+              'Bearer synthetic-not-a-secret',
+            );
+            expect(JSON.parse(String(init?.body))).toStrictEqual({
+              model: CONFIG.requestedModel,
+              input: [
+                {
+                  role: 'user',
+                  content: [
+                    { type: 'input_text', text: '' },
+                    { type: 'input_text', text: ' exact user text\n' },
+                  ],
+                },
+              ],
+              instructions: ' exact system text\n',
+              reasoning: { effort: 'high', mode: 'pro', summary: 'auto' },
+            });
+            for (const rejected of [
+              { ...turn, tools: REQUEST.tools! },
+              { ...turn, messages: [...turn.messages, ...turn.messages] },
+              { ...turn, requestedModel: 'another-model' },
+              {
+                ...turn,
+                transport:
+                  turn.transport.kind === 'http'
+                    ? {
+                        kind: 'websocket' as const,
+                        connectionId: '7bdca3ee-ae2a-4551-a7a5-4895b613b40b',
+                      }
+                    : { kind: 'http' as const },
+              },
+              {
+                ...turn,
+                messages: [
+                  {
+                    role: 'user' as const,
+                    content: [
+                      {
+                        kind: 'image' as const,
+                        mimeType: 'image/png',
+                        base64: '',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ])
+              expect(
+                yield* Effect.flip(model.estimateInputTokens(rejected)),
+              ).toMatchObject({ kind: 'unsupported' });
+            expect(fetch).toHaveBeenCalledTimes(1);
+            const omitted = yield* model.prepareTurn({
+              messages: turn.messages,
+              reasoning: null,
+            });
+            assert(omitted.mode === 'foreground');
+            yield* model.estimateInputTokens(omitted);
+            const secondBody = JSON.parse(
+              String(fetch.mock.calls[1]?.[1]?.body),
+            );
+            expect(secondBody).not.toHaveProperty('instructions');
+            expect(secondBody).not.toHaveProperty('reasoning');
+            const result = yield* model.generateTurn(turn);
+            expect(result.finishReason).toBe('stop');
+            expect(fetch).toHaveBeenCalledTimes(transport === 'http' ? 3 : 2);
+            expect(frames).toHaveLength(transport === 'http' ? 0 : 1);
+          }),
+        ),
+      );
+      expect(modelWith(fetch).estimateInputTokens).toBeUndefined();
+      expect(
+        modelWith(fetch, SUBSCRIPTION_CONFIG).estimateInputTokens,
+      ).toBeUndefined();
+    },
+  );
+
+  it.each([
+    {
+      name: 'missing receipt',
+      body: '{}',
+      status: 200,
+      kind: 'malformed-output',
+    },
+    {
+      name: 'wrong discriminator',
+      body: '{"object":"response","input_tokens":0}',
+      status: 200,
+      kind: 'malformed-output',
+    },
+    {
+      name: 'fractional count',
+      body: '{"object":"response.input_tokens","input_tokens":0.5}',
+      status: 200,
+      kind: 'malformed-output',
+    },
+    {
+      name: 'malformed JSON',
+      body: '{',
+      status: 200,
+      kind: 'malformed-output',
+    },
+    {
+      name: 'authentication rejection',
+      body: '{"error":{"message":"denied"}}',
+      status: 401,
+      kind: 'authentication',
+    },
+    {
+      name: 'provider rejection',
+      body: '{"error":{"message":"unavailable"}}',
+      status: 503,
+      kind: 'provider-rejection',
+    },
+  ])(
+    'reports $name during counting without a retry or a false zero',
+    async ({ body, status, kind }) => {
+      const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(
+        async () =>
+          new Response(body, {
+            status,
+            headers: {
+              'content-type': 'application/json',
+              'x-request-id': 'count-request',
+            },
+          }),
+      );
+      const model = modelWith(fetch, {
+        ...CONFIG,
+        supportsInputTokenEstimation: true,
+      });
+      assert(model.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        model.prepareTurn({ messages: REQUEST.messages }),
+      );
+      assert(turn.mode === 'foreground');
+      const error = await Effect.runPromise(
+        Effect.flip(model.estimateInputTokens(turn)),
+      );
+      expect(error).toMatchObject({
+        kind,
+        requestId: 'count-request',
+        model: CONFIG.requestedModel,
+      });
+      expect(error.cause).toBeDefined();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    { phase: 'headers', lateFailure: false },
+    { phase: 'body', lateFailure: false },
+    { phase: 'body', lateFailure: true },
+  ])(
+    'aborts and joins count $phase consumption (distinct late failure: $lateFailure)',
+    async ({ phase, lateFailure }) => {
+      let signal: AbortSignal | null | undefined;
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const late = new Error('distinct count-body failure');
+      const settled = vi.fn();
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async (_url, init) => {
+          signal = init?.signal;
+          assert(signal);
+          const aborted = new Promise<never>((_resolve, reject) => {
+            signal!.addEventListener(
+              'abort',
+              () => {
+                void gate.then(() => {
+                  settled();
+                  reject(lateFailure ? late : signal!.reason);
+                });
+              },
+              { once: true },
+            );
+          });
+          if (phase === 'headers') return aborted;
+          const result = Response.json({});
+          vi.spyOn(result, 'json').mockImplementation(() => aborted);
+          return result;
+        });
+      const model = modelWith(fetch, {
+        ...CONFIG,
+        supportsInputTokenEstimation: true,
+      });
+      assert(model.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        model.prepareTurn({ messages: REQUEST.messages }),
+      );
+      assert(turn.mode === 'foreground');
+      const fiber = Effect.runFork(model.estimateInputTokens(turn));
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      let finished = false;
+      const interruption = Effect.runPromise(Fiber.interrupt(fiber)).then(
+        () => {
+          finished = true;
+        },
+      );
+      await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+      expect(finished).toBe(false);
+      expect(settled).not.toHaveBeenCalled();
+      release();
+      await interruption;
+      expect(settled).toHaveBeenCalledTimes(1);
+      const exit = await Effect.runPromise(Fiber.await(fiber));
+      assert(exit._tag === 'Failure');
+      expect(exit.cause.reasons.filter(Cause.isInterruptReason)).toHaveLength(
+        1,
+      );
+      const defects = exit.cause.reasons.filter(Cause.isDieReason);
+      if (lateFailure)
+        expect(defects).toMatchObject([
+          { defect: { cause: late, model: CONFIG.requestedModel } },
+        ]);
+      else expect(defects).toHaveLength(0);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it.each(['stop', 'length'] as const)(
     'owns one WebSocket reader through a %s continuation and rejects old connection anchors',
     async (outcome) => {
       const requests: Record<string, unknown>[] = [];
+      const countFetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async () =>
+          Response.json(
+            {
+              error: { message: 'Counting is temporarily unavailable.' },
+            },
+            { status: 503 },
+          ),
+        );
+      vi.stubGlobal('fetch', countFetch);
       let connections = 0;
       let closes = 0;
       const configuration = await socketServer((socket) => {
@@ -269,10 +574,13 @@ describe('native OpenAI Responses protocol', () => {
       await Effect.runPromise(
         Effect.scoped(
           Effect.gen(function* () {
-            const model = yield* openaiResponsesWebSocketModel(configuration, {
-              kind: 'api-key',
-              apiKey: 'synthetic-not-a-secret',
-            });
+            const model = yield* openaiResponsesWebSocketModel(
+              { ...configuration, supportsInputTokenEstimation: true },
+              {
+                kind: 'api-key',
+                apiKey: 'synthetic-not-a-secret',
+              },
+            );
             const turn = yield* model.prepareTurn(REQUEST);
             assert(
               turn.protocol === 'openai-responses' &&
@@ -315,6 +623,19 @@ describe('native OpenAI Responses protocol', () => {
             };
             const next = yield* model.prepareTurn(nextRequest);
             assert(next.mode === 'foreground');
+            assert(model.estimateInputTokens);
+            expect(
+              yield* Effect.flip(model.estimateInputTokens(next)),
+            ).toMatchObject({ kind: 'unsupported' });
+            expect(countFetch).not.toHaveBeenCalled();
+            const cold = yield* model.prepareTurn({
+              messages: REQUEST.messages,
+            });
+            assert(cold.mode === 'foreground');
+            expect(
+              yield* Effect.flip(model.estimateInputTokens(cold)),
+            ).toMatchObject({ kind: 'provider-rejection' });
+            expect(countFetch).toHaveBeenCalledTimes(1);
             const second = yield* model.generateTurn(next);
             assert(second.providerResponseId !== null);
             expect(second.providerResponseId).toBe('resp_2');
@@ -639,6 +960,7 @@ describe('native OpenAI Responses protocol', () => {
             ),
           ).toMatchObject({ kind: 'unsupported' });
           expect(model.background).toBeUndefined();
+          expect(model.estimateInputTokens).toBeUndefined();
         }),
       ),
     );

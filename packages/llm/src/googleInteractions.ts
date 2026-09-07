@@ -286,7 +286,8 @@ function sdkFailure(cause: unknown): ModelError {
   const decoded = HttpFailureSchema.safeParse(cause);
   const status = decoded.success ? decoded.data.status : undefined;
   let kind: ModelError['kind'] = 'transport';
-  if (status !== undefined) {
+  if (cause instanceof SyntaxError) kind = 'malformed-output';
+  else if (status !== undefined) {
     kind =
       status === 401 || status === 403
         ? 'authentication'
@@ -965,5 +966,100 @@ export function googleInteractionsModel(
       });
     return result;
   });
-  return Object.freeze({ prepareTurn, streamTurn, generateTurn });
+  const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
+    Effect.fn('llm.google.estimateInputTokens')(function* (input) {
+      const parsed = ResolvedTurnSchema.safeParse(input);
+      if (!parsed.success || parsed.data.protocol !== 'google-interactions')
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message: 'The prepared Google count invocation is unsupported.',
+        });
+      const turn = parsed.data;
+      yield* invocationInput(turn, origin);
+      const message = turn.messages[0];
+      if (
+        turn.continuation !== undefined ||
+        turn.tools.length !== 0 ||
+        turn.messages.length !== 1 ||
+        message?.role !== 'user' ||
+        !message.content.every((part) => part.kind === 'text')
+      )
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Google counting supports one initial text-only user message and optional system text.',
+        });
+      const parts = message.content.map((part) => ({ text: part.text }));
+      let pending: ReturnType<typeof client.models.countTokens> | undefined;
+      const response = yield* Effect.tryPromise({
+        try: (signal) => {
+          pending = client.models.countTokens({
+            model: turn.requestedModel,
+            // Preserve the existing converted-content estimate, not a claim
+            // to count the full Interactions request or its thinking controls.
+            contents: [
+              ...(turn.system === undefined
+                ? []
+                : [{ role: 'system', parts: [{ text: turn.system }] }]),
+              { role: 'user', parts },
+            ],
+            config: {
+              abortSignal: signal,
+              httpOptions: { retryOptions: { attempts: 1 } },
+            },
+          });
+          return pending;
+        },
+        catch: sdkFailure,
+      }).pipe(
+        Effect.onExit((exit) => {
+          const operation = pending;
+          if (operation === undefined) return Effect.void;
+          // On interruption, Effect aborts its signal before this finalizer joins.
+          return Effect.tryPromise({
+            try: () => operation,
+            catch: (cause) => cause,
+          }).pipe(
+            Effect.catch((cause) => {
+              if (
+                Exit.isFailure(exit) &&
+                (exit.cause.reasons.some(
+                  (reason) =>
+                    Cause.isFailReason(reason) &&
+                    reason.error instanceof ModelError &&
+                    reason.error.cause === cause,
+                ) ||
+                  // The pinned SDK forwards abort without its reason. Its full
+                  // count promise exposes the resulting DOM AbortError.
+                  (Cause.hasInterrupts(exit.cause) &&
+                    cause instanceof DOMException &&
+                    cause.name === 'AbortError'))
+              )
+                return Effect.void;
+              return Effect.die(sdkFailure(cause));
+            }),
+            Effect.asVoid,
+          );
+        }),
+      );
+      const count = z
+        .object({ totalTokens: z.int().nonnegative() })
+        .safeParse(response);
+      if (!count.success)
+        return yield* new ModelError({
+          kind: 'malformed-output',
+          message: 'Google returned no valid input token estimate.',
+          cause: count.error,
+        });
+      return Object.freeze({
+        inputTokens: count.data.totalTokens,
+        coverage: 'google-converted-content' as const,
+      });
+    });
+  return Object.freeze({
+    prepareTurn,
+    streamTurn,
+    generateTurn,
+    ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),
+  });
 }

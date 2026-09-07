@@ -825,6 +825,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     .readonly(),
   BindingSchema.extend({
     protocol: z.literal('google-interactions'),
+    supportsInputTokenEstimation: z.boolean(),
     defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
   BindingSchema.extend({
@@ -836,7 +837,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
   BindingSchema.extend({
     protocol: z.literal('kimi-chat'),
     supportsImageInput: z.boolean(),
-    supportsMessageTokenEstimation: z.boolean(),
+    supportsInputTokenEstimation: z.boolean(),
     requiresPromptCacheKey: z.boolean(),
     thinkingControl: z.enum(['toggle', 'always', 'effort']),
     supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
@@ -887,6 +888,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
   BindingSchema.extend({
     protocol: z.literal('openai-responses'),
     background: z.enum(['supported', 'unsupported']),
+    supportsInputTokenEstimation: z.boolean(),
     supportsTemperature: z.boolean(),
     supportsMaxOutputTokens: z.boolean(),
     supportsStorage: z.boolean(),
@@ -954,6 +956,7 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     .readonly(),
   BindingSchema.extend({
     protocol: z.literal('anthropic-messages'),
+    supportsInputTokenEstimation: z.boolean(),
     supportsTemperature: z.boolean(),
     supportsForcedToolChoice: z.boolean(),
     defaults: AnthropicControlsSchema.omit({ toolChoice: true }).readonly(),
@@ -1471,6 +1474,20 @@ export class ModelError extends Data.TaggedError('ModelError')<
   z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
 > {}
 
+/** An input estimate with its counted scope, not generation usage. */
+export const InputTokenEstimateSchema = z
+  .strictObject({
+    inputTokens: z.int().nonnegative(),
+    coverage: z.enum([
+      'kimi-messages',
+      'google-converted-content',
+      'anthropic-message-input',
+      'responses-input',
+    ]),
+  })
+  .readonly();
+export type InputTokenEstimate = z.infer<typeof InputTokenEstimateSchema>;
+
 /** A configured executable value; it owns neither conversation nor retry policy. */
 export interface Model {
   prepareTurn(request: TurnRequest): Effect.Effect<ResolvedTurn, ModelError>;
@@ -1480,8 +1497,10 @@ export interface Model {
   generateTurn(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ): Effect.Effect<TurnResult, ModelError>;
-  /** Estimate the prepared messages, not total request or completion usage. */
-  estimateMessageTokens?(turn: ResolvedTurn): Effect.Effect<number, ModelError>;
+  /** Estimate supported prepared input and report the counted scope. */
+  estimateInputTokens?(
+    turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
+  ): Effect.Effect<InputTokenEstimate, ModelError>;
   readonly background?: {
     submit(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,

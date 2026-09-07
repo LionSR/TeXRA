@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const providerMocks = vi.hoisted(() => ({
   asExternalUri: vi.fn(async (uri: { toString: () => string }) => uri),
   getUser: vi.fn(),
-  invalidateRemoteAgentsAfterSignOut: vi.fn(async () => {}),
+  invalidateRemoteAgentsAfterSignOut: vi.fn(() => Effect.void),
   openExternal: vi.fn(async () => true),
   withPkcePermit: vi.fn((operation: unknown) => {
     const result = testDoubles.pkceTail.then(() =>

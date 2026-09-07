@@ -295,7 +295,7 @@ describe('agent package run lifecycle', () => {
       mocks.ownerInstalled = false;
     });
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
-    mocks.loadAgents.mockResolvedValue(undefined);
+    mocks.loadAgents.mockReturnValue(Effect.void);
     mocks.runValidatedAgent.mockImplementation(
       (_input: unknown, options: RunAgentOptions) => driveRun(options),
     );

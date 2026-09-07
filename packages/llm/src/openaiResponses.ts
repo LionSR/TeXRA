@@ -15,6 +15,7 @@ import {
   BackgroundSubmissionSchema,
   CancellationEvidenceSchema,
   ContinuationSchema,
+  InputTokenEstimateSchema,
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
@@ -1136,6 +1137,137 @@ const responseParameters = Effect.fn('llm.responses.parameters')(function* (
   return { turn, parameters };
 });
 
+/** Counts only the initial text input; the caller owns admission and retry policy. */
+const estimateResponseInput = Effect.fn('llm.responses.estimateInputTokens')(
+  function* (
+    config: OpenAIResponsesConfiguration,
+    origin: ResponseOrigin,
+    transport: ResponsesTransport,
+    client: OpenAI,
+    input: Extract<ResolvedTurn, { mode: 'foreground' }>,
+  ) {
+    const { turn, parameters } = yield* responseParameters(
+      config,
+      origin,
+      transport,
+      input,
+      'foreground',
+    );
+    if (
+      turn.continuation !== undefined ||
+      turn.tools.length !== 0 ||
+      turn.messages.length !== 1 ||
+      turn.messages[0]?.role !== 'user' ||
+      turn.messages[0].content.some((part) => part.kind !== 'text')
+    )
+      return yield* new ModelError({
+        kind: 'unsupported',
+        message:
+          'Input estimation supports one initial text-only user message without tools or continuation.',
+      });
+
+    let requestId: string | undefined;
+    const enrich = (error: ModelError) =>
+      new ModelError({
+        ...error,
+        message: error.message,
+        cause: error.cause,
+        requestId: error.requestId ?? requestId,
+        model: error.model ?? origin.requestedModel,
+      });
+    let request: { signal: AbortSignal; pending: Promise<unknown> } | undefined;
+    const raw = yield* Effect.tryPromise({
+      try: (signal) => {
+        const pending = client.responses.inputTokens
+          .count(
+            {
+              model: parameters.model,
+              input: parameters.input,
+              ...(parameters.instructions !== undefined
+                ? { instructions: parameters.instructions }
+                : {}),
+              ...(parameters.reasoning !== undefined
+                ? { reasoning: parameters.reasoning }
+                : {}),
+            },
+            { signal, maxRetries: 0 },
+          )
+          .asResponse()
+          .then((response) => {
+            requestId = response.headers.get('x-request-id') ?? undefined;
+            return response.json() as Promise<unknown>;
+          });
+        request = { signal, pending };
+        return pending;
+      },
+      catch: (cause) =>
+        enrich(
+          cause instanceof SyntaxError
+            ? new ModelError({
+                kind: 'malformed-output',
+                message: 'The input token count returned malformed JSON.',
+                cause,
+              })
+            : openaiFailure(cause),
+        ),
+    }).pipe(
+      // On interruption, tryPromise aborts before this uninterruptible join.
+      Effect.onExit((exit) => {
+        if (request === undefined) return Effect.void;
+        const { signal, pending } = request;
+        return Effect.tryPromise({
+          try: () => pending,
+          catch: (cause) => cause,
+        }).pipe(
+          Effect.catch((cause) => {
+            const repeated =
+              Exit.isFailure(exit) &&
+              exit.cause.reasons.some(
+                (reason) =>
+                  Cause.isFailReason(reason) &&
+                  reason.error instanceof ModelError &&
+                  reason.error.cause === cause,
+              );
+            return repeated ||
+              cause === signal.reason ||
+              (cause instanceof OpenAI.APIUserAbortError &&
+                cause.cause === signal.reason)
+              ? Effect.void
+              : Effect.die(
+                  enrich(
+                    new ModelError({
+                      kind: 'transport',
+                      message:
+                        'The input token count failed while joining its request.',
+                      cause,
+                    }),
+                  ),
+                );
+          }),
+        );
+      }),
+    );
+    const parsed = z
+      .object({
+        object: z.literal('response.input_tokens'),
+        input_tokens: InputTokenEstimateSchema.unwrap().shape.inputTokens,
+      })
+      .safeParse(raw);
+    if (!parsed.success)
+      return yield* enrich(
+        new ModelError({
+          kind: 'malformed-output',
+          message: 'The input token count returned an invalid receipt.',
+          cause: parsed.error,
+        }),
+      );
+    return InputTokenEstimateSchema.parse({
+      inputTokens: parsed.data.input_tokens,
+      coverage: 'responses-input',
+    });
+  },
+);
+
 const ResponseAuthenticationSchema = z.discriminatedUnion('kind', [
   z
     .strictObject({
@@ -1817,6 +1949,20 @@ export function openaiResponsesModel(
     prepareTurn,
     streamTurn,
     generateTurn,
+    ...(config.supportsInputTokenEstimation
+      ? {
+          estimateInputTokens: (
+            input: Extract<ResolvedTurn, { mode: 'foreground' }>,
+          ) =>
+            estimateResponseInput(
+              config,
+              origin,
+              { kind: 'http' },
+              client,
+              input,
+            ),
+        }
+      : {}),
     ...(config.background === 'supported'
       ? { background: Object.freeze({ submit, observe, cancel }) }
       : {}),
@@ -1877,6 +2023,17 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       cause instanceof ModelError ? Effect.fail(cause) : Effect.die(cause),
     ),
   );
+  const countClient = config.supportsInputTokenEstimation
+    ? new OpenAI({
+        apiKey: selected.token,
+        defaultHeaders: selected.headers,
+        baseURL: config.deployment.endpoint,
+        maxRetries: 0,
+        organization: null,
+        project: null,
+        logLevel: 'off',
+      })
+    : undefined;
   const endpoint = new URL(config.deployment.endpoint);
   if (endpoint.username || endpoint.password)
     return yield* new ModelError({
@@ -2263,5 +2420,27 @@ export const openaiResponsesWebSocketModel = Effect.fn(
     });
   const generateTurn: Model['generateTurn'] = (turn) =>
     completedTurn(streamTurn(turn));
-  return Object.freeze({ prepareTurn, streamTurn, generateTurn });
+  return Object.freeze({
+    prepareTurn,
+    streamTurn,
+    generateTurn,
+    ...(countClient
+      ? {
+          estimateInputTokens: Effect.fn(
+            'llm.responses.webSocketEstimateInputTokens',
+          )(function* (input: Extract<ResolvedTurn, { mode: 'foreground' }>) {
+            if (invalid) return yield* invalid;
+            if ((yield* Clock.currentTimeMillis) - openedAt >= 55 * 60_000)
+              return yield* closed;
+            return yield* estimateResponseInput(
+              config,
+              origin,
+              transport,
+              countClient,
+              input,
+            );
+          }),
+        }
+      : {}),
+  });
 });

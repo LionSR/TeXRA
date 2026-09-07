@@ -2,6 +2,7 @@
 import { createRequire } from 'node:module';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
@@ -241,7 +242,7 @@ function captureNextRenderOnSubmit(options?: { recordRender?: boolean }): {
 async function stubAgentRegistry(): Promise<() => void> {
   const agents = await import('@agent/index');
   const spies = [
-    vi.spyOn(agents, 'loadAgents').mockResolvedValue(undefined),
+    vi.spyOn(agents, 'loadAgents').mockReturnValue(Effect.void),
     vi.spyOn(agents, 'getVisibleAgents').mockReturnValue([]),
   ];
   return () => {

@@ -7,11 +7,12 @@ import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TurnRequest, TurnResult } from '@texra-ai/llm/turn';
 
-function model(store = true) {
+function model(store = true, supportsInputTokenEstimation = true) {
   return googleInteractionsModel(
     {
       protocol: 'google-interactions',
       requestedModel: 'gemini-test',
+      supportsInputTokenEstimation,
       deployment: {
         endpoint: 'https://synthetic.invalid',
         credentialScope: 'test-account',
@@ -218,6 +219,240 @@ describe('canonical Google Interactions protocol', () => {
     vi.unstubAllEnvs();
   });
 
+  it.each([undefined, '', ' Exact system\n'])(
+    'counts exact cold converted content with system %j without generating',
+    async (system) => {
+      const inputTokens = system === undefined ? 0 : 7;
+      fetchModel.mockImplementation(async () =>
+        Response.json({ totalTokens: inputTokens }),
+      );
+      const configured = model();
+      expect(model(true, false).estimateInputTokens).toBeUndefined();
+      assert(configured.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        configured.prepareTurn({
+          ...(system === undefined ? {} : { system }),
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { kind: 'text', text: '  exact\n' },
+                { kind: 'text', text: '' },
+                { kind: 'text', text: 'last' },
+              ],
+            },
+          ],
+        }),
+      );
+      assert(turn.mode === 'foreground');
+      expect(fetchModel).not.toHaveBeenCalled();
+      const estimate = await Effect.runPromise(
+        configured.estimateInputTokens(JSON.parse(JSON.stringify(turn))),
+      );
+      expect(estimate).toEqual({
+        inputTokens,
+        coverage: 'google-converted-content',
+      });
+      expect(Object.isFrozen(estimate)).toBe(true);
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchModel.mock.calls[0];
+      expect(String(url)).toBe(
+        'https://synthetic.invalid/v1beta/models/gemini-test:countTokens',
+      );
+      expect(JSON.parse(init!.body as string)).toEqual({
+        contents: [
+          ...(system === undefined
+            ? []
+            : [{ role: 'system', parts: [{ text: system }] }]),
+          {
+            role: 'user',
+            parts: [{ text: '  exact\n' }, { text: '' }, { text: 'last' }],
+          },
+        ],
+      });
+      expect(new Headers(init!.headers).get('x-goog-api-key')).toBe(
+        'synthetic-key',
+      );
+    },
+  );
+
+  it.each(['tools', 'media', 'history', 'binding', 'choice'] as const)(
+    'rejects unsupported %s before counting any Google input',
+    async (kind) => {
+      const configured = model();
+      assert(configured.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        configured.prepareTurn({
+          messages: [{ role: 'user', content: [{ kind: 'text', text: 'x' }] }],
+        }),
+      );
+      assert(turn.protocol === 'google-interactions');
+      let input: unknown = turn;
+      if (kind === 'tools') input = { ...turn, tools: request().tools };
+      if (kind === 'media') input = { ...turn, messages: request().messages };
+      if (kind === 'history')
+        input = { ...turn, messages: [...turn.messages, ...turn.messages] };
+      if (kind === 'binding')
+        input = {
+          ...turn,
+          deployment: {
+            ...turn.deployment,
+            credentialScope: 'another-account',
+          },
+        };
+      if (kind === 'choice')
+        input = {
+          ...turn,
+          controls: { ...turn.controls, toolChoice: { name: 'absent' } },
+        };
+      await expect(
+        Effect.runPromise(
+          configured.estimateInputTokens(JSON.parse(JSON.stringify(input))),
+        ),
+      ).rejects.toMatchObject({ _tag: 'ModelError' });
+      expect(fetchModel).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { body: '{}', status: 200, kind: 'malformed-output' },
+    { body: '{"totalTokens":-1}', status: 200, kind: 'malformed-output' },
+    { body: '{', status: 200, kind: 'malformed-output' },
+    {
+      body: '{"error":{"message":"denied"}}',
+      status: 401,
+      kind: 'authentication',
+    },
+    {
+      body: '{"error":{"message":"busy"}}',
+      status: 429,
+      kind: 'provider-rejection',
+    },
+  ])(
+    'rejects Google count receipt $body at HTTP $status without retry',
+    async ({ body, status, kind }) => {
+      fetchModel.mockImplementation(
+        async () =>
+          new Response(body, {
+            status,
+            headers: { 'content-type': 'application/json' },
+          }),
+      );
+      const configured = model();
+      assert(configured.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        configured.prepareTurn({
+          messages: [{ role: 'user', content: [{ kind: 'text', text: 'x' }] }],
+        }),
+      );
+      assert(turn.mode === 'foreground');
+      const exit = await Effect.runPromise(
+        Effect.exit(configured.estimateInputTokens(turn)),
+      );
+      assert(exit._tag === 'Failure');
+      expect(exit.cause.reasons).toHaveLength(1);
+      expect(exit.cause.reasons.find(Cause.isFailReason)?.error).toMatchObject({
+        kind,
+        ...(status === 200 ? {} : { status }),
+      });
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['headers', 'body', 'late-body-failure'] as const)(
+    'aborts and joins the complete Google count promise during %s',
+    async (phase) => {
+      let enter: () => void = () => {};
+      const entered = new Promise<void>((resolve) => {
+        enter = resolve;
+      });
+      let abort: () => void = () => {};
+      const aborted = new Promise<void>((resolve) => {
+        abort = resolve;
+      });
+      let release: () => void = () => {};
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const failure = new Error('Late count read failure');
+      fetchModel.mockImplementation(async (_url, init) => {
+        assert(init?.signal);
+        const signal = init.signal;
+        if (phase === 'headers')
+          return new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                abort();
+                void released.then(() =>
+                  reject(new DOMException('Aborted', 'AbortError')),
+                );
+              },
+              { once: true },
+            );
+            enter();
+          });
+        return new Response(
+          new ReadableStream<Uint8Array>(
+            {
+              start(controller) {
+                signal.addEventListener(
+                  'abort',
+                  () => {
+                    abort();
+                    void released.then(() =>
+                      controller.error(
+                        phase === 'late-body-failure'
+                          ? failure
+                          : new DOMException('Aborted', 'AbortError'),
+                      ),
+                    );
+                  },
+                  { once: true },
+                );
+              },
+              pull() {
+                enter();
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+          { headers: { 'content-type': 'application/json' } },
+        );
+      });
+      const configured = model();
+      assert(configured.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        configured.prepareTurn({
+          messages: [{ role: 'user', content: [{ kind: 'text', text: 'x' }] }],
+        }),
+      );
+      assert(turn.mode === 'foreground');
+      const fiber = Effect.runFork(configured.estimateInputTokens(turn));
+      await entered;
+      let finished = false;
+      const interruption = Effect.runPromise(Fiber.interrupt(fiber)).then(
+        (exit) => {
+          finished = true;
+          return exit;
+        },
+      );
+      await aborted;
+      expect(finished).toBe(false);
+      release();
+      await interruption;
+      const exit = await Effect.runPromise(Fiber.await(fiber));
+      assert(exit._tag === 'Failure');
+      expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+      if (phase === 'late-body-failure')
+        expect(
+          exit.cause.reasons.find(Cause.isDieReason)?.defect,
+        ).toMatchObject({ cause: failure });
+      else expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it.each([
     { store: true, includeSummary: true },
     { store: false, includeSummary: false },
@@ -354,6 +589,11 @@ describe('canonical Google Interactions protocol', () => {
         configured.prepareTurn(exchange(restored)),
       );
       assert(next.mode === 'foreground');
+      assert(configured.estimateInputTokens);
+      await expect(
+        Effect.runPromise(configured.estimateInputTokens(next)),
+      ).rejects.toMatchObject({ kind: 'unsupported' });
+      expect(fetchModel).toHaveBeenCalledTimes(1);
       fetchModel.mockImplementationOnce(async () =>
         response([
           {

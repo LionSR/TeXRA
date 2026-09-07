@@ -7,6 +7,7 @@ import { z } from 'zod';
 // Local imports - canonical model contract
 import { openaiFailure } from './openaiError.js';
 import {
+  InputTokenEstimateSchema,
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
@@ -1765,9 +1766,11 @@ export function openaiChatModel(
       return completed;
     },
   );
-  const estimateMessageTokens =
-    config.protocol === 'kimi-chat' && config.supportsMessageTokenEstimation
-      ? Effect.fn('llm.estimateMessageTokens')(function* (input: ResolvedTurn) {
+  const estimateInputTokens =
+    config.protocol === 'kimi-chat' && config.supportsInputTokenEstimation
+      ? Effect.fn('llm.estimateInputTokens')(function* (
+          input: Extract<ResolvedTurn, { mode: 'foreground' }>,
+        ) {
           const parsed = ResolvedTurnSchema.safeParse(input);
           if (
             !parsed.success ||
@@ -1875,13 +1878,16 @@ export function openaiChatModel(
               cause: receipt.error,
             });
           }
-          return receipt.data.data.total_tokens;
+          return InputTokenEstimateSchema.parse({
+            inputTokens: receipt.data.data.total_tokens,
+            coverage: 'kimi-messages',
+          });
         }, Effect.scoped)
       : undefined;
   return Object.freeze({
     prepareTurn,
     streamTurn,
     generateTurn,
-    ...(estimateMessageTokens === undefined ? {} : { estimateMessageTokens }),
+    ...(estimateInputTokens === undefined ? {} : { estimateInputTokens }),
   });
 }

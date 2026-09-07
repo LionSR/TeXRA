@@ -1,6 +1,10 @@
 // Third-party imports
-import Anthropic, { APIError, APIConnectionError } from '@anthropic-ai/sdk';
-import { Cause, Effect, Stream } from 'effect';
+import Anthropic, {
+  APIError,
+  APIConnectionError,
+  APIUserAbortError,
+} from '@anthropic-ai/sdk';
+import { Cause, Effect, Exit, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
@@ -976,5 +980,118 @@ export function anthropicMessagesModel(
       });
     return completed;
   });
-  return Object.freeze({ prepareTurn, streamTurn, generateTurn });
+  const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
+    Effect.fn('llm.anthropic.estimateInputTokens')(function* (input) {
+      const parsed = ResolvedTurnSchema.safeParse(input);
+      if (!parsed.success || parsed.data.protocol !== 'anthropic-messages')
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message: 'The prepared Anthropic count invocation is unsupported.',
+        });
+      const turn = parsed.data;
+      const body = yield* invocationBody(turn, origin, config);
+      const message = turn.messages[0];
+      if (
+        turn.tools.length !== 0 ||
+        turn.messages.length !== 1 ||
+        message?.role !== 'user' ||
+        !message.content.every((part) => part.kind === 'text')
+      )
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Anthropic counting supports one initial text-only user message and optional system text.',
+        });
+      let requestId: string | undefined;
+      const failure = (cause: unknown) => {
+        const error = sdkFailure(cause);
+        return new ModelError({
+          ...error,
+          message: error.message,
+          cause,
+          requestId: error.requestId ?? requestId,
+          model: origin.requestedModel,
+        });
+      };
+      let pending: Promise<unknown> | undefined;
+      const response = yield* Effect.tryPromise({
+        try: (signal) => {
+          pending = client.messages
+            .countTokens(
+              {
+                model: body.model,
+                messages: body.messages,
+                ...(body.system === undefined ? {} : { system: body.system }),
+                ...(body.thinking === undefined
+                  ? {}
+                  : { thinking: body.thinking }),
+                ...(body.output_config === undefined
+                  ? {}
+                  : { output_config: body.output_config }),
+                ...(body.cache_control === undefined
+                  ? {}
+                  : { cache_control: body.cache_control }),
+              },
+              { signal },
+            )
+            .asResponse()
+            .then((response) => {
+              requestId = response.headers.get('request-id') ?? undefined;
+              return response.json() as Promise<unknown>;
+            });
+          return pending;
+        },
+        catch: failure,
+      }).pipe(
+        Effect.onExit((exit) => {
+          const operation = pending;
+          if (operation === undefined) return Effect.void;
+          // On interruption, Effect aborts its signal before this finalizer joins.
+          return Effect.tryPromise({
+            try: () => operation,
+            catch: (cause) => cause,
+          }).pipe(
+            Effect.catch((cause) => {
+              if (
+                Exit.isFailure(exit) &&
+                (exit.cause.reasons.some(
+                  (reason) =>
+                    Cause.isFailReason(reason) &&
+                    reason.error instanceof ModelError &&
+                    reason.error.cause === cause,
+                ) ||
+                  // The pinned SDK replaces caller abort reasons both before
+                  // headers and while forwarding abort to the response body.
+                  (Cause.hasInterrupts(exit.cause) &&
+                    (cause instanceof APIUserAbortError ||
+                      (cause instanceof DOMException &&
+                        cause.name === 'AbortError'))))
+              )
+                return Effect.void;
+              return Effect.die(failure(cause));
+            }),
+            Effect.asVoid,
+          );
+        }),
+      );
+      const count = z.object({ input_tokens: CountSchema }).safeParse(response);
+      if (!count.success)
+        return yield* new ModelError({
+          kind: 'malformed-output',
+          message: 'Anthropic returned no valid input token estimate.',
+          cause: count.error,
+          requestId,
+          model: origin.requestedModel,
+        });
+      return Object.freeze({
+        inputTokens: count.data.input_tokens,
+        coverage: 'anthropic-message-input' as const,
+      });
+    });
+  return Object.freeze({
+    prepareTurn,
+    streamTurn,
+    generateTurn,
+    ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),
+  });
 }

@@ -56,7 +56,7 @@ const REASONING_CONFIGS = [
     ...BASE_CONFIG,
     protocol: 'kimi-chat',
     supportsImageInput: true,
-    supportsMessageTokenEstimation: false,
+    supportsInputTokenEstimation: false,
     requiresPromptCacheKey: false,
     thinkingControl: 'toggle',
     supportedEfforts: [],
@@ -716,11 +716,11 @@ describe('native OpenAI Chat protocol', () => {
       .mockResolvedValueOnce(response(sse(chunk())));
     const config = {
       ...REASONING_CONFIGS[1],
-      supportsMessageTokenEstimation: true,
+      supportsInputTokenEstimation: true,
       requiresPromptCacheKey: true,
     };
     const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
-    assert(model.estimateMessageTokens !== undefined);
+    assert(model.estimateInputTokens !== undefined);
     const missingKey = await Effect.runPromise(
       Effect.flip(model.prepareTurn(REQUEST)),
     );
@@ -778,8 +778,8 @@ describe('native OpenAI Chat protocol', () => {
     expect(fetch).not.toHaveBeenCalled();
     const rehydrated = JSON.parse(JSON.stringify(prepared));
     expect(
-      await Effect.runPromise(model.estimateMessageTokens(rehydrated)),
-    ).toBe(17);
+      await Effect.runPromise(model.estimateInputTokens(rehydrated)),
+    ).toStrictEqual({ inputTokens: 17, coverage: 'kimi-messages' });
     expect(String(fetch.mock.calls[0]?.[0])).toBe(
       `${config.deployment.endpoint}/tokenizers/estimate-token-count`,
     );
@@ -817,9 +817,7 @@ describe('native OpenAI Chat protocol', () => {
         deployment: { ...config.deployment, credentialScope: 'foreign' },
       },
     ]) {
-      await Effect.runPromise(
-        Effect.flip(model.estimateMessageTokens(rejected)),
-      );
+      await Effect.runPromise(Effect.flip(model.estimateInputTokens(rejected)));
       await Effect.runPromise(Effect.flip(model.generateTurn(rejected)));
     }
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -827,7 +825,7 @@ describe('native OpenAI Chat protocol', () => {
       apiKey: 'synthetic',
       fetch,
     });
-    expect(ordinary.estimateMessageTokens).toBeUndefined();
+    expect(ordinary.estimateInputTokens).toBeUndefined();
     const ordinaryTurn = await Effect.runPromise(ordinary.prepareTurn(REQUEST));
     assert(ordinaryTurn.protocol === 'kimi-chat');
     expect(ordinaryTurn.controls.promptCacheKey).toBeNull();
@@ -877,16 +875,17 @@ describe('native OpenAI Chat protocol', () => {
         }),
       );
       const model = openaiChatModel(
-        { ...REASONING_CONFIGS[1], supportsMessageTokenEstimation: true },
+        { ...REASONING_CONFIGS[1], supportsInputTokenEstimation: true },
         {
           apiKey: 'synthetic',
           fetch,
         },
       );
-      assert(model.estimateMessageTokens !== undefined);
+      assert(model.estimateInputTokens !== undefined);
       const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
+      assert(turn.mode === 'foreground');
       const failure = await Effect.runPromise(
-        Effect.flip(model.estimateMessageTokens(turn)),
+        Effect.flip(model.estimateInputTokens(turn)),
       );
       expect(failure).toMatchObject({ kind, requestId: 'estimate-original' });
       expect(failure.cause).toBeDefined();
@@ -2936,7 +2935,7 @@ describe('native OpenAI Chat protocol', () => {
       if (estimating)
         config = {
           ...REASONING_CONFIGS[1],
-          supportsMessageTokenEstimation: true,
+          supportsInputTokenEstimation: true,
         };
       const model = openaiChatModel(config, {
         apiKey: 'synthetic',
@@ -2947,7 +2946,7 @@ describe('native OpenAI Chat protocol', () => {
       const failure = await Effect.runPromise(
         Effect.flip(
           estimating
-            ? model.estimateMessageTokens!(prepared).pipe(Effect.asVoid)
+            ? model.estimateInputTokens!(prepared).pipe(Effect.asVoid)
             : Stream.runForEach(model.streamTurn(prepared), (event) =>
                 Effect.sync(() => {
                   if (event.kind === 'delta') controller.error(cause);
@@ -3071,7 +3070,7 @@ describe('native OpenAI Chat protocol', () => {
       if (estimating)
         config = {
           ...REASONING_CONFIGS[1],
-          supportsMessageTokenEstimation: true,
+          supportsInputTokenEstimation: true,
         };
       const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
       const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
@@ -3093,7 +3092,7 @@ describe('native OpenAI Chat protocol', () => {
         return;
       }
       const operation = estimating
-        ? model.estimateMessageTokens!(prepared)
+        ? model.estimateInputTokens!(prepared)
         : Stream.runForEach(model.streamTurn(prepared), (event) =>
             Effect.sync(() => {
               if (event.kind === 'delta') onDelta();

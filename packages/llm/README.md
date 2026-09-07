@@ -141,13 +141,38 @@ tool-result media. Pricing and credential-route selection remain runtime-owned;
 no application caller has switched and neither old handler is deleted yet.
 
 Kimi preparation retains a caller-supplied `prompt_cache_key`; selected routes
-that require it reject missing keys. No session identity is invented. Selected
-Kimi routes may additionally expose a message-token estimate using the same
-lowered model and messages as generation. This count excludes tool definitions
-and is not total request usage or a generation allowance. There is no automatic
-preflight, retry or budget adjustment. Application admission must still supply
-the stable cache identity and must not treat the old automatically assigned
-image detail as authored intent; those production consumers have not switched.
+that require it reject missing keys. No session identity is invented. Application
+admission must not treat the old automatically assigned image detail as authored
+intent; those production consumers have not switched.
+
+Selected routes expose one optional `estimateInputTokens` operation when
+`supportsInputTokenEstimation` is selected. Its readonly receipt contains a
+nonnegative `inputTokens` count and a `coverage` value identifying what was counted:
+
+- `kimi-messages` retains the same lowered model and messages as generation,
+  including supported history and vision, but excludes top-level tool definitions.
+- `google-converted-content` retains the existing system-prepended content
+  conversion. It counts through `models.countTokens`, not the complete
+  Interactions request or its thinking controls. The pinned Developer API
+  converter rejects separate system, tools and generation configuration; the
+  broader [REST request form](https://ai.google.dev/api/tokens) is not substituted.
+- `anthropic-message-input` uses the generation lowering's message, system,
+  thinking, output and cache configuration with the stable
+  [count endpoint](https://platform.claude.com/docs/en/api/messages/count_tokens).
+  Counting does not itself populate a prompt cache.
+- `responses-input` uses the selected model, input, instructions and reasoning
+  with the [input-token endpoint](https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens/methods/count).
+  Both HTTP and acquired WebSocket models count over HTTP with their captured
+  credentials. Counting does not send a socket frame or change continuation state.
+
+The three new provider counts accept one foreground user message containing text,
+optional system instructions, no tools, no prior history and no continuation.
+Broader input fails explicitly; Kimi retains its existing wider coverage. Zero is
+a valid measurement, while missing or malformed counts fail. None of these
+receipts is total usage, a bill or a generation allowance. There is no automatic
+preflight, retry or budget adjustment. Application admission still owns context
+limits, output reduction and count-failure policy, and must supply the stable Kimi
+cache identity. Configured production helpers have not switched.
 
 Streaming Chat reads one SDK HTTP response through the native Effect SSE parser. This retains
 Kimi's and xAI's required `[DONE]` terminator, which the SDK's parsed iterator suppresses;

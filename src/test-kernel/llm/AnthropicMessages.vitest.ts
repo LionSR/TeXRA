@@ -19,6 +19,7 @@ const CONFIG: AnthropicMessagesConfiguration = {
   },
   supportsTemperature: true,
   supportsForcedToolChoice: true,
+  supportsInputTokenEstimation: true,
   defaults: {
     maxOutputTokens: 8192,
     temperature: 1,
@@ -201,6 +202,270 @@ describe('canonical Anthropic Messages protocol', () => {
     fetchModel.mockImplementation(async () => response(signedEvents()));
   });
   afterEach(() => vi.unstubAllEnvs());
+
+  it.each([undefined, '', ' Exact system\n'])(
+    'counts the selected Anthropic cold input with system %j without generating',
+    async (system) => {
+      const inputTokens = system === undefined ? 0 : 7;
+      fetchModel.mockImplementation(async () =>
+        Response.json({ input_tokens: inputTokens }),
+      );
+      const configured = model({
+        ...CONFIG,
+        defaults: {
+          ...CONFIG.defaults,
+          thinking: { mode: 'enabled', budgetTokens: 2048, display: 'omitted' },
+        },
+      });
+      expect(
+        model({ ...CONFIG, supportsInputTokenEstimation: false })
+          .estimateInputTokens,
+      ).toBeUndefined();
+      assert(configured.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        configured.prepareTurn({
+          ...(system === undefined ? {} : { system }),
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { kind: 'text', text: '  exact\n' },
+                { kind: 'text', text: '' },
+                { kind: 'text', text: 'last' },
+              ],
+            },
+          ],
+        }),
+      );
+      assert(turn.mode === 'foreground');
+      expect(fetchModel).not.toHaveBeenCalled();
+      const estimate = await Effect.runPromise(
+        configured.estimateInputTokens(JSON.parse(JSON.stringify(turn))),
+      );
+      expect(estimate).toEqual({
+        inputTokens,
+        coverage: 'anthropic-message-input',
+      });
+      expect(Object.isFrozen(estimate)).toBe(true);
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchModel.mock.calls[0];
+      expect(String(url)).toBe(
+        'https://synthetic.invalid/v1/messages/count_tokens',
+      );
+      expect(JSON.parse(init!.body as string)).toEqual({
+        model: 'selected-claude',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: '  exact\n' },
+              { type: 'text', text: '' },
+              { type: 'text', text: 'last' },
+            ],
+          },
+        ],
+        ...(system === undefined ? {} : { system }),
+        thinking: { type: 'enabled', budget_tokens: 2048, display: 'omitted' },
+        output_config: { effort: 'high' },
+        cache_control: { type: 'ephemeral', ttl: '1h' },
+      });
+      expect(new Headers(init!.headers).get('x-api-key')).toBe('selected-key');
+    },
+  );
+
+  it.each(['tools', 'media', 'history', 'binding', 'budget'] as const)(
+    'rejects unsupported %s before counting any Anthropic input',
+    async (kind) => {
+      const configured = model();
+      assert(configured.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        configured.prepareTurn({
+          messages: [{ role: 'user', content: [{ kind: 'text', text: 'x' }] }],
+        }),
+      );
+      assert(turn.protocol === 'anthropic-messages');
+      let input: unknown = turn;
+      if (kind === 'tools') input = { ...turn, tools: REQUEST.tools };
+      if (kind === 'media') input = { ...turn, messages: REQUEST.messages };
+      if (kind === 'history')
+        input = { ...turn, messages: [...turn.messages, ...turn.messages] };
+      if (kind === 'binding')
+        input = {
+          ...turn,
+          deployment: {
+            ...turn.deployment,
+            credentialScope: 'another-account',
+          },
+        };
+      if (kind === 'budget')
+        input = {
+          ...turn,
+          controls: {
+            ...turn.controls,
+            thinking: {
+              mode: 'enabled',
+              budgetTokens: 10000,
+              display: 'omitted',
+            },
+          },
+        };
+      await expect(
+        Effect.runPromise(
+          configured.estimateInputTokens(JSON.parse(JSON.stringify(input))),
+        ),
+      ).rejects.toMatchObject({ _tag: 'ModelError' });
+      expect(fetchModel).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { body: '{}', status: 200, kind: 'malformed-output' },
+    { body: '{"input_tokens":-1}', status: 200, kind: 'malformed-output' },
+    { body: '{', status: 200, kind: 'malformed-output' },
+    {
+      body: '{"error":{"message":"denied"}}',
+      status: 401,
+      kind: 'authentication',
+    },
+    {
+      body: '{"error":{"message":"busy"}}',
+      status: 429,
+      kind: 'provider-rejection',
+    },
+  ])(
+    'rejects Anthropic count receipt $body at HTTP $status without retry',
+    async ({ body, status, kind }) => {
+      fetchModel.mockImplementation(
+        async () =>
+          new Response(body, {
+            status,
+            headers: {
+              'content-type': 'application/json',
+              'request-id': 'count-request',
+            },
+          }),
+      );
+      const configured = model();
+      assert(configured.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        configured.prepareTurn({
+          messages: [{ role: 'user', content: [{ kind: 'text', text: 'x' }] }],
+        }),
+      );
+      assert(turn.mode === 'foreground');
+      const exit = await Effect.runPromise(
+        Effect.exit(configured.estimateInputTokens(turn)),
+      );
+      assert(exit._tag === 'Failure');
+      expect(exit.cause.reasons).toHaveLength(1);
+      expect(exit.cause.reasons.find(Cause.isFailReason)?.error).toMatchObject({
+        kind,
+        requestId: 'count-request',
+        model: 'selected-claude',
+        ...(status === 200 ? {} : { status }),
+      });
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['headers', 'body', 'late-body-failure'] as const)(
+    'aborts and joins the complete Anthropic count promise during %s',
+    async (phase) => {
+      let enter: () => void = () => {};
+      const entered = new Promise<void>((resolve) => {
+        enter = resolve;
+      });
+      let abort: () => void = () => {};
+      const aborted = new Promise<void>((resolve) => {
+        abort = resolve;
+      });
+      let release: () => void = () => {};
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const failure = new Error('Late count read failure');
+      fetchModel.mockImplementation(async (_url, init) => {
+        assert(init?.signal);
+        const signal = init.signal;
+        if (phase === 'headers')
+          return new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                abort();
+                void released.then(() =>
+                  reject(new DOMException('Aborted', 'AbortError')),
+                );
+              },
+              { once: true },
+            );
+            enter();
+          });
+        return new Response(
+          new ReadableStream<Uint8Array>(
+            {
+              start(controller) {
+                signal.addEventListener(
+                  'abort',
+                  () => {
+                    abort();
+                    void released.then(() =>
+                      controller.error(
+                        phase === 'late-body-failure'
+                          ? failure
+                          : new DOMException('Aborted', 'AbortError'),
+                      ),
+                    );
+                  },
+                  { once: true },
+                );
+              },
+              pull() {
+                enter();
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+          {
+            headers: {
+              'content-type': 'application/json',
+              'request-id': 'pending-count',
+            },
+          },
+        );
+      });
+      const configured = model();
+      assert(configured.estimateInputTokens);
+      const turn = await Effect.runPromise(
+        configured.prepareTurn({
+          messages: [{ role: 'user', content: [{ kind: 'text', text: 'x' }] }],
+        }),
+      );
+      assert(turn.mode === 'foreground');
+      const fiber = Effect.runFork(configured.estimateInputTokens(turn));
+      await entered;
+      let finished = false;
+      const interruption = Effect.runPromise(Fiber.interrupt(fiber)).then(
+        (exit) => {
+          finished = true;
+          return exit;
+        },
+      );
+      await aborted;
+      expect(finished).toBe(false);
+      release();
+      await interruption;
+      const exit = await Effect.runPromise(Fiber.await(fiber));
+      assert(exit._tag === 'Failure');
+      expect(Cause.hasInterrupts(exit.cause)).toBe(true);
+      if (phase === 'late-body-failure')
+        expect(
+          exit.cause.reasons.find(Cause.isDieReason)?.defect,
+        ).toMatchObject({ cause: failure, requestId: 'pending-count' });
+      else expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('round-trips signed and redacted blocks with two ordered local settlements and exact materialized media', async () => {
     vi.stubEnv('ANTHROPIC_AUTH_TOKEN', 'ambient-bearer');

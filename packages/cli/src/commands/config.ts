@@ -99,7 +99,7 @@ async function configureAgentRoster(
   await initLocalCliPlatform(context);
   // The controller below resolves agent keys, so the registry must be loaded
   // first; the honest roster read happens once, later, where it is emitted.
-  await loadAgents({ includeRemote: false });
+  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
   const roster = createWorkspaceAgentRosterController();
   const customRequested =
     input.workflow !== undefined || input.toolUse !== undefined;
