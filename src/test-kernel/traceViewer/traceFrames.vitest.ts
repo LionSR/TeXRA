@@ -118,8 +118,11 @@ function legacyTrace(
 describe('traceEvents legacy-status fallback (issue #7188)', () => {
   it('delivers an oversized first row intact without an empty intermediate frame', () => {
     const name = 'a'.repeat(300 * 1024);
-    const trace = legacyTrace(undefined);
-    trace.config = AgentConfigSchema.parse({ ...trace.config, agent: name });
+    const source = legacyTrace(undefined);
+    const trace = {
+      ...source,
+      config: AgentConfigSchema.parse({ ...source.config, agent: name }),
+    };
     const frames = [
       ...traceFrames(trace, 'trace', {
         kind: 'subscribe',
