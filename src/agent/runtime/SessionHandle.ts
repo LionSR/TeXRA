@@ -49,7 +49,7 @@ import {
 } from '@agent/storage/executionLease';
 import { finalizeRun } from '@agent/storage/executionLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { createLog } from '@logger/logUtils';
+import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
 import { effectRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -60,6 +60,7 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
+  isTranscriptEvent,
   RUN_OUTCOME,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
@@ -554,7 +555,12 @@ export class SessionHandle {
   publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
     if (this.disposed) return;
     const draft = runEventDraft(streamId, event);
-    if (draft) this.publish([draft]);
+    if (draft)
+      this.publish([
+        isTranscriptEvent(draft)
+          ? { ...draft, transcriptDebug: isDebugModeEnabled() }
+          : draft,
+      ]);
   }
 
   /**

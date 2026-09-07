@@ -28,7 +28,12 @@ function createState(
   events: string[],
   overrides: Partial<PRSubscriptionState> = {},
 ): PRSubscriptionState {
-  const listener = (text: string) => events.push(text);
+  const listener = (text: string): Effect.Effect<void> => {
+    // Record on the emit turn (PollEventListener's synchronous phase); there
+    // is no deferred delivery to run.
+    events.push(text);
+    return Effect.void;
+  };
   return createPRSubscriptionState({
     listeners: new Set([listener]),
     currentShaState: createPRCurrentShaState(SHA),

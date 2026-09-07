@@ -21,7 +21,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkError/errorPatterns';
-import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
+import { attachPartialText } from '@common/errors/sdkError/errorMetadata';
 import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
 import type {
   FileLocation,
@@ -300,14 +300,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         this.trackInputTokens(response.usage, 'streaming response');
         return { response, updatedMessages };
       } catch (err) {
-        return handleStreamingFailure(err, {
-          finalizeOnError: () =>
-            this.finalizeProgressStreamsOnError(thinking, output),
-          // Lift the accumulated partial text onto the error so the retry UI
-          // can show the tail (parity with the other streaming providers).
-          partialTail: () =>
-            takeTail(aggregator.getFullContent(), PARTIAL_TEXT_TAIL_MAX),
-        });
+        this.finalizeProgressStreamsOnError(thinking, output);
+        attachPartialText(
+          err,
+          takeTail(aggregator.getFullContent(), PARTIAL_TEXT_TAIL_MAX),
+        );
+        throw err;
       }
     }
 

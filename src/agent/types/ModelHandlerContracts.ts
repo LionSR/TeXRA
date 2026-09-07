@@ -139,16 +139,6 @@ export type ExtractNormalizedResponseResult = ExtractResponseBase<
 >;
 
 /**
- * Result from checking stop conditions.
- */
-export interface StopConditionsResult {
-  /** Whether the turn should end */
-  endTurn: boolean;
-  /** Whether generation should stop */
-  shouldStop: boolean;
-}
-
-/**
  * Shared tool-call base. Members of {@link SdkToolCall} specialize this with
  * their provider literal, input, and raw wire type. Provider-specific extras
  * (e.g. Google `thoughtSignature`) are intersected at the alias, not via a

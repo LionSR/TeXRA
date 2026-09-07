@@ -14,6 +14,7 @@ import {
 } from './codexConstants';
 import { type CodexSession } from './codexSessionTypes';
 import type { Effect } from 'effect';
+import type { HttpClient } from 'effect/unstable/http';
 
 export interface CodexLoopbackLoginOptions {
   coordinator: LoopbackOAuthCoordinator<CodexSession>;
@@ -22,7 +23,7 @@ export interface CodexLoopbackLoginOptions {
 
 export function loginWithLoopback(
   options: CodexLoopbackLoginOptions,
-): Effect.Effect<CodexSession, unknown> {
+): Effect.Effect<CodexSession, unknown, HttpClient.HttpClient> {
   return loginWithOAuthLoopback({
     coordinator: options.coordinator,
     openBrowser: options.openBrowser,

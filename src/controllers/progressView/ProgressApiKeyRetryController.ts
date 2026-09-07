@@ -2,6 +2,7 @@ import { Effect, Exit, Semaphore } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
+import { hostPort } from '@controllers/effectPort';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
@@ -10,7 +11,6 @@ import {
   quotaFallbackRuntimes,
   type QuotaFallbackRuntime,
 } from '@model/quotaFallbackRoutes';
-import { effectRuntime } from '@platform/processRuntime';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
 import {
   isKimiCodeExclusiveModel,
@@ -36,36 +36,8 @@ interface ProgressApiKeyRetryRequest {
   chatGptSubscriptionEligible?: boolean;
 }
 
-interface ProgressApiKeyPreparationResult {
-  proceeded: boolean;
-  /** Exhaustion reasons whose quota-fallback toggle was turned off. */
-  disabledQuotaRoutes: readonly ExhaustionReason[];
-}
-
-interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResult {
-  retried: boolean;
-}
-
 interface ProgressApiRoutingSnapshot {
   readonly quotaRoutes: ReadonlyMap<ExhaustionReason, boolean>;
-}
-
-function noRetryResult(): ProgressApiKeyRetryResult {
-  return {
-    proceeded: false,
-    retried: false,
-    disabledQuotaRoutes: [],
-  };
-}
-
-/** A host port call (credentials, prompts, toggles, the retry launch). Its
- *  rejection is the host's own error and reaches the caller with the same
- *  identity from the Promise edge. */
-function port<A>(call: () => A | PromiseLike<A>): Effect.Effect<A, unknown> {
-  return Effect.tryPromise({
-    try: async () => call(),
-    catch: (error) => error,
-  });
 }
 
 export interface ProgressApiKeyRetryControllerDeps {
@@ -133,13 +105,9 @@ export class ProgressApiKeyRetryController {
     return this.deps.quotaFallbackRuntimes ?? quotaFallbackRuntimes;
   }
 
-  useOwnApiKey(
-    request: ProgressApiKeyRetryRequest,
-  ): Promise<ProgressApiKeyRetryResult> {
-    return effectRuntime().runPromise(this.switchToOwnApiKey(request));
-  }
-
-  private readonly switchToOwnApiKey = Effect.fn(
+  /** Switch this retry onto the user's own key and relaunch it. The host
+   *  arm that took the request runs this where it stands. */
+  readonly useOwnApiKey = Effect.fn(
     'ProgressApiKeyRetryController.useOwnApiKey',
   )(function* (
     this: ProgressApiKeyRetryController,
@@ -151,10 +119,10 @@ export class ProgressApiKeyRetryController {
         request.exhaustionReason,
       )
     ) {
-      return noRetryResult();
+      return;
     }
 
-    const proceeded = yield* this.ensureOwnApiKeyReady({
+    const proceeded = yield* this.ensureOwnApiKey({
       ...request,
       provider: this.credentialProviderFor(request),
     });
@@ -162,104 +130,17 @@ export class ProgressApiKeyRetryController {
       !proceeded ||
       !this.deps.isRetryPending(request.stream, request.requestId)
     ) {
-      return noRetryResult();
+      return;
     }
 
-    const committed = yield* this.commitOwnApiKeyRouting(request, () =>
+    yield* this.commitOwnApiKeyRouting(request, () =>
       this.deps.triggerRetry(request.stream, request.requestId),
     );
-    return committed ? { ...committed, retried: true } : noRetryResult();
   });
 
-  /**
-   * Serialize one own-API-key routing commit: switch the routing for `action`
-   * and restore it when `action` fails or reports it never used the
-   * switches. Resolves to the preparation (whose switches stay on for the
-   * retry) or undefined when the retry identity is no longer pending.
-   *
-   * The request may have been dismissed or replaced while this callback
-   * waited behind another stream's routing commit. The pending identity is
-   * re-checked once inside the lane, before touching global routing, so a
-   * stale switch cannot briefly rebind credentials.
-   */
-  private commitOwnApiKeyRouting(
-    request: ProgressApiKeyRetryRequest,
-    action: () => boolean | PromiseLike<boolean>,
-  ): Effect.Effect<ProgressApiKeyPreparationResult | undefined, unknown> {
-    return this.routingLane.withPermit(
-      Effect.scoped(this.routingTransaction(request, action)),
-    );
-  }
-
-  private readonly routingTransaction = Effect.fn(
-    'ProgressApiKeyRetryController.commitOwnApiKeyRouting',
-  )(function* (
-    this: ProgressApiKeyRetryController,
-    request: ProgressApiKeyRetryRequest,
-    action: () => boolean | PromiseLike<boolean>,
-  ) {
-    if (!this.deps.isRetryPending(request.stream, request.requestId)) {
-      return undefined;
-    }
-    const before = this.routingSnapshot();
-    // One chain: turn off every matching quota-fallback preference so the
-    // retry rebuilds onto the fallback credential. Remark: prefer-off sticks
-    // after the quota resets — users may forget to re-enable it.
-    const disabledQuotaRoutes: ExhaustionReason[] = [];
-    for (const runtime of this.fallbackRuntimes) {
-      if (
-        !runtime.getEnabled() ||
-        !this.shouldDisableRuntime(runtime, request)
-      ) {
-        continue;
-      }
-      const reason = runtime.descriptor.exhaustionReason;
-      disabledQuotaRoutes.push(reason);
-      // The compensation is registered before its setter runs: a setter can
-      // mutate in memory and then reject on persistence, so a throw midway
-      // must roll back every switch that may have landed instead of
-      // stranding global toggles the retry never uses. Finalizers run last
-      // registered first, so the rollback is in reverse application order
-      // and every restore is attempted. A restore that fails is logged here,
-      // where the rollback is owned, then dies: when a switch or the action
-      // failed, the caller sees that failure and the restore's defect stays
-      // behind it in the Cause; when the action reported no retry, the first
-      // restore to fail (the last switch applied) reaches the caller as its
-      // own error.
-      yield* Effect.addFinalizer((exit) =>
-        Exit.isSuccess(exit) && exit.value !== undefined
-          ? Effect.void
-          : Effect.tryPromise({
-              try: () =>
-                runtime.restoreEnabled(before.quotaRoutes.get(reason) ?? false),
-              catch: (error) => error,
-            }).pipe(
-              Effect.tapError((error) =>
-                Effect.sync(() => {
-                  log.warn(
-                    `Failed to restore the ${reason} quota-fallback preference after the retry did not use it: ${toErrorMessage(error)}`,
-                  );
-                }),
-              ),
-              Effect.orDie,
-            ),
-      );
-      yield* port(() => runtime.setEnabled(false));
-    }
-
-    const actionSucceeded = yield* port(action);
-    return actionSucceeded
-      ? { proceeded: true, disabledQuotaRoutes }
-      : undefined;
-  });
-
-  ensureOwnApiKey(
-    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
-  ): Promise<boolean> {
-    return effectRuntime().runPromise(this.ensureOwnApiKeyReady(request));
-  }
-
-  private readonly ensureOwnApiKeyReady = Effect.fn(
+  /** Whether the user has (or has just entered) a usable key for this
+   *  retry's credential owner. */
+  readonly ensureOwnApiKey = Effect.fn(
     'ProgressApiKeyRetryController.ensureOwnApiKey',
   )(function* (
     this: ProgressApiKeyRetryController,
@@ -276,7 +157,7 @@ export class ProgressApiKeyRetryController {
     //   usable direct key is enough consent to retry on it.
     if (requireChange) {
       const before = yield* this.readKeys(providersToCheck);
-      yield* port(() => this.deps.promptForApiKey(provider));
+      yield* hostPort(() => this.deps.promptForApiKey(provider));
       return yield* this.hasChangedUsableKey(providersToCheck, before);
     }
 
@@ -286,8 +167,83 @@ export class ProgressApiKeyRetryController {
     // none exists yet, and only re-check the keys after that prompt (so the
     // common already-set path reads the secret store once, not twice).
     if (yield* this.hasAnyUsableKey(providersToCheck)) return true;
-    yield* port(() => this.deps.promptForApiKey(provider));
+    yield* hostPort(() => this.deps.promptForApiKey(provider));
     return yield* this.hasAnyUsableKey(providersToCheck);
+  });
+
+  /**
+   * Serialize one own-API-key routing commit: switch the routing for `action`
+   * and restore it when `action` fails or reports it never used the
+   * switches. Returns whether the action used the routing, or false without
+   * running the action when the retry identity is no longer pending.
+   *
+   * The request may have been dismissed or replaced while this callback
+   * waited behind another stream's routing commit. The pending identity is
+   * re-checked once inside the lane, before touching global routing, so a
+   * stale switch cannot briefly rebind credentials.
+   */
+  private commitOwnApiKeyRouting(
+    request: ProgressApiKeyRetryRequest,
+    action: () => boolean | PromiseLike<boolean>,
+  ): Effect.Effect<boolean, unknown> {
+    return this.routingLane.withPermit(
+      Effect.scoped(this.routingTransaction(request, action)),
+    );
+  }
+
+  private readonly routingTransaction = Effect.fn(
+    'ProgressApiKeyRetryController.commitOwnApiKeyRouting',
+  )(function* (
+    this: ProgressApiKeyRetryController,
+    request: ProgressApiKeyRetryRequest,
+    action: () => boolean | PromiseLike<boolean>,
+  ) {
+    if (!this.deps.isRetryPending(request.stream, request.requestId)) {
+      return false;
+    }
+    const before = this.routingSnapshot();
+    // One chain: turn off every matching quota-fallback preference so the
+    // retry rebuilds onto the fallback credential. Remark: prefer-off sticks
+    // after the quota resets — users may forget to re-enable it.
+    for (const runtime of this.fallbackRuntimes) {
+      if (
+        !runtime.getEnabled() ||
+        !this.shouldDisableRuntime(runtime, request)
+      ) {
+        continue;
+      }
+      const reason = runtime.descriptor.exhaustionReason;
+      // The compensation is registered before its setter runs: a setter can
+      // mutate in memory and then reject on persistence, so a throw midway
+      // must roll back every switch that may have landed instead of
+      // stranding global toggles the retry never uses. Finalizers run last
+      // registered first, so the rollback is in reverse application order
+      // and every restore is attempted. A restore that fails is logged here,
+      // where the rollback is owned, then dies: when a switch or the action
+      // failed, the caller sees that failure and the restore's defect stays
+      // behind it in the Cause; when the action reported no retry, the first
+      // restore to fail (the last switch applied) reaches the caller as its
+      // own error.
+      yield* Effect.addFinalizer((exit) =>
+        Exit.isSuccess(exit) && exit.value === true
+          ? Effect.void
+          : hostPort(() =>
+              runtime.restoreEnabled(before.quotaRoutes.get(reason) ?? false),
+            ).pipe(
+              Effect.tapError((error) =>
+                Effect.sync(() => {
+                  log.warn(
+                    `Failed to restore the ${reason} quota-fallback preference after the retry did not use it: ${toErrorMessage(error)}`,
+                  );
+                }),
+              ),
+              Effect.orDie,
+            ),
+      );
+      yield* hostPort(() => runtime.setEnabled(false));
+    }
+
+    return yield* hostPort(action);
   });
 
   // OAuth subscriptions pin the fallback key provider (ChatGPT → openai,
@@ -346,16 +302,11 @@ export class ProgressApiKeyRetryController {
   runCopilotFallbackWithRouting(
     request: ProgressApiKeyRetryRequest,
     start: (copilotRouteOverride: CopilotRouteOverride) => Promise<boolean>,
-  ): Promise<boolean> {
+  ): Effect.Effect<boolean, unknown> {
     // The user chose "use own API key" for this retry. The direct-route
     // override travels only with the replacement launch; the standing
     // preference remains visible to concurrent and future runs.
-    return effectRuntime().runPromise(
-      Effect.map(
-        this.commitOwnApiKeyRouting(request, () => start('direct')),
-        (committed) => committed !== undefined,
-      ),
-    );
+    return this.commitOwnApiKeyRouting(request, () => start('direct'));
   }
 
   private routingSnapshot(): ProgressApiRoutingSnapshot {
@@ -375,7 +326,7 @@ export class ProgressApiKeyRetryController {
     return Effect.map(
       Effect.forEach(
         providers,
-        (provider) => port(() => this.deps.hasUsableKey(provider)),
+        (provider) => hostPort(() => this.deps.hasUsableKey(provider)),
         { concurrency: 'unbounded' },
       ),
       (checks) => checks.some(Boolean),
@@ -402,7 +353,7 @@ export class ProgressApiKeyRetryController {
         providers,
         (provider) =>
           Effect.map(
-            port(() => this.deps.readKey(provider)),
+            hostPort(() => this.deps.readKey(provider)),
             (key) => [provider, key] as const,
           ),
         { concurrency: 'unbounded' },

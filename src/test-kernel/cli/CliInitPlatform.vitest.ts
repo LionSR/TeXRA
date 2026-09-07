@@ -137,9 +137,17 @@ vi.mock('@platform/defaults/nodeAgentRuntime', () => ({
   initNodeAgentRuntime: mocks.initNodeAgentRuntime,
 }));
 
-vi.mock('@telemetry/UsageLogService', () => ({
-  UsageLogService: { initialize: vi.fn(), dispose: vi.fn() },
-}));
+// The two lifecycle arms are Effects the host runs, so the doubles answer
+// with one rather than `undefined`.
+vi.mock('@telemetry/UsageLogService', async () => {
+  const { Effect: effect } = await import('effect');
+  return {
+    UsageLogService: {
+      initialize: vi.fn(() => effect.void),
+      dispose: vi.fn(() => effect.void),
+    },
+  };
+});
 
 // First-init dependencies: only exercised when tryPlatform() returns undefined.
 // Most cases keep tryPlatform truthy and skip this block, so these stubs are

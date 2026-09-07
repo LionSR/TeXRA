@@ -37,7 +37,7 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkError/errorPatterns';
 import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
-import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
+import { attachPartialText } from '@common/errors/sdkError/errorMetadata';
 import { isGpt5ModelName } from '@model/modelNames';
 import type {
   OpenAIResponseProviderCapabilities,
@@ -1730,24 +1730,14 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
 
       return this.finalizeResponse(response, ctx);
     } catch (error) {
-      return handleStreamingFailure(error, {
-        // Finalize the progress streams on error so the view does not hang
-        // in a loading state (no-op if the stream never opened or already
-        // finalized). Note: this only runs when `recover` above (the
-        // `retrieveAfterUnhandledStreamEvent` polling fallback attempted at
-        // both the event-loop catch and the `finalResponse()` catch) was
-        // either unavailable or itself failed — a successful recovery
-        // returns a valid `response` and never reaches this catch.
-        finalizeOnError: () => processor?.abort(),
-        // Attach a capped tail of any streamed text before it propagates so
-        // the retry UI receives the same structured error shape downstream.
-        partialTail: () => {
-          const streamedText = processor?.streamedText ?? '';
-          return streamedText
-            ? takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX)
-            : '';
-        },
-      });
+      // Recovery above was unavailable or failed. Close any progress streams
+      // and retain partial output before the error reaches retry handling.
+      processor?.abort();
+      attachPartialText(
+        error,
+        takeTail(processor?.streamedText ?? '', PARTIAL_TEXT_TAIL_MAX),
+      );
+      throw error;
     }
   }
 

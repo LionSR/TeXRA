@@ -39,12 +39,12 @@ export interface HostSnapshotSourceOptions {
    *  never shown. */
   apiKeyBanner?: () => Promise<Banners['apiKey']>;
   dependencyBanner?: () => Promise<Banners['dependency']>;
+  /** Write directly to the bridge's host snapshot, which its streams replay. */
+  publish(snapshot: HostSnapshot): void;
   onError(error: unknown): void;
 }
 
 export interface HostSnapshotSource {
-  /** The snapshot as last assembled; null until the first `refresh`. */
-  current(): HostSnapshot | null;
   /** Reassemble every catalog and publish the result. */
   refresh(): Promise<void>;
   /** The agent, team, and model catalogs changed (a roster edit, a
@@ -67,16 +67,12 @@ export interface HostSnapshotSource {
   /** The user dismissed one of the dismissable banners. */
   dismissBanner(banner: 'login' | 'gettingStarted' | 'dependency'): void;
   setOnboarding(state: HostSnapshot['onboarding']): void;
-  /** Fires with every published snapshot. */
-  onChange(listener: (snapshot: HostSnapshot) => void): () => void;
 }
 
 /** The paper's display record and the catalogs, assembled per session. */
 export function createHostSnapshotSource(
   options: HostSnapshotSourceOptions,
 ): HostSnapshotSource {
-  const listeners = new Set<(snapshot: HostSnapshot) => void>();
-  let snapshot: HostSnapshot | null = null;
   let catalogs: Pick<
     HostSnapshot,
     'agentOptions' | 'modelOptions' | 'teamOptions'
@@ -106,7 +102,7 @@ export function createHostSnapshotSource(
   const dismissed = new Set<'gettingStarted' | 'dependency'>();
 
   function publish(): void {
-    snapshot = {
+    options.publish({
       paper: options.paper,
       ...catalogs,
       workspaceRoots: options.workspaceRoots?.() ?? [],
@@ -131,8 +127,7 @@ export function createHostSnapshotSource(
           ),
       },
       onboarding,
-    };
-    for (const listener of [...listeners]) listener(snapshot);
+    });
   }
 
   async function loadAgents(): Promise<void> {
@@ -193,7 +188,6 @@ export function createHostSnapshotSource(
   const catalogLoads = [loadAgents, loadTeams, loadModels];
 
   return {
-    current: () => snapshot,
     refresh: guarded(
       ...catalogLoads,
       loadFiles,
@@ -234,12 +228,6 @@ export function createHostSnapshotSource(
       if (state === onboarding) return;
       onboarding = state;
       publish();
-    },
-    onChange(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
     },
   };
 }

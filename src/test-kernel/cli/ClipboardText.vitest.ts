@@ -1,4 +1,4 @@
-import { Layer, ManagedRuntime } from 'effect';
+import { ManagedRuntime } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const writeMock = vi.hoisted(() => vi.fn());
@@ -24,6 +24,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 import { writeClipboardText } from '@cli/runtime/clipboardText';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { initProcessRuntime } from '@platform/processRuntime';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 describe('CLI clipboard text writer', () => {
   beforeEach(() => {
@@ -89,7 +90,7 @@ describe('CLI clipboard text writer', () => {
       expect(execFileMock).toHaveBeenCalled();
     } finally {
       await disposeProcessRuntime();
-      initProcessRuntime(ManagedRuntime.make(Layer.empty));
+      initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
     }
   });
 

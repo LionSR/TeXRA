@@ -88,10 +88,34 @@ function isTransientRequestError(error: RequestError): boolean {
  * `request` aborts when the attempt is interrupted, by the deadline or by
  * the caller. Fails with {@link RequestTimedOut} on the deadline and with
  * {@link RequestFailed} carrying the request's own error otherwise.
+ *
+ * `request` must declare its `signal` parameter and hand it to the client;
+ * one that does not gets no signal at all and dies as a defect rather than
+ * quietly outliving its own cancellation.
  */
 export const withRequestTimeout = Effect.fn('timeouts.withRequestTimeout')(
-  <T>(timeoutMs: number, request: (signal: AbortSignal) => Promise<T>) =>
-    Effect.tryPromise({
+  function* <T>(
+    timeoutMs: number,
+    request: (signal: AbortSignal) => Promise<T>,
+  ) {
+    // `Effect.tryPromise` creates the AbortSignal only when its callback
+    // declares the parameter (`f.length !== 0`, effect's `tryPromise`). A
+    // request written `() => ky.get(url)` therefore gets no signal, and
+    // neither the deadline below nor the caller's interruption reaches the
+    // in-flight request: it is abandoned to settle unobserved while this
+    // program reports a timeout — a cancellation that silently does nothing.
+    // TypeScript cannot catch it (a zero-parameter function is assignable to
+    // a one-parameter type), so the misuse is a defect raised here.
+    if (request.length === 0) {
+      yield* Effect.die(
+        new Error(
+          'withRequestTimeout was given a request that declares no AbortSignal parameter, ' +
+            'so neither the deadline nor the caller can abort it. Take the signal and hand ' +
+            'it to the client: (signal) => ky.get(url, { signal }).',
+        ),
+      );
+    }
+    return yield* Effect.tryPromise({
       try: request,
       catch: (cause) =>
         new RequestFailed({ message: toErrorMessage(cause), cause }),
@@ -106,7 +130,8 @@ export const withRequestTimeout = Effect.fn('timeouts.withRequestTimeout')(
             }),
           ),
       }),
-    ),
+    );
+  },
 );
 
 interface RetryTransientFetchOptions {

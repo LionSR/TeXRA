@@ -131,6 +131,12 @@ describe('sessionFold', () => {
       message: 'Calculation complete.',
       stageId: 'round',
     });
+    const debug = log.emit(CHILD, 1070, {
+      type: 'log',
+      level: 'debug',
+      message: 'Captured debug detail.',
+      transcriptDebug: true,
+    });
     const initial = () => foldAll([tail(start), subscribe(CHILD), alive]);
     const live = foldAll(
       [
@@ -144,7 +150,7 @@ describe('sessionFold', () => {
           to: 12,
           text: 'The integral',
         },
-        ...[completed, final, ended, notice].map(tail),
+        ...[completed, final, ended, notice, debug].map(tail),
       ],
       initial(),
     );
@@ -162,7 +168,7 @@ describe('sessionFold', () => {
     expect(stream(replay, CHILD).transcript).toEqual(
       stream(live, CHILD).transcript,
     );
-    expect(stream(replay, CHILD).transcript.rows).toHaveLength(2);
+    expect(stream(replay, CHILD).transcript.rows).toHaveLength(3);
     expect(stream(replay, CHILD).transcript.rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -170,6 +176,17 @@ describe('sessionFold', () => {
           text: expect.objectContaining({ full: completedText }),
         }),
       ]),
+    );
+    const hidden = log.emit(CHILD, 1080, {
+      type: 'log',
+      level: 'debug',
+      message: 'Hidden debug detail.',
+      transcriptDebug: false,
+    });
+    const filtered = fold(live, tail(hidden));
+    expect(filtered.streams).toBe(live.streams);
+    expect(filtered.folded.get(qualifyAggregateId('stream', CHILD))).toBe(
+      hidden.seq,
     );
   });
 

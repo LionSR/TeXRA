@@ -1538,12 +1538,6 @@
       "name": "isUnsupported"
     },
     {
-      "file": "src/telemetry/UsageLogService.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "USAGE_LOG_FLUSH_OUTCOME"
-    },
-    {
       "file": "src/tools/DiagnosticsTool.ts",
       "category": "production-dead",
       "kind": "exports",

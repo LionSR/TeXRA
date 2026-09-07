@@ -1730,13 +1730,16 @@ function foldTraceEvent(
     indexes.trace.record(event, {
       at: event.at,
       id: JSON.stringify([event.aggregateId, event.seq]),
-      debug: false,
+      debug: event.transcriptDebug ?? false,
     });
   const change = indexes.source.drainEmission();
   for (const entry of [...change.appended, ...change.dirtied]) {
     stream = { ...stream, transcript: applyEntry(view, stream, entry) };
   }
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
+  // A filtered fact still advances its source cursor. Keep the stream and
+  // transcript references stable when that fact produced no presentation.
+  if (change.appended.length === 0 && change.dirtied.length === 0) return true;
   setStream(
     view,
     runModelAt(

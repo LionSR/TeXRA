@@ -13,8 +13,11 @@ import {
   type SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import {
+  ANTHROPIC_STOP,
+  GOOGLE_FINISH,
   isContextWindowExceededStopReason,
   isTokenLimitStopReason,
+  OPENAI_CHAT_FINISH,
   type ProviderStopReason,
 } from '@agent/types/StopReasonTypes';
 import { K_SLICE } from '@agent/core/constants';
@@ -30,6 +33,17 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
+
+// Reflection owns conversation limits and document completion, not the provider.
+const CONTINUE_LIMIT = 10;
+const INPUT_TOKEN_LIMIT = 1500000;
+const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
+const END_TURN_REASONS: ProviderStopReason[] = [
+  ANTHROPIC_STOP.END_TURN,
+  ANTHROPIC_STOP.STOP_SEQUENCE,
+  OPENAI_CHAT_FINISH.STOP,
+  GOOGLE_FINISH.STOP,
+];
 
 // ============================================================================
 // Cycle Fields
@@ -426,7 +440,7 @@ class ResponseContinuationNode extends BaseNode<
   override async exec(
     prepRes: ContinuationPrepResult,
   ): Promise<ContinuationNodeResult> {
-    const { round, run, setting } = this.services;
+    const { round, run, setting, logger } = this.services;
     const modelHandler = this.services.modelCell.handler;
 
     if (prepRes.kind === 'skipped') {
@@ -447,14 +461,45 @@ class ResponseContinuationNode extends BaseNode<
       };
     }
 
-    const { endTurn: shouldEndTurn, shouldStop } =
-      modelHandler.checkStopConditions(
-        stopReason,
-        processedResponse,
-        round,
-        run,
-        setting,
-      );
+    const totals = run.usageAccumulator.totals;
+    const maxOutputTokens =
+      totals.firstInputTokens > 0
+        ? OUTPUT_TOKEN_LIMIT_FACTOR * totals.firstInputTokens
+        : Number.POSITIVE_INFINITY;
+    const continuationLimitExceeded = round.continuationCount > CONTINUE_LIMIT;
+    const inputTokenLimitExceeded = totals.totalInputTokens > INPUT_TOKEN_LIMIT;
+    const maxOutputTokensExceeded = totals.totalOutputTokens > maxOutputTokens;
+    const shouldEndTurn = END_TURN_REASONS.includes(stopReason ?? '');
+    const encounterDocumentTag = processedResponse.includes(OUTPUT_END_TAG);
+
+    // Warn-only by design: this multiplier has never fed `shouldStop`, it just
+    // flags a run whose output has run away relative to its first input.
+    if (maxOutputTokensExceeded) {
+      logger.warn('Output tokens exceed input token multiplier', {
+        data: {
+          maxOutputTokensFactor: OUTPUT_TOKEN_LIMIT_FACTOR,
+          totalOutputTokens: totals.totalOutputTokens,
+          firstInputTokens: totals.firstInputTokens,
+        },
+      });
+    }
+
+    const shouldStop =
+      encounterDocumentTag ||
+      continuationLimitExceeded ||
+      inputTokenLimitExceeded;
+
+    if (shouldStop) {
+      logger.debug('StopFlags', {
+        data: {
+          endTurn: shouldEndTurn,
+          encounterDocumentTag,
+          continuationLimitExceeded,
+          inputTokenLimitExceeded,
+          maxOutputTokensExceeded,
+        },
+      });
+    }
 
     const shouldContinue = modelHandler.shouldContinue(
       stopReason,

@@ -314,6 +314,10 @@ export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('transcript.entry', { entry: StreamLogEntrySchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
     schema.extend({
+      /** Captured at publication. Pre-2026-09-07 source facts used false on
+       * replay; retain that absent-input rule until 2026-12-07. Imported
+       * transcript.entry rows already contain their recorded presentation. */
+      transcriptDebug: z.boolean().optional(),
       aggregateId: AggregateIdSchema.refine(
         (key) => aggregateTarget(key).kind === 'stream',
         `Expected a stream aggregate for ${schema.shape.type.value}`,
