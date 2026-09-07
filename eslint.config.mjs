@@ -73,6 +73,7 @@ const VSCODE_FREE_ZONE_DIRS = [
   'src/utils',
   'src/logger',
   'packages/agent/src',
+  'packages/llm/src',
   'packages/desktop/src',
   'packages/extension/src/webview/frontend',
   'packages/extension/src/progressView/frontend',
@@ -529,6 +530,7 @@ export default tseslint.config(
     files: [
       'src/**/*.ts',
       'packages/agent/src/**/*.ts',
+      'packages/llm/src/**/*.ts',
       'packages/extension/src/**/*.ts',
       'packages/desktop/src/**/*.ts',
       'packages/desktop/design-harness/**/*.ts',
@@ -657,6 +659,14 @@ export default tseslint.config(
     },
   },
 
+  // The native model package owns a standalone TypeScript program and lint process.
+  {
+    files: ['packages/llm/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: { project: ['./packages/llm/tsconfig.json'] },
+    },
+  },
+
   // Tooling owns a separate TypeScript program. The lint command runs this
   // group in a fresh process so the other projects are released first.
   {
@@ -681,7 +691,11 @@ export default tseslint.config(
   // Production core code must not reach back into host-owned layers; import
   // declarations are forbidden.
   {
-    files: ['src/**/*.{ts,tsx}', 'packages/agent/src/**/*.{ts,tsx}'],
+    files: [
+      'src/**/*.{ts,tsx}',
+      'packages/agent/src/**/*.{ts,tsx}',
+      'packages/llm/src/**/*.{ts,tsx}',
+    ],
     ignores: ['src/test-kernel/**'],
     rules: {
       'no-restricted-imports': [

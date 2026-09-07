@@ -1,0 +1,30 @@
+{
+  "name": "@texra-ai/llm",
+  "version": "0.41.0",
+  "private": true,
+  "type": "module",
+  "description": "TeXRA-owned canonical model operations",
+  "exports": {
+    "./turn": "./src/turn.ts",
+    "./openai-chat": "./src/openaiChat.ts",
+    "./openai-responses": "./src/openaiResponses.ts",
+    "./anthropic-messages": "./src/anthropicMessages.ts",
+    "./google-interactions": "./src/googleInteractions.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.123.0",
+    "@google/genai": "2.21.0",
+    "openai": "7.10.0"
+  },
+  "peerDependencies": {
+    "effect": "4.0.0-rc.112",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "effect": "4.0.0-rc.112",
+    "zod": "4.4.3"
+  }
+}
