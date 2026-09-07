@@ -1,5 +1,7 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the module under test. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
+import '@test/support/defaultSessionTestSetup';
 
 import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
@@ -10,6 +12,7 @@ import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { RUN_OUTCOME, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import type {
   ExecutionId,
@@ -29,7 +32,7 @@ setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 const mocks = vi.hoisted(() => ({
   registerExecution: vi.fn(),
   startChildRunLoop: vi.fn(),
-  createRehydratedChildStream: vi.fn(),
+  createChildStream: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
   requireWorkflowOrToolUseAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
@@ -80,12 +83,13 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   assertOwnedExecutionLease: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/childRunLoop', () => ({
+vi.mock('@agent/runtime/childRunLoop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/runtime/childRunLoop')>()),
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
 vi.mock('@tools/delegation/childStream', () => ({
-  createRehydratedChildStream: mocks.createRehydratedChildStream,
+  createChildStream: mocks.createChildStream,
   childStreamDescription: (raw: string) => raw,
 }));
 
@@ -127,7 +131,7 @@ function parentContext(stopAfterCycle = false): LaunchRunContext {
       executionId,
       streamId,
       agentName: 'orchestrator',
-      session: { id: 'workflow-script-test' } as never,
+      session: currentSession(),
       signal: new AbortController().signal,
     },
   };
@@ -239,7 +243,7 @@ beforeEach(async () => {
     result: { action: 'approve' },
     autoApproved: false,
   });
-  mocks.startChildRunLoop.mockReturnValue(Promise.resolve());
+  mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
   mocks.requireWorkflowOrToolUseAgent.mockImplementation((name) => {
     if (name === 'missing-agent') {
       throw new Error(
@@ -253,19 +257,20 @@ beforeEach(async () => {
       path: `/agents/${name}.yaml`,
     };
   });
-  mocks.createRehydratedChildStream.mockImplementation(
-    async (runId: ExecutionId): Promise<unknown> => {
-      const logger = new TraceEmitter();
-      vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
-      return {
-        childStreamId: `workflow-script#${runId}` as StreamTabId,
-        logger,
-        waitForInput: vi.fn(),
-        beginTurn: vi.fn(),
-        failTurn: vi.fn(),
-        finalize: vi.fn(),
-      };
-    },
+  mocks.createChildStream.mockImplementation(
+    (_session: unknown, runId: ExecutionId) =>
+      Effect.sync(() => {
+        const logger = new TraceEmitter();
+        vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
+        return {
+          childStreamId: `workflow-script#${runId}` as StreamTabId,
+          logger,
+          waitForInput: vi.fn(),
+          beginTurn: vi.fn(),
+          failTurn: vi.fn(),
+          finalize: vi.fn(() => Effect.void),
+        };
+      }),
   );
 });
 
@@ -310,7 +315,7 @@ describe('WorkflowScriptTool', () => {
       `workflow-script#${runExecutionIdFor('tool-test')}`,
       streamId,
       'auto-approved',
-      expect.objectContaining({ id: 'workflow-script-test' }),
+      currentSession(),
     );
   });
 
@@ -321,7 +326,7 @@ describe('WorkflowScriptTool', () => {
       `workflow-script#${runExecutionIdFor('tool-test')}`,
       streamId,
       'inherit',
-      expect.objectContaining({ id: 'workflow-script-test' }),
+      currentSession(),
     );
   });
 
@@ -385,12 +390,16 @@ return null`;
         }),
       }),
       streamId,
+      currentSession(),
+      expect.objectContaining({ kind: 'launch' }),
     );
   });
 
   it('owns a detached run completion rejection without delivering a second error', async () => {
     const lateFailure = new Error('late finalization failed');
-    mocks.startChildRunLoop.mockReturnValueOnce(Promise.reject(lateFailure));
+    mocks.startChildRunLoop.mockReturnValueOnce(
+      Effect.forkDetach(Effect.fail(lateFailure)),
+    );
 
     const result = await callTool();
 
@@ -489,7 +498,8 @@ return null`;
       'tool-test',
       registrationOptionsFor('tool-test'),
     );
-    expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
+    expect(mocks.createChildStream).toHaveBeenCalledWith(
+      currentSession(),
       runExecutionId,
       streamId,
       expect.objectContaining({
@@ -502,7 +512,7 @@ return null`;
       `workflow-script#${runExecutionId}`,
       streamId,
       'inherit',
-      expect.objectContaining({ id: 'workflow-script-test' }),
+      currentSession(),
     );
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
     const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
@@ -736,7 +746,7 @@ return null`;
     });
     expect(result.error).toContain('Script file: .texra/workflow-scripts/');
     expect(mocks.registerExecution).not.toHaveBeenCalled();
-    expect(mocks.createRehydratedChildStream).not.toHaveBeenCalled();
+    expect(mocks.createChildStream).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
@@ -771,7 +781,7 @@ return null`;
     });
     expect(result.error).toContain('Script file: .texra/workflow-scripts/');
     expect(mocks.registerExecution).not.toHaveBeenCalled();
-    expect(mocks.createRehydratedChildStream).not.toHaveBeenCalled();
+    expect(mocks.createChildStream).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
@@ -786,7 +796,8 @@ return null`;
     expect(result.status).toBe('executed');
     // The durable record stays honest (no file lists); the binding rides the
     // checkpoint and the live stream config the agent steps consume.
-    expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
+    expect(mocks.createChildStream).toHaveBeenCalledWith(
+      currentSession(),
       runExecutionIdFor('tool-test'),
       expect.anything(),
       expect.objectContaining({
@@ -845,7 +856,8 @@ return null`;
     const result = await callTool({ script: resumeScript });
 
     expect(result.status).toBe('executed');
-    expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
+    expect(mocks.createChildStream).toHaveBeenCalledWith(
+      currentSession(),
       runExecutionIdFor('resume'),
       expect.anything(),
       expect.objectContaining({
@@ -961,7 +973,7 @@ return null`;
     });
     expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
     // A relaunch over a live run never starts a second competing loop.
-    expect(mocks.createRehydratedChildStream).not.toHaveBeenCalled();
+    expect(mocks.createChildStream).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 

@@ -99,6 +99,7 @@ export class ToolUseWaitNode extends BaseNode<
     // ordinary suspension symmetric and leaves one delivery site.
     if (isSubagent) {
       ownerSession.status.transitionToWaiting(streamId, 'wait');
+      await ownerSession.settlePublications();
       return { kind: 'waiting' };
     }
 
@@ -120,6 +121,7 @@ export class ToolUseWaitNode extends BaseNode<
 
     if (!session.hasQueuedFollowUp()) {
       ownerSession.status.transitionToWaiting(streamId, 'wait');
+      await ownerSession.settlePublications();
     }
 
     const batch = await session.waitForFollowUp(signal);
@@ -163,7 +165,6 @@ export class ToolUseWaitNode extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    await session.transcripts.ensureLoaded(streamId);
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
     await session.settlePublications();
 

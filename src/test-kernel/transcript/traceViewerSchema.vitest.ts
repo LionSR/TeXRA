@@ -7,6 +7,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   EXECUTION_STATUS,
   LOG_LEVELS,
@@ -75,7 +76,7 @@ describe('trace-viewer TraceDataSchema', () => {
       outcome: 'completed',
       streamId,
     });
-    const store = await StreamLogStore.open();
+    const store = StreamLogStore.ephemeral('trace schema fixture');
     appendTranscriptEntry(store, streamId, {
       id: 'entry-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -84,10 +85,13 @@ describe('trace-viewer TraceDataSchema', () => {
       messageType: MESSAGE_TYPES.DEFAULT,
       text: 'hello',
     });
-    await store.flush();
 
     const result = await Effect.runPromise(
-      assembleTrace(executionId, createTestSession().snapshots),
+      assembleTrace(executionId, {
+        roots: processWorkspaceRoots(),
+        snapshots: createTestSession().snapshots,
+        transcripts: store,
+      }),
     );
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;

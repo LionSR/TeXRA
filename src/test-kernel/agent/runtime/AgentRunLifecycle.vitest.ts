@@ -2,7 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { noopTrace, TraceEmitter, type StatusEvent } from '@agent/trace';
+import { noopTrace, TraceEmitter } from '@agent/trace';
 import type { FinalizeExecutionResult } from '@agent/storage/executionLifecycle';
 import {
   acquireResumedExecutionLease,
@@ -28,9 +28,7 @@ import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
-  MESSAGE_TYPES,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_SUBSTATE,
   agentKey,
@@ -46,7 +44,6 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
-import { withTranscriptWriter } from '@test/support/storeTestDrivers';
 
 import {
   eventsOfType,
@@ -200,30 +197,22 @@ function parkNextFinalize(): { started: () => boolean; release: () => void } {
   };
 }
 
-/**
- * Seed the open run-group row a suspended run's parked teardown must (or must
- * not) close. Production writes it via the transcript recorder's stage.start
- * handler, which the fake runners in this file skip.
- */
+/** Publish the run and open stage that a suspended teardown must close. */
 function seedOpenRunGroup(
   ctx: AgentLaunchContext,
   streamId: StreamTabId,
 ): string {
   const parentStageId = ctx.parentStage.id;
-  if (!parentStageId) {
+  if (!parentStageId)
     throw new Error('The fixture parent stage must carry an id.');
-  }
-  withTranscriptWriter(defaultSession().transcripts, streamId, (writer) =>
-    writer.appendSettled({
-      id: parentStageId,
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: 'info',
-      timestamp: Date.now(),
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'run',
-      data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
-    }),
-  );
+  const session = ctx.runScope.session;
+  publishTestRunStart(session, streamId, ctx.runScope.executionId);
+  session.publishRunEvent(streamId, {
+    type: 'stage.start',
+    id: parentStageId,
+    label: 'run',
+    kind: 'run',
+  });
   return parentStageId;
 }
 
@@ -444,7 +433,7 @@ describe('runFlowWithLifecycle', () => {
     publishTestRunStart(ctx.runScope.session, streamId, executionId);
     const trace = new TraceEmitter();
     const detachTrace = ctx.runScope.session.attachRunTrace(
-      { trace, handleStatus: () => {} },
+      { trace },
       streamId,
     );
     // One plane in commit order: run.config and the status fact both land
@@ -791,16 +780,9 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-early-stop-no-blip',
     );
     publishTestRunStart(ctx.runScope.session, streamId, executionId);
-    const changes: StatusEvent[] = [];
-    const detachStatus = defaultSession().attachRunTrace(
-      {
-        trace: new TraceEmitter(),
-        handleStatus: (event) => {
-          if (event.streamId === streamId) changes.push(event);
-        },
-      },
-      streamId,
-    );
+    const recorded = recordSessionEvents(ctx.runScope.session, {
+      aggregateId: qualifyAggregateId('stream', streamId),
+    });
 
     try {
       const result = await runFlowWithLifecycle(
@@ -816,11 +798,11 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(changes.map((change) => change.phase)).toEqual([
-        STREAM_PHASE.CANCELLED,
-      ]);
+      await ctx.runScope.session.settlePublications();
+      expect(
+        eventsOfType(recorded.events, 'status').map((event) => event.phase),
+      ).toEqual([STREAM_PHASE.CANCELLED]);
     } finally {
-      detachStatus();
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -891,6 +873,10 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, ctx } = lifecycleFixture(
       'lifecycle-subagent-waiting-kill',
     );
+    const parentStageId = seedOpenRunGroup(ctx, streamId);
+    const recorded = recordSessionEvents(ctx.runScope.session, {
+      aggregateId: qualifyAggregateId('stream', streamId),
+    });
     const followUpsTerminalize = vi.spyOn(
       ctx.runScope.session.followUps,
       'terminalize',
@@ -912,10 +898,6 @@ describe('runFlowWithLifecycle', () => {
       const traceEmit = vi.spyOn(noopTrace, 'emit');
 
       const waitingHandle = takeWaitingHandle(executionId);
-
-      // Seed the open run-group row this suspension's parked teardown must
-      // close.
-      const parentStageId = seedOpenRunGroup(ctx, streamId);
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
       // preserves the follow-up queue for WAITING — it does not dispose the
@@ -955,22 +937,13 @@ describe('runFlowWithLifecycle', () => {
           flowRecord: 'preserve',
         }),
       );
-      // The kill path never resumes, so the per-suspension parent stage must
-      // be closed here rather than dangling open forever. `ctx.parentStage`
-      // is already desubscribed by this point (disposeTrace ran in the
-      // WAITING branch's own finally), so the stage's GROUP_END entry is
-      // written directly to the transcript store instead of through the
-      // now-inert `ctx.parentStage.end()`.
-      expect(
-        defaultSession().transcripts.get(streamId)?.toJSON() ?? [],
-      ).toContainEqual(
+      // The detached trace cannot publish this close. The suspended owner
+      // must append it to the same session event stream before releasing.
+      await ctx.runScope.session.settlePublications();
+      expect(eventsOfType(recorded.events, 'stage.end')).toContainEqual(
         expect.objectContaining({
           id: parentStageId,
-          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-          data: expect.objectContaining({
-            status: RUN_OUTCOME.CANCELLED,
-            kind: 'run',
-          }),
+          status: RUN_OUTCOME.CANCELLED,
         }),
       );
     } finally {
@@ -979,15 +952,16 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('runs run-end cleanup when waiting transcript teardown fails', async () => {
+  it('runs run-end cleanup when waiting stage publication fails', async () => {
     const { executionId, streamId, ctx } = lifecycleFixture(
       'lifecycle-waiting-transcript-failure-run-end',
     );
     const stopSessionsForRun = vi.fn(async (_runId: ExecutionId) => {});
-    vi.spyOn(
-      ctx.runScope.session.transcripts,
-      'loadAndAcquireWriter',
-    ).mockRejectedValueOnce(new Error('transcript close failed'));
+    seedOpenRunGroup(ctx, streamId);
+    await ctx.runScope.session.settlePublications();
+    vi.spyOn(ctx.runScope.session, 'settlePublications').mockRejectedValueOnce(
+      new Error('stage publication failed'),
+    );
 
     try {
       const result = await runFlowWithLifecycle(

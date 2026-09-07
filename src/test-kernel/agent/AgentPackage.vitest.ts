@@ -57,6 +57,7 @@ const mocks = vi.hoisted(() => ({
   ownerInstalled: false,
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
+  getExecutionHandle: vi.fn(),
   /** Every session the owner built for the package, with what it was
    *  built over: one per storage root. */
   sessionInits: [] as { readonly roots: { readonly storage: string } }[],
@@ -102,6 +103,7 @@ vi.mock('@agent/runtime', async () => {
   const { Deferred, Effect, Stream, SubscriptionRef } = await import('effect');
   const { emptySessionView } = await import('@shared/session/sessionView');
   class FakeSession {
+    readonly executions = { getHandle: mocks.getExecutionHandle };
     /** The session's view level: the pre-launch session, no stream yet. */
     readonly view = Effect.runSync(
       SubscriptionRef.make<FakeSessionView>({
@@ -161,7 +163,12 @@ vi.mock('@agent/runtime', async () => {
         sessions.delete(root);
         return mocks.closeSession(root);
       }),
-    runAgent: mocks.runValidatedAgent,
+    runAgent: (input: unknown, options: RunAgentOptions) =>
+      Effect.tryPromise({
+        try: () => mocks.runValidatedAgent(input, options),
+        catch: (cause) =>
+          cause instanceof Error ? cause : new Error(String(cause)),
+      }).pipe(Effect.uninterruptible),
     sessionOwnerInstalled: () => mocks.ownerInstalled,
   };
 });
@@ -305,6 +312,7 @@ describe('agent package run lifecycle', () => {
     });
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.loadAgents.mockReturnValue(Effect.void);
+    mocks.getExecutionHandle.mockReturnValue(undefined);
     mocks.runValidatedAgent.mockImplementation(
       (_input: unknown, options: RunAgentOptions) => driveRun(options),
     );
@@ -491,6 +499,64 @@ describe('agent package run lifecycle', () => {
         expect(mocks.disposeRuntime).not.toHaveBeenCalled();
         yield* Effect.promise(() => runAgent(INPUT).result);
         expect(mocks.sessionInits).toHaveLength(1);
+      }),
+  );
+
+  it.live(
+    'aborts interrupted admission before waiting for the provider cleanup',
+    () =>
+      Effect.gen(function* () {
+        const entered = yield* Deferred.make<void>();
+        const aborted = yield* Deferred.make<void>();
+        let finishCleanup!: () => void;
+        const cleanupMayFinish = new Promise<void>((resolve) => {
+          finishCleanup = resolve;
+        });
+        const observations: string[] = [];
+        mocks.runValidatedAgent.mockImplementationOnce(async () => {
+          await new Promise<void>((resolve) => {
+            // The native run owns this handle before it reserves a stream.
+            // Interruption reaches that owner while registration is masked.
+            mocks.getExecutionHandle.mockReturnValue({
+              interrupt: () => {
+                observations.push('aborted');
+                Deferred.doneUnsafe(aborted, Effect.void);
+                resolve();
+              },
+            });
+            Deferred.doneUnsafe(entered, Effect.void);
+          });
+          await cleanupMayFinish;
+          observations.push('settled');
+          return RESULT;
+        });
+        yield* Effect.gen(function* () {
+          const sessions = yield* Sessions;
+          const session = yield* sessions.open();
+          const admission = yield* Effect.forkChild(
+            session.start({
+              agent: 'assistant',
+              instruction: 'Test instruction',
+            }),
+          );
+          yield* Deferred.await(entered);
+          const interruption = yield* Effect.forkChild(
+            Fiber.interrupt(admission),
+          );
+          yield* Deferred.await(aborted);
+          expect(observations).toEqual(['aborted']);
+          expect(interruption.pollUnsafe()).toBeUndefined();
+          expect(mocks.getExecutionHandle).toHaveBeenCalledWith(
+            expect.any(String),
+          );
+          finishCleanup();
+          yield* Fiber.join(interruption);
+          expect(observations).toEqual(['aborted', 'settled']);
+          const exit = yield* Fiber.await(admission);
+          expect(
+            Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause),
+          ).toBe(true);
+        }).pipe(Effect.scoped, Effect.provide(Runtime.layer(PLATFORM)));
       }),
   );
 

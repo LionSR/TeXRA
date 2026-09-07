@@ -54,7 +54,7 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
+import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
@@ -451,7 +451,7 @@ describe('ModelInvocationNode retry', () => {
     const logger = new TraceEmitter();
     const transcript = StreamLogStore.ephemeral('retry diagnostics test');
     transcript.ensureStream(streamId);
-    const recorder = attachTranscriptRecorder(
+    const recorder = attachTestTranscriptFold(
       logger,
       transcript.acquireWriter(streamId, streamId),
     );

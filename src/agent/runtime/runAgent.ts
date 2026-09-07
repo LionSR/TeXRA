@@ -1,3 +1,5 @@
+import { Cause, Effect, Exit } from 'effect';
+
 import { registerExecution } from '@agent/storage';
 import {
   clearTerminalExecutionState,
@@ -19,12 +21,13 @@ import {
   generateExecutionId,
   linkAbortSignals,
 } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { AgentExecutionHandle } from './ExecutionHandle';
 import { runInSession } from './RunContext';
 import { getStreamTabId } from './streamTab';
-import { defaultSession } from './SessionHandle';
+import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
 
 /**
@@ -41,7 +44,6 @@ export interface RunAgentOptions extends Pick<
   | 'onApprovalPolicyDenial'
   | 'runtimeUnavailableTools'
   | 'tools'
-  | 'session'
   | 'modelHandlerCompatibilityKey'
   | 'copilotRouteOverride'
   | 'onRun'
@@ -50,6 +52,7 @@ export interface RunAgentOptions extends Pick<
   | 'launchSignal'
   | 'openWorkflowOutput'
 > {
+  readonly session: SessionHandle;
   /**
    * Persist host-owned final state before the ordinary session drain. Return
    * true when the hook already drained artifacts and disposed of ownership.
@@ -90,191 +93,184 @@ export type RunAgentRequest =
  * lineage; for those, drop to the lower-level engine `executeAgent`, where the
  * caller owns executionId generation and `registerExecution`.
  */
-export async function runAgent(
+export const runAgent = Effect.fn('runAgent')(function* (
   request: RunAgentRequest,
   options: RunAgentOptions,
-): Promise<AgentFlowResult> {
-  // Split the `runAgent`-only options off; the rest (`executeAgentOptions`) is
-  // exactly the `Pick<ExecuteAgentOptions, …>` that `RunAgentOptions` extends, so
-  // it forwards verbatim and a newly-picked option needs no change here.
+): Effect.fn.Return<AgentFlowResult, Error> {
   const {
     beforeLeaseRelease,
     onExecutionLeaseAcquired,
     preferHelperModel,
     ...executeAgentOptions
   } = options;
-
   const executionId = request.executionId ?? generateExecutionId();
   const shouldRegister = request.kind === 'fresh';
-  const runSession = executeAgentOptions.session ?? defaultSession();
+  const runSession = executeAgentOptions.session;
   const launchAbortController = new AbortController();
-  let detachLaunchAbortLink: (() => void) | undefined;
-  let launchHandle: AgentExecutionHandle | undefined;
-  let detachLaunchInterrupt: (() => void) | undefined;
-  try {
-    // Linked rather than composed with `AbortSignal.any`, which would keep the
-    // launch signal reachable from a long-lived caller signal for that signal's
-    // whole lifetime (see `linkAbortSignals`).
-    detachLaunchAbortLink = linkAbortSignals(
-      [executeAgentOptions.launchSignal],
-      launchAbortController,
-    );
-    const launchSignal = launchAbortController.signal;
-    const launchStreamId = getStreamTabId(request.config.agent, {
-      executionId,
-    });
-    launchHandle = runSession.executions.getHandle(executionId)
-      ? undefined
-      : new AgentExecutionHandle(
-          {
-            streamId: launchStreamId,
-            executionId,
-            identity: { kind: 'agent', agent: request.config.agent },
-            category: request.config.agentCategory,
-          },
-          launchStreamId,
-        );
-    detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
-      interrupt: () => launchAbortController.abort(),
-    });
+  const detachLaunchAbortLink = linkAbortSignals(
+    [executeAgentOptions.launchSignal],
+    launchAbortController,
+  );
+  const launchSignal = launchAbortController.signal;
+  const launchStreamId = getStreamTabId(request.config.agent, { executionId });
+  const launchHandle = runSession.executions.getHandle(executionId)
+    ? undefined
+    : new AgentExecutionHandle(
+        {
+          streamId: launchStreamId,
+          executionId,
+          identity: { kind: 'agent', agent: request.config.agent },
+          category: request.config.agentCategory,
+        },
+        launchStreamId,
+      );
+  const detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
+    interrupt: () => launchAbortController.abort(),
+  });
+
+  return yield* Effect.gen(function* () {
     if (launchHandle) runSession.executions.track(launchHandle);
-
-    // The launch handle above is tracked synchronously so a stop can reach the
-    // launch; the generation itself starts on the execution's lane, after any
-    // previous generation of this id has disposed.
-    // The whole generation runs in the run session's scope, not the caller's:
-    // the execution record, the lease, and the terminal writes below all
-    // resolve their storage root through the session, and the caller's
-    // ambient session may legitimately differ from `options.session` (see the
-    // note at the `executeAgent` call).
-    return await runSession.executions.launchExecution(executionId, async () =>
-      runInSession(runSession, async () => {
-        // Resolved before registerExecution so the stored record and the run agree
-        // on the model.
+    return yield* runSession.executions.launchExecution(
+      executionId,
+      Effect.gen(function* () {
+        // Resolve the selected model before registering the execution.
         const config = preferHelperModel
-          ? await applyHelperModelPreference(request.config)
+          ? yield* Effect.tryPromise({
+              try: async () =>
+                runInSession(runSession, () =>
+                  applyHelperModelPreference(request.config),
+                ),
+              catch: ensureError,
+            })
           : request.config;
-
         const userFollowUpSupport =
           config.agentCategory === AgentCategory.ToolUse &&
           executeAgentOptions.stopAfterCycle !== true
             ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
             : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
+        yield* Effect.tryPromise({
+          try: async () =>
+            runInSession(runSession, async () => {
+              if (shouldRegister) {
+                await registerExecution(executionId, config, config.agent, {
+                  streamId: launchStreamId,
+                  identity: { kind: 'agent', agent: config.agent },
+                  userFollowUpSupport,
+                });
+              } else {
+                await acquireResumedExecutionLease(executionId);
+              }
+            }),
+          catch: ensureError,
+        });
 
-        if (shouldRegister) {
-          // `launchStreamId` is the same id: `applyHelperModelPreference` only
-          // ever swaps `model`, so `config.agent` is `request.config.agent`.
-          await registerExecution(executionId, config, config.agent, {
-            streamId: launchStreamId,
-            identity: { kind: 'agent', agent: config.agent },
-            userFollowUpSupport,
-          });
-        } else {
-          await acquireResumedExecutionLease(executionId);
-        }
-
-        onExecutionLeaseAcquired?.(executionId);
         let lifecycleStarted = false;
-        let runResult: AgentFlowResult | undefined;
-        let runFailure: { error: unknown } | undefined;
-        let finalArtifactsHandled = false;
         let previousTerminalOutcome: RunOutcome | undefined;
         let resumedStreamId: StreamTabId | undefined;
         const callerOnRun = executeAgentOptions.onRun;
-        try {
-          // A resumed execution is no longer described by the terminal facts its
-          // previous run persisted; drop them before this run writes anything a
-          // reader would project them onto.
-          if (!shouldRegister) {
-            const cleared = await clearTerminalExecutionState(executionId);
-            resumedStreamId = cleared.streamId;
-            previousTerminalOutcome = cleared.previousOutcome;
-          }
-          const result = await executeAgent(config, executionId, {
-            ...executeAgentOptions,
-            launchSignal,
-            // Forward the session resolved above: without it the launch context
-            // redefaults to the ambient `currentSession()`, which can disagree
-            // with the lease handling's `runSession` inside another run's async
-            // context.
-            session: runSession,
-            streamTabIdOverride: resumedStreamId,
-            userFollowUpSupport,
-            onRun: async (handle) => {
-              lifecycleStarted = true;
-              await callerOnRun?.(handle);
-            },
-          });
-          runResult = result;
-        } catch (error) {
-          runFailure = { error };
+        const execution = yield* Effect.exit(
+          Effect.gen(function* () {
+            onExecutionLeaseAcquired?.(executionId);
+            if (!shouldRegister) {
+              const cleared = yield* Effect.tryPromise({
+                try: async () =>
+                  runInSession(runSession, () =>
+                    clearTerminalExecutionState(executionId),
+                  ),
+                catch: ensureError,
+              });
+              resumedStreamId = cleared.streamId;
+              previousTerminalOutcome = cleared.previousOutcome;
+            }
+            return yield* executeAgent(config, executionId, {
+              ...executeAgentOptions,
+              launchSignal,
+              session: runSession,
+              streamTabIdOverride: resumedStreamId,
+              userFollowUpSupport,
+              onRun: async (handle) => {
+                lifecycleStarted = true;
+                await callerOnRun?.(handle);
+              },
+            });
+          }),
+        );
+
+        const failures: unknown[] = [];
+        if (Exit.isFailure(execution)) {
+          const error = Cause.squash(execution.cause);
+          failures.push(error);
           const restoredOutcome = shouldRegister
             ? RUN_OUTCOME.FAILED
             : previousTerminalOutcome;
           if (!lifecycleStarted && restoredOutcome !== undefined) {
-            const finalization = await finalizeRun({
-              executionId,
-              outcome: restoredOutcome,
-              flowRecord: shouldRegister ? 'delete' : 'preserve',
-            });
-            if (!finalization.ok) {
-              runFailure = {
-                error: new AggregateError(
-                  [error, finalization.error],
-                  `Execution ${executionId} failed before lifecycle startup and its terminal status could not be persisted`,
-                ),
-              };
-            }
-          }
-        }
-
-        const artifactFailures: unknown[] = [];
-        try {
-          finalArtifactsHandled = (await beforeLeaseRelease?.()) === true;
-        } catch (error) {
-          artifactFailures.push(error);
-        }
-        if (!finalArtifactsHandled) {
-          // A host hook can fail before touching session artifacts, and
-          // preserving those artifacts is worth the attempt; its error stays
-          // primary in the aggregate below.
-          try {
-            await runSession.releaseExecutionLease(executionId);
-          } catch (error) {
-            artifactFailures.push(error);
-          }
-        }
-
-        if (artifactFailures.length > 0) {
-          const artifactFailure = aggregateError(
-            artifactFailures,
-            `Execution ${executionId} has multiple final artifact failures`,
-          );
-          if (runFailure) {
-            throw new AggregateError(
-              [runFailure.error, artifactFailure],
-              `Execution ${executionId} failed and its final artifacts could not be persisted`,
+            const finalization = yield* Effect.exit(
+              Effect.tryPromise({
+                try: async () =>
+                  runInSession(runSession, () =>
+                    finalizeRun({
+                      executionId,
+                      outcome: restoredOutcome,
+                      flowRecord: shouldRegister ? 'delete' : 'preserve',
+                    }),
+                  ),
+                catch: ensureError,
+              }),
             );
+            if (Exit.isFailure(finalization))
+              failures.push(Cause.squash(finalization.cause));
+            else if (!finalization.value.ok)
+              failures.push(finalization.value.error);
           }
-          throw artifactFailure;
         }
-        if (runFailure) throw runFailure.error;
-        if (!runResult) {
-          throw new Error(
-            `Execution ${executionId} finished without a result.`,
+
+        const artifacts = yield* Effect.exit(
+          Effect.tryPromise({
+            try: async () =>
+              runInSession(runSession, async () => beforeLeaseRelease?.()),
+            catch: ensureError,
+          }),
+        );
+        if (Exit.isFailure(artifacts))
+          failures.push(Cause.squash(artifacts.cause));
+        if (Exit.isFailure(artifacts) || artifacts.value !== true) {
+          const release = yield* Effect.exit(
+            Effect.tryPromise({
+              try: async () =>
+                runInSession(runSession, () =>
+                  runSession.releaseExecutionLease(executionId),
+                ),
+              catch: ensureError,
+            }),
+          );
+          if (Exit.isFailure(release))
+            failures.push(Cause.squash(release.cause));
+        }
+        if (failures.length > 0) {
+          return yield* Effect.fail(
+            ensureError(
+              aggregateError(
+                failures,
+                `Execution ${executionId} failed or its final artifacts could not be persisted`,
+              ),
+            ),
           );
         }
-        return runResult;
-      }),
+        return yield* execution;
+      }).pipe(Effect.uninterruptible),
     );
-  } finally {
-    detachLaunchAbortLink?.();
-    detachLaunchInterrupt?.();
-    if (
-      launchHandle &&
-      runSession.executions.getHandle(executionId) === launchHandle
-    ) {
-      runSession.executions.untrack(executionId);
-    }
-  }
-}
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        detachLaunchAbortLink();
+        detachLaunchInterrupt?.();
+        if (
+          launchHandle &&
+          runSession.executions.getHandle(executionId) === launchHandle
+        ) {
+          runSession.executions.untrack(executionId);
+        }
+      }),
+    ),
+  );
+});

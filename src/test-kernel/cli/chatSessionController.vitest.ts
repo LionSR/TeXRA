@@ -355,7 +355,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
         executions as unknown as ExecutionRegistry,
       ),
     },
-    transcripts: { ensureLoaded: vi.fn(async () => undefined) },
+    transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
     ...overrides,
   });
 }
@@ -563,12 +563,15 @@ describe('createChatSessionController', () => {
       streamId: 'stream-start',
     });
     mocks.runAgent.mockImplementation(
-      async (
+      (
         request: { config: unknown; executionId: ExecutionId },
         options: object,
-      ) => {
-        return mocks.executeAgent(request.config, request.executionId, options);
-      },
+      ) =>
+        Effect.tryPromise({
+          try: () =>
+            mocks.executeAgent(request.config, request.executionId, options),
+          catch: ensureError,
+        }),
     );
     // Return the caller-provided default (undefined for roster keys) — a
     // blanket `false` is not a valid persisted value for
@@ -1065,8 +1068,12 @@ describe('createChatSessionController', () => {
     const runA = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
     const runB = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.FAILED>>();
     mocks.runAgent
-      .mockReturnValueOnce(runA.promise)
-      .mockReturnValueOnce(runB.promise);
+      .mockReturnValueOnce(
+        Effect.tryPromise({ try: () => runA.promise, catch: ensureError }),
+      )
+      .mockReturnValueOnce(
+        Effect.tryPromise({ try: () => runB.promise, catch: ensureError }),
+      );
 
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
@@ -1375,7 +1382,9 @@ describe('createChatSessionController', () => {
     // awaits finish.
     const ensureLoaded = pDefer<void>();
     installSession({
-      transcripts: { ensureLoaded: () => ensureLoaded.promise },
+      transcripts: {
+        ensureLoaded: () => Effect.promise(() => ensureLoaded.promise),
+      },
     });
 
     const session = makeSession({

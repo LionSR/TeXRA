@@ -7,6 +7,9 @@
  * interactive follow-up turn to consume async delivery.
  */
 
+// Third-party imports
+import { Cause, Effect, Exit } from 'effect';
+
 // Local imports
 import {
   AgentConfigSchema,
@@ -15,9 +18,10 @@ import {
 import {
   getRunContextExecutionId,
   getRunContextSession,
-  tryUseRunContext,
+  runInSession,
+  type RunContext,
 } from '@agent/runtime/RunContext';
-import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
+import type { ToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
@@ -30,7 +34,7 @@ import type { ToolResult } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { generateExecutionId } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
@@ -90,14 +94,17 @@ interface ApprovalMeta {
  * Result is delivered via the shared child-run loop's follow-up queue
  * delivery — the same choreography every child-run type shares.
  */
-export async function executeSubagent(
+export const executeSubagent = Effect.fn('executeSubagent')(function* (
+  parentContext: RunContext | undefined,
+  callContext: ToolCallContext | undefined,
   configPayload: AgentConfigPayload,
   agentName: string,
   parentStreamId: StreamTabId,
   options?: { approvalMeta?: ApprovalMeta },
-): Promise<ToolResult> {
-  const parentContext = tryUseRunContext();
-  const parentSession = getRunContextSession(parentContext);
+) {
+  const parentSession = parentContext
+    ? getRunContextSession(parentContext)
+    : undefined;
   if (!parentContext || !parentSession) {
     return errorResult(
       'delegate_agent and delegate_workflow require an active agent session. Run delegation from an active agent session, or ensure the tool run context provides its owning session.',
@@ -115,8 +122,7 @@ export async function executeSubagent(
   // child-run loop can still roll the child's cost into the parent run after
   // this tool call has returned. Subagents count toward parent usage totals
   // only — they never drive the loop.
-  const recordSubagentCost =
-    getCurrentToolCallContext()?.hooks?.recordSubagentCost;
+  const recordSubagentCost = callContext?.hooks?.recordSubagentCost;
   const recordCost = (totalCostUsd: number | undefined): void => {
     recordSubagentCost?.(totalCostUsd ?? 0);
   };
@@ -141,6 +147,7 @@ export async function executeSubagent(
       options?.approvalMeta?.autoApproved === true
         ? 'auto-approved'
         : 'inherit',
+      parentSession,
     );
   };
 
@@ -149,13 +156,13 @@ export async function executeSubagent(
     // follow-up the way the detached loop does it. Degrade deliberately to the
     // parent run's trace (the same trace nested tool activity projects onto):
     // the orchestrator's transcript still records what its child is doing.
-    const parentTrace = getCurrentToolCallContext()?.trace;
+    const parentTrace = callContext?.trace;
     const notifyParentTrace = (update: SubagentProgressUpdate): void => {
       const line = describeSubagentProgress(agentName, update);
       if (line) parentTrace?.info(line);
     };
-    try {
-      const { result, delivery } = await executeSubagentForDeliveryInBand({
+    const deliveryExit = yield* Effect.exit(
+      executeSubagentForDeliveryInBand({
         configPayload: childConfigPayload,
         agentName,
         parentExecutionId,
@@ -167,15 +174,18 @@ export async function executeSubagent(
         onStreamResolved: inheritChildStreamApprovals,
         onCost: recordCost,
         notify: notifyParentTrace,
-      });
+      }),
+    );
+    if (Exit.isSuccess(deliveryExit)) {
+      const { result, delivery } = deliveryExit.value;
       return executed(
         delivery,
         result.outcome === 'cancelled'
           ? `Cancelled '${agentName}'`
           : `Completed '${agentName}'`,
       );
-    } catch (err) {
-      return errorResult(toErrorMessage(err), {
+    } else {
+      return errorResult(toErrorMessage(Cause.squash(deliveryExit.cause)), {
         summary: `Subagent '${agentName}' failed`,
       });
     }
@@ -190,12 +200,18 @@ export async function executeSubagent(
   const userFollowUpSupport = isToolUse
     ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
     : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
-  const { childStreamId } = await registerChildExecution({
-    executionId,
-    config,
-    agentName,
-    userFollowUpSupport,
-    parentExecutionId,
+  const { childStreamId } = yield* Effect.tryPromise({
+    try: () =>
+      runInSession(parentSession, () =>
+        registerChildExecution({
+          executionId,
+          config,
+          agentName,
+          userFollowUpSupport,
+          parentExecutionId,
+        }),
+      ),
+    catch: ensureError,
   });
 
   const strategyParams = {
@@ -215,20 +231,22 @@ export async function executeSubagent(
     userFollowUpSupport,
   };
 
-  await startDetachedChildRunLoop({
+  yield* startDetachedChildRunLoop({
+    session: parentSession,
     executionId,
     parentStreamId,
     childStreamId,
     agentName,
     recordCost,
-    buildLaunch: async () => ({
-      strategy: createNativeSubagentStrategy(strategyParams),
-      onLoopFailed: (error: unknown): void => {
-        log.error(`Subagent '${agentName}' run loop failed after launch`, {
-          data: error,
-        });
-      },
-    }),
+    buildLaunch: () =>
+      Effect.sync(() => ({
+        strategy: createNativeSubagentStrategy(strategyParams),
+        onLoopFailed: (error: unknown): void => {
+          log.error(`Subagent '${agentName}' run loop failed after launch`, {
+            data: error,
+          });
+        },
+      })),
   });
 
   const meta = options?.approvalMeta;
@@ -258,4 +276,4 @@ export async function executeSubagent(
     ].join('\n'),
     `Launched '${agentName}' (async)`,
   );
-}
+});

@@ -14,7 +14,7 @@
  * `src/controllers/progressView/ChatExportController.ts`).
  *
  * The conversation comes from the completed-run archive facade
- * (`readCompletedRunConversation`): the transcript sidecar owns completed-run
+ * (`readCompletedRunConversation`): the canonical transcript fold owns completed-run
  * display/export per #7246 Decision 1.
  *
  * `store.readConfig()` already validates against `AgentConfigSchema`
@@ -24,14 +24,19 @@
  * (and no risk of it throwing on a corrupt record) is needed.
  */
 
+import { Effect } from 'effect';
+
 import { getExecutionStore } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@agent/export/schemas';
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
 } from '@transcript';
+import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * Facts read from the execution store, plus the assembled
@@ -70,15 +75,30 @@ function hasConversationMessages(
   return Array.isArray(conversation) && conversation.length > 0;
 }
 
-export async function loadChatExportInput(
+export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   id: ExecutionId,
-): Promise<ChatExportLoadResult> {
-  const store = getExecutionStore(id);
-  const [config, conversationResult, meta] = await Promise.all([
-    store.readConfig(),
-    readCompletedRunConversation(id),
-    store.readMeta(),
-  ]);
+  session: Pick<SessionHandle, 'roots' | 'transcripts'>,
+): Effect.fn.Return<ChatExportLoadResult, Error> {
+  const [config, conversationResult, meta] = yield* Effect.all(
+    [
+      Effect.tryPromise({
+        try: () =>
+          runWithWorkspaceRoots(session.roots, () =>
+            getExecutionStore(id).readConfig(),
+          ),
+        catch: ensureError,
+      }),
+      readCompletedRunConversation(id, session),
+      Effect.tryPromise({
+        try: () =>
+          runWithWorkspaceRoots(session.roots, () =>
+            getExecutionStore(id).readMeta(),
+          ),
+        catch: ensureError,
+      }),
+    ],
+    { concurrency: 3 },
+  );
   const conversation = hasConversationMessages(conversationResult.conversation)
     ? conversationResult.conversation
     : null;
@@ -115,4 +135,4 @@ export async function loadChatExportInput(
       messages: conversation,
     },
   };
-}
+});

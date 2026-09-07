@@ -45,6 +45,13 @@ export interface SessionGraph {
    *  below), so nothing holding a session can append past its bookkeeping. */
   readonly events: Omit<SessionEventsShape, 'publish'>;
   readonly publish: SessionEventsShape['publish'];
+  /** Transient text shares the existing session-input source, never the event table. */
+  readonly publishText: (
+    streamId: StreamTabId,
+    id: string,
+    text: string,
+  ) => Effect.Effect<void>;
+  readonly readText: (streamId: StreamTabId, id: string) => string | undefined;
   /** The one session state every renderer reads: the fold fiber's level. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its

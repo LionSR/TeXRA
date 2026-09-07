@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { Cause, Effect, Exit } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
@@ -59,14 +60,14 @@ import {
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { linkAbortSignals } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 
-import { createRunContext, withRunContext } from './RunContext';
+import { createRunContext, runInSession, withRunContext } from './RunContext';
 import { createRunScope } from './RunScope';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
-import { currentSession, type SessionHandle } from './SessionHandle';
+import type { SessionHandle } from './SessionHandle';
 import type { StreamStatusMachine } from './StreamStatusService';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -237,31 +238,21 @@ async function validateModelExists(
   );
 }
 
-async function inferLaunchModelHandlerCompatibilityKey(
-  executionId: ExecutionId,
-  model: string,
-): Promise<ModelHandlerCompatibilityKey | undefined> {
-  try {
-    const flowRecord = await getExecutionStore(executionId).read<FlowRecord>(
-      flowKey(executionId),
-    );
-    return inferPersistedFlowModelHandlerCompatibilityKey(
-      model,
-      flowRecord?.shared,
-    );
-  } catch (error) {
-    // A failed read here silently falls through to the default model-handler
-    // route, which can resume with the wrong provider message format. Warn
-    // loudly instead of swallowing it so a bad resume is diagnosable.
-    logger.warn(
-      'Failed to read flow record for launch, using default model-handler route',
-      {
-        data: { executionId, error: toErrorMessage(error) },
-      },
-    );
-    return undefined;
-  }
-}
+const inferLaunchModelHandlerCompatibilityKey = Effect.fn(
+  'inferLaunchModelHandlerCompatibilityKey',
+)(function* (executionId: ExecutionId, model: string, session: SessionHandle) {
+  const flowRecord = yield* Effect.tryPromise({
+    try: async () =>
+      runInSession(session, () =>
+        getExecutionStore(executionId).read<FlowRecord>(flowKey(executionId)),
+      ),
+    catch: ensureError,
+  });
+  return inferPersistedFlowModelHandlerCompatibilityKey(
+    model,
+    flowRecord?.shared,
+  );
+});
 
 /**
  * Create a "Run:" stage, optionally logging a user instruction first.
@@ -289,303 +280,366 @@ function beginRunStage(
   return agentLogger.openStage(label, { kind: 'run' });
 }
 
-async function assembleAgentLaunchContext(
-  input: AgentLaunchInput & { session: SessionHandle },
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-  resources: Array<() => void | Promise<void>>,
-  onStarted: (runTrace: RunTrace, category: AgentCategory) => void,
-): Promise<AgentLaunchContext> {
-  input.signal?.throwIfAborted();
-  const fullConfig = input.config;
-  const interactions = input.session.interactions;
-  // Resolve by the source the delegation captured at validation time, so launch
-  // lands on the exact entry validation/display resolved. When no source is
-  // pinned (direct launches, restored records), resolution falls to the
-  // category-scoped rule validation uses — never blind name resolution.
-  const resolution = await getAgentPath(
-    fullConfig.agent,
-    interactions,
-    fullConfig.agentCategory,
-    fullConfig.agentSource,
-  );
-  input.signal?.throwIfAborted();
-  // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
-  // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
-  // (to Workflow when absent), so `setting.agentCategory` is always populated
-  // here — a second defaulting pass would be a guaranteed no-op.
-  const [setting, prompt] = await loadAgentSettingAndPrompts(resolution);
-  input.signal?.throwIfAborted();
+const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
+  function* (
+    input: AgentLaunchInput & { session: SessionHandle },
+    executionId: ExecutionId,
+    streamId: StreamTabId,
+    resources: Array<() => void | Promise<void>>,
+    onStarted: (runTrace: RunTrace, category: AgentCategory) => void,
+  ): Effect.fn.Return<AgentLaunchContext, Error> {
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    const fullConfig = input.config;
+    const interactions = input.session.interactions;
+    // Resolve by the source the delegation captured at validation time, so launch
+    // lands on the exact entry validation/display resolved. When no source is
+    // pinned (direct launches, restored records), resolution falls to the
+    // category-scoped rule validation uses; never blind name resolution.
+    const resolution = yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(input.session, () =>
+          getAgentPath(
+            fullConfig.agent,
+            interactions,
+            fullConfig.agentCategory,
+            fullConfig.agentSource,
+          ),
+        ),
+      catch: ensureError,
+    });
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
+    // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
+    // (to Workflow when absent), so `setting.agentCategory` is always populated
+    // here; a second defaulting pass would be a guaranteed no-op.
+    const [setting, prompt] = yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(input.session, () =>
+          loadAgentSettingAndPrompts(resolution),
+        ),
+      catch: ensureError,
+    });
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
 
-  // Block category mismatch: prevent launching a tool-use agent as a workflow
-  // (or vice versa). Source-pinned resolution already guarantees launch lands on
-  // the entry validation chose, so this catches only the residual case the
-  // registry's pre-merge category can't see: a child agent that `inherits` a
-  // parent of the other category resolves with the scanner's pre-merge category
-  // (used by getVisibleAgent) but loads a post-merge `setting.agentCategory`
-  // that differs. Only enforced when the caller opts in and the category was
-  // explicitly supplied before schema defaults were applied.
-  if (
-    input.enforceCategory &&
-    fullConfig.agentCategory !== setting.agentCategory
-  ) {
-    const suggestion =
-      setting.agentCategory === AgentCategory.ToolUse
-        ? 'delegate_agent'
-        : 'delegate_workflow';
-    throw new AgentError(
-      `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${fullConfig.agentCategory}. Use ${suggestion} instead.`,
-    );
-  }
-
-  const modelConfig = await validateModelExists(fullConfig.model, interactions);
-  input.signal?.throwIfAborted();
-
-  const config: AgentConfig = {
-    ...fullConfig,
-    agentCategory: setting.agentCategory,
-  };
-
-  // The session is resolved once at the boundary (buildAgentLaunchContext)
-  // and carried in, so a delegated launch inherits the parent run's session
-  // policy and a root launch gets the process default exactly once.
-  const session = input.session;
-  const modelHandlerCompatibilityKey =
-    input.modelHandlerCompatibilityKey ??
-    (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));
-  input.signal?.throwIfAborted();
-  const modelHandler = modelHandlerCompatibilityKey
-    ? await createModelHandlerForCompatibilityKey(
-        modelConfig,
-        modelHandlerCompatibilityKey,
-        session.responseTextProcessing,
-      )
-    : await createModelHandler(
-        modelConfig,
-        session.responseTextProcessing,
-        input.copilotRouteOverride,
+    // Block category mismatch: prevent launching a tool-use agent as a workflow
+    // (or vice versa). Source-pinned resolution already guarantees launch lands on
+    // the entry validation chose, so this catches only the residual case the
+    // registry's pre-merge category can't see: a child agent that `inherits` a
+    // parent of the other category resolves with the scanner's pre-merge category
+    // (used by getVisibleAgent) but loads a post-merge `setting.agentCategory`
+    // that differs. Only enforced when the caller opts in and the category was
+    // explicitly supplied before schema defaults were applied.
+    if (
+      input.enforceCategory &&
+      fullConfig.agentCategory !== setting.agentCategory
+    ) {
+      const suggestion =
+        setting.agentCategory === AgentCategory.ToolUse
+          ? 'delegate_agent'
+          : 'delegate_workflow';
+      return yield* Effect.fail(
+        new AgentError(
+          `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${fullConfig.agentCategory}. Use ${suggestion} instead.`,
+        ),
       );
-  resources.push(() => modelHandler.dispose());
-  input.signal?.throwIfAborted();
-  const modelCell = new ModelCell(modelHandler, config.model);
+    }
 
-  const transcriptWriter = await session.transcripts.loadAndAcquireWriter(
-    streamId,
-    executionId,
-  );
-  input.signal?.throwIfAborted();
-  const rawRunTrace = createRunTrace(
-    streamId,
-    session.transcripts,
-    session.flushers,
-    executionId,
-    transcriptWriter,
-  );
-  // The composed trace enters the store BEFORE session attachment, so a
-  // failed attachment still disposes the raw trace through the store.
-  const attachment: { detach?: () => void } = {};
-  const runTrace: RunTrace = {
-    trace: rawRunTrace.trace,
-    handleStatus: rawRunTrace.handleStatus,
-    dispose: () => {
-      try {
-        attachment.detach?.();
-      } finally {
-        rawRunTrace.dispose();
-      }
-    },
-  };
-  resources.push(() => runTrace.dispose());
-  attachment.detach = session.attachRunTrace(rawRunTrace, streamId);
+    const modelConfig = yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(input.session, () =>
+          validateModelExists(fullConfig.model, interactions),
+        ),
+      catch: ensureError,
+    });
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
 
-  const agentLogger = runTrace.trace;
-  modelHandler.setAgentCategory(setting.agentCategory);
-  modelHandler.setLogger(agentLogger);
+    const config: AgentConfig = {
+      ...fullConfig,
+      agentCategory: setting.agentCategory,
+    };
 
-  input.signal?.throwIfAborted();
-  const isRemote = isRemoteAgent(fullConfig.agent);
-  // The reservation commit point: the existence fact. From here the stream
-  // is real for every fold, and a failure below ends it with a terminal
-  // `result` instead of releasing the reservation (PRD
-  // one-fold-three-renderers, section 6, item 3). The launch facts the fold
-  // reads verbatim (item 6) are all known here; the run's own `run.config`
-  // follows once the lifecycle starts. A resume (`streamTabIdOverride`)
-  // activates an existing stream and mints no `run.start` (decision 9).
-  // The existence fact and its first activation are one batch (item 8):
-  // published on the session, never as trace events, so no process failure
-  // can leave a run without its activation line.
-  const background = input.isSubagent ?? false;
-  session.publish([
-    ...(input.streamTabIdOverride
-      ? []
-      : [
-          {
-            type: 'run.start' as const,
-            aggregateId: qualifyAggregateId('stream', streamId),
-            executionId,
-            identity: { kind: 'agent' as const, agent: config.agent },
-            userFollowUpSupport:
-              input.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-            category: setting.agentCategory,
-            isRemote,
-            worktree: launchWorktreeInfo(config.workingDirectory),
-            ...(input.parentStreamId && input.parentStreamId !== streamId
-              ? { parentStreamId: input.parentStreamId }
-              : {}),
-            // A delegated child runs in the background whoever is watching.
-            background,
-            // The initial policy snapshot (PRD 6, item 2). A delegated
-            // child's ancestry is registered from `onStreamResolved` below,
-            // after this event; the queue publishes a fresh `approval.policy`
-            // for every value the edge changes, so the fold's latest-of-type
-            // entry ends correct.
-            approvalPolicy: session.approvalPolicySnapshotFor(streamId),
-            ...(input.checkpointId ? { checkpointId: input.checkpointId } : {}),
-          },
-        ]),
-    // Every activation, first launch and resume alike (PRD 6, item 8).
-    {
-      type: 'run.activate',
-      aggregateId: qualifyAggregateId('stream', streamId),
-      category: setting.agentCategory,
-      isRemote,
-      background,
-    },
-    // Reservation is local admission, not a stream fact. Its first visible
-    // status belongs to this creation transaction, after run.start.
-    ...(input.streamTabIdOverride
-      ? []
-      : [
-          {
-            type: 'status' as const,
-            aggregateId: qualifyAggregateId('stream', streamId),
-            phase: STREAM_PHASE.RUNNING,
-            cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-            substate: STREAM_SUBSTATE.STARTING,
-            runStartedAt: session.status.getStreamState(streamId)?.runStartedAt,
-          },
-        ]),
-  ]);
-  await session.settlePublications();
-  onStarted(runTrace, setting.agentCategory);
-  input.onStreamResolved?.(streamId, runTrace.trace);
+    // The session is resolved once at the boundary (buildAgentLaunchContext)
+    // and carried in, so a delegated launch inherits the parent run's session
+    // policy and a root launch gets the process default exactly once.
+    const session = input.session;
+    const modelHandlerCompatibilityKey =
+      input.modelHandlerCompatibilityKey ??
+      (yield* inferLaunchModelHandlerCompatibilityKey(
+        executionId,
+        config.model,
+        session,
+      ));
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    const modelHandler = yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(session, () =>
+          modelHandlerCompatibilityKey
+            ? createModelHandlerForCompatibilityKey(
+                modelConfig,
+                modelHandlerCompatibilityKey,
+                session.responseTextProcessing,
+              )
+            : createModelHandler(
+                modelConfig,
+                session.responseTextProcessing,
+                input.copilotRouteOverride,
+              ),
+        ),
+      catch: ensureError,
+    });
+    resources.push(() => modelHandler.dispose());
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    const modelCell = new ModelCell(modelHandler, config.model);
 
-  // Log the initial instruction as a user message so both workflow and
-  // tool-use tabs display it inline with the stream log (no separate panel).
-  const displayInstruction = getDisplayedInstruction(config);
-  const initialInstruction =
-    displayInstruction && !input.streamTabIdOverride
-      ? displayInstruction
-      : undefined;
-  const supportsMediaInMessage =
-    setting.agentCategory === AgentCategory.ToolUse
-      ? modelHandler.capabilities.supportsVision ||
-        modelHandler.capabilities.supportsNativeAudio
-      : modelHandler.capabilities.supportsVision;
-  const initialMediaMayBeInserted =
-    config.mediaFiles.length > 0 && supportsMediaInMessage;
+    const transcriptWriter = yield* session.transcripts.loadAndAcquireWriter(
+      streamId,
+      executionId,
+    );
+    const rawRunTrace = createRunTrace(streamId, transcriptWriter);
+    // The composed trace enters the store BEFORE session attachment, so a
+    // failed attachment still disposes the raw trace through the store.
+    const attachment: { detach?: () => void } = {};
+    const runTrace: RunTrace = {
+      trace: rawRunTrace.trace,
+      dispose: () => {
+        try {
+          attachment.detach?.();
+        } finally {
+          rawRunTrace.dispose();
+        }
+      },
+    };
+    resources.push(() => runTrace.dispose());
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    attachment.detach = session.attachRunTrace(rawRunTrace, streamId);
 
-  const parentStage = beginRunStage(
-    agentLogger,
-    `Run: ${config.agent}`,
-    initialMediaMayBeInserted ? undefined : initialInstruction,
-  );
-  resources.push(() => parentStage.end(RUN_OUTCOME.FAILED));
+    const agentLogger = runTrace.trace;
+    modelHandler.setAgentCategory(setting.agentCategory);
+    modelHandler.setLogger(agentLogger);
 
-  // Tell the user when attached images will be dropped because the chosen model
-  // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards
-  // drop them silently otherwise.
-  const visionWarning = mediaNeedsVisionWarning(
-    config.mediaFiles,
-    modelHandler.capabilities,
-    'attached',
-    fullConfig.model,
-  );
-  if (visionWarning) agentLogger.warn(visionWarning);
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    const isRemote = isRemoteAgent(fullConfig.agent);
+    // The reservation commit point: the existence fact. From here the stream
+    // is real for every fold, and a failure below ends it with a terminal
+    // `result` instead of releasing the reservation (PRD
+    // one-fold-three-renderers, section 6, item 3). The launch facts the fold
+    // reads verbatim (item 6) are all known here; the run's own `run.config`
+    // follows once the lifecycle starts. A resume (`streamTabIdOverride`)
+    // activates an existing stream and mints no `run.start` (decision 9).
+    // The existence fact and its first activation are one batch (item 8):
+    // published on the session, never as trace events, so no process failure
+    // can leave a run without its activation line.
+    const background = input.isSubagent ?? false;
+    session.publish([
+      ...(input.streamTabIdOverride
+        ? []
+        : [
+            {
+              type: 'run.start' as const,
+              aggregateId: qualifyAggregateId('stream', streamId),
+              executionId,
+              identity: { kind: 'agent' as const, agent: config.agent },
+              userFollowUpSupport:
+                input.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+              category: setting.agentCategory,
+              isRemote,
+              worktree: launchWorktreeInfo(config.workingDirectory),
+              ...(input.parentStreamId && input.parentStreamId !== streamId
+                ? { parentStreamId: input.parentStreamId }
+                : {}),
+              // A delegated child runs in the background whoever is watching.
+              background,
+              // The initial policy snapshot (PRD 6, item 2). A delegated
+              // child's ancestry is registered from `onStreamResolved` below,
+              // after this event; the queue publishes a fresh `approval.policy`
+              // for every value the edge changes, so the fold's latest-of-type
+              // entry ends correct.
+              approvalPolicy: session.approvalPolicySnapshotFor(streamId),
+              ...(input.checkpointId
+                ? { checkpointId: input.checkpointId }
+                : {}),
+            },
+          ]),
+      // Every activation, first launch and resume alike (PRD 6, item 8).
+      {
+        type: 'run.activate',
+        aggregateId: qualifyAggregateId('stream', streamId),
+        category: setting.agentCategory,
+        isRemote,
+        background,
+      },
+      // Reservation is local admission, not a stream fact. Its first visible
+      // status belongs to this creation transaction, after run.start.
+      ...(input.streamTabIdOverride
+        ? []
+        : [
+            {
+              type: 'status' as const,
+              aggregateId: qualifyAggregateId('stream', streamId),
+              phase: STREAM_PHASE.RUNNING,
+              cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+              substate: STREAM_SUBSTATE.STARTING,
+              runStartedAt:
+                session.status.getStreamState(streamId)?.runStartedAt,
+            },
+          ]),
+    ]);
+    yield* Effect.tryPromise({
+      try: () => session.settlePublications(),
+      catch: ensureError,
+    });
+    onStarted(runTrace, setting.agentCategory);
+    input.onStreamResolved?.(streamId, runTrace.trace);
 
-  const agentPath = path.dirname(resolution.entry.path);
-  const workingDirectory = config.workingDirectory?.trim() || undefined;
-  const runAbortController = new AbortController();
-  // Linked, not composed: `AbortSignal.any` would keep this run's signal (and
-  // every listener still attached to it) reachable from the caller's signal
-  // until that signal aborts. A parent run's signal outlives each subagent it
-  // launches, so a long orchestration would retain every finished child's run
-  // scope. The link is detached with the run trace at end-of-run.
-  const detachRunAbortLink = linkAbortSignals(
-    [input.signal],
-    runAbortController,
-  );
-  resources.push(detachRunAbortLink);
-  const runSignal = runAbortController.signal;
-  const runScope = createRunScope({
-    streamId,
-    executionId,
-    agentName: config.agent,
-    workingDirectory,
-    delegationAgentScope: fullConfig.delegationAgentScope,
-    session,
-    signal: runSignal,
-  });
-  const buildVars = () =>
-    buildUserVars(
+    // Log the initial instruction as a user message so both workflow and
+    // tool-use tabs display it inline with the stream log (no separate panel).
+    const displayInstruction = getDisplayedInstruction(config);
+    const initialInstruction =
+      displayInstruction && !input.streamTabIdOverride
+        ? displayInstruction
+        : undefined;
+    const supportsMediaInMessage =
+      setting.agentCategory === AgentCategory.ToolUse
+        ? modelHandler.capabilities.supportsVision ||
+          modelHandler.capabilities.supportsNativeAudio
+        : modelHandler.capabilities.supportsVision;
+    const initialMediaMayBeInserted =
+      config.mediaFiles.length > 0 && supportsMediaInMessage;
+
+    const parentStage = beginRunStage(
+      agentLogger,
+      `Run: ${config.agent}`,
+      initialMediaMayBeInserted ? undefined : initialInstruction,
+    );
+    resources.push(() => parentStage.end(RUN_OUTCOME.FAILED));
+
+    // Tell the user when attached images will be dropped because the chosen model
+    // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards
+    // drop them silently otherwise.
+    const visionWarning = mediaNeedsVisionWarning(
+      config.mediaFiles,
+      modelHandler.capabilities,
+      'attached',
+      fullConfig.model,
+    );
+    if (visionWarning) agentLogger.warn(visionWarning);
+
+    const agentPath = path.dirname(resolution.entry.path);
+    const workingDirectory = config.workingDirectory?.trim() || undefined;
+    const runAbortController = new AbortController();
+    // Linked, not composed: `AbortSignal.any` would keep this run's signal (and
+    // every listener still attached to it) reachable from the caller's signal
+    // until that signal aborts. A parent run's signal outlives each subagent it
+    // launches, so a long orchestration would retain every finished child's run
+    // scope. The link is detached with the run trace at end-of-run.
+    const detachRunAbortLink = linkAbortSignals(
+      [input.signal],
+      runAbortController,
+    );
+    resources.push(detachRunAbortLink);
+    const runSignal = runAbortController.signal;
+    const runScope = createRunScope({
+      streamId,
+      executionId,
+      agentName: config.agent,
+      workingDirectory,
+      delegationAgentScope: fullConfig.delegationAgentScope,
+      session,
+      signal: runSignal,
+    });
+    const buildVars = () =>
+      buildUserVars(
+        config,
+        setting,
+        prompt,
+        agentPath,
+        {
+          isOpenai: modelHandler.config.provider === ModelProvider.OPENAI,
+          isAnthropic: modelHandler.config.provider === ModelProvider.ANTHROPIC,
+          isGoogle: modelHandler.config.provider === ModelProvider.GOOGLE,
+        },
+        agentLogger,
+        { delegationAgentScope: runScope.delegationAgentScope },
+      );
+
+    const baseVars = yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(session, () =>
+          setting.agentCategory === AgentCategory.ToolUse
+            ? buildVars()
+            : parentStage.child('Init').run(buildVars),
+        ),
+      catch: ensureError,
+    });
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+
+    const userVarChannels: UserVariableChannels = { ...baseVars };
+    const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
+
+    const usageMonitor = new UsageMonitor(
+      modelCell,
+      {
+        logger: agentLogger,
+        executionId,
+        runStageId: parentStage.id,
+        streamId,
+      },
+      {
+        agentName: config.agent,
+        agentCategory: setting.agentCategory,
+      },
+    );
+    return {
       config,
+      resolvedAgentDescription: resolution.entry.description,
       setting,
       prompt,
-      agentPath,
-      {
-        isOpenai: modelHandler.config.provider === ModelProvider.OPENAI,
-        isAnthropic: modelHandler.config.provider === ModelProvider.ANTHROPIC,
-        isGoogle: modelHandler.config.provider === ModelProvider.GOOGLE,
-      },
-      agentLogger,
-      { delegationAgentScope: runScope.delegationAgentScope },
-    );
-
-  const baseVars =
-    setting.agentCategory === AgentCategory.ToolUse
-      ? await buildVars()
-      : await parentStage.child('Init').run(buildVars);
-  input.signal?.throwIfAborted();
-
-  const userVarChannels: UserVariableChannels = { ...baseVars };
-  const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
-
-  const usageMonitor = new UsageMonitor(
-    modelCell,
-    {
+      modelCell,
+      toolPolicy: createToolPolicy(input.toolPolicy),
       logger: agentLogger,
-      executionId,
-      runStageId: parentStage.id,
-      streamId,
-    },
-    {
-      agentName: config.agent,
-      agentCategory: setting.agentCategory,
-    },
-  );
-  return {
-    config,
-    resolvedAgentDescription: resolution.entry.description,
-    setting,
-    prompt,
-    modelCell,
-    toolPolicy: createToolPolicy(input.toolPolicy),
-    logger: agentLogger,
-    parentStage,
-    userVarChannels,
-    attachedMemoryMisses,
-    usageMonitor,
-    runScope,
-    interrupt: () => runAbortController.abort(),
-    initialUserMessageForTranscript: initialMediaMayBeInserted
-      ? initialInstruction
-      : undefined,
-    disposeTrace: () => {
-      detachRunAbortLink();
-      runTrace.dispose();
-    },
-  };
-}
+      parentStage,
+      userVarChannels,
+      attachedMemoryMisses,
+      usageMonitor,
+      runScope,
+      interrupt: () => runAbortController.abort(),
+      initialUserMessageForTranscript: initialMediaMayBeInserted
+        ? initialInstruction
+        : undefined,
+      disposeTrace: () => {
+        detachRunAbortLink();
+        runTrace.dispose();
+      },
+    };
+  },
+);
 
 function acquireStreamOrThrow(
   streamId: StreamTabId,
@@ -679,35 +733,28 @@ function compensateStartedFailure(args: {
  * `streamTabIdOverride`, reserves nothing, and emits `run.activate` alone:
  * its stream already exists for every fold (PRD 6, item 8).
  */
-export async function buildAgentLaunchContext(
-  input: AgentLaunchInput,
-): Promise<AgentLaunchContext> {
-  input.signal?.throwIfAborted();
-  const { config } = input;
-  const launchSession = input.session ?? currentSession();
-  const interactions = launchSession.interactions;
-  const streamStatus = launchSession.status;
-  const executionId = input.executionId;
-  // One mint of this run's stream id: an override is used as-is (resume
-  // paths pass the streamId stamped on execution metadata), and otherwise
-  // the freshly minted id is both the reservation and the run's identity.
-  const streamId =
-    input.streamTabIdOverride ?? getStreamTabId(config.agent, { executionId });
-  const reservedStreamId = input.streamTabIdOverride ? undefined : streamId;
-  if (reservedStreamId) {
-    acquireStreamOrThrow(reservedStreamId, streamStatus);
-  }
+export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
+  function* (input: AgentLaunchInput & { session: SessionHandle }) {
+    yield* Effect.try({
+      try: () => input.signal?.throwIfAborted(),
+      catch: ensureError,
+    });
+    const { config, session: launchSession, executionId } = input;
+    const interactions = launchSession.interactions;
+    const streamStatus = launchSession.status;
+    const streamId =
+      input.streamTabIdOverride ??
+      getStreamTabId(config.agent, { executionId });
+    const reservedStreamId = input.streamTabIdOverride ? undefined : streamId;
+    if (reservedStreamId) acquireStreamOrThrow(reservedStreamId, streamStatus);
 
-  // LIFO ownership of everything assembled before the runtime accepts the
-  // launch. Entries register in creation order, so a failed launch unwinds:
-  // parent stage end → started-failure compensation (before the trace it
-  // logs into is disposed) → run trace detach/dispose → model handler dispose.
-  const resources: Array<() => void | Promise<void>> = [];
-  const launchFailure: { error?: unknown } = {};
-  let started = false;
-  try {
-    const ctx = await assembleAgentLaunchContext(
-      { ...input, session: launchSession },
+    // The runtime takes these resources only after assembly succeeds. Failure
+    // unwinds them in reverse order while preserving the original cause.
+    const resources: Array<() => void | Promise<void>> = [];
+    const launchFailure: { error?: unknown } = {};
+    let started = false;
+    return yield* assembleAgentLaunchContext(
+      input,
       executionId,
       streamId,
       resources,
@@ -727,44 +774,50 @@ export async function buildAgentLaunchContext(
           await launchSession.settlePublications();
         });
       },
+    ).pipe(
+      Effect.onError((cause) =>
+        Effect.gen(function* () {
+          const err = Cause.squash(cause);
+          launchFailure.error = err;
+          const failures: unknown[] = [];
+          for (const dispose of resources.toReversed()) {
+            const disposed = yield* Effect.exit(
+              Effect.tryPromise({
+                try: async () => dispose(),
+                catch: ensureError,
+              }),
+            );
+            if (Exit.isFailure(disposed))
+              failures.push(Cause.squash(disposed.cause));
+          }
+          if (failures.length) {
+            logger.warn(
+              'Failed to release launch resources after a failed launch',
+              {
+                data: {
+                  error: new AggregateError(failures, 'Launch cleanup failed'),
+                },
+              },
+            );
+          }
+          if (!started && reservedStreamId)
+            streamStatus.releaseIfReserved(reservedStreamId);
+          if (
+            !input.suppressErrorNotification &&
+            !(err instanceof ZodError) &&
+            !hasErrorPresentationClaimed(err)
+          ) {
+            interactions.emit(
+              'requestShowError',
+              { message: toErrorMessage(err) },
+              { replayWhenAttached: true },
+            );
+          }
+        }),
+      ),
     );
-    // The runtime accepted the launch: the returned context and its run
-    // lifecycle now own these resources.
-    return ctx;
-  } catch (err) {
-    launchFailure.error = err;
-    try {
-      const failures: unknown[] = [];
-      for (const dispose of resources.toReversed()) {
-        try {
-          await dispose();
-        } catch (error) {
-          failures.push(error);
-        }
-      }
-      if (failures.length)
-        throw new AggregateError(failures, 'Launch cleanup failed');
-    } catch (cleanupError) {
-      logger.warn('Failed to release launch resources after a failed launch', {
-        data: { error: cleanupError },
-      });
-    }
-    if (!started && reservedStreamId) {
-      // The stream never existed (no `run.start`): release the reserved
-      // stream lock silently.
-      streamStatus.releaseIfReserved(reservedStreamId);
-    }
-    if (
-      !input.suppressErrorNotification &&
-      !(err instanceof ZodError) &&
-      !hasErrorPresentationClaimed(err)
-    ) {
-      interactions.emit(
-        'requestShowError',
-        { message: toErrorMessage(err) },
-        { replayWhenAttached: true },
-      );
-    }
-    throw err;
-  }
-}
+  },
+  // The existing launch signal owns cancellation. Let each acquisition settle
+  // before cleanup so a late Promise cannot create an unowned resource.
+  Effect.uninterruptible,
+);

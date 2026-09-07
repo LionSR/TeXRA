@@ -30,7 +30,6 @@ import {
   LayerMap,
   ManagedRuntime,
   Option,
-  Queue,
   Schedule,
   RcMap,
   Stream,
@@ -74,12 +73,9 @@ import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { SessionInputs } from '@shared/session/sessionInputs';
-import {
-  isRunningStreamingTextEntry,
-  type StreamLogDelta,
-} from '@shared/session/traceEntries';
+
 import { Database } from '@shared/session/database';
-import type { StreamLogStore } from '@transcript/StreamLogStore';
+import { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { databaseLayer } from './Database';
 import { collectPendingDeletions } from './deletionCleanup';
@@ -200,64 +196,6 @@ const ownerLiveness = Layer.effectDiscard(
 );
 
 /**
- * The transcript bridge, until the cutover: the root's transcript store's
- * change feed supplies only the in-flight text level of its streaming rows.
- * Source trace facts now supply durable transcript history directly.
- */
-const transcriptBridge = (transcripts: StreamLogStore) =>
-  Layer.effectDiscard(
-    Effect.gen(function* () {
-      const chunks = yield* TextChunkSource;
-      const deltas = yield* Queue.unbounded<{
-        readonly streamId: StreamTabId;
-        readonly delta: StreamLogDelta;
-      }>();
-      yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          transcripts.onChange((streamId, delta) => {
-            Queue.offerUnsafe(deltas, { streamId, delta });
-          }),
-        ),
-        (detach) => Effect.sync(detach),
-      );
-      yield* Effect.forkScoped(
-        Stream.runForEach(Stream.fromQueue(deltas), ({ streamId, delta }) =>
-          Effect.gen(function* () {
-            const rows = delta.reset
-              ? (transcripts.get(streamId)?.getRange(0) ?? [])
-              : [...delta.appended, ...delta.dirtied];
-            if (rows.length === 0 && delta.textChunks.length === 0) return;
-            yield* SubscriptionRef.update(chunks.ref, (held) => {
-              const next = new Map(held);
-              for (const entry of rows) {
-                const key = `${streamId}/${entry.id}`;
-                if (isRunningStreamingTextEntry(entry)) {
-                  const text = entry.text ?? '';
-                  next.set(key, {
-                    previous: undefined,
-                    text,
-                    length: text.length,
-                  });
-                } else next.delete(key);
-              }
-              for (const chunk of delta.textChunks) {
-                const key = `${streamId}/${chunk.id}`;
-                const previous = next.get(key);
-                next.set(key, {
-                  previous,
-                  text: chunk.appendText,
-                  length: (previous?.length ?? 0) + chunk.appendText.length,
-                });
-              }
-              return next;
-            });
-          }),
-        ),
-      );
-    }),
-  );
-
-/**
  * The handle of one root, over the root's graph: the last layer of the
  * entry, so it is the first thing unwound when the entry closes and the
  * graph outlives every publisher above it. Every release goes through the
@@ -276,6 +214,7 @@ const sessionHandleLayer = (
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
       const inputs = yield* SessionInputs;
+      const chunks = yield* TextChunkSource;
       const subscriptions = yield* TranscriptSubscriptions;
       const delivered = yield* SubscriptionRef.make(0);
       const tailEnded = yield* Deferred.make<void>();
@@ -286,6 +225,30 @@ const sessionHandleLayer = (
         );
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
+        publishText: (streamId, id, text) =>
+          SubscriptionRef.update(chunks.ref, (held) => {
+            const next = new Map(held);
+            const key = `${streamId}/${id}`;
+            const previous = next.get(key);
+            next.set(key, {
+              previous,
+              text,
+              length: (previous?.length ?? 0) + text.length,
+            });
+            return next;
+          }),
+        readText: (streamId, id) => {
+          let chunk = SubscriptionRef.getUnsafe(chunks.ref).get(
+            `${streamId}/${id}`,
+          );
+          if (chunk === undefined) return undefined;
+          const pieces: string[] = [];
+          while (chunk !== undefined) {
+            pieces.push(chunk.text);
+            chunk = chunk.previous;
+          }
+          return pieces.reverse().join('');
+        },
         publish: (events) =>
           Effect.gen(function* () {
             const rows = yield* publish(events);
@@ -360,11 +323,17 @@ const sessionHandleLayer = (
       );
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing().pipe(Effect.orDie);
+      const transcripts = yield* StreamLogStore.open(
+        eventLog,
+        initialListing,
+        key.open.transcriptMode,
+      ).pipe(Effect.orDie);
       const session = yield* Effect.acquireRelease(
         Effect.sync(
           () =>
             new SessionHandle({
               ...key.open,
+              transcripts,
               snapshots: new StreamSnapshotStore(eventLog),
               graph,
             }),
@@ -384,6 +353,17 @@ const sessionHandleLayer = (
                     session,
                     aggregateTarget(event.aggregateId).id,
                   )
+                : Effect.void,
+            ),
+            Effect.andThen(
+              event.type === 'stream.end'
+                ? SubscriptionRef.update(chunks.ref, (held) => {
+                    const next = new Map(held);
+                    next.delete(
+                      `${aggregateTarget(event.aggregateId).id}/${event.id}`,
+                    );
+                    return next;
+                  })
                 : Effect.void,
             ),
             Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
@@ -422,21 +402,15 @@ const sessionHandleLayer = (
 /** The runtime graph of one root (PRD 7.3): the root-scoped services the
  *  handle is built over. */
 const sessionGraphLayer = (key: SessionKey) => {
-  if (key.open.transcripts.mode.kind === 'read-only') {
-    throw new Error(
-      'SessionHandle requires a writable transcript store; read-only stores are reserved for call-scoped readers.',
-    );
-  }
-  return Layer.mergeAll(
-    ownerLiveness,
-    transcriptBridge(key.open.transcripts),
-  ).pipe(
+  return ownerLiveness.pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(
       sessionEventsLayer.pipe(
         Layer.provideMerge(
-          databaseLayer(key.open.transcripts.mode.kind).pipe(Layer.orDie),
+          databaseLayer(key.open.transcriptMode?.kind ?? 'persistent').pipe(
+            Layer.orDie,
+          ),
         ),
       ),
     ),

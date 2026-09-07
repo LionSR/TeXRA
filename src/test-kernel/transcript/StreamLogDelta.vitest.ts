@@ -69,36 +69,6 @@ describe('StreamLogStore delta emission', () => {
     expect(deltas[0].appended[0].text).toBe('hel');
   });
 
-  it('coalesces one commit covering several mutations into one delta', () => {
-    const store = StreamLogStore.ephemeral('delta test');
-    appendTranscriptEntry(store, STREAM, {
-      id: 'g1',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      text: 'r0',
-      data: { status: 'running' },
-    });
-    appendTranscriptEntry(store, STREAM, {
-      id: 't1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 2,
-      messageType: MESSAGE_TYPES.THINKING,
-      text: 'thinking',
-      data: { status: 'running' },
-    });
-    const deltas = captureDeltas(store);
-
-    // endRunningGroupsForStreams settles both running rows under a single
-    // commit, so one delta carries both dirtied entries in seqNo order.
-    void store.endRunningGroupsForStreams([STREAM], 99);
-
-    expect(deltas).toHaveLength(1);
-    expect(deltas[0].appended).toEqual([]);
-    expect(deltas[0].dirtied.map((entry) => entry.id)).toEqual(['g1', 't1']);
-  });
-
   it('does not emit for a no-op update', () => {
     const store = StreamLogStore.ephemeral('delta test');
     appendTranscriptEntry(store, STREAM, logRow('m1', 'hello'));

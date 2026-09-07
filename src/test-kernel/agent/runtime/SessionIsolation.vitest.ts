@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -21,6 +22,7 @@ import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   RUN_OUTCOME,
+  aggregateId,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -29,7 +31,10 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import {
+  createTestSession,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import { StorageFS } from '@utils/files/storageFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { createTestLaunchContext } from './launchContextTestUtils';
@@ -55,7 +60,7 @@ vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
         input.executionId,
         workspaceRoots().storage,
       );
-      return { ok: true };
+      return { ok: true, outcome: 'cancelled' };
     }),
   };
 });
@@ -128,11 +133,28 @@ describe('session isolation', () => {
       }),
     });
     const live = [
-      [sessionA, 'exec:drain-a' as ExecutionId],
-      [sessionB, 'exec:drain-b' as ExecutionId],
+      [sessionA, 'a0da01' as ExecutionId],
+      [sessionB, 'b0db01' as ExecutionId],
     ] as const;
+    const closures = live.map(([session, executionId]) =>
+      vi.spyOn(session, 'publishRunEvent').mockImplementation(() => {
+        expect(
+          runInSession(session, () => ownsExecutionLease(executionId)),
+        ).toBe(true);
+      }),
+    );
     try {
       for (const [session, executionId] of live) {
+        const streamId = `stream:${executionId}` as StreamTabId;
+        publishTestRunStart(session, streamId, executionId);
+        session.publish([
+          {
+            type: 'stage.start',
+            aggregateId: aggregateId('stream', streamId),
+            id: `stage:${executionId}`,
+            label: 'Running stage',
+          },
+        ]);
         await runInSession(session, async () => {
           await acquireFreshExecutionLease(executionId);
           session.executions.track(
@@ -146,10 +168,19 @@ describe('session isolation', () => {
       }
       // A quit handler runs in no session scope; the process roots answer
       // there, and neither paper's lease is keyed under them.
-      expect(ownsExecutionLease('exec:drain-a' as ExecutionId)).toBe(false);
-      await settleLiveSessionExecutions(new AbortController().signal);
-      expect(storageMocks.settledUnder.get('exec:drain-a')).toBe('/storage/a');
-      expect(storageMocks.settledUnder.get('exec:drain-b')).toBe('/storage/b');
+      expect(ownsExecutionLease('a0da01' as ExecutionId)).toBe(false);
+      await Effect.runPromise(
+        settleLiveSessionExecutions(new AbortController().signal),
+      );
+      for (const [index, [, executionId]] of live.entries()) {
+        expect(closures[index]).toHaveBeenCalledWith(`stream:${executionId}`, {
+          type: 'stage.end',
+          id: `stage:${executionId}`,
+          status: RUN_OUTCOME.CANCELLED,
+        });
+      }
+      expect(storageMocks.settledUnder.get('a0da01')).toBe('/storage/a');
+      expect(storageMocks.settledUnder.get('b0db01')).toBe('/storage/b');
       for (const [session, executionId] of live) {
         expect(
           runInSession(session, () => ownsExecutionLease(executionId)),

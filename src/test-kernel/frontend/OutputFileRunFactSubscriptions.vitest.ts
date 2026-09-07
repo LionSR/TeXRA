@@ -108,7 +108,6 @@ vi.mock('vscode', () => {
 
 const { createTestSession, publishTestRunStart } =
   await import('@test/support/sessionTestUtils');
-const { settleSessionEvents } = await import('../agent/progressTestUtils');
 const { appSignals } = await import('@eventBus/AppSignals');
 const { registerInlineCriticism, setInlineCriticismEnabled } =
   await import('@frontend/latex/inlineCriticism');
@@ -144,7 +143,7 @@ async function emitOutputFiles(
       },
     },
   ]);
-  await settleSessionEvents();
+  await session.settlePublications();
 }
 
 /** Diagnostics currently recorded for `absolutePath` in the latest collection. */

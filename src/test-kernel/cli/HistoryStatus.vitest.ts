@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import '@test/support/sessionGraphTestSetup';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { registerExecution, getExecutionStore } from '@agent/storage';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
@@ -9,6 +10,10 @@ import {
 import { flowKey } from '@agent/node/persistedFlow';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
+import {
+  initializeDefaultSession,
+  teardownDefaultSession,
+} from '@agent/runtime/SessionHandle';
 import {
   formatCliHistoryDetailsText,
   listResumableCliHistoryEntries,
@@ -23,6 +28,10 @@ import {
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  createTempDirPlatform,
+  useTempDirs,
+} from '@test/support/tempDirPlatform';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
   agent: 'orchestrator',
@@ -38,7 +47,12 @@ const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse({
   instruction: 'Continue the workflow.',
 });
 
-setupPlatform({ workspacePath: '/workspace' });
+const tempDirs = useTempDirs();
+setupPlatform(() => createTempDirPlatform('texra-history-status-', tempDirs));
+beforeEach(() => {
+  teardownDefaultSession();
+  initializeDefaultSession({});
+});
 
 /** Registers an execution, releases its lease, and writes a flow record. */
 async function seedFlowRecord(

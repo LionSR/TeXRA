@@ -749,25 +749,6 @@ export async function releaseOwnedExecutionLeaseAfterFailure(
   }
 }
 
-/**
- * Run pre-handoff launch work under one failure policy: if the operation
- * throws before the child run loop has taken over the execution, release the
- * fresh lease before the error propagates — a failed launch must not leave a
- * record that refuses a prompt relaunch for this process's whole lifetime.
- * Post-handoff work must stay outside this guard: once the run loop owns the
- * lease, releasing it would yank ownership from a live child.
- */
-export async function runWithOwnedExecutionLeaseLaunchGuard<T>(
-  executionId: ExecutionId,
-  operation: () => T | Promise<T>,
-): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
-  }
-}
-
 async function releaseOwnership(ownership: OwnedExecutionLease): Promise<void> {
   const root = ownership.storageRoot;
   const { executionId } = ownership;

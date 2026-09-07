@@ -46,24 +46,26 @@ const tempDirs = useTempDirs();
 async function installFreshDefaultSession(): Promise<void> {
   await installStoragePlatform();
   await import('@test/support/sessionGraphTestSetup');
-  const [
-    { initializeDefaultSession, teardownDefaultSession },
-    { StreamLogStore },
-  ] = await Promise.all([
-    import('@agent/runtime/SessionHandle'),
-    import('@transcript'),
-  ]);
+  const { initializeDefaultSession, teardownDefaultSession } =
+    await import('@agent/runtime/SessionHandle');
   teardownDefaultSession();
-  initializeDefaultSession({ transcripts: await StreamLogStore.open() });
+  initializeDefaultSession({});
 }
 
 async function installStoragePlatform(): Promise<void> {
   await installFakeHost(await createTempDirPlatform('texra-run-', tempDirs));
 }
 
-vi.mock('@agent/runtime/runAgent', () => ({
-  runAgent: mocks.runAgent,
-}));
+vi.mock('@agent/runtime/runAgent', async () => {
+  const { Effect } = await import('effect');
+  return {
+    runAgent: (...args: unknown[]) =>
+      Effect.tryPromise({
+        try: () => mocks.runAgent(...args),
+        catch: (error) => error,
+      }),
+  };
+});
 
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
@@ -198,11 +200,13 @@ function stubHangingRun(handleOptions: (options: LeaseOptions) => void): {
   return { resolve: (result: unknown) => resolveRun(result) };
 }
 
-/** Spies on the default session's transcript store flush. */
-async function spyOnTranscriptFlush() {
+/** Observe the session's terminal artifact drain. */
+async function spyOnArtifactFlush() {
   const { defaultSession } = await import('@agent/runtime/SessionHandle');
   const store = defaultSession().transcripts;
-  const flushSpy = vi.spyOn(store, 'flush').mockResolvedValue(undefined);
+  const flushSpy = vi
+    .spyOn(defaultSession(), 'flushArtifacts')
+    .mockResolvedValue(undefined);
   return { store, flushSpy };
 }
 
@@ -497,10 +501,10 @@ describe('executeCliRequest', () => {
     });
   });
 
-  it('uses an opened persistent store and flushes it after the run', async () => {
+  it('uses a persistent session and drains its artifacts after the run', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
-    const { store, flushSpy } = await spyOnTranscriptFlush();
+    const { store, flushSpy } = await spyOnArtifactFlush();
     const callOrder: string[] = [];
     flushSpy.mockImplementation(async () => {
       callOrder.push('flush');
@@ -521,10 +525,10 @@ describe('executeCliRequest', () => {
     expect(callOrder).toEqual(['runAgent', 'flush']);
   });
 
-  it('flushes the stream log store even when the run throws', async () => {
+  it('drains session artifacts even when the run throws', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
-    const { flushSpy } = await spyOnTranscriptFlush();
+    const { flushSpy } = await spyOnArtifactFlush();
     mocks.runAgent.mockRejectedValueOnce(new AgentError('boom'));
 
     // #7645: a classified run failure resolves to a non-zero exit code
@@ -543,7 +547,7 @@ describe('executeCliRequest', () => {
   it('rethrows a non-AgentError rejection instead of swallowing it into an exit code', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();
-    const { flushSpy } = await spyOnTranscriptFlush();
+    const { flushSpy } = await spyOnArtifactFlush();
     // An unclassified failure (e.g. registerExecution disk I/O,
     // workspaceState.update) is genuinely unexpected — it must keep
     // propagating so bin/texra.ts's crash handler reports it, instead of
@@ -561,7 +565,7 @@ describe('executeCliRequest', () => {
 
   it('preserves a run failure when the final artifact flush also fails', async () => {
     const { executeCliRequest } = await loadRunExecution();
-    const { flushSpy } = await spyOnTranscriptFlush();
+    const { flushSpy } = await spyOnArtifactFlush();
     const runError = new Error('provider transport failed');
     const flushError = new Error('transcript flush failed');
     mocks.runAgent.mockRejectedValueOnce(runError);
@@ -641,7 +645,7 @@ describe('executeCliRequest', () => {
     'marks $label owned executions interrupted during platform shutdown',
     async ({ kind }) => {
       const { platform, executeCliRequest } = await installFakePlatform();
-      const { flushSpy } = await spyOnTranscriptFlush();
+      const { flushSpy } = await spyOnArtifactFlush();
       const { defaultSession } = await import('@agent/runtime/SessionHandle');
       const killSpy = vi.spyOn(defaultSession().executions, 'kill');
       mocks.releaseExecutionLeaseAfterArtifacts.mockImplementationOnce(

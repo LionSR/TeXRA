@@ -540,7 +540,7 @@ describe('Sessions owner', () => {
   const open = (storagePath: string) =>
     openSession({
       roots: createFakeWorkspaceRoots({ storagePath }),
-      transcripts: StreamLogStore.ephemeral('sessions owner test'),
+      transcriptMode: { kind: 'ephemeral', reason: 'sessions owner test' },
     });
   const isLive = (session: SessionHandle): boolean => {
     let live = false;
@@ -565,13 +565,10 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const session = open('/workspace/owner/committed-status');
-        const handleStatus = vi.fn();
+        const handleStatus = vi.spyOn(session.executions, 'handleStatus');
         const onResult = vi.fn();
         const detachResult = session.onResult(onResult);
-        const detach = session.attachRunTrace(
-          { trace: new TraceEmitter(), handleStatus },
-          STREAM,
-        );
+
         try {
           session.publish([
             runStart,
@@ -603,13 +600,25 @@ describe('Sessions owner', () => {
           yield* Effect.promise(() =>
             vi.waitFor(() => expect(handleStatus).toHaveBeenCalledOnce()),
           );
-          expect(handleStatus.mock.calls[0][0]).toMatchObject({
-            type: 'status',
-            streamId: OLDER,
-            phase: STREAM_PHASE.WAITING,
-            seq: 2,
-            commit: 4,
-          });
+          expect(handleStatus).toHaveBeenCalledWith(OLDER);
+          const received = yield* Effect.all(
+            [STREAM, OLDER].map((id) =>
+              Stream.runCollect(
+                session.events.aggregate(qualifyAggregateId('stream', id), 0),
+              ),
+            ),
+          );
+          expect(
+            received.flat().filter((event) => event.type === 'status'),
+          ).toEqual([
+            expect.objectContaining({
+              type: 'status',
+              aggregateId: qualifyAggregateId('stream', OLDER),
+              phase: STREAM_PHASE.WAITING,
+              seq: 2,
+              commit: 4,
+            }),
+          ]);
           const result = {
             type: 'result',
             outcome: 'completed',
@@ -635,18 +644,13 @@ describe('Sessions owner', () => {
           const committed = yield* Stream.runCollect(
             session.events.aggregate(qualifyAggregateId('stream', OLDER), 0),
           );
-          const handleRegistryStatus = vi.spyOn(
-            session.executions,
-            'handleStatus',
-          );
           for (const event of committed)
             yield* session.receiveCommittedEvent({ ...event, ownerId: OTHER });
           expect(handleStatus).toHaveBeenCalledOnce();
           expect(onResult).toHaveBeenCalledOnce();
-          expect(handleRegistryStatus).not.toHaveBeenCalled();
         } finally {
           detachResult();
-          detach();
+          handleStatus.mockRestore();
           session.dispose();
         }
       }),

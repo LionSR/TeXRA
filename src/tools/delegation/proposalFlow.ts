@@ -5,10 +5,14 @@
  * waits for user approval via `session.interactions` before executing.
  */
 
+// Third-party imports
+import { Cause, Effect, Exit } from 'effect';
+
 // Local imports
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { currentSession } from '@agent/runtime/SessionHandle';
-import { tryUseRunContext } from '@agent/runtime/RunContext';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { withRunContext, type RunContext } from '@agent/runtime/RunContext';
+import type { ToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import {
   classifyRejection,
   type ProposalResult,
@@ -25,7 +29,7 @@ import { proposalApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { assertNever, generateShortId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getDelegationAgent,
   getDelegationAgents,
@@ -164,8 +168,10 @@ interface DelegationProposalDecision {
 export async function requestDelegationProposal(
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
   streamId: StreamTabId,
+  session: SessionHandle,
+  parentContext: RunContext | undefined,
 ): Promise<DelegationProposalDecision> {
-  if (proposalApprovals().isBypassed(streamId)) {
+  if (proposalApprovals(session).isBypassed(streamId)) {
     return { result: { action: 'approve' }, autoApproved: true };
   }
 
@@ -177,11 +183,11 @@ export async function requestDelegationProposal(
   // `autoApproved: false` keeps the child on inherited per-kind approval
   // state, so `--approval-policy never` still denies bash and edits
   // downstream.
-  if (tryUseRunContext()?.approvalPromptsUnavailable === true) {
+  if (parentContext?.approvalPromptsUnavailable === true) {
     return { result: { action: 'approve' }, autoApproved: false };
   }
 
-  const interaction = currentSession().interactions.requestAgentProposal({
+  const interaction = session.interactions.requestAgentProposal({
     requestId: generateShortId(),
     streamId,
     ...proposal,
@@ -198,18 +204,32 @@ export async function requestDelegationProposal(
  * If proposal bypass is active for this stream, skips the proposal and launches immediately.
  * Otherwise, waits for user approval via the session's host interactions.
  */
-export async function proposeAndExecute(
+export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
+  session: SessionHandle,
+  parentContext: RunContext,
+  callContext: ToolCallContext | undefined,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
   agentName: string,
   streamId: StreamTabId,
-): Promise<ToolResult> {
-  const decision = await requestDelegationProposal(proposal, streamId);
+) {
+  const decision = yield* Effect.tryPromise({
+    try: () =>
+      requestDelegationProposal(proposal, streamId, session, parentContext),
+    catch: ensureError,
+  });
   if (decision.autoApproved) {
     // Preserve the approved delegation's edit grant explicitly on the child.
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
-    return executeSubagent(proposal, agentName, streamId, {
-      approvalMeta: { autoApproved: true },
-    });
+    return yield* executeSubagent(
+      parentContext,
+      callContext,
+      proposal,
+      agentName,
+      streamId,
+      {
+        approvalMeta: { autoApproved: true },
+      },
+    );
   }
 
   const { result } = decision;
@@ -229,24 +249,35 @@ export async function proposeAndExecute(
   // already resolved when the proposal was built.
   let modelOverride: string | undefined;
   if (result.model && result.model !== proposal.model) {
-    try {
-      modelOverride = await selectAvailableDelegationModel({
-        requestedModel: result.model,
-        parentModel: proposal.model,
-      });
-    } catch (err) {
+    const modelExit = yield* Effect.exit(
+      Effect.tryPromise({
+        try: () =>
+          withRunContext(parentContext, () =>
+            selectAvailableDelegationModel({
+              requestedModel: result.model,
+              parentModel: proposal.model,
+            }),
+          ),
+        catch: ensureError,
+      }),
+    );
+    if (Exit.isFailure(modelExit)) {
       return errorResult(
-        `Cannot launch with model '${result.model}': ${toErrorMessage(err)} Re-propose the delegation.`,
+        `Cannot launch with model '${result.model}': ${toErrorMessage(Cause.squash(modelExit.cause))} Re-propose the delegation.`,
         {
           summary: `Approved model override '${result.model}' is not available`,
         },
       );
     }
+    modelOverride = modelExit.value;
   }
+
   const agentOverride =
     result.agent && result.agent !== proposal.agent ? result.agent : undefined;
   const resolvedAgentOverride = agentOverride
-    ? getDelegationAgent(proposal.agentCategory, agentOverride)
+    ? withRunContext(parentContext, () =>
+        getDelegationAgent(proposal.agentCategory, agentOverride),
+      )
     : undefined;
 
   // Re-validate against the current registry — between proposal display and
@@ -273,17 +304,24 @@ export async function proposeAndExecute(
     }),
   };
   const effectiveAgentName = resolvedAgentOverride?.name ?? agentName;
-  return executeSubagent(effective, effectiveAgentName, streamId, {
-    approvalMeta: {
-      autoApproved: false,
-      ...(modelOverride && {
-        modelOverride,
-        requestedModel: proposal.model,
-      }),
-      ...(agentOverride && {
-        agentOverride,
-        requestedAgent: proposal.agent,
-      }),
+  return yield* executeSubagent(
+    parentContext,
+    callContext,
+    effective,
+    effectiveAgentName,
+    streamId,
+    {
+      approvalMeta: {
+        autoApproved: false,
+        ...(modelOverride && {
+          modelOverride,
+          requestedModel: proposal.model,
+        }),
+        ...(agentOverride && {
+          agentOverride,
+          requestedAgent: proposal.agent,
+        }),
+      },
     },
-  });
-}
+  );
+});

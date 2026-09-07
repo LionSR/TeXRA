@@ -5,8 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/claudeAgent';
-import { createRunTrace, StreamLogStore } from '@transcript';
+import { StreamLogStore } from '@transcript';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -29,7 +30,7 @@ async function runWithLoggerStore<T>(
   const store = StreamLogStore.ephemeral('test');
   await store.clear();
 
-  return await fn(store, createRunTrace(streamId, store).trace);
+  return await fn(store, createTestRunTrace(streamId, store).trace);
 }
 
 function collectToolLogs(store: StreamLogStore): unknown[] {

@@ -132,22 +132,20 @@ describe('committed stream removal', () => {
             );
             yield* Deferred.await(cleaning);
             let launched = false;
-            const launch = session.executions.launchExecution(
-              'aabbccdd',
-              async () => {
-                launched = true;
-              },
-            );
-            yield* Effect.promise(() =>
+            const launch = yield* Effect.forkScoped(
               session.executions.launchExecution(
-                '11223344',
-                async () => undefined,
+                'aabbccdd',
+                Effect.sync(() => {
+                  launched = true;
+                }),
               ),
+              { startImmediately: true },
             );
+            yield* session.executions.launchExecution('11223344', Effect.void);
             expect(launched).toBe(false);
             yield* Deferred.succeed(releaseCleanup, undefined);
             yield* Fiber.join(interruption);
-            yield* Effect.promise(() => launch);
+            yield* Fiber.join(launch);
             expect(launched).toBe(true);
           }),
         ),

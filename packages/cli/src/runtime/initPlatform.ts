@@ -378,6 +378,7 @@ export async function initCliPlatform(
     // below so the kills (all synchronous) land first, matching the other
     // hosts' ordering.
     registerRuntimeShutdownHandlers(lifecycle, {
+      runSettlement: (settlement) => effectRuntime().runPromise(settlement),
       // The default session is installed later by whichever entry point opens
       // transcripts, so its shutdown lookup remains lazy.
       flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),

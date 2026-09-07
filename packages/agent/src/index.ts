@@ -34,6 +34,7 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - host services this boundary wires
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { effectRuntime } from '@platform/processRuntime';
 import type { SessionCloseReport } from '@shared/schemas';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 
@@ -191,6 +192,7 @@ function agentServices(
   const sessions = makeSessions(hold.runtime);
   composition = { platform, sessions };
   registerRuntimeShutdownHandlers(platform.lifecycle, {
+    runSettlement: (settlement) => effectRuntime().runPromise(settlement),
     flushArtifacts: async (signal) => {
       await Effect.runPromise(sessions.close(platform.roots, signal));
     },

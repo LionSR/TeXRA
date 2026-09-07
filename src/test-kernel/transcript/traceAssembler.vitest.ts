@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { registerExecution } from '@agent/storage/executionLifecycle';
@@ -9,6 +9,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
+import { processWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   aggregateId,
   LOG_LEVELS,
@@ -37,13 +38,17 @@ import {
 } from '@transcript';
 
 const tempDirs = useTempDirs();
+let transcripts: StreamLogStore;
+beforeEach(() => {
+  transcripts = StreamLogStore.ephemeral('trace export fixture');
+});
 
-/** Persists a single stream-log entry so the stream is discoverable on disk. */
+/** Populate the transcript input consumed by the export. */
 async function appendLogEntry(
   streamId: StreamTabId,
   text: string,
 ): Promise<void> {
-  const store = await StreamLogStore.open();
+  const store = transcripts;
   appendTranscriptEntry(store, streamId, {
     id: 'entry-1',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -52,7 +57,6 @@ async function appendLogEntry(
     messageType: MESSAGE_TYPES.DEFAULT,
     text,
   });
-  await store.flush();
 }
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -115,7 +119,11 @@ describe('assembleTrace', () => {
 
     const trace = unwrapOkTrace(
       await Effect.runPromise(
-        assembleTrace(executionId, createTestSession().snapshots),
+        assembleTrace(executionId, {
+          roots: processWorkspaceRoots(),
+          snapshots: createTestSession().snapshots,
+          transcripts,
+        }),
       ),
     );
 
@@ -153,7 +161,13 @@ describe('assembleTrace', () => {
     await settleSessionEvents();
 
     const trace = unwrapOkTrace(
-      await Effect.runPromise(assembleTrace(executionId, session.snapshots)),
+      await Effect.runPromise(
+        assembleTrace(executionId, {
+          roots: processWorkspaceRoots(),
+          snapshots: session.snapshots,
+          transcripts,
+        }),
+      ),
     );
 
     expect(trace.streamId).toBe(streamId);
@@ -173,10 +187,11 @@ describe('assembleTrace', () => {
 
   it('returns config_missing when no config was ever written', async () => {
     const result = await Effect.runPromise(
-      assembleTrace(
-        'exec-no-config' as ExecutionId,
-        createTestSession().snapshots,
-      ),
+      assembleTrace('exec-no-config' as ExecutionId, {
+        roots: processWorkspaceRoots(),
+        snapshots: createTestSession().snapshots,
+        transcripts,
+      }),
     );
     expect(result).toEqual({ status: 'config_missing' });
   });
@@ -186,7 +201,11 @@ describe('assembleTrace', () => {
     await getExecutionStore(executionId).writeRunRecord(config());
 
     const result = await Effect.runPromise(
-      assembleTrace(executionId, createTestSession().snapshots),
+      assembleTrace(executionId, {
+        roots: processWorkspaceRoots(),
+        snapshots: createTestSession().snapshots,
+        transcripts,
+      }),
     );
 
     expect(result).toEqual({ status: 'streamLogs_missing' });
@@ -198,7 +217,11 @@ describe('assembleTrace', () => {
     await writeExecution(executionId, { streamId });
 
     const result = await Effect.runPromise(
-      assembleTrace(executionId, createTestSession().snapshots),
+      assembleTrace(executionId, {
+        roots: processWorkspaceRoots(),
+        snapshots: createTestSession().snapshots,
+        transcripts,
+      }),
     );
 
     expect(result).toEqual({ status: 'streamLogs_missing' });
@@ -228,7 +251,11 @@ describe('assembleTrace', () => {
 
     const trace = unwrapOkTrace(
       await Effect.runPromise(
-        assembleTrace(executionId, createTestSession().snapshots),
+        assembleTrace(executionId, {
+          roots: processWorkspaceRoots(),
+          snapshots: createTestSession().snapshots,
+          transcripts,
+        }),
       ),
     );
 

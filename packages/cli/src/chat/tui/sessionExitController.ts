@@ -175,12 +175,9 @@ export function createSessionExitController(
   // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
     runCliPlatformShutdownSequence(platform().lifecycle);
-  // Materialize buffered trace chunks, then drain the debounced StreamLog disk
-  // writes so the tail of the session isn't lost (SAVE_DEBOUNCE_MS window).
-  // Persistent flushes have bounded retries; an explicitly ephemeral session
-  // has no disk work to drain. Ownership of any execution still held — the
-  // WAITING flow this exit deliberately preserves included — settles in the
-  // platform shutdown that follows, which every host now registers.
+  // Drain artifact writes and canonical event publication before shutdown.
+  // Platform shutdown then settles executions whose leases are still held,
+  // including the WAITING flow whose checkpoint this exit preserves.
   const persistBeforePlatformShutdown = async (): Promise<void> => {
     try {
       await ctx.flushArtifacts();

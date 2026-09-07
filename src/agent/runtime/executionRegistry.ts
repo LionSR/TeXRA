@@ -276,16 +276,15 @@ export class ExecutionRegistry {
     });
   }
 
-  /**
-   * Launch a generation of `executionId` as a lifecycle step: `start` begins
-   * once the previous generation has disposed, and its promise becomes the
-   * generation later steps wait on. The step itself returns as soon as the run
-   * has begun, so a parent launching a child is never held by the child's
-   * lifetime and a step never waits on a run for which it holds the lane.
-   */
-  launchExecution<T>(executionId: string, start: () => Promise<T>): Promise<T> {
-    this.assertActive();
-    return this.lanes.launch(executionId, start);
+  /** Run a generation after earlier work and retain its lane through cleanup. */
+  launchExecution<A, E, R>(
+    executionId: string,
+    operation: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | Error, R> {
+    return Effect.suspend(() => {
+      this.assertActive();
+      return this.lanes.launch(executionId, operation);
+    });
   }
 
   /** Register an execution handle. */

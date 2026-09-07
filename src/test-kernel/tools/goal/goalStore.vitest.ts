@@ -21,7 +21,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { GoalStore, goalStateChanges } from '@tools/goal';
 
 const STREAM_A = 'stream:forget-a' as StreamTabId;
@@ -188,7 +187,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
       await inSession(runSession, () =>
         GoalStore.start(STREAM_A, 'objective one'),
       );
-      await settleSessionEvents();
+      await runSession.settlePublications();
       run.clear();
       explicit.clear();
       fallback.clear();
@@ -196,7 +195,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
       await inSession(runSession, () =>
         GoalStore.forget(STREAM_A, explicitSession),
       );
-      await settleSessionEvents();
+      await explicitSession.settlePublications();
 
       expect(run.seen).toEqual([]);
       expect(explicit.seen).toEqual([{ streamId: STREAM_A }]);
@@ -289,7 +288,10 @@ describe('goalStateChanges', () => {
           state: { active: false },
         },
       ]);
-      await settleSessionEvents();
+      await Promise.all([
+        sessionA.settlePublications(),
+        sessionB.settlePublications(),
+      ]);
 
       expect(seen).toEqual([{ streamId: 'same-session' }]);
       await withRunContext(createRunContext({ session: sessionA }), () =>
@@ -338,7 +340,7 @@ describe('goalStateChanges', () => {
           'prove the sharp estimate',
         );
       });
-      await settleSessionEvents();
+      await runSession.settlePublications();
 
       expect(run.seen).toEqual([
         { streamId: SUBSCRIPTION_STREAM },

@@ -15,7 +15,8 @@ import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
-import { createRunTrace, StreamLogStore } from '@transcript';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import { StreamLogStore } from '@transcript';
 import { delay } from '@utils/core';
 
 import { testRunScope, withTestRunContext } from './progressTestUtils';
@@ -81,7 +82,7 @@ interface HarnessOptions {
 }
 
 function dispatchHarness(opts: HarnessOptions) {
-  const runTrace = createRunTrace(
+  const runTrace = createTestRunTrace(
     'DispatchParallelTest' as StreamTabId,
     StreamLogStore.ephemeral('test'),
   );

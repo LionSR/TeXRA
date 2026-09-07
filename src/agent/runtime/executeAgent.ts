@@ -1,5 +1,7 @@
 import * as path from 'node:path';
 
+import { Cause, Effect, Exit } from 'effect';
+
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
@@ -41,6 +43,7 @@ import {
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { stopLeanServersForEndedRun } from '@tools/lean/leanLanguageServices';
 import { ensureRunDir } from '@utils/files/runStorageFs';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   buildAgentLaunchContext,
@@ -66,11 +69,7 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { runInSession } from './RunContext';
-import {
-  currentSession,
-  defaultSession,
-  type SessionHandle,
-} from './SessionHandle';
+import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
@@ -388,13 +387,16 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 export function executeAgent(
   config: AgentConfig,
   executionId: ExecutionId,
-  options: ExecuteAgentOptions & { isSubagent: true },
-): Promise<AgentFlowResult | WaitingToolUseFlowResult>;
+  options: ExecuteAgentOptions & { isSubagent: true; session: SessionHandle },
+): Effect.Effect<AgentFlowResult | WaitingToolUseFlowResult, Error>;
 export function executeAgent(
   config: AgentConfig,
   executionId: ExecutionId,
-  options: ExecuteAgentOptions & { isSubagent?: false | undefined },
-): Promise<AgentFlowResult>;
+  options: ExecuteAgentOptions & {
+    isSubagent?: false | undefined;
+    session: SessionHandle;
+  },
+): Effect.Effect<AgentFlowResult, Error>;
 
 /**
  * Low-level execution runner for an already-registered execution. Fresh
@@ -402,114 +404,135 @@ export function executeAgent(
  * canonical `executions/{id}/config.json` exists before `run.start` exposes
  * its identity. Resume paths reuse the existing execution record.
  */
-export async function executeAgent(
+export function executeAgent(
   config: AgentConfig,
   executionId: ExecutionId,
-  options: ExecuteAgentOptions,
-): Promise<AgentRuntimeFlowResult> {
-  assertOwnedExecutionLease(executionId);
-  const ctx = await buildAgentLaunchContext({
-    config,
-    executionId,
-    streamTabIdOverride: options.streamTabIdOverride,
-    onStreamResolved: options.onStreamResolved,
-    isSubagent: options.isSubagent,
-    parentStreamId: options.parentStreamId,
-    userFollowUpSupport: options.userFollowUpSupport,
-    enforceCategory: options.enforceCategory,
-    suppressErrorNotification:
-      options.suppressErrorNotification ?? options.isSubagent,
-    session: options.session,
-    modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-    copilotRouteOverride: options.copilotRouteOverride,
-    signal: options.launchSignal,
-    toolPolicy: {
-      approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-      runtimeUnavailableTools: options.runtimeUnavailableTools,
-      stopAfterCycle: options.stopAfterCycle,
-    },
-  });
-  return withExecutionRunContext(
-    ctx,
-    { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
-    async () => {
-      const { setting, config } = ctx;
-      const {
-        streamId: runStreamId,
-        executionId: runExecutionId,
-        session: runSession,
-      } = ctx.runScope;
-      const { isSubagent } = options;
-
-      // Start description generation concurrently with the run, but join it
-      // before the owner can release its execution lease. This prevents the
-      // metadata write from recreating an execution deleted by another host.
-      const sessionDescription = generateSessionDescription(
-        runExecutionId,
-        runStreamId,
-        config,
-        ctx.resolvedAgentDescription,
-        runSession,
-        ctx.runScope.signal,
-      );
-      try {
-        const result = await runFlowWithLifecycle(
+  options: ExecuteAgentOptions & { session: SessionHandle },
+): Effect.Effect<AgentRuntimeFlowResult, Error> {
+  return Effect.gen(function* () {
+    yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(options.session, () =>
+          assertOwnedExecutionLease(executionId),
+        ),
+      catch: ensureError,
+    });
+    const ctx = yield* buildAgentLaunchContext({
+      config,
+      executionId,
+      streamTabIdOverride: options.streamTabIdOverride,
+      onStreamResolved: options.onStreamResolved,
+      isSubagent: options.isSubagent,
+      parentStreamId: options.parentStreamId,
+      userFollowUpSupport: options.userFollowUpSupport,
+      enforceCategory: options.enforceCategory,
+      suppressErrorNotification:
+        options.suppressErrorNotification ?? options.isSubagent,
+      session: options.session,
+      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+      copilotRouteOverride: options.copilotRouteOverride,
+      signal: options.launchSignal,
+      toolPolicy: {
+        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        runtimeUnavailableTools: options.runtimeUnavailableTools,
+        stopAfterCycle: options.stopAfterCycle,
+      },
+    });
+    return yield* Effect.tryPromise({
+      try: () =>
+        withExecutionRunContext(
           ctx,
-          async (handle, lifecycle) => {
-            // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
-            await ensureRunDir(executionId);
-            logger.info(`Starting task execution (streamId: ${runStreamId})`);
-            logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
-            logger.debug('Task execution details', {
-              data: {
-                streamId: runStreamId,
-                agent: config.agent,
-                model: config.model,
-              },
-            });
-            logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
-            // Subagents don't need to force-open the progress board or show notifications —
-            // the orchestrator's stream is already visible.
-            if (!isSubagent) {
-              runSession.interactions.emit(
-                'requestEnsureProgressView',
-                { fallbackNotification: buildFallbackNotification(config) },
-                { replayWhenAttached: true },
-              );
-            }
-            logger.info('Executing agent', {
-              data: { agent: config.agent, model: config.model },
-            });
+          { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
+          async () => {
+            const { setting, config } = ctx;
+            const {
+              streamId: runStreamId,
+              executionId: runExecutionId,
+              session: runSession,
+            } = ctx.runScope;
+            const { isSubagent } = options;
 
-            if (setting.agentCategory === AgentCategory.ToolUse) {
-              return launchToolUseRun(
+            // Start description generation concurrently with the run, but join it
+            // before the owner can release its execution lease. This prevents the
+            // metadata write from recreating an execution deleted by another host.
+            const sessionDescription = generateSessionDescription(
+              runExecutionId,
+              runStreamId,
+              config,
+              ctx.resolvedAgentDescription,
+              runSession,
+              ctx.runScope.signal,
+            );
+            try {
+              const result = await runFlowWithLifecycle(
                 ctx,
-                handle,
-                lifecycle,
-                { ...options, setting, isSubagent },
-                { kind: 'fresh', onIdle: options.onIdle },
+                async (handle, lifecycle) => {
+                  // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
+                  await ensureRunDir(executionId);
+                  logger.info(
+                    `Starting task execution (streamId: ${runStreamId})`,
+                  );
+                  logger.info(
+                    `Input file: ${config.inputFiles[0] ?? '(none)'}`,
+                  );
+                  logger.debug('Task execution details', {
+                    data: {
+                      streamId: runStreamId,
+                      agent: config.agent,
+                      model: config.model,
+                    },
+                  });
+                  logger.debug(
+                    `Output files: ${config.outputFiles?.length ?? 0}`,
+                  );
+                  // Subagents don't need to force-open the progress board or show notifications;
+                  // the orchestrator's stream is already visible.
+                  if (!isSubagent) {
+                    runSession.interactions.emit(
+                      'requestEnsureProgressView',
+                      {
+                        fallbackNotification: buildFallbackNotification(config),
+                      },
+                      { replayWhenAttached: true },
+                    );
+                  }
+                  logger.info('Executing agent', {
+                    data: { agent: config.agent, model: config.model },
+                  });
+
+                  if (setting.agentCategory === AgentCategory.ToolUse) {
+                    return launchToolUseRun(
+                      ctx,
+                      handle,
+                      lifecycle,
+                      { ...options, setting, isSubagent },
+                      { kind: 'fresh', onIdle: options.onIdle },
+                    );
+                  }
+                  const result = await runReflectionAgent(ctx, setting);
+                  if (result.error) return result;
+                  const outputOutcome =
+                    await options.openWorkflowOutput?.(result);
+                  return outputOutcome === undefined
+                    ? result
+                    : { ...result, outcome: outputOutcome };
+                },
+                buildLifecycleOptions(options, isSubagent),
               );
+              if (isWaitingFlowResult(result) && !options.isSubagent) {
+                throw new Error(
+                  'executeAgent received a non-terminal WAITING result for a non-subagent run.',
+                );
+              }
+              return result;
+            } finally {
+              await sessionDescription;
             }
-            const result = await runReflectionAgent(ctx, setting);
-            if (result.error) return result;
-            const outputOutcome = await options.openWorkflowOutput?.(result);
-            return outputOutcome === undefined
-              ? result
-              : { ...result, outcome: outputOutcome };
           },
-          buildLifecycleOptions(options, isSubagent),
-        );
-        if (isWaitingFlowResult(result) && !options.isSubagent) {
-          throw new Error(
-            'executeAgent received a non-terminal WAITING result for a non-subagent run.',
-          );
-        }
-        return result;
-      } finally {
-        await sessionDescription;
-      }
-    },
-  );
+        ),
+      catch: ensureError,
+    });
+  }).pipe(Effect.uninterruptible);
 }
 
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
@@ -537,123 +560,133 @@ export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
  * is a subagent — and can therefore legitimately resolve WAITING again — comes
  * from persisted lineage (`hasPersistedParent`), never from the caller.
  */
-async function resumeToolUseWithOwnedLease(
-  resume: ToolUseResumeData,
-  options: ResumeToolUseFromResumeDataOptions = {},
-): Promise<AgentRuntimeFlowResult> {
-  // Resolve persisted lineage before launch assembly activates the stream and
-  // transfers its resources. Storage failures must propagate without leaving
-  // an activated resume stream outside lifecycle cleanup.
-  let isSubagent: boolean;
-  let userFollowUpSupport: UserFollowUpSupport;
-  let ctx: AgentLaunchContext;
-  try {
-    // This execution is running again, so the terminal facts its previous
-    // run left behind stop describing it here, before any turn of the
-    // resumed run can write a result envelope for readers to project onto.
-    // Lane 2 follow-up (PRD 5.2): once approval facts replay from durable
-    // history, this same step appends `approval.resolved` (cause:
-    // interrupted) for every request still pending on the stream, so a
-    // replayed resume never folds back to waiting on a request no runtime
-    // listens for. In process the run lifecycle's end-of-run cancel already
-    // resolves them, so nothing is pending here today.
-    await clearTerminalExecutionState(resume.executionId);
-    [isSubagent, userFollowUpSupport] = await Promise.all([
-      hasPersistedParent(resume.executionId),
-      getPersistedUserFollowUpSupport(resume.executionId),
-    ]);
-    // Load the transcript before the launch reserves its writer, the order
-    // `createRehydratedChildStream` uses. Nothing between the launch's
-    // `run.start` and the run lifecycle may reject: the lifecycle's failure
-    // path is what ends a started stream with its terminal result.
-    await (options.session ?? currentSession()).transcripts.ensureLoaded(
-      resume.streamId,
-    );
-    ctx = await buildAgentLaunchContext({
-      config: resume.agentConfig,
-      executionId: resume.executionId,
-      streamTabIdOverride: resume.streamId,
-      // SessionResumeRetrieval already resolved the persisted ?? inferred key
-      // for this exact record; do not re-infer here.
-      modelHandlerCompatibilityKey: resume.shared.modelHandlerCompatibilityKey,
-      isSubagent,
-      parentStreamId: options.parentStreamId,
-      userFollowUpSupport,
-      // Host resume callers surface their own warning toast on failure;
-      // skip the bus-level error to avoid double-notifying.
-      suppressErrorNotification: true,
-      session: options.session,
-      toolPolicy: {
-        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-        runtimeUnavailableTools: options.runtimeUnavailableTools,
-      },
-    });
-  } catch (error) {
-    throw await releaseOwnedExecutionLeaseAfterFailure(
-      resume.executionId,
-      error,
-    );
-  }
-  const { setting } = ctx;
-  const { session: runSession } = ctx.runScope;
-
-  // Only the run itself is guarded here. The release below is deliberately
-  // outside: a release that fails must not be retried by the catch arm.
-  let result: AgentRuntimeFlowResult;
-  try {
-    result = await withExecutionRunContext(
-      ctx,
-      { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
-      async () =>
-        runFlowWithLifecycle(
-          ctx,
-          async (handle, lifecycle) => {
-            // Inside the lifecycle so the rejection ends the started stream
-            // with its FAILED result like any other run failure.
-            if (setting.agentCategory !== AgentCategory.ToolUse) {
-              // Keep this historical diagnostic byte-for-byte for external monitors.
-              throw new AgentError(
-                'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-              );
-            }
-            return launchToolUseRun(
-              ctx,
-              handle,
-              lifecycle,
-              { ...options, setting, isSubagent },
-              {
-                kind: 'resume',
-                resume,
-                drainedFollowUps: options.drainedFollowUps,
-                takePendingFollowUps: options.takePendingFollowUps,
-                isCancellationRequested: options.isCancellationRequested,
-                onCancellationAtFlowAttachment:
-                  options.onCancellationAtFlowAttachment,
-              },
-            );
+const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
+  function* (
+    resume: ToolUseResumeData,
+    options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
+  ) {
+    const runSession = options.session;
+    const setup = yield* Effect.exit(
+      Effect.gen(function* () {
+        const [isSubagent, userFollowUpSupport] = yield* Effect.tryPromise({
+          try: async () =>
+            runInSession(runSession, async () => {
+              await clearTerminalExecutionState(resume.executionId);
+              return Promise.all([
+                hasPersistedParent(resume.executionId),
+                getPersistedUserFollowUpSupport(resume.executionId),
+              ]);
+            }),
+          catch: ensureError,
+        });
+        const ctx = yield* buildAgentLaunchContext({
+          config: resume.agentConfig,
+          executionId: resume.executionId,
+          streamTabIdOverride: resume.streamId,
+          modelHandlerCompatibilityKey:
+            resume.shared.modelHandlerCompatibilityKey,
+          isSubagent,
+          parentStreamId: options.parentStreamId,
+          userFollowUpSupport,
+          suppressErrorNotification: true,
+          session: runSession,
+          toolPolicy: {
+            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+            runtimeUnavailableTools: options.runtimeUnavailableTools,
           },
-          buildLifecycleOptions(options, isSubagent),
-        ),
+        });
+        return { ctx, isSubagent };
+      }),
     );
-  } catch (error) {
-    // The run's own failure is the one the caller must see; a release failure
-    // on top of it is additional information, not a replacement.
-    try {
-      await runSession.releaseExecutionLease(resume.executionId);
-    } catch (releaseError) {
-      throw new AggregateError(
-        [error, releaseError],
-        `Execution ${resume.executionId} failed and its final artifacts could not be persisted`,
-      );
+    if (Exit.isFailure(setup)) {
+      const failure = yield* Effect.tryPromise({
+        try: async () =>
+          runInSession(runSession, () =>
+            releaseOwnedExecutionLeaseAfterFailure(
+              resume.executionId,
+              Cause.squash(setup.cause),
+            ),
+          ),
+        catch: ensureError,
+      });
+      return yield* Effect.fail(ensureError(failure));
     }
-    throw error;
-  }
-  // A WAITING result keeps the lease: the next resume owns this execution.
-  if (!isWaitingFlowResult(result)) {
-    await runSession.releaseExecutionLease(resume.executionId);
-  }
-  return result;
-}
+    const { ctx, isSubagent } = setup.value;
+    const { setting } = ctx;
+    const result = yield* Effect.exit(
+      Effect.tryPromise({
+        try: () =>
+          withExecutionRunContext(
+            ctx,
+            { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
+            async () =>
+              runFlowWithLifecycle(
+                ctx,
+                async (handle, lifecycle) => {
+                  // Inside the lifecycle so the rejection ends the started stream
+                  // with its FAILED result like any other run failure.
+                  if (setting.agentCategory !== AgentCategory.ToolUse) {
+                    // Keep this historical diagnostic byte-for-byte for external monitors.
+                    throw new AgentError(
+                      'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+                    );
+                  }
+                  return launchToolUseRun(
+                    ctx,
+                    handle,
+                    lifecycle,
+                    { ...options, setting, isSubagent },
+                    {
+                      kind: 'resume',
+                      resume,
+                      drainedFollowUps: options.drainedFollowUps,
+                      takePendingFollowUps: options.takePendingFollowUps,
+                      isCancellationRequested: options.isCancellationRequested,
+                      onCancellationAtFlowAttachment:
+                        options.onCancellationAtFlowAttachment,
+                    },
+                  );
+                },
+                buildLifecycleOptions(options, isSubagent),
+              ),
+          ),
+        catch: ensureError,
+      }),
+    );
+    if (Exit.isFailure(result)) {
+      const released = yield* Effect.exit(
+        Effect.tryPromise({
+          try: async () =>
+            runInSession(runSession, () =>
+              runSession.releaseExecutionLease(resume.executionId),
+            ),
+          catch: ensureError,
+        }),
+      );
+      if (Exit.isFailure(released)) {
+        return yield* Effect.fail(
+          new AggregateError(
+            [Cause.squash(result.cause), Cause.squash(released.cause)],
+            `Execution ${resume.executionId} failed and its final artifacts could not be persisted`,
+          ),
+        );
+      }
+      return yield* Effect.failCause(result.cause);
+    }
+    // A WAITING result retains ownership for the next resumed turn.
+    if (!isWaitingFlowResult(result.value)) {
+      yield* Effect.tryPromise({
+        try: async () =>
+          runInSession(runSession, () =>
+            runSession.releaseExecutionLease(resume.executionId),
+          ),
+        catch: ensureError,
+      });
+    }
+    return result.value;
+  },
+  Effect.uninterruptible,
+);
 
 /**
  * One resumed turn of a persisted tool-use session: claim its execution lease,
@@ -665,55 +698,61 @@ async function resumeToolUseWithOwnedLease(
  * turn inside the child's own generation, which already holds the child's
  * execution lane. Hosts resume through {@link resumeToolUseFromResumeData}.
  */
-async function resumeToolUseTurn(
+const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
   resume: ToolUseResumeData,
-  options: ResumeToolUseFromResumeDataOptions = {},
-): Promise<AgentRuntimeFlowResult> {
-  await acquireResumedExecutionLease(resume.executionId);
-  let leasedResume: ToolUseResumeData;
-  try {
-    // The caller's lookup only decides whether a resume may be attempted.
-    // Its shared state is never launched: reload after the lease is owned so
-    // this process has a single authoritative persisted snapshot.
-    const retrievedResume = await retrieveSessionResumeData(
-      resume.streamId,
-      resume.executionId,
-      resume.agentConfig,
-      { parentStreamId: resume.parentStreamId },
-    );
-    if (retrievedResume?.type !== 'toolUse') {
-      throw new ResumeSessionUnavailableError(resume.executionId);
-    }
-    leasedResume = retrievedResume;
-  } catch (error) {
-    throw await releaseOwnedExecutionLeaseAfterFailure(
-      resume.executionId,
-      error,
-    );
+  options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
+) {
+  const session = options.session;
+  yield* Effect.tryPromise({
+    try: async () =>
+      runInSession(session, () =>
+        acquireResumedExecutionLease(resume.executionId),
+      ),
+    catch: ensureError,
+  });
+  const retrieval = yield* Effect.exit(
+    Effect.tryPromise({
+      try: async () =>
+        runInSession(session, async () => {
+          // Reload under ownership. The caller's earlier lookup only admits the attempt.
+          const retrieved = await retrieveSessionResumeData(
+            resume.streamId,
+            resume.executionId,
+            resume.agentConfig,
+            { parentStreamId: resume.parentStreamId },
+          );
+          if (retrieved?.type !== 'toolUse')
+            throw new ResumeSessionUnavailableError(resume.executionId);
+          return retrieved;
+        }),
+      catch: ensureError,
+    }),
+  );
+  if (Exit.isFailure(retrieval)) {
+    const failure = yield* Effect.tryPromise({
+      try: async () =>
+        runInSession(session, () =>
+          releaseOwnedExecutionLeaseAfterFailure(
+            resume.executionId,
+            Cause.squash(retrieval.cause),
+          ),
+        ),
+      catch: ensureError,
+    });
+    return yield* Effect.fail(ensureError(failure));
   }
-  // `resumeToolUseWithOwnedLease` owns release after its launch boundary,
-  // including its own setup failures. Keep it outside the retrieval guard so
-  // a run failure is not released twice by nested rollback paths.
-  return await resumeToolUseWithOwnedLease(leasedResume, options);
-}
+  // The launched turn owns release from here, including setup failures.
+  return yield* resumeToolUseWithOwnedLease(retrieval.value, options);
+}, Effect.uninterruptible);
 
-/**
- * Resume a persisted tool-use session as a new generation of its execution:
- * the turn starts on the execution's serial lane, after any previous
- * generation of the same id has fully disposed, so two generations never
- * hold the lease at once.
- */
+/** Resume after the previous generation and its teardown have settled. */
 export function resumeToolUseFromResumeData(
   resume: ToolUseResumeData,
-  options: ResumeToolUseFromResumeDataOptions = {},
-): Promise<AgentRuntimeFlowResult> {
-  const session = options.session ?? defaultSession();
-  // The turn runs in the resumed session's scope from its first store touch
-  // (the lease claim, the terminal-state clear, the snapshot reload), so a
-  // host resuming a paper's run from outside that paper's scope still keys
-  // every record under the paper's own storage root.
-  return session.executions.launchExecution(resume.executionId, async () =>
-    runInSession(session, () => resumeToolUseTurn(resume, options)),
+  options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
+): Effect.Effect<AgentRuntimeFlowResult, Error> {
+  return options.session.executions.launchExecution(
+    resume.executionId,
+    resumeToolUseTurn(resume, options),
   );
 }
 

@@ -43,7 +43,7 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
-import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
+import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
@@ -341,7 +341,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
       const streamId = `stream:tool-use-round-${name}` as StreamTabId;
       const store = StreamLogStore.ephemeral('test');
       store.ensureStream(streamId);
-      const recorder = attachTranscriptRecorder(
+      const recorder = attachTestTranscriptFold(
         logger,
         store.acquireWriter(streamId, streamId),
       );
