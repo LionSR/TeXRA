@@ -4,7 +4,7 @@ import { Deferred, Effect } from 'effect';
 import { runInSession } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
-import { effectRuntime } from '@platform/processRuntime';
+import { hostPort } from '@controllers/effectPort';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
@@ -35,11 +35,6 @@ interface Take {
   cancelled: boolean;
 }
 
-/** `Effect.tryPromise` with the identity catch every call below wants: the
- *  rejection value flows through unchanged as the error. */
-const tryPromise = <A>(run: () => Promise<A>): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: run, catch: (error) => error });
-
 /** One instance per host process, shared by its session request handlers. */
 export class HostDraftRequests {
   private take: Take | null = null;
@@ -69,15 +64,9 @@ export class HostDraftRequests {
     return () => this.listeners.delete(listener);
   }
 
-  handle(
-    session: SessionHandle,
-    request: DraftRequest,
-    port: string,
-  ): Promise<HostOutcome> {
-    return effectRuntime().runPromise(this.draft(session, request, port));
-  }
-
-  private readonly draft = Effect.fn('HostDraftRequests.handle')(function* (
+  /** Answer one draft request of `session`, arriving on `port`. The host
+   *  that took the request runs this where it stands. */
+  readonly handle = Effect.fn('HostDraftRequests.handle')(function* (
     this: HostDraftRequests,
     session: SessionHandle,
     request: DraftRequest,
@@ -85,7 +74,7 @@ export class HostDraftRequests {
   ): Effect.fn.Return<HostOutcome, unknown> {
     switch (request.kind) {
       case 'polish': {
-        const result = yield* tryPromise(() =>
+        const result = yield* hostPort(() =>
           polishTextWithAI(request.text, undefined, session),
         );
         if (!result.success) {
@@ -98,7 +87,7 @@ export class HostDraftRequests {
       case 'savePastedImage':
         return {
           kind: 'savedImage',
-          fileName: yield* tryPromise(() =>
+          fileName: yield* hostPort(() =>
             savePastedImageBase64(request.base64, request.fileName),
           ),
         };
@@ -164,7 +153,7 @@ export class HostDraftRequests {
   ) {
     const takeProgram: Effect.Effect<HostOutcome, unknown> = Effect.gen(
       function* () {
-        const started = yield* tryPromise(async () =>
+        const started = yield* hostPort(async () =>
           runInSession(take.session, startRecording),
         );
         if (!started.success) {
@@ -179,7 +168,7 @@ export class HostDraftRequests {
             reason: 'The recording was cancelled.',
           });
         }
-        const result = yield* tryPromise(async () =>
+        const result = yield* hostPort(async () =>
           runInSession(take.session, stopRecordingAndTranscribe),
         );
         if (!result.success) {

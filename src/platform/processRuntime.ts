@@ -7,8 +7,12 @@
  * Installed like the process roots: exactly once, by the entry.
  */
 import type { ManagedRuntime } from 'effect';
+import type { HttpClient } from 'effect/unstable/http';
 
-export type ProcessRuntime = ManagedRuntime.ManagedRuntime<never, never>;
+export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
+  HttpClient.HttpClient,
+  never
+>;
 
 let processRuntime: ProcessRuntime | null = null;
 
