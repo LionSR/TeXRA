@@ -24,7 +24,7 @@ ticked rows). Where a candidate overlaps them it says so.
 adapter layers, single source of truth, zero new tests by default), the
 plan-vs-issued-calls record
 ([2026-08-28](../feature/2026-08-28-workflow-plan-vs-issued-calls.md)), and the
-child-run concurrency proposal ([2026-08-15](../architecture/2026-08-15-child-run-concurrency-budget.md)).
+child-run concurrency proposal ([2026-08-15](../../implemented/architecture/2026-08-15-child-run-concurrency-budget.md)).
 Nothing below collapses a settled surface.
 
 **Totals if everything lands:** ≈ −285 production LoC across seven small
