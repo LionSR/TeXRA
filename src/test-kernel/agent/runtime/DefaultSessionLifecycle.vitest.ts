@@ -1,5 +1,7 @@
+// Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
@@ -197,46 +199,53 @@ describe('default session lifecycle', () => {
     }
   });
 
-  it('can initialize again only after explicit teardown', async () => {
-    const {
-      defaultSession,
-      initializeDefaultSession,
-      teardownDefaultSession,
-      tryDefaultSession,
-      StreamLogStore,
-    } = await importSessionRuntime();
+  // `closeSession` forks a real-time `Effect.sleep` deadline budget and
+  // races it against settlement promises, so this test needs the live clock.
+  it.live('can initialize again only after explicit teardown', () =>
+    Effect.gen(function* () {
+      const {
+        defaultSession,
+        initializeDefaultSession,
+        teardownDefaultSession,
+        tryDefaultSession,
+        StreamLogStore,
+      } = yield* Effect.promise(() => importSessionRuntime());
 
-    const first = initializeDefaultSession({
-      transcripts: StreamLogStore.ephemeral('first activation'),
-    });
-    expect(() =>
-      initializeDefaultSession({
-        transcripts: StreamLogStore.ephemeral('replacement attempt'),
-      }),
-    ).toThrow('already been initialized');
+      const first = initializeDefaultSession({
+        transcripts: StreamLogStore.ephemeral('first activation'),
+      });
+      expect(() =>
+        initializeDefaultSession({
+          transcripts: StreamLogStore.ephemeral('replacement attempt'),
+        }),
+      ).toThrow('already been initialized');
 
-    const disposeSpy = vi.spyOn(first, 'dispose');
+      const disposeSpy = vi.spyOn(first, 'dispose');
 
-    teardownDefaultSession();
-
-    expect(disposeSpy).toHaveBeenCalledOnce();
-    expect(tryDefaultSession()).toBeUndefined();
-
-    const second = initializeDefaultSession({
-      transcripts: StreamLogStore.ephemeral('second activation'),
-    });
-    try {
-      expect(defaultSession()).toBe(second);
-      expect(second).not.toBe(first);
-      // The default session is read from its owner: closing its root
-      // through the owner leaves no default session behind.
-      const { closeSession } = await import('@agent/runtime/sessionGraph');
-      const { processWorkspaceRoots } =
-        await import('@platform/workspaceRoots');
-      await Effect.runPromise(closeSession(processWorkspaceRoots().storage));
-      expect(tryDefaultSession()).toBeUndefined();
-    } finally {
       teardownDefaultSession();
-    }
-  });
+
+      expect(disposeSpy).toHaveBeenCalledOnce();
+      expect(tryDefaultSession()).toBeUndefined();
+
+      const second = initializeDefaultSession({
+        transcripts: StreamLogStore.ephemeral('second activation'),
+      });
+      try {
+        expect(defaultSession()).toBe(second);
+        expect(second).not.toBe(first);
+        // The default session is read from its owner: closing its root
+        // through the owner leaves no default session behind.
+        const { closeSession } = yield* Effect.promise(
+          () => import('@agent/runtime/sessionGraph'),
+        );
+        const { processWorkspaceRoots } = yield* Effect.promise(
+          () => import('@platform/workspaceRoots'),
+        );
+        yield* closeSession(processWorkspaceRoots().storage);
+        expect(tryDefaultSession()).toBeUndefined();
+      } finally {
+        teardownDefaultSession();
+      }
+    }),
+  );
 });

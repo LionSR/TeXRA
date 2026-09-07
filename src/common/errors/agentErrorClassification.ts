@@ -4,14 +4,14 @@ import {
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
   type RunOutcome,
+  type ResultEvent,
 } from '@shared/schemas';
 
 import { isDiskFullError } from './errorPredicates';
 import { hasMissingApiKeyErrorMarker } from './sdkError/errorMetadata';
 import { isContextWindowError, isUserAbort } from './sdkError/errorPatterns';
 
-export type AgentErrorKind =
-  'abort' | 'context-window' | 'disk-full' | 'missing-api-key' | 'unexpected';
+export type AgentErrorKind = NonNullable<ResultEvent['error']>['kind'];
 
 /**
  * Canonical outcome of a run terminated by a thrown error, per error kind.

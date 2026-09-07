@@ -1,7 +1,8 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { it } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
 import pDefer from 'p-defer';
-import { expect, it, vi } from 'vitest';
+import { expect, vi } from 'vitest';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -21,83 +22,96 @@ vi.mock('@agent/runtime/textEnhancement', () => ({
   polishTextWithAI: vi.fn(),
 }));
 
-it('returns transcription to Start when another paper stops the process recorder', async () => {
-  const startup = pDefer<{ success: boolean }>();
-  audio.startRecording.mockReturnValue(startup.promise);
-  audio.stopRecordingAndTranscribe.mockResolvedValue({
-    success: true,
-    text: 'A conserved quantity.',
-  });
-  const requests = new HostDraftRequests();
-  /** The host's run edge: every arm answers where the host took the request. */
-  const handle = (...args: Parameters<HostDraftRequests['handle']>) =>
-    Effect.runPromise(requests.handle(...args));
-  const first = { roots: { storage: '/papers/first' } } as SessionHandle;
-  const second = { roots: { storage: '/papers/second' } } as SessionHandle;
-  const snapshot = vi.fn();
-  const unsubscribe = requests.subscribe(snapshot);
+it.effect(
+  'returns transcription to Start when another paper stops the process recorder',
+  () =>
+    Effect.gen(function* () {
+      const startup = pDefer<{ success: boolean }>();
+      audio.startRecording.mockReturnValue(startup.promise);
+      audio.stopRecordingAndTranscribe.mockResolvedValue({
+        success: true,
+        text: 'A conserved quantity.',
+      });
+      const requests = new HostDraftRequests();
+      const first = { roots: { storage: '/papers/first' } } as SessionHandle;
+      const second = { roots: { storage: '/papers/second' } } as SessionHandle;
+      const snapshot = vi.fn();
+      const unsubscribe = requests.subscribe(snapshot);
 
-  const started = handle(
-    first,
-    {
-      kind: 'record',
-      action: { kind: 'start', target: 'launch' },
-    },
-    'origin',
-  );
-  await expect(
-    handle(
-      second,
-      {
-        kind: 'record',
-        action: { kind: 'start', target: 'launch' },
-      },
-      'other',
-    ),
-  ).rejects.toMatchObject({ _tag: 'Rejected' });
-  expect(snapshot).toHaveBeenLastCalledWith({
-    session: '/papers/first',
-    target: 'launch',
-  });
+      const started = yield* Effect.forkChild(
+        requests.handle(
+          first,
+          {
+            kind: 'record',
+            action: { kind: 'start', target: 'launch' },
+          },
+          'origin',
+        ),
+      );
+      // Let the take reserve the recorder before the rival Start arrives.
+      yield* Effect.yieldNow;
+      const rejected = yield* Effect.flip(
+        requests.handle(
+          second,
+          {
+            kind: 'record',
+            action: { kind: 'start', target: 'launch' },
+          },
+          'other',
+        ),
+      );
+      expect(rejected).toMatchObject({ _tag: 'Rejected' });
+      expect(snapshot).toHaveBeenLastCalledWith({
+        session: '/papers/first',
+        target: 'launch',
+      });
 
-  await expect(
-    handle(second, { kind: 'record', action: { kind: 'stop' } }, 'other'),
-  ).resolves.toEqual({ kind: 'done' });
-  expect(audio.stopRecordingAndTranscribe).not.toHaveBeenCalled();
-  startup.resolve({ success: true });
-  await expect(started).resolves.toEqual({
-    kind: 'text',
-    text: 'A conserved quantity.',
-  });
-  expect(audio.startRecording).toHaveBeenCalledTimes(1);
-  expect(audio.stopRecordingAndTranscribe).toHaveBeenCalledTimes(1);
-  expect(snapshot).toHaveBeenLastCalledWith(null);
+      expect(
+        yield* requests.handle(
+          second,
+          { kind: 'record', action: { kind: 'stop' } },
+          'other',
+        ),
+      ).toEqual({ kind: 'done' });
+      expect(audio.stopRecordingAndTranscribe).not.toHaveBeenCalled();
+      startup.resolve({ success: true });
+      expect(yield* Fiber.join(started)).toEqual({
+        kind: 'text',
+        text: 'A conserved quantity.',
+      });
+      expect(audio.startRecording).toHaveBeenCalledTimes(1);
+      expect(audio.stopRecordingAndTranscribe).toHaveBeenCalledTimes(1);
+      expect(snapshot).toHaveBeenLastCalledWith(null);
 
-  const nextStartup = pDefer<{ success: boolean }>();
-  audio.startRecording.mockReturnValueOnce(nextStartup.promise);
-  const nextTake = handle(
-    first,
-    {
-      kind: 'record',
-      action: { kind: 'start', target: 'launch' },
-    },
-    'origin',
-  );
-  const cancelled = expect(nextTake).rejects.toMatchObject({
-    _tag: 'Cancelled',
-  });
-  requests.cancel(first, 'other');
-  expect(snapshot).toHaveBeenLastCalledWith({
-    session: '/papers/first',
-    target: 'launch',
-  });
-  requests.cancel(first, 'origin');
-  nextStartup.resolve({ success: true });
-  await cancelled;
-  await vi.waitFor(() =>
-    expect(audio.killActiveRecording).toHaveBeenCalledTimes(1),
-  );
-  expect(audio.stopRecordingAndTranscribe).toHaveBeenCalledTimes(1);
-  expect(snapshot).toHaveBeenLastCalledWith(null);
-  unsubscribe();
-});
+      const nextStartup = pDefer<{ success: boolean }>();
+      audio.startRecording.mockReturnValueOnce(nextStartup.promise);
+      const nextTake = yield* Effect.forkChild(
+        requests.handle(
+          first,
+          {
+            kind: 'record',
+            action: { kind: 'start', target: 'launch' },
+          },
+          'origin',
+        ),
+      );
+      yield* Effect.yieldNow;
+      requests.cancel(first, 'other');
+      expect(snapshot).toHaveBeenLastCalledWith({
+        session: '/papers/first',
+        target: 'launch',
+      });
+      requests.cancel(first, 'origin');
+      nextStartup.resolve({ success: true });
+      const cancelled = yield* Effect.flip(Fiber.join(nextTake));
+      expect(cancelled).toMatchObject({ _tag: 'Cancelled' });
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(audio.killActiveRecording).toHaveBeenCalledTimes(1),
+        ),
+      );
+      expect(audio.stopRecordingAndTranscribe).toHaveBeenCalledTimes(1);
+      expect(snapshot).toHaveBeenLastCalledWith(null);
+      unsubscribe();
+    }),
+);

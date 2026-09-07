@@ -2,6 +2,7 @@
 import { resolve } from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import {
   afterEach,
   beforeAll,
@@ -86,7 +87,7 @@ beforeAll(async () => {
       },
     },
   );
-  await refresh({ includeRemote: false });
+  await Effect.runPromise(refresh({ includeRemote: false }));
 });
 
 afterEach(() => {

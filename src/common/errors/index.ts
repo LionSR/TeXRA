@@ -18,7 +18,6 @@ export {
 export {
   AGENT_ERROR_OUTCOME,
   classifyAgentError,
-  type AgentErrorKind,
 } from './agentErrorClassification';
 
 export { AgentError } from './agentErrors';

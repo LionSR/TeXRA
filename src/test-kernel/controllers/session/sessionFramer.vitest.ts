@@ -12,10 +12,7 @@ import { Effect, Fiber, Layer, Queue, Stream, SubscriptionRef } from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi } from 'vitest';
 
-import {
-  SessionEventLog,
-  sessionEventsLayer,
-} from '@agent/runtime/SessionEvents';
+import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
   frameSubscription,
   type FramerSource,
@@ -26,6 +23,7 @@ import {
   TranscriptSubscriptions,
   type InflightTextChunk,
 } from '@controllers/session/sessionSources';
+import { databaseLayer } from '@controllers/session/Database';
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WebviewSessions } from '@controllers/session/webviewSessionLayer';
@@ -40,6 +38,7 @@ import {
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
+import { Database } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -47,7 +46,6 @@ import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 
 function textTail(
   text: string,
@@ -92,8 +90,8 @@ const runtimeGraph = (history: readonly SessionEventDraft[]) => {
   const roots = createFakeWorkspaceRoots({ storagePath: KEY });
   const seeded = Layer.effectDiscard(
     Effect.gen(function* () {
-      const log = yield* SessionEventLog;
-      yield* log.appendAll(history);
+      const log = yield* Database;
+      yield* log.appendAll(history).pipe(Effect.orDie);
     }),
   );
   return SessionViewService.layer.pipe(
@@ -102,12 +100,7 @@ const runtimeGraph = (history: readonly SessionEventDraft[]) => {
       sessionEventsLayer.pipe(
         Layer.provideMerge(
           seeded.pipe(
-            Layer.provideMerge(
-              SessionEventLog.memoryLayer(
-                StreamLogStore.ephemeral('session framer test'),
-                roots,
-              ),
-            ),
+            Layer.provideMerge(databaseLayer('ephemeral').pipe(Layer.orDie)),
           ),
         ),
       ),
@@ -195,8 +188,10 @@ describe('session framer', () => {
       }).success,
     ).toBe(true);
   });
+
   it('preserves stream and execution subscription keys across the webview bridge', async () => {
     const session = createTestSession();
+    const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
     const bridge = new SessionBridge({
       session,
       onPortClosed: () => {},
@@ -215,9 +210,10 @@ describe('session framer', () => {
         aggregates: keys.map((id) => ({ id, fromSeq: 0 })),
       });
       await vi.waitFor(() => {
-        expect(
-          [...SubscriptionRef.getUnsafe(session.view).folded.keys()].toSorted(),
-        ).toEqual(keys.toSorted());
+        expect(setSubscriptions).toHaveBeenCalledWith(
+          PORT,
+          keys.map((id) => ({ id, fromSeq: 0 })),
+        );
       });
     } finally {
       bridge.dispose();
@@ -255,6 +251,8 @@ describe('session framer', () => {
         ).toEqual([
           ['listing', 'run.start'],
           ['listing', 'status'],
+          ['aggregate', 'run.start'],
+          ['aggregate', 'status'],
         ]);
         expect(replay.at(-1)?.local?.self).toEqual([SELF]);
         // The tail: a commit after the replay is framed as an `all` row and
@@ -363,6 +361,7 @@ describe('session framer', () => {
           local: null,
           host: null,
           replayComplete: false,
+          existence: null,
         });
         const ticker = yield* Effect.forkScoped(ticking);
         yield* settle(
@@ -403,7 +402,7 @@ describe('session framer', () => {
           {
             ...runStart,
             aggregateId: qualifyAggregateId('stream', child),
-            executionId: 'second',
+            executionId: 'dec0de',
           },
         ]);
         yield* SubscriptionRef.update(
@@ -437,6 +436,51 @@ describe('session framer', () => {
         // Neither a partial replay nor its superseded generation may mutate
         // the previously published view, whose indexes are shared by the fold.
         yield* Fiber.interrupt(decoder);
+        const beforeLive = yield* SubscriptionRef.get(view.ref);
+        const sameCursorFrame: EventsFrame = {
+          kind: 'events',
+          session: KEY,
+          generation: named.generation,
+          cursor: beforeLive.cursor,
+          events: [],
+          chunks: [],
+          local: null,
+          host: null,
+          replayComplete: false,
+          existence: null,
+        };
+        yield* frames.feed({
+          ...sameCursorFrame,
+          chunks: [
+            {
+              _tag: 'chunk',
+              streamId: STREAM,
+              rowId: 'row-1',
+              from: 11,
+              to: 12,
+              text: '!',
+            },
+          ],
+        });
+        yield* TestClock.adjust('16 millis');
+        expect(yield* SubscriptionRef.get(view.ref)).toBe(beforeLive);
+        yield* frames.feed({
+          ...sameCursorFrame,
+          existence: {
+            checkedAggregateIds: [qualifyAggregateId('stream', STREAM)],
+            removedAggregateIds: [],
+            claims: [
+              {
+                aggregateId: qualifyAggregateId('stream', STREAM),
+                ownerId: null,
+              },
+            ],
+          },
+        });
+        yield* settle(view.ref, (v) => v.streams.get(STREAM)?.ownerId === null);
+        const afterLive = yield* SubscriptionRef.get(view.ref);
+        expect(afterLive.cursor).toBe(beforeLive.cursor);
+        expect(afterLive.inflight.get(`${STREAM}/row-1`)).toBe('Hello again!');
         const beforeReplay = yield* SubscriptionRef.get(view.ref);
         yield* frames.begin(2);
         yield* shell.set('shell', named.aggregates);
@@ -462,6 +506,7 @@ describe('session framer', () => {
           local: null,
           host: null,
           replayComplete: false,
+          existence: null,
         });
         yield* TestClock.adjust('16 millis');
         expect(yield* SubscriptionRef.get(view.ref)).toBe(beforeReplay);

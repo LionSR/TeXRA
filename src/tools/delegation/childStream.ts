@@ -92,16 +92,18 @@ export function childStreamDescription(raw: string): string {
 }
 
 /** Create a child stream tab and execution handle for a background child task. */
-export function createChildStream(
+export async function createChildStream(
   executionId: ExecutionId,
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
-): ChildStream {
+): Promise<ChildStream> {
   const childStreamId = getStreamTabId(options.streamPrefix, { executionId });
 
   // Capture the run's session at creation (inside the parent run's ALS); the
   // status-update and finalize closures below fire later, possibly outside it.
   const session = currentSession();
+  await session.settlePublications();
+  const existing = session.hasStream(childStreamId);
   const runTrace = createRunTrace(
     childStreamId,
     session.transcripts,
@@ -128,28 +130,34 @@ export function createChildStream(
     // deterministic IDs in the CLI, so every fallible setup step above ran
     // before this point; a failure here rolls back below without a fact.
     session.publish([
-      {
-        type: 'run.start',
-        aggregateId: qualifyAggregateId('stream', childStreamId),
-        executionId,
-        identity: options.run,
-        userFollowUpSupport: options.userFollowUpSupport,
-        // Launch facts the fold reads verbatim (item 6). Remoteness is an
-        // agent-registry fact (a `source: 'remote'` entry); a process,
-        // agent-CLI, or workflow-script child has no registry entry and is
-        // never remote.
-        category: options.config.agentCategory,
-        isRemote: false,
-        worktree: launchWorktreeInfo(options.config.workingDirectory),
-        parentStreamId,
-        background: true,
-        // The initial policy snapshot (PRD 6, item 2). Approval ancestry for
-        // the child is registered after this event by the delegation site;
-        // the queue publishes `approval.policy` for every value the edge
-        // changes.
-        approvalPolicy: session.approvalPolicySnapshotFor(childStreamId),
-        ...(options.checkpointId ? { checkpointId: options.checkpointId } : {}),
-      },
+      ...(existing
+        ? []
+        : [
+            {
+              type: 'run.start' as const,
+              aggregateId: qualifyAggregateId('stream', childStreamId),
+              executionId,
+              identity: options.run,
+              userFollowUpSupport: options.userFollowUpSupport,
+              // Launch facts the fold reads verbatim (item 6). Remoteness is an
+              // agent-registry fact (a `source: 'remote'` entry); a process,
+              // agent-CLI, or workflow-script child has no registry entry and is
+              // never remote.
+              category: options.config.agentCategory,
+              isRemote: false,
+              worktree: launchWorktreeInfo(options.config.workingDirectory),
+              parentStreamId,
+              background: true,
+              // The initial policy snapshot (PRD 6, item 2). Approval ancestry for
+              // the child is registered after this event by the delegation site;
+              // the queue publishes `approval.policy` for every value the edge
+              // changes.
+              approvalPolicy: session.approvalPolicySnapshotFor(childStreamId),
+              ...(options.checkpointId
+                ? { checkpointId: options.checkpointId }
+                : {}),
+            },
+          ]),
       // No `isRemote`: the wire line never carried one for a child, which
       // has no agent-registry entry to be remote.
       {
@@ -159,6 +167,7 @@ export function createChildStream(
         background: true,
       },
     ]);
+    await session.settlePublications();
     started = true;
     runTrace.trace.emit({
       type: 'run.config',
@@ -235,7 +244,7 @@ export function createChildStream(
     // started-but-never-run ghost; the child's result stays out of the host
     // result plane (`isSubagent`), as every child-stream result does.
     const failures: unknown[] = [error];
-    const cleanups: (() => void)[] = [
+    const cleanups: (() => void | Promise<void>)[] = [
       () => {
         if (!started) return;
         runTrace.trace.emit({
@@ -252,12 +261,13 @@ export function createChildStream(
           },
         });
       },
+      () => session.settlePublications(),
       () => detachSessionTrace?.(),
       () => runTrace.dispose(),
     ];
     for (const cleanup of cleanups) {
       try {
-        cleanup();
+        await cleanup();
       } catch (cleanupError) {
         failures.push(cleanupError);
       }
@@ -289,7 +299,7 @@ export async function createRehydratedChildStream(
     executionId,
   );
   try {
-    return createChildStream(executionId, parentStreamId, {
+    return await createChildStream(executionId, parentStreamId, {
       ...options,
       reservedWriter: writer,
     });

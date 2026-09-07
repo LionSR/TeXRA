@@ -24,6 +24,7 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -81,8 +82,10 @@ function createWaitNodeServices(
     ...topLevel
   } = overrides;
   const { capabilities, ...modelHandlerOverrides } = modelHandler ?? {};
+  const runScope = testRunScope(streamId, { session: ownerSession, signal });
+  publishTestRunStart(runScope.session, runScope.streamId);
   return {
-    runScope: testRunScope(streamId, { session: ownerSession, signal }),
+    runScope,
     toolPolicy: createToolPolicy({ stopAfterCycle }),
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),

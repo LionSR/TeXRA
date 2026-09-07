@@ -1,4 +1,5 @@
 // Local imports - execution requests
+import { Effect } from 'effect';
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 
 // Local imports - team launch
@@ -37,75 +38,87 @@ export interface MainViewExecutionLaunchHost {
 }
 
 /** Resolve an ordinary or team launch and answer refusals on the request path. */
-export async function prepareMainViewExecutionLaunch(
+export function prepareMainViewExecutionLaunch(
   message: MainViewExecuteMessage,
   host: MainViewExecutionLaunchHost,
-): Promise<ValidatedExecutionRequest> {
-  let preparation: MainViewExecutionPreparationResult;
-  let infoMessage: string | undefined;
-  if (message.session?.launchTarget !== 'team') {
-    preparation = prepareMainViewExecutionRequest(message);
-  } else {
-    const teamId = message.session.teamId;
-    if (!teamId)
-      throw new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
-    const resolution = await resolveTeamLaunch({
-      teamId,
-      ...createTeamCatalogPorts(),
-      choose: (unavailableNames) =>
-        host.chooseTeamAvailability(unavailableNames),
-      signIn: () => host.signInForRemoteAgentCatalog(),
-    }).catch((error: unknown) => {
-      throw new Rejected({
-        reason: `Team launch failed: ${toErrorMessage(error)}`,
-      });
-    });
-    switch (resolution.status) {
-      case 'cancelled':
-        throw new Cancelled();
-      case 'unknown-team':
-        throw new Rejected({ reason: formatUnknownTeamMessage(teamId) });
-      case 'blocked':
-        throw new Rejected({
-          reason: formatTeamLaunchBlockedMessage(teamId, resolution.reason),
-        });
-      case 'unavailable':
-        throw new Rejected({
-          reason: formatTeamUnavailableMessage(
-            teamId,
-            resolution.unavailableNames,
+): Effect.Effect<ValidatedExecutionRequest, Rejected | Cancelled> {
+  return Effect.gen(function* () {
+    let preparation: MainViewExecutionPreparationResult;
+    let infoMessage: string | undefined;
+    if (message.session?.launchTarget !== 'team') {
+      preparation = prepareMainViewExecutionRequest(message);
+    } else {
+      const teamId = message.session.teamId;
+      if (!teamId)
+        return yield* new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
+      const resolution = yield* resolveTeamLaunch({
+        teamId,
+        ...createTeamCatalogPorts(),
+        choose: (unavailableNames) =>
+          host.chooseTeamAvailability(unavailableNames),
+        signIn: () => host.signInForRemoteAgentCatalog(),
+      }).pipe(
+        Effect.catch((error: unknown) =>
+          Effect.fail(
+            new Rejected({
+              reason: `Team launch failed: ${toErrorMessage(error)}`,
+            }),
           ),
-        });
-      case 'ready':
-        preparation = prepareMainViewTeamExecutionRequest(
-          message,
-          resolution.fields,
-        );
-        if (resolution.partial)
-          infoMessage = formatPartialTeamLaunchMessage(resolution.missingNames);
-        break;
-      default:
-        return assertNever(
-          resolution,
-          'Unhandled main-view team launch resolution',
-        );
+        ),
+      );
+      switch (resolution.status) {
+        case 'cancelled':
+          return yield* new Cancelled();
+        case 'unknown-team':
+          return yield* new Rejected({
+            reason: formatUnknownTeamMessage(teamId),
+          });
+        case 'blocked':
+          return yield* new Rejected({
+            reason: formatTeamLaunchBlockedMessage(teamId, resolution.reason),
+          });
+        case 'unavailable':
+          return yield* new Rejected({
+            reason: formatTeamUnavailableMessage(
+              teamId,
+              resolution.unavailableNames,
+            ),
+          });
+        case 'ready':
+          preparation = prepareMainViewTeamExecutionRequest(
+            message,
+            resolution.fields,
+          );
+          if (resolution.partial)
+            infoMessage = formatPartialTeamLaunchMessage(
+              resolution.missingNames,
+            );
+          break;
+        default:
+          return assertNever(
+            resolution,
+            'Unhandled main-view team launch resolution',
+          );
+      }
     }
-  }
-  if (!preparation.valid) {
-    throw new Rejected({
-      reason: preparation.message,
-      ...(preparation.docsCommand && { docsCommand: preparation.docsCommand }),
-    });
-  }
-  if (infoMessage) void host.showInfoMessage(infoMessage);
-  return preparation.request;
+    if (!preparation.valid) {
+      return yield* new Rejected({
+        reason: preparation.message,
+        ...(preparation.docsCommand && {
+          docsCommand: preparation.docsCommand,
+        }),
+      });
+    }
+    if (infoMessage) void host.showInfoMessage(infoMessage);
+    return preparation.request;
+  });
 }
 
 /** Both GUI hosts launch the selections carried by the requesting surface. */
 export function prepareSurfaceLaunch(
   { launch, instruction }: Extract<HostRequest, { kind: 'launch' }>,
   host: MainViewExecutionLaunchHost,
-): Promise<ValidatedExecutionRequest> {
+): Effect.Effect<ValidatedExecutionRequest, Rejected | Cancelled> {
   return prepareMainViewExecutionLaunch(
     {
       agent: launch.agent[launch.sessionType],

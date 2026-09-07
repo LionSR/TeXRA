@@ -242,7 +242,7 @@ export async function signOutCliSupabase(): Promise<void> {
   const authCoordinator = initializeCliSupabaseAuth();
   await runAuthProgram(authCoordinator.clearSession());
   await refreshRemoteAgentCatalogAfterSignOut(
-    invalidateRemoteAgentsAfterSignOut,
+    () => effectRuntime().runPromise(invalidateRemoteAgentsAfterSignOut()),
     (message) => activeAuthLog?.warn?.('cli-auth', message),
   );
 }

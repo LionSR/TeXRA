@@ -3,10 +3,9 @@
 import * as path from 'node:path';
 
 import { glob } from 'glob';
-import pMap from 'p-map';
 import { ZodError, type ZodIssue } from 'zod';
 
-import { Result } from 'effect';
+import { Data, Effect, Result } from 'effect';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import {
   AgentDefinitionSchema,
@@ -23,6 +22,19 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
 
 const log = createLog('agentRegistry');
+
+/**
+ * One file- or directory-level scan failure. Scanning is a best-effort
+ * projection: a bad YAML file becomes an issue entry and an unreadable
+ * directory becomes an empty scan with one issue, so the error never escapes
+ * `scanDirectory`'s channel — it exists to be recovered from, and the channel
+ * is `never` at the export. Defects (programming errors) stay defects.
+ */
+class AgentScanError extends Data.TaggedError('AgentScanError')<{
+  readonly path: string;
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 interface AgentDirectoryScan {
   readonly entries: AgentEntry[];
@@ -49,29 +61,41 @@ export function extractToolNames(
   });
 }
 
-export async function scanDirectory(
+export function scanDirectory(
   dir: string,
   source: AgentSource,
-): Promise<AgentDirectoryScan> {
-  if (!dir) return { entries: [], issues: [] };
+): Effect.Effect<AgentDirectoryScan> {
+  if (!dir) return Effect.succeed({ entries: [], issues: [] });
 
-  try {
-    const files = (
-      await glob('**/*.yaml', {
-        cwd: dir,
-        absolute: true,
-        nodir: true,
-      })
-    ).toSorted();
+  return Effect.gen(function* () {
+    const files = (yield* Effect.tryPromise({
+      try: () =>
+        glob('**/*.yaml', {
+          cwd: dir,
+          absolute: true,
+          nodir: true,
+        }),
+      catch: (cause) =>
+        new AgentScanError({
+          path: dir,
+          message: toErrorMessage(cause),
+          cause,
+        }),
+    })).toSorted();
     const issues: AgentScanIssue[] = [];
     const parsed: ParsedAgentYaml[] = [];
-    for (const result of await pMap(
+    for (const result of yield* Effect.forEach(
       files,
-      (yamlPath) => readYamlDefinition(yamlPath, dir),
+      (yamlPath) => Effect.result(readYamlDefinition(yamlPath, dir)),
       { concurrency: 8 },
     )) {
-      if (result.ok) parsed.push(result.value);
-      else issues.push(result.issue);
+      if (Result.isSuccess(result)) parsed.push(result.success);
+      else {
+        issues.push({
+          path: result.failure.path,
+          message: result.failure.message,
+        });
+      }
     }
     const unique = entriesWithUniqueNames(parsed, dir, issues);
     const definitions = new Map(
@@ -79,24 +103,30 @@ export async function scanDirectory(
     );
     const entries: AgentEntry[] = [];
     for (const entry of unique) {
-      const scanned = scanYaml(entry, source, definitions);
-      if (scanned.ok) {
-        entries.push(scanned.entry);
+      const scanned = yield* Effect.result(
+        scanYaml(entry, source, definitions),
+      );
+      if (Result.isSuccess(scanned)) {
+        entries.push(scanned.success);
         continue;
       }
+      log.warn(`Failed to scan ${entry.path}: ${scanned.failure.message}`);
       issues.push({
         path: path.relative(dir, entry.path),
-        message: scanned.message,
+        message: scanned.failure.message,
       });
     }
 
     log.debug(`Scanned ${entries.length} agents from ${source}`);
     return { entries, issues };
-  } catch (err) {
-    const message = toErrorMessage(err);
-    log.error(`Failed to scan ${dir}: ${message}`);
-    return { entries: [], issues: [{ path: dir, message }] };
-  }
+  }).pipe(
+    Effect.catch((error: AgentScanError) =>
+      Effect.sync(() => {
+        log.error(`Failed to scan ${dir}: ${error.message}`);
+        return { entries: [], issues: [{ path: dir, message: error.message }] };
+      }),
+    ),
+  );
 }
 
 function entriesWithUniqueNames(
@@ -126,34 +156,38 @@ function entriesWithUniqueNames(
   return unique;
 }
 
-async function readYamlDefinition(
+function readYamlDefinition(
   yamlPath: string,
   dir: string,
-): Promise<
-  { ok: true; value: ParsedAgentYaml } | { ok: false; issue: AgentScanIssue }
-> {
+): Effect.Effect<ParsedAgentYaml, AgentScanError> {
   const displayPath = path.relative(dir, yamlPath);
-  try {
-    const content = await AbsoluteFS.read(yamlPath);
-    const parsed = parseYamlWith(content, AgentDefinitionSchema);
-    if (Result.isFailure(parsed)) {
-      const message = formatScanFailure(parsed.failure);
-      log.warn(`Failed to scan ${yamlPath}: ${message}`);
-      return { ok: false, issue: { path: displayPath, message } };
-    }
-    return {
-      ok: true,
-      value: {
+  const scanError = (cause: unknown) =>
+    new AgentScanError({
+      path: displayPath,
+      message: formatScanFailure(cause),
+      cause,
+    });
+  return Effect.tryPromise({
+    try: () => AbsoluteFS.read(yamlPath),
+    catch: scanError,
+  }).pipe(
+    Effect.flatMap((content) => {
+      const parsed = parseYamlWith(content, AgentDefinitionSchema);
+      if (Result.isFailure(parsed)) {
+        return Effect.fail(scanError(parsed.failure));
+      }
+      return Effect.succeed({
         name: parsed.success.name,
         path: yamlPath,
         definition: parsed.success,
-      },
-    };
-  } catch (err) {
-    const message = formatScanFailure(err);
-    log.warn(`Failed to scan ${yamlPath}: ${message}`);
-    return { ok: false, issue: { path: displayPath, message } };
-  }
+      });
+    }),
+    Effect.tapError((error) =>
+      Effect.sync(() =>
+        log.warn(`Failed to scan ${yamlPath}: ${error.message}`),
+      ),
+    ),
+  );
 }
 
 function formatScanFailure(error: unknown): string {
@@ -225,54 +259,53 @@ function scanYaml(
   entry: ParsedAgentYaml,
   source: AgentSource,
   definitions: Map<string, ParsedAgentYaml>,
-): { ok: true; entry: AgentEntry } | { ok: false; message: string } {
-  try {
-    const settingsBlock = inheritedDefinitionBlock(
-      entry,
-      definitions,
-      'settings',
-    );
-    const promptsBlock = inheritedDefinitionBlock(
-      entry,
-      definitions,
-      'prompts',
-    );
-    const rawSettings = settingsBlock.value;
-    const rawPrompts = promptsBlock.value;
-    const defaultOutputFiles = rawSettings.defaultOutputFiles;
-
-    const tools = extractToolNames(rawSettings.tools);
-
-    const rawCategory = rawSettings.agentCategory;
-    const category =
-      source === 'builtInToolUse' || rawCategory === AgentCategory.ToolUse
-        ? AgentCategory.ToolUse
-        : AgentCategory.Workflow;
-
-    let rounds: number | undefined;
-    if (
-      category === AgentCategory.Workflow &&
-      settingsBlock.complete &&
-      promptsBlock.complete
-    ) {
-      const parsedRounds = AgentWorkflowSettingSchema.shape.rounds.safeParse(
-        rawSettings.rounds,
+): Effect.Effect<AgentEntry, AgentScanError> {
+  return Effect.try({
+    try: () => {
+      const settingsBlock = inheritedDefinitionBlock(
+        entry,
+        definitions,
+        'settings',
       );
-      if (parsedRounds.success) {
-        rounds = Math.max(
-          parsedRounds.data,
-          userRequestTemplateCount(rawPrompts.userRequest),
-        );
-      } else {
-        log.warn(
-          `Ignoring malformed rounds in ${entry.path}: ${toErrorMessage(parsedRounds.error)}`,
-        );
-      }
-    }
+      const promptsBlock = inheritedDefinitionBlock(
+        entry,
+        definitions,
+        'prompts',
+      );
+      const rawSettings = settingsBlock.value;
+      const rawPrompts = promptsBlock.value;
+      const defaultOutputFiles = rawSettings.defaultOutputFiles;
 
-    return {
-      ok: true,
-      entry: {
+      const tools = extractToolNames(rawSettings.tools);
+
+      const rawCategory = rawSettings.agentCategory;
+      const category =
+        source === 'builtInToolUse' || rawCategory === AgentCategory.ToolUse
+          ? AgentCategory.ToolUse
+          : AgentCategory.Workflow;
+
+      let rounds: number | undefined;
+      if (
+        category === AgentCategory.Workflow &&
+        settingsBlock.complete &&
+        promptsBlock.complete
+      ) {
+        const parsedRounds = AgentWorkflowSettingSchema.shape.rounds.safeParse(
+          rawSettings.rounds,
+        );
+        if (parsedRounds.success) {
+          rounds = Math.max(
+            parsedRounds.data,
+            userRequestTemplateCount(rawPrompts.userRequest),
+          );
+        } else {
+          log.warn(
+            `Ignoring malformed rounds in ${entry.path}: ${toErrorMessage(parsedRounds.error)}`,
+          );
+        }
+      }
+
+      return {
         name: entry.name,
         source,
         path: entry.path,
@@ -283,10 +316,13 @@ function scanYaml(
           ? defaultOutputFiles
           : undefined,
         rounds,
-      },
-    };
-  } catch (err) {
-    log.warn(`Failed to scan ${entry.path}: ${toErrorMessage(err)}`);
-    return { ok: false, message: toErrorMessage(err) };
-  }
+      };
+    },
+    catch: (cause) =>
+      new AgentScanError({
+        path: entry.path,
+        message: toErrorMessage(cause),
+        cause,
+      }),
+  });
 }

@@ -18,6 +18,7 @@ import {
   type StorageProvider,
   type AgentDirectoriesPort,
   type ProcessesPort,
+  type HostEnvironmentPort,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
@@ -586,6 +587,19 @@ const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
   builtInToolUse: async () => '/workspace/resources/tool_use_agents',
 };
 
+// Frozen: every createFakePlatform() call shares this object, so a test that
+// mutated it (rather than passing a `hostEnvironment` override) would leak
+// into later tests (AGENTS.md "Never hand out a shared mutable literal").
+const FAKE_HOST_ENVIRONMENT: HostEnvironmentPort = Object.freeze({
+  hostInfo: () => ({
+    platform: 'linux',
+    arch: 'x64',
+    osRelease: 'fake-release',
+    shell: '/bin/bash',
+  }),
+  packagedElectronResourcesPath: () => undefined,
+});
+
 export function createFakePlatform(
   options: FakePlatformOptions = {},
   overrides: Partial<Platform> = {},
@@ -598,6 +612,7 @@ export function createFakePlatform(
     fs: new FakeFileSystemProvider(options.files),
     storage: new FakeStorageProvider(options.globalStoragePath),
     processes: new FakeProcesses(),
+    hostEnvironment: FAKE_HOST_ENVIRONMENT,
     fileLocks: {
       withFileLock: (lockPath) => withPerKeyLane(lockLanes, lockPath),
     },

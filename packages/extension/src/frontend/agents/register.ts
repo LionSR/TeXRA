@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { createWorkspaceAgentRosterController, refresh } from '@agent/index';
 import { appSignals } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import type { AgentSource } from '@shared/schemas';
 
 const log = createLog('AgentRegister');
@@ -44,7 +45,7 @@ export async function promptToAddAgentToConfig(
   // reload it performs is conditional on an unrelated view being open. The
   // agent-creator just wrote this YAML, so a listener posting against the
   // stale cache would render a roster missing the agent it was told about.
-  await refresh();
+  await effectRuntime().runPromise(refresh());
   // The write above rewrites the selection as `custom`, retiring any applied
   // team, so an open settings view needs the same notice `apply_team` sends.
   appSignals.emit('agentRosterChanged', undefined);

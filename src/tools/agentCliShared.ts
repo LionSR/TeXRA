@@ -322,13 +322,17 @@ export const launchAgentCliSession = Effect.fn(
   );
   const childStream = yield* agentCliCall(() =>
     runWithOwnedExecutionLeaseLaunchGuard(executionId, async () => {
-      const stream = createChildStream(executionId, params.parentStreamId, {
-        streamPrefix: params.streamPrefix,
-        run: identity,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-        description: params.description,
-        config: params.config,
-      });
+      const stream = await createChildStream(
+        executionId,
+        params.parentStreamId,
+        {
+          streamPrefix: params.streamPrefix,
+          run: identity,
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+          description: params.description,
+          config: params.config,
+        },
+      );
       // The guard callback is Promise-land (the lease guard is an agent-layer
       // Promise API), so failure capture here is a then-continuation, not a
       // catch clause: a synchronous startLoop throw and a rejection both land
