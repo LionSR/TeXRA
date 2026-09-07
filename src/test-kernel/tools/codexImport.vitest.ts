@@ -83,9 +83,11 @@ describe('findCodexBinaryPath', () => {
     fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
     fs.writeFileSync(binaryPath, '');
 
-    // Impersonate a packaged Electron app: the resolver's highest-priority
-    // probe reads process.versions.electron, process.defaultApp, and
-    // process.resourcesPath.
+    // Impersonate a packaged Electron app: nodeHostEnvironment's
+    // packagedElectronResourcesPath() (a frozen, shared singleton — see
+    // nodeHostEnvironment.ts) reads process.versions.electron,
+    // process.defaultApp, and process.resourcesPath directly, so mutating
+    // those is the only way to steer it from a test.
     const electronProcess = process as NodeJS.Process & {
       defaultApp?: boolean;
       resourcesPath?: string;
