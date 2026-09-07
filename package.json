@@ -92,7 +92,7 @@
     "globals": "^17.12.0",
     "jsdom": "^30.0.1",
     "knip": "^6.34.0",
-    "memfs": "^4.68.2",
+    "memfs": "^4.71.0",
     "prettier": "^3.9.6",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.69.0",
