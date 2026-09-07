@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { hostPort } from '@common/hostPort';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import {
   formatTeamUnavailableMessage,
@@ -10,7 +11,6 @@ import {
   applyTeamRosterWithPreflight,
   type TeamRosterApplicationDeps,
 } from '@common/teams/TeamRosterApplication';
-import { hostPort } from '@common/hostPort';
 import type { MessageHost } from '@hosts/uiHosts';
 import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';

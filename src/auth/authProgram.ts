@@ -7,8 +7,8 @@
  * sanctioned boundary, not here.
  */
 import { Cause, Data, Deferred, Effect, Exit, Option, Semaphore } from 'effect';
-import type { HttpClient } from 'effect/unstable/http';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * A host port (secret storage), an SDK call, or a provider policy rejected.
