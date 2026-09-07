@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Bug Fixes
+
+- Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
+
 ## [0.40.10] - 2026-09-06
 
 ### Shared (all surfaces)
