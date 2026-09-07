@@ -102,8 +102,9 @@ the repository dies on `import { Effect } from 'effect'`.
 The recorded run predates the per-record ceiling check described in section 2,
 which was added after review. The change is confined to the load gate, an
 `ENOENT` test in `databaseBytes` and the CPU read, none of which sits inside a
-timed region, and a full `--allow-load` run of the amended script reproduced
-section 4 within run-to-run variance: 100,000-row `readAll` 1451.40 ms against
+timed region, and a full `--allow-load` run of the amended script, on the same
+machine with the branch rebased onto `4d538c5e40`, reproduced section 4 within
+run-to-run variance: 100,000-row `readAll` 1451.40 ms against
 the recorded 1436.93 ms, peak heap growth 677.98 MB against 677.82 MB, settled
 on-disk bytes identical for the 1 KiB and 256 KiB shapes and 2,965,504 B
 against 2,990,080 B for `status` (2.81x against the recorded 2.84x). That run
