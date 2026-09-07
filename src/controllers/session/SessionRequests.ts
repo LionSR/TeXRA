@@ -277,9 +277,10 @@ function handle(
       });
     case 'followUp.send':
       // A collaborator rejection is a handler defect by this module's
-      // contract (see the header): `Effect.promise` is what routes it there,
-      // and `SessionBridge` logs the cause under the request id and answers
-      // `Internal`.
+      // contract (see the header), and `Effect.promise` is what routes it
+      // there. Where the defect surfaces depends on the path: a bridge logs
+      // the cause under the request id and answers `Internal`; in process it
+      // reaches whatever ran the Effect.
       return Effect.promise(() =>
         submitFollowUp(
           req.streamId,
