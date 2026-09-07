@@ -89,13 +89,14 @@ provide retained-state recovery. Closing a trace iterator clears its queued data
 
 Run `node scripts/measure-session-readers.mjs`. It bundles the actual framer,
 receiver, and shared fold and executes synthetic model-response rows without
-network calls or user data. On Node 26.8.1, one September 7 run produced:
+network calls or user data. On Node 26.8.1, a September 7 run at source commit
+`86d17c674f` produced:
 
 | Workload                          | Encoded source |   Max frame | Frames | Rows retained | Observed heap growth | Observed RSS growth |
 | --------------------------------- | -------------: | ----------: | -----: | ------------: | -------------------: | ------------------: |
-| 1,000 rows, 240 characters each   |      526,646 B |   135,319 B |      5 |         1,000 |         18,730,072 B |         4,964,352 B |
-| 100,000 rows, 240 characters each |   53,833,658 B |   138,393 B |    396 |       100,000 |        158,589,448 B |       123,256,832 B |
-| One 4 MiB retained response       |    4,194,867 B | 4,195,020 B |      2 |             1 |         29,761,648 B |        50,642,944 B |
+| 1,000 rows, 240 characters each   |      526,646 B |   135,319 B |      4 |         1,000 |         18,690,576 B |         5,079,040 B |
+| 100,000 rows, 240 characters each |   53,833,658 B |   138,393 B |    391 |       100,000 |        150,825,744 B |       121,372,672 B |
+| One 4 MiB retained response       |    4,194,867 B | 4,194,731 B |      3 |             1 |         29,704,552 B |        54,870,016 B |
 
 Heap/RSS include source objects and the canonical folded transcript, not just
 transport retention. Values are sampled during frame delivery and fold publication
@@ -104,9 +105,9 @@ and the 16 ms cadence make frame counts and memory measurements vary. These are
 synthetic acceptance workloads, not a claim about the largest real user history.
 
 The same script pauses a reader after its first frame while a healthy reader drains
-100,000 rows from a lazy source. The paused reader's source pulls stayed at 221
+100,000 rows from a lazy source. The paused reader's source pulls stayed at 257
 before and after that interval; its outstanding frame count stayed at one. Settled
-heap across both readers changed from 46,729,336 B to 47,081,960 B (+352,624 B),
+heap across both readers changed from 46,776,936 B to 47,117,840 B (+340,904 B),
 after forced GC at both samples. This demonstrates bounded pulling during the
 interval; it is not a universal flat total-process-memory guarantee.
 
