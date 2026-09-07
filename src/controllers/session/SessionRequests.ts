@@ -50,7 +50,7 @@ const done: Outcome = { kind: 'done' };
 
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
-  'aggregateState' | 'acquireClaims' | 'appendAll'
+  'aggregateState' | 'acquireClaims' | 'appendAll' | 'openDependentIds'
 >;
 
 /** The session's request handler, admitting on the log's sequence table. */
@@ -180,8 +180,11 @@ function handle(
           .pipe(Effect.orDie))[0];
         if (row && !row.closed) {
           const liveness = SubscriptionRef.getUnsafe(local);
+          const dependentIds = yield* log
+            .openDependentIds(aggregateId)
+            .pipe(Effect.orDie);
           if (row.ownerId === null) {
-            yield* log.acquireClaims([aggregateId]).pipe(
+            yield* log.acquireClaims(dependentIds).pipe(
               Effect.mapError(
                 () =>
                   new Unavailable({
@@ -197,7 +200,7 @@ function handle(
               );
             }
             yield* log
-              .acquireClaims([aggregateId])
+              .acquireClaims(dependentIds)
               .pipe(
                 Effect.mapError(() => new NotOwner({ streamId: req.streamId })),
               );

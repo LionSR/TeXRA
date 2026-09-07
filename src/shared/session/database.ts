@@ -88,6 +88,10 @@ export class Database extends Context.Service<
     readonly acquireClaims: (
       ids: readonly AggregateId[],
     ) => Effect.Effect<void, DatabaseReadFailed | DatabaseWriteFailed>;
+    /** Open aggregates in this id's parent-edge closure, including itself. */
+    readonly openDependentIds: (
+      id: AggregateId,
+    ) => Effect.Effect<readonly AggregateId[], DatabaseReadFailed>;
     /** Clear only this process's claims, in one transaction. */
     readonly releaseClaims: (
       ids: readonly AggregateId[],

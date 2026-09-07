@@ -54,6 +54,7 @@ import {
   aggregateId as qualifyAggregateId,
   listingTypeOf,
   referencedAggregates,
+  AggregateIdSchema,
   type AggregateId,
   type CommitOrdinal,
   type SessionEvent,
@@ -285,6 +286,11 @@ export const databaseLayer = (
         UPDATE event_sequence SET closed = 1
         WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
       `);
+      const openDependentIdsStmt = db.prepare(`${dependents}
+        SELECT aggregate_id AS aggregateId FROM event_sequence
+        WHERE aggregate_id IN (SELECT aggregate_id FROM dependents)
+          AND closed = 0
+      `);
       const setInquiryParent = db.prepare(
         'UPDATE event_sequence SET parent_id = ? WHERE aggregate_id = ?',
       );
@@ -494,6 +500,14 @@ export const databaseLayer = (
               }
             });
           }),
+        openDependentIds: (id) =>
+          query(() =>
+            openDependentIdsStmt
+              .all(id)
+              .map((row: Record<string, unknown>) =>
+                AggregateIdSchema.parse(row.aggregateId),
+              ),
+          ),
         releaseClaims: (ids) =>
           ids.length === 0
             ? Effect.void
