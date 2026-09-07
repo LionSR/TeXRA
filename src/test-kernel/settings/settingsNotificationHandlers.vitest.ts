@@ -29,20 +29,17 @@ const toolUseItem: AgentSelectionItem = {
 // hand-rolling the outbound message shape. These tests pin the exact shape
 // both hosts previously built by hand.
 describe('settingsView notification message builders', () => {
-  it('buildAgentSelectionMessage loads agents then wraps the selection items', async () => {
-    const loadAgents = vi.fn().mockResolvedValue(undefined);
+  it('buildAgentSelectionMessage wraps the selection items', () => {
     const buildSelectionItems = vi.fn().mockReturnValue({
       workflow: [workflowItem],
       toolUse: [toolUseItem],
     });
 
-    const message = await buildAgentSelectionMessage({
-      loadAgents,
+    const message = buildAgentSelectionMessage({
       buildSelectionItems,
       getCustomAgentScanIssues: () => [],
     });
 
-    expect(loadAgents).toHaveBeenCalledOnce();
     expect(buildSelectionItems).toHaveBeenCalledOnce();
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
@@ -51,15 +48,14 @@ describe('settingsView notification message builders', () => {
     });
   });
 
-  it('buildAgentSelectionMessage includes custom agent scan issues', async () => {
+  it('buildAgentSelectionMessage includes custom agent scan issues', () => {
     const issues = [
       {
         path: 'retired.yaml',
         message: 'settings: unrecognized keys documentTag',
       },
     ];
-    const message = await buildAgentSelectionMessage({
-      loadAgents: vi.fn().mockResolvedValue(undefined),
+    const message = buildAgentSelectionMessage({
       buildSelectionItems: vi.fn().mockReturnValue({
         workflow: [],
         toolUse: [],
