@@ -47,6 +47,7 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   SESSION_FRAME_BYTES,
   SESSION_FRAME_ROWS,
+  SESSION_FRAME_TARGET_BYTES,
   SESSION_REPLAY_BYTES,
   SESSION_REPLAY_ROWS,
   SessionReaderError,
@@ -206,11 +207,11 @@ export function frameSubscription(
             () => ({ items: [] as FrameItem[], bytes: 0 }),
             (batch) =>
               batch.items.length < SESSION_FRAME_ROWS &&
-              batch.bytes < FRAME_TARGET_BYTES,
+              batch.bytes < SESSION_FRAME_TARGET_BYTES,
             (batch, item: FrameItem) =>
               Effect.sync(() => {
                 const bytes = sessionMessageBytes(item);
-                if (bytes > SESSION_FRAME_BYTES - FRAME_TARGET_BYTES) {
+                if (bytes > SESSION_FRAME_BYTES - SESSION_FRAME_TARGET_BYTES) {
                   throw new SessionReaderError(
                     'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
                   );

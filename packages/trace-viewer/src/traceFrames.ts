@@ -25,6 +25,7 @@ import {
 import {
   SESSION_FRAME_BYTES,
   SESSION_FRAME_ROWS,
+  SESSION_FRAME_TARGET_BYTES,
   SessionReaderError,
   sessionMessageBytes,
 } from '@shared/session/sessionReadBudget';
@@ -334,12 +335,15 @@ export function* traceFrames(
   let sequence = 1;
   for (const event of traceEvents(trace, named)) {
     const size = sessionMessageBytes(event);
-    if (size > SESSION_FRAME_BYTES - 4096) {
+    if (size > SESSION_FRAME_BYTES - SESSION_FRAME_TARGET_BYTES) {
       throw new SessionReaderError(
         'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
       );
     }
-    if (events.length >= SESSION_FRAME_ROWS || bytes + size > 256 * 1024) {
+    if (
+      events.length >= SESSION_FRAME_ROWS ||
+      bytes + size > SESSION_FRAME_TARGET_BYTES
+    ) {
       yield {
         ...frame,
         sequence,

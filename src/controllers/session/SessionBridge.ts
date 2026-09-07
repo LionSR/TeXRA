@@ -209,6 +209,7 @@ class PortFramer {
             catch: (deliveryError) => deliveryError,
           }).pipe(
             Effect.timeout('5 seconds'),
+            // The root failure is logged above; this port cannot receive a notice.
             Effect.catch(() => Effect.void),
           );
         }),
