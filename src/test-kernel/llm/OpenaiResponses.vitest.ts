@@ -1,9 +1,22 @@
+// Node imports
+import assert from 'node:assert/strict';
+
 // Third-party imports
-import { openaiResponsesModel } from '@texra-ai/llm/openai-responses';
-import { Effect, Fiber, Stream } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { openaiChatModel } from '@texra-ai/llm/openai-chat';
+import {
+  openaiResponsesContinuation,
+  openaiResponsesModel,
+} from '@texra-ai/llm/openai-responses';
+import { ContinuationSchema } from '@texra-ai/llm/turn';
+import { Cause, Effect, Fiber, Stream } from 'effect';
+import { TestClock } from 'effect/testing';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
+  BackgroundEvent,
+  ModelError,
   OpenAIResponsesConfiguration,
+  RemoteOperation,
+  TurnEvent,
   TurnRequest,
 } from '@texra-ai/llm/turn';
 
@@ -15,6 +28,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
     credentialScope: 'synthetic-account',
   },
   supportsTemperature: true,
+  background: 'unsupported',
   defaults: {
     temperature: 0.7,
     maxOutputTokens: 100,
@@ -35,6 +49,16 @@ const REQUEST: TurnRequest = {
       parameters: { type: 'object', properties: { path: { type: 'string' } } },
     },
   ],
+};
+const OPERATION: RemoteOperation = {
+  origin: {
+    protocol: 'openai-responses',
+    codecVersion: 1,
+    requestedModel: CONFIG.requestedModel,
+    deployment: CONFIG.deployment,
+  },
+  providerResponseId: 'resp_1',
+  afterSequence: null,
 };
 const REASONING = {
   type: 'reasoning',
@@ -95,11 +119,11 @@ function events(output: object[], final: object = snapshot(output)): object[] {
     { type: 'response.completed', response: final },
   ];
 }
-function sse(frames: object[]): string {
+function sse(frames: object[], startingAt = 0): string {
   return frames
     .map(
       (frame, sequence_number) =>
-        `data: ${JSON.stringify({ ...frame, sequence_number })}\n\n`,
+        `data: ${JSON.stringify({ ...frame, sequence_number: startingAt + sequence_number })}\n\n`,
     )
     .join('');
 }
@@ -119,6 +143,641 @@ function modelWith(fetch: typeof globalThis.fetch, configuration = CONFIG) {
 }
 
 describe('native OpenAI Responses protocol', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it.each(['Chat', 'Responses'] as const)(
+    '%s rejects ambient header overrides and disables SDK diagnostic logging',
+    async (protocol) => {
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        new Response('data: malformed-provider-data\n\n', {
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+      );
+      const construct = () =>
+        protocol === 'Responses'
+          ? modelWith(fetch)
+          : openaiChatModel(
+              {
+                protocol: 'openai-chat',
+                requestedModel: CONFIG.requestedModel,
+                deployment: CONFIG.deployment,
+                defaults: {
+                  temperature: 0,
+                  maxOutputTokens: 100,
+                  parallelToolCalls: true,
+                },
+              },
+              { apiKey: 'synthetic-not-a-secret', fetch },
+            );
+      vi.stubEnv(
+        'OPENAI_CUSTOM_HEADERS',
+        'Authorization: Bearer other-account',
+      );
+      expect(construct).toThrow('Ambient OpenAI');
+      expect(fetch).not.toHaveBeenCalled();
+      vi.stubEnv('OPENAI_CUSTOM_HEADERS', '');
+      vi.stubEnv('OPENAI_LOG', 'debug');
+      const logs = (['debug', 'log', 'info', 'warn', 'error'] as const).map(
+        (method) => vi.spyOn(console, method).mockImplementation(() => {}),
+      );
+      const model = construct();
+      const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
+      assert(turn.mode === 'foreground');
+      expect(
+        await Effect.runPromise(Effect.flip(model.generateTurn(turn))),
+      ).toMatchObject({ kind: 'malformed-output' });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      for (const log of logs) expect(log).not.toHaveBeenCalled();
+    },
+  );
+
+  it('joins submission detach, resumes only the accepted job and constructs continuation from admitted input', async () => {
+    let finishCancellation!: () => void;
+    const cancellation = new Promise<void>((resolve) => {
+      finishCancellation = resolve;
+    });
+    const cancelBody = vi.fn(() => cancellation);
+    const submissionFinished = vi.fn();
+    const acceptance = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            sse([
+              {
+                type: 'response.created',
+                response: snapshot([], { status: 'queued' }),
+              },
+            ]),
+          ),
+        );
+      },
+      cancel: cancelBody,
+    });
+    const observedFrames = [
+      {
+        type: 'response.in_progress',
+        response: snapshot([], { status: 'in_progress' }),
+      },
+      {
+        type: 'response.output_text.delta',
+        output_index: 1,
+        item_id: 'msg_1',
+        delta: 'Progress only',
+      },
+      { type: 'response.completed', response: snapshot(OUTPUT) },
+    ];
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async (url, init) => {
+        if (init?.method === 'POST') {
+          const body = JSON.parse(String(init.body));
+          if (body.background)
+            return new Response(acceptance, {
+              headers: { 'content-type': 'text/event-stream' },
+            });
+          return response(events([MESSAGE]));
+        }
+        const after = Number(
+          new URL(String(url)).searchParams.get('starting_after'),
+        );
+        return new Response(sse(observedFrames.slice(after), after + 1), {
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      });
+    const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+    assert(model.background);
+    const turn = await Effect.runPromise(
+      model.prepareTurn({
+        ...REQUEST,
+        mode: 'background',
+        store: true,
+        system: 'policy',
+      }),
+    );
+    assert(turn.mode === 'background');
+    const fiber = Effect.runFork(
+      model.background
+        .submit(turn)
+        .pipe(Effect.tap(() => Effect.sync(submissionFinished))),
+    );
+    await vi.waitFor(() => expect(cancelBody).toHaveBeenCalledTimes(1));
+    expect(submissionFinished).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    finishCancellation();
+    const accepted = await Effect.runPromise(Fiber.join(fiber));
+    assert(accepted.kind === 'accepted');
+    expect(accepted.operation).toEqual({
+      origin: {
+        protocol: turn.protocol,
+        codecVersion: turn.codecVersion,
+        requestedModel: turn.requestedModel,
+        deployment: turn.deployment,
+      },
+      providerResponseId: 'resp_1',
+      afterSequence: 0,
+    });
+    const policy = { deadlineAtMs: Date.now() + 60_000 };
+    const initial = await Effect.runPromise(
+      Stream.runCollect(
+        model.background
+          .observe(accepted.operation, policy)
+          .pipe(Stream.take(1)),
+      ),
+    );
+    expect(initial[0]).toMatchObject({ kind: 'identified', afterSequence: 1 });
+    const resumed = await Effect.runPromise(
+      Stream.runCollect(
+        model.background.observe(
+          { ...accepted.operation, afterSequence: 1 },
+          policy,
+        ),
+      ),
+    );
+    expect(resumed.map((event) => [event.kind, event.afterSequence])).toEqual([
+      ['delta', 2],
+      ['completed', 3],
+    ]);
+    const terminal = resumed.at(-1);
+    assert(terminal?.kind === 'completed');
+    expect(terminal.result.continuation).toBeUndefined();
+    const continuation = await Effect.runPromise(
+      openaiResponsesContinuation(turn, terminal.result),
+    );
+    assert(continuation && 'responseId' in continuation.anchor);
+    expect(continuation).toMatchObject({
+      coveredMessages: 2,
+      anchor: { responseId: 'resp_1', coveredItems: 5 },
+    });
+    const messages: TurnRequest['messages'] = [
+      ...turn.messages,
+      {
+        role: 'assistant',
+        origin: terminal.result.requestedOrigin,
+        content: terminal.result.content,
+      },
+      {
+        role: 'tool',
+        results: [
+          {
+            callOrdinal: 0,
+            status: 'success',
+            content: [{ kind: 'text', text: 'a' }],
+          },
+          {
+            callOrdinal: 1,
+            status: 'error',
+            content: [{ kind: 'text', text: 'b' }],
+          },
+        ],
+      },
+    ];
+    const nextRequest = {
+      ...REQUEST,
+      messages,
+      system: 'policy',
+      continuation,
+    };
+    const next = await Effect.runPromise(model.prepareTurn(nextRequest));
+    assert(next.mode === 'foreground');
+    await Effect.runPromise(model.generateTurn(next));
+    expect(
+      JSON.parse(String(fetch.mock.calls.at(-1)?.[1]?.body)),
+    ).toMatchObject({
+      previous_response_id: 'resp_1',
+      instructions: 'policy',
+      input: [
+        { type: 'function_call_output', call_id: 'call_1', output: 'a' },
+        { type: 'function_call_output', call_id: 'call_2', output: 'Error: b' },
+      ],
+    });
+    for (const request of [
+      { ...nextRequest, system: 'changed' },
+      {
+        ...nextRequest,
+        continuation: ContinuationSchema.parse({
+          ...continuation,
+          anchor: { ...continuation.anchor, coveredItems: 4 },
+        }),
+      },
+    ])
+      expect(
+        (await Effect.runPromise(Effect.flip(model.prepareTurn(request)))).kind,
+      ).toBe('invalid-request');
+    const retrievals = fetch.mock.calls.filter(
+      ([, init]) => init?.method === 'GET',
+    );
+    expect(retrievals).toHaveLength(2);
+    expect(
+      retrievals.map(([url]) =>
+        new URL(String(url)).searchParams.get('starting_after'),
+      ),
+    ).toEqual(['0', '1']);
+    for (const [url] of retrievals)
+      expect(String(url)).toContain('reasoning.encrypted_content');
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('retains learned acceptance in an unexpected cleanup defect', async () => {
+    const cleanupFailure = new Error('cancel rejected');
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            sse([
+              {
+                type: 'response.created',
+                response: snapshot([], { status: 'in_progress' }),
+              },
+            ]),
+          ),
+        );
+      },
+      cancel() {
+        return Promise.reject(cleanupFailure);
+      },
+    });
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      new Response(body, {
+        headers: { 'content-type': 'text/event-stream' },
+      }),
+    );
+    const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+    assert(model.background);
+    const turn = await Effect.runPromise(
+      model.prepareTurn({ ...REQUEST, mode: 'background' }),
+    );
+    assert(turn.mode === 'background');
+    const exit = await Effect.runPromise(
+      Effect.exit(model.background.submit(turn)),
+    );
+    assert(exit._tag === 'Failure');
+    const defect = exit.cause.reasons.find(Cause.isDieReason);
+    expect(defect?.defect).toMatchObject({
+      operation: { providerResponseId: 'resp_1', afterSequence: 0 },
+      cause: cleanupFailure,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['completed', 'stop'],
+    ['incomplete', 'length'],
+  ])(
+    'returns immediate %s output without requiring stored history',
+    async (status, finishReason) => {
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        response([
+          {
+            type: `response.${status}`,
+            response: snapshot([{ ...MESSAGE, status }], {
+              status,
+              ...(status === 'incomplete'
+                ? { incomplete_details: { reason: 'max_output_tokens' } }
+                : {}),
+            }),
+          },
+        ]),
+      );
+      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+      assert(model.background);
+      const turn = await Effect.runPromise(
+        model.prepareTurn({ ...REQUEST, mode: 'background', store: false }),
+      );
+      assert(turn.mode === 'background');
+      const submitted = await Effect.runPromise(model.background.submit(turn));
+      assert(submitted.kind === 'completed');
+      expect(submitted.result).toMatchObject({
+        finishReason,
+        providerResponseId: 'resp_1',
+      });
+      expect(submitted.result).not.toHaveProperty('continuation');
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
+        background: true,
+        stream: true,
+        store: false,
+      });
+    },
+  );
+
+  it.each(['submit', 'cancel'] as const)(
+    'interrupts a pending %s HTTP read without reporting acceptance or cancellation',
+    async (operationName) => {
+      let signal: AbortSignal | null | undefined;
+      const cancelBody = vi.fn();
+      const body = new ReadableStream<Uint8Array>({ cancel: cancelBody });
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async (_url, init) => {
+          signal = init?.signal;
+          return new Response(body, {
+            headers: {
+              'content-type':
+                operationName === 'submit'
+                  ? 'text/event-stream'
+                  : 'application/json',
+            },
+          });
+        });
+      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+      assert(model.background);
+      const turn = await Effect.runPromise(
+        model.prepareTurn({ ...REQUEST, mode: 'background' }),
+      );
+      assert(turn.mode === 'background');
+      const completed = vi.fn();
+      const task =
+        operationName === 'submit'
+          ? model.background.submit(turn).pipe(Effect.asVoid)
+          : model.background.cancel(OPERATION).pipe(Effect.asVoid);
+      const fiber = Effect.runFork(
+        task.pipe(Effect.tap(() => Effect.sync(completed))),
+      );
+      await vi.waitFor(() => expect(body.locked).toBe(true));
+      await Effect.runPromise(Fiber.interrupt(fiber));
+      expect(signal?.aborted).toBe(true);
+      expect(completed).not.toHaveBeenCalled();
+      if (operationName === 'submit')
+        expect(cancelBody).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['missing', 'failed', 'not-found'] as const)(
+    'does not recreate work or advance a terminal cursor after %s observation',
+    async (outcome) => {
+      const frames = [
+        {
+          type: 'response.created',
+          response: snapshot([], { status: 'in_progress' }),
+        },
+      ];
+      if (outcome === 'failed')
+        frames.push({
+          type: 'response.failed',
+          response: snapshot([], {
+            status: 'failed',
+            error: { code: 'server_error', message: 'Original job failure' },
+          }),
+        });
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        outcome === 'not-found'
+          ? new Response(
+              JSON.stringify({
+                error: { message: 'Job no longer retrievable' },
+              }),
+              {
+                status: 404,
+                headers: { 'content-type': 'application/json' },
+              },
+            )
+          : response(frames),
+      );
+      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+      assert(model.background);
+      const observed: BackgroundEvent[] = [];
+      const failure = await Effect.runPromise(
+        Effect.flip(
+          Stream.runForEach(
+            model.background.observe(OPERATION, {
+              deadlineAtMs: Date.now() + 60_000,
+            }),
+            (event) =>
+              Effect.sync(() => {
+                observed.push(event);
+              }),
+          ),
+        ),
+      );
+      expect(failure).toMatchObject({
+        kind: outcome === 'missing' ? 'malformed-output' : 'provider-rejection',
+        operation: OPERATION,
+        responseId: 'resp_1',
+      });
+      if (outcome === 'failed')
+        expect(failure.message).toBe('Original job failure');
+      expect(observed.map((event) => event.afterSequence)).toEqual(
+        outcome === 'not-found' ? [] : [0],
+      );
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch.mock.calls[0]?.[1]?.method).toBe('GET');
+    },
+  );
+
+  it.each(['same', 'omitted', 'changed', 'sparse'] as const)(
+    'preserves observed completed evidence against a %s terminal snapshot',
+    async (variant) => {
+      let output: object[] = [REASONING];
+      if (variant === 'omitted')
+        output = [
+          {
+            type: REASONING.type,
+            id: REASONING.id,
+            summary: REASONING.summary,
+            content: REASONING.content,
+          },
+        ];
+      if (variant === 'changed')
+        output = [{ ...REASONING, encrypted_content: 'contradictory_opaque' }];
+      if (variant === 'sparse') output = [];
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        response([
+          {
+            type: 'response.in_progress',
+            response: snapshot([], { status: 'in_progress' }),
+          },
+          {
+            type: 'response.output_item.done',
+            output_index: 0,
+            item: REASONING,
+          },
+          { type: 'response.completed', response: snapshot(output) },
+        ]),
+      );
+      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+      assert(model.background);
+      const seen: BackgroundEvent[] = [];
+      const exit = await Effect.runPromise(
+        Effect.exit(
+          Stream.runForEach(
+            model.background.observe(OPERATION, {
+              deadlineAtMs: Date.now() + 60_000,
+            }),
+            (event) =>
+              Effect.sync(() => {
+                seen.push(event);
+              }),
+          ),
+        ),
+      );
+      if (variant === 'changed' || variant === 'sparse') {
+        assert(exit._tag === 'Failure');
+        expect(
+          exit.cause.reasons.find(Cause.isFailReason)?.error,
+        ).toMatchObject({ kind: 'malformed-output' });
+        expect(seen.map((event) => event.afterSequence)).toEqual([0, 1]);
+      } else {
+        expect(exit._tag).toBe('Success');
+        expect(seen.at(-1)).toMatchObject({
+          kind: 'completed',
+          afterSequence: 2,
+          result: {
+            content: [
+              {
+                kind: 'reasoning',
+                evidence: {
+                  encryptedContent: 'enc_complete',
+                  status: 'completed',
+                  itemId: 'rs_1',
+                },
+              },
+            ],
+          },
+        });
+      }
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['foreground', 'observation'] as const)(
+    'settles %s at the semantic terminal event while the HTTP body remains open',
+    async (mode) => {
+      const cancelBody = vi.fn();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              sse([
+                {
+                  type: 'response.completed',
+                  response: snapshot([MESSAGE]),
+                },
+              ]),
+            ),
+          );
+        },
+        cancel: cancelBody,
+      });
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        new Response(body, {
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+      );
+      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+      assert(model.background);
+      const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
+      assert(turn.mode === 'foreground');
+      const stream: Stream.Stream<TurnEvent | BackgroundEvent, ModelError> =
+        mode === 'foreground'
+          ? model.streamTurn(turn)
+          : model.background.observe(OPERATION, {
+              deadlineAtMs: Date.now() + 60_000,
+            });
+      const seen = await Effect.runPromise(Stream.runCollect(stream));
+      const completed = seen.at(-1);
+      expect(completed).toMatchObject({
+        kind: 'completed',
+        result: { providerResponseId: 'resp_1', finishReason: 'stop' },
+      });
+      if (mode === 'observation')
+        expect(completed).toHaveProperty('afterSequence', 0);
+      expect(cancelBody).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['headers', 'body'] as const)(
+    'keeps the original deadline while waiting for %s and before another request',
+    async (phase) => {
+      let markStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      const cancelled = vi.fn();
+      const body = new ReadableStream<Uint8Array>({ cancel: cancelled });
+      let sendHeaders!: () => void;
+      const headers = new Promise<void>((resolve) => {
+        sendHeaders = resolve;
+      });
+      let signal: AbortSignal | null | undefined;
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async (_url, init) => {
+          signal = init?.signal;
+          markStarted();
+          await headers;
+          return new Response(body, {
+            headers: { 'content-type': 'text/event-stream' },
+          });
+        });
+      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+      assert(model.background);
+      const background = model.background;
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const observation = Stream.runDrain(
+            background.observe(OPERATION, { deadlineAtMs: 100 }),
+          );
+          const fiber = yield* Effect.forkChild(Effect.flip(observation));
+          yield* Effect.promise(() => started);
+          yield* TestClock.adjust('40 millis');
+          if (phase === 'body') {
+            sendHeaders();
+            yield* Effect.promise(() =>
+              vi.waitFor(() => expect(body.locked).toBe(true)),
+            );
+          }
+          yield* TestClock.adjust('60 millis');
+          expect((yield* Fiber.join(fiber)).kind).toBe('observation-deadline');
+          expect(signal?.aborted).toBe(true);
+          expect(cancelled).toHaveBeenCalledTimes(phase === 'body' ? 1 : 0);
+          expect((yield* Effect.flip(observation)).kind).toBe(
+            'observation-deadline',
+          );
+          expect(fetch).toHaveBeenCalledTimes(1);
+        }).pipe(Effect.provide(TestClock.layer())),
+      );
+      sendHeaders();
+      expect(String(fetch.mock.calls[0]?.[0])).not.toContain('starting_after');
+    },
+  );
+
+  it.each([
+    ['cancelled', 'confirmed-cancelled'],
+    ['completed', 'observed-terminal'],
+    ['failed', 'observed-terminal'],
+    ['incomplete', 'observed-terminal'],
+    ['queued', 'unconfirmed'],
+    ['in_progress', 'unconfirmed'],
+  ])(
+    'reports cancellation status %s as %s without claiming ordering',
+    async (status, kind) => {
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        new Response(JSON.stringify(snapshot([], { status })), {
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+      const model = modelWith(fetch, { ...CONFIG, background: 'supported' });
+      assert(model.background);
+      const result = await Effect.runPromise(
+        model.background.cancel({ ...OPERATION, afterSequence: 0 }),
+      );
+      expect(result).toMatchObject({
+        kind,
+        providerResponseId: 'resp_1',
+        returnedModel: 'returned-model',
+      });
+      expect(result).not.toHaveProperty('result');
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(String(fetch.mock.calls[0]?.[0])).toContain(
+        '/responses/resp_1/cancel',
+      );
+    },
+  );
+
   it('preserves grouped completed items, encrypted evidence and original tool IDs through a sparse terminal snapshot', async () => {
     const frames = events(
       OUTPUT,
@@ -154,6 +813,7 @@ describe('native OpenAI Responses protocol', () => {
       );
     const model = modelWith(fetch);
     const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
+    assert(turn.mode === 'foreground');
     const collected = await Effect.runPromise(
       Stream.runCollect(model.streamTurn(turn)),
     );
@@ -229,7 +889,12 @@ describe('native OpenAI Responses protocol', () => {
             },
           ],
         })
-        .pipe(Effect.flatMap(model.generateTurn)),
+        .pipe(
+          Effect.flatMap((turn) => {
+            assert(turn.mode === 'foreground');
+            return model.generateTurn(turn);
+          }),
+        ),
     );
     expect(next.content[0]).toMatchObject({
       kind: 'message',
@@ -267,6 +932,7 @@ describe('native OpenAI Responses protocol', () => {
     );
     config.defaults.reasoning = null;
     config.defaults.serviceTier = null;
+    assert(turn.mode === 'foreground');
     await Effect.runPromise(model.generateTurn(turn));
     expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
       temperature: 0,
@@ -281,7 +947,12 @@ describe('native OpenAI Responses protocol', () => {
     await Effect.runPromise(
       model
         .prepareTurn({ ...REQUEST, reasoning: null, serviceTier: null })
-        .pipe(Effect.flatMap(model.generateTurn)),
+        .pipe(
+          Effect.flatMap((turn) => {
+            assert(turn.mode === 'foreground');
+            return model.generateTurn(turn);
+          }),
+        ),
     );
     const omitted = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
     expect(omitted.reasoning).toBeUndefined();
@@ -301,13 +972,32 @@ describe('native OpenAI Responses protocol', () => {
       ).kind,
     ).toBe('unsupported');
     await Effect.runPromise(
-      withoutTemperature
-        .prepareTurn(REQUEST)
-        .pipe(Effect.flatMap(withoutTemperature.generateTurn)),
+      withoutTemperature.prepareTurn(REQUEST).pipe(
+        Effect.flatMap((turn) => {
+          assert(turn.mode === 'foreground');
+          return withoutTemperature.generateTurn(turn);
+        }),
+      ),
     );
     expect(
       JSON.parse(String(fetch.mock.calls[2]?.[1]?.body)).temperature,
     ).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(
+      await Effect.runPromise(
+        Effect.flip(
+          model.prepareTurn({
+            ...REQUEST,
+            continuation: {
+              origin: { ...OPERATION.origin, protocol: 'google-interactions' },
+              coveredMessages: 1,
+              prefixFingerprint: 'a'.repeat(64),
+              anchor: { interactionId: 'int_1', coveredSteps: 1 },
+            },
+          }),
+        ),
+      ),
+    ).toMatchObject({ kind: 'unsupported' });
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 
@@ -327,7 +1017,12 @@ describe('native OpenAI Responses protocol', () => {
     );
     const model = modelWith(fetch);
     const result = await Effect.runPromise(
-      model.prepareTurn(REQUEST).pipe(Effect.flatMap(model.generateTurn)),
+      model.prepareTurn(REQUEST).pipe(
+        Effect.flatMap((turn) => {
+          assert(turn.mode === 'foreground');
+          return model.generateTurn(turn);
+        }),
+      ),
     );
     expect(result).toMatchObject({
       finishReason: 'length',
@@ -420,14 +1115,15 @@ describe('native OpenAI Responses protocol', () => {
       const failure = await Effect.runPromise(
         Effect.flip(
           model.prepareTurn(REQUEST).pipe(
-            Effect.flatMap((turn) =>
-              Stream.runForEach(model.streamTurn(turn), (event) =>
+            Effect.flatMap((turn) => {
+              assert(turn.mode === 'foreground');
+              return Stream.runForEach(model.streamTurn(turn), (event) =>
                 Effect.sync(() => {
                   if (event.kind === 'completed') completed();
                   if (event.kind === 'delta') delta();
                 }),
-              ),
-            ),
+              );
+            }),
           ),
         ),
       );
@@ -469,7 +1165,12 @@ describe('native OpenAI Responses protocol', () => {
     const model = modelWith(fetch);
     const failure = await Effect.runPromise(
       Effect.flip(
-        model.prepareTurn(REQUEST).pipe(Effect.flatMap(model.generateTurn)),
+        model.prepareTurn(REQUEST).pipe(
+          Effect.flatMap((turn) => {
+            assert(turn.mode === 'foreground');
+            return model.generateTurn(turn);
+          }),
+        ),
       ),
     );
     expect(failure).toMatchObject({
@@ -512,6 +1213,7 @@ describe('native OpenAI Responses protocol', () => {
       });
     const model = modelWith(fetch);
     const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
+    assert(turn.mode === 'foreground');
     const fiber = Effect.runFork(
       Stream.runForEach(model.streamTurn(turn), (event) =>
         Effect.sync(() => {

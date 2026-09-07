@@ -1,12 +1,10 @@
-// Node imports
-import { createHash } from 'node:crypto';
-
 // Third-party imports
 import { GoogleGenAI, type Interactions } from '@google/genai';
 import { Cause, Effect, Exit, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
+import { prefixFingerprint } from './prefixFingerprint.js';
 import {
   JsonObjectSchema,
   ModelConfigurationSchema,
@@ -108,28 +106,6 @@ const WireEventSchema = z.discriminatedUnion('event_type', [
   }),
   z.object({ event_type: z.literal('error'), error: z.unknown() }),
 ]);
-
-/** Codec 1 uses sorted object entries followed by ECMAScript JSON enumeration. */
-function prefixFingerprint(
-  origin: ModelOrigin,
-  system: string | undefined,
-  messages: ResolvedTurn['messages'],
-): string {
-  const encoded = JSON.stringify(
-    ['texra-google-interactions-prefix-v1', origin, system ?? null, messages],
-    (_key, value: unknown) => {
-      if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-        return value;
-      }
-      return Object.fromEntries(
-        Object.entries(value).sort(([left], [right]) =>
-          left < right ? -1 : Number(left > right),
-        ),
-      );
-    },
-  );
-  return createHash('sha256').update(encoded, 'utf8').digest('hex');
-}
 
 const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
   part: Extract<
@@ -359,7 +335,12 @@ const invocationInput = Effect.fn('llm.google.invocationInput')(function* (
     !sameModelOrigin(continuation.origin, origin) ||
     continuation.coveredMessages > turn.messages.length ||
     continuation.prefixFingerprint !==
-      prefixFingerprint(origin, turn.system, prefix) ||
+      prefixFingerprint(
+        'texra-google-interactions-prefix-v1',
+        origin,
+        turn.system,
+        prefix,
+      ) ||
     continuation.anchor.coveredSteps !== prefixSteps.length ||
     turn.messages
       .slice(continuation.coveredMessages)
@@ -422,12 +403,20 @@ export function googleInteractionsModel(
       }
       if (
         parsed.data.reasoning !== undefined ||
-        parsed.data.serviceTier !== undefined
+        parsed.data.serviceTier !== undefined ||
+        parsed.data.thinking !== undefined ||
+        parsed.data.effort !== undefined ||
+        parsed.data.cache !== undefined ||
+        parsed.data.stopSequences !== undefined ||
+        parsed.data.inferenceGeo !== undefined ||
+        parsed.data.mode === 'background' ||
+        (parsed.data.continuation !== undefined &&
+          parsed.data.continuation.origin.protocol !== 'google-interactions')
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
           message:
-            'Google does not support Responses reasoning or service-tier controls.',
+            'Google does not support the supplied protocol controls or background mode.',
         });
       }
       const turn = ResolvedTurnSchema.parse({
@@ -455,6 +444,14 @@ export function googleInteractionsModel(
     Stream.suspend(() => {
       let responseId: string | undefined;
       let returnedModel: string | null = null;
+      const enrich = (error: ModelError) =>
+        new ModelError({
+          ...error,
+          message: error.message,
+          cause: error.cause,
+          responseId,
+          model: returnedModel ?? config.requestedModel,
+        });
       return Stream.unwrap(
         Effect.gen(function* () {
           const parsed = ResolvedTurnSchema.safeParse(input);
@@ -476,11 +473,28 @@ export function googleInteractionsModel(
           yield* Effect.addFinalizer((exit) => {
             const body = reader;
             if (body === undefined) return Effect.void;
-            // Preserve a primary failure or interruption, not a cleanup failure
-            // after successful use. The request has already been aborted.
-            const cancel = Exit.isSuccess(exit)
-              ? Effect.promise(() => body.cancel())
-              : Effect.tryPromise(() => body.cancel()).pipe(Effect.ignore);
+            const cancel = Effect.tryPromise({
+              try: () => body.cancel(),
+              catch: (cause) => cause,
+            }).pipe(
+              Effect.catch((cause) => {
+                // Cancel repeats an errored reader's original failure; distinct
+                // cleanup defects remain part of the scope's combined failure.
+                if (
+                  (signal.aborted && cause === signal.reason) ||
+                  (Exit.isFailure(exit) &&
+                    exit.cause.reasons.some(
+                      (reason) =>
+                        Cause.isFailReason(reason) &&
+                        reason.error instanceof ModelError &&
+                        reason.error.kind === 'transport' &&
+                        reason.error.cause === cause,
+                    ))
+                )
+                  return Effect.void;
+                return Effect.die(cause);
+              }),
+            );
             return cancel.pipe(
               Effect.ensuring(Effect.sync(() => body.releaseLock())),
             );
@@ -890,6 +904,7 @@ export function googleInteractionsModel(
                       origin,
                       coveredMessages: prefix.length,
                       prefixFingerprint: prefixFingerprint(
+                        'texra-google-interactions-prefix-v1',
                         origin,
                         turn.system,
                         prefix,
@@ -905,19 +920,8 @@ export function googleInteractionsModel(
               return { kind: 'completed', result: result.data } as const;
             }),
           );
-          return Stream.concat(events, terminal);
-        }),
-      ).pipe(
-        Stream.mapError(
-          (error) =>
-            new ModelError({
-              ...error,
-              message: error.message,
-              cause: error.cause,
-              responseId,
-              model: returnedModel ?? config.requestedModel,
-            }),
-        ),
+          return Stream.concat(events, terminal).pipe(Stream.mapError(enrich));
+        }).pipe(Effect.mapError(enrich)),
       );
     });
 

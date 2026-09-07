@@ -1,6 +1,9 @@
+// Node imports
+import assert from 'node:assert/strict';
+
 // Third-party imports
 import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
-import { Deferred, Effect, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TurnRequest, TurnResult } from '@texra-ai/llm/turn';
 
@@ -218,6 +221,7 @@ describe('canonical Google Interactions protocol', () => {
       const prepared = await Effect.runPromise(
         configured.prepareTurn(request()),
       );
+      assert(prepared.mode === 'foreground');
       expect(fetchModel).not.toHaveBeenCalled();
       const events = await Effect.runPromise(
         Stream.runCollect(configured.streamTurn(prepared)),
@@ -321,6 +325,7 @@ describe('canonical Google Interactions protocol', () => {
       const next = await Effect.runPromise(
         configured.prepareTurn(exchange(restored)),
       );
+      assert(next.mode === 'foreground');
       fetchModel.mockImplementationOnce(async () =>
         response([
           {
@@ -415,6 +420,7 @@ describe('canonical Google Interactions protocol', () => {
   ] as const)('rejects a changed %s before provider I/O', async (changed) => {
     const configured = model();
     const prepared = await Effect.runPromise(configured.prepareTurn(request()));
+    assert(prepared.mode === 'foreground');
     const result = await Effect.runPromise(configured.generateTurn(prepared));
     const next = JSON.parse(JSON.stringify(exchange(result)));
     if (changed === 'system') next.system = 'different';
@@ -444,6 +450,8 @@ describe('canonical Google Interactions protocol', () => {
     'parallel-control',
     'reasoning-control',
     'service-tier-control',
+    'anthropic-controls',
+    'background-mode',
   ] as const)(
     'rejects unsupported %s before provider I/O',
     async (unsupported) => {
@@ -451,6 +459,7 @@ describe('canonical Google Interactions protocol', () => {
       const prepared = await Effect.runPromise(
         configured.prepareTurn(request()),
       );
+      assert(prepared.mode === 'foreground');
       const result = await Effect.runPromise(configured.generateTurn(prepared));
       const next = JSON.parse(JSON.stringify(exchange(result)));
       let expectedMessage = 'Google tool results';
@@ -464,7 +473,19 @@ describe('canonical Google Interactions protocol', () => {
         next[
           unsupported === 'reasoning-control' ? 'reasoning' : 'serviceTier'
         ] = null;
-        expectedMessage = 'Google does not support Responses';
+        expectedMessage = 'Google does not support';
+      } else if (unsupported === 'anthropic-controls') {
+        Object.assign(next, {
+          thinking: { mode: 'disabled' },
+          effort: null,
+          cache: 'disabled',
+          stopSequences: [],
+          inferenceGeo: null,
+        });
+        expectedMessage = 'Google does not support';
+      } else if (unsupported === 'background-mode') {
+        next.mode = 'background';
+        expectedMessage = 'Google does not support';
       } else if (unsupported === 'raw-audio') {
         expectedMessage = 'Raw Google audio';
         next.messages.push({
@@ -666,6 +687,7 @@ describe('canonical Google Interactions protocol', () => {
     fetchModel.mockImplementation(async () => response(events));
     const configured = model();
     const prepared = await Effect.runPromise(configured.prepareTurn(request()));
+    assert(prepared.mode === 'foreground');
     await expect(
       Effect.runPromise(configured.generateTurn(prepared)),
     ).rejects.toMatchObject({
@@ -690,6 +712,7 @@ describe('canonical Google Interactions protocol', () => {
     });
     const configured = model();
     const prepared = await Effect.runPromise(configured.prepareTurn(request()));
+    assert(prepared.mode === 'foreground');
     await expect(
       Effect.runPromise(configured.generateTurn(prepared)),
     ).rejects.toMatchObject({
@@ -702,6 +725,7 @@ describe('canonical Google Interactions protocol', () => {
   });
 
   it('retains response identity when the body fails after progress', async () => {
+    const readFailure = new Error('Body failed');
     let bodyController: ReadableStreamDefaultController<Uint8Array>;
     fetchModel.mockImplementation(
       async () =>
@@ -724,31 +748,37 @@ describe('canonical Google Interactions protocol', () => {
     );
     const configured = model();
     const prepared = await Effect.runPromise(configured.prepareTurn(request()));
-    await expect(
-      Effect.runPromise(
+    assert(prepared.mode === 'foreground');
+    const exit = await Effect.runPromise(
+      Effect.exit(
         configured.streamTurn(prepared).pipe(
           Stream.runForEach((event) =>
             Effect.sync(() => {
-              if (event.kind === 'delta')
-                bodyController.error(new Error('Body failed'));
+              if (event.kind === 'delta') bodyController.error(readFailure);
             }),
           ),
         ),
       ),
-    ).rejects.toMatchObject({
+    );
+    assert(exit._tag === 'Failure');
+    expect(exit.cause.reasons).toHaveLength(1);
+    const primary = exit.cause.reasons.find(Cause.isFailReason)?.error;
+    expect(primary).toMatchObject({
       _tag: 'ModelError',
       kind: 'transport',
       responseId: 'int_1',
       model: 'gemini-returned',
       message: 'Body failed',
+      cause: readFailure,
     });
   });
 
-  it.each(['headers', 'body', 'successful-take'] as const)(
+  it.each(['headers', 'body', 'malformed', 'successful-take'] as const)(
     'aborts before cleanup after %s',
     async (phase) => {
       const entered = await Effect.runPromise(Deferred.make<void>());
       const order: string[] = [];
+      const cleanupFailure = new Error('Cancellation failed');
       fetchModel.mockImplementation((input) => {
         const request = input as Request;
         if (phase === 'headers') {
@@ -789,6 +819,11 @@ describe('canonical Google Interactions protocol', () => {
                         delta: { type: 'text', text: 'started' },
                       },
                     ]
+                      .map((event, index) =>
+                        phase === 'malformed' && index === 1
+                          ? { event_type: 'step.start', index: 0, step: null }
+                          : event,
+                      )
                       .map((event) => `data: ${JSON.stringify(event)}\n\n`)
                       .join(''),
                   ),
@@ -800,7 +835,7 @@ describe('canonical Google Interactions protocol', () => {
                     ? 'cancel-after-abort'
                     : 'cancel-before-abort',
                 );
-                throw new Error('Cancellation failed');
+                throw cleanupFailure;
               },
             }),
             { headers: { 'content-type': 'text/event-stream' } },
@@ -811,7 +846,23 @@ describe('canonical Google Interactions protocol', () => {
       const prepared = await Effect.runPromise(
         configured.prepareTurn(request()),
       );
-      if (phase === 'successful-take') {
+      assert(prepared.mode === 'foreground');
+      if (phase === 'malformed') {
+        const exit = await Effect.runPromise(
+          Effect.exit(Stream.runDrain(configured.streamTurn(prepared))),
+        );
+        assert(exit._tag === 'Failure');
+        expect(
+          exit.cause.reasons.find(Cause.isFailReason)?.error,
+        ).toMatchObject({
+          kind: 'malformed-output',
+          responseId: 'int_1',
+          model: 'gemini-test',
+        });
+        expect(exit.cause.reasons.find(Cause.isDieReason)?.defect).toBe(
+          cleanupFailure,
+        );
+      } else if (phase === 'successful-take') {
         await expect(
           Effect.runPromise(
             configured.streamTurn(prepared).pipe(

@@ -8,12 +8,14 @@
     "./turn": "./src/turn.ts",
     "./openai-chat": "./src/openaiChat.ts",
     "./openai-responses": "./src/openaiResponses.ts",
+    "./anthropic-messages": "./src/anthropicMessages.ts",
     "./google-interactions": "./src/googleInteractions.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.123.0",
     "@google/genai": "2.21.0",
     "openai": "7.10.0"
   },

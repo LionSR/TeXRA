@@ -1,4 +1,5 @@
 // Node imports
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -138,6 +139,7 @@ describe('agent creator orchestration', () => {
                 },
               ],
             });
+            assert(turn.mode === 'foreground');
             const result = yield* model.generateTurn(turn);
             return result.content
               .flatMap((part) => (part.kind === 'message' ? part.content : []))

@@ -27,7 +27,15 @@ const BindingSchema = z.strictObject({
     .readonly(),
 });
 const OriginSchema = BindingSchema.extend({
-  protocol: z.enum(['openai-chat', 'google-interactions', 'openai-responses']),
+  protocol: z.enum([
+    'openai-chat',
+    'google-interactions',
+    'openai-responses',
+    'anthropic-messages',
+    'deepseek-chat',
+    'kimi-chat',
+    'glm-chat',
+  ]),
   codecVersion: z.literal(1),
 });
 
@@ -113,6 +121,9 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
       evidence: z
         .discriminatedUnion('kind', [
           z
+            .strictObject({ kind: z.literal('chat-reasoning-content') })
+            .readonly(),
+          z
             .strictObject({
               kind: z.literal('google-interactions-thought-signature'),
               signature: z.string().min(1),
@@ -125,6 +136,18 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
               // Missing, null and exact opaque bytes have distinct wire meanings.
               encryptedContent: z.string().nullable().optional(),
               status: z.enum(['completed', 'incomplete']).optional(),
+            })
+            .readonly(),
+          z
+            .strictObject({
+              kind: z.literal('anthropic-thinking-signature'),
+              signature: z.string(),
+            })
+            .readonly(),
+          z
+            .strictObject({
+              kind: z.literal('anthropic-redacted-thinking'),
+              data: z.string(),
             })
             .readonly(),
         ])
@@ -150,6 +173,14 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
 ]);
 
 const ContentSchema = z.array(OutputPartSchema).readonly();
+const EVIDENCE_PROTOCOL = {
+  'google-interactions-thought-signature': 'google-interactions',
+  'openai-responses-message': 'openai-responses',
+  'openai-responses-reasoning': 'openai-responses',
+  'openai-responses-function-call': 'openai-responses',
+  'anthropic-thinking-signature': 'anthropic-messages',
+  'anthropic-redacted-thinking': 'anthropic-messages',
+} as const;
 
 function validateAssistantContent(
   origin: ModelOrigin,
@@ -162,16 +193,30 @@ function validateAssistantContent(
     const evidence = part.evidence;
     if (
       evidence != null &&
-      origin.protocol !==
-        (evidence.kind === 'google-interactions-thought-signature'
-          ? 'google-interactions'
-          : 'openai-responses')
+      (evidence.kind === 'chat-reasoning-content'
+        ? !['deepseek-chat', 'kimi-chat', 'glm-chat'].includes(origin.protocol)
+        : origin.protocol !== EVIDENCE_PROTOCOL[evidence.kind])
     ) {
       ctx.addIssue({
         code: 'custom',
         path: ['content', index],
         message:
           'Provider content evidence requires its original protocol binding.',
+      });
+    }
+    if (
+      part.kind === 'reasoning' &&
+      (((evidence?.kind === 'anthropic-thinking-signature' ||
+        evidence?.kind === 'chat-reasoning-content') &&
+        (part.summary.length !== 0 || part.content?.length !== 1)) ||
+        (evidence?.kind === 'anthropic-redacted-thinking' &&
+          (part.summary.length !== 0 || part.content !== undefined)))
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['content', index],
+        message:
+          'Signed or Chat thinking preserves one exact returned text field; redacted thinking has no readable content or summary.',
       });
     }
     if (
@@ -301,22 +346,37 @@ const ToolDefinitionsSchema = z
   })
   .readonly();
 
+const PrefixSchema = z.strictObject({
+  coveredMessages: z.int().positive(),
+  prefixFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+});
+const GoogleContinuationSchema = PrefixSchema.extend({
+  origin: OriginSchema.extend({
+    protocol: z.literal('google-interactions'),
+  }).readonly(),
+  anchor: z
+    .strictObject({
+      interactionId: z.string().min(1),
+      coveredSteps: z.int().positive(),
+    })
+    .readonly(),
+}).readonly();
+const ResponsesContinuationSchema = PrefixSchema.extend({
+  origin: OriginSchema.extend({
+    protocol: z.literal('openai-responses'),
+  }).readonly(),
+  anchor: z
+    .strictObject({
+      responseId: z.string().min(1),
+      coveredItems: z.int().nonnegative(),
+    })
+    .readonly(),
+}).readonly();
 /** Provider acceleration of an exact prefix, never the conversation authority. */
-export const ContinuationSchema = z
-  .strictObject({
-    origin: OriginSchema.extend({
-      protocol: z.literal('google-interactions'),
-    }).readonly(),
-    coveredMessages: z.int().positive(),
-    prefixFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    anchor: z
-      .strictObject({
-        interactionId: z.string().min(1),
-        coveredSteps: z.int().positive(),
-      })
-      .readonly(),
-  })
-  .readonly();
+export const ContinuationSchema = z.union([
+  GoogleContinuationSchema,
+  ResponsesContinuationSchema,
+]);
 export type Continuation = z.infer<typeof ContinuationSchema>;
 
 const ToolChoiceSchema = z.union([
@@ -333,10 +393,39 @@ const ResponsesReasoningSchema = z
   })
   .readonly()
   .nullable();
+const DisabledThinkingSchema = z.strictObject({ mode: z.literal('disabled') });
+const AdaptiveThinkingSchema = z.strictObject({
+  mode: z.literal('adaptive'),
+  display: z.enum(['summarized', 'omitted']),
+});
+const BudgetedThinkingSchema = z.strictObject({
+  mode: z.literal('enabled'),
+  budgetTokens: z.int().min(1024),
+  display: z.enum(['summarized', 'omitted']),
+});
+const AnthropicThinkingSchema = z.discriminatedUnion('mode', [
+  DisabledThinkingSchema.readonly(),
+  AdaptiveThinkingSchema.readonly(),
+  BudgetedThinkingSchema.readonly(),
+]);
+const AuthoredThinkingSchema = z.discriminatedUnion('mode', [
+  DisabledThinkingSchema.readonly(),
+  AdaptiveThinkingSchema.readonly(),
+  BudgetedThinkingSchema.partial({
+    budgetTokens: true,
+    display: true,
+  }).readonly(),
+]);
+const EffortSchema = z
+  .enum(['low', 'medium', 'high', 'xhigh', 'max'])
+  .nullable();
+const CacheSchema = z.enum(['disabled', '5m', '1h']);
+const InferenceGeoSchema = z.enum(['global', 'us']).nullable();
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */
 export const TurnRequestSchema = z
   .strictObject({
+    mode: z.enum(['foreground', 'background']).optional(),
     system: z.string().optional(),
     messages: PreparedHistorySchema,
     tools: ToolDefinitionsSchema.optional(),
@@ -347,7 +436,15 @@ export const TurnRequestSchema = z
     store: z.boolean().optional(),
     thinkingLevel: z.enum(['low', 'medium', 'high']).optional(),
     reasoning: ResponsesReasoningSchema.optional(),
-    serviceTier: z.literal('fast').nullable().optional(),
+    serviceTier: z
+      .enum(['fast', 'auto', 'standard-only'])
+      .nullable()
+      .optional(),
+    thinking: AuthoredThinkingSchema.optional(),
+    effort: EffortSchema.optional(),
+    cache: CacheSchema.optional(),
+    stopSequences: z.array(z.string()).readonly().optional(),
+    inferenceGeo: InferenceGeoSchema.optional(),
     continuation: ContinuationSchema.optional(),
   })
   .readonly();
@@ -374,6 +471,34 @@ const ResponsesControlsSchema = z.strictObject({
   reasoning: ResponsesReasoningSchema,
   serviceTier: z.literal('fast').nullable(),
 });
+const AnthropicControlsSchema = z.strictObject({
+  maxOutputTokens: z.int().positive(),
+  temperature: z.number().min(0).max(1).nullable(),
+  parallelToolCalls: z.boolean(),
+  toolChoice: ToolChoiceSchema,
+  thinking: AnthropicThinkingSchema,
+  effort: EffortSchema,
+  cache: CacheSchema,
+  stopSequences: z.array(z.string()).readonly(),
+  serviceTier: z.enum(['auto', 'standard-only']),
+  inferenceGeo: InferenceGeoSchema,
+});
+const ChatReasoningControlsSchema = z.strictObject({
+  maxOutputTokens: z.int().positive(),
+  temperature: z.number().min(0).max(2).nullable(),
+  thinking: z
+    .strictObject({ mode: z.enum(['enabled', 'disabled']) })
+    .readonly(),
+  effort: EffortSchema,
+  toolChoice: ToolChoiceSchema,
+});
+const KimiControlsSchema = ChatReasoningControlsSchema.extend({
+  preserveThinking: z.boolean(),
+});
+const GlmControlsSchema = ChatReasoningControlsSchema.extend({
+  temperature: z.number().min(0).max(1).nullable(),
+  clearThinking: z.boolean(),
+});
 
 /** Already-selected protocol binding and defaults, provided by the application. */
 export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
@@ -386,7 +511,36 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
   BindingSchema.extend({
+    protocol: z.literal('deepseek-chat'),
+    supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
+    supportsForcedToolChoice: z.boolean(),
+    defaults: ChatReasoningControlsSchema.omit({ toolChoice: true }).readonly(),
+  }).readonly(),
+  BindingSchema.extend({
+    protocol: z.literal('kimi-chat'),
+    thinkingControl: z.enum(['toggle', 'always', 'effort']),
+    supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
+    supportsForcedToolChoice: z.boolean(),
+    temperatureByThinking: z
+      .strictObject({
+        enabled: z.number().min(0).max(2).nullable(),
+        disabled: z.number().min(0).max(2).nullable(),
+      })
+      .readonly(),
+    defaults: KimiControlsSchema.omit({
+      toolChoice: true,
+      temperature: true,
+    }).readonly(),
+  }).readonly(),
+  BindingSchema.extend({
+    protocol: z.literal('glm-chat'),
+    supportsThinkingDisabled: z.boolean(),
+    supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
+    defaults: GlmControlsSchema.omit({ toolChoice: true }).readonly(),
+  }).readonly(),
+  BindingSchema.extend({
     protocol: z.literal('openai-responses'),
+    background: z.enum(['supported', 'unsupported']),
     supportsTemperature: z.boolean(),
     defaults: ResponsesControlsSchema.omit({ toolChoice: true }).readonly(),
   })
@@ -404,11 +558,35 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
       }
     })
     .readonly(),
+  BindingSchema.extend({
+    protocol: z.literal('anthropic-messages'),
+    supportsTemperature: z.boolean(),
+    supportsForcedToolChoice: z.boolean(),
+    defaults: AnthropicControlsSchema.omit({ toolChoice: true }).readonly(),
+  })
+    .superRefine((configuration, ctx) => {
+      if (
+        !configuration.supportsTemperature &&
+        configuration.defaults.temperature !== null
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'temperature'],
+          message:
+            'A model without temperature support requires a null default.',
+        });
+      }
+    })
+    .readonly(),
 ]);
 export type ModelConfiguration = z.infer<typeof ModelConfigurationSchema>;
 export type OpenAIChatConfiguration = Extract<
   ModelConfiguration,
   { protocol: 'openai-chat' }
+>;
+export type ChatConfiguration = Extract<
+  ModelConfiguration,
+  { protocol: 'openai-chat' | 'deepseek-chat' | 'kimi-chat' | 'glm-chat' }
 >;
 export type GoogleInteractionsConfiguration = Extract<
   ModelConfiguration,
@@ -418,6 +596,10 @@ export type OpenAIResponsesConfiguration = Extract<
   ModelConfiguration,
   { protocol: 'openai-responses' }
 >;
+export type AnthropicMessagesConfiguration = Extract<
+  ModelConfiguration,
+  { protocol: 'anthropic-messages' }
+>;
 
 const PreparedInputSchema = OriginSchema.extend({
   mode: z.literal('foreground'),
@@ -425,21 +607,42 @@ const PreparedInputSchema = OriginSchema.extend({
   messages: PreparedHistorySchema,
   tools: ToolDefinitionsSchema,
 });
+const ResponsesPreparedSchema = PreparedInputSchema.extend({
+  protocol: z.literal('openai-responses'),
+  controls: ResponsesControlsSchema.readonly(),
+  continuation: ResponsesContinuationSchema.optional(),
+});
 /** Prepared semantic input; execution never reapplies current defaults. */
-export const ResolvedTurnSchema = z.discriminatedUnion('protocol', [
-  PreparedInputSchema.extend({
-    protocol: z.literal('openai-chat'),
-    controls: OpenAIControlsSchema.readonly(),
-  }).readonly(),
-  PreparedInputSchema.extend({
-    protocol: z.literal('google-interactions'),
-    controls: GoogleControlsSchema.readonly(),
-    continuation: ContinuationSchema.optional(),
-  }).readonly(),
-  PreparedInputSchema.extend({
-    protocol: z.literal('openai-responses'),
-    controls: ResponsesControlsSchema.readonly(),
-  }).readonly(),
+export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
+  z.discriminatedUnion('protocol', [
+    PreparedInputSchema.extend({
+      protocol: z.literal('openai-chat'),
+      controls: OpenAIControlsSchema.readonly(),
+    }).readonly(),
+    PreparedInputSchema.extend({
+      protocol: z.literal('google-interactions'),
+      controls: GoogleControlsSchema.readonly(),
+      continuation: GoogleContinuationSchema.optional(),
+    }).readonly(),
+    PreparedInputSchema.extend({
+      protocol: z.literal('deepseek-chat'),
+      controls: ChatReasoningControlsSchema.readonly(),
+    }).readonly(),
+    PreparedInputSchema.extend({
+      protocol: z.literal('kimi-chat'),
+      controls: KimiControlsSchema.readonly(),
+    }).readonly(),
+    PreparedInputSchema.extend({
+      protocol: z.literal('glm-chat'),
+      controls: GlmControlsSchema.readonly(),
+    }).readonly(),
+    ResponsesPreparedSchema.readonly(),
+    PreparedInputSchema.extend({
+      protocol: z.literal('anthropic-messages'),
+      controls: AnthropicControlsSchema.readonly(),
+    }).readonly(),
+  ]),
+  ResponsesPreparedSchema.extend({ mode: z.literal('background') }).readonly(),
 ]);
 export type ResolvedTurn = z.infer<typeof ResolvedTurnSchema>;
 
@@ -450,18 +653,60 @@ const UsageSchema = z
     totalTokens: z.int().nonnegative().nullable(),
     cachedInputTokens: z.int().nonnegative().nullable(),
     reasoningTokens: z.int().nonnegative().nullable(),
+    providerUsage: z
+      .strictObject({
+        kind: z.literal('anthropic'),
+        uncachedInputTokens: z.int().nonnegative().nullable(),
+        cacheCreationTokens: z.int().nonnegative().nullable(),
+        cacheCreation5mTokens: z.int().nonnegative().nullable(),
+        cacheCreation1hTokens: z.int().nonnegative().nullable(),
+        serviceTier: z.enum(['standard', 'priority', 'batch']).nullable(),
+        inferenceGeo: z.string().nullable(),
+      })
+      .readonly()
+      .optional(),
   })
   .readonly();
+
+const IdentitySchema = z.strictObject({
+  providerResponseId: z.string().min(1),
+  requestedOrigin: ModelOriginSchema,
+  returnedModel: z.string().min(1).nullable(),
+});
 
 /** A completed provider turn, not a completed agent execution. */
 export const TurnResultSchema = z
   .strictObject({
-    providerResponseId: z.string().min(1),
-    requestedOrigin: ModelOriginSchema,
-    returnedModel: z.string().min(1).nullable(),
+    ...IdentitySchema.shape,
     modelFingerprint: z.string().nullable(),
     content: ContentSchema,
-    finishReason: z.enum(['stop', 'length', 'content-filter', 'tool-calls']),
+    finishReason: z.enum([
+      'stop',
+      'length',
+      'content-filter',
+      'tool-calls',
+      'stop-sequence',
+      'refusal',
+      'context-window-exceeded',
+    ]),
+    stopSequence: z.string().optional(),
+    refusalEvidence: z
+      .strictObject({
+        kind: z.literal('anthropic-refusal'),
+        category: z
+          .enum([
+            'cyber',
+            'bio',
+            'frontier_llm',
+            'reasoning_extraction',
+            'general_harms',
+          ])
+          .nullable(),
+        explanation: z.string().nullable(),
+      })
+      .readonly()
+      .nullable()
+      .optional(),
     /** Unknown counts remain unknown, including within a partial receipt. */
     usage: UsageSchema.nullable(),
     continuation: ContinuationSchema.optional(),
@@ -469,8 +714,33 @@ export const TurnResultSchema = z
   .superRefine((result, ctx) => {
     validateAssistantContent(result.requestedOrigin, result.content, ctx);
     if (
+      (result.finishReason === 'stop-sequence') !==
+      (result.stopSequence !== undefined)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['stopSequence'],
+        message:
+          'A stop-sequence outcome requires its exact matched sequence, and no other outcome has one.',
+      });
+    }
+    if (
+      (result.refusalEvidence !== undefined &&
+        result.requestedOrigin.protocol !== 'anthropic-messages') ||
+      (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
+      (result.usage?.providerUsage !== undefined &&
+        result.requestedOrigin.protocol !== 'anthropic-messages')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Provider refusal and usage evidence require their original protocol and outcome.',
+      });
+    }
+    if (
       result.finishReason !== 'length' &&
       result.finishReason !== 'content-filter' &&
+      result.finishReason !== 'context-window-exceeded' &&
       result.content.some(
         (part) =>
           part.evidence != null &&
@@ -499,28 +769,76 @@ export const TurnResultSchema = z
   .readonly();
 export type TurnResult = z.infer<typeof TurnResultSchema>;
 
+// Identity evidence is neither background acceptance nor cancellation.
+const IdentifiedEventSchema = IdentitySchema.extend({
+  kind: z.literal('identified'),
+});
+const DeltaEventSchema = z.strictObject({
+  kind: z.literal('delta'),
+  part: z.enum(['text', 'refusal', 'reasoning']),
+  text: z.string(),
+});
+const CompletedEventSchema = z.strictObject({
+  kind: z.literal('completed'),
+  result: TurnResultSchema,
+});
 const TurnEventSchema = z.discriminatedUnion('kind', [
-  // Foreground identity evidence is neither background acceptance nor cancellation.
+  IdentifiedEventSchema.readonly(),
+  DeltaEventSchema.readonly(),
+  CompletedEventSchema.readonly(),
+]);
+export type TurnEvent = z.infer<typeof TurnEventSchema>;
+
+/** Enough evidence to observe accepted remote work, without a second transcript. */
+export const RemoteOperationSchema = z
+  .strictObject({
+    origin: OriginSchema.extend({
+      protocol: z.literal('openai-responses'),
+    }).readonly(),
+    providerResponseId: z.string().min(1),
+    afterSequence: z.int().nonnegative().nullable(),
+  })
+  .readonly();
+export type RemoteOperation = z.infer<typeof RemoteOperationSchema>;
+export const BackgroundSubmissionSchema = z.discriminatedUnion('kind', [
   z
     .strictObject({
-      kind: z.literal('identified'),
-      providerResponseId: z.string().min(1),
-      requestedOrigin: ModelOriginSchema,
+      kind: z.literal('accepted'),
+      operation: RemoteOperationSchema,
       returnedModel: z.string().min(1).nullable(),
     })
     .readonly(),
-  z
-    .strictObject({
-      kind: z.literal('delta'),
-      part: z.enum(['text', 'refusal', 'reasoning']),
-      text: z.string(),
-    })
-    .readonly(),
-  z
-    .strictObject({ kind: z.literal('completed'), result: TurnResultSchema })
-    .readonly(),
+  CompletedEventSchema.readonly(),
 ]);
-export type TurnEvent = z.infer<typeof TurnEventSchema>;
+export type BackgroundSubmission = z.infer<typeof BackgroundSubmissionSchema>;
+const SequenceSchema = z.strictObject({ afterSequence: z.int().nonnegative() });
+/** A delivered sequence is not a durable acknowledgement by its consumer. */
+export const BackgroundEventSchema = z.discriminatedUnion('kind', [
+  IdentifiedEventSchema.extend(SequenceSchema.shape).readonly(),
+  DeltaEventSchema.extend(SequenceSchema.shape).readonly(),
+  CompletedEventSchema.extend(SequenceSchema.shape).readonly(),
+  SequenceSchema.extend({ kind: z.literal('cursor') }).readonly(),
+]);
+export type BackgroundEvent = z.infer<typeof BackgroundEventSchema>;
+/** A cancellation response reports the state observed, not which request won a race. */
+export const CancellationEvidenceSchema = z.discriminatedUnion('kind', [
+  IdentitySchema.extend({ kind: z.literal('confirmed-cancelled') }).readonly(),
+  IdentitySchema.extend({
+    kind: z.literal('observed-terminal'),
+    status: z.enum(['completed', 'failed', 'incomplete']),
+  }).readonly(),
+  IdentitySchema.extend({
+    kind: z.literal('unconfirmed'),
+    status: z.enum(['queued', 'in_progress']),
+  }).readonly(),
+]);
+export type CancellationEvidence = z.infer<typeof CancellationEvidenceSchema>;
+/** Absolute original deadline; reconnecting does not replenish it. */
+export const ObservationPolicySchema = z
+  .strictObject({
+    deadlineAtMs: z.int().nonnegative(),
+  })
+  .readonly();
 
 const ModelErrorFieldsSchema = z.strictObject({
   kind: z.enum([
@@ -530,12 +848,14 @@ const ModelErrorFieldsSchema = z.strictObject({
     'transport',
     'provider-rejection',
     'malformed-output',
+    'observation-deadline',
   ]),
   message: z.string(),
   requestId: z.string().optional(),
   responseId: z.string().optional(),
   model: z.string().optional(),
   status: z.int().optional(),
+  operation: RemoteOperationSchema.optional(),
 });
 /** Typed provider failure. Fiber interruption remains outside this channel. */
 export class ModelError extends Data.TaggedError('ModelError')<
@@ -545,6 +865,22 @@ export class ModelError extends Data.TaggedError('ModelError')<
 /** A configured executable value; it owns neither conversation nor retry policy. */
 export interface Model {
   prepareTurn(request: TurnRequest): Effect.Effect<ResolvedTurn, ModelError>;
-  streamTurn(turn: ResolvedTurn): Stream.Stream<TurnEvent, ModelError>;
-  generateTurn(turn: ResolvedTurn): Effect.Effect<TurnResult, ModelError>;
+  streamTurn(
+    turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
+  ): Stream.Stream<TurnEvent, ModelError>;
+  generateTurn(
+    turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
+  ): Effect.Effect<TurnResult, ModelError>;
+  readonly background?: {
+    submit(
+      turn: Extract<ResolvedTurn, { mode: 'background' }>,
+    ): Effect.Effect<BackgroundSubmission, ModelError>;
+    observe(
+      operation: RemoteOperation,
+      policy: z.infer<typeof ObservationPolicySchema>,
+    ): Stream.Stream<BackgroundEvent, ModelError>;
+    cancel(
+      operation: RemoteOperation,
+    ): Effect.Effect<CancellationEvidence, ModelError>;
+  };
 }
