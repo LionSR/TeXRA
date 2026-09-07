@@ -1,4 +1,5 @@
 import { createWorkspaceAgentRosterController, loadAgents } from '@agent/index';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   byCategory,
@@ -20,7 +21,7 @@ export type CliAgentRosterRecord = AgentRosterSnapshot & {
 };
 
 export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
-  await loadAgents({ includeRemote: false });
+  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
   const roster = createWorkspaceAgentRosterController();
   const cwd = workspaceRoots().workspace;
   const config = cwd ? await loadWorkspaceCliConfig(cwd) : undefined;

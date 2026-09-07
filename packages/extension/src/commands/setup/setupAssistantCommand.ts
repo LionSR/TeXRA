@@ -13,6 +13,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
 import { agentName } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -238,10 +239,10 @@ export async function launchSetupAssistant(): Promise<
 
     // Activation initializes the registry, but this command can also be
     // invoked directly in tests or unusual startup paths. `loadAgents()` is
-    // idempotent: it returns the in-flight promise if loading is still
-    // running, resolves immediately if already initialized, or kicks off a
+    // idempotent: it joins the in-flight load through the catalog lane if one
+    // is running, returns immediately if already initialized, or kicks off a
     // fresh load.
-    await loadAgents();
+    await effectRuntime().runPromise(loadAgents());
 
     const launch = () =>
       runAgent(

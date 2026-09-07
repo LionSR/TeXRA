@@ -20,6 +20,7 @@ import {
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import type { MessageHost } from '@hosts/uiHosts';
+import { effectRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
@@ -243,7 +244,8 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private async postAgentSelectionData(): Promise<void> {
     this.renderer.postToRenderer(
       await buildAgentSelectionMessage({
-        loadAgents: this.registry.loadAgents,
+        loadAgents: () =>
+          effectRuntime().runPromise(this.registry.loadAgents()),
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
         getCustomAgentScanIssues,
       }),
@@ -425,27 +427,29 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       typeof SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET
     >,
   ): Promise<void> {
-    await applySettingsTeamRoster(message.presetId, {
-      catalog: this.catalogController,
-      loadLocalCatalog: () =>
-        this.registry.loadAgents({ includeRemote: false }),
-      canAccessRemoteCatalog: this.remoteCatalog.canAccess,
-      signIn: this.remoteCatalog.signIn,
-      forceRefreshRemoteCatalog: () =>
-        this.registry.refreshAgents({ includeRemote: true }),
-      presentation: {
-        chooseTeamAvailability: this.prompts.chooseTeamAvailability,
-        showInfoMessage: this.notifications.showInfoMessage,
-        showErrorMessage: this.notifications.showErrorMessage,
-      },
-      refreshAfterApply: async (selectedToolUseAgent) => {
-        this.postAgentModePresets();
-        await Promise.all([
-          this.postAgentSelectionData(),
-          this.postMainAgentAndTeamOptionsData(selectedToolUseAgent),
-        ]);
-      },
-    });
+    await effectRuntime().runPromise(
+      applySettingsTeamRoster(message.presetId, {
+        catalog: this.catalogController,
+        loadLocalCatalog: () =>
+          this.registry.loadAgents({ includeRemote: false }),
+        canAccessRemoteCatalog: this.remoteCatalog.canAccess,
+        signIn: this.remoteCatalog.signIn,
+        forceRefreshRemoteCatalog: () =>
+          this.registry.refreshAgents({ includeRemote: true }),
+        presentation: {
+          chooseTeamAvailability: this.prompts.chooseTeamAvailability,
+          showInfoMessage: this.notifications.showInfoMessage,
+          showErrorMessage: this.notifications.showErrorMessage,
+        },
+        refreshAfterApply: async (selectedToolUseAgent) => {
+          this.postAgentModePresets();
+          await Promise.all([
+            this.postAgentSelectionData(),
+            this.postMainAgentAndTeamOptionsData(selectedToolUseAgent),
+          ]);
+        },
+      }),
+    );
   }
 
   private async saveAgentModePreset(): Promise<void> {
@@ -454,7 +458,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       prompt: 'Name for the new team',
     });
     if (!name?.trim()) return;
-    await this.registry.loadAgents();
+    await effectRuntime().runPromise(this.registry.loadAgents());
     const preset = await this.catalogController.saveCurrentPreset(name);
     this.postAgentModePresets();
     await this.onCatalogChanged();

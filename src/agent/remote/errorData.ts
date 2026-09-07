@@ -1,3 +1,19 @@
+import { Data } from 'effect';
+
+/**
+ * A failure to list or load the remote agent catalog. Lives here rather than
+ * in `remoteAgentList.ts` so `remoteAgentMeta.ts` can name the type without a
+ * static import of the listing module — that module stays lazily imported to
+ * keep ky and the auth client out of generic tool closures (see
+ * `inlineAgents.ts`).
+ */
+export class RemoteAgentListError extends Data.TaggedError(
+  'RemoteAgentListError',
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
 /**
  * Convert ky's `HTTPError.data` (a parsed JSON value for JSON responses, or a
  * plain string otherwise) into a flat string for error messages, or `undefined`

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import {
   formatTeamUnavailableMessage,
@@ -38,52 +39,66 @@ interface SettingsTeamRosterOptions extends Omit<
   readonly refreshAfterApply: (selectedToolUseAgent?: string) => Promise<void>;
 }
 
+/** Call a host presentation port from the program. */
+const hostPort = <A>(
+  call: () => A | PromiseLike<A>,
+): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: async () => call(), catch: (error) => error });
+
 /** Apply a settings team and present its outcome consistently across hosts. */
-export async function applySettingsTeamRoster(
+export function applySettingsTeamRoster(
   presetId: string,
   options: SettingsTeamRosterOptions,
-): Promise<void> {
-  const result = await applyTeamRosterWithPreflight(presetId, {
-    ...options,
-    choose: (preset, unavailableNames) =>
-      options.presentation.chooseTeamAvailability(
-        teamAvailabilityPrompt(unavailableNames, preset.name),
-      ),
-  });
-
-  switch (result.status) {
-    case 'unknown':
-      await options.presentation.showErrorMessage(
-        formatUnknownTeamMessage(presetId),
-      );
-      return;
-    case 'choice-required':
-    case 'cancelled':
-      return;
-    case 'unavailable':
-      await options.presentation.showErrorMessage(
-        formatTeamUnavailableMessage(
-          result.preset.name,
-          result.unavailableNames,
+): Effect.Effect<void, unknown> {
+  return Effect.gen(function* () {
+    const result = yield* applyTeamRosterWithPreflight(presetId, {
+      ...options,
+      choose: (preset, unavailableNames) =>
+        options.presentation.chooseTeamAvailability(
+          teamAvailabilityPrompt(unavailableNames, preset.name),
         ),
-      );
-      return;
-    case 'applied': {
-      const selectedToolUseAgent = options.catalog.getPresetToolUseRoot(
-        result.preset.agents.toolUse,
-        result.preset.id,
-      );
-      await options.refreshAfterApply(selectedToolUseAgent);
+    });
 
-      const unresolvedCount = result.resolution.unresolvedNames.length;
-      await options.presentation.showInfoMessage(
-        unresolvedCount === 0
-          ? `Applied "${result.preset.name}" team`
-          : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
-      );
-      return;
+    switch (result.status) {
+      case 'unknown':
+        yield* hostPort(() =>
+          options.presentation.showErrorMessage(
+            formatUnknownTeamMessage(presetId),
+          ),
+        );
+        return;
+      case 'choice-required':
+      case 'cancelled':
+        return;
+      case 'unavailable':
+        yield* hostPort(() =>
+          options.presentation.showErrorMessage(
+            formatTeamUnavailableMessage(
+              result.preset.name,
+              result.unavailableNames,
+            ),
+          ),
+        );
+        return;
+      case 'applied': {
+        const selectedToolUseAgent = options.catalog.getPresetToolUseRoot(
+          result.preset.agents.toolUse,
+          result.preset.id,
+        );
+        yield* hostPort(() => options.refreshAfterApply(selectedToolUseAgent));
+
+        const unresolvedCount = result.resolution.unresolvedNames.length;
+        yield* hostPort(() =>
+          options.presentation.showInfoMessage(
+            unresolvedCount === 0
+              ? `Applied "${result.preset.name}" team`
+              : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
+          ),
+        );
+        return;
+      }
+      default:
+        return assertNever(result, 'Unhandled settings team roster outcome');
     }
-    default:
-      return assertNever(result, 'Unhandled settings team roster outcome');
-  }
+  });
 }
