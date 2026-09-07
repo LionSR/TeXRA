@@ -62,8 +62,6 @@ import type { SessionView } from '@shared/session/sessionView';
 
 /** The framing window: the 16 ms cadence of the old delta batches. */
 const FRAME_WINDOW = '16 millis';
-/** Flush small updates together; one large row may exceed this target, up
- * to the complete frame budget. No row is split or truncated. */
 
 /** The session view, ordered input reader, and per-port subscription setter. */
 export interface FramerSource {
