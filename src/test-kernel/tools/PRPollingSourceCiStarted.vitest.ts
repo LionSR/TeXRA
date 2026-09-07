@@ -106,11 +106,11 @@ function queuePollResponses(
   runs: GhCheckRun[],
 ): void {
   ghGet
-    .mockResolvedValueOnce(prResponse(sha))
-    .mockResolvedValueOnce({ status: 304 })
-    .mockResolvedValueOnce({ status: 304 })
-    .mockResolvedValueOnce({ status: 304 })
-    .mockResolvedValueOnce(checkRunsResponse(runs));
+    .mockReturnValueOnce(Effect.succeed(prResponse(sha)))
+    .mockReturnValueOnce(Effect.succeed({ status: 304 }))
+    .mockReturnValueOnce(Effect.succeed({ status: 304 }))
+    .mockReturnValueOnce(Effect.succeed({ status: 304 }))
+    .mockReturnValueOnce(Effect.succeed(checkRunsResponse(runs)));
 }
 
 describe('PRPollingSource CI-started events', () => {

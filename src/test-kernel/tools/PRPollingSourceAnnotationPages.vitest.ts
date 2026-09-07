@@ -15,9 +15,6 @@ import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 import type { PollHookRejected } from '@tools/github/PollingSourceBase';
 import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
 
-// Local imports - utils
-import { ensureError } from '@utils/errors/errorMessage';
-
 // Local imports - test support
 import { mockGitHubClient } from '../support/githubClientMock';
 import {
@@ -52,7 +49,7 @@ type AnnotationFetchFn = (
   logger: AgentTrace,
   budget: AnnotationFetchBudget,
   now?: number,
-) => Promise<GhCheckAnnotation[]>;
+) => Effect.Effect<GhCheckAnnotation[], unknown>;
 
 /** Minimal logger for driving the infrastructure `fetchAnnotations` directly. */
 function testLogger(): AgentTrace {
@@ -128,20 +125,22 @@ describe('PRPollingSource annotation pagination', () => {
         createHarness(),
       );
       ghGet
-        .mockResolvedValueOnce({ status: 200, data: fullWarningPage() })
-        .mockResolvedValueOnce({
-          status: 200,
-          data: [annotation('failure', 100)],
-        });
+        .mockReturnValueOnce(
+          Effect.succeed({ status: 200, data: fullWarningPage() }),
+        )
+        .mockReturnValueOnce(
+          Effect.succeed({
+            status: 200,
+            data: [annotation('failure', 100)],
+          }),
+        );
 
-      const annotations = yield* Effect.promise(() =>
-        fetchAnnotations(
-          'owner',
-          'repo',
-          42,
-          testLogger(),
-          new AnnotationFetchBudget(2, 60_000),
-        ),
+      const annotations = yield* fetchAnnotations(
+        'owner',
+        'repo',
+        42,
+        testLogger(),
+        new AnnotationFetchBudget(2, 60_000),
       );
 
       expect(annotations).toHaveLength(101);
@@ -159,16 +158,16 @@ describe('PRPollingSource annotation pagination', () => {
       const { ghGet, fetchAnnotations } = yield* Effect.promise(() =>
         createHarness(),
       );
-      ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
+      ghGet.mockReturnValue(
+        Effect.succeed({ status: 200, data: fullWarningPage() }),
+      );
 
-      const annotations = yield* Effect.promise(() =>
-        fetchAnnotations(
-          'owner',
-          'repo',
-          42,
-          testLogger(),
-          new AnnotationFetchBudget(50, 60_000),
-        ),
+      const annotations = yield* fetchAnnotations(
+        'owner',
+        'repo',
+        42,
+        testLogger(),
+        new AnnotationFetchBudget(50, 60_000),
       );
 
       expect(annotations).toHaveLength(5000);
@@ -184,23 +183,23 @@ describe('PRPollingSource annotation pagination', () => {
       const { ghGet, fetchAnnotations } = yield* Effect.promise(() =>
         createHarness(),
       );
-      ghGet.mockResolvedValue({ status: 200, data: fullWarningPage() });
-
-      const error = yield* Effect.flip(
-        Effect.tryPromise({
-          try: () =>
-            fetchAnnotations(
-              'owner',
-              'repo',
-              42,
-              testLogger(),
-              new AnnotationFetchBudget(1, 60_000),
-            ),
-          catch: ensureError,
-        }),
+      ghGet.mockReturnValue(
+        Effect.succeed({ status: 200, data: fullWarningPage() }),
       );
 
-      expect(error.message).toContain('Annotation fetch budget exhausted');
+      const error = yield* Effect.flip(
+        fetchAnnotations(
+          'owner',
+          'repo',
+          42,
+          testLogger(),
+          new AnnotationFetchBudget(1, 60_000),
+        ),
+      );
+
+      expect(error).toMatchObject({
+        message: expect.stringContaining('Annotation fetch budget exhausted'),
+      });
       expect(ghGet).toHaveBeenCalledTimes(1);
     }),
   );

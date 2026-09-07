@@ -102,7 +102,7 @@ describe('PRPollingSource annotation drain', () => {
         const run = createCheckRun(42);
         const state = createDrainState([run]);
         const rateLimit = new GitHubRateLimitError(1_800_000_000);
-        mocks.fetchAnnotations.mockRejectedValue(rateLimit);
+        mocks.fetchAnnotations.mockReturnValue(Effect.fail(rateLimit));
 
         yield* drainAccess(source).drainAnnotationQueues([
           ['owner/repo#7', state],
@@ -141,7 +141,7 @@ describe('PRPollingSource annotation drain', () => {
           createCheckRun(8),
           createCheckRun(9),
         ]);
-        mocks.fetchAnnotations.mockResolvedValue([]);
+        mocks.fetchAnnotations.mockReturnValue(Effect.succeed([]));
 
         yield* drainAccess(source).drainAnnotationQueues([
           ['first', firstState],
@@ -181,11 +181,13 @@ describe('PRPollingSource annotation drain', () => {
       );
       state.annotationLevelByListener.set(warningListener, 'warning');
       state.annotationLevelByListener.set(noticeListener, 'notice');
-      mocks.fetchAnnotations.mockResolvedValue([
-        annotation('notice', 'advisory note'),
-        annotation('warning', 'format warning'),
-        annotation('failure', 'blocking failure'),
-      ]);
+      mocks.fetchAnnotations.mockReturnValue(
+        Effect.succeed([
+          annotation('notice', 'advisory note'),
+          annotation('warning', 'format warning'),
+          annotation('failure', 'blocking failure'),
+        ]),
+      );
 
       yield* drainAccess(source).drainAnnotationQueues([
         ['owner/repo#7', state],
@@ -222,9 +224,9 @@ describe('PRPollingSource annotation drain', () => {
       const key = prKeyToString(pr);
       const state = drainAccess(source).getSubscriptionState(key);
       if (!state) throw new Error('Expected subscription state');
-      mocks.fetchAnnotations.mockResolvedValue([
-        annotation('warning', 'format warning'),
-      ]);
+      mocks.fetchAnnotations.mockReturnValue(
+        Effect.succeed([annotation('warning', 'format warning')]),
+      );
 
       state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
         pendingAnnotationRuns: [createCheckRun(13)],

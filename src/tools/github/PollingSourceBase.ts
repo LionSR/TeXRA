@@ -101,20 +101,6 @@ export class PollHookRejected extends Data.TaggedError('PollHookRejected')<{
   readonly cause: unknown;
 }> {}
 
-/**
- * The one wrap of the GitHub client for a poll hook: a rejected request
- * becomes a {@link PollHookRejected} carrying the error the client raised, so
- * `handleFailure`'s `instanceof` classification still sees the GitHub error
- * class itself.
- */
-export const pollRequest = <A>(
-  request: (signal: AbortSignal) => Promise<A>,
-): Effect.Effect<A, PollHookRejected> =>
-  Effect.tryPromise({
-    try: request,
-    catch: (cause) => new PollHookRejected({ cause }),
-  });
-
 interface PollingSourceConfig {
   /** Display name used in the logger and exception messages. */
   name: string;
@@ -549,10 +535,10 @@ export abstract class PollingSourceBase<
 
   /**
    * One round, with its failures contained so the poller survives them. A
-   * round only ever fails by a defect — a throwing `handleFailure` or
-   * listener — which used to reject `tick()`'s promise with nobody watching;
-   * it is logged here and the loop continues. An interrupt (shutdown, the
-   * last unsubscribe) is re-raised so the fiber ends.
+   * Single request errors are handled per subscription. Non-interrupted
+   * defects and compound failures are logged here once, retaining every reason. An
+   * interrupt is re-raised so the fiber ends. This does not recover child
+   * failures discarded by the parallel iterator during external interruption.
    */
   private readonly runRound = Effect.fn('PollingSourceBase.runRound')(
     function* (this: PollingSourceBase<K, S>) {
@@ -562,7 +548,10 @@ export abstract class PollingSourceBase<
         return yield* Effect.failCause(exit.cause);
       }
       this.logger.warn('Poll round failed; polling continues.', {
-        data: Cause.squash(exit.cause),
+        data:
+          exit.cause.reasons.length === 1
+            ? Cause.squash(exit.cause)
+            : exit.cause,
       });
     },
   );
@@ -622,30 +611,34 @@ export abstract class PollingSourceBase<
         );
       }
       yield* this.afterTick(entries, now).pipe(
-        Effect.catchTag('PollHookRejected', (rejection) =>
-          Effect.sync(() => {
+        Effect.catchCause((cause) => {
+          const reason = cause.reasons[0];
+          if (cause.reasons.length !== 1 || reason?._tag !== 'Fail') {
+            return Effect.failCause(cause);
+          }
+          return Effect.sync(() => {
             this.logger.warn('Post-poll hook failed', {
-              data: rejection.cause,
+              data: reason.error.cause,
             });
-          }),
-        ),
+          });
+        }),
       );
     },
   );
 
   /**
-   * Poll one subscription, routing every failure of that subscription through
-   * handleFailure and never past this entry.
+   * Poll one subscription, classifying its ordinary single errors here.
+   * Interruption and compound failures pass through to the round.
    *
-   * A defect is contained here, not propagated. When `pollOne` was a Promise
+   * A single defect is contained here. When `pollOne` was a Promise
    * its synchronous throws were caught by `Effect.tryPromise` and classified
    * per subscription; now that it is an Effect they would be defects, and
    * `pollRound` re-raises a failed entry before `afterTick`, so one
    * subclass's bug would skip annotation draining for every subscription in
    * the round and leave the offending one with no backoff and no path to the
-   * 24 h detach gate. Interruption is not caught (`catchDefect`, not
-   * `catchCause`), so stopping the loop still stops it, and the defect is
-   * logged rather than silently folded into the backoff.
+   * 24 h detach gate. Interruption and compound causes pass through intact;
+   * the round reports them without applying several backoff updates to one
+   * poll. An ordinary single defect is logged before applying its backoff.
    */
   private readonly pollEntry = Effect.fn('PollingSourceBase.pollEntry')(
     function* (this: PollingSourceBase<K, S>, key: K, state: S, now: number) {
@@ -657,19 +650,27 @@ export abstract class PollingSourceBase<
             state.consecutiveFailures = 0;
           }),
         ),
-        Effect.catchTag('PollHookRejected', (rejection) =>
-          Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
-            this.handleFailure(key, state, rejection.cause, failedAt),
-          ),
-        ),
-        Effect.catchDefect((defect) =>
-          Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
+        Effect.catchCause((cause) => {
+          const reason = cause.reasons[0];
+          if (cause.reasons.length !== 1 || reason?._tag !== 'Fail') {
+            return Effect.failCause(cause);
+          }
+          return Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
+            this.handleFailure(key, state, reason.error.cause, failedAt),
+          );
+        }),
+        Effect.catchCause((cause) => {
+          const reason = cause.reasons[0];
+          if (cause.reasons.length !== 1 || reason?._tag !== 'Die') {
+            return Effect.failCause(cause);
+          }
+          return Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
             Effect.suspend(() => {
-              this.logger.warn('Poll threw a defect', { data: defect });
-              return this.handleFailure(key, state, defect, failedAt);
+              this.logger.warn('Poll threw a defect', { data: reason.defect });
+              return this.handleFailure(key, state, reason.defect, failedAt);
             }),
-          ),
-        ),
+          );
+        }),
       );
     },
   );
