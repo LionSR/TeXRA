@@ -10,6 +10,10 @@ import { SessionEventLog } from '@agent/runtime/SessionEvents';
 import type { FoldInput, TextChunk } from '@shared/schemas';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import {
+  SessionReaderError,
+  sessionMessageBytes,
+} from '@shared/session/sessionReadBudget';
+import {
   LocalRuntimeSource,
   TextChunkSource,
   type InflightText,
@@ -23,27 +27,43 @@ export const sessionInputsLayer = Layer.effect(
     const local = yield* LocalRuntimeSource;
     const text = yield* TextChunkSource;
     return {
-      read: (aggregates, fromCommit) =>
+      read: (aggregates, fromCommit, budget) =>
         Stream.unwrap(
           Effect.gen(function* () {
             const anchor =
               fromCommit === 0
                 ? yield* SubscriptionRef.get(log.level)
                 : fromCommit;
-            const listing = yield* Stream.runCollect(log.readListing());
-            const replay: FoldInput[] = listing.map((event) => ({
-              _tag: 'event',
-              read: 'listing',
-              event,
-            }));
+            const replay: FoldInput[] = [];
+            let replayBytes = 0;
+            const appendReplay = (input: FoldInput): void => {
+              if (budget) {
+                replayBytes += sessionMessageBytes(input);
+                if (
+                  replayBytes > budget.bytes ||
+                  replay.length >= budget.rows
+                ) {
+                  throw new SessionReaderError(
+                    'This conversation exceeds the history display limit. Its saved content is unchanged.',
+                  );
+                }
+              }
+              replay.push(input);
+            };
+            yield* Stream.runForEach(log.readListing(), (event) =>
+              Effect.sync(() => {
+                appendReplay({ _tag: 'event', read: 'listing', event });
+              }),
+            );
             replay.push({ _tag: 'subscriptions', set: [...aggregates] });
             for (const aggregate of aggregates) {
-              const rows = yield* Stream.runCollect(
+              yield* Stream.runForEach(
                 log.readAggregate(aggregate.id, aggregate.fromSeq),
+                (event) =>
+                  Effect.sync(() => {
+                    appendReplay({ _tag: 'event', read: 'aggregate', event });
+                  }),
               );
-              for (const event of rows) {
-                replay.push({ _tag: 'event', read: 'aggregate', event });
-              }
             }
             replay.push(
               { _tag: 'local', local: yield* SubscriptionRef.get(local.ref) },
@@ -74,17 +94,27 @@ export const sessionInputsLayer = Layer.effect(
                     const nextText = yield* SubscriptionRef.get(text.ref);
                     const snapshot = yield* SubscriptionRef.get(local.ref);
                     const cursor = yield* SubscriptionRef.get(log.level);
-                    const rows = yield* log.readAll(previous.cursor).pipe(
+                    const batches: FoldInput[][] = [];
+                    let bytes = 0;
+                    yield* log.readAll(previous.cursor).pipe(
                       Stream.takeWhile((event) => event.commit <= cursor),
-                      Stream.runCollect,
+                      Stream.runForEach((event) =>
+                        Effect.sync(() => {
+                          if (budget) {
+                            bytes += sessionMessageBytes(event);
+                            if (
+                              bytes > budget.bytes ||
+                              batches.length >= budget.rows
+                            ) {
+                              throw new SessionReaderError(
+                                'This conversation exceeds the history display limit. Its saved content is unchanged.',
+                              );
+                            }
+                          }
+                          batches.push([{ _tag: 'event', read: 'all', event }]);
+                        }),
+                      ),
                     );
-                    const batches: FoldInput[][] = rows.map((event) => [
-                      {
-                        _tag: 'event',
-                        read: 'all',
-                        event,
-                      },
-                    ]);
                     const inputs: FoldInput[] = [];
                     for (const [key, value] of nextText) {
                       const held = previous.text.get(key);
@@ -94,6 +124,13 @@ export const sessionInputsLayer = Layer.effect(
                       const parts: string[] = [];
                       let at: InflightTextChunk | undefined = value;
                       while (at !== undefined && at !== held) {
+                        if (budget) {
+                          bytes += sessionMessageBytes(at.text);
+                          if (bytes > budget.bytes)
+                            throw new SessionReaderError(
+                              'This conversation exceeds the history display limit. Its saved content is unchanged.',
+                            );
+                        }
                         parts.push(at.text);
                         at = at.previous;
                       }

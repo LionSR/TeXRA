@@ -112,6 +112,7 @@ export function renderSessionHarnessBridge({
       });
       return {
         kind: 'events',
+          sequence: 1,
         session: subscribe.session,
         generation: subscribe.generation,
         cursor: harnessSession.events.reduce((max, event) => Math.max(max, event.commit), 0),

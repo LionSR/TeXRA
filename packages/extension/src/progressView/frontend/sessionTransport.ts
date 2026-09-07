@@ -24,6 +24,7 @@ import {
   type DownMessage,
   type EventsFrame,
   type Response,
+  type ReaderFailure,
   type Subscribe,
   type UpMessage,
 } from '@shared/session/sessionFrames';
@@ -65,6 +66,7 @@ export interface WebviewTransport {
   onSurfaceAction(
     listener: (session: string, action: WireSurfaceAction) => void,
   ): void;
+  onReaderFailure(listener: (session: string, reason: string) => void): void;
   /** Release a session's graph: its signals, its scope (the LayerMap
    *  entry, the fold fiber, the frames), and its slot, so a later `open`
    *  of the key builds a fresh one. A key that is not open is a no-op. */
@@ -75,6 +77,8 @@ export interface WebviewTransport {
 interface OpenSession extends WebviewSession {
   readonly graph: WebviewGraph;
   readonly scope: Scope.Closeable;
+  aggregates: Subscribe['aggregates'];
+  recovered: boolean;
 }
 
 /** The discriminator alone: a message of one of the session kinds that
@@ -93,13 +97,65 @@ export function installWebviewTransport(): WebviewTransport {
     session: string,
     action: WireSurfaceAction,
   ) => void = () => undefined;
+  let readerFailureListener: (session: string, reason: string) => void = () =>
+    undefined;
+
+  function subscribe(
+    session: OpenSession,
+    aggregates: Subscribe['aggregates'],
+  ): void {
+    session.generation += 1;
+    session.aggregates = aggregates;
+    const message: Subscribe = {
+      kind: 'subscribe',
+      session: session.key,
+      generation: session.generation,
+      cursor: SubscriptionRef.getUnsafe(session.graph.view.ref).cursor,
+      aggregates,
+    };
+    runtime.runSync(
+      session.graph.frames
+        .begin(message.generation)
+        .pipe(
+          Effect.andThen(
+            session.graph.subscriptions.set(SHELL_PORT, aggregates),
+          ),
+        ),
+    );
+    hostBridge.postMessage(message);
+  }
+
+  function failReader(failure: ReaderFailure): void {
+    const session = sessions.get(failure.session);
+    if (!session || session.generation !== failure.generation) return;
+    hostBridge.postMessage({
+      kind: 'reader.stop',
+      session: session.key,
+      generation: session.generation,
+    });
+    if (failure.retryable && !session.recovered) {
+      session.recovered = true;
+      // The last published fold owns the restart cursor, never a merely
+      // received/staged frame. Requests retain their independent owners.
+      const view = SubscriptionRef.getUnsafe(session.graph.view.ref);
+      subscribe(
+        session,
+        session.aggregates.map((aggregate) => ({
+          ...aggregate,
+          fromSeq: view.folded.get(aggregate.id) ?? 0,
+        })),
+      );
+      return;
+    }
+    readerFailureListener(session.key, failure.reason);
+  }
 
   /** Route one frame to its session's frames service; the frames service
    *  drops a frame of another generation. A frame for a session that is
    *  not open is the host's defect, dropped loudly. `feed` is synchronous,
    *  so frames are fed in arrival order on the caller's turn: a forked
    *  fiber per frame would let the scheduler interleave two frames' rows. */
-  const deliver = (frame: EventsFrame): void => {
+  const deliver = (frame: EventsFrame | ReaderFailure): void => {
     const session = sessions.get(frame.session);
     if (!session) {
       console.warn(
@@ -107,7 +163,35 @@ export function installWebviewTransport(): WebviewTransport {
       );
       return;
     }
-    runtime.runSync(session.graph.frames.feed(frame));
+    if (session.generation !== frame.generation) return;
+    const input =
+      frame.kind === 'reader.error'
+        ? Effect.succeed({ reason: frame.reason, retryable: frame.retryable })
+        : session.graph.frames.feed(frame, () =>
+            queueMicrotask(() => {
+              if (session.generation !== frame.generation) return;
+              hostBridge.postMessage({
+                kind: 'reader.progress',
+                session: frame.session,
+                generation: frame.generation,
+                sequence: frame.sequence,
+              });
+            }),
+          );
+    const problem = runtime.runSync(
+      input.pipe(
+        Effect.tap((problem) =>
+          problem ? session.graph.frames.stop : Effect.void,
+        ),
+      ),
+    );
+    if (problem)
+      failReader({
+        kind: 'reader.error',
+        session: frame.session,
+        generation: frame.generation,
+        ...problem,
+      });
   };
 
   const receive = (data: unknown): boolean => {
@@ -120,6 +204,9 @@ export function installWebviewTransport(): WebviewTransport {
     const message = parsed.data;
     switch (message.kind) {
       case 'events':
+        deliver(message);
+        return true;
+      case 'reader.error':
         deliver(message);
         return true;
       case 'response': {
@@ -143,6 +230,11 @@ export function installWebviewTransport(): WebviewTransport {
   const close = (key: string): void => {
     const session = sessions.get(key);
     if (!session) return;
+    hostBridge.postMessage({
+      kind: 'reader.stop',
+      session: key,
+      generation: session.generation,
+    });
     sessions.delete(key);
     session.view$.dispose();
     session.host$.dispose();
@@ -180,32 +272,17 @@ export function installWebviewTransport(): WebviewTransport {
           null,
         ),
         generation: 0,
+        aggregates: [],
+        recovered: false,
       };
       sessions.set(key, session);
       return session;
     },
     subscribe(session, aggregates) {
-      session.generation += 1;
-      const message: Subscribe = {
-        kind: 'subscribe',
-        session: session.key,
-        generation: session.generation,
-        cursor: session.view$.get().cursor,
-        aggregates,
-      };
-      // Begin the generation and replace the shell's transcript set before
-      // the host answers (PRD 8.1): the fold reopens its reads on the set.
       const open = sessions.get(session.key);
       if (!open) throw new Error(`Session ${session.key} is not open`);
-      const { graph } = open;
-      runtime.runSync(
-        graph.frames
-          .begin(message.generation)
-          .pipe(
-            Effect.andThen(graph.subscriptions.set(SHELL_PORT, aggregates)),
-          ),
-      );
-      hostBridge.postMessage(message);
+      open.recovered = false;
+      subscribe(open, aggregates);
     },
     request(message) {
       return new Promise((resolve) => {
@@ -215,6 +292,9 @@ export function installWebviewTransport(): WebviewTransport {
     },
     onSurfaceAction(listener) {
       surfaceListener = listener;
+    },
+    onReaderFailure(listener) {
+      readerFailureListener = listener;
     },
     close,
     dispose() {

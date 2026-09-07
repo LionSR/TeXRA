@@ -43,7 +43,15 @@ import {
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
-import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
+import type {
+  DownMessage,
+  EventsFrame,
+  Subscribe,
+} from '@shared/session/sessionFrames';
+import {
+  SESSION_FRAME_BYTES,
+  sessionMessageBytes,
+} from '@shared/session/sessionReadBudget';
 import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -209,7 +217,7 @@ describe('session framer', () => {
       qualifyAggregateId('execution', EXECUTION),
     ];
     try {
-      bridge.attach({ id: PORT, send: () => {} }).receive({
+      bridge.attach({ id: PORT, send: async () => {} }).receive({
         ...subscribe,
         session: session.roots.storage,
         aggregates: keys.map((id) => ({ id, fromSeq: 0 })),
@@ -224,6 +232,199 @@ describe('session framer', () => {
       session.dispose();
     }
   });
+  it('gates each port on receiver progress and releases a stopped reader independently', async () => {
+    const session = createTestSession();
+    const set = session.subscriptions.set;
+    vi.spyOn(session.subscriptions, 'set').mockImplementation(
+      (port, interests) =>
+        (interests.length === 0 ? Effect.sleep('25 millis') : Effect.void).pipe(
+          Effect.andThen(set(port, interests)),
+        ),
+    );
+    const replay = Array.from({ length: 700 }, (_, index) => ({
+      _tag: 'event' as const,
+      read: 'aggregate' as const,
+      event: {
+        ...waiting,
+        seq: index + 1,
+        commit: index + 1,
+        ownerId: SELF,
+        at: 0,
+      },
+    }));
+    // A source replay remains available even when one consumer stalls.
+    vi.spyOn(session, 'inputs').mockImplementation(() =>
+      Stream.concat(
+        Stream.make([...replay, { _tag: 'replay.complete' as const }]),
+        Stream.never,
+      ),
+    );
+    const bridge = new SessionBridge({
+      session,
+      onPortClosed: () => {},
+      handleHostRequest: async () => ({ kind: 'done' }),
+    });
+    const slow: DownMessage[] = [];
+    const healthy: EventsFrame[] = [];
+    const slowPort = bridge.attach({
+      id: 'slow',
+      send: async (message) => {
+        slow.push(message);
+      },
+    });
+    const fastPort = bridge.attach({
+      id: 'healthy',
+      send: async (message) => {
+        if (message.kind !== 'events') return;
+        healthy.push(message);
+        fastPort.receive({
+          kind: 'reader.progress',
+          session: session.roots.storage,
+          generation: message.generation,
+          sequence: message.sequence,
+        });
+      },
+    });
+    try {
+      const request = { ...subscribe, session: session.roots.storage };
+      const slowOnly = qualifyAggregateId('execution', EXECUTION);
+      const slowRequest = {
+        ...request,
+        aggregates: [...request.aggregates, { id: slowOnly, fromSeq: 0 }],
+      };
+      slowPort.receive(slowRequest);
+      fastPort.receive(request);
+      await vi.waitFor(() =>
+        expect(healthy.some((frame) => frame.replayComplete)).toBe(true),
+      );
+      expect(slow).toHaveLength(1);
+      expect(healthy.flatMap((frame) => frame.events)).toEqual(replay);
+      expect(
+        healthy.every((frame, index) => frame.sequence === index + 1),
+      ).toBe(true);
+      slowPort.receive({
+        kind: 'reader.progress',
+        session: session.roots.storage,
+        generation: 1,
+        sequence: 99,
+      });
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      expect(slow).toHaveLength(1);
+      slowPort.receive({
+        kind: 'reader.stop',
+        session: session.roots.storage,
+        generation: 1,
+      });
+      // Restart the same framer while its old cleanup is still delayed.
+      slowPort.receive({ ...slowRequest, generation: 2 });
+      await new Promise<void>((resolve) => setTimeout(resolve, 75));
+      expect(SubscriptionRef.getUnsafe(session.view).folded.has(slowOnly)).toBe(
+        true,
+      );
+      slowPort.receive({
+        kind: 'reader.stop',
+        session: session.roots.storage,
+        generation: 2,
+      });
+      await vi.waitFor(() =>
+        expect(
+          SubscriptionRef.getUnsafe(session.view).folded.has(slowOnly),
+        ).toBe(false),
+      );
+      expect(
+        SubscriptionRef.getUnsafe(session.view).folded.has(
+          runStart.aggregateId,
+        ),
+      ).toBe(true);
+      fastPort.receive({
+        kind: 'reader.stop',
+        session: session.roots.storage,
+        generation: 1,
+      });
+      // Reused public ids get independent attachment interests.
+      const replacement = bridge.attach({
+        id: 'healthy',
+        send: async () => {},
+      });
+      replacement.receive({ ...request, generation: 2 });
+      await vi.waitFor(() =>
+        expect(
+          SubscriptionRef.getUnsafe(session.view).folded.has(
+            runStart.aggregateId,
+          ),
+        ).toBe(true),
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 75));
+      expect(
+        SubscriptionRef.getUnsafe(session.view).folded.has(
+          runStart.aggregateId,
+        ),
+      ).toBe(true);
+      replacement.close();
+      const reopened = bridge.attach({ id: 'healthy', send: async () => {} });
+      reopened.receive({ ...request, generation: 3 });
+      await new Promise<void>((resolve) => setTimeout(resolve, 75));
+      expect(
+        SubscriptionRef.getUnsafe(session.view).folded.has(
+          runStart.aggregateId,
+        ),
+      ).toBe(true);
+      reopened.receive({
+        kind: 'reader.stop',
+        session: session.roots.storage,
+        generation: 3,
+      });
+      await vi.waitFor(() =>
+        expect(SubscriptionRef.getUnsafe(session.view).folded.size).toBe(0),
+      );
+    } finally {
+      bridge.dispose();
+      session.dispose();
+    }
+  });
+
+  it.effect(
+    'delivers a retained 4 MiB row intact within its independent frame envelope',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.forkScoped(ticking);
+        const source = yield* framerSource;
+        const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
+        const event = {
+          ...waiting,
+          seq: 1,
+          commit: 1,
+          ownerId: SELF,
+          at: 0,
+          cause: 'x'.repeat(4 * 1024 * 1024),
+        };
+        const frames = yield* frameSubscription(
+          {
+            ...source,
+            inputs: () =>
+              Stream.make([
+                { _tag: 'event', read: 'aggregate', event },
+                { _tag: 'replay.complete' },
+              ]),
+          },
+          PORT,
+          host,
+          subscribe,
+        ).pipe(
+          Stream.takeUntil((frame) => frame.replayComplete),
+          Stream.runCollect,
+        );
+        expect(
+          frames.flatMap((frame) => frame.events).map((row) => row.event),
+        ).toEqual([event]);
+        expect(
+          frames.every(
+            (frame) => sessionMessageBytes(frame) <= SESSION_FRAME_BYTES,
+          ),
+        ).toBe(true);
+      }).pipe(Effect.provide(runtimeGraph([]))),
+  );
+
   it.effect(
     'answers a Subscribe with the replay, then frames the tail every 16 ms with one chunk per row',
     () =>
@@ -256,7 +457,9 @@ describe('session framer', () => {
           ['listing', 'run.start'],
           ['listing', 'status'],
         ]);
-        expect(replay.at(-1)?.local?.self).toEqual([SELF]);
+        expect(
+          replay.findLast((frame) => frame.local !== null)?.local?.self,
+        ).toEqual([SELF]);
         // The tail: a commit after the replay is framed as an `all` row and
         // the frame's cursor is the commit the framer drained; two appends
         // to one row in one window merge into one chunk, never two; a chunk
@@ -335,35 +538,39 @@ describe('session framer', () => {
         const decoder = yield* Effect.forkScoped(
           Stream.runForEach(
             frameSubscription(source, PORT, host, named),
-            (frame) => frames.feed(frame),
+            (frame) => frames.feed(frame, () => {}),
           ),
         );
         // A frame of a superseded generation is dropped: nothing of it
         // reaches the fold.
-        yield* frames.feed({
-          kind: 'events',
-          session: KEY,
-          generation: 0,
-          cursor: 99,
-          events: [
-            {
-              _tag: 'event',
-              read: 'all',
-              event: {
-                type: 'stream.removed',
-                aggregateId: qualifyAggregateId('stream', STREAM),
-                seq: 9,
-                commit: 99,
-                ownerId: SELF,
-                at: 0,
+        yield* frames.feed(
+          {
+            kind: 'events',
+            sequence: 1,
+            session: KEY,
+            generation: 0,
+            cursor: 99,
+            events: [
+              {
+                _tag: 'event',
+                read: 'all',
+                event: {
+                  type: 'stream.removed',
+                  aggregateId: qualifyAggregateId('stream', STREAM),
+                  seq: 9,
+                  commit: 99,
+                  ownerId: SELF,
+                  at: 0,
+                },
               },
-            },
-          ],
-          chunks: [],
-          local: null,
-          host: null,
-          replayComplete: false,
-        });
+            ],
+            chunks: [],
+            local: null,
+            host: null,
+            replayComplete: false,
+          },
+          () => {},
+        );
         const ticker = yield* Effect.forkScoped(ticking);
         yield* settle(
           view.ref,
@@ -440,29 +647,33 @@ describe('session framer', () => {
         const beforeReplay = yield* SubscriptionRef.get(view.ref);
         yield* frames.begin(2);
         yield* shell.set('shell', named.aggregates);
-        yield* frames.feed({
-          kind: 'events',
-          session: KEY,
-          generation: 2,
-          cursor: 4,
-          events: [
-            {
-              _tag: 'event',
-              read: 'listing',
-              event: {
-                ...waiting,
-                seq: 10,
-                commit: 10,
-                ownerId: SELF,
-                at: 0,
+        yield* frames.feed(
+          {
+            kind: 'events',
+            sequence: 1,
+            session: KEY,
+            generation: 2,
+            cursor: 4,
+            events: [
+              {
+                _tag: 'event',
+                read: 'listing',
+                event: {
+                  ...waiting,
+                  seq: 10,
+                  commit: 10,
+                  ownerId: SELF,
+                  at: 0,
+                },
               },
-            },
-          ],
-          chunks: [],
-          local: null,
-          host: null,
-          replayComplete: false,
-        });
+            ],
+            chunks: [],
+            local: null,
+            host: null,
+            replayComplete: false,
+          },
+          () => {},
+        );
         yield* TestClock.adjust('16 millis');
         expect(yield* SubscriptionRef.get(view.ref)).toBe(beforeReplay);
         expect(beforeReplay.streams.get(STREAM)?.status).toBe(
@@ -477,7 +688,7 @@ describe('session framer', () => {
               generation: 3,
               cursor: beforeReplay.cursor,
             }),
-            (frame) => frames.feed(frame),
+            (frame) => frames.feed(frame, () => {}),
           ),
         );
         yield* settle(view.ref, (v) => v !== beforeReplay);

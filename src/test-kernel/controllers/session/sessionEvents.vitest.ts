@@ -326,6 +326,7 @@ describe('session events and view', () => {
         const rows = yield* Stream.runCollect(log.readListing());
         const frame = DownMessageSchema.safeParse({
           kind: 'events',
+          sequence: 1,
           session: 'k',
           generation: 0,
           cursor: 0,

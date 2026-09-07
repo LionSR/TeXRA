@@ -68,6 +68,7 @@ export class SessionViewService extends Context.Service<
                       fromSeq: view.folded.get(entry.id) ?? entry.fromSeq,
                     })),
                     view.cursor,
+                    null,
                   ),
                 ),
               ),

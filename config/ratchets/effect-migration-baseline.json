@@ -165,7 +165,7 @@
       "src/agent/runtime/SessionHandle.ts": 3,
       "src/controllers/onboarding/OnboardingRefreshQueue.ts": 1,
       "src/controllers/progressView/ProgressApiKeyRetryController.ts": 3,
-      "src/controllers/session/SessionBridge.ts": 6,
+      "src/controllers/session/SessionBridge.ts": 5,
       "src/controllers/session/hostDraftRequests.ts": 1,
       "src/controllers/session/hostRunActions.ts": 1,
       "src/controllers/session/sessionLayer.ts": 3,

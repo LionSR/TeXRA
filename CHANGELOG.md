@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Bug Fixes
+
+- Conversation views recover interrupted updates without losing drafts, and a
+  slow view no longer accumulates unlimited unread updates.
+
 ## [0.40.10] - 2026-09-06
 
 ### Shared (all surfaces)

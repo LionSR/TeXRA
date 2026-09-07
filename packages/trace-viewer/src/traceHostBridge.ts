@@ -21,11 +21,12 @@ import {
 import {
   UpMessageSchema,
   type DownMessage,
+  type EventsFrame,
 } from '@shared/session/sessionFrames';
 import type { TraceDocument } from '@transcript';
 
 import { parseTraceData } from './traceDataSchema';
-import { traceFrame } from './traceFrames';
+import { traceFrames } from './traceFrames';
 
 /** The session key the page's `<progress-app data-session>` names. */
 const TRACE_SESSION = 'trace';
@@ -52,6 +53,29 @@ function deliver(message: DownMessage): void {
 function installTraceHostBridge(document: Promise<TraceDocument>): void {
   let state: unknown;
   let selected = false;
+  let generation = -1;
+  let sequence = 0;
+  let frames: Generator<EventsFrame> | undefined;
+  const next = (): void => {
+    try {
+      const frame = frames?.next();
+      if (!frame || frame.done) return;
+      sequence = frame.value.sequence;
+      deliver(frame.value);
+    } catch (error) {
+      frames = undefined;
+      deliver({
+        kind: 'reader.error',
+        session: TRACE_SESSION,
+        generation,
+        reason:
+          error instanceof Error
+            ? error.message
+            : 'The exported conversation could not be read.',
+        retryable: false,
+      });
+    }
+  };
   const bridge: HostBridgeApi = {
     postMessage(message) {
       const parsed = UpMessageSchema.safeParse(message);
@@ -62,9 +86,14 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
       const up = parsed.data;
       switch (up.kind) {
         case 'subscribe':
+          generation = up.generation;
+          frames?.return(undefined);
+          frames = undefined;
           document.then(
             (loaded) => {
-              deliver(traceFrame(loaded, TRACE_SESSION, up));
+              if (generation !== up.generation) return;
+              frames = traceFrames(loaded, TRACE_SESSION, up);
+              next();
               if (selected) return;
               selected = true;
               deliver({
@@ -77,6 +106,15 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
             // document has nothing to answer.
             () => undefined,
           );
+          return;
+        case 'reader.stop':
+          if (up.generation === generation) {
+            frames?.return(undefined);
+            frames = undefined;
+          }
+          return;
+        case 'reader.progress':
+          if (up.generation === generation && up.sequence === sequence) next();
           return;
         case 'runtime.request':
         case 'host.request':

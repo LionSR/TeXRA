@@ -15,14 +15,15 @@
  * as Promises and adds nothing of its own.
  */
 import {
+  Cause,
   Context,
   Deferred,
   Effect,
   Exit,
   Fiber,
   Queue,
+  Result,
   Stream,
-  type Cause,
   type Scope,
 } from 'effect';
 
@@ -65,6 +66,7 @@ import {
 import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import { sessionMessageBytes } from '@shared/session/sessionReadBudget';
 import type {
   SessionView as RuntimeSessionView,
   StreamView as RuntimeStreamView,
@@ -139,9 +141,9 @@ export interface Run {
    * when the run settles, fails with {@link RunFailure} when the run failed,
    * and drops what it holds when the run settles unread. Running it once is
    * the contract: ending the iteration detaches the trace while the run
-   * continues. The pre-reader buffer is bounded: a run whose events pass
-   * {@link TRACE_HANDOVER_EVENTS} with nobody reading has no reader, so it
-   * warns and detaches rather than retaining the whole trace.
+   * continues. Unread data is bounded to 512 events and 8 MiB even after
+   * attachment; overload fails only this trace, preserving run execution
+   * and canonical session history.
    */
   readonly events: Stream.Stream<AgentEvent, RunFailure>;
   /** Before the runtime hands over the live handle this aborts the launch;
@@ -223,15 +225,12 @@ const NEVER_ENTERED = 'The run ended without entering the session.';
 const log = createLog('agentPackage');
 
 /**
- * How many trace events a run holds for a reader that has yet to attach.
- * The buffer exists only to bridge admission to the reader's first pull, so
- * a run that passes it with nobody reading has no reader: it says so and
- * detaches its trace, instead of retaining a long run's whole trace (every
- * `stream.chunk` included) until the run settles. A reader that did attach
- * is never dropped: past its first pull the buffer is the reader's, and
- * nothing here discards what it has yet to read.
+ * A callback trace cannot backpressure execution. Bound unread events and
+ * their encoded bytes before and after reader attachment; overflow fails
+ * only that trace reader, while canonical session events and the run continue.
  */
 const TRACE_HANDOVER_EVENTS = 512;
+const TRACE_BUFFER_BYTES = 8 * 1024 * 1024;
 
 /** The run's stream and every descendant the view holds. */
 function runStreamIds(view: SessionView, streamId: StreamTabId): StreamTabId[] {
@@ -341,12 +340,16 @@ function start(
   return Effect.gen(function* () {
     const config = yield* admitInput(input);
     const executionId = generateExecutionId();
-    const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
+    const trace = yield* Queue.bounded<
+      { readonly event: AgentEvent; readonly bytes: number },
+      RunFailure | Cause.Done
+    >(TRACE_HANDOVER_EVENTS);
     const admitted = yield* Deferred.make<StreamTabId, RunFailure>();
     let handle: RuntimeAgentRunHandle | undefined;
     let detach: (() => void) | undefined;
     let reading = false;
-    let buffered = 0;
+    let bufferedBytes = 0;
+    let traceOverflow = false;
     /** Detach the trace, once: the reader's close does it while the run
      *  continues, and the run's settlement does it for a reader that never
      *  came. */
@@ -360,7 +363,10 @@ function start(
       Effect.gen(function* () {
         release();
         // A run nobody read retains nothing: what it buffered goes with it.
-        if (!reading) yield* Effect.orDie(Queue.clear(trace));
+        if (!reading) {
+          yield* Queue.clear(trace).pipe(Effect.catchCause(() => Effect.void));
+          bufferedBytes = 0;
+        }
         if (Exit.isFailure(exit)) {
           yield* Deferred.failCause(admitted, exit.cause);
           yield* Queue.failCause(trace, exit.cause);
@@ -399,14 +405,42 @@ function start(
                   },
                   onStreamResolved: (streamId, runTrace) => {
                     detach = runTrace.subscribe((event) => {
-                      if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
-                        log.warn(
-                          `Run ${executionId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; detaching its trace. Iterate the run's events in the turn that starts it, or await only its result.`,
+                      if (traceOverflow) return;
+                      const measured = Result.try(() =>
+                        sessionMessageBytes(event),
+                      );
+                      const bytes = Result.isSuccess(measured)
+                        ? measured.success
+                        : 0;
+                      let failure: Error | undefined;
+                      if (Result.isFailure(measured)) {
+                        failure = new Error(
+                          `Trace reader for run ${executionId} could not encode an event. The run continues; read its session view or canonical events to recover.`,
+                        );
+                      } else if (
+                        bufferedBytes + bytes > TRACE_BUFFER_BYTES ||
+                        !Queue.offerUnsafe(trace, { event, bytes })
+                      ) {
+                        failure = new Error(
+                          `Trace reader for run ${executionId} exceeded its unread event budget. The run continues; read its session view or canonical events to recover.`,
+                        );
+                      }
+                      if (failure) {
+                        traceOverflow = true;
+                        log.warn(failure.message);
+                        Queue.failCauseUnsafe(
+                          trace,
+                          Cause.fail(
+                            new RunFailure({
+                              cause: failure,
+                              message: failure.message,
+                            }),
+                          ),
                         );
                         release();
                         return;
                       }
-                      Queue.offerUnsafe(trace, event);
+                      bufferedBytes += bytes;
                     });
                     Deferred.doneUnsafe(admitted, Effect.succeed(streamId));
                   },
@@ -422,48 +456,60 @@ function start(
         );
         spawned.push(runFiber);
         const streamId = yield* restore(Deferred.await(admitted));
-        const view = session.viewChanges.pipe(
+        const levels = session.viewChanges.pipe(
           // The level replays on subscribe, and the fold lands the run's
           // `run.start` asynchronously, so a replayed level can predate the
           // run.
           Stream.dropWhile((level) => !level.streams.has(streamId)),
-          // The view is the end condition: the first level holding the
-          // run's durable outcome is the last element.
-          Stream.takeUntil(
-            (level) => level.streams.get(streamId)?.durableOutcome != null,
-          ),
         );
-        // The transcript tier folds only for subscribed aggregates, on a
-        // port of this run's own: its stream now, its descendants as the
-        // view gains them. The port is never cleared, by choice: the run's
-        // rows stay resident for the life of the package session, as a
-        // TUI's do.
-        const port = `sdk/${streamId}`;
-        let subscribed = '';
-        const interest = (ids: readonly StreamTabId[]): Effect.Effect<void> =>
-          Effect.suspend(() => {
-            const key = ids.join('\0');
-            if (key === subscribed) return Effect.void;
-            subscribed = key;
-            return session.subscriptions.set(
-              port,
-              ids.map((id) => ({
-                id: qualifyAggregateId('stream', id),
-                fromSeq: 0,
-              })),
-            );
-          });
-        yield* interest([streamId]);
+        // The terminal drain and each public reader hold distinct interests.
+        // Leaving one releases only its own port; completed runs retain no
+        // permanent transcript subscription in a long-lived package session.
+        const observe = (port: string) =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              let subscribed = '';
+              const interest = (
+                ids: readonly StreamTabId[],
+              ): Effect.Effect<void> =>
+                Effect.suspend(() => {
+                  const key = ids.join('\0');
+                  if (key === subscribed) return Effect.void;
+                  subscribed = key;
+                  return session.subscriptions.set(
+                    port,
+                    ids.map((id) => ({
+                      id: qualifyAggregateId('stream', id),
+                      fromSeq: 0,
+                    })),
+                  );
+                });
+              yield* Effect.addFinalizer(() =>
+                session.subscriptions.set(port, []),
+              );
+              yield* interest([streamId]);
+              return levels.pipe(
+                Stream.tap((level) => interest(runStreamIds(level, streamId))),
+                // An evicted terminal listing can replay immediately. Wait for
+                // the atomic transcript replay before exposing/completing it.
+                Stream.filter((level) =>
+                  runStreamIds(level, streamId).every((id) =>
+                    level.folded.has(qualifyAggregateId('stream', id)),
+                  ),
+                ),
+                Stream.takeUntil(
+                  (level) =>
+                    level.streams.get(streamId)?.durableOutcome != null,
+                ),
+              );
+            }),
+          );
         // The package owns this drain: the descendants join the
         // subscription as the view gains them, and the run's `result` waits
         // for its final fold even when nobody reads `view`, and fails if
         // the fold dies first.
         const drain = yield* Effect.forkDetach(
-          Stream.runDrain(
-            view.pipe(
-              Stream.tap((level) => interest(runStreamIds(level, streamId))),
-            ),
-          ),
+          Stream.runDrain(observe(`sdk/${streamId}`)),
           { startImmediately: true },
         );
         spawned.push(drain);
@@ -473,13 +519,28 @@ function start(
           result: Fiber.join(runFiber).pipe(
             Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
           ),
-          view,
+          view: Stream.suspend(() => observe(`sdk/view/${(readerPorts += 1)}`)),
           events: Stream.unwrap(
             Effect.sync(() => {
               reading = true;
-              return Stream.fromQueue(trace);
+              return Stream.fromEffectRepeat(Queue.take(trace)).pipe(
+                Stream.map(({ event, bytes }) => {
+                  bufferedBytes -= bytes;
+                  return event;
+                }),
+              );
             }),
-          ).pipe(Stream.ensuring(Effect.sync(release))),
+          ).pipe(
+            Stream.ensuring(
+              Effect.gen(function* () {
+                release();
+                yield* Queue.clear(trace).pipe(
+                  Effect.catchCause(() => Effect.void),
+                );
+                bufferedBytes = 0;
+              }),
+            ),
+          ),
           interrupt: Effect.suspend(() =>
             handle
               ? Effect.sync(() => {

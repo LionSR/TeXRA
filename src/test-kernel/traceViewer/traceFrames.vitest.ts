@@ -35,7 +35,7 @@ import { assembleTrace, StreamLogStore } from '@transcript';
 // with no path alias into the root vitest config, but this suite exercises
 // the real replay pipeline (`@progressView/frontend`'s dispatcher + slices),
 // so a plain relative import is the simplest way to reach it.
-import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
+import { traceFrames } from '../../../packages/trace-viewer/src/traceFrames';
 
 const tempDirs = useTempDirs();
 
@@ -44,21 +44,23 @@ setupPlatform(() => createTempDirPlatform('texra-replay-trace-', tempDirs));
 /** The view the fold reaches over the trace's listing and transcript rows,
  *  with the transcript tier subscribed for the run's stream. */
 function foldTrace(trace: TraceDocument) {
-  const frame = traceFrame(trace, 'trace', {
-    kind: 'subscribe',
-    session: 'trace',
-    generation: 1,
-    cursor: 0,
-    aggregates: [
-      { id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 },
-    ],
-  });
+  const frames = [
+    ...traceFrames(trace, 'trace', {
+      kind: 'subscribe',
+      session: 'trace',
+      generation: 1,
+      cursor: 0,
+      aggregates: [
+        { id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 },
+      ],
+    }),
+  ];
   const view = fold(emptySessionView('trace', 0), [
     {
       _tag: 'subscriptions',
       set: [{ id: qualifyAggregateId('stream', trace.streamId), fromSeq: 0 }],
     },
-    ...frame.events,
+    ...frames.flatMap((frame) => frame.events),
     { _tag: 'local', local: { self: [], heldBy: [], unreadable: [] } },
   ]);
   return view.streams.get(trace.streamId);

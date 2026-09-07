@@ -92,11 +92,12 @@ export interface RunAgentInput {
  * an iteration begun right after `runAgent()` misses none of the launch
  * events. Ending the iteration detaches the event source while the run
  * itself continues, and a run that settles without ever being iterated
- * discards what it buffered. That pre-reader buffer is bounded: a run whose
- * events pass it with nobody reading warns and detaches its trace, so
- * awaiting only `result` never retains a long run's whole trace.
+ * discards what it buffered. Unread trace data is capped at 512 events and
+ * 8 MiB, including after attachment. Overload fails only the trace reader;
+ * execution and its result continue. Retained state is available from the
+ * session view or canonical events.
  *
- * Every failure arrives on `result`, never as a throw from `runAgent()`
+ * Every execution failure arrives on `result`, never as a throw from `runAgent()`
  * itself. A refusal before any model work is the tagged error the Effect
  * surface names (`AgentNotFound`, `ToolsRefused`, `PlatformConflict`), or,
  * for a run started after the platform's shutdown has run, the plain
@@ -123,9 +124,10 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
    * through a cast corrupts the session every host and every later run on
    * it reads.
    *
-   * The run's transcript rows (`StreamView.transcript`) are resident for the
-   * life of the package session, which is the process: its stream and, as
-   * they appear, its descendants are subscribed on the run's behalf.
+   * The run's transcript rows and descendants stay resident through its
+   * final hydrated fold. Each view iterator holds its own scoped interest
+   * and releases it when iteration ends. A late iterator waits for any
+   * evicted transcript to replay before yielding the terminal view.
    *
    * A run that fails before it enters the session has no view: the
    * iteration ends empty and `result` carries the failure. If the session's
