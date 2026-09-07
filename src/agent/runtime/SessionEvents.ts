@@ -38,6 +38,7 @@ import {
 } from 'effect';
 
 import type { AgentEvent, StatusEvent } from '@agent/trace';
+import { FileReadLimitError } from '@common/storage/fileReadLimit';
 import { createLog } from '@logger/logUtils';
 import {
   runWithWorkspaceRoots,
@@ -58,6 +59,10 @@ import {
   SessionEvents,
   type SessionCursor,
 } from '@shared/session/sessionEvents';
+import {
+  SessionReaderError,
+  type SessionReadBudget,
+} from '@shared/session/sessionReadBudget';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import {
   HISTORICAL_COMMITS_PER_STREAM,
@@ -157,6 +162,7 @@ export class SessionEventLog extends Context.Service<
     readonly readAggregate: (
       aggregateId: AggregateId,
       fromSeq: number,
+      budget?: SessionReadBudget,
     ) => Stream.Stream<SessionEvent>;
     /** Whether the aggregate exists and is not closed (C2, C9): a stream
      *  exists from its listing (the summary tier's, or the publish of its
@@ -283,16 +289,24 @@ export class SessionEventLog extends Context.Service<
           // the rows above a commit are the slice past it; a cursor inside
           // the listing tier's space reads every log row.
           readAll: (fromCommit) =>
-            Stream.suspend(() =>
-              Stream.fromIterable(
-                rows
-                  .slice(Math.max(0, fromCommit - reserved))
-                  .flatMap((row) => {
+            Stream.suspend(() => {
+              const end = rows.length;
+              return Stream.fromIterable(
+                (function* () {
+                  for (
+                    let index = Math.max(0, fromCommit - reserved);
+                    index < end;
+                    index += 1
+                  ) {
+                    const row = rows[index];
+                    if (row === undefined) continue;
                     const event = materialize(row);
-                    return event === null ? [] : [event];
-                  }),
-              ),
-            ),
+                    if (event !== null) yield event;
+                  }
+                })(),
+                { chunkSize: 1 },
+              );
+            }),
           // The listing tier is the summary tier's plus the log's own
           // listing rows: every historical stream derived from the store
           // on the first read, in the reserved commit space, then the facts
@@ -308,41 +322,53 @@ export class SessionEventLog extends Context.Service<
           // entry, see `nextSeq`) and the level they were read at. The
           // stream's listing facts reach a reader through `listing()` and
           // the tail.
-          readAggregate: (aggregateId, fromSeq) =>
+          readAggregate: (aggregateId, fromSeq, budget) =>
             Stream.unwrap(
               Effect.gen(function* () {
                 const target = aggregateTarget(aggregateId);
                 if (target.kind !== 'stream') {
+                  const end = rows.length;
                   return Stream.fromIterable(
-                    rows
-                      .filter(
-                        (row) =>
-                          row.aggregateId === aggregateId && row.seq > fromSeq,
-                      )
-                      .flatMap((row) => {
+                    (function* () {
+                      for (let index = 0; index < end; index += 1) {
+                        const row = rows[index];
+                        if (
+                          row === undefined ||
+                          row.aggregateId !== aggregateId ||
+                          row.seq <= fromSeq
+                        )
+                          continue;
                         const event = materialize(row);
-                        return event === null ? [] : [event];
-                      }),
+                        if (event !== null) yield event;
+                      }
+                    })(),
+                    { chunkSize: 1 },
                   );
                 }
                 const commit = yield* SubscriptionRef.get(level);
-                const entries = yield* Effect.promise(async () =>
-                  runWithWorkspaceRoots(roots, () =>
-                    transcripts.readEntries(target.id),
-                  ),
-                );
-                return Stream.fromIterable(
-                  entries
-                    .filter((entry) => entry.seqNo > fromSeq)
-                    .map((entry): SessionEvent => ({
-                      type: 'transcript.entry',
-                      aggregateId,
-                      seq: entry.seqNo,
-                      commit,
-                      ownerId: identity.ownerId,
-                      at: entry.timestamp,
-                      entry,
-                    })),
+                const entries = yield* Effect.tryPromise({
+                  try: async () =>
+                    runWithWorkspaceRoots(roots, () =>
+                      transcripts.readEntries(target.id, budget),
+                    ),
+                  catch: (error) =>
+                    error instanceof FileReadLimitError
+                      ? new SessionReaderError(
+                          'This conversation exceeds the history display limit. Its saved content is unchanged.',
+                        )
+                      : error,
+                }).pipe(Effect.orDie);
+                return Stream.fromIterable(entries, { chunkSize: 1 }).pipe(
+                  Stream.filter((entry) => entry.seqNo > fromSeq),
+                  Stream.map((entry): SessionEvent => ({
+                    type: 'transcript.entry',
+                    aggregateId,
+                    seq: entry.seqNo,
+                    commit,
+                    ownerId: identity.ownerId,
+                    at: entry.timestamp,
+                    entry,
+                  })),
                 );
               }),
             ),

@@ -33,7 +33,7 @@ incrementally from the already loaded trace document.
 
 | Retention stage                       | Bound                                   |
 | ------------------------------------- | --------------------------------------- |
-| Collected source events and live text | 128 MiB encoded input, 1,000,000 events |
+| Collected source events and live text | 128 MiB encoded input, 1,000,000 inputs |
 | Frame aggregation                     | 256 inputs, 256 KiB batching target     |
 | One serialized frame                  | 16 MiB                                  |
 | Outstanding host delivery             | One frame per port                      |
@@ -42,8 +42,8 @@ incrementally from the already loaded trace document.
 | SDK unread callback trace             | 512 events and 8 MiB encoded events     |
 
 The batching target is not a per-message truncation threshold. A retained row may
-exceed 256 KiB; the framer reserves that much space for an already started batch,
-so one input may use at most 15.75 MiB, and the resulting frame is checked against
+exceed 256 KiB and receives its own frame. The framer leaves 256 KiB for the frame
+envelope, so one input may use at most 15.75 MiB, and the resulting frame is checked against
 16 MiB. No saved row is split, edited, or silently omitted. A larger input or replay
 fails that reader with an explicit size notice and releases its interest.
 
@@ -55,6 +55,13 @@ those costs. Input iteration hands the aggregator one item at a time, avoiding a
 whole replay array becoming an aggregation leftover. Intrinsic session/history
 storage and immutable views retained by callers are outside auxiliary delivery
 budgets.
+
+The standalone file-store reader bounds actual file-stream bytes before JSON
+decoding, preflights array row counts, and hydrates spill files sequentially within
+the remaining source budget. Each subscribed transcript receives the remaining
+cumulative budget. The in-memory event tail is materialized one row at a time;
+live text includes both its encoded fragments and its row envelope in the shared
+byte and row accounting. These display limits leave the saved files unchanged.
 
 The SQLite integration accepts an optional budget on public reads. Its iterator
 checks encoded raw-row bytes and row count before decoding/retaining the next row;

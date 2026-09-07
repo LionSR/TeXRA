@@ -55,21 +55,31 @@ export const sessionInputsLayer = Layer.effect(
                 appendReplay({ _tag: 'event', read: 'listing', event });
               }),
             );
-            replay.push({ _tag: 'subscriptions', set: [...aggregates] });
+            appendReplay({ _tag: 'subscriptions', set: [...aggregates] });
             for (const aggregate of aggregates) {
               yield* Stream.runForEach(
-                log.readAggregate(aggregate.id, aggregate.fromSeq),
+                log.readAggregate(
+                  aggregate.id,
+                  aggregate.fromSeq,
+                  budget
+                    ? {
+                        bytes: Math.max(0, budget.bytes - replayBytes),
+                        rows: Math.max(0, budget.rows - replay.length),
+                      }
+                    : undefined,
+                ),
                 (event) =>
                   Effect.sync(() => {
                     appendReplay({ _tag: 'event', read: 'aggregate', event });
                   }),
               );
             }
-            replay.push(
-              { _tag: 'local', local: yield* SubscriptionRef.get(local.ref) },
-              { _tag: 'replay.complete' },
-              { _tag: 'drained', cursor: anchor },
-            );
+            appendReplay({
+              _tag: 'local',
+              local: yield* SubscriptionRef.get(local.ref),
+            });
+            appendReplay({ _tag: 'replay.complete' });
+            appendReplay({ _tag: 'drained', cursor: anchor });
             // Every level replays on subscribe; changes during the cold read
             // are therefore covered by the first finite tail read.
             const wakes = Stream.mergeAll(
@@ -96,21 +106,26 @@ export const sessionInputsLayer = Layer.effect(
                     const cursor = yield* SubscriptionRef.get(log.level);
                     const batches: FoldInput[][] = [];
                     let bytes = 0;
+                    let rows = 0;
+                    const checkBudget = (): void => {
+                      if (
+                        budget &&
+                        (bytes > budget.bytes || rows >= budget.rows)
+                      )
+                        throw new SessionReaderError(
+                          'This conversation exceeds the history display limit. Its saved content is unchanged.',
+                        );
+                    };
+                    const charge = (input: FoldInput): void => {
+                      if (budget) bytes += sessionMessageBytes(input);
+                      checkBudget();
+                      rows += 1;
+                    };
                     yield* log.readAll(previous.cursor).pipe(
                       Stream.takeWhile((event) => event.commit <= cursor),
                       Stream.runForEach((event) =>
                         Effect.sync(() => {
-                          if (budget) {
-                            bytes += sessionMessageBytes(event);
-                            if (
-                              bytes > budget.bytes ||
-                              batches.length >= budget.rows
-                            ) {
-                              throw new SessionReaderError(
-                                'This conversation exceeds the history display limit. Its saved content is unchanged.',
-                              );
-                            }
-                          }
+                          charge({ _tag: 'event', read: 'all', event });
                           batches.push([{ _tag: 'event', read: 'all', event }]);
                         }),
                       ),
@@ -126,10 +141,7 @@ export const sessionInputsLayer = Layer.effect(
                       while (at !== undefined && at !== held) {
                         if (budget) {
                           bytes += sessionMessageBytes(at.text);
-                          if (bytes > budget.bytes)
-                            throw new SessionReaderError(
-                              'This conversation exceeds the history display limit. Its saved content is unchanged.',
-                            );
+                          checkBudget();
                         }
                         parts.push(at.text);
                         at = at.previous;
@@ -145,12 +157,23 @@ export const sessionInputsLayer = Layer.effect(
                         to: value.length,
                         text: parts.toReversed().join(''),
                       };
+                      // Fragments were charged before joining. Charge the row
+                      // envelope and the shared row count before retaining it.
+                      if (budget)
+                        bytes += sessionMessageBytes({ ...chunk, text: '' });
+                      checkBudget();
+                      rows += 1;
                       inputs.push(chunk);
                     }
-                    inputs.push(
-                      { _tag: 'local', local: snapshot },
-                      { _tag: 'drained', cursor },
-                    );
+                    const localInput: FoldInput = {
+                      _tag: 'local',
+                      local: snapshot,
+                    };
+                    charge(localInput);
+                    inputs.push(localInput);
+                    const drained: FoldInput = { _tag: 'drained', cursor };
+                    charge(drained);
+                    inputs.push(drained);
                     batches.push(inputs);
                     return [{ cursor, text: nextText }, batches] as const;
                   }),

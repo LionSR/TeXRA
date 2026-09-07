@@ -8,7 +8,15 @@
  * the frames to the view the runtime holds.
  */
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer, Queue, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Queue,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi } from 'vitest';
 
@@ -37,6 +45,7 @@ import {
   FoldEventSchema,
   STREAM_PHASE,
   type ExecutionId,
+  type FoldInput,
   type SessionEventDraft,
   type StreamTabId,
 } from '@shared/schemas';
@@ -50,6 +59,7 @@ import type {
 } from '@shared/session/sessionFrames';
 import {
   SESSION_FRAME_BYTES,
+  SESSION_FRAME_TARGET_BYTES,
   sessionMessageBytes,
 } from '@shared/session/sessionReadBudget';
 import type { SessionView } from '@shared/session/sessionView';
@@ -384,7 +394,7 @@ describe('session framer', () => {
   });
 
   it.effect(
-    'delivers a retained 4 MiB row intact within its independent frame envelope',
+    'delivers large retained rows intact independently of preceding small rows',
     () =>
       Effect.gen(function* () {
         yield* Effect.forkScoped(ticking);
@@ -398,11 +408,27 @@ describe('session framer', () => {
           at: 0,
           cause: 'x'.repeat(4 * 1024 * 1024),
         };
+        const small = {
+          _tag: 'event' as const,
+          read: 'aggregate' as const,
+          event: { ...event, cause: '' },
+        };
+        small.event.cause = 's'.repeat(
+          SESSION_FRAME_TARGET_BYTES - 1 - sessionMessageBytes(small),
+        );
+        const large = { ...small, event: { ...event, cause: '' } };
+        large.event.cause = 'l'.repeat(
+          SESSION_FRAME_BYTES -
+            SESSION_FRAME_TARGET_BYTES -
+            sessionMessageBytes(large),
+        );
         const frames = yield* frameSubscription(
           {
             ...source,
             inputs: () =>
               Stream.make([
+                small,
+                large,
                 { _tag: 'event', read: 'aggregate', event },
                 { _tag: 'replay.complete' },
               ]),
@@ -416,12 +442,51 @@ describe('session framer', () => {
         );
         expect(
           frames.flatMap((frame) => frame.events).map((row) => row.event),
-        ).toEqual([event]);
+        ).toEqual([small.event, large.event, event]);
         expect(
           frames.every(
             (frame) => sessionMessageBytes(frame) <= SESSION_FRAME_BYTES,
           ),
         ).toBe(true);
+      }).pipe(Effect.provide(runtimeGraph([]))),
+  );
+
+  it.effect(
+    'charges live text row envelopes and the shared source row limit before publication',
+    () =>
+      Effect.gen(function* () {
+        const inputs = yield* SessionInputs;
+        const text = yield* TextChunkSource;
+        yield* SubscriptionRef.set(
+          text.ref,
+          new Map(
+            Array.from({ length: 5 }, (_, index) => [
+              `${STREAM}/${'r'.repeat(1000)}-${index}`,
+              textTail('x'),
+            ]),
+          ),
+        );
+        for (const budget of [
+          { bytes: 4096, rows: 100 },
+          { bytes: 100_000, rows: 4 },
+        ]) {
+          const emitted: (readonly FoldInput[])[] = [];
+          const exit = yield* Effect.exit(
+            inputs.read([], 0, budget).pipe(
+              Stream.take(2),
+              Stream.runForEach((batch) =>
+                Effect.sync(() => {
+                  emitted.push(batch);
+                }),
+              ),
+            ),
+          );
+          expect(Exit.isFailure(exit)).toBe(true);
+          expect(emitted).toHaveLength(1);
+          expect(emitted[0]?.some((input) => input._tag === 'chunk')).toBe(
+            false,
+          );
+        }
       }).pipe(Effect.provide(runtimeGraph([]))),
   );
 

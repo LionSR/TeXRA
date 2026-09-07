@@ -201,22 +201,45 @@ export function frameSubscription(
       return Stream.merge(inputs, hosts).pipe(
         Stream.aggregateWithin(
           Sink.fold(
-            () => ({ items: [] as FrameItem[], bytes: 0 }),
+            () => ({
+              items: [] as FrameItem[],
+              bytes: 0,
+              next: null as FrameItem | null,
+            }),
             (batch) =>
+              batch.next === null &&
               batch.items.length < SESSION_FRAME_ROWS &&
               batch.bytes < SESSION_FRAME_TARGET_BYTES,
             (batch, item: FrameItem) =>
               Effect.sync(() => {
-                const bytes = sessionMessageBytes(item);
-                if (bytes > SESSION_FRAME_BYTES - SESSION_FRAME_TARGET_BYTES) {
+                const size = sessionMessageBytes(item);
+                if (size > SESSION_FRAME_BYTES - SESSION_FRAME_TARGET_BYTES)
                   throw new SessionReaderError(
                     'A conversation update exceeds the display delivery limit. Its saved content is unchanged.',
                   );
+                if (
+                  batch.items.length > 0 &&
+                  batch.bytes + size > SESSION_FRAME_TARGET_BYTES
+                ) {
+                  batch.next = item;
+                  return batch;
                 }
                 batch.items.push(item);
-                batch.bytes += bytes;
+                batch.bytes += size;
                 return batch;
               }),
+          ).pipe(
+            Sink.mapEnd(
+              ([batch, leftovers]) =>
+                [
+                  { items: batch.items },
+                  // fold consumed the prospective row; return it as the first
+                  // leftover so the next frame receives it exactly once.
+                  batch.next === null
+                    ? leftovers
+                    : [batch.next, ...(leftovers ?? [])],
+                ] as const,
+            ),
           ),
           Schedule.spaced(FRAME_WINDOW),
         ),
