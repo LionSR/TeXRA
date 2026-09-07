@@ -13,7 +13,7 @@ import {
 } from 'electron';
 import PQueue from 'p-queue';
 
-import { Effect, SubscriptionRef } from 'effect';
+import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 import { runInSession } from '@agent/runtime';
 import {
@@ -381,14 +381,22 @@ function createWindow(options: {
   const showErrorMessage = showMessageBoxOfType('error');
   const reportAsyncError = (error: unknown) => {
     console.error('Desktop asynchronous operation failed:', error);
-    void showErrorMessage(
-      `A desktop operation failed: ${toErrorMessage(error)}`,
-    ).catch((notificationError: unknown) => {
-      console.error(
-        'Failed to display desktop asynchronous operation error:',
-        notificationError,
-      );
-    });
+    effectRuntime().runFork(
+      hostPort(() =>
+        showErrorMessage(
+          `A desktop operation failed: ${toErrorMessage(error)}`,
+        ),
+      ).pipe(
+        Effect.catch((notificationError) =>
+          Effect.sync(() => {
+            console.error(
+              'Failed to display desktop asynchronous operation error:',
+              notificationError,
+            );
+          }),
+        ),
+      ),
+    );
   };
   const reportBackgroundError = (error: unknown) => {
     console.error('Desktop background operation failed:', error);
@@ -450,26 +458,32 @@ function createWindow(options: {
   // `app.whenReady()` block, which the lock-losing process never reaches, so
   // no extra single-instance gate is needed here; `checkForDesktopUpdate`
   // itself dedupes concurrent calls and window reopens.
-  checkForDesktopUpdate({
-    currentVersion: app.getVersion(),
-    globalState: options.globalState,
-    isPackaged: app.isPackaged,
-    notify: async (release) => {
-      const { response } = await dialog.showMessageBox(window, {
-        type: 'info',
-        message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
-        buttons: ['Download', 'Later'],
-        defaultId: 0,
-        cancelId: 1,
-      });
-      if (response === 0) {
-        // Open the known-constant releases page rather than any
-        // network-provided URL, so an unauthenticated API response can
-        // never influence what shell.openExternal opens.
-        await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
-      }
-    },
-  }).catch(reportBackgroundError);
+  effectRuntime().runFork(
+    hostPort(() =>
+      checkForDesktopUpdate({
+        currentVersion: app.getVersion(),
+        globalState: options.globalState,
+        isPackaged: app.isPackaged,
+        notify: async (release) => {
+          const { response } = await dialog.showMessageBox(window, {
+            type: 'info',
+            message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
+            buttons: ['Download', 'Later'],
+            defaultId: 0,
+            cancelId: 1,
+          });
+          if (response === 0) {
+            // Open the known-constant releases page rather than any
+            // network-provided URL, so an unauthenticated API response can
+            // never influence what shell.openExternal opens.
+            await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
+          }
+        },
+      }),
+    ).pipe(
+      Effect.catch((error) => Effect.sync(() => reportBackgroundError(error))),
+    ),
+  );
   const previewOptions = {
     shell,
     // The in-app PDF overlay is preferred when the renderer is available.
@@ -492,20 +506,27 @@ function createWindow(options: {
     [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'Configuration Guide',
     [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model Documentation',
   };
+  /** Open a documentation URL without keeping the caller waiting; the browser
+   *  never opening is reported, not swallowed. */
+  const openExternalInBackground = (url: string): void => {
+    effectRuntime().runFork(
+      hostPort(() => previewHost.openExternal(url)).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => reportBackgroundError(error)),
+        ),
+      ),
+    );
+  };
   const dispatchInstructionAction = (action: InstructionAction): void => {
     switch (action) {
       case INSTRUCTION_ACTION.SET_API_KEY:
         postDesktopSettingsView(postToRendererIfAlive, 'models');
         return;
       case INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE:
-        previewHost
-          .openExternal('https://texra.ai/guide/configuration.html')
-          .catch(reportBackgroundError);
+        openExternalInBackground('https://texra.ai/guide/configuration.html');
         return;
       case INSTRUCTION_ACTION.OPEN_MODELS_DOC:
-        previewHost
-          .openExternal('https://texra.ai/guide/models.html')
-          .catch(reportBackgroundError);
+        openExternalInBackground('https://texra.ai/guide/models.html');
         return;
     }
   };
@@ -624,7 +645,12 @@ function createWindow(options: {
     const paper = paperByKey(key);
     if (!paper || paper.root === undefined) return;
     if (hasUnsavedChanges && showDiscardDialog() !== 1) return;
-    void options.papers.close(paper.root).catch(reportAsyncError);
+    const root = paper.root;
+    effectRuntime().runFork(
+      hostPort(() => options.papers.close(root)).pipe(
+        Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+      ),
+    );
   };
 
   const openWorkspaceFolder = async () => {
@@ -652,6 +678,20 @@ function createWindow(options: {
       return true;
     },
   });
+  /**
+   * Await a host promise the caller has already started, reporting rather than
+   * raising its failure: a dialog that could not be shown must not fail the
+   * execution behind it, and a temp-dir removal that could not finish must not
+   * stall the quit drain that waits on it.
+   */
+  const awaitOrReport = (started: Promise<void>): Promise<void> =>
+    effectRuntime().runPromise(
+      hostPort(() => started).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => reportBackgroundError(error)),
+        ),
+      ),
+    );
   // Not fire-and-forget: every quit path reaches the before-quit handler,
   // whose lifecycle drain awaits the dispose queue's idle before the final
   // quit. `desktopDiffHost.dispose()` is invoked synchronously here (so
@@ -659,16 +699,16 @@ function createWindow(options: {
   // completion promise resolves, keeping a macOS dock-reopen from discarding
   // an earlier window's still-running cleanup.
   windowResources.add(() => {
-    const current = desktopDiffHost.dispose().catch(reportBackgroundError);
-    void diffHostDisposeQueue.add(() => current);
+    const settled = awaitOrReport(desktopDiffHost.dispose());
+    void diffHostDisposeQueue.add(() => settled);
   });
   const requestDiffHost = createDesktopDiffHost({
     openPath: requestPreviewHost.openPath,
     postToRenderer: postToRendererIfAlive,
   });
   windowResources.add(() => {
-    const current = requestDiffHost.dispose().catch(reportBackgroundError);
-    void diffHostDisposeQueue.add(() => current);
+    const settled = awaitOrReport(requestDiffHost.dispose());
+    void diffHostDisposeQueue.add(() => settled);
   });
   const agentExecutionHost: DesktopAgentExecutionHost = {
     openPath: previewHost.openPath,
@@ -678,11 +718,12 @@ function createWindow(options: {
       confirmDialog({ message, confirmLabel: 'Replace file' }),
     chooseTeamAvailability,
     signInForRemoteAgentCatalog,
-    showInfoMessage: (message) =>
-      showInfoMessage(message).catch(reportBackgroundError),
+    // Presentation failures are reported, never raised: an execution must not
+    // fail because a dialog could not be shown. The caller still awaits the
+    // dialog, as it did before.
+    showInfoMessage: (message) => awaitOrReport(showInfoMessage(message)),
     showWarningMessage,
-    showErrorMessage: (message) =>
-      showErrorMessage(message).catch(reportBackgroundError),
+    showErrorMessage: (message) => awaitOrReport(showErrorMessage(message)),
     showInstructionDialog,
     pickTranscriptExportFormat: async () => {
       const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
@@ -1288,7 +1329,11 @@ function createWindow(options: {
       }
     }),
   );
-  void onboardingIpc.refreshOnboardingFunnel().catch(reportAsyncError);
+  effectRuntime().runFork(
+    hostPort(() => onboardingIpc.refreshOnboardingFunnel()).pipe(
+      Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+    ),
+  );
   const shellActions = createDesktopShellActions(
     { postToRenderer: postToRendererIfAlive },
     {
@@ -1593,94 +1638,116 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
 
       // Until the initial window is fully wired, any startup failure must run
       // the same process-session shutdown used by an ordinary application
-      // exit. Once this block completes, the lifecycle owns that cleanup.
-      try {
-        const warn = (message: string) => console.warn(`[desktop] ${message}`);
-        papers = await openDesktopPaperRegistry({
-          dataRoot: platformInit.dataRoot,
-          processRoots: platformInit.processRoots,
-          globalConfigStore: platformInit.globalConfigStore,
-          globalState: platformInit.globalState,
-          warn,
-        });
-        processResources.add(() => papers.dispose());
-        // Reopen every folder left open last time and show the one shown
-        // last. A folder that is gone or no longer opens is reported once the
-        // window exists; the others open regardless.
-        const remembered = await readRememberedDesktopPapers(
-          platformInit.globalState,
-          warn,
-        );
-        const unopenedPapers = remembered.missing.map(
-          (root) => `${root} (no such folder; forgotten)`,
-        );
-        for (const root of remembered.roots) {
-          await effectRuntime().runPromise(
-            hostPort(() => papers.open(root)).pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  unopenedPapers.push(`${root}: ${toErrorMessage(error)}`);
-                }),
-              ),
-            ),
-          );
-        }
-        papers.activate(papers.list().at(-1)?.root);
-        // Ask the renderer to close before draining process services. A dirty
-        // editor can veto that close and remain fully operational. Once the
-        // window really closes, its handler calls app.quit() again and this
-        // listener proceeds with the ordinary shutdown chain.
-        installDesktopBeforeQuitWiring({
-          app,
-          getMainWindow: () => mainWindow,
-          lifecycle,
-          continueAfterWindowClose: (continueQuit) => {
-            continueQuitAfterWindowClose = continueQuit;
-          },
-        });
-
-        void initializeDesktopCrashReporting({
-          sensitivePaths: () => [
-            ...papers.list().map((paper) => paper.root),
-            app.getPath('userData'),
-            platformInit.dataRoot,
-          ],
-          log: console,
-        });
-        const authCoordinator = createDesktopAuthCoordinator({
-          secrets: platformInit.secrets,
-          log: console,
-        });
-        const authCallbackState = createDesktopAuthCallbackState(
-          console,
-          platformInit.globalState,
-        );
-        installContentSecurityPolicy();
-        reopenMainWindow = () =>
-          createWindow({
-            papers,
-            authCoordinator,
-            authCallbackState,
+      // exit. Once this program completes, the lifecycle owns that cleanup.
+      // The original failure is re-raised, not the fold's envelope: the fatal
+      // reporter below prints `error.stack`, which a wrapper would replace
+      // with the runtime's own trace.
+      const startup = await effectRuntime().runPromiseExit(
+        hostPort(async () => {
+          const warn = (message: string) =>
+            console.warn(`[desktop] ${message}`);
+          papers = await openDesktopPaperRegistry({
+            dataRoot: platformInit.dataRoot,
+            processRoots: platformInit.processRoots,
+            globalConfigStore: platformInit.globalConfigStore,
             globalState: platformInit.globalState,
-            secrets: platformInit.secrets,
-            agentDirectories: platformInit.agentDirectories,
-            resourcesPath: platformInit.resourcesPath,
+            warn,
           });
-        reopenMainWindow();
-        if (unopenedPapers.length > 0) {
-          void showDesktopWarningDialog(
-            `Some papers could not be reopened:\n${unopenedPapers.join('\n')}`,
-          ).catch((error: unknown) => console.error(error));
-        }
+          processResources.add(() => papers.dispose());
+          // Reopen every folder left open last time and show the one shown
+          // last. A folder that is gone or no longer opens is reported once the
+          // window exists; the others open regardless.
+          const remembered = await readRememberedDesktopPapers(
+            platformInit.globalState,
+            warn,
+          );
+          const unopenedPapers = remembered.missing.map(
+            (root) => `${root} (no such folder; forgotten)`,
+          );
+          for (const root of remembered.roots) {
+            await effectRuntime().runPromise(
+              hostPort(() => papers.open(root)).pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => {
+                    unopenedPapers.push(`${root}: ${toErrorMessage(error)}`);
+                  }),
+                ),
+              ),
+            );
+          }
+          papers.activate(papers.list().at(-1)?.root);
+          // Ask the renderer to close before draining process services. A dirty
+          // editor can veto that close and remain fully operational. Once the
+          // window really closes, its handler calls app.quit() again and this
+          // listener proceeds with the ordinary shutdown chain.
+          installDesktopBeforeQuitWiring({
+            app,
+            getMainWindow: () => mainWindow,
+            lifecycle,
+            continueAfterWindowClose: (continueQuit) => {
+              continueQuitAfterWindowClose = continueQuit;
+            },
+          });
 
-        app.on('activate', () => {
-          if (BrowserWindow.getAllWindows().length === 0) reopenMainWindow?.();
-        });
-      } catch (error) {
+          void initializeDesktopCrashReporting({
+            sensitivePaths: () => [
+              ...papers.list().map((paper) => paper.root),
+              app.getPath('userData'),
+              platformInit.dataRoot,
+            ],
+            log: console,
+          });
+          const authCoordinator = createDesktopAuthCoordinator({
+            secrets: platformInit.secrets,
+            log: console,
+          });
+          const authCallbackState = createDesktopAuthCallbackState(
+            console,
+            platformInit.globalState,
+          );
+          installContentSecurityPolicy();
+          reopenMainWindow = () =>
+            createWindow({
+              papers,
+              authCoordinator,
+              authCallbackState,
+              globalState: platformInit.globalState,
+              secrets: platformInit.secrets,
+              agentDirectories: platformInit.agentDirectories,
+              resourcesPath: platformInit.resourcesPath,
+            });
+          reopenMainWindow();
+          if (unopenedPapers.length > 0) {
+            effectRuntime().runFork(
+              hostPort(() =>
+                showDesktopWarningDialog(
+                  `Some papers could not be reopened:\n${unopenedPapers.join('\n')}`,
+                ),
+              ).pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => console.error(error)),
+                ),
+              ),
+            );
+          }
+
+          app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0)
+              reopenMainWindow?.();
+          });
+        }),
+      );
+      if (Exit.isFailure(startup)) {
         await lifecycle.runShutdown();
-        throw error;
+        throw Cause.squash(startup.cause);
       }
     })
+    // The one catch this entry keeps. It guards `initializeElectronPlatform`
+    // itself, which is what installs the process Effect runtime, so there is
+    // no runtime to fold this failure on: a platform init that dies before
+    // `installProcessRuntime` would make `effectRuntime()` throw over the
+    // error it was meant to report. Electron's `whenReady()` promise is the
+    // real foreign boundary here.
     .catch((error: unknown) => {
       reportFatalStartupError(error);
     });

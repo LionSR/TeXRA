@@ -167,7 +167,7 @@
       "packages/cli/src/runtime/supabaseAuthCallbackServer.ts": 4,
       "packages/cli/src/runtime/supabaseAuthDeviceCode.ts": 2,
       "packages/cli/src/runtime/updateChecker.ts": 3,
-      "packages/desktop/src/main/index.ts": 13,
+      "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,
       "src/agent/runtime/SessionHandle.ts": 9,
