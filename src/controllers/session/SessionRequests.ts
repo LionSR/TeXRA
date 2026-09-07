@@ -11,7 +11,12 @@
  * `stream.removed`). Ownership comes from that same current sequence row:
  * a foreign claim
  * without a death proof is `NotOwner`. Display residency and historical
- * event writers never establish present ownership. In process (the TUI,
+ * event writers never establish present ownership. A collaborator that
+ * rejects is neither: the arms below reach one through `Effect.promise`, so
+ * its rejection is a handler defect, and `SessionBridge` logs the cause
+ * under the request id and answers `Internal` — the sender's latch clears
+ * either way. A refusal this handler decides is a `RequestError`; a
+ * collaborator breaking is not one to word. In process (the TUI,
  * headless) the Effect's own result is
  * the response; a bridge posts it as the `Response` of 8.4.
  *

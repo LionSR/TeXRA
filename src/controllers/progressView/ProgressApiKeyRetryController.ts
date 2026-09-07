@@ -2,7 +2,7 @@ import { Effect, Exit, Semaphore } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
-import { hostPort } from '@controllers/effectPort';
+import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import type { CopilotRouteOverride } from '@model/copilotRouting';

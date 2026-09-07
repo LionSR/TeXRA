@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { hostPort } from '@common/hostPort';
 
 import {
   subscriptionProvider,
@@ -88,13 +89,6 @@ export function mergeCliTexraAccountStatus(
 // case, not another 30-line copy.
 // ---------------------------------------------------------------------------
 
-/** A Promise step of the preference machinery, failing with what it threw. */
-const step = <A>(run: () => PromiseLike<A>) =>
-  Effect.tryPromise({
-    try: async () => run(),
-    catch: (error: unknown) => error,
-  });
-
 /** Toggle an OAuth-subscription preference (Grok/ChatGPT) with sign-in. */
 const updateSubscriptionCliModelAccess = Effect.fn(
   'modelAccessSelection.updateSubscriptionCliModelAccess',
@@ -107,7 +101,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
   const provider = subscriptionProvider(providerId);
   const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
-    const update = yield* step(() => provider.setPreferSubscription(false));
+    const update = yield* hostPort(() => provider.setPreferSubscription(false));
     return {
       message: update.effective
         ? `${displayName} subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
@@ -115,7 +109,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     } satisfies CliModelAccessSelectionResult;
   }
 
-  const status = yield* step(() => provider.getStatus());
+  const status = yield* hostPort(() => provider.getStatus());
   let accountLabel = status.label;
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
@@ -129,8 +123,8 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     accountLabel = account.label;
   }
 
-  const update = yield* step(() => provider.setPreferSubscription(true));
-  yield* step(() =>
+  const update = yield* hostPort(() => provider.setPreferSubscription(true));
+  yield* hostPort(() =>
     platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false),
   );
   return {
@@ -182,7 +176,9 @@ export const updateCliModelAccess = Effect.fn(
     (runtime) => runtime.descriptor.cliProvider === selection.provider,
   );
   if (codingPlan) {
-    return yield* step(() => updateKeyedCliModelAccess(selection, codingPlan));
+    return yield* hostPort(() =>
+      updateKeyedCliModelAccess(selection, codingPlan),
+    );
   }
   if (selection.provider === 'grok' || selection.provider === 'chatgpt') {
     return yield* updateSubscriptionCliModelAccess(
