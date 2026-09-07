@@ -548,7 +548,6 @@ export default tseslint.config(
           './tsconfig.json',
           './tsconfig.test-kernel.json',
           './tsconfig.build.json',
-          './packages/llm/tsconfig.json',
           './packages/desktop/tsconfig.main.json',
           './packages/desktop/tsconfig.preload.json',
           './packages/desktop/tsconfig.renderer.json',
@@ -657,6 +656,14 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': 'off',
       'local/no-vscode-import-in-free-zones': 'error',
       'prefer-const': 'error',
+    },
+  },
+
+  // The native model package owns a standalone TypeScript program and lint process.
+  {
+    files: ['packages/llm/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: { project: ['./packages/llm/tsconfig.json'] },
     },
   },
 
