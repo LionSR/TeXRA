@@ -319,7 +319,7 @@ const resolveIssueIsPR = (
   number: number,
 ): Effect.Effect<boolean, unknown> =>
   Effect.flatMap(
-    hostPort(() => ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`)),
+    ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`),
     (res) =>
       res.status !== 200
         ? Effect.fail(
@@ -432,9 +432,7 @@ const getDefaultBranch = (
   repo: string,
 ): Effect.Effect<string, unknown> =>
   Effect.flatMap(
-    hostPort(() =>
-      ghGet<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
-    ),
+    ghGet<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
     (res) =>
       res.status !== 200
         ? Effect.fail(
@@ -463,10 +461,8 @@ const listOpenPullSuggestions = (
   repo: string,
 ): Effect.Effect<string, unknown> =>
   Effect.map(
-    hostPort(() =>
-      ghGet<OpenPullSummary[]>(
-        `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
-      ),
+    ghGet<OpenPullSummary[]>(
+      `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
     ),
     (res) => {
       if (res.status !== 200 || res.data.length === 0) {
@@ -538,9 +534,8 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
       );
     }
     const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
-    const res = yield* hostPort(() =>
-      ghGet<Array<{ number: number; html_url: string }>>(apiPath),
-    );
+    const res =
+      yield* ghGet<Array<{ number: number; html_url: string }>>(apiPath);
     if (res.status !== 200) {
       return yield* Effect.fail(
         new ToolError(`Unexpected GitHub response status: ${res.status}`),

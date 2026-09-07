@@ -14,7 +14,7 @@
  * file only owns the per-issue endpoint set and the dedup state.
  */
 
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import type { Disposable } from '@platform/interfaces';
 import {
@@ -32,9 +32,8 @@ import {
   dedupeComments,
   type DedupedResource,
   type PollEventListener,
-  type PollHookRejected,
+  PollHookRejected,
   PollingSourceBase,
-  pollRequest,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
@@ -113,7 +112,13 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     _key: string,
     state: SubscriptionState,
   ): Effect.Effect<void, PollHookRejected> {
-    return this.pollIssue(state);
+    return this.pollIssue(state).pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) => new PollHookRejected({ cause: error })),
+        ),
+      ),
+    );
   }
 
   private readonly pollIssue = Effect.fn('IssuePollingSource.pollIssue')(
@@ -128,10 +133,8 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
       // The two endpoints are independent — fetch in parallel.
       const [issueRes, commentsRes] = yield* Effect.all(
         [
-          pollRequest(() => ghGet<GhIssue>(issuePath, state.etags.issue)),
-          pollRequest(() =>
-            ghGet<GhIssueComment[]>(commentsUrl, state.etags.comments),
-          ),
+          ghGet<GhIssue>(issuePath, state.etags.issue),
+          ghGet<GhIssueComment[]>(commentsUrl, state.etags.comments),
         ],
         { concurrency: 2 },
       );

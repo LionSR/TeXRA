@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -13,7 +13,10 @@ import {
   resolveArxivPaperDirectoryRelative,
 } from '@latex/arxivProcessor';
 import * as logger from '@logger/logUtils';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 const tempDirs = useTempDirs();
 const SOURCE_URL = 'https://arxiv.org/src/2404.12175';
@@ -118,6 +121,84 @@ describe('arXiv processor logger channel', () => {
 });
 
 describe('arXiv source download filenames', () => {
+  setupPlatform({}, { fs: nodeFilesystem });
+
+  it.live(
+    'closes an interrupted body writer before deleting its partial download',
+    () =>
+      Effect.gen(function* () {
+        const destBasePath = yield* tempSourceBase;
+        const started = yield* Deferred.make<void>();
+        const events: string[] = [];
+        const createWriteStream = AbsoluteFS.createWriteStream.bind(AbsoluteFS);
+        vi.spyOn(AbsoluteFS, 'createWriteStream').mockImplementation(
+          (...args) => {
+            const writer = createWriteStream(...args);
+            writer.once('close', () => events.push('writer-closed'));
+            writer.once('open', () => Deferred.doneUnsafe(started, Exit.void));
+            return writer;
+          },
+        );
+        const deleteFile = AbsoluteFS.delete.bind(AbsoluteFS);
+        vi.spyOn(AbsoluteFS, 'delete').mockImplementation(async (...args) => {
+          events.push('partial-deleted');
+          return deleteFile(...args);
+        });
+        let body: ReadableStreamDefaultController<Uint8Array> | undefined;
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(
+            async () =>
+              new Response(
+                new ReadableStream<Uint8Array>({
+                  start(controller) {
+                    body = controller;
+                    controller.enqueue(
+                      new TextEncoder().encode('partial source'),
+                    );
+                  },
+                  cancel() {
+                    events.push('body-cancelled');
+                  },
+                }),
+                {
+                  headers: {
+                    'content-disposition': 'attachment; filename="source"',
+                  },
+                },
+              ),
+          ),
+        );
+
+        const fiber = yield* ArxivProcessor.downloadFile(
+          SOURCE_URL,
+          destBasePath,
+        ).pipe(Effect.forkChild);
+        yield* Deferred.await(started);
+        yield* Fiber.interrupt(fiber);
+        const exit = yield* Fiber.await(fiber);
+        // End an unowned old body after observing the result, so a failing
+        // regression does not leave its original writer alive in the suite.
+        if (!events.includes('body-cancelled')) body?.close();
+        expect(
+          Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause),
+        ).toBe(true);
+        expect(events).toStrictEqual([
+          'body-cancelled',
+          'writer-closed',
+          'partial-deleted',
+        ]);
+        expect(
+          yield* Effect.promise(() =>
+            fs.access(destBasePath).then(
+              () => true,
+              () => false,
+            ),
+          ),
+        ).toBe(false);
+      }),
+  );
+
   it.effect(
     'does not infer a missing header filename when it matches the base path',
     () =>
