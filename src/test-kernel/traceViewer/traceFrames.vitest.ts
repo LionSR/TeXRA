@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
@@ -20,6 +21,7 @@ import {
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
 import { emptySessionView } from '@shared/session/sessionView';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -197,7 +199,9 @@ describe('traceEvents legacy-status fallback (issue #7188)', () => {
     });
     await store.flush();
 
-    const result = await assembleTrace(executionId);
+    const result = await Effect.runPromise(
+      assembleTrace(executionId, createTestSession().snapshots),
+    );
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
     expect(result.trace.meta?.outcome).toBeUndefined();

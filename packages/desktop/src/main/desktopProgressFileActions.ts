@@ -16,11 +16,16 @@ import {
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
-import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
+import {
+  runLatexdiffForExecution,
+  type RunLatexdiffForExecutionParams,
+} from '@latex/latexdiff/runLatexdiff';
 import type {
   DiffProgressReporter,
   DiffRunOutcome,
 } from '@latex/latexdiff/types';
+import { effectRuntime } from '@platform/processRuntime';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -49,6 +54,7 @@ type DesktopProgressFileActionUi = Pick<
  * full progress bridge.
  */
 interface DesktopProgressFileActionHost {
+  readonly snapshots: RunLatexdiffForExecutionParams['snapshots'];
   startExecution(request: ValidatedExecutionRequest): void;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
@@ -209,22 +215,26 @@ export class DesktopProgressFileActions {
     // Desktop has no per-operation progress UI.
     const progress: DiffProgressReporter = { report: () => undefined };
     try {
-      const { outcome } = await runLatexdiffForExecution({
-        agent: scan?.agent ?? '',
-        model: scan?.model ?? '',
-        inputFile: scan?.inputFile ?? '',
-        outputFiles: scan?.outputFiles,
-        runId: runContext.executionId ?? null,
-        outputsByRound: hasOutputs ? runContext.outputsByRound : null,
-        mathMarkup: DEFAULT_MATH_MARKUP,
-        generateBetweenRoundDiffs: true,
-        executionDiscovery: createLatexExecutionDiscovery(),
-        latexdiff: {
-          channel: DESKTOP_LATEXDIFF_CHANNEL,
-          service: new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL),
-        },
-        progress,
-      });
+      const { outcome } = await effectRuntime().runPromise(
+        runLatexdiffForExecution({
+          snapshots: this.host.snapshots,
+          filesystem: nodeFilesystem,
+          agent: scan?.agent ?? '',
+          model: scan?.model ?? '',
+          inputFile: scan?.inputFile ?? '',
+          outputFiles: scan?.outputFiles,
+          runId: runContext.executionId ?? null,
+          outputsByRound: hasOutputs ? runContext.outputsByRound : null,
+          mathMarkup: DEFAULT_MATH_MARKUP,
+          generateBetweenRoundDiffs: true,
+          executionDiscovery: createLatexExecutionDiscovery(),
+          latexdiff: {
+            channel: DESKTOP_LATEXDIFF_CHANNEL,
+            service: new LaTeXdiffService(DESKTOP_LATEXDIFF_CHANNEL),
+          },
+          progress,
+        }),
+      );
       return outcome;
     } catch (error) {
       // The core can throw (e.g. no workspace path). Don't abort the whole

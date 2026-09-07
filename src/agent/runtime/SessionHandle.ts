@@ -116,9 +116,9 @@ const logger = createLog('sessionHandle');
  * of a session onto a plane nobody reads. The session co-constructs them.
  */
 export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
-  Partial<
-    Pick<SessionHandle, 'snapshots' | 'responseTextProcessing' | 'roots'>
-  > & { readonly interactions?: HostInteractions };
+  Partial<Pick<SessionHandle, 'responseTextProcessing' | 'roots'>> & {
+    readonly interactions?: HostInteractions;
+  };
 
 export class SessionHandle {
   /**
@@ -190,7 +190,9 @@ export class SessionHandle {
   /** Session-owned per-stream sidecar store for runs launched in this session. */
   readonly snapshots: StreamSnapshotStore;
   /** The store's projection of the durable facts, called inside `publish`. */
-  private readonly applySnapshotEvent: (event: SessionEventDraft) => void;
+  private readonly applySnapshotEvent: (
+    event: SessionEvent,
+  ) => Effect.Effect<void>;
   private readonly graph: SessionGraph;
   /**
    * The transcript recorders' status ports (`RunTrace.handleStatus`), one per
@@ -235,6 +237,7 @@ export class SessionHandle {
   constructor(
     init: SessionHandleInit & {
       readonly roots: WorkspaceRoots;
+      readonly snapshots: StreamSnapshotStore;
       readonly graph: (session: SessionHandle) => SessionGraph;
     },
   ) {
@@ -279,16 +282,8 @@ export class SessionHandle {
     // The sidecar store is a session artifact exactly like `transcripts`: the
     // session projects its own run events into it and flushes it below, so no
     // host has to construct, attach, and flush one of its own.
-    this.snapshots = init.snapshots ?? new StreamSnapshotStore();
-    // The summary sink mirrors snapshot-owned display metadata into the
-    // always-resident stream summaries, so sidebars and all-streams metadata
-    // paths read summaries instead of per-stream sidecars (#9947). Always
-    // writable: this constructor rejects read-only transcript stores above.
-    this.applySnapshotEvent = this.snapshots.attachSessionEvents({
-      summaryMetaSink: (stream, meta) =>
-        transcripts.recordSummaryMeta(stream, meta),
-      summaryMetaSource: (stream) => transcripts.getSummaryMeta(stream),
-    });
+    this.snapshots = init.snapshots;
+    this.applySnapshotEvent = this.snapshots.attachSessionEvents();
     this.interactions = interactions;
     this.approvals = approvals;
     this.modelRetries = new ModelRetryGate();
@@ -485,11 +480,7 @@ export class SessionHandle {
   }
 
   private async flushArtifactsOnce(): Promise<void> {
-    const writers = [
-      () => this.transcripts.flush(),
-      () => this.snapshots.flush(),
-      ...this.artifactFlushers,
-    ];
+    const writers = [() => this.transcripts.flush(), ...this.artifactFlushers];
     const results = await Promise.allSettled(
       writers.map((flush) => Promise.resolve().then(flush)),
     );
@@ -616,38 +607,45 @@ export class SessionHandle {
   }
 
   /** Apply a durable fact delivered by the root's ordered table tail. */
-  receiveCommittedEvent(event: SessionEvent): void {
-    // The shared fold receives every row. File writers, host notifications and
-    // runtime waiters belong only to the process that authored the fact.
+  receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
+    // File writers, host notifications and runtime waiters belong only to
+    // the process that authored the fact.
     const { self } = SubscriptionRef.getUnsafe(this.graph.local);
-    if (event.ownerId == null || !self.includes(event.ownerId)) return;
-    this.applySnapshotEvent(event);
-    if (event.type === 'result') {
-      for (const listener of [...this.resultListeners]) {
-        try {
-          listener({
-            ...event,
-            streamId: aggregateTarget(event.aggregateId).id,
-          });
-        } catch (error) {
-          logger.warn('Session result listener threw', { data: error });
-        }
-      }
+    if (event.ownerId == null || !self.includes(event.ownerId)) {
+      return Effect.void;
     }
+    return this.applySnapshotEvent(event).pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          if (event.type === 'result') {
+            for (const listener of [...this.resultListeners]) {
+              try {
+                listener({
+                  ...event,
+                  streamId: aggregateTarget(event.aggregateId).id,
+                });
+              } catch (error) {
+                logger.warn('Session result listener threw', { data: error });
+              }
+            }
+          }
 
-    if (event.type !== 'status') return;
-    const status: StatusEvent = {
-      ...event,
-      streamId: aggregateTarget(event.aggregateId).id as StreamTabId,
-    };
-    for (const port of [...this.statusPorts]) {
-      try {
-        port(status);
-      } catch (error) {
-        logger.warn('Session status port threw', { data: error });
-      }
-    }
-    this.executions.handleStatus(status.streamId);
+          if (event.type !== 'status') return;
+          const status: StatusEvent = {
+            ...event,
+            streamId: aggregateTarget(event.aggregateId).id as StreamTabId,
+          };
+          for (const port of [...this.statusPorts]) {
+            try {
+              port(status);
+            } catch (error) {
+              logger.warn('Session status port threw', { data: error });
+            }
+          }
+          this.executions.handleStatus(status.streamId);
+        }),
+      ),
+    );
   }
 
   /**

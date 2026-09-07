@@ -31,6 +31,7 @@ import {
   ManagedRuntime,
   Option,
   Queue,
+  Schedule,
   RcMap,
   Stream,
   SubscriptionRef,
@@ -63,6 +64,7 @@ import {
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   aggregateId as qualifyAggregateId,
+  aggregateTarget,
   ownerIdentity,
   type OwnerId,
   type SessionCloseReport,
@@ -78,8 +80,12 @@ import {
 } from '@shared/session/traceEntries';
 import { Database } from '@shared/session/database';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
+import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { databaseLayer } from './Database';
+import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
+import { sweepLeftoverStreams } from './sweepLeftoverStreams';
+import { applyCommittedStreamRemoval } from './applyCommittedStreamRemoval';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -273,6 +279,11 @@ const sessionHandleLayer = (
       const subscriptions = yield* TranscriptSubscriptions;
       const delivered = yield* SubscriptionRef.make(0);
       const tailEnded = yield* Deferred.make<void>();
+      const settledCursor = () =>
+        Math.min(
+          SubscriptionRef.getUnsafe(view.ref).cursor,
+          SubscriptionRef.getUnsafe(delivered),
+        );
       const graph = (session: SessionHandle): SessionGraph => ({
         events: reads,
         publish: (events) =>
@@ -313,9 +324,8 @@ const sessionHandleLayer = (
           }),
         view: view.ref,
         viewChanges: view.changes,
-        // The plane's tail woken by the view's cursor instead of the log's
-        // level: the same rows `events.all` delivers, none before the fold
-        // has landed the state it produced.
+        // Release rows only once both the view fold and local reconciliation
+        // have applied them. Readers can then query either state consistently.
         folded: (fromCommit) =>
           tailFrom(
             (from) =>
@@ -323,12 +333,11 @@ const sessionHandleLayer = (
                 eventLog.readAll(from).pipe(Effect.orDie),
               ),
             {
-              get: SubscriptionRef.get(view.ref).pipe(
-                Effect.map((v) => v.cursor),
-              ),
-              changes: SubscriptionRef.changes(view.ref).pipe(
-                Stream.map((v) => v.cursor),
-              ),
+              get: Effect.sync(settledCursor),
+              changes: Stream.merge(
+                SubscriptionRef.changes(view.ref),
+                SubscriptionRef.changes(delivered),
+              ).pipe(Stream.map(settledCursor)),
             },
             fromCommit,
           ),
@@ -349,8 +358,17 @@ const sessionHandleLayer = (
         Scope.make(),
         (scope, exit) => Scope.close(scope, exit),
       );
+      // Capture the startup cohort before callers can publish new launches.
+      const initialListing = yield* eventLog.readListing().pipe(Effect.orDie);
       const session = yield* Effect.acquireRelease(
-        Effect.sync(() => new SessionHandle({ ...key.open, graph })),
+        Effect.sync(
+          () =>
+            new SessionHandle({
+              ...key.open,
+              snapshots: new StreamSnapshotStore(eventLog),
+              graph,
+            }),
+        ),
         (session) =>
           Effect.sync(() => session.unwind()).pipe(
             Effect.ensuring(Effect.promise(() => session.settlePublications())),
@@ -359,12 +377,43 @@ const sessionHandleLayer = (
       yield* SubscriptionRef.set(delivered, anchor);
       yield* reads.all(anchor).pipe(
         Stream.runForEach((event) =>
-          Effect.sync(() => session.receiveCommittedEvent(event)).pipe(
+          session.receiveCommittedEvent(event).pipe(
+            Effect.andThen(() =>
+              event.type === 'stream.removed'
+                ? applyCommittedStreamRemoval(
+                    session,
+                    aggregateTarget(event.aggregateId).id,
+                  )
+                : Effect.void,
+            ),
             Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
           ),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
+      );
+      yield* sweepLeftoverStreams(session, initialListing).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() =>
+            log.warn('Background-shell cleanup failed.', {
+              data: error,
+            }),
+          ),
+        ),
+        Effect.forkScoped,
+      );
+      // The session owns retries and waits for in-flight removal on close.
+      yield* collectPendingDeletions(eventLog, key.storage).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            log.warn(
+              'Deletion records could not be read; cleanup remains pending.',
+              { data: error },
+            );
+          }),
+        ),
+        Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
+        Effect.forkScoped,
       );
       return session;
     }),

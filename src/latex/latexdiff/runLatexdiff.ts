@@ -1,13 +1,15 @@
 /**
  * Host-neutral orchestration for a full latexdiff run.
  *
- * Resolves which round outputs to diff — preferring caller-supplied metadata,
+ * Resolves which round outputs to diff: preferring caller-supplied metadata,
  * then a run-id-scoped run-dir scan, then agent/model/input auto-discovery —
  * and dispatches to the metadata-driven or workspace-scan diff engine. This is
  * the single source of truth shared by every host (VS Code command, CLI,
  * desktop); each host keeps only its own UX (progress chrome, prompts, result
  * rendering) and calls this with a {@link DiffProgressReporter}.
  */
+
+import { Effect } from 'effect';
 
 import { createLog } from '@logger/logUtils';
 import {
@@ -22,14 +24,17 @@ import type {
   RoundIndexed,
 } from '@shared/schemas';
 
+import type { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   runLatexdiffFromMetadata,
   runLatexdiffViaWorkspaceScan,
 } from './diffOperations';
+import { discoverLatestExecutionOutputs } from './outputDiscovery';
 import {
-  discoverLatestExecutionOutputs,
   scanRunDirForOutputs,
-} from './outputDiscovery';
+  type RunOutputFilesystem,
+} from './runOutputFiles';
 import type { LatexExecutionDiscoveryPort } from './executionDiscovery';
 import type { MathMarkupOption } from './mathMarkup';
 import type {
@@ -42,7 +47,7 @@ import type {
  * Normalize arbitrary command payload metadata into the canonical round
  * record. VS Code commands can be invoked with any argument shape, so this
  * routes through the same canonical parse entry used for persisted
- * round-indexed data — malformed rounds/items are dropped rather than
+ * round-indexed data: malformed rounds/items are dropped rather than
  * crashing the command handler.
  */
 export function normalizeRunLatexdiffOutputsByRound(
@@ -65,6 +70,8 @@ export interface RunLatexdiffForExecutionParams {
   readonly inputFile: string;
   /** Agent-owned execution listing injected by hosts (metadata auto-discovery). */
   readonly executionDiscovery: LatexExecutionDiscoveryPort;
+  readonly snapshots: Pick<StreamSnapshotStore, 'read'>;
+  readonly filesystem: RunOutputFilesystem;
   readonly outputFiles?: string[];
   /** Execution to scope output discovery to (progress-toolbar invocations). */
   readonly runId?: string | null;
@@ -87,96 +94,110 @@ interface LatexdiffExecutionResult {
   readonly source: LatexdiffOutputsSource;
 }
 
-export async function runLatexdiffForExecution(
-  params: RunLatexdiffForExecutionParams,
-): Promise<LatexdiffExecutionResult> {
-  const {
-    agent,
-    model,
-    inputFile,
-    executionDiscovery,
-    outputFiles,
-    mathMarkup,
-    generateBetweenRoundDiffs,
-    latexdiff,
-    progress,
-  } = params;
-  const runId = params.runId ?? undefined;
-  const log = createLog(latexdiff.channel);
+export const runLatexdiffForExecution = Effect.fn('runLatexdiffForExecution')(
+  function* (
+    params: RunLatexdiffForExecutionParams,
+  ): Effect.fn.Return<LatexdiffExecutionResult, Error> {
+    const {
+      agent,
+      model,
+      inputFile,
+      executionDiscovery,
+      outputFiles,
+      mathMarkup,
+      generateBetweenRoundDiffs,
+      latexdiff,
+      progress,
+    } = params;
+    const runId = params.runId ?? undefined;
+    const log = createLog(latexdiff.channel);
 
-  let outputsByRound = params.outputsByRound ?? null;
-  let source: LatexdiffOutputsSource = outputsByRound
-    ? 'metadata'
-    : 'workspace-scan';
-  let discoveredExecutionId: ExecutionId | undefined;
+    let outputsByRound = params.outputsByRound ?? null;
+    let source: LatexdiffOutputsSource = outputsByRound
+      ? 'metadata'
+      : 'workspace-scan';
+    let discoveredExecutionId: ExecutionId | undefined;
 
-  // When the caller pins a runId (progress-toolbar invocations do), scope
-  // output discovery to that execution first. Otherwise metadata
-  // auto-discovery can return a different, newer run with the same
-  // agent/model/inputFile — silently diffing against the wrong outputs.
-  if (!outputsByRound && runId) {
-    const parsedRunId = ExecutionIdSchema.safeParse(runId);
-    if (parsedRunId.success) {
-      const scanned = await scanRunDirForOutputs(
-        parsedRunId.data,
-        inputFile,
-        outputFiles,
+    // When the caller pins a runId (progress-toolbar invocations do), scope
+    // output discovery to that execution first. Otherwise metadata
+    // auto-discovery can return a different, newer run with the same
+    // agent/model/inputFile: silently diffing against the wrong outputs.
+    if (!outputsByRound && runId) {
+      const parsedRunId = ExecutionIdSchema.safeParse(runId);
+      if (parsedRunId.success) {
+        const scanned = yield* Effect.tryPromise({
+          try: () =>
+            scanRunDirForOutputs(
+              parsedRunId.data,
+              inputFile,
+              outputFiles,
+              latexdiff.channel,
+              params.filesystem,
+            ),
+          catch: ensureError,
+        });
+        if (scanned) {
+          outputsByRound = scanned;
+          source = 'run-dir-scan';
+          discoveredExecutionId = parsedRunId.data;
+          log.debug(
+            `Using run-dir scan outputs from execution ${parsedRunId.data}`,
+          );
+        }
+      }
+    }
+
+    // No runId given: fall back to searching executions by agent/model/inputFile
+    // and pulling their persisted metadata. When the caller pinned a runId but
+    // the run-dir scan turned up nothing, DO NOT drop to latest-matching
+    // auto-discovery: that would silently diff against a different (usually
+    // newer) execution with the same agent/model/input.
+    if (!outputsByRound && !runId) {
+      const discovered = yield* discoverLatestExecutionOutputs(
+        executionDiscovery,
+        params.snapshots,
+        {
+          agent,
+          model,
+          inputFile,
+        },
         latexdiff.channel,
+        params.filesystem,
       );
-      if (scanned) {
-        outputsByRound = scanned;
-        source = 'run-dir-scan';
-        discoveredExecutionId = parsedRunId.data;
+      if (discovered) {
+        outputsByRound = discovered.rounds;
+        source = 'metadata';
+        discoveredExecutionId = discovered.executionId;
         log.debug(
-          `Using run-dir scan outputs from execution ${parsedRunId.data}`,
+          `Using metadata outputs from execution ${discovered.executionId}`,
         );
       }
     }
-  }
 
-  // No runId given: fall back to searching executions by agent/model/inputFile
-  // and pulling their persisted metadata. When the caller pinned a runId but
-  // the run-dir scan turned up nothing, DO NOT drop to latest-matching
-  // auto-discovery — that would silently diff against a different (usually
-  // newer) execution with the same agent/model/input.
-  if (!outputsByRound && !runId) {
-    const discovered = await discoverLatestExecutionOutputs(
-      executionDiscovery,
-      {
-        agent,
-        model,
-        inputFile,
-      },
-      latexdiff.channel,
-    );
-    if (discovered) {
-      outputsByRound = discovered.rounds;
-      source = 'metadata';
-      discoveredExecutionId = discovered.executionId;
-      log.debug(
-        `Using metadata outputs from execution ${discovered.executionId}`,
-      );
-    }
-  }
+    const rounds = outputsByRound;
+    const outcome = yield* Effect.tryPromise({
+      try: () =>
+        rounds
+          ? runLatexdiffFromMetadata({
+              rounds,
+              mathMarkup,
+              generateBetweenRoundDiffs,
+              latexdiff,
+              progress,
+            })
+          : runLatexdiffViaWorkspaceScan({
+              agent,
+              model,
+              inputFile,
+              outputFiles,
+              mathMarkup,
+              generateBetweenRoundDiffs,
+              latexdiff,
+              progress,
+            }),
+      catch: ensureError,
+    });
 
-  const outcome = outputsByRound
-    ? await runLatexdiffFromMetadata({
-        rounds: outputsByRound,
-        mathMarkup,
-        generateBetweenRoundDiffs,
-        latexdiff,
-        progress,
-      })
-    : await runLatexdiffViaWorkspaceScan({
-        agent,
-        model,
-        inputFile,
-        outputFiles,
-        mathMarkup,
-        generateBetweenRoundDiffs,
-        latexdiff,
-        progress,
-      });
-
-  return { outcome, executionId: discoveredExecutionId, source };
-}
+    return { outcome, executionId: discoveredExecutionId, source };
+  },
+);

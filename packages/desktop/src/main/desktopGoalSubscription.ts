@@ -12,7 +12,7 @@ import { goalStateChanges, type GoalStateChange } from '@tools/goal';
 
 /** Read a session's goal-state changes from now on. */
 export function subscribeDesktopGoalChanges(
-  session: Pick<SessionHandle, 'events' | 'now'>,
+  session: Pick<SessionHandle, 'folded' | 'now'>,
   listener: (change: GoalStateChange) => void,
 ): () => void {
   const fiber = effectRuntime().runFork(

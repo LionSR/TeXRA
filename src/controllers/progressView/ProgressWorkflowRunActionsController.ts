@@ -103,7 +103,6 @@ export class ProgressWorkflowRunActionsController {
     stream: StreamTabId,
     action: (config: AgentConfig, executionId?: string) => Promise<void>,
   ): Promise<void> {
-    await this.deps.state.preload?.(stream);
     const { config, executionId } = this.deps.state.getRunMetadata(stream);
     if (!config) {
       // This controller holds no messaging port, so the refusal is at least

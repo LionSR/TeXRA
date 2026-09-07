@@ -173,6 +173,7 @@ describe('external inquiry continuation session routing', () => {
       );
       await session.settlePublications();
 
+      await session.settlePublications();
       expect(explicit.facts).toMatchObject([
         {
           type: 'inquiryThreadUpdated',
@@ -210,6 +211,7 @@ describe('external inquiry continuation session routing', () => {
       );
       await session.settlePublications();
 
+      await session.settlePublications();
       expect(run.facts).toMatchObject([
         expect.objectContaining({
           type: 'inquiryThreadUpdated',

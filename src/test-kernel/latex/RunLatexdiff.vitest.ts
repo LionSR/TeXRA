@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaTeXdiffService } from '@latex/latexdiff';
 import type { LatexExecutionDiscoveryPort } from '@latex/latexdiff/executionDiscovery';
@@ -13,8 +14,11 @@ const mocks = vi.hoisted(() => ({
   runLatexdiffViaWorkspaceScan: vi.fn(),
 }));
 
-vi.mock('@latex/latexdiff/outputDiscovery', () => ({
+vi.mock('@latex/latexdiff/runOutputFiles', () => ({
   scanRunDirForOutputs: mocks.scanRunDirForOutputs,
+}));
+
+vi.mock('@latex/latexdiff/outputDiscovery', () => ({
   discoverLatestExecutionOutputs: mocks.discoverLatestExecutionOutputs,
 }));
 
@@ -43,7 +47,11 @@ const executionDiscovery: LatexExecutionDiscoveryPort = {
   readStreamId: async () => undefined,
 };
 
+const snapshots = { read: vi.fn() };
+
 const baseRequest = {
+  filesystem: { readDirectory: vi.fn(), isSymlink: vi.fn() },
+  snapshots,
   agent: 'revise',
   model: 'claude-opus-4-8',
   inputFile: 'paper.tex',
@@ -62,10 +70,12 @@ describe('runLatexdiffForExecution', () => {
 
   it('uses caller-supplied outputs without any discovery', async () => {
     const rounds = roundMap();
-    const result = await runLatexdiffForExecution({
-      ...baseRequest,
-      outputsByRound: rounds,
-    });
+    const result = await Effect.runPromise(
+      runLatexdiffForExecution({
+        ...baseRequest,
+        outputsByRound: rounds,
+      }),
+    );
 
     expect(result.source).toBe('metadata');
     expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalledWith(
@@ -78,10 +88,12 @@ describe('runLatexdiffForExecution', () => {
   it('scopes a valid runId to a run-dir scan before metadata discovery', async () => {
     mocks.scanRunDirForOutputs.mockResolvedValue(roundMap());
 
-    const result = await runLatexdiffForExecution({
-      ...baseRequest,
-      runId: 'abc123',
-    });
+    const result = await Effect.runPromise(
+      runLatexdiffForExecution({
+        ...baseRequest,
+        runId: 'abc123',
+      }),
+    );
 
     expect(result.source).toBe('run-dir-scan');
     expect(result.executionId).toBe('abc123');
@@ -90,6 +102,7 @@ describe('runLatexdiffForExecution', () => {
       'paper.tex',
       undefined,
       'test',
+      baseRequest.filesystem,
     );
     expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
     expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
@@ -98,10 +111,12 @@ describe('runLatexdiffForExecution', () => {
   it('does not fall back to auto-discovery when a pinned runId scan misses', async () => {
     mocks.scanRunDirForOutputs.mockResolvedValue(null);
 
-    const result = await runLatexdiffForExecution({
-      ...baseRequest,
-      runId: 'abc123',
-    });
+    const result = await Effect.runPromise(
+      runLatexdiffForExecution({
+        ...baseRequest,
+        runId: 'abc123',
+      }),
+    );
 
     expect(result.source).toBe('workspace-scan');
     expect(mocks.discoverLatestExecutionOutputs).not.toHaveBeenCalled();
@@ -109,10 +124,12 @@ describe('runLatexdiffForExecution', () => {
   });
 
   it('ignores an invalid runId without scanning or auto-discovering', async () => {
-    const result = await runLatexdiffForExecution({
-      ...baseRequest,
-      runId: 'not-hex!',
-    });
+    const result = await Effect.runPromise(
+      runLatexdiffForExecution({
+        ...baseRequest,
+        runId: 'not-hex!',
+      }),
+    );
 
     expect(result.source).toBe('workspace-scan');
     expect(mocks.scanRunDirForOutputs).not.toHaveBeenCalled();
@@ -121,31 +138,39 @@ describe('runLatexdiffForExecution', () => {
   });
 
   it('auto-discovers by agent/model/input when no runId is given', async () => {
-    mocks.discoverLatestExecutionOutputs.mockResolvedValue({
-      executionId: 'def456',
-      rounds: roundMap(),
-    });
+    mocks.discoverLatestExecutionOutputs.mockReturnValue(
+      Effect.succeed({
+        executionId: 'def456',
+        rounds: roundMap(),
+      }),
+    );
 
-    const result = await runLatexdiffForExecution({ ...baseRequest });
+    const result = await Effect.runPromise(
+      runLatexdiffForExecution({ ...baseRequest }),
+    );
 
     expect(result.source).toBe('metadata');
     expect(result.executionId).toBe('def456');
     expect(mocks.discoverLatestExecutionOutputs).toHaveBeenCalledWith(
       executionDiscovery,
+      snapshots,
       {
         agent: 'revise',
         model: 'claude-opus-4-8',
         inputFile: 'paper.tex',
       },
       'test',
+      baseRequest.filesystem,
     );
     expect(mocks.runLatexdiffFromMetadata).toHaveBeenCalled();
   });
 
   it('falls back to a workspace scan when auto-discovery finds nothing', async () => {
-    mocks.discoverLatestExecutionOutputs.mockResolvedValue(null);
+    mocks.discoverLatestExecutionOutputs.mockReturnValue(Effect.succeed(null));
 
-    const result = await runLatexdiffForExecution({ ...baseRequest });
+    const result = await Effect.runPromise(
+      runLatexdiffForExecution({ ...baseRequest }),
+    );
 
     expect(result.source).toBe('workspace-scan');
     expect(mocks.runLatexdiffViaWorkspaceScan).toHaveBeenCalledWith(
@@ -175,10 +200,12 @@ describe('runLatexdiffForExecution logger seam', () => {
     mocks.scanRunDirForOutputs.mockResolvedValue(roundMap());
     const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
 
-    const result = await runLatexdiffForExecution({
-      ...baseRequest,
-      runId: 'abc123',
-    });
+    const result = await Effect.runPromise(
+      runLatexdiffForExecution({
+        ...baseRequest,
+        runId: 'abc123',
+      }),
+    );
 
     expect(result.source).toBe('run-dir-scan');
     expect(debug).toHaveBeenCalledWith(
@@ -190,13 +217,17 @@ describe('runLatexdiffForExecution logger seam', () => {
   });
 
   it('logs the metadata discovery resolution on the latexdiff runtime channel', async () => {
-    mocks.discoverLatestExecutionOutputs.mockResolvedValue({
-      executionId: 'def456',
-      rounds: roundMap(),
-    });
+    mocks.discoverLatestExecutionOutputs.mockReturnValue(
+      Effect.succeed({
+        executionId: 'def456',
+        rounds: roundMap(),
+      }),
+    );
     const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
 
-    const result = await runLatexdiffForExecution({ ...baseRequest });
+    const result = await Effect.runPromise(
+      runLatexdiffForExecution({ ...baseRequest }),
+    );
 
     expect(result.source).toBe('metadata');
     expect(debug).toHaveBeenCalledWith(
