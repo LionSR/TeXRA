@@ -53,16 +53,14 @@ function runKnip({ production = false } = {}) {
     maxBuffer: 32 * 1024 * 1024,
     // Knip's vite plugin loads packages/extension/vite.config.mts for entry
     // detection, and that config throws unless VITE_WEBVIEW names a webview.
-    // Without this the analyzer swallowed a permanent config-load ERROR on
-    // every green run, hiding any real config failure behind it. Build callers
-    // set the variable themselves, so the per-webview build guard is untouched.
-    env: { ...process.env, VITE_WEBVIEW: 'webview' },
+    // Both frontend entry points are also listed explicitly in knip.json.
+    env: { ...process.env, VITE_WEBVIEW: 'progressView' },
   });
   if (result.error) {
     throw result.error;
   }
-  // Knip exits 1 whenever it finds any issue at all, which is expected here.
-  // A non-zero status is only a real failure if it did not produce JSON.
+  // Findings and configuration errors can both exit 1 with parseable JSON;
+  // the parser must inspect diagnostics before accepting the findings.
   return parseKnipIssues(result.stdout, result.stderr);
 }
 

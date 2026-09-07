@@ -1,3 +1,6 @@
+// Node.js imports
+import { stripVTControlCharacters } from 'node:util';
+
 const EMPTY_COUNTS = { files: 0, exports: 0, types: 0, duplicates: 0 };
 const KNIP_KINDS = new Set(Object.keys(EMPTY_COUNTS));
 
@@ -113,6 +116,10 @@ export function countByCategory(findings) {
 // Split out from runKnip() so the parsing/validation logic is unit-testable
 // without spawning the real knip binary.
 export function parseKnipIssues(stdout, stderr) {
+  const diagnostics = stripVTControlCharacters(stderr);
+  if (/^ERROR:/m.test(diagnostics)) {
+    throw new Error(`knip reported an analysis error:\n${diagnostics}`);
+  }
   let parsed;
   try {
     parsed = JSON.parse(stdout);
