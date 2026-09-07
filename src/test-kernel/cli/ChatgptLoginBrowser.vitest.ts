@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { effectRuntime } from '@platform/processRuntime';
 
 const mocks = vi.hoisted(() => ({
   codexCoordinator: vi.fn(() => ({})),
@@ -28,7 +29,7 @@ const signInCliChatGpt = (
   options: { writeProgress: (message: string) => void },
   signal?: AbortSignal,
 ) =>
-  Effect.runPromise(signInCliSubscription('chatgpt', init, options), {
+  effectRuntime().runPromise(signInCliSubscription('chatgpt', init, options), {
     signal,
   });
 

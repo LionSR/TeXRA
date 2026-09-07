@@ -1,3 +1,4 @@
+import { Effect, Fiber, type Scheduler } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
@@ -8,7 +9,78 @@ import {
 } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
+/** Run the registry's persistence drain at the test's edge until it ends. */
+async function withDrain(
+  registry: AgentCliSessionRegistry,
+  body: () => Promise<void>,
+): Promise<void> {
+  const drain = Effect.runFork(registry.persistenceDrain());
+  try {
+    await body();
+  } finally {
+    await Effect.runPromise(Fiber.interrupt(drain));
+  }
+}
+
 describe('AgentCliSessionRegistry', () => {
+  it('keeps a queued mapping when a drain is interrupted at a scheduler handoff', async () => {
+    // Sweep actual runtime yield points through dequeue and persistence. A
+    // surviving drain must find the write unless the retiring drain owns it.
+    for (let pauseAfter = 2; pauseAfter < 80; pauseAfter++) {
+      const tasks: Array<() => void> = [];
+      let operations = 0;
+      const scheduler: Scheduler.Scheduler = {
+        executionMode: 'async',
+        shouldYield: () => ++operations === pauseAfter,
+        makeDispatcher: () => ({
+          scheduleTask: (task) => tasks.push(task),
+          flush: () => {
+            while (tasks.length > 0) tasks.shift()?.();
+          },
+        }),
+      };
+      const executions = testExecutionRegistry();
+      const persistSessionId = vi.fn(async () => {});
+      const registry = new AgentCliSessionRegistry(
+        'test_session_id',
+        executions,
+        {
+          persistSessionId,
+          reportPersistenceFailure: vi.fn(),
+        },
+      );
+      registry.register('session-handoff', {
+        childStreamId: 'child-handoff' as StreamTabId,
+        executionId: 'execution-handoff' as ExecutionId,
+      });
+      const retiring = Effect.runFork(registry.persistenceDrain(), {
+        scheduler,
+      });
+      const interrupted = Effect.runPromise(Fiber.interrupt(retiring));
+      // The paused scheduler also owns cancellation cleanup and promise
+      // settlement. Drain it before starting the surviving consumer.
+      for (let step = 0; step < 100; step++) {
+        while (tasks.length > 0) tasks.shift()?.();
+        await Promise.resolve();
+      }
+      await interrupted;
+      try {
+        await withDrain(registry, async () => {
+          await vi.waitFor(() =>
+            expect(persistSessionId).toHaveBeenCalledOnce(),
+          );
+        });
+        expect(persistSessionId).toHaveBeenCalledWith(
+          'execution-handoff',
+          'test_session_id',
+          'session-handoff',
+        );
+      } finally {
+        executions.dispose();
+      }
+    }
+  });
+
   it.each([
     {
       kind: 'rejected',
@@ -39,22 +111,24 @@ describe('AgentCliSessionRegistry', () => {
       );
 
       try {
-        expect(
-          registry.register('session-write-failure', {
-            childStreamId: 'child-write-failure' as StreamTabId,
-            executionId,
-          }),
-        ).toBeUndefined();
+        await withDrain(registry, async () => {
+          expect(
+            registry.register('session-write-failure', {
+              childStreamId: 'child-write-failure' as StreamTabId,
+              executionId,
+            }),
+          ).toBeUndefined();
 
-        await vi.waitFor(() => {
-          expect(reportPersistenceFailure).toHaveBeenCalledWith(
-            executionId,
-            writeError,
-          );
+          await vi.waitFor(() => {
+            expect(reportPersistenceFailure).toHaveBeenCalledWith(
+              executionId,
+              writeError,
+            );
+          });
+          expect(reportPersistenceFailure).toHaveBeenCalledOnce();
+          expect(persistSessionId).toHaveBeenCalledOnce();
+          expect(registry.lookup('session-write-failure')).toBeDefined();
         });
-        expect(reportPersistenceFailure).toHaveBeenCalledOnce();
-        expect(persistSessionId).toHaveBeenCalledOnce();
-        expect(registry.lookup('session-write-failure')).toBeDefined();
       } finally {
         registry.release('session-write-failure');
         executions.dispose();
@@ -78,14 +152,16 @@ describe('AgentCliSessionRegistry', () => {
       },
     );
 
-    registry.register('session-log-failure', {
-      childStreamId: 'child-log-failure' as StreamTabId,
-      executionId: 'execution-log-failure' as ExecutionId,
-    });
+    await withDrain(registry, async () => {
+      registry.register('session-log-failure', {
+        childStreamId: 'child-log-failure' as StreamTabId,
+        executionId: 'execution-log-failure' as ExecutionId,
+      });
 
-    await vi.waitFor(() => expect(persistSessionId).toHaveBeenCalledOnce());
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(registry.lookup('session-log-failure')).toBeDefined();
+      await vi.waitFor(() => expect(persistSessionId).toHaveBeenCalledOnce());
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(registry.lookup('session-log-failure')).toBeDefined();
+    });
     registry.release('session-log-failure');
     executions.dispose();
   });
@@ -104,7 +180,7 @@ describe('AgentCliSessionRegistry', () => {
       expect(registry.claim('session-a')).toBeUndefined();
       expect(registry.lookup('session-a')).toBeUndefined();
 
-      const active = registry.waitForActive('session-a');
+      const active = Effect.runPromise(registry.waitForActive('session-a'));
       registry.register('session-a', entry);
 
       await expect(active).resolves.toBe(entry);
@@ -136,7 +212,7 @@ describe('AgentCliSessionRegistry', () => {
     try {
       const releaseClaim = registry.claim('session-a');
       expect(releaseClaim).toBeTypeOf('function');
-      const active = registry.waitForActive('session-a');
+      const active = Effect.runPromise(registry.waitForActive('session-a'));
 
       releaseClaim?.();
 
@@ -146,7 +222,7 @@ describe('AgentCliSessionRegistry', () => {
 
       releaseNextClaim?.();
       await expect(
-        registry.waitForActive('session-a'),
+        Effect.runPromise(registry.waitForActive('session-a')),
       ).resolves.toBeUndefined();
     } finally {
       executions.dispose();

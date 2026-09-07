@@ -390,13 +390,28 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
     parameters.max_completion_tokens = turn.controls.maxOutputTokens;
     if (turn.tools.length > 0)
       parameters.parallel_tool_calls = turn.controls.parallelToolCalls;
-    if (turn.protocol === 'xai-chat' && config.protocol === 'xai-chat') {
+    if (config.protocol === 'openai-chat' || config.protocol === 'xai-chat') {
+      if (
+        config.protocol === 'openai-chat' &&
+        !config.supportsTemperature &&
+        turn.controls.temperature !== null
+      ) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'The selected OpenAI Chat model does not support temperature.',
+        });
+      }
       if (turn.controls.effort !== null) {
-        if (!config.supportedEfforts.includes(turn.controls.effort)) {
+        const supportedEfforts: readonly NonNullable<TurnRequest['effort']>[] =
+          config.supportedEfforts;
+        if (!supportedEfforts.includes(turn.controls.effort)) {
           return yield* new ModelError({
             kind: 'unsupported',
             message:
-              'The selected xAI model does not support this reasoning effort.',
+              config.protocol === 'xai-chat'
+                ? 'The selected xAI model does not support this reasoning effort.'
+                : 'The selected OpenAI Chat model does not support this reasoning effort.',
           });
         }
         parameters.reasoning_effort = turn.controls.effort;
@@ -597,8 +612,6 @@ export function openaiChatModel(
         parsed.data.thinkingLevel !== undefined ||
         parsed.data.continuation !== undefined ||
         parsed.data.reasoning !== undefined ||
-        parsed.data.effort === 'none' ||
-        parsed.data.effort === 'minimal' ||
         parsed.data.serviceTier !== undefined ||
         parsed.data.cache !== undefined ||
         (parsed.data.stopSequences !== undefined &&
@@ -614,11 +627,11 @@ export function openaiChatModel(
         });
       }
       if (
-        ((config.protocol === 'openai-chat' ||
-          config.protocol === 'dashscope-chat') &&
+        (config.protocol === 'dashscope-chat' &&
           (parsed.data.thinking !== undefined ||
             parsed.data.effort !== undefined)) ||
-        (config.protocol === 'xai-chat' &&
+        ((config.protocol === 'openai-chat' ||
+          config.protocol === 'xai-chat') &&
           parsed.data.thinking !== undefined) ||
         (config.protocol !== 'openai-chat' &&
           config.protocol !== 'xai-chat' &&
@@ -643,15 +656,29 @@ export function openaiChatModel(
       const maxOutputTokens =
         parsed.data.maxOutputTokens ?? config.defaults.maxOutputTokens;
       let controls: ChatTurn['controls'];
-      if (config.protocol === 'xai-chat') {
+      if (config.protocol === 'openai-chat' || config.protocol === 'xai-chat') {
+        if (
+          config.protocol === 'openai-chat' &&
+          !config.supportsTemperature &&
+          parsed.data.temperature !== undefined
+        ) {
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message:
+              'The selected OpenAI Chat model does not support temperature.',
+          });
+        }
         const effort =
           parsed.data.effort === undefined
             ? config.defaults.effort
             : parsed.data.effort;
-        if (effort === 'max') {
+        if (
+          config.protocol === 'xai-chat' &&
+          (effort === 'max' || effort === 'none' || effort === 'minimal')
+        ) {
           return yield* new ModelError({
             kind: 'unsupported',
-            message: 'xAI Chat does not support max reasoning effort.',
+            message: 'xAI Chat does not support this reasoning effort.',
           });
         }
         controls = {
@@ -662,10 +689,7 @@ export function openaiChatModel(
           toolChoice,
           effort,
         };
-      } else if (
-        config.protocol === 'openai-chat' ||
-        config.protocol === 'dashscope-chat'
-      ) {
+      } else if (config.protocol === 'dashscope-chat') {
         controls = {
           ...config.defaults,
           temperature: parsed.data.temperature ?? config.defaults.temperature,
@@ -673,14 +697,17 @@ export function openaiChatModel(
           parallelToolCalls:
             parsed.data.parallelToolCalls ?? config.defaults.parallelToolCalls,
           toolChoice,
-          ...(config.protocol === 'dashscope-chat'
-            ? {
-                stopSequences:
-                  parsed.data.stopSequences ?? config.defaults.stopSequences,
-              }
-            : {}),
+          stopSequences:
+            parsed.data.stopSequences ?? config.defaults.stopSequences,
         };
       } else {
+        if (parsed.data.effort === 'none' || parsed.data.effort === 'minimal') {
+          return yield* new ModelError({
+            kind: 'unsupported',
+            message:
+              'The selected Chat route does not support this reasoning effort.',
+          });
+        }
         const authoredThinking = parsed.data.thinking;
         if (
           authoredThinking?.mode === 'adaptive' ||

@@ -7,6 +7,7 @@
  * sanctioned boundary, not here.
  */
 import { Cause, Data, Deferred, Effect, Exit, Option, Semaphore } from 'effect';
+import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * A host port (secret storage), an SDK call, or a provider policy rejected.
@@ -111,7 +112,7 @@ function rethrowPortCause(error: unknown): never {
  * `Effect.run*` call itself in boundary code (PRD R1).
  */
 export type AuthProgramEdge = <A, E>(
-  program: Effect.Effect<A, E>,
+  program: Effect.Effect<A, E, HttpClient.HttpClient>,
 ) => Promise<Exit.Exit<A, E>>;
 
 let authProgramEdge: AuthProgramEdge | null = null;
@@ -128,7 +129,7 @@ export function installAuthProgramEdge(edge: AuthProgramEdge): void {
  * and interruption propagate as they are.
  */
 export async function runAuthProgram<A, E>(
-  program: Effect.Effect<A, E>,
+  program: Effect.Effect<A, E, HttpClient.HttpClient>,
   rethrow: (error: E) => never = rethrowPortCause,
 ): Promise<A> {
   if (!authProgramEdge) {

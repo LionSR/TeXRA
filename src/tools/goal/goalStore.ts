@@ -1,4 +1,3 @@
-import { Mutex } from 'async-mutex';
 import { Stream } from 'effect';
 
 import {
@@ -21,14 +20,17 @@ import {
   type GoalStatus,
   type StreamTabId,
 } from '@shared/schemas';
-import { filterNotNull, unique, hexId12 } from '@utils/core';
+import { filterNotNull, unique, hexId12, KeyedMutex } from '@utils/core';
 
 const STREAM_KEY_PREFIX = 'goals:byStream:';
 const INDEX_KEY = 'goals:index';
 // Stream index growth is user-driven (one entry per stream that ever had
 // a Goal). `forget()` removes entries; callers that delete a stream
 // without calling `forget()` leave dangling entries until next manual cleanup.
-const indexMutex = new Mutex();
+// Single logical resource (the index), so KeyedMutex (utils/core/keyedMutex.ts)
+// is used with one constant key rather than a bare Mutex — the same
+// primitive most other module-level locks in the codebase already use.
+const indexMutex = new KeyedMutex<'index'>();
 
 /** One goal mutation as observed on a session's event plane. */
 export interface GoalStateChange {
@@ -125,7 +127,7 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
 async function mutateIndex(
   mutate: (index: StreamTabId[]) => StreamTabId[],
 ): Promise<void> {
-  await indexMutex.runExclusive(async () => {
+  await indexMutex.runExclusive('index', async () => {
     const state = workspaceRoots().workspaceState;
     const index = readIndex();
     const next = mutate(index);

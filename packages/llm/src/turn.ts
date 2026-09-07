@@ -606,6 +606,10 @@ const OpenAIControlsSchema = z.strictObject({
   parallelToolCalls: z.boolean(),
   toolChoice: ToolChoiceSchema,
 });
+const OpenAIChatControlsSchema = OpenAIControlsSchema.extend({
+  temperature: OpenAIControlsSchema.shape.temperature.nullable(),
+  effort: ReasoningEffortSchema,
+});
 const GoogleControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
   store: z.boolean(),
@@ -718,8 +722,35 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     .readonly(),
   BindingSchema.extend({
     protocol: z.literal('openai-chat'),
-    defaults: OpenAIControlsSchema.omit({ toolChoice: true }).readonly(),
-  }).readonly(),
+    supportsTemperature: z.boolean(),
+    supportedEfforts: z.array(ReasoningEffortSchema.unwrap()).readonly(),
+    defaults: OpenAIChatControlsSchema.omit({ toolChoice: true }).readonly(),
+  })
+    .superRefine((configuration, ctx) => {
+      if (
+        !configuration.supportsTemperature &&
+        configuration.defaults.temperature !== null
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'temperature'],
+          message:
+            'A model without temperature support requires a null default.',
+        });
+      }
+      if (
+        configuration.defaults.effort !== null &&
+        !configuration.supportedEfforts.includes(configuration.defaults.effort)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaults', 'effort'],
+          message:
+            'The default reasoning effort must be supported by the selected route.',
+        });
+      }
+    })
+    .readonly(),
   BindingSchema.extend({
     protocol: z.literal('google-interactions'),
     defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
@@ -942,7 +973,7 @@ export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
     }).readonly(),
     PreparedInputSchema.extend({
       protocol: z.literal('openai-chat'),
-      controls: OpenAIControlsSchema.readonly(),
+      controls: OpenAIChatControlsSchema.readonly(),
     }).readonly(),
     PreparedInputSchema.extend({
       protocol: z.literal('google-interactions'),

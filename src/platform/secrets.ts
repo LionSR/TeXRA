@@ -44,15 +44,15 @@ export interface PlatformSecrets {
 }
 
 /**
- * Shared `get()` shape every {@link PlatformSecrets} implementation follows:
- * an environment-variable override, else the persisted value. Each host's
- * `get()` becomes a one-line call to this with its own env lookup.
+ * Default {@link PlatformSecrets.get} body: an environment-variable override,
+ * else the persisted value. Every host implements `get()` this way over its
+ * own `getEnv`/`getStored`, so each host's `get()` becomes a one-line
+ * `secretsGet(this, key)`.
  */
-export async function secretWithEnvOverride(
+export async function secretsGet(
+  secrets: Pick<PlatformSecrets, 'getEnv' | 'getStored'>,
   key: string,
-  getEnv: (key: string) => string | undefined,
-  getStored: (key: string) => Promise<string | undefined>,
 ): Promise<string | undefined> {
-  const envValue = getEnv(key);
-  return envValue !== undefined ? envValue : getStored(key);
+  const envValue = secrets.getEnv(key);
+  return envValue !== undefined ? envValue : secrets.getStored(key);
 }

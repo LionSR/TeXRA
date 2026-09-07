@@ -106,12 +106,15 @@ describe('agent creator orchestration', () => {
       {
         protocol: 'openai-chat',
         requestedModel: 'configured-helper',
+        supportsTemperature: true,
+        supportedEfforts: [],
         deployment: {
           endpoint: 'https://synthetic.invalid/v1',
           credentialScope: 'synthetic-agent-creator',
         },
         defaults: {
           temperature: 0,
+          effort: null,
           maxOutputTokens: 4096,
           parallelToolCalls: true,
         },

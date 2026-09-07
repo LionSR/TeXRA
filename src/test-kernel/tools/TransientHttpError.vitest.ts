@@ -100,7 +100,7 @@ describe('retryTransientFetch', () => {
         const retriesLeft: number[] = [];
         const fiber = yield* Effect.forkChild(
           Effect.flip(
-            retryTransientFetch(() => Promise.reject(kyErrorWithStatus(503)), {
+            retryTransientFetch(Effect.fail(kyErrorWithStatus(503)), {
               retries: 3,
               minTimeout: 1,
               timeoutMs: 1000,
@@ -111,14 +111,8 @@ describe('retryTransientFetch', () => {
             }),
           ),
         );
-        // Each backoff (at most 8 ms with jitter) sleeps on the test clock;
-        // let the rejected attempt settle before moving the clock past it.
-        for (let i = 0; i < 4; i++) {
-          yield* Effect.promise(
-            () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-          );
-          yield* TestClock.adjust('10 millis');
-        }
+        // The three backoff intervals together take less than 14 ms.
+        yield* TestClock.adjust('40 millis');
         const error = yield* Fiber.join(fiber);
         expect(error._tag).toBe('RequestFailed');
         expect(error.cause).toBeInstanceOf(HTTPError);

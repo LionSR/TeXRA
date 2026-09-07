@@ -26,7 +26,7 @@ import { requireInteractions } from '@tools/contextHelpers';
 import { errorResult } from '@tools/core/result';
 import { generateShortId } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { previewLabel } from '@utils/text/stringUtils';
 
 const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
@@ -108,7 +108,7 @@ export function buildBashApprovalRejectedResult(
   command: string,
   rejection: Extract<BashSettlement, { action: 'reject' }>,
 ): ToolResult {
-  const preview = truncateWithEllipsis(command, 60);
+  const preview = previewLabel(command);
   const classification = classifyRejection(rejection);
   let message: string;
   let guidance: string | undefined;

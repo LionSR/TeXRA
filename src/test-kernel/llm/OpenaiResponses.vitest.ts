@@ -761,8 +761,11 @@ describe('native OpenAI Responses protocol', () => {
                 protocol: 'openai-chat',
                 requestedModel: CONFIG.requestedModel,
                 deployment: CONFIG.deployment,
+                supportsTemperature: true,
+                supportedEfforts: [],
                 defaults: {
                   temperature: 0,
+                  effort: null,
                   maxOutputTokens: 100,
                   parallelToolCalls: true,
                 },

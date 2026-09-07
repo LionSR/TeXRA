@@ -13,7 +13,7 @@ import {
 import { Cause, Effect, Exit, Fiber, Stream } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const CONFIG = {
+const BASE_CONFIG = {
   protocol: 'openai-chat' as const,
   requestedModel: 'synthetic-model',
   deployment: {
@@ -22,6 +22,18 @@ const CONFIG = {
   },
   defaults: { temperature: 0, maxOutputTokens: 100, parallelToolCalls: true },
 };
+const CONFIG = {
+  ...BASE_CONFIG,
+  supportsTemperature: true,
+  supportedEfforts: [],
+  defaults: { ...BASE_CONFIG.defaults, effort: null },
+};
+const OPENAI_REASONING_CONFIG = {
+  ...CONFIG,
+  supportsTemperature: false,
+  supportedEfforts: ['low', 'medium', 'high'],
+  defaults: { ...BASE_CONFIG.defaults, temperature: null, effort: 'high' },
+} as const satisfies ChatConfiguration;
 const REQUEST: TurnRequest = {
   messages: [
     { role: 'user', content: [{ kind: 'text', text: 'Generate YAML.' }] },
@@ -29,7 +41,7 @@ const REQUEST: TurnRequest = {
 };
 const REASONING_CONFIGS = [
   {
-    ...CONFIG,
+    ...BASE_CONFIG,
     protocol: 'deepseek-chat',
     supportedEfforts: ['low', 'high', 'max'],
     supportsForcedToolChoice: false,
@@ -41,7 +53,7 @@ const REASONING_CONFIGS = [
     },
   },
   {
-    ...CONFIG,
+    ...BASE_CONFIG,
     protocol: 'kimi-chat',
     supportsImageInput: true,
     supportsMessageTokenEstimation: false,
@@ -58,7 +70,7 @@ const REASONING_CONFIGS = [
     },
   },
   {
-    ...CONFIG,
+    ...BASE_CONFIG,
     protocol: 'glm-chat',
     supportsImageInput: true,
     supportsThinkingDisabled: false,
@@ -74,17 +86,17 @@ const REASONING_CONFIGS = [
 ] as const satisfies readonly ChatConfiguration[];
 
 const XAI_CONFIG = {
-  ...CONFIG,
+  ...BASE_CONFIG,
   protocol: 'xai-chat',
   supportsImageInput: true,
   supportedEfforts: ['low', 'medium', 'high', 'xhigh'],
-  defaults: { ...CONFIG.defaults, effort: 'high' },
+  defaults: { ...BASE_CONFIG.defaults, effort: 'high' },
 } as const satisfies ChatConfiguration;
 const QWEN_CONFIG = {
-  ...CONFIG,
+  ...BASE_CONFIG,
   protocol: 'dashscope-chat',
   defaults: {
-    ...CONFIG.defaults,
+    ...BASE_CONFIG.defaults,
     stopSequences: ['</answer>'],
     thinking: { mode: 'disabled' },
   },
@@ -743,6 +755,8 @@ describe('native OpenAI Chat protocol', () => {
   );
 
   it.each([
+    { config: OPENAI_REASONING_CONFIG, controls: { temperature: 0 } },
+    { config: OPENAI_REASONING_CONFIG, controls: { effort: 'xhigh' } },
     { config: REASONING_CONFIGS[0], controls: { temperature: 1 } },
     { config: REASONING_CONFIGS[1], controls: { temperature: 1 } },
     {
@@ -774,6 +788,34 @@ describe('native OpenAI Chat protocol', () => {
   );
 
   it.each([
+    {
+      name: 'OpenAI selected reasoning default',
+      config: OPENAI_REASONING_CONFIG,
+      request: {},
+      wire: { max_completion_tokens: 100, reasoning_effort: 'high' },
+      omitted: ['temperature', 'max_tokens'],
+    },
+    {
+      name: 'OpenAI authored reasoning effort',
+      config: OPENAI_REASONING_CONFIG,
+      request: { effort: 'low' },
+      wire: { max_completion_tokens: 100, reasoning_effort: 'low' },
+      omitted: ['temperature', 'max_tokens'],
+    },
+    {
+      name: 'OpenAI explicit null effort',
+      config: OPENAI_REASONING_CONFIG,
+      request: { effort: null },
+      wire: { max_completion_tokens: 100 },
+      omitted: ['temperature', 'reasoning_effort', 'max_tokens'],
+    },
+    {
+      name: 'OpenAI selected none effort',
+      config: { ...CONFIG, supportedEfforts: ['none'] },
+      request: { effort: 'none' },
+      wire: { temperature: 0, reasoning_effort: 'none' },
+      omitted: ['max_tokens'],
+    },
     {
       name: 'DeepSeek non-thinking named tool',
       config: { ...REASONING_CONFIGS[0], supportsForcedToolChoice: true },
@@ -855,6 +897,16 @@ describe('native OpenAI Chat protocol', () => {
   );
 
   it.each([
+    {
+      name: 'OpenAI unsupported authored temperature',
+      config: OPENAI_REASONING_CONFIG,
+      request: { temperature: 0 },
+    },
+    {
+      name: 'OpenAI unsupported authored effort',
+      config: OPENAI_REASONING_CONFIG,
+      request: { effort: 'xhigh' },
+    },
     {
       name: 'DeepSeek thinking temperature',
       config: REASONING_CONFIGS[0],
@@ -1990,27 +2042,38 @@ describe('native OpenAI Chat protocol', () => {
     );
   });
 
-  it('freezes configured parallelism and the required tool before sending', async () => {
+  it('freezes configured controls and the required tool before sending', async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockImplementation(async () =>
         response(sse(toolChunk([call(0)], 'tool_calls'))),
       );
-    const config = structuredClone(CONFIG);
-    config.defaults.parallelToolCalls = false;
+    const config = structuredClone(OPENAI_REASONING_CONFIG);
+    Object.assign(config.defaults, { parallelToolCalls: false });
     const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
     const choice = { name: 'search' };
     const turn = await Effect.runPromise(
       model.prepareTurn({ ...REQUEST, tools: TOOLS, toolChoice: choice }),
     );
     assert(turn.mode === 'foreground');
-    config.defaults.parallelToolCalls = true;
+    Object.assign(config, {
+      supportsTemperature: true,
+      supportedEfforts: ['low', 'max'],
+    });
+    Object.assign(config.defaults, {
+      parallelToolCalls: true,
+      temperature: 1,
+      effort: 'low',
+    });
     choice.name = 'fetch';
     await Effect.runPromise(model.generateTurn(turn));
-    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
+    const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({
       parallel_tool_calls: false,
       tool_choice: { type: 'function', function: { name: 'search' } },
+      reasoning_effort: 'high',
     });
+    expect(body).not.toHaveProperty('temperature');
     await Effect.runPromise(
       model
         .prepareTurn({ ...REQUEST, tools: TOOLS, parallelToolCalls: true })
@@ -2044,6 +2107,12 @@ describe('native OpenAI Chat protocol', () => {
       ),
     );
     expect(forged.kind).toBe('invalid-request');
+    for (const request of [{ temperature: 0 }, { effort: 'max' }] as const) {
+      const failure = await Effect.runPromise(
+        Effect.flip(model.prepareTurn({ ...REQUEST, ...request })),
+      );
+      expect(failure.kind).toBe('unsupported');
+    }
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -2130,7 +2199,7 @@ describe('native OpenAI Chat protocol', () => {
       request = { ...REQUEST, mode: 'background' };
     if (scenario === 'thinking control')
       request = { ...REQUEST, thinking: { mode: 'disabled' } };
-    if (scenario === 'effort control') request = { ...REQUEST, effort: null };
+    if (scenario === 'effort control') request = { ...REQUEST, effort: 'high' };
     if (scenario === 'none effort') request = { ...REQUEST, effort: 'none' };
     if (scenario === 'minimal effort')
       request = { ...REQUEST, effort: 'minimal' };

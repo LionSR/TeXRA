@@ -49,7 +49,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
 import { formatDuration, generateExecutionId } from '@utils/core';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { previewLabel } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
@@ -476,7 +476,7 @@ export class BashTool extends defineTool({
     const duration = formatDuration(Date.now() - startedAt);
 
     if (result.success) {
-      const preview = truncateWithEllipsis(command, 60);
+      const preview = previewLabel(command);
       return executed(
         retainedStdout ?? '',
         `Executed: ${preview} (exit 0, ${duration})`,
@@ -497,7 +497,7 @@ export class BashTool extends defineTool({
     cwd?: string,
   ): Promise<ToolResult> {
     const executionId = generateExecutionId();
-    const preview = truncateWithEllipsis(command, 60);
+    const preview = previewLabel(command);
     const childStreamId = getStreamTabId(BASH_CHILD_STREAM_PREFIX, {
       executionId,
     });

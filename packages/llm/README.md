@@ -71,6 +71,14 @@ assistant content places a text/refusal message before the ordered call list;
 Chat history with text after a call is rejected rather than silently reordered.
 Plain OpenAI Chat freezes the selected parallel-call setting and any required tool
 during preparation. Tool definitions retain their parameters with `strict: false`.
+Its configuration also states whether temperature is supported and which reasoning
+efforts are allowed; these are selected facts, not deductions from a model name.
+A null default temperature omits the wire parameter, while unsupported authored
+temperature fails before transport. An absent authored effort inherits the selected
+default; explicit null requests omission. Unsupported defaults, authored controls
+and rehydrated prepared controls fail before a generation request is sent. Output
+limits continue to use `max_completion_tokens`, as specified by the
+[Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
 Google also preserves a required named tool, but does not yet implement the
 parallel-call control and rejects it when requested.
 

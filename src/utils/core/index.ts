@@ -112,6 +112,29 @@ export function mapToRecord<K extends string | number, V>(
   );
 }
 
+/**
+ * Look up `key` in a string-keyed `Record`, guarded with `Object.hasOwn` so
+ * an arbitrary/untrusted key (`toString`, `__proto__`, `constructor`, …)
+ * cannot resolve to an inherited `Object.prototype` member. Returns
+ * `fallback` (or `undefined`, if omitted) when `key` is not an own property.
+ */
+export function safeLookup<T>(
+  record: Readonly<Record<string, T>>,
+  key: string,
+): T | undefined;
+export function safeLookup<T>(
+  record: Readonly<Record<string, T>>,
+  key: string,
+  fallback: T,
+): T;
+export function safeLookup<T>(
+  record: Readonly<Record<string, T>>,
+  key: string,
+  fallback?: T,
+): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : fallback;
+}
+
 // ---------------------------------------------------------------------------
 // pathBasics (browser-safe; Node-dependent path helpers live in pathCore.ts)
 // ---------------------------------------------------------------------------

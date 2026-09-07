@@ -13,14 +13,12 @@ const MESSAGES = {
   fallback: (message: string) => `Failed: ${message}`,
 } as const;
 
-/** The failure `withRequestTimeout` raises for a request that threw `cause`. */
+/** The failure `withRequestTimeout` raises for a request that failed with `cause`. */
 const failed = (cause: unknown) =>
-  Effect.flip(withRequestTimeout(1000, () => Promise.reject(cause)));
+  Effect.flip(withRequestTimeout(1000, Effect.fail(cause)));
 
 /** The failure `withRequestTimeout` raises when the deadline passes first. */
-const timedOut = Effect.flip(
-  withRequestTimeout(0, () => new Promise<never>(() => {})),
-);
+const timedOut = Effect.flip(withRequestTimeout(0, Effect.never));
 
 /**
  * Regression coverage for the retry/final-label predicate consolidation

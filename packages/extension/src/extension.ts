@@ -513,7 +513,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   registerRuntimeShutdownHandlers(lifecycle, {
     afterAgentShutdown: [
       () => killActiveRecording(),
-      () => UsageLogService.dispose(),
+      () => effectRuntime().runPromise(UsageLogService.dispose()),
     ],
     flushArtifacts: () => runtimeSession.flushArtifacts(),
     afterExecutionSettlement: [
@@ -632,10 +632,13 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ? context.extension.packageJSON.version
       : undefined;
   try {
-    UsageLogService.initialize(
-      {},
-      extensionVersion,
-      vscode.env.appName || undefined,
+    await effectRuntime().runPromise(
+      UsageLogService.initialize(
+        effectRuntime().scope,
+        {},
+        extensionVersion,
+        vscode.env.appName || undefined,
+      ),
     );
   } catch (error) {
     log.warn(`Failed to initialize usage logging: ${toErrorMessage(error)}`);
