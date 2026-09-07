@@ -28,6 +28,7 @@ import {
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { appSignals } from '@eventBus/AppSignals';
+import { effectRuntime } from '@platform/processRuntime';
 import type { ToolResult } from '@shared/schemas';
 import {
   AGENT_MODE_PRESETS,
@@ -112,15 +113,17 @@ ${describeTeams()}`,
       },
     };
 
-    const result = await applyTeamRosterWithPreflight(input.teamId, {
-      catalog,
-      loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-      canAccessRemoteCatalog: async () => authStatus.authenticated,
-      providedChoice: input.unavailableAction ?? undefined,
-      choose: async () => undefined,
-      signIn,
-      forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
-    });
+    const result = await effectRuntime().runPromise(
+      applyTeamRosterWithPreflight(input.teamId, {
+        catalog,
+        loadLocalCatalog: () => loadAgents({ includeRemote: false }),
+        canAccessRemoteCatalog: async () => authStatus.authenticated,
+        providedChoice: input.unavailableAction ?? undefined,
+        choose: async () => undefined,
+        signIn,
+        forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
+      }),
+    );
 
     if (result.status === 'unknown') {
       // The schema gates ids, so this only fires if the enum and the preset

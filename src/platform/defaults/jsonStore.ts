@@ -26,6 +26,9 @@ const FLUSH_LOCK_TUNING: FileLockTuning = {
     maxTimeout: 100,
   },
 };
+// Deferred so a store that never contends stays off the locking path. The
+// import settles unless the bundle itself is broken, which is not a failure
+// this module can act on.
 const fileLocks = Effect.promise(() => import('./fileLocks.js'));
 
 type JsonRecord = Record<string, unknown>;

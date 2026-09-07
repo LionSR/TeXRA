@@ -1,6 +1,11 @@
 import * as path from 'node:path';
 
+import { Effect, ManagedRuntime } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { initProcessRuntime } from '@platform/processRuntime';
+import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 const mocks = vi.hoisted(() => ({
   deleteFile: vi.fn(async () => undefined),
@@ -99,8 +104,6 @@ vi.mock('@utils/files/absoluteFS', () => ({
   },
 }));
 
-import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
-
 function createHandlers(): AgentHandlers {
   return new AgentHandlers(
     {
@@ -136,16 +139,20 @@ const APPLY_AGENT_MODE_PRESET = {
 } as const;
 
 describe('AgentHandlers custom-agent file actions', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+  });
 
   it('logs notification failures after applying a team preset', async () => {
     mocks.showLoggedMessage.mockRejectedValueOnce(
       new Error('notification unavailable'),
     );
     mocks.applySettingsTeamRoster.mockImplementationOnce(
-      async (_presetId, { presentation }) => {
-        await presentation.showErrorMessage('Unable to apply team');
-      },
+      (_presetId, { presentation }) =>
+        Effect.promise(async () => {
+          await presentation.showErrorMessage('Unable to apply team');
+        }),
     );
 
     await createHandlers().handleApplyAgentModePreset(APPLY_AGENT_MODE_PRESET);

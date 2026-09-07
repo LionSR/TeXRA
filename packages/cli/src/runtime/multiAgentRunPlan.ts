@@ -8,6 +8,7 @@ import {
   teamPlanHasGaps,
   type TeamPreset,
 } from '@common/teams/TeamPlan';
+import { effectRuntime } from '@platform/processRuntime';
 import { byCategory } from '@shared/schemas';
 
 import { missingMultiAgentPresetMessage } from './agents';
@@ -34,7 +35,7 @@ interface MultiAgentPresetPlansLoadResult {
   readonly remoteCatalogRefreshAttempted: boolean;
 }
 
-function planCurrentMultiAgentRun(
+export function planCurrentMultiAgentRun(
   init: MultiAgentRunPlanInit,
 ): CliMultiAgentPresetRunPlan {
   const preset = findTeamPreset(readCliMultiAgentPresets(), init.preset);
@@ -66,7 +67,7 @@ export async function loadCliMultiAgentRunPlan(
   init: MultiAgentRunPlanInit,
   options: { readonly reloadRemoteAgents?: boolean } = {},
 ): Promise<MultiAgentRunPlanLoadResult> {
-  await loadAgents({ includeRemote: false });
+  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
   const localPlan = planCurrentMultiAgentRun(init);
   if (options.reloadRemoteAgents === false) {
     return {
@@ -88,7 +89,7 @@ export async function loadCliMultiAgentRunPlan(
 export async function loadCliMultiAgentPresetPlanSet(
   presets: readonly TeamPreset[],
 ): Promise<MultiAgentPresetPlansLoadResult> {
-  await loadAgents({ includeRemote: false });
+  await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
   const result = await reloadRemoteAgentsForGaps(
     planLoadedCliMultiAgentPresets(presets),
     (plans) => plans.some(teamPlanHasGaps),
@@ -108,10 +109,12 @@ function reloadRemoteAgentsForGaps<T>(
   readonly value: T;
   readonly remoteCatalogRefreshAttempted: boolean;
 }> {
-  return refreshRemoteCatalogForGaps(value, hasGaps, replan, {
-    canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
-    refreshRemote: () => refresh({ includeRemote: true }),
-  });
+  return effectRuntime().runPromise(
+    refreshRemoteCatalogForGaps(value, hasGaps, replan, {
+      canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
+      refreshRemote: () => refresh({ includeRemote: true }),
+    }),
+  );
 }
 
 export function writeMissingPresetAgents(

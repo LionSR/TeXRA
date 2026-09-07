@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
@@ -20,6 +21,7 @@ import {
 import { repoPath } from './desktopTestPaths.ts';
 
 const noOp = async (): Promise<void> => undefined;
+const noOpEffect = (): Effect.Effect<void> => Effect.void;
 
 function statePorts() {
   return {
@@ -33,9 +35,9 @@ function realAgentController(): DefaultDesktopAgentSettingsController {
     onCatalogChanged: async () => {},
     ...statePorts(),
     registry: {
-      loadAgents: noOp,
-      refreshAgents: noOp,
-      loadAgentOptionsData: async () => ({ workflow: [], toolUse: [] }),
+      loadAgents: noOpEffect,
+      refreshAgents: noOpEffect,
+      loadAgentOptionsData: () => Effect.succeed({ workflow: [], toolUse: [] }),
       getAgents: () => [],
       getVisibleAgents: () => [],
     },

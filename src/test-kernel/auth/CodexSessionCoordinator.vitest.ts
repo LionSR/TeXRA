@@ -1,7 +1,10 @@
+// Third-party imports
+import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit } from 'effect';
 import pDefer from 'p-defer';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
+// Local imports
 import {
   CodexAuthError,
   type CodexOAuthClient,
@@ -121,6 +124,19 @@ function completeLogin(
   });
 }
 
+/**
+ * Capture the rejection of a coordinator call the test already started.
+ * (`Effect.promise` would turn the rejection into a defect, which
+ * `Effect.flip` does not see.)
+ */
+const rejection = (completion: Promise<unknown>) =>
+  Effect.flip(
+    Effect.tryPromise({
+      try: () => completion,
+      catch: (error) => error,
+    }),
+  );
+
 function makeCoordinator(
   storage: CodexSessionStorage,
   client: Partial<CodexOAuthClient> = {},
@@ -137,370 +153,457 @@ function makeCoordinator(
 }
 
 describe('CodexSessionCoordinator', () => {
-  it('reports signed-out with no stored session', async () => {
-    const coordinator = makeCoordinator(memoryStorage());
-    expect(await coordinator.getStatus()).toEqual({ signedIn: false });
-  });
+  it.effect('reports signed-out with no stored session', () =>
+    Effect.gen(function* () {
+      const coordinator = makeCoordinator(memoryStorage());
+      expect(yield* Effect.promise(() => coordinator.getStatus())).toEqual({
+        signedIn: false,
+      });
+    }),
+  );
 
-  it('reports signed-in with email/account from the stored session', async () => {
-    const coordinator = makeCoordinator(memoryStorage(session()));
-    expect(await coordinator.getStatus()).toEqual({
-      signedIn: true,
-      email: 'user@example.com',
-      accountId: 'acct-0',
-    });
-  });
-
-  it('does not refresh a token outside the 5-minute buffer', async () => {
-    const storage = memoryStorage(
-      session({ expiresAtMs: NOW + FIVE_MIN + 60_000 }),
-    );
-    const refreshTokens = vi.fn();
-    const coordinator = makeCoordinator(storage, { refreshTokens });
-    expect(await coordinator.getFreshAccessToken()).toBe('access-0');
-    expect(refreshTokens).not.toHaveBeenCalled();
-  });
-
-  it('refreshes proactively within the 5-minute buffer', async () => {
-    const storage = memoryStorage(session({ expiresAtMs: NOW + 60_000 }));
-    const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
-    const coordinator = makeCoordinator(storage, { refreshTokens });
-    expect(await coordinator.getFreshAccessToken()).toBe('access-1');
-    expect(refreshTokens).toHaveBeenCalledOnce();
-    expect(storage.peek()?.accessToken).toBe('access-1');
-  });
-
-  it('single-flights concurrent refreshes', async () => {
-    const storage = memoryStorage(expiredSession());
-    const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
-    const refreshTokens = vi.fn(() => Deferred.await(pending));
-    const coordinator = makeCoordinator(storage, { refreshTokens });
-
-    const a = coordinator.getFreshAccessToken();
-    const b = coordinator.getFreshAccessToken();
-    // Let both callers reach the shared refresh before it resolves.
-    await delay(0);
-    expect(refreshTokens).toHaveBeenCalledOnce();
-
-    Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
-    const [ra, rb] = await Promise.all([a, b]);
-
-    expect(ra).toBe('access-1');
-    expect(rb).toBe('access-1');
-    expect(refreshTokens).toHaveBeenCalledOnce();
-  });
-
-  it('does not restore a session when sign-out races with refresh', async () => {
-    const storage = memoryStorage(expiredSession());
-    const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
-    const refreshTokens = vi.fn(() => Deferred.await(pending));
-    const coordinator = makeCoordinator(storage, { refreshTokens });
-
-    const token = coordinator.getFreshAccessToken();
-    await delay(0);
-    expect(refreshTokens).toHaveBeenCalledOnce();
-
-    await coordinator.signOut();
-    Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
-
-    await expect(token).rejects.toMatchObject({
-      kind: 'expired',
-      needsReauth: true,
-    });
-    expect(storage.peek()).toBeUndefined();
-  });
-
-  it('does not restore a session when sign-out races with refresh storage', async () => {
-    const storage = gatedStorage('store', expiredSession());
-    const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
-    const coordinator = makeCoordinator(storage, { refreshTokens });
-
-    const token = coordinator.getFreshAccessToken();
-    await storage.gateReached;
-    const signOut = coordinator.signOut();
-    storage.release();
-
-    await expect(token).rejects.toMatchObject({
-      kind: 'expired',
-      needsReauth: true,
-    });
-    await signOut;
-    expect(storage.peek()).toBeUndefined();
-  });
-
-  it('does not erase a newer login with a blocked fatal-refresh deletion', async () => {
-    const storage = gatedStorage('delete', expiredSession());
-    const refreshTokens = vi.fn(() =>
-      Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
-    );
-    const exchangeAuthorizationCode = vi.fn(() =>
-      Effect.succeed(newLoginTokenResponse()),
-    );
-    const coordinator = makeCoordinator(storage, {
-      exchangeAuthorizationCode,
-      refreshTokens,
-    });
-
-    const token = coordinator.getFreshAccessToken();
-    // The fatal refresh has started its delete (blocked); a login lands now.
-    await storage.gateReached;
-    const login = completeLogin(coordinator);
-    // Let the login run as far as it can before the delete unblocks, so an
-    // unserialized store would land first and be erased by the stale delete.
-    await delay(0);
-    storage.release();
-
-    await expect(token).rejects.toMatchObject({ kind: 'fatal' });
-    await login;
-    expect(storage.peek()?.accessToken).toBe('access-new');
-    expect(storage.peek()?.refreshToken).toBe('refresh-new');
-  });
-
-  it('does not start a stale refresh for a caller entering during sign-out', async () => {
-    const storage = gatedStorage('delete', expiredSession());
-    const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
-    const coordinator = makeCoordinator(storage, { refreshTokens });
-
-    const signOut = coordinator.signOut();
-    // The sign-out delete is blocked mid-write; a caller enters now.
-    await storage.gateReached;
-    const token = coordinator.getFreshAccessToken();
-    storage.release();
-
-    await expect(token).rejects.toMatchObject({
-      kind: 'expired',
-      needsReauth: true,
-    });
-    await signOut;
-    expect(refreshTokens).not.toHaveBeenCalled();
-    expect(storage.peek()).toBeUndefined();
-  });
-
-  it('does not overwrite a newer login for a caller entering during login', async () => {
-    const storage = gatedStorage('store', expiredSession());
-    const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
-    const exchangeAuthorizationCode = vi.fn(() =>
-      Effect.succeed(newLoginTokenResponse()),
-    );
-    const coordinator = makeCoordinator(storage, {
-      exchangeAuthorizationCode,
-      refreshTokens,
-    });
-
-    const login = completeLogin(coordinator);
-    // The login store is blocked mid-write; a caller enters now.
-    await storage.gateReached;
-    const token = coordinator.getFreshAccessToken();
-    storage.release();
-
-    await login;
-    expect(await token).toBe('access-new');
-    expect(refreshTokens).not.toHaveBeenCalled();
-    expect(storage.peek()?.accessToken).toBe('access-new');
-  });
-
-  it('finishes an interrupted login store before a later sign-out runs', async () => {
-    const gated = gatedStorage('store');
-    const ops: string[] = [];
-    const storage: CodexSessionStorage = {
-      get: gated.get,
-      store: async (value) => {
-        ops.push('store');
-        await gated.store(value);
-      },
-      delete: async () => {
-        ops.push('delete');
-        await gated.delete();
-      },
-    };
-    const exchangeAuthorizationCode = vi.fn(() =>
-      Effect.succeed(newLoginTokenResponse()),
-    );
-    const coordinator = makeCoordinator(storage, { exchangeAuthorizationCode });
-    const controller = new AbortController();
-
-    // The loopback login's run boundary: the host signal interrupts the
-    // login's fiber while its session store is blocked mid-write.
-    const login = effectRuntime().runPromiseExit(
-      coordinator.loginWithCode({
-        code: 'new-code',
-        verifier: 'new-verifier',
-        redirectUri: 'http://localhost:1455/auth/callback',
+  it.effect(
+    'reports signed-in with email/account from the stored session',
+    () =>
+      Effect.gen(function* () {
+        const coordinator = makeCoordinator(memoryStorage(session()));
+        expect(yield* Effect.promise(() => coordinator.getStatus())).toEqual({
+          signedIn: true,
+          email: 'user@example.com',
+          accountId: 'acct-0',
+        });
       }),
-      { signal: controller.signal },
-    );
-    await gated.gateReached;
-    controller.abort();
-    const signOut = coordinator.signOut();
-    await delay(0);
+  );
 
-    // The store cannot be cancelled, so it keeps the permit: the sign-out
-    // queues behind it instead of running beside it.
-    expect(ops).toEqual(['store']);
-    gated.release();
+  it.effect('does not refresh a token outside the 5-minute buffer', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(
+        session({ expiresAtMs: NOW + FIVE_MIN + 60_000 }),
+      );
+      const refreshTokens = vi.fn();
+      const coordinator = makeCoordinator(storage, { refreshTokens });
+      expect(
+        yield* Effect.promise(() => coordinator.getFreshAccessToken()),
+      ).toBe('access-0');
+      expect(refreshTokens).not.toHaveBeenCalled();
+    }),
+  );
 
-    expect(Exit.isSuccess(await login)).toBe(false);
-    await signOut;
-    expect(ops).toEqual(['store', 'delete']);
-    expect(gated.peek()).toBeUndefined();
-  });
+  it.effect('refreshes proactively within the 5-minute buffer', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(session({ expiresAtMs: NOW + 60_000 }));
+      const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
+      const coordinator = makeCoordinator(storage, { refreshTokens });
+      expect(
+        yield* Effect.promise(() => coordinator.getFreshAccessToken()),
+      ).toBe('access-1');
+      expect(refreshTokens).toHaveBeenCalledOnce();
+      expect(storage.peek()?.accessToken).toBe('access-1');
+    }),
+  );
 
-  it('retries a session read superseded while storage is blocked', async () => {
-    const storage = gatedStorage('get', session());
-    const exchangeAuthorizationCode = vi.fn(() =>
-      Effect.succeed(newLoginTokenResponse()),
-    );
-    const coordinator = makeCoordinator(storage, {
-      exchangeAuthorizationCode,
-    });
+  it.effect('single-flights concurrent refreshes', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(expiredSession());
+      const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
+      const refreshTokens = vi.fn(() => Deferred.await(pending));
+      const coordinator = makeCoordinator(storage, { refreshTokens });
 
-    const token = coordinator.getFreshAccessToken();
-    await storage.gateReached;
-    await completeLogin(coordinator);
-    storage.release();
+      const a = coordinator.getFreshAccessToken();
+      const b = coordinator.getFreshAccessToken();
+      // Let both callers reach the shared refresh before it resolves.
+      yield* Effect.promise(() => delay(0));
+      expect(refreshTokens).toHaveBeenCalledOnce();
 
-    expect(await token).toBe('access-new');
-    expect(storage.peek()?.accessToken).toBe('access-new');
-  });
+      Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
+      const [ra, rb] = yield* Effect.promise(() => Promise.all([a, b]));
 
-  it('does not clear a newer login when a stale refresh is rejected', async () => {
-    const storage = memoryStorage(expiredSession());
-    const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
-    const refreshTokens = vi.fn(() => Deferred.await(pending));
-    const exchangeAuthorizationCode = vi.fn(() =>
-      Effect.succeed(newLoginTokenResponse()),
-    );
-    const coordinator = makeCoordinator(storage, {
-      exchangeAuthorizationCode,
-      refreshTokens,
-    });
+      expect(ra).toBe('access-1');
+      expect(rb).toBe('access-1');
+      expect(refreshTokens).toHaveBeenCalledOnce();
+    }),
+  );
 
-    const token = coordinator.getFreshAccessToken();
-    await delay(0);
-    expect(refreshTokens).toHaveBeenCalledOnce();
+  it.effect('does not restore a session when sign-out races with refresh', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(expiredSession());
+      const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
+      const refreshTokens = vi.fn(() => Deferred.await(pending));
+      const coordinator = makeCoordinator(storage, { refreshTokens });
 
-    await completeLogin(coordinator);
-    Deferred.doneUnsafe(
-      pending,
-      Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
-    );
+      const token = coordinator.getFreshAccessToken();
+      yield* Effect.promise(() => delay(0));
+      expect(refreshTokens).toHaveBeenCalledOnce();
 
-    await expect(token).rejects.toMatchObject({
-      kind: 'fatal',
-      needsReauth: true,
-    });
-    expect(storage.peek()?.accessToken).toBe('access-new');
-    expect(storage.peek()?.refreshToken).toBe('refresh-new');
-  });
+      yield* Effect.promise(() => coordinator.signOut());
+      Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
 
-  it('returns the newer login when a successful refresh is superseded', async () => {
-    const storage = memoryStorage(expiredSession());
-    const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
-    const refreshTokens = vi.fn(() => Deferred.await(pending));
-    const exchangeAuthorizationCode = vi.fn(() =>
-      Effect.succeed(newLoginTokenResponse()),
-    );
-    const coordinator = makeCoordinator(storage, {
-      exchangeAuthorizationCode,
-      refreshTokens,
-    });
+      const error = yield* rejection(token);
+      expect(error).toMatchObject({
+        kind: 'expired',
+        needsReauth: true,
+      });
+      expect(storage.peek()).toBeUndefined();
+    }),
+  );
 
-    const token = coordinator.getFreshAccessToken();
-    await delay(0);
-    expect(refreshTokens).toHaveBeenCalledOnce();
+  it.effect(
+    'does not restore a session when sign-out races with refresh storage',
+    () =>
+      Effect.gen(function* () {
+        const storage = gatedStorage('store', expiredSession());
+        const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
+        const coordinator = makeCoordinator(storage, { refreshTokens });
 
-    await completeLogin(coordinator);
-    Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
+        const token = coordinator.getFreshAccessToken();
+        yield* Effect.promise(() => storage.gateReached);
+        const signOut = coordinator.signOut();
+        storage.release();
 
-    // Concurrent sign-in is not a re-auth failure — hand back the new session.
-    await expect(token).resolves.toBe('access-new');
-    expect(storage.peek()?.accessToken).toBe('access-new');
-    expect(storage.peek()?.refreshToken).toBe('refresh-new');
-  });
+        const error = yield* rejection(token);
+        expect(error).toMatchObject({
+          kind: 'expired',
+          needsReauth: true,
+        });
+        yield* Effect.promise(() => signOut);
+        expect(storage.peek()).toBeUndefined();
+      }),
+  );
 
-  it('does not treat a still-expiring pre-refresh session as a successful supersede', async () => {
-    // Generation bump that leaves the same expiring credentials (models a
-    // concurrent store that failed after supersede, or rewrote the same
-    // blob) must not hand back the stale token as if refresh completed.
-    const storage = memoryStorage(expiredSession());
-    const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
-    const refreshTokens = vi.fn(() => Deferred.await(pending));
-    const exchangeAuthorizationCode = vi.fn(() =>
-      Effect.succeed(
-        tokenResponse({
-          access_token: 'access-0',
-          refresh_token: 'refresh-0',
-          // Still inside the proactive refresh buffer.
-          expires_in: 60,
-        }),
-      ),
-    );
-    const coordinator = makeCoordinator(storage, {
-      exchangeAuthorizationCode,
-      refreshTokens,
-    });
+  it.effect(
+    'does not erase a newer login with a blocked fatal-refresh deletion',
+    () =>
+      Effect.gen(function* () {
+        const storage = gatedStorage('delete', expiredSession());
+        const refreshTokens = vi.fn(() =>
+          Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
+        );
+        const exchangeAuthorizationCode = vi.fn(() =>
+          Effect.succeed(newLoginTokenResponse()),
+        );
+        const coordinator = makeCoordinator(storage, {
+          exchangeAuthorizationCode,
+          refreshTokens,
+        });
 
-    const token = coordinator.getFreshAccessToken();
-    await delay(0);
-    expect(refreshTokens).toHaveBeenCalledOnce();
+        const token = coordinator.getFreshAccessToken();
+        // The fatal refresh has started its delete (blocked); a login lands now.
+        yield* Effect.promise(() => storage.gateReached);
+        const login = completeLogin(coordinator);
+        // Let the login run as far as it can before the delete unblocks, so an
+        // unserialized store would land first and be erased by the stale delete.
+        yield* Effect.promise(() => delay(0));
+        storage.release();
 
-    await completeLogin(coordinator);
-    Deferred.doneUnsafe(
-      pending,
-      Effect.succeed(tokenResponse({ access_token: 'access-stale-refresh' })),
-    );
+        const error = yield* rejection(token);
+        expect(error).toMatchObject({ kind: 'fatal' });
+        yield* Effect.promise(() => login);
+        expect(storage.peek()?.accessToken).toBe('access-new');
+        expect(storage.peek()?.refreshToken).toBe('refresh-new');
+      }),
+  );
 
-    await expect(token).rejects.toMatchObject({
-      kind: 'transient',
-      needsReauth: false,
-    });
-    expect(storage.peek()?.accessToken).toBe('access-0');
-  });
+  it.effect(
+    'does not start a stale refresh for a caller entering during sign-out',
+    () =>
+      Effect.gen(function* () {
+        const storage = gatedStorage('delete', expiredSession());
+        const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
+        const coordinator = makeCoordinator(storage, { refreshTokens });
 
-  it('keeps the previous refresh token when the response omits a new one', async () => {
-    const storage = memoryStorage(expiredSession());
-    const refreshTokens = vi.fn(() =>
-      Effect.succeed(tokenResponse({ refresh_token: undefined })),
-    );
-    const coordinator = makeCoordinator(storage, { refreshTokens });
-    await coordinator.getFreshAccessToken();
-    expect(storage.peek()?.refreshToken).toBe('refresh-0');
-  });
+        const signOut = coordinator.signOut();
+        // The sign-out delete is blocked mid-write; a caller enters now.
+        yield* Effect.promise(() => storage.gateReached);
+        const token = coordinator.getFreshAccessToken();
+        storage.release();
 
-  it('clears the session and surfaces re-auth on a fatal refresh', async () => {
-    const storage = memoryStorage(expiredSession());
-    const refreshTokens = vi.fn(() =>
-      Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
-    );
-    const coordinator = makeCoordinator(storage, { refreshTokens });
+        const error = yield* rejection(token);
+        expect(error).toMatchObject({
+          kind: 'expired',
+          needsReauth: true,
+        });
+        yield* Effect.promise(() => signOut);
+        expect(refreshTokens).not.toHaveBeenCalled();
+        expect(storage.peek()).toBeUndefined();
+      }),
+  );
 
-    await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({
-      kind: 'fatal',
-      needsReauth: true,
-    });
-    expect(storage.peek()).toBeUndefined();
-  });
+  it.effect(
+    'does not overwrite a newer login for a caller entering during login',
+    () =>
+      Effect.gen(function* () {
+        const storage = gatedStorage('store', expiredSession());
+        const refreshTokens = vi.fn(() => Effect.succeed(tokenResponse()));
+        const exchangeAuthorizationCode = vi.fn(() =>
+          Effect.succeed(newLoginTokenResponse()),
+        );
+        const coordinator = makeCoordinator(storage, {
+          exchangeAuthorizationCode,
+          refreshTokens,
+        });
 
-  it('keeps the session on a transient refresh failure', async () => {
-    const storage = memoryStorage(expiredSession());
-    const refreshTokens = vi.fn(() =>
-      Effect.fail(new CodexAuthError('upstream 502', 'transient', 502)),
-    );
-    const coordinator = makeCoordinator(storage, { refreshTokens });
+        const login = completeLogin(coordinator);
+        // The login store is blocked mid-write; a caller enters now.
+        yield* Effect.promise(() => storage.gateReached);
+        const token = coordinator.getFreshAccessToken();
+        storage.release();
 
-    await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({
-      kind: 'transient',
-    });
-    expect(storage.peek()?.refreshToken).toBe('refresh-0');
-  });
+        yield* Effect.promise(() => login);
+        expect(yield* Effect.promise(() => token)).toBe('access-new');
+        expect(refreshTokens).not.toHaveBeenCalled();
+        expect(storage.peek()?.accessToken).toBe('access-new');
+      }),
+  );
 
-  it('throws expired when not signed in', async () => {
-    const coordinator = makeCoordinator(memoryStorage());
-    await expect(coordinator.getFreshAccessToken()).rejects.toMatchObject({
-      kind: 'expired',
-      needsReauth: true,
-    });
-  });
+  it.effect(
+    'finishes an interrupted login store before a later sign-out runs',
+    () =>
+      Effect.gen(function* () {
+        const gated = gatedStorage('store');
+        const ops: string[] = [];
+        const storage: CodexSessionStorage = {
+          get: gated.get,
+          store: async (value) => {
+            ops.push('store');
+            await gated.store(value);
+          },
+          delete: async () => {
+            ops.push('delete');
+            await gated.delete();
+          },
+        };
+        const exchangeAuthorizationCode = vi.fn(() =>
+          Effect.succeed(newLoginTokenResponse()),
+        );
+        const coordinator = makeCoordinator(storage, {
+          exchangeAuthorizationCode,
+        });
+        const controller = new AbortController();
+
+        // The loopback login's run boundary: the host signal interrupts the
+        // login's fiber while its session store is blocked mid-write.
+        const login = effectRuntime().runPromiseExit(
+          coordinator.loginWithCode({
+            code: 'new-code',
+            verifier: 'new-verifier',
+            redirectUri: 'http://localhost:1455/auth/callback',
+          }),
+          { signal: controller.signal },
+        );
+        yield* Effect.promise(() => gated.gateReached);
+        controller.abort();
+        const signOut = coordinator.signOut();
+        yield* Effect.promise(() => delay(0));
+
+        // The store cannot be cancelled, so it keeps the permit: the sign-out
+        // queues behind it instead of running beside it.
+        expect(ops).toEqual(['store']);
+        gated.release();
+
+        const loginExit = yield* Effect.promise(() => login);
+        expect(Exit.isSuccess(loginExit)).toBe(false);
+        yield* Effect.promise(() => signOut);
+        expect(ops).toEqual(['store', 'delete']);
+        expect(gated.peek()).toBeUndefined();
+      }),
+  );
+
+  it.effect('retries a session read superseded while storage is blocked', () =>
+    Effect.gen(function* () {
+      const storage = gatedStorage('get', session());
+      const exchangeAuthorizationCode = vi.fn(() =>
+        Effect.succeed(newLoginTokenResponse()),
+      );
+      const coordinator = makeCoordinator(storage, {
+        exchangeAuthorizationCode,
+      });
+
+      const token = coordinator.getFreshAccessToken();
+      yield* Effect.promise(() => storage.gateReached);
+      yield* Effect.promise(() => completeLogin(coordinator));
+      storage.release();
+
+      expect(yield* Effect.promise(() => token)).toBe('access-new');
+      expect(storage.peek()?.accessToken).toBe('access-new');
+    }),
+  );
+
+  it.effect(
+    'does not clear a newer login when a stale refresh is rejected',
+    () =>
+      Effect.gen(function* () {
+        const storage = memoryStorage(expiredSession());
+        const pending = Deferred.makeUnsafe<
+          CodexTokenResponse,
+          CodexAuthError
+        >();
+        const refreshTokens = vi.fn(() => Deferred.await(pending));
+        const exchangeAuthorizationCode = vi.fn(() =>
+          Effect.succeed(newLoginTokenResponse()),
+        );
+        const coordinator = makeCoordinator(storage, {
+          exchangeAuthorizationCode,
+          refreshTokens,
+        });
+
+        const token = coordinator.getFreshAccessToken();
+        yield* Effect.promise(() => delay(0));
+        expect(refreshTokens).toHaveBeenCalledOnce();
+
+        yield* Effect.promise(() => completeLogin(coordinator));
+        Deferred.doneUnsafe(
+          pending,
+          Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
+        );
+
+        const error = yield* rejection(token);
+        expect(error).toMatchObject({
+          kind: 'fatal',
+          needsReauth: true,
+        });
+        expect(storage.peek()?.accessToken).toBe('access-new');
+        expect(storage.peek()?.refreshToken).toBe('refresh-new');
+      }),
+  );
+
+  it.effect(
+    'returns the newer login when a successful refresh is superseded',
+    () =>
+      Effect.gen(function* () {
+        const storage = memoryStorage(expiredSession());
+        const pending = Deferred.makeUnsafe<
+          CodexTokenResponse,
+          CodexAuthError
+        >();
+        const refreshTokens = vi.fn(() => Deferred.await(pending));
+        const exchangeAuthorizationCode = vi.fn(() =>
+          Effect.succeed(newLoginTokenResponse()),
+        );
+        const coordinator = makeCoordinator(storage, {
+          exchangeAuthorizationCode,
+          refreshTokens,
+        });
+
+        const token = coordinator.getFreshAccessToken();
+        yield* Effect.promise(() => delay(0));
+        expect(refreshTokens).toHaveBeenCalledOnce();
+
+        yield* Effect.promise(() => completeLogin(coordinator));
+        Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
+
+        // Concurrent sign-in is not a re-auth failure — hand back the new session.
+        expect(yield* Effect.promise(() => token)).toBe('access-new');
+        expect(storage.peek()?.accessToken).toBe('access-new');
+        expect(storage.peek()?.refreshToken).toBe('refresh-new');
+      }),
+  );
+
+  it.effect(
+    'does not treat a still-expiring pre-refresh session as a successful supersede',
+    () =>
+      Effect.gen(function* () {
+        // Generation bump that leaves the same expiring credentials (models a
+        // concurrent store that failed after supersede, or rewrote the same
+        // blob) must not hand back the stale token as if refresh completed.
+        const storage = memoryStorage(expiredSession());
+        const pending = Deferred.makeUnsafe<
+          CodexTokenResponse,
+          CodexAuthError
+        >();
+        const refreshTokens = vi.fn(() => Deferred.await(pending));
+        const exchangeAuthorizationCode = vi.fn(() =>
+          Effect.succeed(
+            tokenResponse({
+              access_token: 'access-0',
+              refresh_token: 'refresh-0',
+              // Still inside the proactive refresh buffer.
+              expires_in: 60,
+            }),
+          ),
+        );
+        const coordinator = makeCoordinator(storage, {
+          exchangeAuthorizationCode,
+          refreshTokens,
+        });
+
+        const token = coordinator.getFreshAccessToken();
+        yield* Effect.promise(() => delay(0));
+        expect(refreshTokens).toHaveBeenCalledOnce();
+
+        yield* Effect.promise(() => completeLogin(coordinator));
+        Deferred.doneUnsafe(
+          pending,
+          Effect.succeed(
+            tokenResponse({ access_token: 'access-stale-refresh' }),
+          ),
+        );
+
+        const error = yield* rejection(token);
+        expect(error).toMatchObject({
+          kind: 'transient',
+          needsReauth: false,
+        });
+        expect(storage.peek()?.accessToken).toBe('access-0');
+      }),
+  );
+
+  it.effect(
+    'keeps the previous refresh token when the response omits a new one',
+    () =>
+      Effect.gen(function* () {
+        const storage = memoryStorage(expiredSession());
+        const refreshTokens = vi.fn(() =>
+          Effect.succeed(tokenResponse({ refresh_token: undefined })),
+        );
+        const coordinator = makeCoordinator(storage, { refreshTokens });
+        yield* Effect.promise(() => coordinator.getFreshAccessToken());
+        expect(storage.peek()?.refreshToken).toBe('refresh-0');
+      }),
+  );
+
+  it.effect('clears the session and surfaces re-auth on a fatal refresh', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(expiredSession());
+      const refreshTokens = vi.fn(() =>
+        Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
+      );
+      const coordinator = makeCoordinator(storage, { refreshTokens });
+
+      const error = yield* rejection(coordinator.getFreshAccessToken());
+      expect(error).toMatchObject({
+        kind: 'fatal',
+        needsReauth: true,
+      });
+      expect(storage.peek()).toBeUndefined();
+    }),
+  );
+
+  it.effect('keeps the session on a transient refresh failure', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(expiredSession());
+      const refreshTokens = vi.fn(() =>
+        Effect.fail(new CodexAuthError('upstream 502', 'transient', 502)),
+      );
+      const coordinator = makeCoordinator(storage, { refreshTokens });
+
+      const error = yield* rejection(coordinator.getFreshAccessToken());
+      expect(error).toMatchObject({
+        kind: 'transient',
+      });
+      expect(storage.peek()?.refreshToken).toBe('refresh-0');
+    }),
+  );
+
+  it.effect('throws expired when not signed in', () =>
+    Effect.gen(function* () {
+      const coordinator = makeCoordinator(memoryStorage());
+      const error = yield* rejection(coordinator.getFreshAccessToken());
+      expect(error).toMatchObject({
+        kind: 'expired',
+        needsReauth: true,
+      });
+    }),
+  );
 
   it('builds an authorize request with the required PKCE + Codex params', () => {
     const coordinator = makeCoordinator(memoryStorage());
@@ -521,12 +624,14 @@ describe('CodexSessionCoordinator', () => {
     expect(req.verifier.length).toBeGreaterThan(0);
   });
 
-  it('signs out by deleting the stored session', async () => {
-    const storage = memoryStorage(session());
-    const coordinator = makeCoordinator(storage);
-    await coordinator.signOut();
-    expect(storage.peek()).toBeUndefined();
-  });
+  it.effect('signs out by deleting the stored session', () =>
+    Effect.gen(function* () {
+      const storage = memoryStorage(session());
+      const coordinator = makeCoordinator(storage);
+      yield* Effect.promise(() => coordinator.signOut());
+      expect(storage.peek()).toBeUndefined();
+    }),
+  );
 });
 
 describe('codexAccountLabel', () => {
