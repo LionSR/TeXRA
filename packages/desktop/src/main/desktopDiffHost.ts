@@ -1,11 +1,11 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 
+import { Cause, Deferred, Effect, Exit } from 'effect';
 import { nanoid } from 'nanoid';
-import pDefer from 'p-defer';
 
 import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
@@ -52,10 +52,11 @@ export function createDesktopDiffHost(
   // so a failed removal can be retried instead of caching a rejection.
   const pendingRemovals = new Map<string, Promise<void>>();
   // Fallback setup in flight: the read/compute/temp-dir-creation prefix of
-  // `openDiff`, tracked from the start of the call. `dispose()` awaits these
-  // so the quit lifecycle also waits for the `disposed` branch below, which
-  // can start its removal only after this setup finishes.
-  const inFlightFallbacks = new Set<Promise<void>>();
+  // `openDiff`, tracked from the start of the call as one `Deferred` gate per
+  // setup. `dispose()` awaits these so the quit lifecycle also waits for the
+  // `disposed` branch below, which can start its removal only after this
+  // setup finishes.
+  const inFlightFallbacks = new Set<Deferred.Deferred<void>>();
   // Set when dispose() starts. A fallback still in flight uses this to choose
   // the post-disposal cleanup path; `drainComplete` then decides whether the
   // record set is still owned by the disposal removal phase.
@@ -82,22 +83,32 @@ export function createDesktopDiffHost(
     tempDir: string,
     warning: string,
   ): Promise<void> {
-    try {
-      await removeTempDir(tempDir);
+    const removed = await effectRuntime().runPromiseExit(
+      Effect.tryPromise({
+        try: () => removeTempDir(tempDir),
+        catch: (error) => error,
+      }),
+    );
+    if (Exit.isSuccess(removed)) {
       externalPatchDirs.delete(tempDir);
-    } catch (cleanupError) {
-      console.warn(`${warning}: ${toErrorMessage(cleanupError)}`);
+      return;
     }
+    console.warn(`${warning}: ${toErrorMessage(Cause.squash(removed.cause))}`);
   }
 
-  // Returns an idempotent settle function for a promise held in
-  // `inFlightFallbacks`. The promise resolves only, so callers never have to
-  // handle a rejection from the bookkeeping slot.
+  // Returns an idempotent settle function for a `Deferred` gate held in
+  // `inFlightFallbacks`. The gate only ever succeeds, so a drainer never has
+  // to handle a failure from the bookkeeping slot.
   function trackFallbackSetup(): () => void {
-    const setup = pDefer<void>();
-    inFlightFallbacks.add(setup.promise);
-    void setup.promise.finally(() => inFlightFallbacks.delete(setup.promise));
-    return setup.resolve;
+    const gate = Deferred.makeUnsafe<void>();
+    inFlightFallbacks.add(gate);
+    let settled = false;
+    return () => {
+      if (settled) return;
+      settled = true;
+      inFlightFallbacks.delete(gate);
+      Deferred.doneUnsafe(gate, Effect.void);
+    };
   }
 
   function takeDirSnapshot(): string[] {
@@ -107,46 +118,35 @@ export function createDesktopDiffHost(
     return tempDirs;
   }
 
-  // Waits for fallback setup to reach a stable empty state, up to a fixed
-  // bound, and then takes the final `externalPatchDirs` snapshot in the same
-  // synchronous step. The double-empty recheck closes the race where an
-  // `openDiff` registers between an initial empty observation and the
+  // Waits for fallback setup to reach a stable empty state, bounded by the
+  // fallback-setup timeout, and then takes the final `externalPatchDirs`
+  // snapshot in the same step. The double-empty recheck closes the race where
+  // an `openDiff` registers between an initial empty observation and the
   // snapshot; a registration after the snapshot is already past the drain and
-  // self-cleans through the `disposed` branch on its own.
-  async function drainFallbackSetups(): Promise<string[]> {
-    // One deadline timer for the whole drain, aborted in the finally so an
-    // early fully-drained return does not leave a live timer behind. Listed
-    // first in the race so an elapsed deadline outranks settled fallbacks.
-    const abort = new AbortController();
-    const deadline = sleep(
-      DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS,
-      'deadline' as const,
-      { signal: abort.signal },
-    ).catch(() => 'deadline' as const);
-    try {
-      let observedEmpty = false;
-      while (true) {
-        if (inFlightFallbacks.size === 0) {
-          if (observedEmpty) {
-            return takeDirSnapshot();
-          }
-          observedEmpty = true;
-          await Promise.resolve();
-          continue;
-        }
-        observedEmpty = false;
-        const winner = await Promise.race([
-          deadline,
-          Promise.allSettled(inFlightFallbacks).then(() => 'settled' as const),
-        ]);
-        if (winner === 'deadline') {
-          return takeDirSnapshot();
-        }
+  // self-cleans through the `disposed` branch on its own. The timeout
+  // interrupts the wait itself, never the tracked setups: a hung read is
+  // abandoned to the `disposed` branch, and the timer goes away with the wait
+  // instead of needing an abort of its own.
+  const drainFallbackSetups: Effect.Effect<string[]> = Effect.gen(function* () {
+    let observedEmpty = false;
+    while (true) {
+      if (inFlightFallbacks.size === 0) {
+        if (observedEmpty) return;
+        observedEmpty = true;
+        yield* Effect.promise(() => Promise.resolve());
+        continue;
       }
-    } finally {
-      abort.abort();
+      observedEmpty = false;
+      yield* Effect.forEach(
+        [...inFlightFallbacks],
+        (gate) => Deferred.await(gate),
+        { discard: true },
+      );
     }
-  }
+  }).pipe(
+    Effect.timeoutOption(DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS),
+    Effect.map(() => takeDirSnapshot()),
+  );
 
   async function openDiff(
     original: DiffSource,
@@ -212,10 +212,16 @@ export function createDesktopDiffHost(
       settleFallbackSetup();
       const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
-      try {
-        await writeFile(diffPath, patch, 'utf8');
-        await options.openPath(diffPath);
-      } catch (error) {
+      const opened = await effectRuntime().runPromiseExit(
+        Effect.tryPromise({
+          try: async () => {
+            await writeFile(diffPath, patch, 'utf8');
+            await options.openPath(diffPath);
+          },
+          catch: (error) => error,
+        }),
+      );
+      if (Exit.isFailure(opened)) {
         // The patch never reached an editor: clean it up now instead of
         // waiting for window close, and preserve the original failure for the
         // caller. Keep the directory recorded when the removal fails so
@@ -224,7 +230,7 @@ export function createDesktopDiffHost(
           tempDir,
           'Failed to remove the temporary diff directory; will retry when the window closes',
         );
-        throw error;
+        throw Cause.squash(opened.cause);
       }
     } finally {
       settleFallbackSetup();
@@ -240,7 +246,7 @@ export function createDesktopDiffHost(
     // from resolving before the post-disposal removal finishes. The returned
     // snapshot is taken in the same step as the final stable-empty check, so a
     // late registration cannot slip between them.
-    const tempDirs = await drainFallbackSetups();
+    const tempDirs = await effectRuntime().runPromise(drainFallbackSetups);
     const firstResults = await Promise.allSettled(
       tempDirs.map((tempDir) => removeTempDir(tempDir)),
     );
