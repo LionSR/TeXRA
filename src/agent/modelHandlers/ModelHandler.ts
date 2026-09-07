@@ -17,21 +17,12 @@ import {
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import type {
-  ConversationRoundStateSnapshot,
-  AgentRunStateSnapshot,
-} from '@agent/core/state/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { MediaEntry } from '@agent/types/mediaTypes';
 import type { StandardPricingConfig } from '@agent/modelHandlers/support/priceUtils';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
-import {
-  ANTHROPIC_STOP,
-  GOOGLE_FINISH,
-  isTokenLimitStopReason,
-  OPENAI_CHAT_FINISH,
-} from '@agent/types/StopReasonTypes';
+import { isTokenLimitStopReason } from '@agent/types/StopReasonTypes';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type {
@@ -43,7 +34,6 @@ import type {
   ModelCredentialSelection,
   ResolvedClientCredential,
   SdkToolCall,
-  StopConditionsResult,
   TokenCountOptions,
   TokenValidationResult,
 } from '@agent/types/ModelHandlerContracts';
@@ -131,12 +121,6 @@ interface ClientCompactionResult<M> {
   didCompact: boolean;
 }
 
-// Conversation stop limits. Fixed for every handler: nothing overrides them
-// per instance, so they are read straight from `checkStopConditions`.
-const CONTINUE_LIMIT = 10;
-const INPUT_TOKEN_LIMIT = 1500000;
-const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
-
 /**
  * A round's media content plus the entries behind it — what the transcript's
  * attachment chips are derived from. Returned together so the two can't drift.
@@ -162,14 +146,6 @@ export interface AssistantTextAppendOptions {
   /** Provider fallback when converting an existing assistant message shape. */
   readonly fallbackText?: string;
 }
-
-// Stop markers that signal a completed turn across providers.
-const END_TURN_REASONS: ProviderStopReason[] = [
-  ANTHROPIC_STOP.END_TURN,
-  ANTHROPIC_STOP.STOP_SEQUENCE,
-  OPENAI_CHAT_FINISH.STOP,
-  GOOGLE_FINISH.STOP,
-];
 
 function mediaAttachmentKindsFromEntries(
   entries: readonly MediaEntry[],
@@ -952,64 +928,6 @@ export abstract class ModelHandler<
       reportMediaAttachmentFailure(this.logger, context, err);
       return [];
     }
-  }
-
-  /**
-   * Evaluates conversation stop conditions based on model response and state.
-   * @returns Object with endTurn (should end current turn) and shouldStop (should stop conversation)
-   */
-  public checkStopConditions(
-    stopReason: ProviderStopReason,
-    newResponse: string,
-    stateRound: ConversationRoundStateSnapshot,
-    stateGlobal: AgentRunStateSnapshot,
-    agentSetting: AgentSetting,
-  ): StopConditionsResult {
-    // Compute token-based stop flags
-    const totals = stateGlobal.usageAccumulator.totals;
-    const maxOutputTokens =
-      totals.firstInputTokens > 0
-        ? OUTPUT_TOKEN_LIMIT_FACTOR * totals.firstInputTokens
-        : Number.POSITIVE_INFINITY;
-    const continuationLimitExceeded =
-      stateRound.continuationCount > CONTINUE_LIMIT;
-    const inputTokenLimitExceeded = totals.totalInputTokens > INPUT_TOKEN_LIMIT;
-    const maxOutputTokensExceeded = totals.totalOutputTokens > maxOutputTokens;
-
-    // Detect stop markers in model output
-    const endTurn = END_TURN_REASONS.includes(stopReason ?? '');
-    const encounterDocumentTag = newResponse.includes(OUTPUT_END_TAG);
-
-    // Warn-only by design: this multiplier has never fed `shouldStop`, it just
-    // flags a run whose output has run away relative to its first input.
-    if (maxOutputTokensExceeded) {
-      this.logger.warn('Output tokens exceed input token multiplier', {
-        data: {
-          maxOutputTokensFactor: OUTPUT_TOKEN_LIMIT_FACTOR,
-          totalOutputTokens: totals.totalOutputTokens,
-          firstInputTokens: totals.firstInputTokens,
-        },
-      });
-    }
-
-    const shouldStop =
-      encounterDocumentTag ||
-      continuationLimitExceeded ||
-      inputTokenLimitExceeded;
-
-    if (shouldStop) {
-      this.logger.debug('StopFlags', {
-        data: {
-          endTurn,
-          encounterDocumentTag,
-          continuationLimitExceeded,
-          inputTokenLimitExceeded,
-          maxOutputTokensExceeded,
-        },
-      });
-    }
-
-    return { endTurn, shouldStop };
   }
 
   /**
