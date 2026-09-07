@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
+import { tryPlatform } from '@platform/platform';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { type ToolResult } from '@shared/schemas';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
@@ -53,7 +54,13 @@ export class ProbeEnvironmentTool extends defineTool({
     const homedir = safeHomedir() ?? '<unresolved>';
     const extendedPath = extendEnvPath();
     const pm = detectPackageManager();
-    const hostInfo = nodeHostEnvironment.hostInfo();
+    // tryPlatform() picks up an installed Platform's hostEnvironment (a test
+    // fake, in suites that override it); nodeHostEnvironment is the fallback
+    // for the rare caller running before initPlatform(). Neither call grows
+    // the frozen platform() ratchet — see effect-migration-ratchet.mjs.
+    const hostInfo = (
+      tryPlatform()?.hostEnvironment ?? nodeHostEnvironment
+    ).hostInfo();
     const [
       core,
       optionalTools,
