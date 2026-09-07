@@ -5,8 +5,8 @@ import {
   Data,
   Duration,
   Effect,
+  Exit,
   Fiber,
-  Queue,
   Scope,
   Semaphore,
 } from 'effect';
@@ -220,13 +220,12 @@ class UsageBatchUndelivered extends Data.TaggedError('UsageBatchUndelivered')<{
 class UsageLogServiceImpl {
   private queue: QueuedUsageEntry[] = [];
   private retryBatch: RetryBatch | null = null;
-  /** The ticker that schedules the periodic flush, forked by `initialize`
-   *  and interrupted by `dispose`. It only signals the sender, so interrupting
-   *  the ticker never touches a send. */
-  private flushTimer: Fiber.Fiber<never> | null = null;
-  private sender: Fiber.Fiber<never> | null = null;
-  private triggers: Queue.Queue<void> | null = null;
-  private owner: Scope.Scope | undefined;
+  /** The scope the two schedulers live in: the periodic ticker and the
+   *  batch-size watcher. `initialize` opens it and `dispose` closes it, and
+   *  closing it interrupts both. Neither ever sends: each forks its flush
+   *  onto a fiber of its own, so closing this scope cannot land inside a
+   *  request that has already taken a batch. */
+  private timers: Scope.Closeable | null = null;
   /** One permit: batches leave in order, and disposal joins an active drain. */
   private readonly flushLane = Semaphore.makeUnsafe(1);
   /** Coalesce triggers before they wait for the lane; failed sends wait for
@@ -237,54 +236,33 @@ class UsageLogServiceImpl {
   private config: UsageLogConfig = { ...DEFAULT_CONFIG };
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
+  /** The batch-size watcher's resume, while it is parked. `log` is
+   *  synchronous — the recorder runs inside an agent round, not inside an
+   *  Effect program — so this callback slot is how a full batch reaches a
+   *  fiber without a run of its own. */
+  private wake: (() => void) | null = null;
+  /** A wake that arrived while the watcher was busy, delivered on its next
+   *  park instead of being dropped. */
+  private wakePending = false;
 
+  /**
+   * Adopt the host's batching configuration and start the schedulers.
+   *
+   * Run by the host at its bootstrap: the ticker and the batch-size watcher
+   * are forked here, so the process's one runtime owns them for the whole of
+   * their lives instead of `log()` forking a fiber per full batch.
+   */
   readonly initialize = Effect.fn('UsageLogService.initialize')(function* (
     this: UsageLogServiceImpl,
-    owner: Scope.Scope,
     config?: Partial<UsageLogConfig>,
     extensionVersion?: string,
     editorType?: string,
   ) {
-    if (this.owner && this.owner !== owner) yield* this.dispose();
+    yield* this.stopTimers();
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.extensionVersion = extensionVersion;
     this.editorType = editorType;
-    if (this.flushTimer) yield* Fiber.interrupt(this.flushTimer);
-    if (!this.sender) {
-      this.triggers = yield* Queue.make<void>({
-        capacity: 1,
-        strategy: 'dropping',
-      });
-      const triggers = this.triggers;
-      this.sender = yield* Effect.forkIn(
-        Effect.forever(
-          Queue.take(triggers).pipe(Effect.andThen(this.backgroundFlush())),
-        ),
-        owner,
-      );
-    }
-    const tick = Clock.clockWith((clock) =>
-      Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
-        Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
-      ),
-    );
-    this.flushTimer = yield* Effect.forkIn(
-      Effect.forever(
-        tick.pipe(Effect.andThen(Effect.sync(() => this.requestFlush()))),
-      ),
-      owner,
-      { startImmediately: true },
-    );
-    if (this.owner !== owner) {
-      this.owner = owner;
-      // Registered after the fibers: drain before scope closure interrupts them.
-      yield* Scope.addFinalizer(
-        owner,
-        Effect.suspend(() =>
-          this.owner === owner ? this.dispose() : Effect.void,
-        ),
-      );
-    }
+    yield* this.startSchedulers();
 
     if (isTelemetryDisabledByEnv()) {
       log.info(
@@ -295,6 +273,36 @@ class UsageLogServiceImpl {
     log.debug(
       `UsageLogService initialized (batchSize=${this.config.batchSize}, flushIntervalMs=${this.config.flushIntervalMs}, enabled=${this.config.enabled})`,
     );
+  });
+
+  /**
+   * Wake the batch-size watcher, or record that it is owed a wake.
+   *
+   * A trigger that arrives while a background flush is running is dropped,
+   * not queued: that flush's drain empties the queue this entry just joined,
+   * and a failed send must wait for a later trigger rather than be retried by
+   * the caller that was already waiting behind it.
+   */
+  private signalWake(): void {
+    if (this.backgroundFlushActive) return;
+    if (this.wake) this.wake();
+    else this.wakePending = true;
+  }
+
+  /** Park until the next full batch. */
+  private readonly awaitWake = Effect.callback<void>((resume) => {
+    if (this.wakePending) {
+      this.wakePending = false;
+      resume(Effect.void);
+      return;
+    }
+    this.wake = () => {
+      this.wake = null;
+      resume(Effect.void);
+    };
+    return Effect.sync(() => {
+      this.wake = null;
+    });
   });
 
   log(
@@ -323,17 +331,7 @@ class UsageLogServiceImpl {
     });
     log.debug(`Queued usage entry (queue size: ${this.queue.length})`);
 
-    if (this.queue.length >= this.config.batchSize) {
-      this.requestFlush();
-    }
-  }
-
-  /** Synchronous producer admission; the process-owned sender does the I/O. */
-  private requestFlush(): void {
-    if (!this.config.enabled || !this.triggers || this.backgroundFlushActive)
-      return;
-    this.backgroundFlushActive = true;
-    Queue.offerUnsafe(this.triggers, undefined);
+    if (this.queue.length >= this.config.batchSize) this.signalWake();
   }
 
   /** Send every batch that is due, one after another, under the lane. */
@@ -364,10 +362,10 @@ class UsageLogServiceImpl {
    * drain cannot fail, so only a defect reaches here, and it is reported by
    * its owner instead of ending a fiber nobody observes.
    */
-  private readonly backgroundFlush = Effect.fn(
-    'UsageLogService.backgroundFlush',
-  )(
+  private readonly backgroundFlush = Effect.fn('UsageLogService.flush')(
     function* (this: UsageLogServiceImpl) {
+      if (this.backgroundFlushActive) return;
+      this.backgroundFlushActive = true;
       yield* this.flushLane.withPermit(this.drain()).pipe(
         Effect.ensuring(
           Effect.sync(() => {
@@ -531,13 +529,69 @@ class UsageLogServiceImpl {
     },
   );
 
+  /** Close the schedulers' scope, interrupting both of them. */
+  private readonly stopTimers = Effect.fn('UsageLogService.stopTimers')(
+    function* (this: UsageLogServiceImpl) {
+      const scope = this.timers;
+      if (!scope) return;
+      this.timers = null;
+      yield* Scope.close(scope, Exit.void);
+    },
+  );
+
+  /**
+   * Fork the periodic ticker and the batch-size watcher into a scope of their
+   * own.
+   *
+   * The schedulers live until dispose() closes that scope, and they must not
+   * keep a short-lived host (the CLI) alive on their own: an active run keeps
+   * the loop running so the tick still fires, but at exit dispose() flushes
+   * and closes the scope rather than the ticker pinning the process. The tick
+   * therefore sleeps on `unrefSleepClock`; a host that never disposes exits
+   * on an empty loop as before, with whatever the queue holds unsent.
+   *
+   * Each scheduler forks its flush detached, on purpose: a flush belongs to
+   * the lane, not to the tick that scheduled it. `sendNextBatch` takes the
+   * batch before the request goes out, and an interrupt landing there would
+   * abort the request without failing it, so nothing would requeue what was
+   * taken. Running the flush on its own fiber keeps a dispose (or a
+   * re-initialize) that lands mid-send from reaching it: dispose waits behind
+   * the send on the lane instead.
+   */
+  private readonly startSchedulers = Effect.fn(
+    'UsageLogService.startSchedulers',
+  )(function* (this: UsageLogServiceImpl) {
+    const scope = yield* Scope.make();
+    this.timers = scope;
+    const tick = Clock.clockWith((clock) =>
+      Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
+        Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
+      ),
+    );
+    yield* Effect.forkIn(
+      Effect.forever(
+        tick.pipe(Effect.andThen(Effect.forkDetach(this.backgroundFlush()))),
+      ),
+      scope,
+      { startImmediately: true },
+    );
+    yield* Effect.forkIn(
+      Effect.forever(
+        this.awaitWake.pipe(
+          Effect.andThen(Effect.forkDetach(this.backgroundFlush())),
+        ),
+      ),
+      scope,
+      { startImmediately: true },
+    );
+  });
+
+  /** Stop the schedulers, refuse new rounds, and drain what is queued. Run
+   *  by the host on its shutdown path. */
   readonly dispose = Effect.fn('UsageLogService.dispose')(function* (
     this: UsageLogServiceImpl,
   ) {
-    if (this.flushTimer) {
-      yield* Fiber.interrupt(this.flushTimer);
-      this.flushTimer = null;
-    }
+    yield* this.stopTimers();
     this.config.enabled = false;
 
     // An in-flight background flush is waited for without
@@ -556,13 +610,6 @@ class UsageLogServiceImpl {
       Fiber.interrupt(warning).pipe(Effect.andThen(this.drain())),
     );
 
-    if (this.sender) {
-      yield* Fiber.interrupt(this.sender);
-      this.sender = null;
-    }
-    this.triggers = null;
-    this.backgroundFlushActive = false;
-    this.owner = undefined;
     log.debug('UsageLogService disposed');
   });
 }

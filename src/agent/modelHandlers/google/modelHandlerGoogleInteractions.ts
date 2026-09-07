@@ -1162,7 +1162,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     const usage = responseObject.usage;
     // Map the Interactions terminal *status* to the canonical Google chat
     // FinishReason the shared stop/continue logic understands (mirrors the
-    // OpenAI Responses handler at extractResponse). `checkStopConditions` keys
+    // OpenAI Responses handler at extractResponse). Reflection keys
     // `endTurn` on GOOGLE_FINISH.STOP and `shouldContinue` /
     // `isTokenLimitStopReason` key truncation on GOOGLE_FINISH.MAX_TOKENS; the
     // raw 'completed' / 'incomplete' status strings match neither, so a clean

@@ -401,12 +401,7 @@ export async function initCliPlatform(
     // runs on normal exit (bin/texra.ts finally) and on signals, both of
     // which call lifecycle.runShutdown().
     await effectRuntime().runPromise(
-      UsageLogService.initialize(
-        effectRuntime().scope,
-        {},
-        context.version,
-        'cli',
-      ),
+      UsageLogService.initialize({}, context.version, 'cli'),
     );
   }
 

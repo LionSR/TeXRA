@@ -634,7 +634,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   try {
     await effectRuntime().runPromise(
       UsageLogService.initialize(
-        effectRuntime().scope,
         {},
         extensionVersion,
         vscode.env.appName || undefined,

@@ -63,7 +63,6 @@ export type IModelHandler<
   | 'getCredentialRouteForClient'
   | 'updateMessageContent'
   | 'shouldContinue'
-  | 'checkStopConditions'
   | 'processThinkingBlock'
   | 'extractToolUse'
   | 'extractServerToolData'

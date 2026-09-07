@@ -158,12 +158,7 @@ export async function initializeElectronPlatform(
   // lost at quit — including plan accounting. `dispose()` drains it, from the
   // same BEFORE phase the other two hosts use.
   await effectRuntime().runPromise(
-    UsageLogService.initialize(
-      effectRuntime().scope,
-      {},
-      app.getVersion(),
-      'desktop',
-    ),
+    UsageLogService.initialize({}, app.getVersion(), 'desktop'),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     effectRuntime().runPromise(UsageLogService.dispose()),
