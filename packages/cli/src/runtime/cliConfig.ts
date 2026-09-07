@@ -20,7 +20,7 @@ import {
 } from '@shared/approvalPolicy';
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import { isObject } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   CLI_OUTPUT_FORMATS,
@@ -325,42 +325,55 @@ type JsonConfigFileResult =
   | { readonly status: 'warning'; readonly warning: string }
   | { readonly status: 'ok'; readonly parsed: Record<string, unknown> };
 
-async function readJsonConfigFile(
+function readJsonConfigFile(
   filePath: string,
-): Promise<JsonConfigFileResult> {
-  let raw: string;
-  try {
-    raw = await readFile(filePath, 'utf8');
-  } catch (error: unknown) {
-    if (isFileNotFoundError(error)) return { status: 'missing' };
-    return {
-      status: 'warning',
-      warning: `Could not read ${filePath}: ${toErrorMessage(error)}`,
-    };
-  }
-
-  const parseResult = safeParseJson(raw);
-  if (Result.isFailure(parseResult)) {
-    return {
-      status: 'warning',
-      warning: `Could not parse ${filePath}: ${toErrorMessage(parseResult.failure)}`,
-    };
-  }
-  const parsed = parseResult.success;
-  if (!isObject(parsed)) {
-    return {
-      status: 'warning',
-      warning: `Ignoring ${filePath}; expected a JSON object.`,
-    };
-  }
-  return { status: 'ok', parsed };
+): Effect.Effect<JsonConfigFileResult> {
+  return Effect.tryPromise({
+    try: () => readFile(filePath, 'utf8'),
+    catch: (cause) => ensureError(cause),
+  }).pipe(
+    Effect.match({
+      onFailure: (error): JsonConfigFileResult =>
+        isFileNotFoundError(error)
+          ? { status: 'missing' }
+          : {
+              status: 'warning',
+              warning: `Could not read ${filePath}: ${toErrorMessage(error)}`,
+            },
+      onSuccess: (raw): JsonConfigFileResult => {
+        const parseResult = safeParseJson(raw);
+        if (Result.isFailure(parseResult)) {
+          return {
+            status: 'warning',
+            warning: `Could not parse ${filePath}: ${toErrorMessage(parseResult.failure)}`,
+          };
+        }
+        if (!isObject(parseResult.success)) {
+          return {
+            status: 'warning',
+            warning: `Ignoring ${filePath}; expected a JSON object.`,
+          };
+        }
+        return { status: 'ok', parsed: parseResult.success };
+      },
+    }),
+  );
 }
+
+/**
+ * The one bare run edge for the config readers below. `buildCliContext`
+ * resolves the CLI config BEFORE `initCliPlatform` (and with it
+ * `installCliProcessRuntime`), so no process runtime exists to borrow; the
+ * programs are service-free. Pinned in `BARE_EFFECT_RUN_SITES`.
+ */
+const runConfigProgram = <A>(program: Effect.Effect<A>): Promise<A> =>
+  Effect.runPromise(program);
 
 export async function loadWorkspaceCliConfig(
   cwd: string,
 ): Promise<LoadedCliConfig> {
   const filePath = workspaceTexraConfigPath(cwd);
-  const result = await readJsonConfigFile(filePath);
+  const result = await runConfigProgram(readJsonConfigFile(filePath));
   if (result.status === 'missing') return { values: {}, warnings: [] };
   if (result.status === 'warning') {
     return { path: filePath, values: {}, warnings: [result.warning] };
@@ -395,7 +408,7 @@ export async function loadUserApprovalPolicy(
     resolveGlobalStoragePath(storageRoot),
     TEXRA_CONFIG_FILE_NAME,
   );
-  const result = await readJsonConfigFile(filePath);
+  const result = await runConfigProgram(readJsonConfigFile(filePath));
   if (result.status === 'missing') return { warnings: [] };
   if (result.status === 'warning') return { warnings: [result.warning] };
 

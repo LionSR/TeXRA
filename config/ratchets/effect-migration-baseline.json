@@ -125,7 +125,6 @@
     },
     "import:p-defer": {
       "packages/cli/src/chat/chatSessionController.ts": 1,
-      "packages/cli/src/runtime/supabaseAuthCallbackServer.ts": 1,
       "src/agent/followUp/FollowUpQueue.ts": 1,
       "src/agent/runtime/ExecutionHandle.ts": 1,
       "src/agent/runtime/ModelRetryGate.ts": 1,
@@ -150,13 +149,6 @@
     },
     "catch:effect-importer": {
       "packages/cli/src/chat/chatSessionController.ts": 7,
-      "packages/cli/src/chat/tui/commands/handlers/loginCommands.ts": 3,
-      "packages/cli/src/chat/tui/history/inputHistory.ts": 1,
-      "packages/cli/src/runtime/cliConfig.ts": 1,
-      "packages/cli/src/runtime/subscriptionLogin.ts": 1,
-      "packages/cli/src/runtime/supabaseAuthCallbackServer.ts": 4,
-      "packages/cli/src/runtime/supabaseAuthDeviceCode.ts": 2,
-      "packages/cli/src/runtime/updateChecker.ts": 3,
       "packages/desktop/src/main/index.ts": 1,
       "packages/extension/src/progressView/ProgressViewProvider.ts": 1,
       "src/agent/remote/RemoteAgentLoader.ts": 1,

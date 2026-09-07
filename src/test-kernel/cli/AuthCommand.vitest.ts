@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
 
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
@@ -51,9 +52,11 @@ describe('CLI auth command', () => {
       authenticated: false,
     });
     mocks.initCliPlatform.mockReset().mockResolvedValue(undefined);
-    mocks.signOutCliSubscription.mockReset().mockResolvedValue({
-      preferenceUpdate: { effective: false, target: 'global' },
-    });
+    mocks.signOutCliSubscription.mockReset().mockReturnValue(
+      Effect.succeed({
+        preferenceUpdate: { effective: false, target: 'global' },
+      }),
+    );
     stdoutSpy = spyOnStreamWrite(process.stdout, (text) => {
       stdout += text;
     });
@@ -138,9 +141,9 @@ describe('CLI auth command', () => {
   });
 
   it('reports ChatGPT logout success when preference cleanup fails', async () => {
-    mocks.signOutCliSubscription.mockResolvedValueOnce({
-      preferenceError: 'Config write failed',
-    });
+    mocks.signOutCliSubscription.mockReturnValueOnce(
+      Effect.succeed({ preferenceError: 'Config write failed' }),
+    );
 
     const result = await runCli(['auth', 'chatgpt', 'logout']);
 

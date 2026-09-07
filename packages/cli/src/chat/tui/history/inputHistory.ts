@@ -6,8 +6,10 @@
 
 import { z } from 'zod';
 
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { effectRuntime } from '@platform/processRuntime';
+import { ensureError } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 const HISTORY_DIR = 'tui';
@@ -43,23 +45,35 @@ function serializeRecords(records: readonly HistoryRecord[]): string {
   return records.map((r) => JSON.stringify(r)).join('\n') + '\n';
 }
 
-export async function loadInputHistory(): Promise<InputHistory> {
-  let records: HistoryRecord[] = [];
-  if (await GlobalStorageFS.exists(HISTORY_PATH)) {
-    try {
-      const raw = await GlobalStorageFS.read(HISTORY_PATH);
+/** Read and parse the JSONL log, skipping malformed lines per the file-format
+ *  policy in the header. */
+function readHistoryRecords(): Effect.Effect<HistoryRecord[], Error> {
+  return Effect.tryPromise({
+    try: () => GlobalStorageFS.read(HISTORY_PATH),
+    catch: (cause) => ensureError(cause),
+  }).pipe(
+    Effect.map((raw) => {
+      const records: HistoryRecord[] = [];
       for (const line of raw.split('\n')) {
         const rec = Result.getOrUndefined(
           parseJsonWith(line, HistoryRecordSchema),
         );
         if (rec && rec.v.length > 0) records.push(rec);
       }
-    } catch {
-      // A read failure (EIO, permission, race-after-exists) must not block
-      // the TUI from mounting — the user can still type, just without
-      // history this session.
-      records = [];
-    }
+      return records;
+    }),
+  );
+}
+
+export async function loadInputHistory(): Promise<InputHistory> {
+  let records: HistoryRecord[] = [];
+  if (await GlobalStorageFS.exists(HISTORY_PATH)) {
+    // A read failure (EIO, permission, race-after-exists) must not block the
+    // TUI from mounting — the user can still type, just without history this
+    // session.
+    records = await effectRuntime().runPromise(
+      readHistoryRecords().pipe(Effect.catch(() => Effect.succeed([]))),
+    );
   }
   // Cap on load; older entries fall off when the ring is full.
   if (records.length > MAX_LINES) records = records.slice(-MAX_LINES);

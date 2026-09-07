@@ -125,7 +125,7 @@ export function defineSubscriptionAuthCommand(
     async run(context) {
       await initCliPlatform({ ...context, quietLogs: true });
       const signOutResult = await withCliAuthError(() =>
-        signOutCliSubscription(options.providerId),
+        effectRuntime().runPromise(signOutCliSubscription(options.providerId)),
       );
       if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
       const update = signOutResult.value;

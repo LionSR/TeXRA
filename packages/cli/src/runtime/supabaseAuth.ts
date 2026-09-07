@@ -1,9 +1,13 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
-import { installAuthProgramEdge, runAuthProgram } from '@auth/authProgram';
+import {
+  installAuthProgramEdge,
+  runAuthProgram,
+  unwrapAuthPortCause,
+} from '@auth/authProgram';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import {
   refreshRemoteAgentCatalogAfterSignOut,
@@ -22,10 +26,14 @@ import { completeDeviceSession } from '@auth/oauth/deviceAuthorization';
 import { platform } from '@platform/platform';
 import { effectRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { openBrowser } from './browser';
-import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
+import {
+  startLoopbackCallbackServer,
+  type LoopbackCallbackServer,
+} from './supabaseAuthCallbackServer';
 import {
   pollForDeviceSession,
   requestDeviceAuthorization,
@@ -100,45 +108,87 @@ export function initializeCliSupabaseAuth(
 export async function signInCliSupabase(
   options: CliLoginOptions = {},
 ): Promise<SupabaseSession> {
-  const provider = options.provider ?? DEFAULT_OAUTH_PROVIDER;
   const authCoordinator = initializeCliSupabaseAuth();
-  const callbackServer = await startLoopbackCallbackServer(authCoordinator);
-  const redirectTo = callbackServer.redirectTo;
-  const queryParams = buildOAuthQueryParams(provider, options);
-
+  const callbackServer = await effectRuntime().runPromise(
+    startLoopbackCallbackServer(authCoordinator),
+  );
   try {
-    options.signal?.throwIfAborted();
-    if (options.selectAccount || options.loginHint) {
-      await runAuthProgram(authCoordinator.clearSession());
+    const exit = await effectRuntime().runPromiseExit(
+      loopbackSignIn(authCoordinator, callbackServer, options),
+      { signal: options.signal },
+    );
+    if (Exit.isSuccess(exit)) return exit.value;
+    // A storage commit that began before cancellation still settles the
+    // sign-in: v4 fiber interruption is sticky (once delivered it re-fires at
+    // every interruptible boundary), so the wait cannot recover in-runtime —
+    // the Promise edge re-awaits the session on a fresh fiber instead. This
+    // is the historical abort contract (`commitStarted`), now settled at the
+    // boundary (R7: a product edge may represent cancellation as data).
+    if (Cause.hasInterrupts(exit.cause) && callbackServer.commitStarted) {
+      return await effectRuntime().runPromise(callbackServer.waitForSession);
     }
-    const { data, error } =
-      await SupabaseClient.getClient().auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo,
-          ...(queryParams && { queryParams }),
-        },
-      });
-    const authUrl = requireOAuthRedirectUrl(data, error);
-
-    options.signal?.throwIfAborted();
-    const sessionPromise = callbackServer.waitForSession(options.signal);
-    options.onAuthUrl?.(authUrl);
-    if (options.openBrowser ?? true) {
-      const browserLaunch = openBrowser(
-        authUrl,
-        options.manualBrowserHint ?? 'texra login --no-browser',
-      );
-      // A completed callback supersedes the launcher result, while callback
-      // failure or cancellation still preempts a stalled launcher.
-      await Promise.race([browserLaunch, sessionPromise.then(() => undefined)]);
-    }
-
-    return await sessionPromise;
+    throw Cause.squash(exit.cause);
   } finally {
-    await callbackServer.close();
+    await effectRuntime().runPromise(callbackServer.close);
   }
 }
+
+/**
+ * The loopback sign-in program: drive the OAuth redirect and browser launch,
+ * then await the callback session. The caller's cancellation signal arrives
+ * as fiber interruption (R5), which `LoopbackCallbackServer.cancel` turns
+ * into refused callbacks; the server is closed by the Promise edge's finally
+ * on success, failure, and cancellation alike.
+ */
+const loopbackSignIn = (
+  authCoordinator: SupabaseSessionCoordinator,
+  callbackServer: LoopbackCallbackServer,
+  options: CliLoginOptions,
+): Effect.Effect<SupabaseSession, Error> => {
+  const provider = options.provider ?? DEFAULT_OAUTH_PROVIDER;
+  const queryParams = buildOAuthQueryParams(provider, options);
+  return Effect.gen(function* () {
+    if (options.selectAccount || options.loginHint) {
+      yield* authCoordinator
+        .clearSession()
+        .pipe(Effect.mapError(unwrapAuthPortCause));
+    }
+    const { data, error } = yield* Effect.tryPromise({
+      try: () =>
+        SupabaseClient.getClient().auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: callbackServer.redirectTo,
+            ...(queryParams && { queryParams }),
+          },
+        }),
+      catch: (cause) => ensureError(cause),
+    });
+    const authUrl = yield* Effect.try({
+      try: () => requireOAuthRedirectUrl(data, error),
+      catch: (cause) => ensureError(cause),
+    });
+
+    options.onAuthUrl?.(authUrl);
+    if (options.openBrowser ?? true) {
+      // A completed callback supersedes the launcher result, while callback
+      // failure or cancellation still preempts a stalled launcher.
+      yield* Effect.raceFirst(
+        Effect.tryPromise({
+          try: () =>
+            openBrowser(
+              authUrl,
+              options.manualBrowserHint ?? 'texra login --no-browser',
+            ),
+          catch: (cause) => ensureError(cause),
+        }),
+        callbackServer.sessionSettled,
+      );
+    }
+
+    return yield* callbackServer.waitForSession;
+  }).pipe(Effect.onInterrupt(() => callbackServer.cancel));
+};
 
 function buildOAuthQueryParams(
   provider: OAuthProvider,
