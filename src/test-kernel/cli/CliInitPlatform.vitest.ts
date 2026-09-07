@@ -138,7 +138,10 @@ vi.mock('@platform/defaults/nodeAgentRuntime', () => ({
 }));
 
 vi.mock('@telemetry/UsageLogService', () => ({
-  UsageLogService: { initialize: vi.fn(), dispose: vi.fn() },
+  UsageLogService: {
+    initialize: vi.fn(() => Effect.void),
+    dispose: vi.fn(() => Effect.void),
+  },
 }));
 
 // First-init dependencies: only exercised when tryPlatform() returns undefined.
@@ -296,6 +299,7 @@ describe('CLI platform init', () => {
     );
 
     expect(vi.mocked(UsageLogService.initialize)).toHaveBeenCalledWith(
+      expect.anything(),
       {},
       '1.2.3',
       'cli',
