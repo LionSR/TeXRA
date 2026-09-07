@@ -143,10 +143,40 @@ const startProbe = (periodMs) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The ceiling the driver refused to start under, forwarded so every record is
+// checked against it too. A start-only check is systematically optimistic:
+// the harness is itself a large part of the load its later scenarios run
+// under, so the reading most likely to breach the ceiling is the one taken
+// last. Empty means \`--allow-load\`: an exploratory run with no ceiling.
+const ceiling = process.env.TEXRA_MEASURE_LOAD_CEILING;
+if (ceiling === undefined)
+  throw new Error('TEXRA_MEASURE_LOAD_CEILING not set by the driver');
+const loadCeiling = ceiling === '' ? null : Number(ceiling);
+
 // Every record carries the load it was taken under, because a number from a
-// busy machine is not a budget.
-const emit = (record) =>
-  console.log(JSON.stringify({ ...record, loadAverage1m: loadavg()[0] }));
+// busy machine is not a budget. A record above the ceiling is printed, marked,
+// and then fails the run: it must be re-taken, never quietly kept.
+const emit = (record) => {
+  const loadAverage1m = loadavg()[0];
+  const exceeded = loadCeiling !== null && loadAverage1m > loadCeiling;
+  console.log(
+    JSON.stringify({
+      ...record,
+      loadAverage1m,
+      ...(exceeded ? { aboveLoadCeiling: loadCeiling } : {}),
+    }),
+  );
+  if (exceeded)
+    throw new Error(
+      'load average ' +
+        loadAverage1m.toFixed(2) +
+        ' exceeded the ceiling of ' +
+        loadCeiling +
+        ' while measuring ' +
+        record.scenario +
+        '; that reading is not a budget',
+    );
+};
 
 /** Append \`rows\` synthetic transcript rows and report what the batch cost. */
 const appendHistory = (db, id, rows, characters, batchSize) =>
@@ -174,10 +204,12 @@ const databaseBytes = (storage) => {
     try {
       return statSync(join(storage, 'texra.db' + suffix)).size;
     } catch (cause) {
-      // Absent only for the WAL sidecars before the first checkpoint; the
-      // main file must exist, and its absence is a real failure.
-      if (suffix === '') throw cause;
-      return 0;
+      // A sidecar that does not exist is genuinely zero bytes: SQLite creates
+      // \`-wal\`/\`-shm\` on the first write and removes them on a checkpointing
+      // close. Every other failure, and any absence of the main file, is a
+      // failed measurement rather than a small number.
+      if (suffix !== '' && cause.code === 'ENOENT') return 0;
+      throw cause;
     }
   };
   return {
@@ -501,11 +533,43 @@ if (role === 'bytes') {
 }
 `;
 
+/**
+ * Timing scenarios are wall-clock measurements on a shared desktop, so a busy
+ * machine does not produce a smaller number, it produces a meaningless one.
+ * Refuse rather than record it; `--allow-load` is for an exploratory run whose
+ * output is not going into a budget.
+ */
+const MAX_LOAD_AVERAGE = 8;
+const allowLoad = process.argv.includes('--allow-load');
+
+/** The ceiling, or `null` under `--allow-load`. Children enforce it per record. */
+const loadCeiling = allowLoad ? null : MAX_LOAD_AVERAGE;
+
+/**
+ * Refuse before spending a scenario's minutes. Children re-check at every
+ * record they emit, so a machine that gets busy mid-scenario fails there;
+ * this is only the cheap early exit.
+ */
+function refuseAboveCeiling(what) {
+  const current = os.loadavg()[0];
+  if (loadCeiling !== null && current > loadCeiling)
+    throw new Error(
+      `1-minute load average ${current.toFixed(2)} exceeds ${loadCeiling} before ${what}; ` +
+        'wait for the machine to settle, or pass --allow-load for a throwaway run.',
+    );
+}
+
 /** One scenario child. A non-zero exit is a failed measurement, never a gap. */
 function measure(label, argv) {
+  refuseAboveCeiling(label);
   const result = spawnSync(process.execPath, ['--expose-gc', output, ...argv], {
     cwd: root,
     stdio: 'inherit',
+    env: {
+      ...process.env,
+      TEXRA_MEASURE_LOAD_CEILING:
+        loadCeiling === null ? '' : String(loadCeiling),
+    },
   });
   if (result.status !== 0)
     throw new Error(
@@ -520,21 +584,7 @@ const workspace = () => {
   return directory;
 };
 
-/**
- * Timing scenarios are wall-clock measurements on a shared desktop, so a busy
- * machine does not produce a smaller number, it produces a meaningless one.
- * Refuse rather than record it; `--allow-load` is for an exploratory run whose
- * output is not going into a budget.
- */
-const MAX_LOAD_AVERAGE = 8;
-const allowLoad = process.argv.includes('--allow-load');
-if (!allowLoad && os.loadavg()[0] > MAX_LOAD_AVERAGE) {
-  console.error(
-    `1-minute load average ${os.loadavg()[0].toFixed(2)} exceeds ${MAX_LOAD_AVERAGE}; ` +
-      'wait for the machine to settle, or pass --allow-load for a throwaway run.',
-  );
-  process.exit(1);
-}
+refuseAboveCeiling('the first scenario');
 
 try {
   mkdirSync(cache, { recursive: true });
@@ -555,18 +605,25 @@ try {
   });
   writeFileSync(output, bundle.outputFiles[0].contents);
 
+  // The machine identity is the thing a baseline pins, so a missing one is a
+  // failed measurement, not the string "unknown".
+  const cpus = os.cpus();
+  const [firstCpu] = cpus;
+  if (firstCpu === undefined)
+    throw new Error('os.cpus() reported no processors');
+
   console.log(
     JSON.stringify({
       scenario: 'environment',
       nodeVersion: process.version,
       platform: process.platform,
       arch: process.arch,
-      cpus: os.cpus().length,
-      cpuModel: os.cpus()[0]?.model ?? 'unknown',
+      cpus: cpus.length,
+      cpuModel: firstCpu.model,
       totalMemoryBytes: os.totalmem(),
       loadAverage1m: os.loadavg()[0],
       loadAverage5m: os.loadavg()[1],
-      loadCeiling: allowLoad ? null : MAX_LOAD_AVERAGE,
+      loadCeiling,
       measuredAt: new Date().toISOString(),
     }),
   );

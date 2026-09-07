@@ -14,9 +14,9 @@ with guessed percentage wins or a net-LOC promise."
 Nothing owned that, and the cutover is landing stage by stage, so a budget
 recorded after the fact would compare the new runtime against nothing. This
 document is the pre-cutover half of the comparison. It records what
-`scripts/measure-runtime-baseline.mjs` measured on `origin/main` at
-`854b36ee69`, the machine and datasets it measured on, and, for each metric the
-Performance gate names that is not measurable today, the exact reason.
+`scripts/measure-runtime-baseline.mjs` measured, the machine and datasets it
+measured on, and, for each metric the Performance gate names that this harness
+does not produce, what it would take to get one.
 
 No production code changed. The harness only reads and writes its own temporary
 session roots.
@@ -32,13 +32,13 @@ after the cutover and produces a back-to-back comparison on one machine.
 
 `Database` is a surviving contract: it is the substrate lane's own boundary, it
 is composed exactly once in production at
-`src/controllers/session/sessionLayer.ts:457`, the per-session layer map every
+`src/controllers/session/sessionLayer.ts:437`, the per-session layer map every
 host installs, and the delivery plan's deletion ledger does not name it.
 `appendAll`, `readAll`, `readListing`, `readInputBatch` and `currentCommit` are
 the operations the scenarios use.
 
 A scenario composes the layer exactly the way
-`src/test-kernel/controllers/session/sessionEvents.vitest.ts:819` does:
+`src/test-kernel/controllers/session/sessionEvents.vitest.ts:823` does:
 
 ```
 databaseLayer('persistent').pipe(
@@ -65,8 +65,14 @@ carries the 1-minute load average it was taken under.
 
 The script refuses to run above a 1-minute load average of 8 and says so, because
 a wall-clock number from a busy shared machine is not a smaller number, it is a
-meaningless one. `--allow-load` overrides that for an exploratory run whose
-output is not going into a budget; do not record such a run here.
+meaningless one. The ceiling is enforced twice: the driver refuses before
+spawning each scenario, and every scenario re-checks it at each record it emits,
+printing the offending record with an `aboveLoadCeiling` field and then failing
+the run. A start-only check would be systematically optimistic, because the
+harness is itself a large part of the load its later scenarios run under, so the
+reading most likely to breach the ceiling is the one taken last. `--allow-load`
+removes the ceiling for an exploratory run whose output is not going into a
+budget; do not record such a run here.
 
 Three measurement primitives are first uses in this repository: `perf_hooks`
 `monitorEventLoopDelay`, `os.loadavg`, and `process.memoryUsage`. Nothing else
@@ -92,6 +98,17 @@ the repository dies on `import { Effect } from 'effect'`.
 | Memory        | 68,719,476,736 bytes (64 GiB)                            |
 | 1-minute load | 6.83 at start, 5.29 to 7.00 across scenarios (ceiling 8) |
 | Measured at   | 2026-09-07T21:06:28Z                                     |
+
+The recorded run predates the per-record ceiling check described in section 2,
+which was added after review. The change is confined to the load gate, an
+`ENOENT` test in `databaseBytes` and the CPU read, none of which sits inside a
+timed region, and a full `--allow-load` run of the amended script reproduced
+section 4 within run-to-run variance: 100,000-row `readAll` 1451.40 ms against
+the recorded 1436.93 ms, peak heap growth 677.98 MB against 677.82 MB, settled
+on-disk bytes identical for the 1 KiB and 256 KiB shapes and 2,965,504 B
+against 2,990,080 B for `status` (2.81x against the recorded 2.84x). That run
+is deliberately not recorded here: it was taken without a ceiling, and section
+2 says such a run does not go into a budget.
 
 Datasets, all synthetic, all written through `appendAll`:
 
@@ -248,10 +265,14 @@ WAL reached 3,444,352 B, settling to 2,990,080 B on close. A long-lived session
 therefore carries its recent history in a WAL that grows until something
 checkpoints it, and on this path only closing does.
 
-## 5. Metrics the gate names that are not measurable today
+## 5. Metrics the gate names that this harness does not produce
 
-Each of these is recorded rather than dropped, with what would have to exist
-first.
+Each of these is recorded rather than dropped, with what it would take. The
+distinction that matters: none of them is an unmeasurable property of the
+system, and two of the four below are already driven by suites in this
+repository, with a third partly driven. What is missing is a vehicle that turns
+those behaviours into a number, and this harness, a spawned repo-root script
+over the `Database` contract, is not that vehicle.
 
 **Host-process cold open.** Section 4 measures the substrate half: a fresh Node
 process opening an existing session database to its first usable listing. The
@@ -264,32 +285,62 @@ drive packaged artifacts, not startup timing:
 cold open needs a launcher that reports a first-paint timestamp, which is its own
 piece of work and is not in this lane.
 
-**p95 stop latency.** Cancellation latency is a property of a run in flight:
-cancel during model call, during tool execution, during approval, during queued
-admission. Driving one needs a model handler, and the only network-free handler
-in the repository is `ModelHandlerValidation`
-(`src/agent/modelHandlers/modelHandlerValidation.ts`), reachable only through
-`shouldUseInternalValidationModelHandler`
-(`src/agent/runtime/internalValidationOverride.ts:30`), which requires all four
-of `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1`, a named per-run env var set
-to `1`, `CI=1`, and an absolute flag file whose contents match a build-time
-sentinel. Any partial activation throws rather than falling through. The
-include flag is an esbuild `define` in `packages/cli/scripts/build-bundle.mjs`,
-so outside a CLI package-validation build the predicate constant-folds to
-`false`. A repository-root script cannot reach it.
+**p95 stop latency.** Cancellation is a property of a run in flight, and the
+Stop/close gate names the points: before registration, during the model call,
+during tool execution, during approval, during queued admission, during
+settlement. Two of those points are driven today, with no network anywhere:
+`src/test-kernel/agent/followUp/ToolUseDispatchInterruption.vitest.ts` builds a
+three-tool round on the real `createToolUseRoundFlow` and aborts the run's own
+`AbortController` either from inside the second tool or during tool-call
+extraction, then asserts every requested call comes back paired with a
+synthesized cancelled result. Its model handler is `roundModelHandler`
+(`src/test-kernel/agent/toolUseRoundTestUtils.ts`) wrapped in `testModelCell`
+(`src/test-kernel/agent/modelCellTestUtils.ts`): a complete handler surface
+built from `vi.fn` stubs, with no client and no request.
 
-**Tool concurrency under load.** Same gate, plus a second limit:
-`ModelHandlerValidation.createResponse`
-(`src/agent/modelHandlers/modelHandlerValidation.ts:154`) emits at most one tool
-call per turn, and only when `TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT=1`. It
-cannot produce the parallel fan-out that `ToolUseDispatchNode`'s partition,
-dedup and barrier behavior exists to handle, so a concurrency number taken
-through it would describe the stub, not the product.
+Those fixtures also run outside vitest. A throwaway probe, bundling them the
+same way this harness bundles its own program, drove that round in a plain Node
+child and returned in about a millisecond between the abort and the flow
+returning with its results paired. That number is not recorded above and is not
+a stop-latency budget. Every tool in the fixture returns immediately and
+`createResponse` resolves without a request, so what the millisecond measures is
+the flow's own cancellation bookkeeping with nothing in flight to cancel. The
+budget the gate wants is dominated by what actually has to unwind: a streaming
+provider response, a running bash child, a subagent. It also needs the approval
+and queued-admission points, which the round-flow fixtures do not reach at all.
+
+Getting it therefore needs a fixture whose tools and model response take a
+controlled, non-zero time to unwind, plus coverage of the two points above.
+Either vehicle works: extend this harness to bundle the kernel fixtures (it
+can, and it would additionally have to deal with the six timers still running
+after the round returns, which keep the child alive past its last record), or
+measure inside the vitest kernel beside the suites that already drive these
+paths. The second is the smaller step and keeps the fixtures where their owners
+maintain them.
+
+**Tool concurrency under load.** The partition, dedup and barrier behaviour is
+covered: `src/test-kernel/agent/ToolUseDispatchParallel.vitest.ts` drives
+`ToolUseDispatchNode`'s real fan-out with probe tools that count their own
+overlap through an `inFlight`/`maxInFlight` counter, and asserts that contiguous
+`parallelSafe` calls overlap, that a non-safe tool is an ordering barrier, that
+duplicates execute once and fan their result out, and that one run signal
+cancels every concurrent call.
+
+What that suite does not give is a number under load. Its probe tools sleep a
+fixed interval and do no work, and it dispatches a single round rather than a
+session under sustained tool traffic, so the overlap it proves is a scheduling
+fact, not throughput or latency. A concurrency budget needs tools that consume
+real resources at a controlled rate and a driver that keeps rounds arriving:
+the same missing vehicle as stop latency, and worth building once for both.
 
 **Representative media through the run path.** Section 4 measures 256 KiB rows
 through `appendAll`, which is the durable cost. What it does not measure is
-media arriving through the real attachment and transcript path, because that
-path needs a run, which needs the model handler above.
+media arriving through the real attachment path: a tool result's `files`
+entries becoming provider content and transcript attachments. Dispatch does
+carry that path in the kernel (`ToolUseDispatchParallel.vitest.ts` asserts a
+malformed attachment result becomes a tool error), but asserting a shape is not
+timing a payload, and the sizes that matter arrive from real tools. Same
+vehicle, again.
 
 ## 6. What to compare after the cutover
 
@@ -311,5 +362,10 @@ A regression in any of these needs a stated reason, not a percentage. A number
 that improves needs the same scrutiny: check the invariants still hold, because
 every scenario throws rather than reporting a smaller number when its contract
 breaks.
+
+Start the comparison run on a quiet machine, not merely a machine under the
+ceiling. The 100,000-row `replay-memory` scenario is the harness's own heaviest
+load, and a run begun in the low sevens has been observed carrying it past 8 and
+failing there. That is the ceiling working, but it costs the whole run.
 
 [plan]: ../../.agents/docs/proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md
