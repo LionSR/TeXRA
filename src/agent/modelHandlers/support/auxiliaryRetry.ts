@@ -11,6 +11,21 @@ import { isProviderErrorAutoRetryable } from '@common/errors/sdkError/providerEr
  */
 export const AUXILIARY_MAX_RETRIES = 2;
 
+/**
+ * SDK-level retries for provider clients, disabled. `ModelInvocationNode` is
+ * the single retry owner for generation requests (an automatic `p-retry`
+ * batch, then one approved manual attempt at a time), so a provider SDK
+ * retrying underneath it would spend attempts against a budget the node
+ * cannot see. Client constructors default to this value and the auxiliary
+ * calls listed on {@link AUXILIARY_MAX_RETRIES} opt back up per request.
+ *
+ * The OpenRouter SDK expresses the same decision as
+ * `retryConfig: { strategy: 'none' }` rather than a count, so its client in
+ * `modelHandlerOpenRouterNative.getClient` states the policy in its own terms
+ * instead of importing this constant.
+ */
+export const SDK_RETRIES_DISABLED = 0;
+
 /** Run an auxiliary provider call under the shared bounded-retry policy. */
 export function auxiliaryRetry<T>(
   operation: () => Promise<T>,

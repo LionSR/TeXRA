@@ -81,6 +81,7 @@ import {
   type BackgroundTerminalVerdict,
 } from '../support/BackgroundRunLifecycle';
 import { ServerChainState } from '../support/ServerChainState';
+import { SDK_RETRIES_DISABLED } from '../support/auxiliaryRetry';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
@@ -1807,19 +1808,20 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   /**
    * Per-call options for the Speakeasy Interactions client.
    *
-   * `maxRetries: 0` keeps the node loop the single retry owner: the generated
-   * client defaults to its own 4-retry backoff, which `httpOptions`-level
-   * retry settings do not govern. Abort is wired via `fetchOptions.signal`
-   * (GoogleGenAIRequestOptions has no top-level abortSignal field). The
-   * request-local HTTP client observes native fetch response resolution and
-   * applies the shared header/body-inactivity policy without relying on
-   * non-standard RequestInit fields that the SDK drops while rebuilding.
+   * {@link SDK_RETRIES_DISABLED} keeps the node loop the single retry owner:
+   * the generated client defaults to its own 4-retry backoff, which
+   * `httpOptions`-level retry settings do not govern. Abort is wired via
+   * `fetchOptions.signal` (GoogleGenAIRequestOptions has no top-level
+   * abortSignal field). The request-local HTTP client observes native fetch
+   * response resolution and applies the shared header/body-inactivity policy
+   * without relying on non-standard RequestInit fields that the SDK drops
+   * while rebuilding.
    */
   private interactionsRequestOptions(
     signal?: AbortSignal,
   ): InteractionsRequestOptions {
     return {
-      maxRetries: 0,
+      maxRetries: SDK_RETRIES_DISABLED,
       fetchOptions: signal ? { signal } : {},
     };
   }
