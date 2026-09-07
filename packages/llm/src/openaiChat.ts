@@ -49,6 +49,11 @@ const UsageSchema = z.object({
     .nullish(),
 });
 
+const TokenEstimateSchema = z.object({
+  data: z.object({ total_tokens: z.int().nonnegative() }),
+  error: z.never().optional(),
+});
+
 // Required content outside this protocol slice fails instead of being stripped.
 const ChunkSchema = z.strictObject({
   id: z.string().min(1),
@@ -115,8 +120,22 @@ const ReasoningChunkSchema = ChunkSchema.extend({
 const chatMessages = Effect.fn('llm.chatMessages')(function* (
   history: ResolvedTurn['messages'],
   origin: ModelOrigin,
+  supportsImageInput: boolean,
 ) {
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+  // Exact media types exclude data-URL delimiters; accepted spelling is retained.
+  const imageMimeTypes =
+    origin.protocol === 'kimi-chat'
+      ? [
+          'image/jpeg',
+          'image/png',
+          'image/gif',
+          'image/webp',
+          'image/bmp',
+          'image/heic',
+          'image/heif',
+        ]
+      : ['image/jpeg', 'image/png'];
   let calls: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall[] =
     [];
   for (const message of history) {
@@ -148,17 +167,37 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
     }
     calls = [];
     if (message.role === 'user') {
-      const text: string[] = [];
+      const content: Array<
+        | OpenAI.Chat.Completions.ChatCompletionContentPartText
+        | OpenAI.Chat.Completions.ChatCompletionContentPartImage
+      > = [];
       for (const part of message.content) {
-        if (part.kind !== 'text') {
+        if (part.kind === 'text') {
+          content.push({ type: 'text', text: part.text });
+        } else if (
+          part.kind === 'image' &&
+          supportsImageInput &&
+          part.detail === undefined &&
+          imageMimeTypes.includes(part.mimeType.toLowerCase())
+        ) {
+          content.push({
+            type: 'image_url',
+            image_url: { url: `data:${part.mimeType};base64,${part.base64}` },
+          });
+        } else {
           return yield* new ModelError({
             kind: 'unsupported',
-            message: 'This Chat protocol requires text-only user input.',
+            message:
+              'This Chat route accepts text and explicitly supported images without detail controls.',
           });
         }
-        text.push(part.text);
       }
-      messages.push({ role: 'user', content: text.join('') });
+      messages.push({
+        role: 'user',
+        content: content.every((part) => part.type === 'text')
+          ? content.map((part) => part.text).join('')
+          : content,
+      });
       continue;
     }
     let assistant:
@@ -265,7 +304,11 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
       message: 'The prepared input belongs to another Chat protocol.',
     });
   }
-  const messages = yield* chatMessages(turn.messages, turn);
+  const messages = yield* chatMessages(
+    turn.messages,
+    turn,
+    'supportsImageInput' in config && config.supportsImageInput,
+  );
   const toolChoice = yield* chatToolChoice(
     turn.controls.toolChoice,
     turn.tools,
@@ -339,6 +382,18 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
     }
     parameters.thinking = { type: thinking.mode };
   } else if (turn.protocol === 'kimi-chat' && config.protocol === 'kimi-chat') {
+    if (
+      config.requiresPromptCacheKey &&
+      turn.controls.promptCacheKey === null
+    ) {
+      return yield* new ModelError({
+        kind: 'invalid-request',
+        message:
+          'The selected Kimi route requires a caller-supplied prompt cache key.',
+      });
+    }
+    if (turn.controls.promptCacheKey !== null)
+      parameters.prompt_cache_key = turn.controls.promptCacheKey;
     if (
       turn.controls.temperature !==
         config.temperatureByThinking[thinking.mode] ||
@@ -458,7 +513,7 @@ export function openaiChatModel(
       if (!parsed.success) {
         return yield* new ModelError({
           kind: 'invalid-request',
-          message: 'This model requires supported materialized text input.',
+          message: 'This model requires supported materialized input.',
           cause: parsed.error,
         });
       }
@@ -471,7 +526,9 @@ export function openaiChatModel(
         parsed.data.serviceTier !== undefined ||
         parsed.data.cache !== undefined ||
         parsed.data.stopSequences !== undefined ||
-        parsed.data.inferenceGeo !== undefined
+        parsed.data.inferenceGeo !== undefined ||
+        (parsed.data.promptCacheKey !== undefined &&
+          config.protocol !== 'kimi-chat')
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -568,6 +625,9 @@ export function openaiChatModel(
           temperature,
           maxOutputTokens,
           toolChoice,
+          ...(config.protocol === 'kimi-chat'
+            ? { promptCacheKey: parsed.data.promptCacheKey ?? null }
+            : {}),
         };
       }
       const prepared = ResolvedTurnSchema.safeParse({ ...common, controls });
@@ -1104,5 +1164,123 @@ export function openaiChatModel(
       return completed;
     },
   );
-  return Object.freeze({ prepareTurn, streamTurn, generateTurn });
+  const estimateMessageTokens =
+    config.protocol === 'kimi-chat' && config.supportsMessageTokenEstimation
+      ? Effect.fn('llm.estimateMessageTokens')(function* (input: ResolvedTurn) {
+          const parsed = ResolvedTurnSchema.safeParse(input);
+          if (
+            !parsed.success ||
+            parsed.data.protocol !== 'kimi-chat' ||
+            !sameModelOrigin(parsed.data, origin)
+          ) {
+            return yield* new ModelError({
+              kind: 'unsupported',
+              message:
+                'The token estimate requires this Kimi route’s prepared input.',
+              cause: parsed.success ? undefined : parsed.error,
+            });
+          }
+          const { model, messages } = yield* chatParameters(
+            parsed.data,
+            config,
+          );
+          let reader: ReadableStreamDefaultReader<Uint8Array> | undefined =
+            undefined;
+          // The request signal must abort before cancellation joins a pending read.
+          yield* Effect.addFinalizer((exit) => {
+            if (reader === undefined) return Effect.void;
+            const body = reader;
+            return Effect.tryPromise({
+              try: () => body.cancel(),
+              catch: (cause) => cause,
+            }).pipe(
+              Effect.catch((cause) => {
+                if (
+                  (signal.aborted && cause === signal.reason) ||
+                  (Exit.isFailure(exit) &&
+                    exit.cause.reasons.some(
+                      (reason) =>
+                        Cause.isFailReason(reason) &&
+                        reason.error instanceof ModelError &&
+                        reason.error.kind === 'transport' &&
+                        reason.error.cause === cause,
+                    ))
+                )
+                  return Effect.void;
+                return Effect.die(cause);
+              }),
+              Effect.ensuring(Effect.sync(() => body.releaseLock())),
+            );
+          });
+          const signal = yield* Effect.abortSignal;
+          const response = yield* Effect.tryPromise({
+            try: () =>
+              client
+                .post<unknown>('/tokenizers/estimate-token-count', {
+                  body: { model, messages },
+                  signal,
+                  maxRetries: 0,
+                })
+                .asResponse(),
+            catch: openaiFailure,
+          });
+          const requestId = response.headers.get('x-request-id') ?? undefined;
+          if (response.body === null) {
+            return yield* new ModelError({
+              kind: 'malformed-output',
+              message: 'Kimi returned no message token estimate body.',
+              requestId,
+              model: config.requestedModel,
+            });
+          }
+          reader = response.body.getReader();
+          const body = reader;
+          const decoder = new TextDecoder();
+          let text = '';
+          while (true) {
+            const part = yield* Effect.tryPromise({
+              try: () => body.read(),
+              catch: (cause) =>
+                new ModelError({
+                  kind: 'transport',
+                  message: 'The Kimi token estimate could not be read.',
+                  requestId,
+                  model: config.requestedModel,
+                  cause,
+                }),
+            });
+            if (part.done) break;
+            text += decoder.decode(part.value, { stream: true });
+          }
+          text += decoder.decode();
+          const raw = yield* Effect.try({
+            try: () => JSON.parse(text) as unknown,
+            catch: (cause) =>
+              new ModelError({
+                kind: 'malformed-output',
+                message: 'Kimi returned malformed message token estimate JSON.',
+                requestId,
+                model: config.requestedModel,
+                cause,
+              }),
+          });
+          const receipt = TokenEstimateSchema.safeParse(raw);
+          if (!receipt.success) {
+            return yield* new ModelError({
+              kind: 'malformed-output',
+              message: 'Kimi returned an invalid message token estimate.',
+              requestId,
+              model: config.requestedModel,
+              cause: receipt.error,
+            });
+          }
+          return receipt.data.data.total_tokens;
+        }, Effect.scoped)
+      : undefined;
+  return Object.freeze({
+    prepareTurn,
+    streamTurn,
+    generateTurn,
+    ...(estimateMessageTokens === undefined ? {} : { estimateMessageTokens }),
+  });
 }

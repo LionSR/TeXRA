@@ -407,6 +407,7 @@ export function googleInteractionsModel(
         parsed.data.thinking !== undefined ||
         parsed.data.effort !== undefined ||
         parsed.data.cache !== undefined ||
+        parsed.data.promptCacheKey !== undefined ||
         parsed.data.stopSequences !== undefined ||
         parsed.data.inferenceGeo !== undefined ||
         parsed.data.mode === 'background' ||

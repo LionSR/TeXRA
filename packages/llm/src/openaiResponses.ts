@@ -662,6 +662,7 @@ export function openaiResponsesModel(
       author.cache !== undefined ||
       author.inferenceGeo !== undefined ||
       author.stopSequences !== undefined ||
+      author.promptCacheKey !== undefined ||
       (author.continuation !== undefined &&
         author.continuation.origin.protocol !== 'openai-responses') ||
       (author.serviceTier != null && author.serviceTier !== 'fast') ||

@@ -1086,21 +1086,21 @@ describe('native OpenAI Responses protocol', () => {
       JSON.parse(String(fetch.mock.calls[2]?.[1]?.body)).temperature,
     ).toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(3);
-    expect(
-      await Effect.runPromise(
-        Effect.flip(
-          model.prepareTurn({
-            ...REQUEST,
-            continuation: {
-              origin: { ...OPERATION.origin, protocol: 'google-interactions' },
-              coveredMessages: 1,
-              prefixFingerprint: 'a'.repeat(64),
-              anchor: { interactionId: 'int_1', coveredSteps: 1 },
-            },
-          }),
-        ),
-      ),
-    ).toMatchObject({ kind: 'unsupported' });
+    for (const request of [
+      {
+        ...REQUEST,
+        continuation: {
+          origin: { ...OPERATION.origin, protocol: 'google-interactions' },
+          coveredMessages: 1,
+          prefixFingerprint: 'a'.repeat(64),
+          anchor: { interactionId: 'int_1', coveredSteps: 1 },
+        },
+      },
+      { ...REQUEST, promptCacheKey: 'admitted-invocation' },
+    ] satisfies readonly TurnRequest[])
+      expect(
+        await Effect.runPromise(Effect.flip(model.prepareTurn(request))),
+      ).toMatchObject({ kind: 'unsupported' });
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 

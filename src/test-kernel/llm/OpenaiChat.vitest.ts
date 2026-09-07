@@ -43,6 +43,9 @@ const REASONING_CONFIGS = [
   {
     ...CONFIG,
     protocol: 'kimi-chat',
+    supportsImageInput: true,
+    supportsMessageTokenEstimation: false,
+    requiresPromptCacheKey: false,
     thinkingControl: 'toggle',
     supportedEfforts: [],
     supportsForcedToolChoice: false,
@@ -57,6 +60,7 @@ const REASONING_CONFIGS = [
   {
     ...CONFIG,
     protocol: 'glm-chat',
+    supportsImageInput: true,
     supportsThinkingDisabled: false,
     supportedEfforts: ['low', 'high', 'max'],
     defaults: {
@@ -144,6 +148,314 @@ const generate = (model: Model) =>
 afterEach(() => vi.unstubAllEnvs());
 
 describe('native OpenAI Chat protocol', () => {
+  it.each([REASONING_CONFIGS[1], REASONING_CONFIGS[2]])(
+    'preserves selected $protocol image input and rejects unsupported media before I/O',
+    async (config) => {
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async () => response(sse(chunk())));
+      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+      const request: TurnRequest = {
+        system: 'Exact system.',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { kind: 'text', text: 'First image: ' },
+              { kind: 'image', mimeType: 'image/PNG', base64: 'YQ==' },
+              { kind: 'text', text: '\nEmpty captured image: ' },
+              { kind: 'image', mimeType: 'image/jpeg', base64: '' },
+              { kind: 'text', text: '\nCompare.' },
+            ],
+          },
+        ],
+      };
+      const prepared = await Effect.runPromise(model.prepareTurn(request));
+      expect(fetch).not.toHaveBeenCalled();
+      const result = await Effect.runPromise(
+        model.generateTurn(JSON.parse(JSON.stringify(prepared))),
+      );
+      const first = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+      expect(first.messages).toEqual([
+        { role: 'system', content: request.system },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'First image: ' },
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/PNG;base64,YQ==' },
+            },
+            { type: 'text', text: '\nEmpty captured image: ' },
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/jpeg;base64,' },
+            },
+            { type: 'text', text: '\nCompare.' },
+          ],
+        },
+      ]);
+      const followUp = await Effect.runPromise(
+        model.prepareTurn({
+          ...request,
+          messages: [
+            ...request.messages,
+            {
+              role: 'assistant',
+              origin: result.requestedOrigin,
+              content: result.content,
+            },
+            { role: 'user', content: [{ kind: 'text', text: 'Continue.' }] },
+          ],
+        }),
+      );
+      await Effect.runPromise(
+        model.generateTurn(JSON.parse(JSON.stringify(followUp))),
+      );
+      expect(
+        JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).messages.slice(0, 2),
+      ).toEqual(first.messages);
+      for (const part of [
+        { kind: 'image', mimeType: 'image/png', base64: '', detail: 'high' },
+        { kind: 'image', mimeType: 'application/pdf', base64: '' },
+        {
+          kind: 'image',
+          mimeType: 'image/png;base64,SGVsbG8=#',
+          base64: 'AA==',
+        },
+        { kind: 'image', mimeType: 'image/svg+xml', base64: 'YQ==' },
+        { kind: 'audio', mimeType: 'audio/wav', base64: '' },
+        { kind: 'video', mimeType: 'video/mp4', base64: '' },
+        { kind: 'document', mimeType: 'application/pdf', base64: '' },
+      ] as const) {
+        const messages = [{ role: 'user', content: [part] }] as const;
+        expect(
+          (
+            await Effect.runPromise(
+              Effect.flip(model.prepareTurn({ messages })),
+            )
+          ).kind,
+        ).toBe('unsupported');
+        expect(
+          (
+            await Effect.runPromise(
+              Effect.flip(
+                model.generateTurn({
+                  ...JSON.parse(JSON.stringify(prepared)),
+                  messages,
+                }),
+              ),
+            )
+          ).kind,
+        ).toBe('unsupported');
+      }
+      const textOnly = openaiChatModel(
+        { ...config, supportsImageInput: false },
+        {
+          apiKey: 'synthetic',
+          fetch,
+        },
+      );
+      expect(
+        (await Effect.runPromise(Effect.flip(textOnly.prepareTurn(request))))
+          .kind,
+      ).toBe('unsupported');
+      expect(fetch).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('estimates Kimi messages explicitly and preserves the caller cache key on generation', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        new Response('{"data":{"total_tokens":17}}', {
+          headers: {
+            'content-type': 'application/json',
+            'x-request-id': 'estimate-original',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(response(sse(chunk())));
+    const config = {
+      ...REASONING_CONFIGS[1],
+      supportsMessageTokenEstimation: true,
+      requiresPromptCacheKey: true,
+    };
+    const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
+    assert(model.estimateMessageTokens !== undefined);
+    const missingKey = await Effect.runPromise(
+      Effect.flip(model.prepareTurn(REQUEST)),
+    );
+    expect(missingKey.kind).toBe('invalid-request');
+    const promptCacheKey = ' retained-session-key ';
+    const prepared = await Effect.runPromise(
+      model.prepareTurn({
+        system: 'Estimate this system too.',
+        promptCacheKey,
+        tools: TOOLS,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { kind: 'text', text: 'Image: ' },
+              { kind: 'image', mimeType: 'image/png', base64: 'YQ==' },
+            ],
+          },
+          {
+            role: 'assistant',
+            origin: {
+              protocol: config.protocol,
+              codecVersion: 1,
+              requestedModel: config.requestedModel,
+              deployment: config.deployment,
+            },
+            content: [
+              {
+                kind: 'reasoning',
+                summary: [],
+                content: [{ kind: 'text', text: 'exact reasoning' }],
+                evidence: { kind: 'chat-reasoning-content' },
+              },
+              {
+                kind: 'local-call',
+                providerCallId: 'original-call',
+                name: 'search',
+                arguments: { query: 'x' },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            results: [
+              {
+                callOrdinal: 0,
+                status: 'success',
+                content: [{ kind: 'text', text: 'found' }],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    const rehydrated = JSON.parse(JSON.stringify(prepared));
+    expect(
+      await Effect.runPromise(model.estimateMessageTokens(rehydrated)),
+    ).toBe(17);
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      `${config.deployment.endpoint}/tokenizers/estimate-token-count`,
+    );
+    const estimate = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+    expect(Object.keys(estimate).sort()).toEqual(['messages', 'model']);
+    expect(estimate.messages[2]).toMatchObject({
+      reasoning_content: 'exact reasoning',
+      tool_calls: [
+        {
+          id: 'original-call',
+          function: { name: 'search', arguments: '{"query":"x"}' },
+        },
+      ],
+    });
+    await Effect.runPromise(model.generateTurn(rehydrated));
+    const generation = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
+    expect({ model: generation.model, messages: generation.messages }).toEqual(
+      estimate,
+    );
+    expect(generation).toMatchObject({
+      prompt_cache_key: promptCacheKey,
+      max_tokens: 100,
+    });
+    expect(rehydrated.controls).toMatchObject({
+      promptCacheKey,
+      maxOutputTokens: 100,
+    });
+    for (const rejected of [
+      {
+        ...rehydrated,
+        controls: { ...rehydrated.controls, promptCacheKey: null },
+      },
+      {
+        ...rehydrated,
+        deployment: { ...config.deployment, credentialScope: 'foreign' },
+      },
+    ]) {
+      await Effect.runPromise(
+        Effect.flip(model.estimateMessageTokens(rejected)),
+      );
+      await Effect.runPromise(Effect.flip(model.generateTurn(rejected)));
+    }
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const ordinary = openaiChatModel(REASONING_CONFIGS[1], {
+      apiKey: 'synthetic',
+      fetch,
+    });
+    expect(ordinary.estimateMessageTokens).toBeUndefined();
+    const ordinaryTurn = await Effect.runPromise(ordinary.prepareTurn(REQUEST));
+    assert(ordinaryTurn.protocol === 'kimi-chat');
+    expect(ordinaryTurn.controls.promptCacheKey).toBeNull();
+  });
+
+  it.each([
+    {
+      name: 'malformed JSON',
+      body: '{',
+      status: 200,
+      kind: 'malformed-output',
+    },
+    {
+      name: 'negative estimate',
+      body: '{"data":{"total_tokens":-1}}',
+      status: 200,
+      kind: 'malformed-output',
+    },
+    {
+      name: 'error alongside a count',
+      body: '{"data":{"total_tokens":3},"error":{"message":"failed"}}',
+      status: 200,
+      kind: 'malformed-output',
+    },
+    {
+      name: 'authentication failure',
+      body: '{"error":{"message":"denied"}}',
+      status: 401,
+      kind: 'authentication',
+    },
+    {
+      name: 'rate limit',
+      body: '{"error":{"message":"limited"}}',
+      status: 429,
+      kind: 'provider-rejection',
+    },
+  ])(
+    'rejects Kimi estimate $name without retrying',
+    async ({ body, status, kind }) => {
+      const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        new Response(body, {
+          status,
+          headers: {
+            'content-type': 'application/json',
+            'x-request-id': 'estimate-original',
+          },
+        }),
+      );
+      const model = openaiChatModel(
+        { ...REASONING_CONFIGS[1], supportsMessageTokenEstimation: true },
+        {
+          apiKey: 'synthetic',
+          fetch,
+        },
+      );
+      assert(model.estimateMessageTokens !== undefined);
+      const turn = await Effect.runPromise(model.prepareTurn(REQUEST));
+      const failure = await Effect.runPromise(
+        Effect.flip(model.estimateMessageTokens(turn)),
+      );
+      expect(failure).toMatchObject({ kind, requestId: 'estimate-original' });
+      expect(failure.cause).toBeDefined();
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it.each([
     { present: true, fragmented: false },
     { present: true, fragmented: true },
@@ -1288,6 +1600,8 @@ describe('native OpenAI Chat protocol', () => {
   it.each([
     'user media',
     'tool media',
+    'Kimi tool media',
+    'GLM tool media',
     'reasoning',
     'missing call ID',
     'text after calls',
@@ -1297,18 +1611,22 @@ describe('native OpenAI Chat protocol', () => {
     'thinking control',
     'effort control',
     'cache control',
+    'prompt cache key',
     'stop control',
     'inference geography',
     'Responses message evidence',
     'Responses call evidence',
   ] as const)('rejects unsupported %s before transport', async (scenario) => {
     const fetch = vi.fn<typeof globalThis.fetch>();
-    const model = modelWith(fetch);
+    let config: ChatConfiguration = CONFIG;
+    if (scenario === 'Kimi tool media') config = REASONING_CONFIGS[1];
+    if (scenario === 'GLM tool media') config = REASONING_CONFIGS[2];
+    const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
     const image = { kind: 'image', mimeType: 'image/png', base64: '' } as const;
     const content: TurnRequest['messages'][number] = {
       role: 'assistant',
       origin: {
-        protocol: 'openai-chat',
+        protocol: config.protocol,
         codecVersion: 1,
         requestedModel: CONFIG.requestedModel,
         deployment: CONFIG.deployment,
@@ -1340,10 +1658,9 @@ describe('native OpenAI Chat protocol', () => {
             {
               callOrdinal: 0,
               status: 'success',
-              content:
-                scenario === 'tool media'
-                  ? [image]
-                  : [{ kind: 'text', text: 'done' }],
+              content: scenario.includes('tool media')
+                ? [image]
+                : [{ kind: 'text', text: 'done' }],
             },
           ],
         },
@@ -1362,6 +1679,8 @@ describe('native OpenAI Chat protocol', () => {
     if (scenario === 'effort control') request = { ...REQUEST, effort: null };
     if (scenario === 'cache control')
       request = { ...REQUEST, cache: 'disabled' };
+    if (scenario === 'prompt cache key')
+      request = { ...REQUEST, promptCacheKey: 'session' };
     if (scenario === 'stop control')
       request = { ...REQUEST, stopSequences: [] };
     if (scenario === 'inference geography')
@@ -1629,72 +1948,98 @@ describe('native OpenAI Chat protocol', () => {
     },
   );
 
-  it('preserves a body-read failure and the HTTP request identity after reasoning', async () => {
-    const cause = new Error('Original body failure');
-    let controller: ReadableStreamDefaultController<Uint8Array>;
-    let requestSignal: AbortSignal | null | undefined;
-    const body = new ReadableStream<Uint8Array>({
-      start(current) {
-        controller = current;
-        current.enqueue(
-          new TextEncoder().encode(
-            `data: ${JSON.stringify(
-              chunk({
-                request_id: 'provider-body-request',
-                choices: [
-                  {
-                    index: 0,
-                    delta: { reasoning_content: 'partial' },
-                    finish_reason: null,
-                  },
-                ],
-              }),
-            )}\n\n`,
-          ),
-        );
-      },
-    });
-    const fetch = vi
-      .fn<typeof globalThis.fetch>()
-      .mockImplementation(async (_input, init) => {
-        requestSignal = init?.signal;
-        return new Response(body, {
-          headers: {
-            'content-type': 'text/event-stream',
-            'x-request-id': 'http-original-request',
-          },
-        });
+  it.each(['generation', 'estimation'] as const)(
+    'preserves a body-read failure and the HTTP request identity during %s',
+    async (operation) => {
+      const estimating = operation === 'estimation';
+      const cause = new Error('Original body failure');
+      let controller: ReadableStreamDefaultController<Uint8Array>;
+      let requestSignal: AbortSignal | null | undefined;
+      const body = new ReadableStream<Uint8Array>({
+        start(current) {
+          controller = current;
+          current.enqueue(
+            new TextEncoder().encode(
+              estimating
+                ? '{"data":'
+                : `data: ${JSON.stringify(
+                    chunk({
+                      request_id: 'provider-body-request',
+                      choices: [
+                        {
+                          index: 0,
+                          delta: { reasoning_content: 'partial' },
+                          finish_reason: null,
+                        },
+                      ],
+                    }),
+                  )}\n\n`,
+            ),
+          );
+        },
+        pull() {
+          if (estimating) controller.error(cause);
+        },
       });
-    const model = openaiChatModel(REASONING_CONFIGS[2], {
-      apiKey: 'synthetic',
-      fetch,
-    });
-    const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
-    assert(prepared.mode === 'foreground');
-    const failure = await Effect.runPromise(
-      Effect.flip(
-        Stream.runForEach(model.streamTurn(prepared), (event) =>
-          Effect.sync(() => {
-            if (event.kind === 'delta') controller.error(cause);
-          }),
+      const fetch = vi
+        .fn<typeof globalThis.fetch>()
+        .mockImplementation(async (_input, init) => {
+          requestSignal = init?.signal;
+          return new Response(body, {
+            headers: {
+              'content-type': estimating
+                ? 'application/json'
+                : 'text/event-stream',
+              'x-request-id': 'http-original-request',
+            },
+          });
+        });
+      const model = openaiChatModel(
+        estimating
+          ? {
+              ...REASONING_CONFIGS[1],
+              supportsMessageTokenEstimation: true,
+            }
+          : REASONING_CONFIGS[2],
+        {
+          apiKey: 'synthetic',
+          fetch,
+        },
+      );
+      const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
+      assert(prepared.mode === 'foreground');
+      const failure = await Effect.runPromise(
+        Effect.flip(
+          estimating
+            ? model.estimateMessageTokens!(prepared).pipe(Effect.asVoid)
+            : Stream.runForEach(model.streamTurn(prepared), (event) =>
+                Effect.sync(() => {
+                  if (event.kind === 'delta') controller.error(cause);
+                }),
+              ),
         ),
-      ),
-    );
-    expect(failure).toMatchObject({
-      kind: 'transport',
-      responseId: 'synthetic-response',
-      model: 'returned-model-version',
-      requestId: 'http-original-request',
-    });
-    expect(failure.cause).toBe(cause);
-    expect(requestSignal?.aborted).toBe(true);
-    expect(body.locked).toBe(false);
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
+      );
+      expect(failure).toMatchObject({
+        kind: 'transport',
+        model: estimating ? CONFIG.requestedModel : 'returned-model-version',
+        requestId: 'http-original-request',
+      });
+      expect(failure.responseId).toBe(
+        estimating ? undefined : 'synthetic-response',
+      );
+      expect(failure.cause).toBe(cause);
+      expect(requestSignal?.aborted).toBe(true);
+      expect(body.locked).toBe(false);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it.each([
     'headers',
     'body',
+    'estimate-headers',
+    'estimate-body',
+    'estimate-interruption-and-cancel',
     'tool arguments',
     'reasoning',
     'successful-take',
@@ -1703,6 +2048,9 @@ describe('native OpenAI Chat protocol', () => {
   ] as const)(
     'interrupts a pending %s read and joins cleanup',
     async (phase) => {
+      const estimating = phase.startsWith('estimate-');
+      const waitingForHeaders =
+        phase === 'headers' || phase === 'estimate-headers';
       let requestSignal: AbortSignal | null | undefined;
       let cancelledAfterAbort = false;
       const cancellation = new Error('Cancellation failed');
@@ -1711,7 +2059,8 @@ describe('native OpenAI Chat protocol', () => {
         if (
           phase === 'successful-take' ||
           phase === 'malformed-frame-and-cancel' ||
-          phase === 'interruption-and-cancel'
+          phase === 'interruption-and-cancel' ||
+          phase === 'estimate-interruption-and-cancel'
         )
           throw cancellation;
       });
@@ -1722,7 +2071,9 @@ describe('native OpenAI Chat protocol', () => {
         start(controller) {
           controller.enqueue(
             new TextEncoder().encode(
-              `data: ${JSON.stringify(chunk({ choices: [{ index: 0, delta: phase === 'reasoning' ? { reasoning_content: 'partial' } : { content: 'partial' }, finish_reason: null }] }))}\n\n`,
+              estimating
+                ? '{"data":'
+                : `data: ${JSON.stringify(chunk({ choices: [{ index: 0, delta: phase === 'reasoning' ? { reasoning_content: 'partial' } : { content: 'partial' }, finish_reason: null }] }))}\n\n`,
             ),
           );
           if (phase === 'tool arguments')
@@ -1742,10 +2093,14 @@ describe('native OpenAI Chat protocol', () => {
         .fn<typeof globalThis.fetch>()
         .mockImplementation((_input, init) => {
           requestSignal = init?.signal;
-          if (phase !== 'headers')
+          if (!waitingForHeaders)
             return Promise.resolve(
               new Response(body, {
-                headers: { 'content-type': 'text/event-stream' },
+                headers: {
+                  'content-type': estimating
+                    ? 'application/json'
+                    : 'text/event-stream',
+                },
               }),
             );
           return new Promise((_resolve, reject) =>
@@ -1756,13 +2111,14 @@ describe('native OpenAI Chat protocol', () => {
             ),
           );
         });
-      const model =
-        phase === 'reasoning'
-          ? openaiChatModel(REASONING_CONFIGS[0], {
-              apiKey: 'synthetic',
-              fetch,
-            })
-          : modelWith(fetch);
+      let config: ChatConfiguration = CONFIG;
+      if (phase === 'reasoning') config = REASONING_CONFIGS[0];
+      if (estimating)
+        config = {
+          ...REASONING_CONFIGS[1],
+          supportsMessageTokenEstimation: true,
+        };
+      const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
       const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
       assert(prepared.mode === 'foreground');
       if (phase === 'successful-take') {
@@ -1781,26 +2137,31 @@ describe('native OpenAI Chat protocol', () => {
         expect(body.locked).toBe(false);
         return;
       }
-      const fiber = Effect.runFork(
-        Stream.runForEach(model.streamTurn(prepared), (event) =>
-          Effect.sync(() => {
-            if (event.kind === 'delta') onDelta();
-            if (event.kind === 'completed') onCompleted();
-            if (event.kind === 'phase' && event.boundary === 'end')
-              onPhaseEnd();
-          }),
-        ),
-      );
+      const operation = estimating
+        ? model.estimateMessageTokens!(prepared)
+        : Stream.runForEach(model.streamTurn(prepared), (event) =>
+            Effect.sync(() => {
+              if (event.kind === 'delta') onDelta();
+              if (event.kind === 'completed') onCompleted();
+              if (event.kind === 'phase' && event.boundary === 'end')
+                onPhaseEnd();
+            }),
+          );
+      const fiber = Effect.runFork(operation);
       await vi.waitFor(() => {
         expect(requestSignal).toBeDefined();
-        if (phase !== 'headers') expect(onDelta).toHaveBeenCalledTimes(1);
+        if (!waitingForHeaders) {
+          if (estimating) expect(body.locked).toBe(true);
+          else expect(onDelta).toHaveBeenCalledTimes(1);
+        }
       });
 
       if (phase !== 'malformed-frame-and-cancel')
         await Effect.runPromise(Fiber.interrupt(fiber));
       if (
         phase === 'malformed-frame-and-cancel' ||
-        phase === 'interruption-and-cancel'
+        phase === 'interruption-and-cancel' ||
+        phase === 'estimate-interruption-and-cancel'
       ) {
         const exit = await Effect.runPromise(Fiber.await(fiber));
         assert(Exit.isFailure(exit));
@@ -1818,7 +2179,7 @@ describe('native OpenAI Chat protocol', () => {
       }
 
       expect(requestSignal?.aborted).toBe(true);
-      if (phase !== 'headers') {
+      if (!waitingForHeaders) {
         expect(cancel).toHaveBeenCalledTimes(1);
         expect(cancelledAfterAbort).toBe(true);
       }

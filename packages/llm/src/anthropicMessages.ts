@@ -450,6 +450,7 @@ export function anthropicMessagesModel(
       input.mode === 'background' ||
       input.continuation !== undefined ||
       input.store !== undefined ||
+      input.promptCacheKey !== undefined ||
       input.reasoning !== undefined ||
       input.thinkingLevel !== undefined ||
       input.serviceTier === 'fast' ||

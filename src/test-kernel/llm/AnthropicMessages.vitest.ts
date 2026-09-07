@@ -566,6 +566,7 @@ describe('canonical Anthropic Messages protocol', () => {
     { serviceTier: 'fast' },
     { mode: 'background' },
     { store: true },
+    { promptCacheKey: 'run-cache-key' },
     {
       messages: [
         {

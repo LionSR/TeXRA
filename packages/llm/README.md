@@ -39,11 +39,22 @@ replay it on retained assistant turns. Selected capabilities determine thinking,
 effort, fixed or omitted temperature, reasoning retention and named-tool support;
 there is no model-name inference or effort clamping. GLM accepts automatic tool
 selection only, and all three reject the authored parallel-call control. Their
-current scope is text and ordinary local tools, without media, hosted execution,
-background, storage, caching, stopping or geography controls. MiniMax remains
-unsupported pending its authoritative stream contract. Complete Kimi Code Plan
-admission also requires a caller-supplied `prompt_cache_key`; its runtime identity
-binding has not been implemented or replaced with an invented session identity.
+current scope includes text and ordinary local tools. Selected Kimi routes also
+accept inline JPEG/PNG/GIF/WebP/BMP/HEIC/HEIF user images; selected GLM routes accept
+JPEG/PNG. MIME spelling and base64 bytes are retained exactly, including empty
+encodings, with ordered text labels. Image detail, tool-result images, audio,
+video and documents remain unsupported in these Chat branches. Hosted execution,
+background, storage, cache-lifetime, stopping and geography controls are also
+unsupported. MiniMax remains unsupported pending its authoritative stream contract.
+
+Kimi preparation retains a caller-supplied `prompt_cache_key`; selected routes
+that require it reject missing keys. No session identity is invented. Selected
+Kimi routes may additionally expose a message-token estimate using the same
+lowered model and messages as generation. This count excludes tool definitions
+and is not total request usage or a generation allowance. There is no automatic
+preflight, retry or budget adjustment. Application admission must still supply
+the stable cache identity and must not treat the old automatically assigned
+image detail as authored intent; those production consumers have not switched.
 
 Chat reads one SDK HTTP response through the native Effect SSE parser. This retains
 Kimi's required `[DONE]` terminator, which the SDK's parsed iterator suppresses;

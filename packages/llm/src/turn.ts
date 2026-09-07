@@ -443,6 +443,7 @@ export const TurnRequestSchema = z
     thinking: AuthoredThinkingSchema.optional(),
     effort: EffortSchema.optional(),
     cache: CacheSchema.optional(),
+    promptCacheKey: z.string().min(1).optional(),
     stopSequences: z.array(z.string()).readonly().optional(),
     inferenceGeo: InferenceGeoSchema.optional(),
     continuation: ContinuationSchema.optional(),
@@ -494,6 +495,9 @@ const ChatReasoningControlsSchema = z.strictObject({
 });
 const KimiControlsSchema = ChatReasoningControlsSchema.extend({
   preserveThinking: z.boolean(),
+  promptCacheKey: TurnRequestSchema.unwrap()
+    .shape.promptCacheKey.unwrap()
+    .nullable(),
 });
 const GlmControlsSchema = ChatReasoningControlsSchema.extend({
   temperature: z.number().min(0).max(1).nullable(),
@@ -518,6 +522,9 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
   }).readonly(),
   BindingSchema.extend({
     protocol: z.literal('kimi-chat'),
+    supportsImageInput: z.boolean(),
+    supportsMessageTokenEstimation: z.boolean(),
+    requiresPromptCacheKey: z.boolean(),
     thinkingControl: z.enum(['toggle', 'always', 'effort']),
     supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
     supportsForcedToolChoice: z.boolean(),
@@ -530,10 +537,12 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     defaults: KimiControlsSchema.omit({
       toolChoice: true,
       temperature: true,
+      promptCacheKey: true,
     }).readonly(),
   }).readonly(),
   BindingSchema.extend({
     protocol: z.literal('glm-chat'),
+    supportsImageInput: z.boolean(),
     supportsThinkingDisabled: z.boolean(),
     supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
     defaults: GlmControlsSchema.omit({ toolChoice: true }).readonly(),
@@ -881,6 +890,8 @@ export interface Model {
   generateTurn(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ): Effect.Effect<TurnResult, ModelError>;
+  /** Estimate the prepared messages, not total request or completion usage. */
+  estimateMessageTokens?(turn: ResolvedTurn): Effect.Effect<number, ModelError>;
   readonly background?: {
     submit(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,
