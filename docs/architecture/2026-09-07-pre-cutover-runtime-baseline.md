@@ -111,6 +111,14 @@ against 2,990,080 B for `status` (2.81x against the recorded 2.84x). That run
 is deliberately not recorded here: it was taken without a ceiling, and section
 2 says such a run does not go into a budget.
 
+A recorded re-run was attempted three times and the ceiling refused all three,
+which is the ceiling working rather than a gap in it. Two were refused at the
+start gate, at load averages of 8.76 and 13.28. The third started at 7.05,
+passed every scenario up to the 100,000-row `replay-memory`, and failed there
+at 8.92 with the record marked `aboveLoadCeiling`. Re-take the baseline on a
+quiet machine before the post-cutover comparison, and take both halves of that
+comparison the same way.
+
 Datasets, all synthetic, all written through `appendAll`:
 
 - **Short retained session**: 1,000 `transcript.entry` rows of 240 characters
