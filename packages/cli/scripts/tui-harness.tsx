@@ -448,7 +448,7 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
     HARNESS_VISIBLE_MODELS,
   );
 }
-await loadAgents({ includeRemote: false });
+await effectRuntime().runPromise(loadAgents({ includeRemote: false }));
 
 // Models the production boundary: `listCliHistoryEntries` already applies
 // `isUserVisibleExecution`, so menu builders only ever see user-started rows.

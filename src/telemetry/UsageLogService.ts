@@ -26,6 +26,7 @@ import {
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
+import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
 import type {
@@ -69,38 +70,6 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
 
 function isTelemetryDisabledByEnv(): boolean {
   return TELEMETRY_OPT_OUT_ENV_VARS.some((name) => isEnvFlagEnabled(name));
-}
-
-/**
- * The ambient clock with a sleep that does not hold the event loop.
- *
- * The flush ticker sleeps forever between ticks, and the process clock's
- * sleep schedules a referenced timer, so a ticker alone would keep a
- * short-lived host (the CLI) alive until `dispose()` interrupted it. This
- * clock is what the ticker sleeps on: the same readings as the clock in
- * scope, a timer the loop does not wait for, still interrupted through the
- * clock rather than a timer handle the service holds. Only the ticker's
- * sleep sees it; a flush the ticker forks runs on the process clock, and the
- * request it sends holds the loop on its own.
- */
-function unrefSleepClock(clock: Clock.Clock): Clock.Clock {
-  return {
-    currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe(),
-    currentTimeMillis: clock.currentTimeMillis,
-    currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe(),
-    currentTimeNanos: clock.currentTimeNanos,
-    monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
-    monotonicTimeNanos: clock.monotonicTimeNanos,
-    sleep: (duration) =>
-      Effect.callback<void>((resume) => {
-        const handle = setTimeout(
-          () => resume(Effect.void),
-          Duration.toMillis(duration),
-        );
-        handle.unref?.();
-        return Effect.sync(() => clearTimeout(handle));
-      }),
-  };
 }
 
 /**

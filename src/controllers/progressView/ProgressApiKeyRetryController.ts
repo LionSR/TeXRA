@@ -2,7 +2,7 @@ import { Effect, Exit, Semaphore } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
-import { hostPort } from '@controllers/effectPort';
+import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
@@ -52,7 +52,7 @@ export interface ProgressApiKeyRetryControllerDeps {
   triggerRetry(
     stream: StreamTabId,
     requestId: string,
-  ): boolean | Promise<boolean>;
+  ): Effect.Effect<boolean, unknown>;
 }
 
 /**
@@ -184,7 +184,7 @@ export class ProgressApiKeyRetryController {
    */
   private commitOwnApiKeyRouting(
     request: ProgressApiKeyRetryRequest,
-    action: () => boolean | PromiseLike<boolean>,
+    action: () => Effect.Effect<boolean, unknown>,
   ): Effect.Effect<boolean, unknown> {
     return this.routingLane.withPermit(
       Effect.scoped(this.routingTransaction(request, action)),
@@ -196,7 +196,7 @@ export class ProgressApiKeyRetryController {
   )(function* (
     this: ProgressApiKeyRetryController,
     request: ProgressApiKeyRetryRequest,
-    action: () => boolean | PromiseLike<boolean>,
+    action: () => Effect.Effect<boolean, unknown>,
   ) {
     if (!this.deps.isRetryPending(request.stream, request.requestId)) {
       return false;
@@ -243,7 +243,7 @@ export class ProgressApiKeyRetryController {
       yield* hostPort(() => runtime.setEnabled(false));
     }
 
-    return yield* hostPort(action);
+    return yield* action();
   });
 
   // OAuth subscriptions pin the fallback key provider (ChatGPT → openai,
@@ -301,7 +301,9 @@ export class ProgressApiKeyRetryController {
   /** Apply Copilot fallback routing only for the duration of a launch attempt. */
   runCopilotFallbackWithRouting(
     request: ProgressApiKeyRetryRequest,
-    start: (copilotRouteOverride: CopilotRouteOverride) => Promise<boolean>,
+    start: (
+      copilotRouteOverride: CopilotRouteOverride,
+    ) => Effect.Effect<boolean, unknown>,
   ): Effect.Effect<boolean, unknown> {
     // The user chose "use own API key" for this retry. The direct-route
     // override travels only with the replacement launch; the standing

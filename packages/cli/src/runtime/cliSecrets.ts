@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import { secretWithEnvOverride, type PlatformSecrets } from '@platform/secrets';
+import { secretsGet, type PlatformSecrets } from '@platform/secrets';
 import { effectRuntime } from '@platform/processRuntime';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
@@ -52,7 +52,7 @@ export class CliSecrets implements PlatformSecrets {
   constructor(private readonly filePath = cliSecretsPath()) {}
 
   get(key: string): Promise<string | undefined> {
-    return secretWithEnvOverride(key, cliEnvValue, (k) => this.getStored(k));
+    return secretsGet(this, key);
   }
 
   getStored(key: string): Promise<string | undefined> {

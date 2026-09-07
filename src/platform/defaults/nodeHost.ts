@@ -29,6 +29,7 @@ import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 // Local file imports
 import { nodeFileLocks } from './fileLocks';
+import { nodeHostEnvironment } from './nodeHostEnvironment';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { nodeProcesses } from './nodeProcesses';
@@ -142,6 +143,7 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
     storage: services.storage,
     fileLocks: nodeFileLocks,
     processes: nodeProcesses,
+    hostEnvironment: nodeHostEnvironment,
     secrets: services.secrets,
     lifecycle: services.lifecycle,
     agentResume: services.agentResume,

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { preflightTeamAvailability } from '@common/teams/TeamAvailabilityPreflight';
@@ -18,9 +19,7 @@ function options(overrides: {
   refreshed?: Resolution;
   remoteCatalogRefreshAttempted?: boolean;
 }) {
-  const refresh = vi.fn(
-    async () => overrides.refreshed ?? { unresolvedNames: [] },
-  );
+  const refresh = vi.fn(() => undefined);
   const signIn = vi.fn(async () => overrides.signedIn ?? true);
   const choose = vi.fn(async () =>
     overrides.choiceRequired ? undefined : (overrides.choice ?? 'cancel'),
@@ -37,7 +36,11 @@ function options(overrides: {
       providedChoice: overrides.providedChoice,
       choose,
       signIn,
-      refresh,
+      refreshRemote: () =>
+        Effect.sync(() => {
+          refresh();
+        }),
+      replan: () => overrides.refreshed ?? { unresolvedNames: [] },
       remoteCatalogRefreshAttempted: overrides.remoteCatalogRefreshAttempted,
     },
   };
@@ -46,7 +49,9 @@ function options(overrides: {
 describe('team availability preflight', () => {
   it('does not prompt or refresh a local-only team', async () => {
     const deps = options({ initial: { unresolvedNames: ['local-plugin'] } });
-    await expect(preflightTeamAvailability(deps.input)).resolves.toEqual({
+    await expect(
+      Effect.runPromise(preflightTeamAvailability(deps.input)),
+    ).resolves.toEqual({
       status: 'proceed',
       value: { unresolvedNames: ['local-plugin'] },
       partial: false,
@@ -57,7 +62,9 @@ describe('team availability preflight', () => {
 
   it('continues only after an explicit partial-team choice', async () => {
     const deps = options({ choice: 'continue' });
-    await expect(preflightTeamAvailability(deps.input)).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(preflightTeamAvailability(deps.input)),
+    ).resolves.toMatchObject({
       status: 'proceed',
       partial: true,
     });
@@ -67,7 +74,9 @@ describe('team availability preflight', () => {
 
   it('cancels without signing in or refreshing', async () => {
     const deps = options({ choice: 'cancel' });
-    await expect(preflightTeamAvailability(deps.input)).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(preflightTeamAvailability(deps.input)),
+    ).resolves.toMatchObject({
       status: 'cancelled',
     });
     expect(deps.signIn).not.toHaveBeenCalled();
@@ -76,7 +85,9 @@ describe('team availability preflight', () => {
 
   it('honors a supplied partial-team choice before authenticated refresh', async () => {
     const deps = options({ authenticated: true, providedChoice: 'continue' });
-    await expect(preflightTeamAvailability(deps.input)).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(preflightTeamAvailability(deps.input)),
+    ).resolves.toMatchObject({
       status: 'proceed',
       partial: true,
     });
@@ -86,7 +97,9 @@ describe('team availability preflight', () => {
 
   it('honors a supplied cancellation before authenticated refresh', async () => {
     const deps = options({ authenticated: true, providedChoice: 'cancel' });
-    await expect(preflightTeamAvailability(deps.input)).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(preflightTeamAvailability(deps.input)),
+    ).resolves.toMatchObject({
       status: 'cancelled',
     });
     expect(deps.choose).not.toHaveBeenCalled();
@@ -96,7 +109,9 @@ describe('team availability preflight', () => {
   it('returns an actionable choice-required result without side effects', async () => {
     const deps = options({ choiceRequired: true });
 
-    await expect(preflightTeamAvailability(deps.input)).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(preflightTeamAvailability(deps.input)),
+    ).resolves.toMatchObject({
       status: 'choice-required',
       unavailableNames: ['orchestrator'],
     });
@@ -106,7 +121,9 @@ describe('team availability preflight', () => {
 
   it('refreshes and retries exactly once after successful sign-in', async () => {
     const deps = options({ choice: 'sign-in', signedIn: true });
-    await expect(preflightTeamAvailability(deps.input)).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(preflightTeamAvailability(deps.input)),
+    ).resolves.toMatchObject({
       status: 'proceed',
       partial: false,
     });
@@ -119,7 +136,9 @@ describe('team availability preflight', () => {
       authenticated: true,
       refreshed: { unresolvedNames: ['orchestrator'] },
     });
-    await expect(preflightTeamAvailability(deps.input)).resolves.toEqual({
+    await expect(
+      Effect.runPromise(preflightTeamAvailability(deps.input)),
+    ).resolves.toEqual({
       status: 'unavailable',
       value: { unresolvedNames: ['orchestrator'] },
       unavailableNames: ['orchestrator'],
@@ -134,7 +153,9 @@ describe('team availability preflight', () => {
       authenticated: true,
       remoteCatalogRefreshAttempted: true,
     });
-    await expect(preflightTeamAvailability(deps.input)).resolves.toMatchObject({
+    await expect(
+      Effect.runPromise(preflightTeamAvailability(deps.input)),
+    ).resolves.toMatchObject({
       status: 'unavailable',
       unavailableNames: ['orchestrator'],
     });

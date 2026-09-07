@@ -181,10 +181,11 @@ function createHarness(options: HarnessOptions = {}): {
           options.isRetryPending ?? (() => options.retryPending ?? true),
         triggerRetry:
           options.triggerRetry ??
-          ((stream) => {
-            retries.push(stream);
-            return options.retryAvailable ?? true;
-          }),
+          ((stream) =>
+            Effect.sync(() => {
+              retries.push(stream);
+              return options.retryAvailable ?? true;
+            })),
       }),
     ),
   };
@@ -388,7 +389,7 @@ describe('ProgressApiKeyRetryController', () => {
         provider: 'anthropic',
         exhaustionReason: 'copilot-subscription',
       },
-      async () => true,
+      () => Effect.succeed(true),
     );
 
     expect(started).toBe(true);
@@ -407,7 +408,7 @@ describe('ProgressApiKeyRetryController', () => {
         exhaustionReason: 'copilot-subscription',
         chatGptSubscriptionEligible: true,
       },
-      async () => true,
+      () => Effect.succeed(true),
     );
 
     expect(started).toBe(true);
@@ -424,7 +425,7 @@ describe('ProgressApiKeyRetryController', () => {
         exhaustionReason: 'copilot-subscription',
         chatGptSubscriptionEligible: true,
       },
-      async () => false,
+      () => Effect.succeed(false),
     );
 
     expect(started).toBe(false);
@@ -453,12 +454,12 @@ describe('ProgressApiKeyRetryController', () => {
         model: 'sonnet46',
         exhaustionReason: 'copilot-subscription',
       },
-      async (copilotRouteOverride) => {
+      (copilotRouteOverride) => {
         expect(copilotRouteOverride).toBe('direct');
         // A concurrent launch still sees the user's standing preference; only
         // the replacement request receives the direct-route override.
         expect(prefersCopilotRoute('sonnet46')).toBe(true);
-        return true;
+        return Effect.succeed(true);
       },
     );
 
@@ -481,7 +482,7 @@ describe('ProgressApiKeyRetryController', () => {
 
     const bothFail = createHarness({
       keys: { openai: 'stored-openai' },
-      triggerRetry: () => Promise.reject(retryFailure),
+      triggerRetry: () => Effect.fail(retryFailure),
       restoreChatGptSubscription: () => Promise.reject(restoreFailure),
     });
     await expect(bothFail.controller.useOwnApiKey(request)).rejects.toBe(
@@ -509,10 +510,13 @@ describe('ProgressApiKeyRetryController', () => {
         if (requestId === 'retry-b') retryBPendingCheck = true;
         return true;
       },
-      triggerRetry: (stream) => {
-        triggerOrder.push(stream);
-        return stream === 'stream-a' ? firstTrigger.promise : true;
-      },
+      triggerRetry: (stream) =>
+        Effect.suspend(() => {
+          triggerOrder.push(stream);
+          return stream === 'stream-a'
+            ? Effect.promise(() => firstTrigger.promise)
+            : Effect.succeed(true);
+        }),
     });
 
     const first = harness.controller.useOwnApiKey({
@@ -689,9 +693,9 @@ describe('ProgressApiKeyRetryController', () => {
         requestId: 'retry-holder',
         exhaustionReason: 'copilot-subscription',
       },
-      async () => {
+      () => {
         startCalls.push('holder');
-        return firstStart.promise;
+        return Effect.promise(() => firstStart.promise);
       },
     );
     await vi.waitFor(() => expect(startCalls).toStrictEqual(['holder']));
@@ -702,9 +706,9 @@ describe('ProgressApiKeyRetryController', () => {
         requestId: 'retry-stale',
         exhaustionReason: 'copilot-subscription',
       },
-      async () => {
+      () => {
         startCalls.push('stale');
-        return true;
+        return Effect.succeed(true);
       },
     );
 

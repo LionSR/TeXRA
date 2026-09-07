@@ -248,14 +248,6 @@ export abstract class BaseFS {
     fs.unlinkSync(this.preparePath(target));
   }
 
-  public static mkdirSync(
-    this: typeof BaseFS,
-    target: string,
-    options?: { recursive?: boolean },
-  ): void {
-    fs.mkdirSync(this.preparePath(target), options);
-  }
-
   public static statSync(this: typeof BaseFS, target: string): fs.Stats {
     return fs.statSync(this.preparePath(target));
   }
