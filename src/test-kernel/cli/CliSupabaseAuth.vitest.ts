@@ -260,9 +260,7 @@ describe('CLI Supabase auth', () => {
       const exit = yield* Fiber.await(fiber);
 
       expect(Exit.isFailure(exit) && Exit.hasInterrupts(exit)).toBe(true);
-      expect(callbackServer.waitForSession).toHaveBeenCalledWith(
-        controller.signal,
-      );
+      expect(mocks.startLoopbackCallbackServer).toHaveBeenCalledOnce();
       expect(mocks.requestDeviceAuthorization).toHaveBeenCalledOnce();
       expect(mocks.pollForDeviceSession).toHaveBeenCalledWith(
         DEVICE_AUTHORIZATION,

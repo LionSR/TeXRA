@@ -4,9 +4,9 @@ import { Cause, Effect, Exit } from 'effect';
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import {
-  AuthPortError,
   installAuthProgramEdge,
   runAuthProgram,
+  unwrapAuthPortCause,
 } from '@auth/authProgram';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import {
@@ -133,11 +133,6 @@ export async function signInCliSupabase(
   }
 }
 
-/** Re-mint an {@link AuthPortError} as the port's own error, the same unwrap
- *  `runAuthProgram` applies at the Promise edge. */
-const unwrapAuthPortCause = (error: AuthPortError): Error =>
-  ensureError(error.cause);
-
 /**
  * The loopback sign-in program: drive the OAuth redirect and browser launch,
  * then await the callback session. The caller's cancellation signal arrives
@@ -178,7 +173,7 @@ const loopbackSignIn = (
     if (options.openBrowser ?? true) {
       // A completed callback supersedes the launcher result, while callback
       // failure or cancellation still preempts a stalled launcher.
-      yield* Effect.race(
+      yield* Effect.raceFirst(
         Effect.tryPromise({
           try: () =>
             openBrowser(

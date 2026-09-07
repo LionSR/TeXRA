@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 // Local imports - auth
 import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
-import { AuthPortError } from '@auth/authProgram';
+import { unwrapAuthPortCause } from '@auth/authProgram';
 import { AUTH_CALLBACK_TIMEOUT_MS } from '@auth/config';
 import {
   type SupabaseSession,
@@ -173,11 +173,6 @@ const assertAcceptingCallbacks = (
           'This authentication attempt was cancelled.',
         ),
       );
-
-/** Re-mint an {@link AuthPortError} as the port's own error, the same unwrap
- *  `runAuthProgram` applies at the Promise edge. */
-const unwrapAuthPortCause = (error: AuthPortError): Error =>
-  ensureError(error.cause);
 
 const handleCallbackRequest = Effect.fn(
   'supabaseAuthCallbackServer.handleCallbackRequest',

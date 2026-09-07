@@ -83,12 +83,16 @@ export function detectInstallMethod(
 }
 
 function currentModulePath(): string {
-  // A bundled or otherwise non-file module has no `file:` URL to convert;
-  // discriminate on the URL instead of catching `fileURLToPath`'s throw
-  // (R7: an exception used as a branch becomes a discriminated read).
-  return import.meta.url.startsWith('file:')
-    ? fileURLToPath(import.meta.url)
-    : readCliEntrypointPath();
+  // A bundled or otherwise non-file module has no `file:` URL to convert.
+  // `fileURLToPath` can still throw on a `file:` URL with a non-local host
+  // or a malformed path, so keep the conversion inside a catch: this check
+  // is best-effort and must not block `chat`/`orchestrate` startup.
+  if (!import.meta.url.startsWith('file:')) return readCliEntrypointPath();
+  try {
+    return fileURLToPath(import.meta.url);
+  } catch {
+    return readCliEntrypointPath();
+  }
 }
 
 export function buildUpdateCommand(method: InstallMethod): {
@@ -335,7 +339,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   // Best-effort by policy: any failure — typed, defect, or interruption —
   // leaves `latest` unset and the check exits silently, as the `catch` it
   // replaces did.
-  await effectRuntime().runPromise(Effect.ignore(check));
+  await effectRuntime().runPromise(Effect.ignoreCause(check));
   if (!latest) return;
   if (!confirmed) {
     writeTextStderr(

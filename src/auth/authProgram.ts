@@ -8,6 +8,7 @@
  */
 import { Cause, Data, Deferred, Effect, Exit, Option, Semaphore } from 'effect';
 import type { HttpClient } from 'effect/unstable/http';
+import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * A host port (secret storage), an SDK call, or a provider policy rejected.
@@ -100,8 +101,12 @@ export class SerializedWrites {
   });
 }
 
+/** Re-mint an {@link AuthPortError} as the port's own error. */
+export const unwrapAuthPortCause = (error: AuthPortError): Error =>
+  ensureError(error.cause);
+
 function rethrowPortCause(error: unknown): never {
-  throw error instanceof AuthPortError ? error.cause : error;
+  throw error instanceof AuthPortError ? unwrapAuthPortCause(error) : error;
 }
 
 /**
