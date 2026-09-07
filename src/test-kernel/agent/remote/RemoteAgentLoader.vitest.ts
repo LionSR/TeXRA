@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
@@ -68,7 +69,7 @@ describe('remote agent listing', () => {
       error: null,
     });
 
-    const agents = await listRemoteAgents();
+    const agents = await Effect.runPromise(listRemoteAgents());
 
     expect(agents.map((agent) => agent.name)).toEqual(['review']);
   });
@@ -82,7 +83,7 @@ describe('remote agent listing', () => {
       error: null,
     });
 
-    const agents = await listRemoteAgents();
+    const agents = await Effect.runPromise(listRemoteAgents());
 
     expect(agents.map((agent) => agent.name)).toEqual(['review']);
   });
@@ -96,7 +97,7 @@ describe('remote agent listing', () => {
       },
     });
 
-    const agents = await listRemoteAgents();
+    const agents = await Effect.runPromise(listRemoteAgents());
 
     expect(agents).toEqual([]);
     expect(selectedColumns).toEqual([

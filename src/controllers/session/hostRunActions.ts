@@ -15,7 +15,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { hostPort } from '@controllers/effectPort';
+import { hostPort } from '@common/hostPort';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
@@ -25,7 +25,6 @@ import {
   isApiProvider,
 } from '@model/apiProviders';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
-import { effectRuntime } from '@platform/processRuntime';
 import { platform } from '@platform/platform';
 import {
   AgentCategory,
@@ -158,19 +157,21 @@ export function createHostRunActions(
     decision:
       | { action: 'retry'; credentials: 'configured' | 'personal' }
       | { action: 'cancel' },
-  ) =>
-    effectRuntime()
-      .runPromise(
-        session.requests.request({
-          kind: 'decision.retry',
-          streamId,
-          approvalId: requestId,
-          decision,
-        }),
-      )
-      .then(
-        () => true,
-        () => false,
+  ): Effect.Effect<boolean> =>
+    // A settle that fails for any reason — the request's own error or a
+    // defect — reports false, as the Promise edge's rejection handler did.
+    // Interruption is not caught: it belongs to the caller's fiber.
+    session.requests
+      .request({
+        kind: 'decision.retry',
+        streamId,
+        approvalId: requestId,
+        decision,
+      })
+      .pipe(
+        Effect.as(true),
+        Effect.catch(() => Effect.succeed(false)),
+        Effect.catchDefect(() => Effect.succeed(false)),
       );
 
   const apiKeyRetry = new ProgressApiKeyRetryController({
@@ -285,24 +286,28 @@ export function createHostRunActions(
           exhaustionReason,
           chatGptSubscriptionEligible: fallback.chatGptSubscriptionEligible,
         },
-        async (copilotRouteOverride) => {
-          if (!isRetryPending(streamId, requestId)) return false;
-          // Start acknowledges ownership of the replacement run. Settlement
-          // without an onRun callback means no replacement was launched.
-          return new Promise<boolean>((resolve, reject) => {
-            void ports
-              .runExecutionRequest(
-                { config: { ...config, model } },
-                { copilotRouteOverride, onRun: () => resolve(true) },
-              )
-              .then(() => resolve(false), reject);
-          });
-        },
+        (copilotRouteOverride) =>
+          Effect.suspend(() => {
+            if (!isRetryPending(streamId, requestId)) {
+              return Effect.succeed(false);
+            }
+            // Start acknowledges ownership of the replacement run. Settlement
+            // without an onRun callback means no replacement was launched.
+            return hostPort(
+              () =>
+                new Promise<boolean>((resolve, reject) => {
+                  void ports
+                    .runExecutionRequest(
+                      { config: { ...config, model } },
+                      { copilotRouteOverride, onRun: () => resolve(true) },
+                    )
+                    .then(() => resolve(false), reject);
+                }),
+            );
+          }),
       );
       if (!started) return;
-      yield* hostPort(() =>
-        settleRetry(streamId, requestId, { action: 'cancel' }),
-      );
+      yield* settleRetry(streamId, requestId, { action: 'cancel' });
     },
   );
 

@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
@@ -81,7 +82,7 @@ describe('cross-category agent resolution', () => {
       },
     );
 
-    await refresh({ includeRemote: false });
+    await Effect.runPromise(refresh({ includeRemote: false }));
   });
 
   afterAll(async () => {

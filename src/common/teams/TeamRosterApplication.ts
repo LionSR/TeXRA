@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import {
   preflightTeamAvailability,
   type TeamAvailabilityChoice,
@@ -36,7 +37,7 @@ type TeamRosterApplicationResult =
 
 export interface TeamRosterApplicationDeps {
   readonly catalog: TeamRosterCatalog;
-  readonly loadLocalCatalog: () => Promise<void>;
+  readonly loadLocalCatalog: () => Effect.Effect<void, unknown>;
   readonly canAccessRemoteCatalog: () => Promise<boolean>;
   /** A decision already supplied by a non-interactive caller. */
   readonly providedChoice?: TeamAvailabilityChoice;
@@ -45,59 +46,69 @@ export interface TeamRosterApplicationDeps {
     unavailableNames: readonly string[],
   ) => Promise<TeamAvailabilityChoice | undefined>;
   readonly signIn: () => Promise<boolean>;
-  readonly forceRefreshRemoteCatalog: () => Promise<void>;
+  readonly forceRefreshRemoteCatalog: () => Effect.Effect<void, unknown>;
 }
 
+/** Call a host dialog, auth, or roster-store port from the program. */
+const hostPort = <A>(
+  call: () => A | PromiseLike<A>,
+): Effect.Effect<A, unknown> =>
+  Effect.tryPromise({ try: async () => call(), catch: (error) => error });
+
 /** Host sequence for preflighting and committing one team roster. */
-export async function applyTeamRosterWithPreflight(
+export function applyTeamRosterWithPreflight(
   presetId: string,
   deps: TeamRosterApplicationDeps,
-): Promise<TeamRosterApplicationResult> {
-  await deps.loadLocalCatalog();
-  const initial = deps.catalog.resolvePreset(presetId);
-  if (!initial.ok) return { status: 'unknown' };
+): Effect.Effect<TeamRosterApplicationResult, unknown> {
+  return Effect.gen(function* () {
+    yield* deps.loadLocalCatalog();
+    const initial = deps.catalog.resolvePreset(presetId);
+    if (!initial.ok) return { status: 'unknown' as const };
 
-  const preflight = await preflightTeamAvailability<ResolvedTeam>({
-    initial,
-    unresolvedNames: (value) => value.resolution.unresolvedNames,
-    texraHostedNames: teamHostedNamesForPreflight(
-      initial.preset,
-      initial.resolution.unresolvedNames,
-    ),
-    canAccessRemoteCatalog: deps.canAccessRemoteCatalog,
-    providedChoice: deps.providedChoice,
-    choose: (names) => deps.choose(initial.preset, names),
-    signIn: deps.signIn,
-    refresh: async () => {
-      await deps.forceRefreshRemoteCatalog();
-      const refreshed = deps.catalog.resolvePreset(presetId);
-      if (!refreshed.ok) throw new Error(`Team no longer exists: ${presetId}`);
-      return refreshed;
-    },
+    const preflight = yield* preflightTeamAvailability<ResolvedTeam>({
+      initial,
+      unresolvedNames: (value) => value.resolution.unresolvedNames,
+      texraHostedNames: teamHostedNamesForPreflight(
+        initial.preset,
+        initial.resolution.unresolvedNames,
+      ),
+      canAccessRemoteCatalog: deps.canAccessRemoteCatalog,
+      providedChoice: deps.providedChoice,
+      choose: (names) => deps.choose(initial.preset, names),
+      signIn: deps.signIn,
+      refreshRemote: deps.forceRefreshRemoteCatalog,
+      replan: () => {
+        const refreshed = deps.catalog.resolvePreset(presetId);
+        if (!refreshed.ok) {
+          throw new Error(`Team no longer exists: ${presetId}`);
+        }
+        return refreshed;
+      },
+    });
+
+    if (preflight.status === 'cancelled') {
+      return { status: 'cancelled' as const, preset: initial.preset };
+    }
+    if (preflight.status === 'choice-required') {
+      return {
+        status: 'choice-required' as const,
+        preset: initial.preset,
+        unavailableNames: preflight.unavailableNames,
+      };
+    }
+    if (preflight.status === 'unavailable') {
+      return {
+        status: 'unavailable' as const,
+        preset: initial.preset,
+        unavailableNames: preflight.unavailableNames,
+      };
+    }
+
+    yield* hostPort(() => deps.catalog.commitPreset(preflight.value.preset));
+    return {
+      status: 'applied' as const,
+      preset: preflight.value.preset,
+      resolution: preflight.value.resolution,
+    };
   });
-
-  if (preflight.status === 'cancelled') {
-    return { status: 'cancelled', preset: initial.preset };
-  }
-  if (preflight.status === 'choice-required') {
-    return {
-      status: 'choice-required',
-      preset: initial.preset,
-      unavailableNames: preflight.unavailableNames,
-    };
-  }
-  if (preflight.status === 'unavailable') {
-    return {
-      status: 'unavailable',
-      preset: initial.preset,
-      unavailableNames: preflight.unavailableNames,
-    };
-  }
-
-  await deps.catalog.commitPreset(preflight.value.preset);
-  return {
-    status: 'applied',
-    preset: preflight.value.preset,
-    resolution: preflight.value.resolution,
-  };
 }

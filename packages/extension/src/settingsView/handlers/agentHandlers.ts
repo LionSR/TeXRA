@@ -33,6 +33,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKey,
@@ -111,7 +112,7 @@ export class AgentHandlers {
   async sendAgentSelectionData(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
       await buildAgentSelectionMessage({
-        loadAgents,
+        loadAgents: () => effectRuntime().runPromise(loadAgents()),
         buildSelectionItems: () => this.catalogController.buildSelectionItems(),
         getCustomAgentScanIssues,
       }),
@@ -304,35 +305,37 @@ export class AgentHandlers {
       'Failed to apply agent team',
       async () => {
         await withAgentCatalogAuthRefreshDeferred(() =>
-          applySettingsTeamRoster(data.presetId, {
-            catalog: this.catalogController,
-            loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-            canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
-            signIn: async () =>
-              (await vscode.commands.executeCommand<boolean>(
-                AUTH_COMMANDS.SIGN_IN,
-              )) === true,
-            forceRefreshRemoteCatalog: () =>
-              refreshAgents({ includeRemote: true }),
-            presentation: {
-              chooseTeamAvailability: (prompt) =>
-                this.chooseTeamAvailability(prompt),
-              showInfoMessage: async (message) => {
-                void vscode.window.showInformationMessage(message);
+          effectRuntime().runPromise(
+            applySettingsTeamRoster(data.presetId, {
+              catalog: this.catalogController,
+              loadLocalCatalog: () => loadAgents({ includeRemote: false }),
+              canAccessRemoteCatalog: () => SupabaseClient.isAuthenticated(),
+              signIn: async () =>
+                (await vscode.commands.executeCommand<boolean>(
+                  AUTH_COMMANDS.SIGN_IN,
+                )) === true,
+              forceRefreshRemoteCatalog: () =>
+                refreshAgents({ includeRemote: true }),
+              presentation: {
+                chooseTeamAvailability: (prompt) =>
+                  this.chooseTeamAvailability(prompt),
+                showInfoMessage: async (message) => {
+                  void vscode.window.showInformationMessage(message);
+                },
+                showErrorMessage: async (message) => {
+                  void showLoggedMessage(this.ctx.channel, message).catch(
+                    (err: unknown) => {
+                      this.ctx.log.warn(
+                        `Error notification failed after handoff: ${toErrorMessage(err)}`,
+                      );
+                    },
+                  );
+                },
               },
-              showErrorMessage: async (message) => {
-                void showLoggedMessage(this.ctx.channel, message).catch(
-                  (err: unknown) => {
-                    this.ctx.log.warn(
-                      `Error notification failed after handoff: ${toErrorMessage(err)}`,
-                    );
-                  },
-                );
-              },
-            },
-            refreshAfterApply: (selectedToolUseAgent) =>
-              this.refreshAfterAgentMutation(selectedToolUseAgent, true),
-          }),
+              refreshAfterApply: (selectedToolUseAgent) =>
+                this.refreshAfterAgentMutation(selectedToolUseAgent, true),
+            }),
+          ),
         );
       },
     );
@@ -350,7 +353,7 @@ export class AgentHandlers {
         });
         if (!name) return; // cancelled
 
-        await loadAgents();
+        await effectRuntime().runPromise(loadAgents());
 
         await this.catalogController.saveCurrentPreset(name);
 

@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { Effect, ManagedRuntime } from 'effect';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
+import { initProcessRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
@@ -10,6 +12,7 @@ import {
   type AgentCatalog,
 } from '@test/support/agentCatalogFixtures';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 import { commandOf } from './desktopSettingsTestSupport';
 
@@ -20,10 +23,10 @@ interface ControllerFixtureOptions {
   readonly visibleCatalog?: AgentCatalog;
   readonly loadAgents?: (options?: {
     includeRemote?: boolean;
-  }) => Promise<void>;
+  }) => Effect.Effect<void>;
   readonly refreshAgents?: (options?: {
     includeRemote?: boolean;
-  }) => Promise<void>;
+  }) => Effect.Effect<void>;
   readonly promptText?: () => Promise<string | undefined>;
   readonly confirm?: () => Promise<boolean>;
   readonly chooseTeamAvailability?: () => Promise<
@@ -34,6 +37,10 @@ interface ControllerFixtureOptions {
   readonly getCustomAgentDirectory?: () => Promise<string>;
   readonly selectCustomAgentDirectory?: () => Promise<string | undefined>;
 }
+
+beforeEach(() => {
+  initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+});
 
 function createControllerFixture(options: ControllerFixtureOptions = {}) {
   const workspaceState = options.workspaceState ?? new FakeStateStore();
@@ -52,18 +59,19 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
     workspaceState,
     globalState,
     registry: {
-      loadAgents: options.loadAgents ?? (async () => undefined),
-      refreshAgents: options.refreshAgents ?? (async () => undefined),
-      loadAgentOptionsData: async () => ({
-        workflow: catalog.workflow.map((entry) => ({
-          value: `${entry.source}:${entry.name}`,
-          label: entry.name,
-        })),
-        toolUse: catalog.toolUse.map((entry) => ({
-          value: `${entry.source}:${entry.name}`,
-          label: entry.name,
-        })),
-      }),
+      loadAgents: options.loadAgents ?? (() => Effect.void),
+      refreshAgents: options.refreshAgents ?? (() => Effect.void),
+      loadAgentOptionsData: () =>
+        Effect.succeed({
+          workflow: catalog.workflow.map((entry) => ({
+            value: `${entry.source}:${entry.name}`,
+            label: entry.name,
+          })),
+          toolUse: catalog.toolUse.map((entry) => ({
+            value: `${entry.source}:${entry.name}`,
+            label: entry.name,
+          })),
+        }),
       getAgents: (category) => catalog[category],
       getVisibleAgents: (category) => visibleCatalog[category],
     },
@@ -179,7 +187,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
   });
 
   it('posts startup agent data to the settings renderer', async () => {
-    const loadAgents = vi.fn(async () => undefined);
+    const loadAgents = vi.fn(() => Effect.void);
     const { controller, posted } = createControllerFixture({
       catalog: physicistCatalog(),
       loadAgents,
@@ -297,18 +305,20 @@ describe('DefaultDesktopAgentSettingsController', () => {
     const workspaceState = customTeamState(remoteTeamPreset());
     const catalog: AgentCatalog = { workflow: [], toolUse: [] };
     const order: string[] = [];
-    const refreshAgents = vi.fn(async () => {
-      order.push('refresh');
-      catalog.toolUse = [
-        {
-          source: 'remote',
-          name: 'orchestrator',
-          path: '/remote/orchestrator.yaml',
-          category: 'toolUse',
-          tools: ['delegate_agent'],
-        },
-      ];
-    });
+    const refreshAgents = vi.fn(() =>
+      Effect.sync(() => {
+        order.push('refresh');
+        catalog.toolUse = [
+          {
+            source: 'remote',
+            name: 'orchestrator',
+            path: '/remote/orchestrator.yaml',
+            category: 'toolUse',
+            tools: ['delegate_agent'],
+          },
+        ];
+      }),
+    );
     const update = vi.spyOn(workspaceState, 'update');
     const { controller } = createControllerFixture({
       workspaceState,
@@ -341,7 +351,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
   it('does not write roster state when team preflight is cancelled', async () => {
     const workspaceState = customTeamState(remoteTeamPreset());
     const update = vi.spyOn(workspaceState, 'update');
-    const refreshAgents = vi.fn(async () => undefined);
+    const refreshAgents = vi.fn(() => Effect.void);
     const { controller } = createControllerFixture({
       workspaceState,
       chooseTeamAvailability: async () => 'cancel',

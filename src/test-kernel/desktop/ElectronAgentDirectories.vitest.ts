@@ -1,10 +1,14 @@
+// Node imports
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 
-import { Effect, ManagedRuntime } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// Third-party imports
+import { it } from '@effect/vitest';
+import { Cause, Effect, Exit, Fiber, ManagedRuntime } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
 
+// Local imports
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type {
@@ -15,6 +19,7 @@ import type { JsonStore } from '@platform/defaults/jsonStore';
 import type { NodeAgentDirectoryBootstrapOptions } from '@platform/defaults/nodeHost';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFileLocks } from '@platform/defaults/fileLocks';
+import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -31,6 +36,16 @@ async function writeText(filePath: string, content: string): Promise<void> {
   await writeFile(filePath, content);
 }
 
+interface AgentDirectoryHarness {
+  bootstrapNodeAgentDirectories: (
+    options: NodeAgentDirectoryBootstrapOptions,
+  ) => Effect.Effect<void>;
+  agentDirectories: AgentDirectoriesPort;
+  globalStateStore: JsonStore;
+  resourcesPath: string;
+  storage: StorageProvider;
+}
+
 describe('desktop agent directory bootstrap', () => {
   const tempDirs = useTempDirs();
 
@@ -39,377 +54,455 @@ describe('desktop agent directory bootstrap', () => {
     vi.resetModules();
   });
 
-  async function createHarness(): Promise<{
-    bootstrapNodeAgentDirectories: (
-      options: NodeAgentDirectoryBootstrapOptions,
-    ) => Promise<void>;
-    agentDirectories: AgentDirectoriesPort;
-    globalStateStore: JsonStore;
-    resourcesPath: string;
-    storage: StorageProvider;
-  }> {
-    vi.resetModules();
-    const tempDir = await makeTempDir('texra-electron-agents-', tempDirs);
-    const resourcesPath = join(tempDir, 'resources');
-    const userDataPath = join(tempDir, 'userData');
-    const workspacePath = join(tempDir, 'workspace');
-    await Promise.all([
-      writeText(join(resourcesPath, 'agents', 'writer.yaml'), 'name: writer\n'),
-      writeText(
-        join(resourcesPath, 'tool_use_agents', 'researcher.yaml'),
-        'name: researcher\n',
-      ),
-      mkdir(join(resourcesPath, 'skills'), { recursive: true }),
-      mkdir(workspacePath, { recursive: true }),
-    ]);
+  function createHarness(): Effect.Effect<AgentDirectoryHarness, unknown> {
+    return Effect.gen(function* () {
+      vi.resetModules();
+      const tempDir = yield* Effect.promise(() =>
+        makeTempDir('texra-electron-agents-', tempDirs),
+      );
+      const resourcesPath = join(tempDir, 'resources');
+      const userDataPath = join(tempDir, 'userData');
+      const workspacePath = join(tempDir, 'workspace');
+      yield* Effect.promise(() =>
+        Promise.all([
+          writeText(
+            join(resourcesPath, 'agents', 'writer.yaml'),
+            'name: writer\n',
+          ),
+          writeText(
+            join(resourcesPath, 'tool_use_agents', 'researcher.yaml'),
+            'name: researcher\n',
+          ),
+          mkdir(join(resourcesPath, 'skills'), { recursive: true }),
+          mkdir(workspacePath, { recursive: true }),
+        ]),
+      );
 
-    const [
-      { JsonStore },
-      { bootstrapNodeAgentDirectories: bootstrapEffect },
-      { initPlatform, platform },
-      { initProcessWorkspaceRoots },
-      { createPlatformAgentDirectories },
-      { effectRuntime, initProcessRuntime },
-    ] = await Promise.all([
-      loadSourceModule('@platform/defaults/jsonStore'),
-      loadSourceModule('@platform/defaults/nodeHost'),
-      import('@platform/platform'),
-      import('@platform/workspaceRoots'),
-      import('@agent/index/platformAgentDirectories'),
-      import('@platform/processRuntime'),
-    ]);
-    // The desktop entry installs the process runtime before it opens a store;
-    // this harness stands in for that entry, so it installs a bare one.
-    try {
-      effectRuntime();
-    } catch {
-      initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
-    }
-    const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
-    const [globalStateStore, workspaceStateStore] = await Effect.runPromise(
-      Effect.all([
+      const [
+        { JsonStore },
+        { bootstrapNodeAgentDirectories: bootstrapEffect },
+        { initPlatform, platform },
+        { initProcessWorkspaceRoots },
+        { createPlatformAgentDirectories },
+        { effectRuntime, initProcessRuntime },
+      ] = yield* Effect.promise(() =>
+        Promise.all([
+          loadSourceModule('@platform/defaults/jsonStore'),
+          loadSourceModule('@platform/defaults/nodeHost'),
+          import('@platform/platform'),
+          import('@platform/workspaceRoots'),
+          import('@agent/index/platformAgentDirectories'),
+          import('@platform/processRuntime'),
+        ]),
+      );
+      // The desktop entry installs the process runtime before it opens a store;
+      // this harness stands in for that entry, so it installs a bare one.
+      try {
+        effectRuntime();
+      } catch {
+        initProcessRuntime(ManagedRuntime.make(testHttpClientLayer));
+      }
+      const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
+      const [globalStateStore, workspaceStateStore] = yield* Effect.all([
         JsonStore.open(join(userDataPath, 'state', 'global.json')),
         JsonStore.open(join(storage.getStoragePath(), 'state.json')),
-      ]),
-    );
+      ]);
 
-    initPlatform({
-      globalState: globalStateStore,
-      fs: nodeFilesystem,
-      storage,
-      fileLocks: nodeFileLocks,
-      processes: nodeProcesses,
-      secrets: new FakeSecrets(),
-      lifecycle: createLifecycleHost(),
-      agentResume: { tryResumeStream: async () => false },
-      agentDirectories: createPlatformAgentDirectories({
-        channel: 'test',
-        customDirectoryStore: {
-          get: () =>
-            globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
-        },
-      }),
-      languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-      toolAvailability: NO_TOOL_AVAILABILITY_HOST,
-      toolMissingHandler: () => {},
-    });
-    initProcessWorkspaceRoots({
-      workspace: workspacePath,
-      storage: storage.getStoragePath(),
-      config: new FakeConfigProvider(),
-      workspaceState: workspaceStateStore,
-    });
+      initPlatform({
+        globalState: globalStateStore,
+        fs: nodeFilesystem,
+        storage,
+        fileLocks: nodeFileLocks,
+        processes: nodeProcesses,
+        hostEnvironment: nodeHostEnvironment,
+        secrets: new FakeSecrets(),
+        lifecycle: createLifecycleHost(),
+        agentResume: { tryResumeStream: async () => false },
+        agentDirectories: createPlatformAgentDirectories({
+          channel: 'test',
+          customDirectoryStore: {
+            get: () =>
+              globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
+          },
+        }),
+        languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
+        toolAvailability: NO_TOOL_AVAILABILITY_HOST,
+        toolMissingHandler: () => {},
+      });
+      initProcessWorkspaceRoots({
+        workspace: workspacePath,
+        storage: storage.getStoragePath(),
+        config: new FakeConfigProvider(),
+        workspaceState: workspaceStateStore,
+      });
 
-    return {
-      // The desktop entry runs this program on the process runtime; here it
-      // runs on the default one, which is what the harness has.
-      bootstrapNodeAgentDirectories: (
-        options: NodeAgentDirectoryBootstrapOptions,
-      ) => Effect.runPromise(bootstrapEffect(options)),
-      agentDirectories: platform().agentDirectories,
-      globalStateStore,
-      resourcesPath,
-      storage,
-    };
+      return {
+        // The desktop entry runs this program on the process runtime; the
+        // harness hands the Effect to the test, which runs it on its own
+        // @effect/vitest runtime instead.
+        bootstrapNodeAgentDirectories: (
+          options: NodeAgentDirectoryBootstrapOptions,
+        ) => bootstrapEffect(options),
+        agentDirectories: platform().agentDirectories,
+        globalStateStore,
+        resourcesPath,
+        storage,
+      };
+    });
   }
 
-  it('copies bundled agents into fresh userData storage and registers directory access', async () => {
-    const {
-      agentDirectories,
-      bootstrapNodeAgentDirectories,
-      globalStateStore,
-      resourcesPath,
-      storage,
-    } = await createHarness();
+  it.effect(
+    'copies bundled agents into fresh userData storage and registers directory access',
+    () =>
+      Effect.gen(function* () {
+        const {
+          agentDirectories,
+          bootstrapNodeAgentDirectories,
+          globalStateStore,
+          resourcesPath,
+          storage,
+        } = yield* createHarness();
 
-    await bootstrapNodeAgentDirectories({
-      channel: 'desktop',
-      resourcesPath,
-      currentVersion: '1.2.3',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    });
+        yield* bootstrapNodeAgentDirectories({
+          channel: 'desktop',
+          resourcesPath,
+          currentVersion: '1.2.3',
+          versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+        });
 
-    const builtInDir = await agentDirectories.builtIn();
-    const toolUseDir = await agentDirectories.builtInToolUse();
+        const builtInDir = yield* Effect.promise(() =>
+          agentDirectories.builtIn(),
+        );
+        const toolUseDir = yield* Effect.promise(() =>
+          agentDirectories.builtInToolUse(),
+        );
 
-    expect(builtInDir).toBe(join(storage.getGlobalStoragePath(), 'agents'));
-    expect(toolUseDir).toBe(
-      join(storage.getGlobalStoragePath(), 'tool_use_agents'),
-    );
-    await expect(
-      readFile(join(builtInDir, 'writer.yaml'), 'utf8'),
-    ).resolves.toBe('name: writer\n');
-    await expect(
-      readFile(join(toolUseDir, 'researcher.yaml'), 'utf8'),
-    ).resolves.toBe('name: researcher\n');
-    expect(globalStateStore.get(GlobalStateKey.LAST_KNOWN_VERSION)).toBe(
-      '1.2.3',
-    );
-  });
-
-  it('skips same-resource re-entry but refreshes when the resource path changes', async () => {
-    const { bootstrapNodeAgentDirectories, resourcesPath, storage } =
-      await createHarness();
-    const options = {
-      channel: 'desktop',
-      resourcesPath,
-      currentVersion: '1.2.3',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    };
-
-    await bootstrapNodeAgentDirectories(options);
-    const copiedAgent = join(
-      storage.getGlobalStoragePath(),
-      'agents',
-      'writer.yaml',
-    );
-    await writeFile(copiedAgent, 'name: locally-edited\n');
-
-    await bootstrapNodeAgentDirectories(options);
-    await expect(readFile(copiedAgent, 'utf8')).resolves.toBe(
-      'name: locally-edited\n',
-    );
-
-    const nextResourcesPath = join(dirname(resourcesPath), 'resources-next');
-    await writeText(
-      join(nextResourcesPath, 'agents', 'writer.yaml'),
-      'name: next\n',
-    );
-    await writeText(
-      join(nextResourcesPath, 'tool_use_agents', 'researcher.yaml'),
-      'name: researcher\n',
-    );
-
-    await bootstrapNodeAgentDirectories({
-      ...options,
-      resourcesPath: nextResourcesPath,
-      currentVersion: '1.2.4',
-    });
-    await expect(readFile(copiedAgent, 'utf8')).resolves.toBe('name: next\n');
-  });
-
-  it('retries a failed reconcile and guards the resource path after success', async () => {
-    const { bootstrapNodeAgentDirectories, resourcesPath, storage } =
-      await createHarness();
-    const copy = vi
-      .spyOn(nodeFilesystem, 'copy')
-      .mockRejectedValueOnce(new Error('copy failed'));
-    const options = {
-      channel: 'desktop',
-      resourcesPath,
-      currentVersion: '1.2.3',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    };
-
-    await expect(
-      bootstrapNodeAgentDirectories(options),
-    ).resolves.toBeUndefined();
-    expect(copy).toHaveBeenCalledOnce();
-
-    await bootstrapNodeAgentDirectories(options);
-    expect(copy).toHaveBeenCalledTimes(3);
-
-    const copiedAgent = join(
-      storage.getGlobalStoragePath(),
-      'agents',
-      'writer.yaml',
-    );
-    await writeFile(copiedAgent, 'name: locally-edited\n');
-
-    await bootstrapNodeAgentDirectories(options);
-    expect(copy).toHaveBeenCalledTimes(3);
-    await expect(readFile(copiedAgent, 'utf8')).resolves.toBe(
-      'name: locally-edited\n',
-    );
-  });
-
-  it('coalesces concurrent bootstraps for the same resource path', async () => {
-    const { bootstrapNodeAgentDirectories, resourcesPath } =
-      await createHarness();
-    const copy = vi.spyOn(nodeFilesystem, 'copy').mockResolvedValue(undefined);
-    const options = {
-      channel: 'desktop',
-      resourcesPath,
-      currentVersion: '1.2.3',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    };
-
-    await Promise.all([
-      bootstrapNodeAgentDirectories(options),
-      bootstrapNodeAgentDirectories(options),
-    ]);
-
-    expect(copy).toHaveBeenCalledTimes(2);
-  });
-
-  it('runs a queued bootstrap after its predecessor rejects', async () => {
-    const { bootstrapNodeAgentDirectories, resourcesPath } =
-      await createHarness();
-    const copy = vi.spyOn(nodeFilesystem, 'copy').mockResolvedValue(undefined);
-    const first = bootstrapNodeAgentDirectories({
-      channel: 'desktop',
-      get resourcesPath(): string {
-        throw new Error('unexpected bootstrap failure');
-      },
-      currentVersion: '1.2.3',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    });
-    const second = bootstrapNodeAgentDirectories({
-      channel: 'desktop',
-      resourcesPath,
-      currentVersion: '1.2.3',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    });
-
-    await expect(first).rejects.toThrow('unexpected bootstrap failure');
-    await expect(second).resolves.toBeUndefined();
-    expect(copy).toHaveBeenCalledTimes(2);
-  });
-
-  it('serializes overlapping resource paths in request order', async () => {
-    const { bootstrapNodeAgentDirectories, resourcesPath } =
-      await createHarness();
-    const nextResourcesPath = join(dirname(resourcesPath), 'resources-next');
-    let releaseFirstCopy!: () => void;
-    const firstCopyBlocked = new Promise<void>((resolve) => {
-      releaseFirstCopy = resolve;
-    });
-    const copiedSources: string[] = [];
-    vi.spyOn(nodeFilesystem, 'copy').mockImplementation(async (source) => {
-      copiedSources.push(source);
-      if (copiedSources.length === 1) await firstCopyBlocked;
-    });
-    const withFileLock = vi
-      .spyOn(nodeFileLocks, 'withFileLock')
-      .mockImplementation(() => (self) => self);
-    const first = bootstrapNodeAgentDirectories({
-      channel: 'desktop',
-      resourcesPath,
-      currentVersion: '1.2.3',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    });
-    await vi.waitFor(() => expect(copiedSources).toHaveLength(1));
-    const secondOptions = {
-      channel: 'desktop',
-      resourcesPath: nextResourcesPath,
-      currentVersion: '1.2.4',
-      versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
-    };
-    const second = bootstrapNodeAgentDirectories(secondOptions);
-
-    await nextTurn();
-    expect(withFileLock).toHaveBeenCalledOnce();
-    expect(copiedSources).toEqual([join(resourcesPath, 'agents')]);
-
-    releaseFirstCopy();
-    await Promise.all([first, second]);
-    expect(copiedSources).toEqual([
-      join(resourcesPath, 'agents'),
-      join(resourcesPath, 'tool_use_agents'),
-      join(nextResourcesPath, 'agents'),
-      join(nextResourcesPath, 'tool_use_agents'),
-    ]);
-
-    await bootstrapNodeAgentDirectories(secondOptions);
-    expect(copiedSources).toHaveLength(4);
-  });
-
-  it('uses the configured version-state key', async () => {
-    const { bootstrapNodeAgentDirectories, globalStateStore, resourcesPath } =
-      await createHarness();
-
-    await bootstrapNodeAgentDirectories({
-      channel: 'cli',
-      resourcesPath,
-      currentVersion: '2.0.0',
-      versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-    });
-
-    expect(
-      globalStateStore.get(
-        GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
-      ),
-    ).toBe('2.0.0');
-    expect(
-      globalStateStore.get(GlobalStateKey.LAST_KNOWN_VERSION),
-    ).toBeUndefined();
-  });
-
-  it('registers runtime skills through the shared Node host defaults', async () => {
-    const { resourcesPath } = await createHarness();
-    // Project sources resolve from the process workspace the harness installed.
-    const projectPath = join(dirname(resourcesPath), 'workspace');
-    await Promise.all([
-      writeSkill(join(resourcesPath, 'skills'), 'bundled-skill', {
-        name: 'bundled-skill',
-        description: 'Bundled skill.',
+        expect(builtInDir).toBe(join(storage.getGlobalStoragePath(), 'agents'));
+        expect(toolUseDir).toBe(
+          join(storage.getGlobalStoragePath(), 'tool_use_agents'),
+        );
+        expect(
+          yield* Effect.promise(() =>
+            readFile(join(builtInDir, 'writer.yaml'), 'utf8'),
+          ),
+        ).toBe('name: writer\n');
+        expect(
+          yield* Effect.promise(() =>
+            readFile(join(toolUseDir, 'researcher.yaml'), 'utf8'),
+          ),
+        ).toBe('name: researcher\n');
+        expect(globalStateStore.get(GlobalStateKey.LAST_KNOWN_VERSION)).toBe(
+          '1.2.3',
+        );
       }),
-      writeSkill(join(projectPath, '.texra', 'skills'), 'project-skill', {
-        name: 'project-skill',
-        description: 'Project skill.',
-      }),
-      writeSkill(join(projectPath, '.codex', 'skills'), 'interop-skill', {
-        name: 'interop-skill',
-        description: 'Interop skill.',
-      }),
-      writeSkill(join(projectPath, 'vendor', 'skills'), 'custom-skill', {
-        name: 'custom-skill',
-        description: 'Custom skill.',
-      }),
-    ]);
-    const { initializeNodeRuntimeSkills } = await loadSourceModule(
-      '@platform/defaults/nodeHost',
-    );
-    const { loadRuntimeSkillDisplay } = await import('@skills/runtimeSkills');
+  );
 
-    initializeNodeRuntimeSkills({
-      resourcesPath,
-      skillSourceOptions: {
-        includeInterop: true,
-        additionalPaths: ['vendor/skills'],
-      },
-    });
+  it.effect(
+    'skips same-resource re-entry but refreshes when the resource path changes',
+    () =>
+      Effect.gen(function* () {
+        const { bootstrapNodeAgentDirectories, resourcesPath, storage } =
+          yield* createHarness();
+        const options = {
+          channel: 'desktop',
+          resourcesPath,
+          currentVersion: '1.2.3',
+          versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+        };
 
-    const { skills } = await loadRuntimeSkillDisplay();
-    expect(skills).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: 'custom-skill',
-          scope: 'custom',
+        yield* bootstrapNodeAgentDirectories(options);
+        const copiedAgent = join(
+          storage.getGlobalStoragePath(),
+          'agents',
+          'writer.yaml',
+        );
+        yield* Effect.promise(() =>
+          writeFile(copiedAgent, 'name: locally-edited\n'),
+        );
+
+        yield* bootstrapNodeAgentDirectories(options);
+        expect(yield* Effect.promise(() => readFile(copiedAgent, 'utf8'))).toBe(
+          'name: locally-edited\n',
+        );
+
+        const nextResourcesPath = join(
+          dirname(resourcesPath),
+          'resources-next',
+        );
+        yield* Effect.promise(() =>
+          writeText(
+            join(nextResourcesPath, 'agents', 'writer.yaml'),
+            'name: next\n',
+          ),
+        );
+        yield* Effect.promise(() =>
+          writeText(
+            join(nextResourcesPath, 'tool_use_agents', 'researcher.yaml'),
+            'name: researcher\n',
+          ),
+        );
+
+        yield* bootstrapNodeAgentDirectories({
+          ...options,
+          resourcesPath: nextResourcesPath,
+          currentVersion: '1.2.4',
+        });
+        expect(yield* Effect.promise(() => readFile(copiedAgent, 'utf8'))).toBe(
+          'name: next\n',
+        );
+      }),
+  );
+
+  it.effect(
+    'retries a failed reconcile and guards the resource path after success',
+    () =>
+      Effect.gen(function* () {
+        const { bootstrapNodeAgentDirectories, resourcesPath, storage } =
+          yield* createHarness();
+        const copy = vi
+          .spyOn(nodeFilesystem, 'copy')
+          .mockRejectedValueOnce(new Error('copy failed'));
+        const options = {
+          channel: 'desktop',
+          resourcesPath,
+          currentVersion: '1.2.3',
+          versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+        };
+
+        yield* bootstrapNodeAgentDirectories(options);
+        expect(copy).toHaveBeenCalledOnce();
+
+        yield* bootstrapNodeAgentDirectories(options);
+        expect(copy).toHaveBeenCalledTimes(3);
+
+        const copiedAgent = join(
+          storage.getGlobalStoragePath(),
+          'agents',
+          'writer.yaml',
+        );
+        yield* Effect.promise(() =>
+          writeFile(copiedAgent, 'name: locally-edited\n'),
+        );
+
+        yield* bootstrapNodeAgentDirectories(options);
+        expect(copy).toHaveBeenCalledTimes(3);
+        expect(yield* Effect.promise(() => readFile(copiedAgent, 'utf8'))).toBe(
+          'name: locally-edited\n',
+        );
+      }),
+  );
+
+  it.live('coalesces concurrent bootstraps for the same resource path', () =>
+    Effect.gen(function* () {
+      const { bootstrapNodeAgentDirectories, resourcesPath } =
+        yield* createHarness();
+      const copy = vi
+        .spyOn(nodeFilesystem, 'copy')
+        .mockResolvedValue(undefined);
+      const options = {
+        channel: 'desktop',
+        resourcesPath,
+        currentVersion: '1.2.3',
+        versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+      };
+
+      yield* Effect.all(
+        [
+          bootstrapNodeAgentDirectories(options),
+          bootstrapNodeAgentDirectories(options),
+        ],
+        { concurrency: 'unbounded' },
+      );
+
+      expect(copy).toHaveBeenCalledTimes(2);
+    }),
+  );
+
+  it.live('runs a queued bootstrap after its predecessor rejects', () =>
+    Effect.gen(function* () {
+      const { bootstrapNodeAgentDirectories, resourcesPath } =
+        yield* createHarness();
+      const copy = vi
+        .spyOn(nodeFilesystem, 'copy')
+        .mockResolvedValue(undefined);
+      const first = yield* Effect.forkChild(
+        Effect.exit(
+          bootstrapNodeAgentDirectories({
+            channel: 'desktop',
+            get resourcesPath(): string {
+              throw new Error('unexpected bootstrap failure');
+            },
+            currentVersion: '1.2.3',
+            versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+          }),
+        ),
+      );
+      const second = yield* Effect.forkChild(
+        bootstrapNodeAgentDirectories({
+          channel: 'desktop',
+          resourcesPath,
+          currentVersion: '1.2.3',
+          versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
         }),
-        expect.objectContaining({
-          name: 'project-skill',
-          scope: 'project',
+      );
+
+      const firstExit = yield* Fiber.join(first);
+      yield* Fiber.join(second);
+      expect(Exit.isFailure(firstExit)).toBe(true);
+      if (Exit.isFailure(firstExit)) {
+        expect(Cause.pretty(firstExit.cause)).toContain(
+          'unexpected bootstrap failure',
+        );
+      }
+      expect(copy).toHaveBeenCalledTimes(2);
+    }),
+  );
+
+  it.live('serializes overlapping resource paths in request order', () =>
+    Effect.gen(function* () {
+      const { bootstrapNodeAgentDirectories, resourcesPath } =
+        yield* createHarness();
+      const nextResourcesPath = join(dirname(resourcesPath), 'resources-next');
+      let releaseFirstCopy!: () => void;
+      const firstCopyBlocked = new Promise<void>((resolve) => {
+        releaseFirstCopy = resolve;
+      });
+      const copiedSources: string[] = [];
+      vi.spyOn(nodeFilesystem, 'copy').mockImplementation(async (source) => {
+        copiedSources.push(source);
+        if (copiedSources.length === 1) await firstCopyBlocked;
+      });
+      const withFileLock = vi
+        .spyOn(nodeFileLocks, 'withFileLock')
+        .mockImplementation(() => (self) => self);
+      const first = yield* Effect.forkChild(
+        bootstrapNodeAgentDirectories({
+          channel: 'desktop',
+          resourcesPath,
+          currentVersion: '1.2.3',
+          versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
         }),
-        expect.objectContaining({
-          name: 'interop-skill',
-          scope: 'interop',
-        }),
-        expect.objectContaining({
-          name: 'bundled-skill',
-          scope: 'bundled',
-        }),
-      ]),
-    );
-  });
+      );
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(copiedSources).toHaveLength(1)),
+      );
+      const secondOptions = {
+        channel: 'desktop',
+        resourcesPath: nextResourcesPath,
+        currentVersion: '1.2.4',
+        versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
+      };
+      const second = yield* Effect.forkChild(
+        bootstrapNodeAgentDirectories(secondOptions),
+      );
+
+      yield* Effect.promise(() => nextTurn());
+      expect(withFileLock).toHaveBeenCalledOnce();
+      expect(copiedSources).toEqual([join(resourcesPath, 'agents')]);
+
+      releaseFirstCopy();
+      yield* Fiber.join(first);
+      yield* Fiber.join(second);
+      expect(copiedSources).toEqual([
+        join(resourcesPath, 'agents'),
+        join(resourcesPath, 'tool_use_agents'),
+        join(nextResourcesPath, 'agents'),
+        join(nextResourcesPath, 'tool_use_agents'),
+      ]);
+
+      yield* bootstrapNodeAgentDirectories(secondOptions);
+      expect(copiedSources).toHaveLength(4);
+    }),
+  );
+
+  it.effect('uses the configured version-state key', () =>
+    Effect.gen(function* () {
+      const { bootstrapNodeAgentDirectories, globalStateStore, resourcesPath } =
+        yield* createHarness();
+
+      yield* bootstrapNodeAgentDirectories({
+        channel: 'cli',
+        resourcesPath,
+        currentVersion: '2.0.0',
+        versionStateKey: GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+      });
+
+      expect(
+        globalStateStore.get(
+          GlobalStateKey.CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION,
+        ),
+      ).toBe('2.0.0');
+      expect(
+        globalStateStore.get(GlobalStateKey.LAST_KNOWN_VERSION),
+      ).toBeUndefined();
+    }),
+  );
+
+  it.effect(
+    'registers runtime skills through the shared Node host defaults',
+    () =>
+      Effect.gen(function* () {
+        const { resourcesPath } = yield* createHarness();
+        // Project sources resolve from the process workspace the harness installed.
+        const projectPath = join(dirname(resourcesPath), 'workspace');
+        yield* Effect.promise(() =>
+          Promise.all([
+            writeSkill(join(resourcesPath, 'skills'), 'bundled-skill', {
+              name: 'bundled-skill',
+              description: 'Bundled skill.',
+            }),
+            writeSkill(join(projectPath, '.texra', 'skills'), 'project-skill', {
+              name: 'project-skill',
+              description: 'Project skill.',
+            }),
+            writeSkill(join(projectPath, '.codex', 'skills'), 'interop-skill', {
+              name: 'interop-skill',
+              description: 'Interop skill.',
+            }),
+            writeSkill(join(projectPath, 'vendor', 'skills'), 'custom-skill', {
+              name: 'custom-skill',
+              description: 'Custom skill.',
+            }),
+          ]),
+        );
+        const { initializeNodeRuntimeSkills } = yield* Effect.promise(() =>
+          loadSourceModule('@platform/defaults/nodeHost'),
+        );
+        const { loadRuntimeSkillDisplay } = yield* Effect.promise(
+          () => import('@skills/runtimeSkills'),
+        );
+
+        initializeNodeRuntimeSkills({
+          resourcesPath,
+          skillSourceOptions: {
+            includeInterop: true,
+            additionalPaths: ['vendor/skills'],
+          },
+        });
+
+        const { skills } = yield* Effect.promise(() =>
+          loadRuntimeSkillDisplay(),
+        );
+        expect(skills).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              name: 'custom-skill',
+              scope: 'custom',
+            }),
+            expect.objectContaining({
+              name: 'project-skill',
+              scope: 'project',
+            }),
+            expect.objectContaining({
+              name: 'interop-skill',
+              scope: 'interop',
+            }),
+            expect.objectContaining({
+              name: 'bundled-skill',
+              scope: 'bundled',
+            }),
+          ]),
+        );
+      }),
+  );
 });

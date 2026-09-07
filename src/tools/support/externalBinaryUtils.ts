@@ -22,26 +22,10 @@ import * as path from 'node:path';
 
 import which from 'which';
 
+import { tryPlatform } from '@platform/platform';
+import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { executeCommandSync } from '@utils/system/execUtils';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
-
-type ElectronProcess = NodeJS.Process & {
-  defaultApp?: boolean;
-  resourcesPath?: string;
-};
-
-/**
- * Returns Electron's `process.resourcesPath` when running inside a packaged
- * Electron application. Returns `undefined` in development mode
- * (`defaultApp === true`) and in non-Electron runtimes (VS Code extension
- * host, plain Node.js).
- */
-function getPackagedElectronResourcesPath(): string | undefined {
-  const electronProcess = process as ElectronProcess;
-  if (electronProcess.versions.electron == null) return undefined;
-  if (electronProcess.defaultApp === true) return undefined;
-  return electronProcess.resourcesPath;
-}
 
 // ---------------------------------------------------------------------------
 // SDK export resolution
@@ -134,7 +118,13 @@ async function resolveBinary(
   // Highest priority when present — packaged apps cannot execute binaries
   // from inside app.asar.
   {
-    const resourcesPath = getPackagedElectronResourcesPath();
+    // tryPlatform() picks up an installed Platform's hostEnvironment (a test
+    // fake, in suites that override it); nodeHostEnvironment is the fallback
+    // for the rare caller running before initPlatform(). Neither call grows
+    // the frozen platform() ratchet — see effect-migration-ratchet.mjs.
+    const resourcesPath = (
+      tryPlatform()?.hostEnvironment ?? nodeHostEnvironment
+    ).packagedElectronResourcesPath();
     if (resourcesPath != null) {
       for (const pkg of config.platformPackages) {
         const platformPkgDir = path.join(
