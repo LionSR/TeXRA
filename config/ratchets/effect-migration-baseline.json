@@ -189,9 +189,6 @@
       "src/agent/remote/remoteAgentList.ts": 2,
       "src/agent/runtime/SessionHandle.ts": 9,
       "src/agent/runtime/bundledPrompts.ts": 1,
-      "src/auth/oauth/loopbackLogin.ts": 2,
-      "src/common/errors/sdkError/errorInspection.ts": 1,
-      "src/common/errors/sdkError/providerErrorFormat.ts": 2,
       "src/tools/github/PollingSourceBase.ts": 1,
       "src/utils/files/relativeFS.ts": 2
     }
