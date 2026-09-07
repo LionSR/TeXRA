@@ -1476,10 +1476,7 @@ export function openaiChatModel(
                 if (!choice) return events;
                 if (choice.finish_reason === 'insufficient_system_resource') {
                   return yield* new ModelError({
-                    kind:
-                      turn.protocol === 'deepseek-chat'
-                        ? 'provider-rejection'
-                        : 'malformed-output',
+                    kind: 'provider-rejection',
                     message:
                       'The model stopped because its inference system had insufficient resources.',
                     cause: chunk,
