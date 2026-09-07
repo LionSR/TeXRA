@@ -10,6 +10,7 @@ import {
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as logger from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -72,10 +73,19 @@ function stubBatchFetch(
   return { batches, fetchMock: stubFetch(batches, beforeRespond) };
 }
 
+/** The host's run edge: the two lifecycle arms answer where the host runs. */
+const initialize = (
+  ...args: Parameters<typeof UsageLogService.initialize>
+): Promise<void> =>
+  effectRuntime().runPromise(UsageLogService.initialize(...args));
+
+const dispose = (): Promise<void> =>
+  effectRuntime().runPromise(UsageLogService.dispose());
+
 describe('UsageLogService', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    UsageLogService.initialize({
+    await initialize({
       batchSize: 1,
       flushIntervalMs: 60_000,
       enabled: true,
@@ -83,7 +93,7 @@ describe('UsageLogService', () => {
   });
 
   afterEach(async () => {
-    await UsageLogService.dispose();
+    await dispose();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -130,7 +140,7 @@ describe('UsageLogService', () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     UsageLogService.log(usageEntry('second'));
-    const disposal = UsageLogService.dispose();
+    const disposal = dispose();
 
     releaseFirstFetch();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -155,7 +165,7 @@ describe('UsageLogService', () => {
   // had already taken from the queue.
   it('waits for a timer-driven flush during disposal instead of aborting it', async () => {
     stubAccessToken();
-    UsageLogService.initialize({
+    await initialize({
       batchSize: 100,
       flushIntervalMs: 20,
       enabled: true,
@@ -170,7 +180,7 @@ describe('UsageLogService', () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const request = fetchMock.mock.calls[0]?.[0] as Request;
 
-    const disposal = UsageLogService.dispose();
+    const disposal = dispose();
     let disposed = false;
     void disposal.then(() => {
       disposed = true;
@@ -190,10 +200,10 @@ describe('UsageLogService', () => {
   // that reaches initialize() and exits without dispose() still exits on an
   // empty loop, so the ticker's timer is unref'd while the request a flush
   // sends holds the loop on its own.
-  it('schedules the ticker on a timer that does not hold the event loop', () => {
+  it('schedules the ticker on a timer that does not hold the event loop', async () => {
     vi.useRealTimers();
     const timers = vi.spyOn(globalThis, 'setTimeout');
-    UsageLogService.initialize({
+    await initialize({
       batchSize: 100,
       flushIntervalMs: 12_345,
       enabled: true,
@@ -217,7 +227,7 @@ describe('UsageLogService', () => {
     UsageLogService.log(usageEntry('slow'));
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    const disposal = UsageLogService.dispose();
+    const disposal = dispose();
     let disposed = false;
     void disposal.then(() => {
       disposed = true;
@@ -408,7 +418,7 @@ describe('UsageLogService', () => {
     // queued under the old value rather than letting the next flush ship them.
     it('discards entries queued before the setting was turned off', async () => {
       stubAccessToken();
-      UsageLogService.initialize({ batchSize: 100, flushIntervalMs: 60_000 });
+      await initialize({ batchSize: 100, flushIntervalMs: 60_000 });
 
       const { batches, fetchMock } = stubBatchFetch();
 
@@ -481,7 +491,7 @@ describe('UsageLogService', () => {
 
     it('drops optional entries from a batch but keeps the accounted ones', async () => {
       stubAccessToken();
-      UsageLogService.initialize({ batchSize: 100, flushIntervalMs: 60_000 });
+      await initialize({ batchSize: 100, flushIntervalMs: 60_000 });
 
       const { batches, fetchMock } = stubBatchFetch();
 

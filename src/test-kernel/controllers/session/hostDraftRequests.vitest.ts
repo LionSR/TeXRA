@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import pDefer from 'p-defer';
 import { expect, it, vi } from 'vitest';
 
@@ -28,12 +29,15 @@ it('returns transcription to Start when another paper stops the process recorder
     text: 'A conserved quantity.',
   });
   const requests = new HostDraftRequests();
+  /** The host's run edge: every arm answers where the host took the request. */
+  const handle = (...args: Parameters<HostDraftRequests['handle']>) =>
+    Effect.runPromise(requests.handle(...args));
   const first = { roots: { storage: '/papers/first' } } as SessionHandle;
   const second = { roots: { storage: '/papers/second' } } as SessionHandle;
   const snapshot = vi.fn();
   const unsubscribe = requests.subscribe(snapshot);
 
-  const started = requests.handle(
+  const started = handle(
     first,
     {
       kind: 'record',
@@ -42,7 +46,7 @@ it('returns transcription to Start when another paper stops the process recorder
     'origin',
   );
   await expect(
-    requests.handle(
+    handle(
       second,
       {
         kind: 'record',
@@ -57,11 +61,7 @@ it('returns transcription to Start when another paper stops the process recorder
   });
 
   await expect(
-    requests.handle(
-      second,
-      { kind: 'record', action: { kind: 'stop' } },
-      'other',
-    ),
+    handle(second, { kind: 'record', action: { kind: 'stop' } }, 'other'),
   ).resolves.toEqual({ kind: 'done' });
   expect(audio.stopRecordingAndTranscribe).not.toHaveBeenCalled();
   startup.resolve({ success: true });
@@ -75,7 +75,7 @@ it('returns transcription to Start when another paper stops the process recorder
 
   const nextStartup = pDefer<{ success: boolean }>();
   audio.startRecording.mockReturnValueOnce(nextStartup.promise);
-  const nextTake = requests.handle(
+  const nextTake = handle(
     first,
     {
       kind: 'record',

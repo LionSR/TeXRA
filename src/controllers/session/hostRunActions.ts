@@ -6,7 +6,7 @@
  * catalog lookups, its key prompt, and its notifications, and both the VS
  * Code extension and the desktop answer the same arms through one body.
  */
-import { SubscriptionRef } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 
 import { resolveAgentKey } from '@agent/index/agentRegistry';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
@@ -15,6 +15,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { hostPort } from '@controllers/effectPort';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
@@ -74,9 +75,11 @@ export interface HostRunActions {
   resume(streamId: StreamTabId): Promise<void>;
   runNew(streamId: StreamTabId): Promise<void>;
   runCompileFixer(streamId: StreamTabId): Promise<void>;
+  /** The retry's switch onto the user's own key. The host arm that took the
+   *  request runs it where it stands. */
   useOwnApiKey(
     request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
-  ): Promise<void>;
+  ): Effect.Effect<void, unknown>;
   /** The launcher's form of a settled run's saved setup. */
   restoreState(streamId: StreamTabId): Promise<AgentConfig>;
   /** The shared sidecar readers used by the workflow controllers. */
@@ -200,100 +203,108 @@ export function createHostRunActions(
   /** The Copilot subscription's fallback: a replacement run on the user's
    *  own key for the model Copilot served, then the pending retry is
    *  cancelled in its favor. */
-  async function copilotFallback(
-    request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
-  ): Promise<void> {
-    const { streamId, requestId } = request;
-    if (!isRetryPending(streamId, requestId)) return;
-    const chooseAnotherModel =
-      'Choose another model and start the agent again.';
-    const modelsChanged =
-      'The available models changed while TeXRA was preparing the API key. Try again.';
-    if (!request.model) {
-      await ports.showInfo(
-        `TeXRA did not record which Copilot model this retry used. ${chooseAnotherModel}`,
+  const copilotFallback = Effect.fn('HostRunActions.copilotFallback')(
+    function* (request: Extract<HostRequest, { kind: 'useOwnApiKey' }>) {
+      const { streamId, requestId } = request;
+      if (!isRetryPending(streamId, requestId)) return;
+      const chooseAnotherModel =
+        'Choose another model and start the agent again.';
+      const modelsChanged =
+        'The available models changed while TeXRA was preparing the API key. Try again.';
+      if (!request.model) {
+        yield* hostPort(() =>
+          ports.showInfo(
+            `TeXRA did not record which Copilot model this retry used. ${chooseAnotherModel}`,
+          ),
+        );
+        return;
+      }
+      const exhaustionReason = exhaustionReasonOf(request);
+      let fallback = getRuntimeModelDirectFallback(
+        request.model,
+        getUseOpenRouter(),
       );
-      return;
-    }
-    const exhaustionReason = exhaustionReasonOf(request);
-    let fallback = getRuntimeModelDirectFallback(
-      request.model,
-      getUseOpenRouter(),
-    );
-    if (!fallback) {
-      await ports.showInfo(
-        `No model you can use with your own API key matches this Copilot model. ${chooseAnotherModel}`,
-      );
-      return;
-    }
-    // Key entry can outlive the retry panel, and the user can change the
-    // OpenRouter preference while that prompt is open. Revalidate both the
-    // exact retry identity and the effective credential owner after each
-    // prompt so an old action cannot launch or alter a replacement request.
-    let prepared = await apiKeyRetry.ensureOwnApiKey({
-      provider: fallback.provider,
-      exhaustionReason,
-    });
-    if (!prepared || !isRetryPending(streamId, requestId)) return;
-    const currentFallback = getRuntimeModelDirectFallback(
-      request.model,
-      getUseOpenRouter(),
-    );
-    if (!currentFallback) {
-      await ports.showInfo(modelsChanged);
-      return;
-    }
-    if (currentFallback.provider !== fallback.provider) {
-      fallback = currentFallback;
-      prepared = await apiKeyRetry.ensureOwnApiKey({
+      if (!fallback) {
+        yield* hostPort(() =>
+          ports.showInfo(
+            `No model you can use with your own API key matches this Copilot model. ${chooseAnotherModel}`,
+          ),
+        );
+        return;
+      }
+      // Key entry can outlive the retry panel, and the user can change the
+      // OpenRouter preference while that prompt is open. Revalidate both the
+      // exact retry identity and the effective credential owner after each
+      // prompt so an old action cannot launch or alter a replacement request.
+      let prepared = yield* apiKeyRetry.ensureOwnApiKey({
         provider: fallback.provider,
         exhaustionReason,
       });
       if (!prepared || !isRetryPending(streamId, requestId)) return;
-      const finalFallback = getRuntimeModelDirectFallback(
+      const currentFallback = getRuntimeModelDirectFallback(
         request.model,
         getUseOpenRouter(),
       );
-      if (!finalFallback || finalFallback.provider !== fallback.provider) {
-        await ports.showInfo(modelsChanged);
+      if (!currentFallback) {
+        yield* hostPort(() => ports.showInfo(modelsChanged));
         return;
       }
-    }
-    await snapshots.preload([streamId]);
-    const { config } = snapshots.getRunMetadata(streamId);
-    if (!config) {
-      await ports.showInfo(
-        `The settings for this run are no longer available. ${chooseAnotherModel}`,
-      );
-      return;
-    }
-    const model = fallback.model;
-    const started = await apiKeyRetry.runCopilotFallbackWithRouting(
-      {
-        stream: streamId,
-        requestId,
-        provider: fallback.provider,
-        model,
-        exhaustionReason,
-        chatGptSubscriptionEligible: fallback.chatGptSubscriptionEligible,
-      },
-      async (copilotRouteOverride) => {
-        if (!isRetryPending(streamId, requestId)) return false;
-        // Start acknowledges ownership of the replacement run. Settlement
-        // without an onRun callback means no replacement was launched.
-        return new Promise<boolean>((resolve, reject) => {
-          void ports
-            .runExecutionRequest(
-              { config: { ...config, model } },
-              { copilotRouteOverride, onRun: () => resolve(true) },
-            )
-            .then(() => resolve(false), reject);
+      if (currentFallback.provider !== fallback.provider) {
+        fallback = currentFallback;
+        prepared = yield* apiKeyRetry.ensureOwnApiKey({
+          provider: fallback.provider,
+          exhaustionReason,
         });
-      },
-    );
-    if (!started) return;
-    await settleRetry(streamId, requestId, { action: 'cancel' });
-  }
+        if (!prepared || !isRetryPending(streamId, requestId)) return;
+        const finalFallback = getRuntimeModelDirectFallback(
+          request.model,
+          getUseOpenRouter(),
+        );
+        if (!finalFallback || finalFallback.provider !== fallback.provider) {
+          yield* hostPort(() => ports.showInfo(modelsChanged));
+          return;
+        }
+      }
+      yield* hostPort(() => snapshots.preload([streamId]));
+      const { config } = snapshots.getRunMetadata(streamId);
+      if (!config) {
+        yield* hostPort(() =>
+          ports.showInfo(
+            `The settings for this run are no longer available. ${chooseAnotherModel}`,
+          ),
+        );
+        return;
+      }
+      const model = fallback.model;
+      const started = yield* apiKeyRetry.runCopilotFallbackWithRouting(
+        {
+          stream: streamId,
+          requestId,
+          provider: fallback.provider,
+          model,
+          exhaustionReason,
+          chatGptSubscriptionEligible: fallback.chatGptSubscriptionEligible,
+        },
+        async (copilotRouteOverride) => {
+          if (!isRetryPending(streamId, requestId)) return false;
+          // Start acknowledges ownership of the replacement run. Settlement
+          // without an onRun callback means no replacement was launched.
+          return new Promise<boolean>((resolve, reject) => {
+            void ports
+              .runExecutionRequest(
+                { config: { ...config, model } },
+                { copilotRouteOverride, onRun: () => resolve(true) },
+              )
+              .then(() => resolve(false), reject);
+          });
+        },
+      );
+      if (!started) return;
+      yield* hostPort(() =>
+        settleRetry(streamId, requestId, { action: 'cancel' }),
+      );
+    },
+  );
 
   return {
     snapshotPort,
@@ -359,16 +370,15 @@ export function createHostRunActions(
         },
       );
     },
-    async useOwnApiKey(request) {
+    useOwnApiKey(request) {
       if (request.exhaustionReason === 'copilot-subscription') {
-        await copilotFallback(request);
-        return;
+        return copilotFallback(request);
       }
       const provider =
         request.provider != null && isApiProvider(request.provider)
           ? request.provider
           : undefined;
-      await apiKeyRetry.useOwnApiKey({
+      return apiKeyRetry.useOwnApiKey({
         stream: request.streamId,
         requestId: request.requestId,
         model: request.model ?? undefined,

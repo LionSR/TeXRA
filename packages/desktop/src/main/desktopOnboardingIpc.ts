@@ -2,6 +2,7 @@ import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardi
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import { effectRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
@@ -158,7 +159,7 @@ export function createDesktopOnboardingIpc(
   }
 
   function refreshOnboardingFunnel(): Promise<void> {
-    return funnelRefreshQueue.run();
+    return effectRuntime().runPromise(funnelRefreshQueue.run());
   }
 
   async function dismiss(): Promise<void> {
