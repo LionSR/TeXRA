@@ -172,14 +172,13 @@ function describeHttpError(
     }
 
     if (typeof rawErrorBody === 'object' && rawErrorBody !== null) {
-      try {
-        const serializedRawBody = JSON.stringify(rawErrorBody);
+      // Non-serializable diagnostic bodies cannot have been JSON-stringified
+      // into the SDK wrapper message by the path guarded here.
+      const serialized = Result.try(() => JSON.stringify(rawErrorBody));
+      if (Result.isSuccess(serialized) && serialized.success !== undefined) {
         wrapperMessageContainsRawBody =
-          serializedRawBody.length > 2 &&
-          extractedMessage.includes(serializedRawBody);
-      } catch {
-        // Non-serializable diagnostic bodies cannot have been JSON-stringified
-        // into the SDK wrapper message by the path guarded here.
+          serialized.success.length > 2 &&
+          extractedMessage.includes(serialized.success);
       }
 
       if (!wrapperMessageContainsRawBody) {
@@ -191,13 +190,15 @@ function describeHttpError(
           const embeddedBody = Result.getOrUndefined(
             safeParseJson(extractedMessage.slice(start, end + 1)),
           );
-          try {
-            wrapperMessageContainsRawBody =
-              stableStringify(embeddedBody) === stableStringify(rawErrorBody);
-          } catch {
-            // Circular or otherwise non-JSON diagnostics cannot match a JSON
-            // fragment parsed from the wrapper message.
-          }
+          // Circular or otherwise non-JSON diagnostics cannot match a JSON
+          // fragment parsed from the wrapper message.
+          wrapperMessageContainsRawBody = Result.getOrElse(
+            Result.try(
+              () =>
+                stableStringify(embeddedBody) === stableStringify(rawErrorBody),
+            ),
+            () => false,
+          );
         }
       }
     }
