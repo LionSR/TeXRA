@@ -626,17 +626,50 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
 });
 
 /**
+ * Whether `actual` and `expected` are the same schema kind, deeply enough to
+ * catch the failure a bare outer-constructor check misses: two `ZodArray`s
+ * wrapping *different* enums (e.g. `LATEX_CONFIG_FIELD_TO_KEY` accidentally
+ * pointing `enabledReplacements` at the regex-category key) both pass an
+ * outer check, but their `.element` enums have different option sets. Recurses
+ * through `ZodArray.element`; compares `ZodEnum.options` as sets; falls back
+ * to the outer-constructor check for every other kind (`ZodBoolean`,
+ * `ZodNumberFormat`, `ZodRecord`, …), where the catalog's own validation
+ * (bounds, value schema) is the only thing that can further distinguish rows.
+ */
+function sameCatalogSchemaKind(actual: unknown, expected: unknown): boolean {
+  if (
+    !(actual instanceof z.ZodType) ||
+    !(expected instanceof z.ZodType) ||
+    actual.constructor !== expected.constructor
+  ) {
+    return false;
+  }
+  if (actual instanceof z.ZodEnum && expected instanceof z.ZodEnum) {
+    const actualOptions = [...actual.options].sort();
+    const expectedOptions = [...expected.options].sort();
+    return (
+      actualOptions.length === expectedOptions.length &&
+      actualOptions.every((option, index) => option === expectedOptions[index])
+    );
+  }
+  if (actual instanceof z.ZodArray && expected instanceof z.ZodArray) {
+    return sameCatalogSchemaKind(actual.element, expected.element);
+  }
+  return true;
+}
+
+/**
  * Reads `key`'s own schema out of the settings catalog (bounds, enum options,
  * and all) rather than restating it, so `LatexConfigValuesSchema` below can
  * never drift from the catalog's own validators the way a hand-duplicated
  * schema could — a bound tightened on the catalog row reaches this projection
- * for free. `expectedKind` is a throwaway schema of the same Zod subclass the
- * catalog row is expected to carry (its own field values are never read); its
- * type both drives `T`'s inference and is checked at runtime via `.constructor`
- * against the schema actually found at `key`, so a catalog row that changes
- * kind (a string field becoming a number, say) fails loudly here instead of
- * silently mistyping the projected field — the `Output` cast this replaces
- * had no such check.
+ * for free. `expectedKind` is a throwaway schema of the same Zod subclass (and,
+ * for enums and arrays of them, the same option set) the catalog row is
+ * expected to carry; its type both drives `T`'s inference and is checked at
+ * runtime via {@link sameCatalogSchemaKind} against the schema actually found
+ * at `key`, so a catalog row that changes kind — or `LATEX_CONFIG_FIELD_TO_KEY`
+ * pointing a field at the wrong same-shaped row — fails loudly here instead of
+ * silently mistyping the projected field.
  */
 function catalogField<T extends z.ZodTypeAny>(
   key: string,
@@ -647,10 +680,7 @@ function catalogField<T extends z.ZodTypeAny>(
     throw new Error(`LATEX_CONFIG_FIELD_TO_KEY: no catalog entry for "${key}"`);
   }
   const schema = settingSchemaWithoutPrefault(entry);
-  if (
-    !(schema instanceof z.ZodType) ||
-    schema.constructor !== expectedKind.constructor
-  ) {
+  if (!sameCatalogSchemaKind(schema, expectedKind)) {
     throw new Error(
       `LATEX_CONFIG_FIELD_TO_KEY: "${key}" catalog schema kind changed — expected ${expectedKind.constructor.name}, got ${(schema as z.ZodTypeAny | undefined)?.constructor?.name ?? typeof schema}`,
     );
