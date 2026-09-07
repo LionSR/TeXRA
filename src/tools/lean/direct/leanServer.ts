@@ -277,7 +277,7 @@ const make = ({
 
     const handlePublishDiagnostics = (params: LspPublishDiagnosticsParams) =>
       Effect.gen(function* () {
-        const absolute = fileUriToPath(params.uri);
+        const absolute = yield* fileUriToPath(params.uri);
         if (!absolute) return;
         const state = openFiles.get(absolute);
         if (!state) return;
@@ -590,17 +590,24 @@ function pathToUri(absolute: string): string {
   return pathToFileURL(absolute).toString();
 }
 
-function fileUriToPath(uri: string): string | null {
-  if (!uri.startsWith('file://')) return null;
-  try {
-    return fileURLToPath(uri);
-  } catch (err) {
-    // Malformed or non-local file URIs from an external Lean LSP server
-    // (e.g. `file://host/path`, bad percent-encoding) make fileURLToPath
-    // throw. This runs on the JSON-RPC notification path, so map to null
-    // (an untracked URI the caller skips) rather than letting the exception
-    // escape and break diagnostics handling.
-    debug(LOG_CHANNEL, `Ignoring unmappable file URI ${uri}`, { data: err });
-    return null;
-  }
+function fileUriToPath(uri: string): Effect.Effect<string | null> {
+  if (!uri.startsWith('file://')) return Effect.succeed(null);
+  // Malformed or non-local file URIs from an external Lean LSP server
+  // (e.g. `file://host/path`, bad percent-encoding) make fileURLToPath
+  // throw. This runs on the JSON-RPC notification path, so map to null
+  // (an untracked URI the caller skips) rather than letting the exception
+  // escape and break diagnostics handling.
+  return Effect.try({
+    try: () => fileURLToPath(uri),
+    catch: (error) => error,
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        debug(LOG_CHANNEL, `Ignoring unmappable file URI ${uri}`, {
+          data: error,
+        });
+        return null;
+      }),
+    ),
+  );
 }
