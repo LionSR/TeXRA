@@ -280,6 +280,7 @@ describe('native OpenAI Responses protocol', () => {
             );
             expect(turn.transport.kind).toBe('websocket');
             const first = yield* model.generateTurn(turn);
+            assert(first.providerResponseId !== null);
             assert(first.continuation?.origin.protocol === 'openai-responses');
             expect(first.continuation.anchor).toMatchObject({
               kind: 'connection',
@@ -315,6 +316,7 @@ describe('native OpenAI Responses protocol', () => {
             const next = yield* model.prepareTurn(nextRequest);
             assert(next.mode === 'foreground');
             const second = yield* model.generateTurn(next);
+            assert(second.providerResponseId !== null);
             expect(second.providerResponseId).toBe('resp_2');
             expect(second.finishReason).toBe(outcome);
             if (outcome === 'stop')
@@ -628,9 +630,9 @@ describe('native OpenAI Responses protocol', () => {
           });
           const turn = yield* model.prepareTurn({ ...REQUEST, system: ' ' });
           assert(turn.mode === 'foreground');
-          expect(
-            (yield* model.generateTurn(turn)).continuation,
-          ).toBeUndefined();
+          const result = yield* model.generateTurn(turn);
+          assert(result.providerResponseId !== null);
+          expect(result.continuation).toBeUndefined();
           expect(
             yield* Effect.flip(
               model.prepareTurn({ ...REQUEST, mode: 'background' }),
@@ -1768,6 +1770,7 @@ describe('native OpenAI Responses protocol', () => {
     expect(body).not.toHaveProperty('background');
     expect(body).not.toHaveProperty('max_output_tokens');
     expect(body).not.toHaveProperty('temperature');
+    assert(result.providerResponseId !== null);
     expect(result.continuation).toBeUndefined();
     expect(
       await Effect.runPromise(

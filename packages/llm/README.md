@@ -24,6 +24,46 @@ model binding, and a later request requires one ordered result per local call.
 Google and Responses continuation verify an exact materialized prefix, not runtime
 branch or replacement lineage; those remain runtime-owned obligations.
 
+The extension-owned `acquireVscodeLanguageModel` implements the same `Model`
+contract directly against the editor API. Acquisition captures one concrete model
+and its exact vendor, ID and version; preparation records a separate live
+acquisition identity. Execution never repeats model discovery, and a foreign or
+retired acquisition is rejected. This prevents TeXRA from silently selecting a
+replacement, but does not freeze the editor's underlying provider or account
+mapping, which the [editor implementation resolves when sending](https://github.com/microsoft/vscode/blob/93cfdd489c3b228840d0f86ec77c3636277c93ea/src/vs/workbench/api/common/extHostLanguageModels.ts#L434).
+Ordinary acquisition requires the editor to report access; the same captured
+model is checked again immediately before each new send. The host-only
+`request-on-send` consent mode is reserved for a direct user action; an unknown
+access observation does not prove whether the model is missing or consent has not
+yet been requested, as distinguished by the [pinned access API](https://github.com/microsoft/vscode/blob/93cfdd489c3b228840d0f86ec77c3636277c93ea/src/vscode-dts/vscode.d.ts#L20858).
+However, the [pinned implementation currently returns true unconditionally](https://github.com/microsoft/vscode/blob/93cfdd489c3b228840d0f86ec77c3636277c93ea/src/vs/workbench/api/common/extHostLanguageModels.ts#L587),
+with an unresolved TODO. Public access checks therefore cannot guarantee that
+sending will not prompt for consent; rechecking does not remove this limitation.
+
+Editor turns preserve ordered text, original complete tool calls and selected
+image inputs, including exact MIME strings and empty captured bytes. Tool results
+are text-only, in original call order; error results receive an explicit `Error: `
+prefix because the API has no result-status field. The stable API has no system
+role, so the system text is folded into the first user message. Other generation
+controls, provider evidence, refusal replay and unsupported response parts fail
+explicitly. Contiguous text fragments become one completed message, without
+changing live deltas or their order around tool calls. Normal, non-cancelled EOF
+completes consumption with null response ID,
+returned model, fingerprint, finish reason and usage; it does not manufacture an
+identified event or a stop reason. Stream cleanup cancels the editor token before
+joining exposed pending operations and closing the iterator, preserving distinct
+cleanup failures. The [public response API](https://github.com/microsoft/vscode/blob/93cfdd489c3b228840d0f86ec77c3636277c93ea/src/vscode-dts/vscode.d.ts#L20196)
+exposes neither this missing metadata nor remote cancellation acknowledgement;
+joining the local iterator is not such acknowledgement.
+The settings Grant action uses this native acquisition and completion directly.
+It first refreshes the model catalogue, retains the exact selected version and
+enables the route only after successful completion. Its post-discovery deadline
+cancels acquisition and generation; scoped cleanup is joined before the action
+settles, without a bounded cleanup-time claim. Distinct cleanup failures remain
+visible in the complete result. The former shared consent-request
+operation is deleted. Configured agent and helper generation have not switched;
+their old handler and language-model port remain deletion obligations.
+
 Chat call arguments accumulate by the provider's call index. Original call IDs
 and names cannot change; complete JSON-object arguments enter the terminal result
 only after a successful tool-call finish and stream exhaustion. The normalized
@@ -118,7 +158,8 @@ before prefix identity is fixed; execution never rewrites an admitted request.
 A null output limit means omission of the wire parameter, not an unlimited
 runtime generation allowance. Unsupported authored controls and altered admitted
 bindings fail before a request is sent.
-All foreground protocols emit observed provider identity before progress or a
+All non-editor foreground protocols, including Responses WebSocket, emit observed
+provider identity before progress or a
 completed result. This evidence is not acceptance of recoverable background work
 or confirmation of remote cancellation.
 
@@ -257,6 +298,7 @@ Responses service-tier billing evidence still requires implementation.
 
 The contract is provisional: remaining media and opaque provider values require
 lossless support before it can be frozen for runtime integration or durable records.
-The existing agent-creation tests exercise the package with synthetic transport,
-but no application consumer has switched away from its configured provider
-routes. This foundation is not an independently complete migration.
+The existing agent-creation tests exercise the package with synthetic transport.
+The settings Grant action is the first application generation consumer of the
+native editor implementation; configured agent and helper routes still use the
+old model system. This foundation is not an independently complete migration.

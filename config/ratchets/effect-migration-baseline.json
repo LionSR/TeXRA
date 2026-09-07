@@ -57,7 +57,7 @@
       "src/model/computeModelOptions.ts": 3,
       "src/model/copilotRouting.ts": 2,
       "src/model/kimiCodeSubscriptionRouting.ts": 1,
-      "src/model/runtimeModelRegistry.ts": 2,
+      "src/model/runtimeModelRegistry.ts": 1,
       "src/tools/approval/latexPreview.ts": 4,
       "src/tools/claudeAgentConfig.ts": 1,
       "src/tools/externalToolDefs.ts": 3,

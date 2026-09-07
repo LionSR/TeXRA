@@ -482,6 +482,7 @@ describe('native OpenRouter Chat', () => {
       totalTokens: 0,
       providerUsage: { cost: 0, isByok: true },
     });
+    assert(result.providerResponseId !== null);
     expect(result.finishEvidence).toEqual({
       kind: 'openrouter',
       nativeFinishReason: null,

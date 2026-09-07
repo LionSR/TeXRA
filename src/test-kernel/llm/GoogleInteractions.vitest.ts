@@ -165,6 +165,7 @@ function response(events: unknown[]): Response {
 }
 
 function exchange(result: TurnResult): TurnRequest {
+  assert(result.providerResponseId !== null);
   const initial = request();
   return {
     ...initial,
@@ -268,6 +269,7 @@ describe('canonical Google Interactions protocol', () => {
       if (completed?.kind !== 'completed')
         throw new Error('Missing completed result');
       const result = completed.result;
+      assert(result.providerResponseId !== null);
       const initialBody = await (fetchModel.mock.calls[0][0] as Request).json();
       expect(initialBody.input).toEqual([
         {

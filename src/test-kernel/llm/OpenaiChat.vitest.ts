@@ -1546,6 +1546,7 @@ describe('native OpenAI Chat protocol', () => {
       const followUpCompleted = followUpEvents.at(-1);
       assert(followUpCompleted?.kind === 'completed');
       const final = followUpCompleted.result;
+      assert(final.providerResponseId !== null);
       // The reported empty reasoning is replayable content, not an observed phase.
       expect(followUpEvents.filter((event) => event.kind === 'phase')).toEqual([
         {
@@ -1785,7 +1786,9 @@ describe('native OpenAI Chat protocol', () => {
     const result = await Effect.runPromise(generate(model));
     expect(result.usage).toBeNull();
     const prepared = await Effect.runPromise(model.prepareTurn(REQUEST));
-    assert(prepared.mode === 'foreground');
+    assert(
+      prepared.protocol === 'openai-chat' && prepared.mode === 'foreground',
+    );
     const failure = await Effect.runPromise(
       Effect.flip(
         model.generateTurn({
@@ -2074,7 +2077,7 @@ describe('native OpenAI Chat protocol', () => {
     if (scenario === 'GLM tool media') config = REASONING_CONFIGS[2];
     const model = openaiChatModel(config, { apiKey: 'synthetic', fetch });
     const image = { kind: 'image', mimeType: 'image/png', base64: '' } as const;
-    const content: TurnRequest['messages'][number] = {
+    const content = {
       role: 'assistant',
       origin: {
         protocol: config.protocol,
@@ -2098,7 +2101,7 @@ describe('native OpenAI Chat protocol', () => {
             ]
           : []),
       ],
-    };
+    } satisfies TurnRequest['messages'][number];
     let request: TurnRequest = {
       messages: [
         ...REQUEST.messages,
@@ -2168,7 +2171,7 @@ describe('native OpenAI Chat protocol', () => {
           message.role === 'assistant'
             ? {
                 ...message,
-                origin: { ...message.origin, protocol: 'openai-responses' },
+                origin: { ...content.origin, protocol: 'openai-responses' },
                 content: message.content.map((part) =>
                   part.kind === 'local-call'
                     ? {

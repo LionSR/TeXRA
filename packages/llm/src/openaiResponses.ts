@@ -18,7 +18,6 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
-  ModelOriginSchema,
   ObservationPolicySchema,
   RemoteOperationSchema,
   ResolvedTurnSchema,
@@ -26,7 +25,6 @@ import {
   TurnResultSchema,
   sameModelOrigin,
   type Model,
-  type ModelOrigin,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
   type TurnEvent,
@@ -38,6 +36,9 @@ import {
   type RemoteOperation,
 } from './turn.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
+
+type ResponseOrigin = RemoteOperation['origin'];
+type HttpTurnResult = Extract<TurnResult, { providerResponseId: string }>;
 
 const ItemStatusSchema = z.enum(['in_progress', 'completed', 'incomplete']);
 const OutputItemSchema = z.discriminatedUnion('type', [
@@ -96,8 +97,8 @@ function itemIdentity(item: OutputItem) {
 
 /** A sparse terminal snapshot may omit evidence, but cannot revise a done item. */
 function agreesWithCompleted(
-  completed: TurnResult['content'][number],
-  candidate: TurnResult['content'][number],
+  completed: HttpTurnResult['content'][number],
+  candidate: HttpTurnResult['content'][number],
 ): boolean {
   if (completed.kind === 'message' && candidate.kind === 'message') {
     return (
@@ -174,7 +175,7 @@ type ResponseValue = z.infer<typeof ResponseSchema>;
 
 const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
   item: OutputItem,
-): Effect.fn.Return<TurnResult['content'][number], ModelError> {
+): Effect.fn.Return<HttpTurnResult['content'][number], ModelError> {
   if (item.status === 'in_progress') {
     return yield* new ModelError({
       kind: 'malformed-output',
@@ -255,10 +256,10 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
 const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
   function* (
     response: ResponseValue,
-    origin: ModelOrigin,
-    content: TurnResult['content'],
+    origin: ResponseOrigin,
+    content: HttpTurnResult['content'],
   ) {
-    let finishReason: TurnResult['finishReason'];
+    let finishReason: HttpTurnResult['finishReason'];
     if (response.status === 'completed') {
       finishReason = content.some((item) => item.kind === 'local-call')
         ? 'tool-calls'
@@ -300,11 +301,11 @@ const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
           }
         : null,
     });
-    if (!result.success) {
+    if (!result.success || result.data.providerResponseId === null) {
       return yield* new ModelError({
         kind: 'malformed-output',
         message: 'The model returned inconsistent completed content.',
-        cause: result.error,
+        cause: result.success ? undefined : result.error,
       });
     }
     return result.data;
@@ -489,6 +490,7 @@ export const openaiResponsesContinuation = Effect.fn(
     !parsedTurn.success ||
     parsedTurn.data.protocol !== 'openai-responses' ||
     !parsedResult.success ||
+    parsedResult.data.providerResponseId === null ||
     !sameModelOrigin(parsedTurn.data, parsedResult.data.requestedOrigin) ||
     !sameModelOrigin(parsedTurn.data, {
       ...parsedConfiguration.data,
@@ -586,7 +588,7 @@ const DeltaEventSchema = EventSchema.extend({
 /** One canonical foreground decoder for HTTP and WebSocket response events. */
 function responseEvents(
   chunks: Stream.Stream<unknown, ModelError>,
-  origin: ModelOrigin,
+  origin: ResponseOrigin,
 ): Stream.Stream<TurnEvent, ModelError> {
   return Stream.suspend(() => {
     let responseId: string | undefined;
@@ -603,7 +605,7 @@ function responseEvents(
       number,
       {
         identity: ReturnType<typeof itemIdentity>;
-        done?: TurnResult['content'][number];
+        done?: HttpTurnResult['content'][number];
       }
     >();
     let terminal: ResponseValue | undefined;
@@ -811,7 +813,7 @@ function responseEvents(
             message: terminal.error?.message ?? 'The model response failed.',
             cause: terminal.error,
           });
-        const output: TurnResult['content'][number][] = [];
+        const output: HttpTurnResult['content'][number][] = [];
         if (items.size > 0) {
           const ordered = [...items].toSorted(
             ([left], [right]) => left - right,
@@ -943,7 +945,7 @@ type ResponsesTransport = Extract<
 /** Resolves controls before admission; no transport request is made here. */
 const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
   config: OpenAIResponsesConfiguration,
-  origin: ModelOrigin,
+  origin: ResponseOrigin,
   transport: ResponsesTransport,
   request: TurnRequest,
 ) {
@@ -1021,7 +1023,7 @@ const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(function* (
 /** Validates the admitted binding and lowers one request without transport flags. */
 const responseParameters = Effect.fn('llm.responses.parameters')(function* (
   config: OpenAIResponsesConfiguration,
-  origin: ModelOrigin,
+  origin: ResponseOrigin,
   transport: ResponsesTransport,
   input: ResolvedTurn,
   mode: 'foreground' | 'background',
@@ -1177,12 +1179,12 @@ export function openaiResponsesModel(
       message: 'This model implements the Responses protocol.',
     });
   }
-  const origin = ModelOriginSchema.parse({
+  const origin = Object.freeze({
     protocol: config.protocol,
     requestedModel: config.requestedModel,
     deployment: config.deployment,
     codecVersion: 1,
-  });
+  } satisfies ResponseOrigin);
   const authentication = responseAuthentication(transport.authentication);
   const client = new OpenAI({
     apiKey: authentication.token,
@@ -1484,10 +1486,13 @@ export function openaiResponsesModel(
             let sequence = operation.afterSequence ?? -1;
             const completedItems = new Map<
               number,
-              TurnResult['content'][number]
+              HttpTurnResult['content'][number]
             >();
             let terminal:
-              | { readonly result: TurnResult; readonly afterSequence: number }
+              | {
+                  readonly result: HttpTurnResult;
+                  readonly afterSequence: number;
+                }
               | undefined;
             const progress = events.pipe(
               Stream.mapEffect((raw) =>
@@ -1835,12 +1840,12 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       kind: 'unsupported',
       message: 'This model implements the Responses protocol.',
     });
-  const origin = ModelOriginSchema.parse({
+  const origin = Object.freeze({
     protocol: config.protocol,
     requestedModel: config.requestedModel,
     deployment: config.deployment,
     codecVersion: 1,
-  });
+  } satisfies ResponseOrigin);
   const selected = yield* Effect.try({
     try: () => responseAuthentication(authentication),
     catch: (cause) => cause,

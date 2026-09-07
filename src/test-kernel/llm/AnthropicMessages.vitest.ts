@@ -494,6 +494,7 @@ describe('canonical Anthropic Messages protocol', () => {
       const turn = await Effect.runPromise(configured.prepareTurn(REQUEST));
       assert(turn.mode === 'foreground');
       const result = await Effect.runPromise(configured.generateTurn(turn));
+      assert(result.providerResponseId !== null);
       expect(result.finishReason).toBe(finishReason);
       expect(result.content).toEqual([]);
       expect(result.stopSequence).toBe(

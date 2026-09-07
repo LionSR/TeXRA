@@ -10,7 +10,6 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
-  ModelOriginSchema,
   ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
@@ -559,12 +558,12 @@ export function openaiChatModel(
       message: 'This model implements the selected native Chat protocols.',
     });
   }
-  const origin = ModelOriginSchema.parse({
+  const origin = Object.freeze({
     protocol: config.protocol,
     codecVersion: 1,
     requestedModel: config.requestedModel,
     deployment: config.deployment,
-  });
+  } satisfies ModelOrigin);
   if (process.env.OPENAI_CUSTOM_HEADERS) {
     throw new ModelError({
       kind: 'unsupported',

@@ -41,9 +41,23 @@ const OriginSchema = BindingSchema.extend({
   ]),
   codecVersion: z.literal(1),
 });
+const EditorBindingSchema = BindingSchema.pick({ requestedModel: true }).extend(
+  {
+    deployment: z
+      .strictObject({ vendor: z.string(), version: z.string() })
+      .readonly(),
+  },
+);
+const EditorOriginSchema = EditorBindingSchema.extend({
+  protocol: z.literal('vscode-lm'),
+  codecVersion: OriginSchema.shape.codecVersion,
+});
 
 /** Selected binding, distinct from an optional returned model version. */
-export const ModelOriginSchema = OriginSchema.readonly();
+export const ModelOriginSchema = z.discriminatedUnion('protocol', [
+  OriginSchema.readonly(),
+  EditorOriginSchema.readonly(),
+]);
 export type ModelOrigin = z.infer<typeof ModelOriginSchema>;
 
 /** Compares the complete non-secret binding, not runtime lineage. */
@@ -51,10 +65,22 @@ export function sameModelOrigin(
   left: ModelOrigin,
   right: ModelOrigin,
 ): boolean {
+  if (
+    left.protocol !== right.protocol ||
+    left.codecVersion !== right.codecVersion ||
+    left.requestedModel !== right.requestedModel
+  ) {
+    return false;
+  }
+  if (left.protocol === 'vscode-lm' || right.protocol === 'vscode-lm') {
+    return (
+      left.protocol === 'vscode-lm' &&
+      right.protocol === 'vscode-lm' &&
+      left.deployment.vendor === right.deployment.vendor &&
+      left.deployment.version === right.deployment.version
+    );
+  }
   return (
-    left.protocol === right.protocol &&
-    left.codecVersion === right.codecVersion &&
-    left.requestedModel === right.requestedModel &&
     left.deployment.endpoint === right.deployment.endpoint &&
     left.deployment.credentialScope === right.deployment.credentialScope
   );
@@ -159,6 +185,42 @@ const OpenRouterFileAnnotationSchema = z
       .readonly(),
   })
   .readonly();
+const MessagePartSchema = z.strictObject({
+  kind: z.literal('message'),
+  content: z
+    .array(
+      z.discriminatedUnion('kind', [
+        TextPartSchema,
+        z
+          .strictObject({ kind: z.literal('refusal'), text: z.string() })
+          .readonly(),
+      ]),
+    )
+    .readonly(),
+  evidence: z
+    .strictObject({
+      kind: z.literal('openai-responses-message'),
+      itemId: z.string().min(1),
+      status: z.enum(['completed', 'incomplete']),
+      phase: z.enum(['commentary', 'final_answer']).nullable().optional(),
+    })
+    .readonly()
+    .optional(),
+});
+const LocalCallPartSchema = z.strictObject({
+  kind: z.literal('local-call'),
+  providerCallId: z.string().min(1).nullable(),
+  name: z.string().min(1),
+  arguments: JsonObjectSchema,
+  evidence: z
+    .strictObject({
+      kind: z.literal('openai-responses-function-call'),
+      itemId: z.string().min(1).optional(),
+      status: z.literal('completed').optional(),
+    })
+    .readonly()
+    .optional(),
+});
 
 const OutputPartSchema = z.discriminatedUnion('kind', [
   OpenRouterFileAnnotationSchema,
@@ -175,30 +237,7 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
         .readonly(),
     })
     .readonly(),
-  z
-    .strictObject({
-      kind: z.literal('message'),
-      content: z
-        .array(
-          z.discriminatedUnion('kind', [
-            TextPartSchema,
-            z
-              .strictObject({ kind: z.literal('refusal'), text: z.string() })
-              .readonly(),
-          ]),
-        )
-        .readonly(),
-      evidence: z
-        .strictObject({
-          kind: z.literal('openai-responses-message'),
-          itemId: z.string().min(1),
-          status: z.enum(['completed', 'incomplete']),
-          phase: z.enum(['commentary', 'final_answer']).nullable().optional(),
-        })
-        .readonly()
-        .optional(),
-    })
-    .readonly(),
+  MessagePartSchema.readonly(),
   z
     .strictObject({
       kind: z.literal('reasoning'),
@@ -241,25 +280,24 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
         .nullable(),
     })
     .readonly(),
-  z
-    .strictObject({
-      kind: z.literal('local-call'),
-      providerCallId: z.string().min(1).nullable(),
-      name: z.string().min(1),
-      arguments: JsonObjectSchema,
-      evidence: z
-        .strictObject({
-          kind: z.literal('openai-responses-function-call'),
-          itemId: z.string().min(1).optional(),
-          status: z.literal('completed').optional(),
-        })
-        .readonly()
-        .optional(),
-    })
-    .readonly(),
+  LocalCallPartSchema.readonly(),
 ]);
 
 const ContentSchema = z.array(OutputPartSchema).readonly();
+const EditorContentSchema = z
+  .array(
+    z.discriminatedUnion('kind', [
+      MessagePartSchema.omit({ evidence: true })
+        .extend({ content: z.array(TextPartSchema).readonly() })
+        .readonly(),
+      LocalCallPartSchema.omit({ evidence: true })
+        .extend({
+          providerCallId: LocalCallPartSchema.shape.providerCallId.unwrap(),
+        })
+        .readonly(),
+    ]),
+  )
+  .readonly();
 const EVIDENCE_PROTOCOL = {
   'google-interactions-thought-signature': 'google-interactions',
   'openai-responses-message': 'openai-responses',
@@ -348,9 +386,17 @@ const AssistantMessageSchema = z
     origin: ModelOriginSchema,
     content: ContentSchema,
   })
-  .superRefine((message, ctx) =>
-    validateAssistantContent(message.origin, message.content, ctx),
-  )
+  .superRefine((message, ctx) => {
+    if (message.origin.protocol === 'vscode-lm') {
+      const parsed = EditorContentSchema.safeParse(message.content);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          ctx.addIssue({ ...issue, path: ['content', ...issue.path] });
+        }
+      }
+    }
+    validateAssistantContent(message.origin, message.content, ctx);
+  })
   .readonly();
 
 const MessageSchema = z.discriminatedUnion('role', [
@@ -623,9 +669,19 @@ const OpenRouterControlsSchema = z.strictObject({
   stopSequences: z.array(z.string()).readonly(),
   toolChoice: ToolChoiceSchema,
 });
+const EditorControlsSchema = z.strictObject({
+  justification: z.string(),
+  toolChoice: z.literal('auto'),
+});
 
 /** Already-selected protocol binding and defaults, provided by the application. */
 export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
+  EditorBindingSchema.extend({
+    protocol: z.literal('vscode-lm'),
+    supportsImageInput: z.boolean(),
+    supportsToolCalling: z.boolean(),
+    defaults: EditorControlsSchema.omit({ toolChoice: true }).readonly(),
+  }).readonly(),
   BindingSchema.extend({
     protocol: z.literal('openrouter-chat'),
     supportsTemperature: z.boolean(),
@@ -847,6 +903,10 @@ export type OpenRouterConfiguration = Extract<
   ModelConfiguration,
   { protocol: 'openrouter-chat' }
 >;
+export type VscodeLanguageModelConfiguration = Extract<
+  ModelConfiguration,
+  { protocol: 'vscode-lm' }
+>;
 
 const PreparedInputSchema = OriginSchema.extend({
   mode: z.literal('foreground'),
@@ -865,6 +925,17 @@ const HttpTransportSchema = z
 /** Prepared semantic input; execution never reapplies current defaults. */
 export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
   z.discriminatedUnion('protocol', [
+    EditorOriginSchema.extend({
+      ...PreparedInputSchema.pick({
+        mode: true,
+        system: true,
+        messages: true,
+        tools: true,
+      }).shape,
+      // An editor object acquisition is not an account or durable origin identity.
+      acquisitionId: z.uuid(),
+      controls: EditorControlsSchema.readonly(),
+    }).readonly(),
     PreparedInputSchema.extend({
       protocol: z.literal('openrouter-chat'),
       controls: OpenRouterControlsSchema.readonly(),
@@ -1012,12 +1083,11 @@ const UsageSchema = z
 
 const IdentitySchema = z.strictObject({
   providerResponseId: z.string().min(1),
-  requestedOrigin: ModelOriginSchema,
+  requestedOrigin: OriginSchema.readonly(),
   returnedModel: z.string().min(1).nullable(),
 });
 
-/** A completed provider turn, not a completed agent execution. */
-export const TurnResultSchema = z
+const HttpTurnResultSchema = z
   .strictObject({
     ...IdentitySchema.shape,
     modelFingerprint: z.string().nullable(),
@@ -1121,6 +1191,26 @@ export const TurnResultSchema = z
     }
   })
   .readonly();
+const EditorTurnResultSchema = z
+  .strictObject({
+    requestedOrigin: EditorOriginSchema.readonly(),
+    // Normal editor EOF reports none of these provider facts.
+    providerResponseId: z.null(),
+    returnedModel: z.null(),
+    modelFingerprint: z.null(),
+    finishReason: z.null(),
+    usage: z.null(),
+    content: EditorContentSchema,
+  })
+  .superRefine((result, ctx) =>
+    validateAssistantContent(result.requestedOrigin, result.content, ctx),
+  )
+  .readonly();
+/** A completed provider turn, not a completed agent execution. */
+export const TurnResultSchema = z.union([
+  HttpTurnResultSchema,
+  EditorTurnResultSchema,
+]);
 export type TurnResult = z.infer<typeof TurnResultSchema>;
 
 // Identity evidence is neither background acceptance nor cancellation.
@@ -1143,6 +1233,9 @@ const PhaseEventSchema = DeltaEventSchema.omit({ text: true }).extend({
 const CompletedEventSchema = z.strictObject({
   kind: z.literal('completed'),
   result: TurnResultSchema,
+});
+const HttpCompletedEventSchema = CompletedEventSchema.extend({
+  result: HttpTurnResultSchema,
 });
 const TurnEventSchema = z.discriminatedUnion('kind', [
   IdentifiedEventSchema.readonly(),
@@ -1171,7 +1264,7 @@ export const BackgroundSubmissionSchema = z.discriminatedUnion('kind', [
       returnedModel: z.string().min(1).nullable(),
     })
     .readonly(),
-  CompletedEventSchema.readonly(),
+  HttpCompletedEventSchema.readonly(),
 ]);
 export type BackgroundSubmission = z.infer<typeof BackgroundSubmissionSchema>;
 const SequenceSchema = z.strictObject({ afterSequence: z.int().nonnegative() });
@@ -1180,7 +1273,7 @@ export const BackgroundEventSchema = z.discriminatedUnion('kind', [
   IdentifiedEventSchema.extend(SequenceSchema.shape).readonly(),
   DeltaEventSchema.extend(SequenceSchema.shape).readonly(),
   PhaseEventSchema.extend(SequenceSchema.shape).readonly(),
-  CompletedEventSchema.extend(SequenceSchema.shape).readonly(),
+  HttpCompletedEventSchema.extend(SequenceSchema.shape).readonly(),
   SequenceSchema.extend({ kind: z.literal('cursor') }).readonly(),
 ]);
 export type BackgroundEvent = z.infer<typeof BackgroundEventSchema>;
@@ -1221,14 +1314,24 @@ const ModelErrorFieldsSchema = z.strictObject({
   status: z.int().optional(),
   operation: RemoteOperationSchema.optional(),
   providerEvidence: z
-    .strictObject({
-      kind: z.literal('openrouter'),
-      origin: OriginSchema.extend({
-        protocol: z.literal('openrouter-chat'),
-      }).readonly(),
-      fileAnnotations: z.array(OpenRouterFileAnnotationSchema).readonly(),
-    })
-    .readonly()
+    .discriminatedUnion('kind', [
+      z
+        .strictObject({
+          kind: z.literal('openrouter'),
+          origin: OriginSchema.extend({
+            protocol: z.literal('openrouter-chat'),
+          }).readonly(),
+          fileAnnotations: z.array(OpenRouterFileAnnotationSchema).readonly(),
+        })
+        .readonly(),
+      z
+        .strictObject({
+          kind: z.literal('vscode-lm'),
+          origin: EditorOriginSchema.readonly(),
+          code: z.enum(['NoPermissions', 'Blocked', 'NotFound']),
+        })
+        .readonly(),
+    ])
     .optional(),
 });
 /** Typed provider failure. Fiber interruption remains outside this channel. */
