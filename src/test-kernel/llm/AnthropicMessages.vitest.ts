@@ -2,9 +2,10 @@
 import assert from 'node:assert/strict';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
 import { Cause, Effect, Fiber, Stream } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type {
   AnthropicMessagesConfiguration,
   TurnRequest,
@@ -203,28 +204,39 @@ describe('canonical Anthropic Messages protocol', () => {
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it.each([undefined, '', ' Exact system\n'])(
-    'counts the selected Anthropic cold input with system %j without generating',
-    async (system) => {
-      const inputTokens = system === undefined ? 0 : 7;
-      fetchModel.mockImplementation(async () =>
-        Response.json({ input_tokens: inputTokens }),
-      );
-      const configured = model({
-        ...CONFIG,
-        defaults: {
-          ...CONFIG.defaults,
-          thinking: { mode: 'enabled', budgetTokens: 2048, display: 'omitted' },
-        },
-      });
-      expect(
-        model({ ...CONFIG, supportsInputTokenEstimation: false })
-          .estimateInputTokens,
-      ).toBeUndefined();
-      assert(configured.estimateInputTokens);
-      const turn = await Effect.runPromise(
-        configured.prepareTurn({
+  it.effect.each([
+    [undefined, '1h'],
+    ['', '1h'],
+    [' Exact system\n', '1h'],
+    [' Exact system\n', '5m'],
+    [' Exact system\n', 'disabled'],
+  ] as const)(
+    'counts the selected Anthropic cold input with system and cache %j without generating',
+    ([system, cache]) =>
+      Effect.gen(function* () {
+        const inputTokens = system === undefined ? 0 : 7;
+        fetchModel.mockImplementation(async () =>
+          Response.json({ input_tokens: inputTokens }),
+        );
+        const configured = model({
+          ...CONFIG,
+          defaults: {
+            ...CONFIG.defaults,
+            thinking: {
+              mode: 'enabled',
+              budgetTokens: 2048,
+              display: 'omitted',
+            },
+          },
+        });
+        expect(
+          model({ ...CONFIG, supportsInputTokenEstimation: false })
+            .estimateInputTokens,
+        ).toBeUndefined();
+        assert(configured.estimateInputTokens);
+        const turn = yield* configured.prepareTurn({
           ...(system === undefined ? {} : { system }),
+          cache,
           messages: [
             {
               role: 'user',
@@ -235,42 +247,59 @@ describe('canonical Anthropic Messages protocol', () => {
               ],
             },
           ],
-        }),
-      );
-      assert(turn.mode === 'foreground');
-      expect(fetchModel).not.toHaveBeenCalled();
-      const estimate = await Effect.runPromise(
-        configured.estimateInputTokens(JSON.parse(JSON.stringify(turn))),
-      );
-      expect(estimate).toEqual({
-        inputTokens,
-        coverage: 'anthropic-message-input',
-      });
-      expect(Object.isFrozen(estimate)).toBe(true);
-      expect(fetchModel).toHaveBeenCalledTimes(1);
-      const [url, init] = fetchModel.mock.calls[0];
-      expect(String(url)).toBe(
-        'https://synthetic.invalid/v1/messages/count_tokens',
-      );
-      expect(JSON.parse(init!.body as string)).toEqual({
-        model: 'selected-claude',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: '  exact\n' },
-              { type: 'text', text: '' },
-              { type: 'text', text: 'last' },
-            ],
+        });
+        assert(turn.mode === 'foreground');
+        expect(fetchModel).not.toHaveBeenCalled();
+        const estimate = yield* configured.estimateInputTokens(
+          JSON.parse(JSON.stringify(turn)),
+        );
+        expect(estimate).toEqual({
+          inputTokens,
+          coverage: 'anthropic-message-input',
+        });
+        expect(Object.isFrozen(estimate)).toBe(true);
+        expect(fetchModel).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchModel.mock.calls[0];
+        expect(String(url)).toBe(
+          'https://synthetic.invalid/v1/messages/count_tokens',
+        );
+        const expectedSystem =
+          system && cache !== 'disabled'
+            ? [
+                {
+                  type: 'text',
+                  text: system,
+                  cache_control: { type: 'ephemeral', ttl: cache },
+                },
+              ]
+            : system;
+        expect(JSON.parse(init!.body as string)).toEqual({
+          model: 'selected-claude',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: '  exact\n' },
+                { type: 'text', text: '' },
+                { type: 'text', text: 'last' },
+              ],
+            },
+          ],
+          ...(system === undefined ? {} : { system: expectedSystem }),
+          thinking: {
+            type: 'enabled',
+            budget_tokens: 2048,
+            display: 'omitted',
           },
-        ],
-        ...(system === undefined ? {} : { system }),
-        thinking: { type: 'enabled', budget_tokens: 2048, display: 'omitted' },
-        output_config: { effort: 'high' },
-        cache_control: { type: 'ephemeral', ttl: '1h' },
-      });
-      expect(new Headers(init!.headers).get('x-api-key')).toBe('selected-key');
-    },
+          output_config: { effort: 'high' },
+          ...(cache === 'disabled'
+            ? {}
+            : { cache_control: { type: 'ephemeral', ttl: cache } }),
+        });
+        expect(new Headers(init!.headers).get('x-api-key')).toBe(
+          'selected-key',
+        );
+      }),
   );
 
   it.each(['tools', 'media', 'history', 'binding', 'budget'] as const)(
@@ -467,255 +496,280 @@ describe('canonical Anthropic Messages protocol', () => {
     },
   );
 
-  it('round-trips signed and redacted blocks with two ordered local settlements and exact materialized media', async () => {
-    vi.stubEnv('ANTHROPIC_AUTH_TOKEN', 'ambient-bearer');
-    vi.stubEnv('ANTHROPIC_BASE_URL', 'https://ambient.invalid');
-    const configured = model();
-    const prepared = await Effect.runPromise(
-      configured.prepareTurn({ ...REQUEST, toolChoice: { name: 'search' } }),
-    );
-    assert(prepared.mode === 'foreground');
-    expect(fetchModel).not.toHaveBeenCalled();
-    const events = await Effect.runPromise(
-      Stream.runCollect(configured.streamTurn(prepared)),
-    );
-    expect(events[0]).toMatchObject({
-      kind: 'identified',
-      providerResponseId: 'msg_1',
-      returnedModel: 'returned-claude',
-    });
-    expect(events.filter((event) => event.kind === 'identified')).toHaveLength(
-      1,
-    );
-    expect(
-      events.flatMap((event) => {
-        if (event.kind === 'phase')
-          return [[event.part, event.boundary, event.providerItemIndex]];
-        if (event.kind === 'delta')
-          return [[event.part, event.text, event.providerItemIndex]];
-        return [];
-      }),
-    ).toEqual([
-      ['reasoning', 'start', 0],
-      ['reasoning', '  returned thinking\n', 0],
-      ['reasoning', 'end', 0],
-      ['reasoning', 'start', 1],
-      ['reasoning', 'end', 1],
-      ['reasoning', 'start', 2],
-      ['reasoning', 'end', 2],
-      ['text', 'start', 3],
-      ['text', '  calling tools\n', 3],
-      ['text', 'end', 3],
-    ]);
-    const completed = events.at(-1);
-    assert(completed?.kind === 'completed');
-    const result = completed.result;
-    expect(result.content).toEqual([
-      {
-        kind: 'reasoning',
-        summary: [],
-        content: [{ kind: 'text', text: '  returned thinking\n' }],
-        evidence: {
-          kind: 'anthropic-thinking-signature',
-          signature: 'signature-a',
-        },
-      },
-      {
-        kind: 'reasoning',
-        summary: [],
-        content: [{ kind: 'text', text: '' }],
-        evidence: {
-          kind: 'anthropic-thinking-signature',
-          signature: 'signature-empty',
-        },
-      },
-      {
-        kind: 'reasoning',
-        summary: [],
-        evidence: {
-          kind: 'anthropic-redacted-thinking',
-          data: 'opaque-redacted',
-        },
-      },
-      {
-        kind: 'message',
-        content: [{ kind: 'text', text: '  calling tools\n' }],
-      },
-      {
-        kind: 'local-call',
-        providerCallId: 'call_0',
-        name: 'search',
-        arguments: { q: 'x' },
-      },
-      {
-        kind: 'local-call',
-        providerCallId: 'call_1',
-        name: 'fetch',
-        arguments: { q: 'x' },
-      },
-    ]);
-    expect(result.usage).toEqual({
-      inputTokens: 62,
-      outputTokens: 11,
-      totalTokens: 73,
-      cachedInputTokens: 20,
-      reasoningTokens: 6,
-      providerUsage: {
-        kind: 'anthropic',
-        uncachedInputTokens: 12,
-        cacheCreationTokens: 30,
-        cacheCreation5mTokens: 11,
-        cacheCreation1hTokens: 19,
-        serviceTier: 'priority',
-        inferenceGeo: 'us',
-      },
-    });
-    const first = JSON.parse(fetchModel.mock.calls[0][1]!.body as string);
-    const headers = new Headers(fetchModel.mock.calls[0][1]!.headers);
-    expect(String(fetchModel.mock.calls[0][0])).toBe(
-      'https://synthetic.invalid/v1/messages',
-    );
-    expect(headers.get('x-api-key')).toBe('selected-key');
-    expect(headers.has('authorization')).toBe(false);
-    expect(first).toMatchObject({
-      model: 'selected-claude',
-      system: REQUEST.system,
-      stream: true,
-      temperature: 1,
-      thinking: { type: 'adaptive', display: 'summarized' },
-      output_config: { effort: 'high' },
-      cache_control: { type: 'ephemeral', ttl: '1h' },
-      service_tier: 'auto',
-      inference_geo: 'us',
-      tool_choice: {
-        type: 'tool',
-        name: 'search',
-        disable_parallel_tool_use: true,
-      },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Read these exact bytes.' },
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/png', data: '' },
+  it.effect(
+    'round-trips signed and redacted blocks with two ordered local settlements and exact materialized media',
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv('ANTHROPIC_AUTH_TOKEN', 'ambient-bearer');
+        vi.stubEnv('ANTHROPIC_BASE_URL', 'https://ambient.invalid');
+        const configured = model();
+        const prepared = yield* configured.prepareTurn({
+          ...REQUEST,
+          toolChoice: { name: 'search' },
+        });
+        assert(prepared.mode === 'foreground');
+        expect(fetchModel).not.toHaveBeenCalled();
+        const events = yield* Stream.runCollect(
+          configured.streamTurn(prepared),
+        );
+        expect(events[0]).toMatchObject({
+          kind: 'identified',
+          providerResponseId: 'msg_1',
+          returnedModel: 'returned-claude',
+        });
+        expect(
+          events.filter((event) => event.kind === 'identified'),
+        ).toHaveLength(1);
+        expect(
+          events.flatMap((event) => {
+            if (event.kind === 'phase')
+              return [[event.part, event.boundary, event.providerItemIndex]];
+            if (event.kind === 'delta')
+              return [[event.part, event.text, event.providerItemIndex]];
+            return [];
+          }),
+        ).toEqual([
+          ['reasoning', 'start', 0],
+          ['reasoning', '  returned thinking\n', 0],
+          ['reasoning', 'end', 0],
+          ['reasoning', 'start', 1],
+          ['reasoning', 'end', 1],
+          ['reasoning', 'start', 2],
+          ['reasoning', 'end', 2],
+          ['text', 'start', 3],
+          ['text', '  calling tools\n', 3],
+          ['text', 'end', 3],
+        ]);
+        const completed = events.at(-1);
+        assert(completed?.kind === 'completed');
+        const result = completed.result;
+        expect(result.content).toEqual([
+          {
+            kind: 'reasoning',
+            summary: [],
+            content: [{ kind: 'text', text: '  returned thinking\n' }],
+            evidence: {
+              kind: 'anthropic-thinking-signature',
+              signature: 'signature-a',
             },
+          },
+          {
+            kind: 'reasoning',
+            summary: [],
+            content: [{ kind: 'text', text: '' }],
+            evidence: {
+              kind: 'anthropic-thinking-signature',
+              signature: 'signature-empty',
+            },
+          },
+          {
+            kind: 'reasoning',
+            summary: [],
+            evidence: {
+              kind: 'anthropic-redacted-thinking',
+              data: 'opaque-redacted',
+            },
+          },
+          {
+            kind: 'message',
+            content: [{ kind: 'text', text: '  calling tools\n' }],
+          },
+          {
+            kind: 'local-call',
+            providerCallId: 'call_0',
+            name: 'search',
+            arguments: { q: 'x' },
+          },
+          {
+            kind: 'local-call',
+            providerCallId: 'call_1',
+            name: 'fetch',
+            arguments: { q: 'x' },
+          },
+        ]);
+        expect(result.usage).toEqual({
+          inputTokens: 62,
+          outputTokens: 11,
+          totalTokens: 73,
+          cachedInputTokens: 20,
+          reasoningTokens: 6,
+          providerUsage: {
+            kind: 'anthropic',
+            uncachedInputTokens: 12,
+            cacheCreationTokens: 30,
+            cacheCreation5mTokens: 11,
+            cacheCreation1hTokens: 19,
+            serviceTier: 'priority',
+            inferenceGeo: 'us',
+          },
+        });
+        const first = JSON.parse(fetchModel.mock.calls[0][1]!.body as string);
+        const headers = new Headers(fetchModel.mock.calls[0][1]!.headers);
+        expect(String(fetchModel.mock.calls[0][0])).toBe(
+          'https://synthetic.invalid/v1/messages',
+        );
+        expect(headers.get('x-api-key')).toBe('selected-key');
+        expect(headers.has('authorization')).toBe(false);
+        expect(first).toMatchObject({
+          model: 'selected-claude',
+          system: [
             {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: 'AA==',
-              },
+              type: 'text',
+              text: REQUEST.system,
+              cache_control: { type: 'ephemeral', ttl: '1h' },
             },
           ],
-        },
-      ],
-    });
-    const next = await Effect.runPromise(
-      configured.prepareTurn(
-        JSON.parse(
-          JSON.stringify({
-            ...REQUEST,
-            effort: null,
-            inferenceGeo: null,
-            serviceTier: 'standard-only',
-            messages: [
-              ...REQUEST.messages,
+          stream: true,
+          temperature: 1,
+          thinking: { type: 'adaptive', display: 'summarized' },
+          output_config: { effort: 'high' },
+          cache_control: { type: 'ephemeral', ttl: '1h' },
+          service_tier: 'auto',
+          inference_geo: 'us',
+          tool_choice: {
+            type: 'tool',
+            name: 'search',
+            disable_parallel_tool_use: true,
+          },
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Read these exact bytes.' },
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: 'image/png', data: '' },
+                },
+                {
+                  type: 'document',
+                  source: {
+                    type: 'base64',
+                    media_type: 'application/pdf',
+                    data: 'AA==',
+                  },
+                },
+              ],
+            },
+          ],
+        });
+        const next = yield* configured.prepareTurn(
+          JSON.parse(
+            JSON.stringify({
+              ...REQUEST,
+              effort: null,
+              inferenceGeo: null,
+              serviceTier: 'standard-only',
+              messages: [
+                ...REQUEST.messages,
+                {
+                  role: 'assistant',
+                  origin: result.requestedOrigin,
+                  content: result.content,
+                },
+                {
+                  role: 'tool',
+                  results: [
+                    {
+                      callOrdinal: 0,
+                      status: 'success',
+                      content: [
+                        { kind: 'text', text: 'ok' },
+                        { kind: 'image', mimeType: 'image/png', base64: '' },
+                      ],
+                    },
+                    {
+                      callOrdinal: 1,
+                      status: 'error',
+                      content: [
+                        {
+                          kind: 'document',
+                          mimeType: 'application/pdf',
+                          base64: 'AA==',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            }),
+          ),
+        );
+        assert(next.mode === 'foreground');
+        fetchModel.mockImplementationOnce(async () =>
+          response([initial(), ...terminal()]),
+        );
+        yield* configured.generateTurn(next);
+        const sent = JSON.parse(fetchModel.mock.calls[1][1]!.body as string);
+        expect(sent.system).toEqual(first.system);
+        expect(sent.cache_control).toEqual(first.cache_control);
+        expect(sent).not.toHaveProperty('output_config');
+        expect(sent).not.toHaveProperty('inference_geo');
+        expect(sent.service_tier).toBe('standard_only');
+        expect(sent.messages.slice(1)).toEqual([
+          {
+            role: 'assistant',
+            content: [
               {
-                role: 'assistant',
-                origin: result.requestedOrigin,
-                content: result.content,
+                type: 'thinking',
+                thinking: '  returned thinking\n',
+                signature: 'signature-a',
+              },
+              { type: 'thinking', thinking: '', signature: 'signature-empty' },
+              { type: 'redacted_thinking', data: 'opaque-redacted' },
+              { type: 'text', text: '  calling tools\n' },
+              {
+                type: 'tool_use',
+                id: 'call_0',
+                name: 'search',
+                input: { q: 'x' },
               },
               {
-                role: 'tool',
-                results: [
+                type: 'tool_use',
+                id: 'call_1',
+                name: 'fetch',
+                input: { q: 'x' },
+              },
+            ],
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_0',
+                is_error: false,
+                content: [
+                  { type: 'text', text: 'ok' },
                   {
-                    callOrdinal: 0,
-                    status: 'success',
-                    content: [
-                      { kind: 'text', text: 'ok' },
-                      { kind: 'image', mimeType: 'image/png', base64: '' },
-                    ],
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: 'image/png',
+                      data: '',
+                    },
                   },
+                ],
+              },
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_1',
+                is_error: true,
+                content: [
                   {
-                    callOrdinal: 1,
-                    status: 'error',
-                    content: [
-                      {
-                        kind: 'document',
-                        mimeType: 'application/pdf',
-                        base64: 'AA==',
-                      },
-                    ],
+                    type: 'document',
+                    source: {
+                      type: 'base64',
+                      media_type: 'application/pdf',
+                      data: 'AA==',
+                    },
                   },
                 ],
               },
             ],
-          }),
-        ),
-      ),
-    );
-    assert(next.mode === 'foreground');
-    fetchModel.mockImplementationOnce(async () =>
-      response([initial(), ...terminal()]),
-    );
-    await Effect.runPromise(configured.generateTurn(next));
-    const sent = JSON.parse(fetchModel.mock.calls[1][1]!.body as string);
-    expect(sent).not.toHaveProperty('output_config');
-    expect(sent).not.toHaveProperty('inference_geo');
-    expect(sent.service_tier).toBe('standard_only');
-    expect(sent.messages.slice(1)).toEqual([
-      {
-        role: 'assistant',
-        content: [
-          {
-            type: 'thinking',
-            thinking: '  returned thinking\n',
-            signature: 'signature-a',
           },
-          { type: 'thinking', thinking: '', signature: 'signature-empty' },
-          { type: 'redacted_thinking', data: 'opaque-redacted' },
-          { type: 'text', text: '  calling tools\n' },
-          { type: 'tool_use', id: 'call_0', name: 'search', input: { q: 'x' } },
-          { type: 'tool_use', id: 'call_1', name: 'fetch', input: { q: 'x' } },
-        ],
-      },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: 'call_0',
-            is_error: false,
-            content: [
-              { type: 'text', text: 'ok' },
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: 'image/png', data: '' },
-              },
-            ],
-          },
-          {
-            type: 'tool_result',
-            tool_use_id: 'call_1',
-            is_error: true,
-            content: [
-              {
-                type: 'document',
-                source: {
-                  type: 'base64',
-                  media_type: 'application/pdf',
-                  data: 'AA==',
-                },
-              },
-            ],
-          },
-        ],
-      },
-    ]);
-  });
+        ]);
+      }),
+  );
 
   it.each([
     ['stop_sequence', 'stop-sequence', { stop_sequence: '</done>' }],

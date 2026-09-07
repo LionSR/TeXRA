@@ -400,6 +400,15 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
           },
         }),
   };
+  if (turn.system && body.cache_control) {
+    body.system = [
+      {
+        type: 'text',
+        text: turn.system,
+        cache_control: body.cache_control,
+      },
+    ];
+  }
   return body;
 });
 
