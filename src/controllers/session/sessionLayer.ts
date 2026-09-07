@@ -340,7 +340,25 @@ const sessionHandleLayer = (
         ),
         (session) =>
           Effect.sync(() => session.unwind()).pipe(
-            Effect.ensuring(Effect.promise(() => session.settlePublications())),
+            // Settlement reports what the session's own publications left
+            // behind. The release still has to finish, so that report is
+            // logged here rather than escaping `Scope.close` and failing the
+            // `invalidate` or `close` that asked for the release.
+            Effect.ensuring(
+              Effect.tryPromise({
+                try: () => session.settlePublications(),
+                catch: (error) => error,
+              }).pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => {
+                    log.warn(
+                      `Session ${key.storage} left a failed publication behind as it closed.`,
+                      { data: error },
+                    );
+                  }),
+                ),
+              ),
+            ),
           ),
       );
       yield* SubscriptionRef.set(delivered, anchor);
