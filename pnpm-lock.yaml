@@ -1019,6 +1019,9 @@ importers:
 
   packages/llm:
     dependencies:
+      '@google/genai':
+        specifier: 2.21.0
+        version: 2.21.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(supports-color@10.2.2)
       openai:
         specifier: 7.10.0
         version: 7.10.0(patch_hash=d98512d39fc954483b782c38a6d4417f03559d68c718dfa4cc567382a26eaaf8)(undici@8.10.1)(ws@8.21.3)(zod@4.4.3)

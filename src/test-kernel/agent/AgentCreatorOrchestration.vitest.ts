@@ -103,7 +103,8 @@ describe('agent creator orchestration', () => {
       );
     const model = openaiChatModel(
       {
-        model: 'configured-helper',
+        protocol: 'openai-chat',
+        requestedModel: 'configured-helper',
         deployment: {
           endpoint: 'https://synthetic.invalid/v1',
           credentialScope: 'synthetic-agent-creator',

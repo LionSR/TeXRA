@@ -2,120 +2,368 @@
 import { Data, type Effect, type Stream } from 'effect';
 import { z } from 'zod';
 
-/** The currently implemented content vocabulary rejects unsupported parts. */
 const TextPartSchema = z
+  .strictObject({ kind: z.literal('text'), text: z.string() })
+  .readonly();
+const BindingSchema = z.strictObject({
+  requestedModel: z.string().min(1),
+  deployment: z
+    .strictObject({ endpoint: z.url(), credentialScope: z.string().min(1) })
+    .readonly(),
+});
+const OriginSchema = BindingSchema.extend({
+  protocol: z.enum(['openai-chat', 'google-interactions']),
+  codecVersion: z.literal(1),
+});
+
+/** Selected binding, distinct from an optional returned model version. */
+export const ModelOriginSchema = OriginSchema.readonly();
+export type ModelOrigin = z.infer<typeof ModelOriginSchema>;
+
+/** Compares the complete non-secret binding, not runtime lineage. */
+export function sameModelOrigin(
+  left: ModelOrigin,
+  right: ModelOrigin,
+): boolean {
+  return (
+    left.protocol === right.protocol &&
+    left.codecVersion === right.codecVersion &&
+    left.requestedModel === right.requestedModel &&
+    left.deployment.endpoint === right.deployment.endpoint &&
+    left.deployment.credentialScope === right.deployment.credentialScope
+  );
+}
+
+function freezeJson(value: z.infer<ReturnType<typeof z.json>>): typeof value {
+  if (value !== null && typeof value === 'object') {
+    for (const nested of Object.values(value)) freezeJson(nested);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function hasSupportedJsonKeys(
+  value: unknown,
+  parents = new Set<object>(),
+): boolean {
+  if (value === null || typeof value !== 'object') return true;
+  if (parents.has(value) || Object.hasOwn(value, '__proto__')) return false;
+  parents.add(value);
+  const valid = Object.values(value).every((nested) =>
+    hasSupportedJsonKeys(nested, parents),
+  );
+  parents.delete(value);
+  return valid;
+}
+
+/** Materialized JSON, including immutable nested containers. */
+export const JsonObjectSchema = z
+  .unknown()
+  .refine(hasSupportedJsonKeys, {
+    message:
+      'JSON cannot contain cycles or __proto__ keys, which this codec cannot preserve.',
+  })
+  .pipe(z.record(z.string(), z.json().transform(freezeJson)).readonly());
+
+const OutputPartSchema = z.discriminatedUnion('kind', [
+  TextPartSchema,
+  z.strictObject({ kind: z.literal('refusal'), text: z.string() }).readonly(),
+  z
+    .strictObject({
+      kind: z.literal('reasoning'),
+      summary: z.array(TextPartSchema).readonly(),
+      evidence: z
+        .strictObject({
+          kind: z.literal('google-interactions-thought-signature'),
+          signature: z.string().min(1),
+        })
+        .readonly()
+        .nullable(),
+    })
+    .readonly(),
+  z
+    .strictObject({
+      kind: z.literal('local-call'),
+      providerCallId: z.string().min(1).nullable(),
+      name: z.string().min(1),
+      arguments: JsonObjectSchema,
+    })
+    .readonly(),
+]);
+
+const ContentSchema = z.array(OutputPartSchema).readonly();
+
+function validateAssistantContent(
+  origin: ModelOrigin,
+  content: z.infer<typeof ContentSchema>,
+  ctx: z.RefinementCtx,
+): void {
+  const ids = new Set<string>();
+  for (const [index, part] of content.entries()) {
+    if (
+      part.kind === 'reasoning' &&
+      part.evidence !== null &&
+      origin.protocol !== 'google-interactions'
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['content', index],
+        message:
+          'Signed reasoning requires its original Google protocol binding.',
+      });
+    }
+    if (part.kind !== 'local-call' || part.providerCallId === null) continue;
+    if (ids.has(part.providerCallId)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['content', index, 'providerCallId'],
+        message: 'Provider call IDs must be distinct within one response.',
+      });
+    }
+    ids.add(part.providerCallId);
+  }
+}
+
+const AssistantMessageSchema = z
   .strictObject({
-    kind: z.literal('text'),
-    text: z.string(),
+    role: z.literal('assistant'),
+    origin: ModelOriginSchema,
+    content: ContentSchema,
+  })
+  .superRefine((message, ctx) =>
+    validateAssistantContent(message.origin, message.content, ctx),
+  )
+  .readonly();
+
+const MessageSchema = z.discriminatedUnion('role', [
+  z
+    .strictObject({
+      role: z.literal('user'),
+      content: z.array(TextPartSchema).min(1).readonly(),
+    })
+    .readonly(),
+  AssistantMessageSchema,
+  z
+    .strictObject({
+      role: z.literal('tool'),
+      results: z
+        .array(
+          z
+            .strictObject({
+              callOrdinal: z.int().nonnegative(),
+              status: z.enum(['success', 'error']),
+              content: z.array(TextPartSchema).readonly(),
+            })
+            .readonly(),
+        )
+        .min(1)
+        .readonly(),
+    })
+    .readonly(),
+]);
+
+// A completed assistant can precede settlement; only the next request requires it.
+const PreparedHistorySchema = z
+  .array(MessageSchema)
+  .min(1)
+  .superRefine((messages, ctx) => {
+    for (const [index, message] of messages.entries()) {
+      if (message.role === 'assistant') {
+        const calls = message.content.filter(
+          (part) => part.kind === 'local-call',
+        );
+        if (calls.length === 0) continue;
+        const results = messages[index + 1];
+        if (
+          results?.role !== 'tool' ||
+          results.results.length !== calls.length ||
+          !results.results.every(
+            (result, ordinal) => result.callOrdinal === ordinal,
+          )
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [index],
+            message:
+              'Every local call requires one adjacent, complete, ordinal-ordered tool-result group before another generation.',
+          });
+        }
+      } else if (message.role === 'tool') {
+        const previous = messages[index - 1];
+        if (
+          previous?.role !== 'assistant' ||
+          !previous.content.some((part) => part.kind === 'local-call')
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [index],
+            message:
+              'Tool results require an immediately preceding calling assistant.',
+          });
+        }
+      }
+    }
   })
   .readonly();
 
-const InputMessageSchema = z
+const ToolDefinitionSchema = z
   .strictObject({
-    role: z.enum(['user', 'assistant']),
-    content: z.array(TextPartSchema).min(1).readonly(),
+    name: z.string().min(1),
+    description: z.string(),
+    parameters: JsonObjectSchema,
   })
   .readonly();
+const ToolDefinitionsSchema = z
+  .array(ToolDefinitionSchema)
+  .superRefine((tools, ctx) => {
+    if (new Set(tools.map((tool) => tool.name)).size !== tools.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Tool definitions must have distinct names.',
+      });
+    }
+  })
+  .readonly();
+
+/** Provider acceleration of an exact prefix, never the conversation authority. */
+export const ContinuationSchema = z
+  .strictObject({
+    origin: OriginSchema.extend({
+      protocol: z.literal('google-interactions'),
+    }).readonly(),
+    coveredMessages: z.int().positive(),
+    prefixFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    anchor: z
+      .strictObject({
+        interactionId: z.string().min(1),
+        coveredSteps: z.int().positive(),
+      })
+      .readonly(),
+  })
+  .readonly();
+export type Continuation = z.infer<typeof ContinuationSchema>;
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */
 export const TurnRequestSchema = z
   .strictObject({
     system: z.string().optional(),
-    messages: z.array(InputMessageSchema).min(1).readonly(),
+    messages: PreparedHistorySchema,
+    tools: ToolDefinitionsSchema.optional(),
     temperature: z.number().min(0).max(2).optional(),
     maxOutputTokens: z.int().positive().optional(),
+    store: z.boolean().optional(),
+    thinkingLevel: z.enum(['low', 'medium', 'high']).optional(),
+    continuation: ContinuationSchema.optional(),
   })
   .readonly();
-
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 
-const ControlsSchema = z
+const OpenAIControlsSchema = z
   .strictObject({
     temperature: z.number().min(0).max(2),
     maxOutputTokens: z.int().positive(),
   })
   .readonly();
-
-const DeploymentSchema = z
+const GoogleControlsSchema = z
   .strictObject({
-    endpoint: z.url(),
-    credentialScope: z.string().min(1),
+    maxOutputTokens: z.int().positive(),
+    store: z.boolean(),
+    thinkingLevel: z.enum(['low', 'medium', 'high']),
   })
   .readonly();
 
-/** Already-selected binding and defaults, provided by the application. */
-export const ModelConfigurationSchema = z
-  .strictObject({
-    model: z.string().min(1),
-    deployment: DeploymentSchema,
-    defaults: ControlsSchema,
-  })
-  .readonly();
-
-export type ModelConfiguration = z.infer<typeof ModelConfigurationSchema>;
-
-/** Prepared semantic input; execution never reapplies current defaults. */
-export const ResolvedTurnSchema = z
-  .strictObject({
+/** Already-selected protocol binding and defaults, provided by the application. */
+export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
+  BindingSchema.extend({
     protocol: z.literal('openai-chat'),
-    codecVersion: z.literal(1),
-    mode: z.literal('foreground'),
-    model: z.string().min(1),
-    deployment: DeploymentSchema,
-    system: z.string().optional(),
-    messages: z.array(InputMessageSchema).min(1).readonly(),
-    controls: ControlsSchema,
-  })
-  .readonly();
+    defaults: OpenAIControlsSchema,
+  }).readonly(),
+  BindingSchema.extend({
+    protocol: z.literal('google-interactions'),
+    defaults: GoogleControlsSchema,
+  }).readonly(),
+]);
+export type ModelConfiguration = z.infer<typeof ModelConfigurationSchema>;
+export type OpenAIChatConfiguration = Extract<
+  ModelConfiguration,
+  { protocol: 'openai-chat' }
+>;
+export type GoogleInteractionsConfiguration = Extract<
+  ModelConfiguration,
+  { protocol: 'google-interactions' }
+>;
 
+const PreparedInputSchema = OriginSchema.extend({
+  mode: z.literal('foreground'),
+  system: z.string().optional(),
+  messages: PreparedHistorySchema,
+  tools: ToolDefinitionsSchema,
+});
+/** Prepared semantic input; execution never reapplies current defaults. */
+export const ResolvedTurnSchema = z.discriminatedUnion('protocol', [
+  PreparedInputSchema.extend({
+    protocol: z.literal('openai-chat'),
+    controls: OpenAIControlsSchema,
+  }).readonly(),
+  PreparedInputSchema.extend({
+    protocol: z.literal('google-interactions'),
+    controls: GoogleControlsSchema,
+    continuation: ContinuationSchema.optional(),
+  }).readonly(),
+]);
 export type ResolvedTurn = z.infer<typeof ResolvedTurnSchema>;
 
 const UsageSchema = z
   .strictObject({
-    inputTokens: z.int().nonnegative(),
-    outputTokens: z.int().nonnegative(),
-    totalTokens: z.int().nonnegative(),
+    inputTokens: z.int().nonnegative().nullable(),
+    outputTokens: z.int().nonnegative().nullable(),
+    totalTokens: z.int().nonnegative().nullable(),
     cachedInputTokens: z.int().nonnegative().nullable(),
     reasoningTokens: z.int().nonnegative().nullable(),
   })
   .readonly();
 
-const OutputPartSchema = z.discriminatedUnion('kind', [
-  TextPartSchema,
-  z.strictObject({ kind: z.literal('refusal'), text: z.string() }).readonly(),
-]);
-
 /** A completed provider turn, not a completed agent execution. */
 export const TurnResultSchema = z
   .strictObject({
-    responseId: z.string().min(1),
-    model: z.string().min(1),
+    providerResponseId: z.string().min(1),
+    requestedOrigin: ModelOriginSchema,
+    returnedModel: z.string().min(1).nullable(),
     modelFingerprint: z.string().nullable(),
-    content: z.array(OutputPartSchema).readonly(),
-    finishReason: z.enum(['stop', 'length', 'content-filter']),
-    /** No reported receipt is unknown, never an invented zero-usage receipt. */
+    content: ContentSchema,
+    finishReason: z.enum(['stop', 'length', 'content-filter', 'tool-calls']),
+    /** Unknown counts remain unknown, including within a partial receipt. */
     usage: UsageSchema.nullable(),
+    continuation: ContinuationSchema.optional(),
+  })
+  .superRefine((result, ctx) => {
+    validateAssistantContent(result.requestedOrigin, result.content, ctx);
+    if (
+      result.continuation &&
+      !sameModelOrigin(result.requestedOrigin, result.continuation.origin)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['continuation'],
+        message: 'Continuation belongs to another model origin.',
+      });
+    }
   })
   .readonly();
-
 export type TurnResult = z.infer<typeof TurnResultSchema>;
 
 const TurnEventSchema = z.discriminatedUnion('kind', [
   z
     .strictObject({
       kind: z.literal('delta'),
-      part: z.enum(['text', 'refusal']),
+      part: z.enum(['text', 'refusal', 'reasoning']),
       text: z.string(),
     })
     .readonly(),
   z
-    .strictObject({
-      kind: z.literal('completed'),
-      result: TurnResultSchema,
-    })
+    .strictObject({ kind: z.literal('completed'), result: TurnResultSchema })
     .readonly(),
 ]);
-
 export type TurnEvent = z.infer<typeof TurnEventSchema>;
 
 const ModelErrorFieldsSchema = z.strictObject({
@@ -133,7 +381,6 @@ const ModelErrorFieldsSchema = z.strictObject({
   model: z.string().optional(),
   status: z.int().optional(),
 });
-
 /** Typed provider failure. Fiber interruption remains outside this channel. */
 export class ModelError extends Data.TaggedError('ModelError')<
   z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }

@@ -6,12 +6,14 @@
   "description": "TeXRA-owned canonical model operations",
   "exports": {
     "./turn": "./src/turn.ts",
-    "./openai-chat": "./src/openaiChat.ts"
+    "./openai-chat": "./src/openaiChat.ts",
+    "./google-interactions": "./src/googleInteractions.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@google/genai": "2.21.0",
     "openai": "7.10.0"
   },
   "peerDependencies": {

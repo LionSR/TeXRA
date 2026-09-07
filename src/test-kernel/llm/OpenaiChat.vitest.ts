@@ -5,7 +5,8 @@ import { Effect, Fiber, Stream } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const CONFIG = {
-  model: 'synthetic-model',
+  protocol: 'openai-chat' as const,
+  requestedModel: 'synthetic-model',
   deployment: {
     endpoint: 'https://synthetic.invalid/v1',
     credentialScope: 'synthetic-account',
@@ -85,8 +86,12 @@ describe('native OpenAI Chat protocol', () => {
     const request = structuredClone(REQUEST);
     const prepared = await Effect.runPromise(model.prepareTurn(request));
     config.defaults.maxOutputTokens = 200;
-    config.model = 'later-model';
-    expect(Object.isFrozen(prepared.messages[0]?.content[0])).toBe(true);
+    config.requestedModel = 'later-model';
+    const content = prepared.messages.find(
+      (message) => message.role === 'user',
+    )?.content;
+    expect(content).toHaveLength(1);
+    expect(Object.isFrozen(content?.[0])).toBe(true);
 
     const events = await Effect.runPromise(
       Stream.runCollect(model.streamTurn(prepared)),
@@ -110,8 +115,14 @@ describe('native OpenAI Chat protocol', () => {
       {
         kind: 'completed',
         result: {
-          responseId: 'synthetic-response',
-          model: 'returned-model-version',
+          providerResponseId: 'synthetic-response',
+          requestedOrigin: {
+            protocol: 'openai-chat',
+            codecVersion: 1,
+            requestedModel: 'synthetic-model',
+            deployment: CONFIG.deployment,
+          },
+          returnedModel: 'returned-model-version',
           modelFingerprint: null,
           content: [{ kind: 'text', text: 'generated: true' }],
           finishReason: 'stop',

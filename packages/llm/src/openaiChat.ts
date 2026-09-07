@@ -7,11 +7,12 @@ import { z } from 'zod';
 import {
   ModelConfigurationSchema,
   ModelError,
+  ModelOriginSchema,
   ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
   type Model,
-  type ModelConfiguration,
+  type OpenAIChatConfiguration,
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
@@ -88,10 +89,22 @@ function sdkFailure(cause: unknown): ModelError {
 
 /** Direct OpenAI Chat protocol; credentials and HTTP transport are foreign inputs. */
 export function openaiChatModel(
-  configuration: ModelConfiguration,
+  configuration: OpenAIChatConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
   const config = ModelConfigurationSchema.parse(configuration);
+  if (config.protocol !== 'openai-chat') {
+    throw new ModelError({
+      kind: 'unsupported',
+      message: 'This model implements the OpenAI Chat protocol.',
+    });
+  }
+  const origin = ModelOriginSchema.parse({
+    protocol: config.protocol,
+    codecVersion: 1,
+    requestedModel: config.requestedModel,
+    deployment: config.deployment,
+  });
   const client = new OpenAI({
     apiKey: transport.apiKey,
     baseURL: config.deployment.endpoint,
@@ -111,14 +124,29 @@ export function openaiChatModel(
           cause: parsed.error,
         });
       }
+      if (
+        parsed.data.store !== undefined ||
+        parsed.data.thinkingLevel !== undefined ||
+        parsed.data.continuation !== undefined ||
+        (parsed.data.tools?.length ?? 0) !== 0 ||
+        parsed.data.messages.some(
+          (message) =>
+            message.role === 'tool' ||
+            message.content.some((part) => part.kind !== 'text'),
+        )
+      ) {
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'This Chat protocol currently supports text-only requests without tools or continuation.',
+        });
+      }
       return ResolvedTurnSchema.parse({
-        protocol: 'openai-chat',
-        codecVersion: 1,
+        ...origin,
         mode: 'foreground',
-        model: config.model,
-        deployment: config.deployment,
         system: parsed.data.system,
         messages: parsed.data.messages,
+        tools: [],
         controls: {
           temperature: parsed.data.temperature ?? config.defaults.temperature,
           maxOutputTokens:
@@ -147,7 +175,8 @@ export function openaiChatModel(
           }
           const turn = parsed.data;
           if (
-            turn.model !== config.model ||
+            turn.protocol !== 'openai-chat' ||
+            turn.requestedModel !== config.requestedModel ||
             turn.deployment.endpoint !== config.deployment.endpoint ||
             turn.deployment.credentialScope !==
               config.deployment.credentialScope
@@ -158,20 +187,44 @@ export function openaiChatModel(
                 'The prepared invocation belongs to another model or deployment.',
             });
           }
-          const signal = yield* Effect.abortSignal;
+          if (turn.tools.length !== 0) {
+            return yield* new ModelError({
+              kind: 'unsupported',
+              message: 'This Chat protocol does not yet lower tools.',
+            });
+          }
           const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
-            turn.messages.map((message) => ({
-              role: message.role,
-              content: message.content.map((part) => part.text).join(''),
-            }));
+            [];
+          for (const message of turn.messages) {
+            if (message.role === 'tool') {
+              return yield* new ModelError({
+                kind: 'unsupported',
+                message:
+                  'This Chat protocol does not yet lower tool exchanges.',
+              });
+            }
+            const text: string[] = [];
+            for (const part of message.content) {
+              if (part.kind !== 'text') {
+                return yield* new ModelError({
+                  kind: 'unsupported',
+                  message:
+                    'This Chat protocol does not yet lower non-text assistant content.',
+                });
+              }
+              text.push(part.text);
+            }
+            messages.push({ role: message.role, content: text.join('') });
+          }
           if (turn.system !== undefined) {
             messages.unshift({ role: 'system', content: turn.system });
           }
+          const signal = yield* Effect.abortSignal;
           const source = yield* Effect.tryPromise({
             try: () =>
               client.chat.completions.create(
                 {
-                  model: turn.model,
+                  model: turn.requestedModel,
                   messages,
                   temperature: turn.controls.temperature,
                   max_completion_tokens: turn.controls.maxOutputTokens,
@@ -304,8 +357,9 @@ export function openaiChatModel(
                 });
               }
               const result = TurnResultSchema.parse({
-                responseId,
-                model: returnedModel,
+                providerResponseId: responseId,
+                requestedOrigin: origin,
+                returnedModel,
                 modelFingerprint: fingerprint,
                 content,
                 finishReason,
@@ -324,7 +378,7 @@ export function openaiChatModel(
               message: error.message,
               cause: error.cause,
               responseId,
-              model: returnedModel ?? config.model,
+              model: returnedModel ?? config.requestedModel,
             }),
         ),
       );
